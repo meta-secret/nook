@@ -16,7 +16,15 @@ describe('formatProviderSyncStatus', () => {
 
     expect(
       formatProviderSyncStatus(
-        { lastSyncedAt, lastSyncedVersion: 42 },
+        {
+          syncCheckpoint: {
+            state: 'synced',
+            version: { state: 'version', version: 42 },
+            synced_at: lastSyncedAt,
+            revision: { state: 'unknown' },
+            common_content_hash: 'content-hash',
+          },
+        },
         'en',
         labels,
       ),
@@ -26,14 +34,22 @@ describe('formatProviderSyncStatus', () => {
   test('reports an absent or invalid timestamp as not synced', () => {
     expect(
       formatProviderSyncStatus(
-        { lastSyncedAt: undefined, lastSyncedVersion: undefined },
+        { syncCheckpoint: { state: 'neverSynced' } },
         'en',
         labels,
       ),
     ).toBe('Not synced yet')
     expect(
       formatProviderSyncStatus(
-        { lastSyncedAt: 'invalid', lastSyncedVersion: 42 },
+        {
+          syncCheckpoint: {
+            state: 'synced',
+            version: { state: 'version', version: 42 },
+            synced_at: 'invalid',
+            revision: { state: 'unknown' },
+            common_content_hash: 'content-hash',
+          },
+        },
         'en',
         labels,
       ),

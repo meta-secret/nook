@@ -391,6 +391,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
 
@@ -399,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_child_becomes_applicable_when_parent_arrives() {
+    fn pending_child_becomes_applicable_when_parent_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert_eq!(
             graph.insert(id("child"), vec![id("root")]),
@@ -414,14 +415,12 @@ mod tests {
             CausalInsertStatus::Applied
         );
         assert!(graph.pending_ids().is_empty());
-        assert_eq!(
-            graph.topological_order().unwrap(),
-            vec![id("root"), id("child")]
-        );
+        assert_eq!(graph.topological_order()?, vec![id("root"), id("child")]);
+        Ok(())
     }
 
     #[test]
-    fn descendant_stays_pending_until_transitive_ancestor_arrives() {
+    fn descendant_stays_pending_until_transitive_ancestor_arrives() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         assert!(matches!(
             graph.insert(id("parent"), vec![id("root")]),
@@ -437,10 +436,12 @@ mod tests {
 
         graph.insert(id("root"), Vec::new());
         assert!(graph.pending_ids().is_empty());
+        Ok(())
     }
 
     #[test]
-    fn direct_insertion_quarantines_conflicting_parent_sets_deterministically() {
+    fn direct_insertion_quarantines_conflicting_parent_sets_deterministically() -> anyhow::Result<()>
+    {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("b"), Vec::new());
@@ -462,10 +463,11 @@ mod tests {
         assert_eq!(left, right);
         assert!(left.quarantined().contains_key("same"));
         assert_eq!(left.parents(&id("same")), Some([id("a")].as_slice()));
+        Ok(())
     }
 
     #[test]
-    fn conflicting_parent_replacement_recomputes_cycles_deterministically() {
+    fn conflicting_parent_replacement_recomputes_cycles_deterministically() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), vec![id("same")]);
         left.insert(id("b"), Vec::new());
@@ -492,10 +494,11 @@ mod tests {
                 (id("same"), id("Causal graph contains a cycle")),
             ])
         );
+        Ok(())
     }
 
     #[test]
-    fn parent_sets_are_normalized_before_duplicate_detection() {
+    fn parent_sets_are_normalized_before_duplicate_detection() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("a"), Vec::new());
         graph.insert(id("b"), Vec::new());
@@ -510,10 +513,11 @@ mod tests {
             Some([id("a"), id("b")].as_slice())
         );
         assert!(!graph.quarantined().contains_key("same"));
+        Ok(())
     }
 
     #[test]
-    fn concurrent_branches_and_join_have_deterministic_heads() {
+    fn concurrent_branches_and_join_have_deterministic_heads() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("left"), vec![id("root")]);
@@ -524,10 +528,11 @@ mod tests {
 
         graph.insert(id("join"), vec![id("left"), id("right")]);
         assert_eq!(graph.heads(), vec![id("join")]);
+        Ok(())
     }
 
     #[test]
-    fn quarantined_events_are_excluded_from_projection_order() {
+    fn quarantined_events_are_excluded_from_projection_order() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("rejected"), vec![id("root")]);
@@ -535,12 +540,13 @@ mod tests {
         graph.quarantine(id("rejected"), "policy rejected".to_owned());
         graph.quarantine(id("descendant"), "ancestor rejected".to_owned());
 
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(graph.topological_order()?, vec![id("root")]);
         assert_eq!(graph.heads(), vec![id("root")]);
+        Ok(())
     }
 
     #[test]
-    fn quarantine_propagates_through_indexed_and_future_descendants() {
+    fn quarantine_propagates_through_indexed_and_future_descendants() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("root"), Vec::new());
         graph.insert(id("rejected"), vec![id("root")]);
@@ -548,8 +554,7 @@ mod tests {
 
         graph.quarantine(id("rejected"), id("invalid signature"));
         assert!(graph.quarantined().contains_key("descendant"));
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
-
+        assert_eq!(graph.topological_order()?, vec![id("root")]);
         assert_eq!(
             graph.insert(id("future"), vec![id("descendant")]),
             CausalInsertStatus::Quarantined {
@@ -557,11 +562,12 @@ mod tests {
             }
         );
         assert!(graph.quarantined().contains_key("future"));
-        assert_eq!(graph.topological_order().unwrap(), vec![id("root")]);
+        assert_eq!(graph.topological_order()?, vec![id("root")]);
+        Ok(())
     }
 
     #[test]
-    fn cycles_are_quarantined_and_excluded_from_applicability() {
+    fn cycles_are_quarantined_and_excluded_from_applicability() -> anyhow::Result<()> {
         let mut graph = CausalGraph::new();
         graph.insert(id("left"), vec![id("right")]);
         assert_eq!(
@@ -576,15 +582,16 @@ mod tests {
         assert!(graph.is_ancestor(&id("right"), &id("left")));
         assert!(!graph.are_concurrent(&id("left"), &id("right")));
         assert_eq!(graph.applicable_ids(), vec![&id("unrelated")]);
-        assert_eq!(graph.topological_order().unwrap(), vec![id("unrelated")]);
+        assert_eq!(graph.topological_order()?, vec![id("unrelated")]);
         assert_eq!(
             graph.quarantined().keys().cloned().collect::<Vec<_>>(),
             vec![id("left"), id("right")]
         );
+        Ok(())
     }
 
     #[test]
-    fn union_is_commutative_associative_and_idempotent() {
+    fn union_is_commutative_associative_and_idempotent() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("root"), Vec::new());
         left.insert(id("left"), vec![id("root")]);
@@ -602,10 +609,11 @@ mod tests {
             left.union(&right.union(&third))
         );
         assert_eq!(left.union(&left), left);
+        Ok(())
     }
 
     #[test]
-    fn union_quarantines_conflicting_parent_sets_commutatively() {
+    fn union_quarantines_conflicting_parent_sets_commutatively() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("same"), vec![id("a")]);
@@ -619,10 +627,11 @@ mod tests {
         assert_eq!(left_right, right_left);
         assert!(left_right.quarantined().contains_key("same"));
         assert_eq!(left_right.parents(&id("same")), Some([id("a")].as_slice()));
+        Ok(())
     }
 
     #[test]
-    fn union_preserves_the_deterministic_minimum_quarantine_reason() {
+    fn union_preserves_the_deterministic_minimum_quarantine_reason() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("a"), Vec::new());
         left.insert(id("b"), Vec::new());
@@ -640,10 +649,11 @@ mod tests {
             left_right.quarantined().get("same").map(String::as_str),
             Some("A-policy")
         );
+        Ok(())
     }
 
     #[test]
-    fn union_recomputes_derived_quarantine_associatively() {
+    fn union_recomputes_derived_quarantine_associatively() -> anyhow::Result<()> {
         let mut left = CausalGraph::new();
         left.insert(id("0"), Vec::new());
         left.insert(id("1"), Vec::new());
@@ -663,5 +673,6 @@ mod tests {
             left_associative.quarantined().get("1").map(String::as_str),
             Some("Conflicting causal parent sets for the same event id")
         );
+        Ok(())
     }
 }

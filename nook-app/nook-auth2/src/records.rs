@@ -111,7 +111,7 @@ mod tests {
     use crate::AgeArmoredCiphertext;
 
     #[test]
-    fn secret_type_parse_display_and_serde_roundtrip() {
+    fn secret_type_parse_display_and_serde_roundtrip() -> anyhow::Result<()> {
         let cases = [
             ("login", SecretType::Login),
             ("api-key", SecretType::ApiKey),
@@ -123,19 +123,17 @@ mod tests {
             ("file-attachment", SecretType::FileAttachment),
         ];
         for (tag, expected) in cases {
-            assert_eq!(SecretType::parse(tag).unwrap(), expected);
+            assert_eq!(SecretType::parse(tag)?, expected);
             assert_eq!(expected.as_str(), tag);
-            let encoded = serde_json::to_string(&expected).unwrap();
-            assert_eq!(
-                serde_json::from_str::<SecretType>(&encoded).unwrap(),
-                expected
-            );
+            let encoded = serde_json::to_string(&expected)?;
+            assert_eq!(serde_json::from_str::<SecretType>(&encoded)?, expected);
         }
         assert!(SecretType::parse("totp").is_err());
+        Ok(())
     }
 
     #[test]
-    fn stored_record_payload_wraps_trusted_and_armored_values() {
+    fn stored_record_payload_wraps_trusted_and_armored_values() -> anyhow::Result<()> {
         let trusted = StoredRecordPayload::from_trusted("opaque-json".to_owned());
         assert_eq!(trusted.as_str(), "opaque-json");
         assert_eq!(trusted.as_ref(), "opaque-json");
@@ -143,25 +141,26 @@ mod tests {
         assert_eq!(trusted.clone().into_inner(), "opaque-json");
 
         let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nabc\n-----END AGE ENCRYPTED FILE-----";
-        let armored = AgeArmoredCiphertext::parse(armor).unwrap();
+        let armored = AgeArmoredCiphertext::parse(armor)?;
         let payload = StoredRecordPayload::from_age_armored(armored);
         assert_eq!(payload.as_str(), armor);
+        Ok(())
     }
 
     #[test]
-    fn stored_secret_record_uses_disk_field_names() {
+    fn stored_secret_record_uses_disk_field_names() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_token001"),
             secret_type: Some(SecretType::ApiKey),
             value: StoredRecordPayload::from_trusted("ciphertext".to_owned()),
         };
 
-        let encoded = serde_json::to_value(&record).unwrap();
+        let encoded = serde_json::to_value(&record)?;
         assert_eq!(encoded["id"], "secret_token001");
         assert_eq!(encoded["type"], "api-key");
         assert_eq!(encoded["data"], "ciphertext");
 
-        let decoded: StoredSecretRecord = serde_json::from_value(encoded).unwrap();
+        let decoded: StoredSecretRecord = serde_json::from_value(encoded)?;
         assert_eq!(decoded, record);
 
         let auth_row = StoredSecretRecord {
@@ -170,8 +169,9 @@ mod tests {
             value: StoredRecordPayload::from_trusted("{}".to_owned()),
         };
         assert_eq!(
-            serde_json::to_value(&auth_row).unwrap()["type"],
+            serde_json::to_value(&auth_row)?["type"],
             serde_json::Value::Null
         );
+        Ok(())
     }
 }

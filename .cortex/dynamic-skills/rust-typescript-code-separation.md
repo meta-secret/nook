@@ -369,13 +369,11 @@ Apply this at the design layer that owns the data — usually `nook-core` — an
 
 When `Option<T>` is still acceptable (do not force an enum):
 
-- Genuinely two-state, self-explanatory, single-field cases where a bespoke enum
-  would only rename `Some`/`None` without adding meaning (e.g. a one-off
-  `revision: Option<String>` on a boundary DTO where "no revision yet" is the
-  only absence).
 - Standard-library / trait signatures that must return `Option` (`get`, `find`,
   `FromStr`-adjacent helpers), and thin wasm boundary helpers returning
   `Option<String>` to JS.
+- If absence is an error, use a typed `thiserror` variant and `Result<T, E>`;
+  do not create an enum variant that merely renames failure.
 - When two or more `Option` fields co-vary (present/absent together), that is the
   clearest case that they should collapse into one enum variant carrying a struct
   — see the `GithubSyncProvider` enum-of-structs pattern above.

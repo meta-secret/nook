@@ -14,7 +14,9 @@ use tokio::sync::watch;
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
+use crate::model::{
+    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TerminalResult,
+};
 use crate::publication::{
     PublicationBinding, bind_publication_task, open_publication_capability,
     publication_delivery_verified,
@@ -35,7 +37,7 @@ pub struct WorkerConfig {
     pub task_timeout_seconds: u64,
     pub poll_min_seconds: u64,
     pub poll_max_seconds: u64,
-    pub model: Option<String>,
+    pub model: String,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub auth_socket: PathBuf,
@@ -81,12 +83,13 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 ));
             }
-            if let Some(task) = self
+            match self
                 .store
                 .claim(&self.config.agent_id, self.config.lease_seconds)
                 .await?
             {
-                break task;
+                ClaimOutcome::Claimed(task) => break task,
+                ClaimOutcome::NoTask => {}
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
@@ -197,9 +200,7 @@ impl<S: TaskStore> Worker<S> {
                     if let Some(capability) = &publication_capability {
                         codex_options = codex_options.with_publication_fd(capability.raw_fd());
                     }
-                    if let Some(model) = &self.config.model {
-                        codex_options.model = Some(model.clone());
-                    }
+                    codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                     codex_options
                         .reasoning_effort
@@ -219,7 +220,7 @@ impl<S: TaskStore> Worker<S> {
                     .context("embedded Codex dependency resolution failed")?;
                     let result: TerminalResult = serde_json::from_str(&resolution)
                         .context("Codex returned an invalid dependency resolution result")?;
-                    if result.status != TerminalStatus::Completed {
+                    if !matches!(result, TerminalResult::Completed { .. }) {
                         return Err(anyhow!("Codex could not integrate dependency artifacts"));
                     }
                     ensure_dependencies_resolved(&repository).await?;
@@ -232,9 +233,7 @@ impl<S: TaskStore> Worker<S> {
                 if let Some(capability) = &publication_capability {
                     codex_options = codex_options.with_publication_fd(capability.raw_fd());
                 }
-                if let Some(model) = &self.config.model {
-                    codex_options.model = Some(model.clone());
-                }
+                codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                 codex_options
                     .reasoning_effort
@@ -246,19 +245,10 @@ impl<S: TaskStore> Worker<S> {
                         .context("embedded Codex execution failed")?;
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
-                result
-                    .validate()
-                    .map_err(anyhow::Error::msg)
-                    .context("Codex returned empty terminal result content")?;
-                let blocker = result
-                    .blocker
-                    .clone()
-                    .into_request()
-                    .map_err(anyhow::Error::msg)
-                    .context("Codex returned an invalid blocker result")?;
-                if result.status == TerminalStatus::Blocked {
-                    let blocker =
-                        blocker.context("Codex blocked the task without a structured blocker")?;
+                if let TerminalResult::Blocked {
+                    summary, blocker, ..
+                } = &result
+                {
                     if blocker.id == task.id {
                         return Err(anyhow!("a blocked task cannot name itself as its blocker"));
                     }
@@ -273,12 +263,7 @@ impl<S: TaskStore> Worker<S> {
                     };
                     let accepted = self
                         .store
-                        .block(
-                            task,
-                            &self.config.agent_id,
-                            &blocker,
-                            &bounded(&result.summary),
-                        )
+                        .block(task, &self.config.agent_id, &blocker, &bounded(summary))
                         .await?;
                     if !accepted {
                         return Err(anyhow!(
@@ -286,9 +271,6 @@ impl<S: TaskStore> Worker<S> {
                         ));
                     }
                     return Err(WorkerBlocked.into());
-                }
-                if blocker.is_some() {
-                    return Err(anyhow!("Codex returned a blocker for a completed task"));
                 }
                 if task.kind == "main-repair"
                     && !publication_delivery_verified(&self.config.publication_socket).await?
@@ -299,9 +281,9 @@ impl<S: TaskStore> Worker<S> {
                 }
                 let summary = bounded(&format!(
                     "{}\n\nChanged files:\n{}\n\nTests:\n{}",
-                    result.summary,
-                    bullet_list(&result.changed_files),
-                    bullet_list(&result.tests)
+                    result.summary(),
+                    bullet_list(result.changed_files()),
+                    bullet_list(result.tests())
                 ));
                 let repository = self.config.workspace.join("repository");
                 let artifact =
@@ -309,7 +291,7 @@ impl<S: TaskStore> Worker<S> {
                         .await?;
                 let accepted = self
                     .store
-                    .complete(task, &self.config.agent_id, &summary, artifact.as_ref())
+                    .complete(task, &self.config.agent_id, &summary, &artifact)
                     .await?;
                 if !accepted {
                     return Err(anyhow!(
@@ -716,7 +698,7 @@ async fn persistable_patch(
     task: &ClaimedTask,
     result: &TerminalResult,
     resumed: bool,
-) -> anyhow::Result<Option<Artifact>> {
+) -> anyhow::Result<CompletionArtifact> {
     let add_status = Command::new("git")
         .args(["add", "--intent-to-add", "--", "."])
         .current_dir(repository)
@@ -749,12 +731,12 @@ async fn persistable_patch(
         ));
     }
     if output.stdout.is_empty() {
-        if !resumed && !result.changed_files.is_empty() {
+        if !resumed && !result.changed_files().is_empty() {
             return Err(anyhow!(
                 "Codex reported changed files but produced no persistable git patch"
             ));
         }
-        return Ok(None);
+        return Ok(CompletionArtifact::NotProduced);
     }
 
     let content = String::from_utf8(output.stdout).context("task patch is not UTF-8")?;
@@ -767,7 +749,7 @@ async fn persistable_patch(
         },
     );
     let id = format!("{}:git-patch", task.attempt_id);
-    Ok(Some(Artifact {
+    Ok(CompletionArtifact::Produced(Artifact {
         uri: format!("hive://artifact/{id}"),
         id,
         kind: "git-patch".to_owned(),
@@ -853,8 +835,7 @@ mod tests {
         prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
-        Artifact, AttemptId, BlockerResult, ClaimedTask, LeaseToken, TaskId, TerminalResult,
-        TerminalStatus,
+        Artifact, AttemptId, ClaimedTask, CompletionArtifact, LeaseToken, TaskId, TerminalResult,
     };
     use sha2::{Digest, Sha256};
 
@@ -869,10 +850,10 @@ mod tests {
     }
 
     #[test]
-    fn a_restarted_process_cannot_reuse_the_same_pod_workspace() {
-        let workspace = tempfile::tempdir().unwrap();
+    fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
+        let workspace = tempfile::tempdir()?;
 
-        establish_worker_lifecycle(workspace.path(), "pod-a").unwrap();
+        establish_worker_lifecycle(workspace.path(), "pod-a")?;
         let error = establish_worker_lifecycle(workspace.path(), "pod-a")
             .expect_err("the second worker process must be rejected");
 
@@ -882,18 +863,19 @@ mod tests {
                 .contains("refusing to restart a Hive worker")
         );
         assert!(workspace.path().join(".hive-task-finished").is_file());
+        Ok(())
     }
 
     #[test]
-    fn recovered_merge_commit_is_part_of_replacement_worker_context() {
+    fn recovered_merge_commit_is_part_of_replacement_worker_context() -> anyhow::Result<()> {
         let task = ClaimedTask {
-            id: TaskId::new("main-failure-recovery").unwrap(),
+            id: TaskId::new("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-recovery").unwrap(),
+            attempt_id: AttemptId::new("attempt-recovery")?,
             attempt_number: 2,
-            lease_token: LeaseToken::new("lease-recovery").unwrap(),
+            lease_token: LeaseToken::new("lease-recovery")?,
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -903,6 +885,7 @@ mod tests {
         assert!(prompt.contains(merge_commit));
         assert!(prompt.contains("Resume the post-merge lifecycle"));
         assert!(prompt.contains("do not create or merge a replacement PR"));
+        Ok(())
     }
 
     #[test]
@@ -939,19 +922,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn implementation_patch_is_durable_before_completion() {
-        let repository = tempfile::tempdir().unwrap();
-        let run_git = |arguments: &[&str]| {
+    async fn implementation_patch_is_durable_before_completion() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
+        let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(repository.path())
-                .status()
-                .unwrap();
+                .status()?;
             assert!(status.success());
+            Ok(())
         };
-        run_git(&["init", "--quiet"]);
-        std::fs::write(repository.path().join("tracked.txt"), "before\n").unwrap();
-        run_git(&["add", "tracked.txt"]);
+        run_git(&["init", "--quiet"])?;
+        std::fs::write(repository.path().join("tracked.txt"), "before\n")?;
+        run_git(&["add", "tracked.txt"])?;
         run_git(&[
             "-c",
             "user.name=Hive Test",
@@ -961,19 +944,18 @@ mod tests {
             "--quiet",
             "-m",
             "fixture",
-        ]);
-        std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
-        std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
+        ])?;
+        std::fs::write(repository.path().join("tracked.txt"), "after\n")?;
+        std::fs::write(repository.path().join("new.txt"), "new\n")?;
 
         let baseline = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(repository.path())
-            .output()
-            .unwrap();
-        let baseline = String::from_utf8(baseline.stdout).unwrap();
+            .output()?;
+        let baseline = String::from_utf8(baseline.stdout)?;
         let baseline = baseline.trim();
-        std::fs::write(repository.path().join("committed.txt"), "committed\n").unwrap();
-        run_git(&["add", "committed.txt"]);
+        std::fs::write(repository.path().join("committed.txt"), "committed\n")?;
+        run_git(&["add", "committed.txt"])?;
         run_git(&[
             "-c",
             "user.name=Hive Test",
@@ -983,56 +965,57 @@ mod tests {
             "--quiet",
             "-m",
             "task commit",
-        ]);
-        std::fs::write(repository.path().join("tracked.txt"), "after\n").unwrap();
-        run_git(&["add", "tracked.txt"]);
-        std::fs::write(repository.path().join("new.txt"), "new\n").unwrap();
+        ])?;
+        std::fs::write(repository.path().join("tracked.txt"), "after\n")?;
+        run_git(&["add", "tracked.txt"])?;
+        std::fs::write(repository.path().join("new.txt"), "new\n")?;
 
         let task = ClaimedTask {
-            id: TaskId::new("task-1").unwrap(),
+            id: TaskId::new("task-1")?,
             kind: "code".to_owned(),
             prompt: "change files".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("attempt-1").unwrap(),
+            attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-1").unwrap(),
+            lease_token: LeaseToken::new("lease-1")?,
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
 
-        let artifact = persistable_patch(repository.path(), baseline, &task, &result, false)
-            .await
-            .unwrap()
-            .expect("patch artifact");
+        let artifact =
+            persistable_patch(repository.path(), baseline, &task, &result, false).await?;
+        let CompletionArtifact::Produced(artifact) = artifact else {
+            panic!("patch artifact");
+        };
 
         assert_eq!(artifact.kind, "git-patch");
         assert!(artifact.digest.starts_with("sha256:"));
         assert!(artifact.content.contains("diff --git a/tracked.txt"));
         assert!(artifact.content.contains("diff --git a/new.txt"));
         assert!(artifact.content.contains("diff --git a/committed.txt"));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch() {
-        let repository = tempfile::tempdir().unwrap();
-        let run_git = |arguments: &[&str]| {
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch() -> anyhow::Result<()>
+    {
+        let repository = tempfile::tempdir()?;
+        let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(repository.path())
-                .status()
-                .unwrap();
+                .status()?;
             assert!(status.success());
+            Ok(())
         };
-        run_git(&["init", "--quiet"]);
-        std::fs::write(repository.path().join("repair.txt"), "published\n").unwrap();
-        run_git(&["add", "repair.txt"]);
+        run_git(&["init", "--quiet"])?;
+        std::fs::write(repository.path().join("repair.txt"), "published\n")?;
+        run_git(&["add", "repair.txt"])?;
         run_git(&[
             "-c",
             "user.name=Hive Test",
@@ -1042,59 +1025,54 @@ mod tests {
             "--quiet",
             "-m",
             "published repair",
-        ]);
+        ])?;
         let baseline = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(repository.path())
-            .output()
-            .unwrap();
-        let baseline = String::from_utf8(baseline.stdout).unwrap();
+            .output()?;
+        let baseline = String::from_utf8(baseline.stdout)?;
         let task = ClaimedTask {
-            id: TaskId::new("resumed-task").unwrap(),
+            id: TaskId::new("resumed-task")?,
             kind: "main-repair".to_owned(),
             prompt: "finish delivery".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-            attempt_id: AttemptId::new("resumed-attempt").unwrap(),
+            attempt_id: AttemptId::new("resumed-attempt")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("resumed-lease").unwrap(),
+            lease_token: LeaseToken::new("resumed-lease")?,
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
 
-        assert!(
-            persistable_patch(repository.path(), baseline.trim(), &task, &result, true)
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(matches!(
+            persistable_patch(repository.path(), baseline.trim(), &task, &result, true).await?,
+            CompletionArtifact::NotProduced
+        ));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn completed_dependency_patch_becomes_the_task_baseline() {
-        let source = tempfile::tempdir().unwrap();
-        let run_git = |arguments: &[&str]| {
+    async fn completed_dependency_patch_becomes_the_task_baseline() -> anyhow::Result<()> {
+        let source = tempfile::tempdir()?;
+        let run_git = |arguments: &[&str]| -> std::io::Result<Vec<u8>> {
             let output = std::process::Command::new("git")
                 .args(arguments)
                 .current_dir(source.path())
-                .output()
-                .unwrap();
+                .output()?;
             assert!(
                 output.status.success(),
                 "{}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            output.stdout
+            Ok(output.stdout)
         };
-        run_git(&["init", "--quiet"]);
-        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
-        run_git(&["add", "dependency.txt"]);
+        run_git(&["init", "--quiet"])?;
+        std::fs::write(source.path().join("dependency.txt"), "before\n")?;
+        run_git(&["add", "dependency.txt"])?;
         run_git(&[
             "-c",
             "user.name=Hive Test",
@@ -1104,14 +1082,13 @@ mod tests {
             "--quiet",
             "-m",
             "fixture",
-        ]);
-        let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"]))
-            .unwrap()
+        ])?;
+        let source_commit = String::from_utf8(run_git(&["rev-parse", "HEAD"])?)?
             .trim()
             .to_owned();
-        std::fs::write(source.path().join("dependency.txt"), "from dependency\n").unwrap();
-        let patch = String::from_utf8(run_git(&["diff", "--binary"])).unwrap();
-        std::fs::write(source.path().join("dependency.txt"), "before\n").unwrap();
+        std::fs::write(source.path().join("dependency.txt"), "from dependency\n")?;
+        let patch = String::from_utf8(run_git(&["diff", "--binary"])?)?;
+        std::fs::write(source.path().join("dependency.txt"), "before\n")?;
         let digest = Sha256::digest(patch.as_bytes());
         let digest = digest.iter().fold(
             String::with_capacity(digest.len() * 2),
@@ -1128,9 +1105,9 @@ mod tests {
             content: patch,
         };
         let resume_branch = "codex/hive-resume-test";
-        run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit]);
-        std::fs::write(source.path().join("resumed.txt"), "durable branch\n").unwrap();
-        run_git(&["add", "resumed.txt"]);
+        run_git(&["checkout", "--quiet", "-b", resume_branch, &source_commit])?;
+        std::fs::write(source.path().join("resumed.txt"), "durable branch\n")?;
+        run_git(&["add", "resumed.txt"])?;
         run_git(&[
             "-c",
             "user.name=Hive Test",
@@ -1140,68 +1117,71 @@ mod tests {
             "--quiet",
             "-m",
             "durable branch",
-        ]);
-        let workspace = tempfile::tempdir().unwrap();
+        ])?;
+        let workspace = tempfile::tempdir()?;
         let preparation = prepare_workspace(
             workspace.path(),
-            source.path().to_str().unwrap(),
+            source
+                .path()
+                .to_str()
+                .ok_or_else(|| std::io::Error::other("source path must be UTF-8"))?,
             &source_commit,
             None,
             std::slice::from_ref(&dependency),
         )
-        .await
-        .unwrap();
+        .await?;
         assert!(!preparation.conflicted);
         let baseline = preparation.baseline;
         let repository = workspace.path().join("repository");
         assert_eq!(
-            std::fs::read_to_string(repository.join("dependency.txt")).unwrap(),
+            std::fs::read_to_string(repository.join("dependency.txt"))?,
             "from dependency\n"
         );
-        let resumed_workspace = tempfile::tempdir().unwrap();
+        let resumed_workspace = tempfile::tempdir()?;
         let resumed_preparation = prepare_workspace(
             resumed_workspace.path(),
-            source.path().to_str().unwrap(),
+            source
+                .path()
+                .to_str()
+                .ok_or_else(|| std::io::Error::other("source path must be UTF-8"))?,
             &source_commit,
             Some(resume_branch),
             std::slice::from_ref(&dependency),
         )
-        .await
-        .unwrap();
+        .await?;
         assert!(!resumed_preparation.conflicted);
         let resumed_repository = resumed_workspace.path().join("repository");
         assert_eq!(
-            std::fs::read_to_string(resumed_repository.join("dependency.txt")).unwrap(),
+            std::fs::read_to_string(resumed_repository.join("dependency.txt"))?,
             "from dependency\n"
         );
         assert_eq!(
-            std::fs::read_to_string(resumed_repository.join("resumed.txt")).unwrap(),
+            std::fs::read_to_string(resumed_repository.join("resumed.txt"))?,
             "durable branch\n"
         );
-        std::fs::write(repository.join("task.txt"), "task result\n").unwrap();
+        std::fs::write(repository.join("task.txt"), "task result\n")?;
         let task = ClaimedTask {
-            id: TaskId::new("task-2").unwrap(),
+            id: TaskId::new("task-2")?,
             kind: "code".to_owned(),
             prompt: "build on dependency".to_owned(),
             source_commit,
-            attempt_id: AttemptId::new("attempt-2").unwrap(),
+            attempt_id: AttemptId::new("attempt-2")?,
             attempt_number: 1,
-            lease_token: LeaseToken::new("lease-2").unwrap(),
+            lease_token: LeaseToken::new("lease-2")?,
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
-        let artifact = persistable_patch(&repository, &baseline, &task, &result, false)
-            .await
-            .unwrap()
-            .expect("task patch");
+        let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
+        let CompletionArtifact::Produced(artifact) = artifact else {
+            panic!("task patch");
+        };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));
+        Ok(())
     }
 }

@@ -16,8 +16,8 @@ use sim::{JoinApproval, SimWorld, Timeline};
 /// must observe the join resolved regardless of the order in which the approval is
 /// pushed to the shared bucket and pulled by the peer.
 #[test]
-fn join_approval_converges_across_all_delivery_orders() {
-    let joiner = DeviceIdentity::generate().unwrap();
+fn join_approval_converges_across_all_delivery_orders() -> anyhow::Result<()> {
+    let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 
     // Two order-independent transport steps: genesis pushes its outbox, and the
@@ -36,63 +36,63 @@ fn join_approval_converges_across_all_delivery_orders() {
         .step("peer: pull remote again", |world| world.pull(1));
 
     let joiner_id_for_invariant = joiner_id.clone();
-    timeline
-        .run_all_permutations(
-            || SimWorld::new(1),
-            |world| {
-                // The genesis device (which produced both events) must always show
-                // the join resolved.
-                let genesis = world
-                    .roster_view(0)
-                    .map_err(|e| format!("genesis roster: {e}"))?;
-                if genesis.has_pending_join(&joiner_id_for_invariant) {
-                    return Err("genesis still shows the join as pending".to_owned());
-                }
-                Ok(())
-            },
-        )
-        .unwrap();
+    timeline.run_all_permutations(
+        || SimWorld::new(1),
+        |world| {
+            // The genesis device (which produced both events) must always show
+            // the join resolved.
+            let genesis = world
+                .roster_view(0)
+                .map_err(|e| format!("genesis roster: {e}"))?;
+            if genesis.has_pending_join(&joiner_id_for_invariant) {
+                return Err("genesis still shows the join as pending".to_owned());
+            }
+            Ok(())
+        },
+    )?;
+    Ok(())
 }
 
 /// The canonical race: peer pulls before the approval is pushed, then pulls again
 /// afterwards. The peer must converge to "join resolved" — never stuck pending and
 /// never a dangling duplicate — once it has pulled after the push.
 #[test]
-fn peer_converges_after_pull_push_pull() {
-    let joiner = DeviceIdentity::generate().unwrap();
+fn peer_converges_after_pull_push_pull() -> anyhow::Result<()> {
+    let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 
-    let mut world = SimWorld::new(1).unwrap();
+    let mut world = SimWorld::new(1)?;
 
     // Genesis records and approves the join.
-    let pending = JoinApproval::request(&mut world, 0, &joiner).unwrap();
-    let approved = pending.approve(&mut world, 0).unwrap();
+    let pending = JoinApproval::request(&mut world, 0, &joiner)?;
+    let approved = pending.approve(&mut world, 0)?;
     assert_eq!(approved.device_id(), joiner_id);
 
     // Peer pulls first — nothing has been pushed yet, so it must see no join at all
     // (the request event lives only in genesis' local log).
-    world.pull(1).unwrap();
-    let before = world.roster_view(1).unwrap();
+    world.pull(1)?;
+    let before = world.roster_view(1)?;
     assert!(
         !before.has_pending_join(&joiner_id),
         "peer saw a join before genesis pushed anything"
     );
 
     // Genesis pushes, peer pulls again, and now converges to resolved.
-    world.push(0).unwrap();
-    world.pull(1).unwrap();
-    let after = world.roster_view(1).unwrap();
+    world.push(0)?;
+    world.pull(1)?;
+    let after = world.roster_view(1)?;
     assert!(
         !after.has_pending_join(&joiner_id),
         "peer still shows the join pending after pulling the approval"
     );
+    Ok(())
 }
 
 /// A denied join also resolves (join row removed) and never re-appears on the peer,
 /// regardless of delivery order.
 #[test]
-fn join_denial_converges_across_all_delivery_orders() {
-    let joiner = DeviceIdentity::generate().unwrap();
+fn join_denial_converges_across_all_delivery_orders() -> anyhow::Result<()> {
+    let joiner = DeviceIdentity::generate()?;
     let joiner_id = joiner.device_id().as_str().to_owned();
 
     let joiner_for_step = joiner.clone();
@@ -106,18 +106,17 @@ fn join_denial_converges_across_all_delivery_orders() {
         .step("peer: pull remote", |world| world.pull(1));
 
     let joiner_id_for_invariant = joiner_id.clone();
-    timeline
-        .run_all_permutations(
-            || SimWorld::new(1),
-            |world| {
-                let genesis = world
-                    .roster_view(0)
-                    .map_err(|e| format!("genesis roster: {e}"))?;
-                if genesis.has_pending_join(&joiner_id_for_invariant) {
-                    return Err("genesis still shows the denied join as pending".to_owned());
-                }
-                Ok(())
-            },
-        )
-        .unwrap();
+    timeline.run_all_permutations(
+        || SimWorld::new(1),
+        |world| {
+            let genesis = world
+                .roster_view(0)
+                .map_err(|e| format!("genesis roster: {e}"))?;
+            if genesis.has_pending_join(&joiner_id_for_invariant) {
+                return Err("genesis still shows the denied join as pending".to_owned());
+            }
+            Ok(())
+        },
+    )?;
+    Ok(())
 }

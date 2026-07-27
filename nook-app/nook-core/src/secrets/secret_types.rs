@@ -614,7 +614,7 @@ mod tests {
         URL_SAFE_NO_PAD.encode(vec![byte; length])
     }
 
-    fn passkey() -> PasskeySecret {
+    fn passkey() -> anyhow::Result<PasskeySecret> {
         let request = crate::PasskeyRegistrationRequest {
             origin: "https://accounts.example.com".to_owned(),
             challenge: encoded(1, 32),
@@ -632,53 +632,55 @@ mod tests {
             resident_key_required: true,
             user_verification_required: true,
         };
-        let mut passkey = crate::create_website_passkey(&request, &[])
-            .unwrap()
-            .credential;
+        let mut passkey = crate::create_website_passkey(&request, &[])?.credential;
         passkey.signature_count = 4;
-        passkey
+        Ok(passkey)
     }
 
     #[test]
-    fn passkey_payload_round_trips_as_versioned_yaml() {
-        let value = SecretValue::Passkey(passkey());
-        let yaml = value.to_yaml().unwrap();
-        let decoded = SecretValue::from_yaml(SecretType::Passkey, &yaml).unwrap();
+    fn passkey_payload_round_trips_as_versioned_yaml() -> anyhow::Result<()> {
+        let value = SecretValue::Passkey(passkey()?);
+        let yaml = value.to_yaml()?;
+        let decoded = SecretValue::from_yaml(SecretType::Passkey, &yaml)?;
 
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("version: 1"));
         assert!(yaml.as_str().contains("rpId: accounts.example.com"));
+        Ok(())
     }
 
     #[test]
-    fn passkey_validation_rejects_invalid_domains_and_backup_state() {
-        let mut invalid_domain = passkey();
+    fn passkey_validation_rejects_invalid_domains_and_backup_state() -> anyhow::Result<()> {
+        let mut invalid_domain = passkey()?;
         invalid_domain.rp_id = "https://example.com".to_owned();
         assert!(invalid_domain.validate().is_err());
 
-        let mut invalid_backup = passkey();
+        let mut invalid_backup = passkey()?;
         invalid_backup.backup_eligible = false;
         assert!(invalid_backup.validate().is_err());
 
-        let mut non_discoverable = passkey();
+        let mut non_discoverable = passkey()?;
         non_discoverable.discoverable = false;
         assert!(non_discoverable.validate().is_err());
+        Ok(())
     }
 
     #[test]
-    fn passkey_validation_rejects_noncanonical_or_wrong_length_binary_fields() {
-        let mut padded = passkey();
+    fn passkey_validation_rejects_noncanonical_or_wrong_length_binary_fields() -> anyhow::Result<()>
+    {
+        let mut padded = passkey()?;
         padded.credential_id.push('=');
         assert!(padded.validate().is_err());
 
-        let mut short_user_handle = passkey();
+        let mut short_user_handle = passkey()?;
         short_user_handle.user_handle = encoded(7, 0);
         assert!(short_user_handle.validate().is_err());
+        Ok(())
     }
 
     #[test]
-    fn passkey_debug_and_zeroize_do_not_retain_private_material() {
-        let mut value = SecretValue::Passkey(passkey());
+    fn passkey_debug_and_zeroize_do_not_retain_private_material() -> anyhow::Result<()> {
+        let mut value = SecretValue::Passkey(passkey()?);
         let debug = format!("{value:?}");
         assert!(debug.contains("[REDACTED]"));
         assert!(!debug.contains(&encoded(3, 96)));
@@ -699,6 +701,7 @@ mod tests {
                 assert!(public_key_cose.0.is_empty());
             }
         }
+        Ok(())
     }
 
     fn file_attachment() -> FileAttachmentSecret {
@@ -713,13 +716,14 @@ mod tests {
     }
 
     #[test]
-    fn file_attachment_payload_round_trips_as_yaml() {
+    fn file_attachment_payload_round_trips_as_yaml() -> anyhow::Result<()> {
         let value = SecretValue::FileAttachment(file_attachment());
-        let yaml = value.to_yaml().unwrap();
-        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml).unwrap();
+        let yaml = value.to_yaml()?;
+        let decoded = SecretValue::from_yaml(SecretType::FileAttachment, &yaml)?;
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("fileName: recovery.pdf"));
         assert!(yaml.as_str().contains("mimeType: application/pdf"));
+        Ok(())
     }
 
     #[test]

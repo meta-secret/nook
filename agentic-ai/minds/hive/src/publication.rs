@@ -2232,83 +2232,78 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn preconnected_capability_survives_without_a_connect_syscall() {
-        let directory = tempfile::tempdir().unwrap();
+    async fn preconnected_capability_survives_without_a_connect_syscall() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
         let socket = directory.path().join("broker.sock");
         let workspace = directory.path().join("workspace");
         let token = directory.path().join("token");
         let private_home = directory.path().join("private");
-        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&workspace)?;
         let broker = tokio::spawn(run_publication_broker(
             socket.clone(),
             workspace,
             token,
             private_home,
         ));
-        let capability = open_publication_capability(&socket).await.unwrap();
-        std::fs::remove_file(&socket).unwrap();
+        let capability = open_publication_capability(&socket).await?;
+        std::fs::remove_file(&socket)?;
 
         let response = request_over_stream(
-            accept_inherited_stream(capability.raw_fd()).await.unwrap(),
+            accept_inherited_stream(capability.raw_fd()).await?,
             &GitHubRequest::Ping,
         )
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(response, json!({ "status": "ok" }));
 
         broker.abort();
+        Ok(())
     }
 
     #[tokio::test]
-    async fn abandoned_reply_cannot_shift_the_next_capability_request() {
-        let directory = tempfile::tempdir().unwrap();
+    async fn abandoned_reply_cannot_shift_the_next_capability_request() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
         let socket = directory.path().join("broker.sock");
         let broker = tokio::spawn({
             let socket = socket.clone();
             async move {
-                let listener = UnixListener::bind(socket).unwrap();
+                let listener = UnixListener::bind(socket)?;
                 for sequence in 1..=2 {
-                    let (mut stream, _) = listener.accept().await.unwrap();
+                    let (mut stream, _) = listener.accept().await?;
                     let mut request = String::new();
-                    BufReader::new(&mut stream)
-                        .read_line(&mut request)
-                        .await
-                        .unwrap();
+                    BufReader::new(&mut stream).read_line(&mut request).await?;
                     stream
                         .write_all(
                             format!(
                                 "{}\n",
                                 serde_json::to_string(&GitHubResponse::Value(json!({
                                     "sequence": sequence
-                                })))
-                                .unwrap()
+                                })))?
                             )
                             .as_bytes(),
                         )
-                        .await
-                        .unwrap();
+                        .await?;
                 }
+                Ok::<(), anyhow::Error>(())
             }
         });
-        let capability = open_publication_capability(&socket).await.unwrap();
+        let capability = open_publication_capability(&socket).await?;
 
-        let mut abandoned = accept_inherited_stream(capability.raw_fd()).await.unwrap();
+        let mut abandoned = accept_inherited_stream(capability.raw_fd()).await?;
         abandoned
-            .write_all(&serde_json::to_vec(&GitHubRequest::Ping).unwrap())
-            .await
-            .unwrap();
-        abandoned.write_all(b"\n").await.unwrap();
+            .write_all(&serde_json::to_vec(&GitHubRequest::Ping)?)
+            .await?;
+        abandoned.write_all(b"\n").await?;
         drop(abandoned);
 
         let response = request_over_stream(
-            accept_inherited_stream(capability.raw_fd()).await.unwrap(),
+            accept_inherited_stream(capability.raw_fd()).await?,
             &GitHubRequest::Ping,
         )
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(response, json!({ "sequence": 2 }));
 
-        broker.await.unwrap();
+        broker.await??;
+        Ok(())
     }
 
     #[test]

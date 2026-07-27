@@ -42,7 +42,8 @@ pub use apple_passwords_import::{
 };
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage, classify_authentication_workflow,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
 pub use authenticator::{
@@ -70,8 +71,8 @@ pub use credit_card::CreditCardSecret;
 pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationResolution,
-    WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
+    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput,
+    PasskeyRegistrationResolution, WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
     deterministic_passkey_prf_input, finish_passkey_device_identity,
     finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
     parse_wrapped_device_identity, passkey_assertion_request,
@@ -82,13 +83,14 @@ pub use device_key_protection::{
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use enrollment::{
-    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
-    EnrollmentState, PersonalCredentialTransfer, PersonalEnrollmentProvider,
-    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
-    SharedProviderGrant, TypedEnrollmentProvider, build_enrollment_link,
-    decrypt_enrollment_payload, encrypt_enrollment_payload, normalize_enrollment_code,
-    parse_enrollment_envelope, peek_enrollment_entry_id, peek_enrollment_entry_label,
-    peek_enrollment_issued_at,
+    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput,
+    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, OAuthAccountIdentity,
+    OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, PersonalCredentialTransfer,
+    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, SharedEnrollmentProvider,
+    SharedEnrollmentProviderData, SharedProviderGrant, TypedEnrollmentProvider,
+    build_enrollment_link, decrypt_enrollment_payload, encrypt_enrollment_payload,
+    normalize_enrollment_code, parse_enrollment_envelope, peek_enrollment_entry_id,
+    peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, EventResult,
@@ -104,9 +106,10 @@ pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
 };
 pub use i18n::{
-    get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,
-    resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_error_message,
-    resolve_translation_catalog, translate, translate_from_catalog, translate_with_replacements,
+    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
+    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
+    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
+    translate_with_replacements,
 };
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
@@ -179,37 +182,37 @@ pub use nook_auth2::{
 pub use multi_device::sentinel_member_records_from_public_roster;
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelParticipantEntry,
-    SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
-    apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
-    build_members_records, count_sentinel_share_records, create_join_request_record,
+    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
+    SentinelParticipantEntry, SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord,
+    VaultMetaState, apply_vault_meta_operation, approve_join_request, assess_connect_access,
+    auth_record, build_members_records, count_sentinel_share_records, create_join_request_record,
     create_join_request_record_with_signing_key, create_sentinel_share_records,
     create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
     deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
     enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
-    event_graph_has_active_device_access, explain_connect_blocked, generate_dec, generate_id,
-    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
-    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
-    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
-    is_sentinel_share_stored_record, is_vault_meta_record, join_record_key, list_join_requests,
-    materialize_vault_meta_from_graph, member_from_identity, member_from_join, member_stored_key,
-    merge_remote_join_records, open_sentinel_share_for_identity, parse_auth_envelopes,
-    parse_join_request, parse_sentinel_share_envelope, pending_join_for_device,
-    reconstruct_sentinel_vault_keys, reconstruct_sentinel_vault_keys_from_opened,
-    rename_vault_member, replace_member_records, resolve_dec, resolve_dek, resolve_member_roster,
-    resolve_members_key, resolve_secrets_key, revoke_vault_member, roster_add_member,
-    sentinel_share_record_key, user_stored_records, vault_has_multi_device_records,
+    event_graph_has_active_device_access, generate_dec, generate_id, generate_symmetric_key,
+    generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
+    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
+    is_members_stored_record, is_reserved_device_label, is_sentinel_share_stored_record,
+    is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
+    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
+    open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
+    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_sentinel_vault_keys,
+    reconstruct_sentinel_vault_keys_from_opened, rename_vault_member, replace_member_records,
+    resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+    revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
+    vault_has_multi_device_records,
 };
 
 pub use nook_event_log::{
     AppendEventInput, Ed25519Signature, EncryptedSecretPayload, EpochRecord, EpochRotationReason,
-    EventGraph, EventId, EventInsertStatus, EventPendingReason, GenesisImportPayload, KeyEpoch,
-    LocalEventStore, ObservedHeads, ProjectedSecret, RemoteEventLogClassification,
-    SecretFingerprint, SecretFingerprintAssignment, SecretReplacementConflict, SecurityConflict,
-    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation, VaultProjection,
-    assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
-    canonical_json_bytes, canonicalize_json, classify_remote_event_log,
+    EpochTransition, EventGraph, EventId, EventInsertStatus, EventPendingReason,
+    GenesisImportPayload, KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret,
+    ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch, RemoteEventLogClassification,
+    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
+    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+    VaultProjection, assert_projection_permutation_invariant, build_genesis_import_event,
+    build_signed_event, canonical_json_bytes, canonicalize_json, classify_remote_event_log,
     concurrent_epoch_rotations_conflict, encrypted_secret_from_armored, event_id_from_body_bytes,
     format_ed25519_signature, operation_starts_epoch, parents_from_heads, parse_ed25519_signature,
     parse_event_storage_bytes, parse_remote_event_storage_bytes, project_vault,
@@ -232,17 +235,18 @@ pub use sync_provider_credentials::{
     seal_provider_credentials_for_public_key,
 };
 pub use sync_provider_store::{
-    AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
-    ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
-    active_vault_providers, bind_google_drive_shared_folder, draft_storage_args,
-    enrollment_provider_for_architecture, enrollment_provider_for_architecture_with_storage_target,
-    enrollment_provider_onboarding_type, ensure_local_provider_row, find_duplicate_sync_provider,
-    first_compatible_provider_id, google_oauth_tokens_to_config, icloud_oauth_tokens_to_config,
-    local_provider_for_active_vault, localize_provider_label, migrate_provider_fields,
-    normalize_auth_snapshot, oauth_remote_storage_ref, provider_label_by_id,
-    provider_onboarding_type, provider_replication_capability_for_row, provider_storage_detail,
-    provider_supports_replication, provider_target_key, providers_visible_while_device_locked,
-    replace_active_vault_provider_grants, seed_provider_from_legacy_storage,
+    AuthProvidersSnapshotData, LocalFolderConfigData, ManagerStoreScopeRef, NormalizedAuthSnapshot,
+    OAuthFileConfigData, ProviderLabelLabels, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
+    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageConnectArgs,
+    StorageProviderData, active_vault_providers, bind_google_drive_shared_folder,
+    draft_storage_args, enrollment_provider_for_architecture,
+    enrollment_provider_for_architecture_with_storage_target, enrollment_provider_onboarding_type,
+    ensure_local_provider_row, find_duplicate_sync_provider, first_compatible_provider_id,
+    google_oauth_tokens_to_config, icloud_oauth_tokens_to_config, local_provider_for_active_vault,
+    localize_provider_label, normalize_auth_snapshot, oauth_remote_storage_ref,
+    provider_label_by_id, provider_onboarding_type, provider_replication_capability_for_row,
+    provider_storage_detail, provider_supports_replication, provider_target_key,
+    providers_visible_while_device_locked, replace_active_vault_provider_grants,
     set_google_drive_provider_mode, set_icloud_provider_mode, staged_remote_storage_args,
     storage_args_for_provider, sync_providers_for_active_vault, update_oauth_remote_ref,
     update_provider_sync_metadata, validate_provider_row_replication, vault_storage_args,
@@ -266,21 +270,23 @@ pub use vault::vault_recovery_options::{
     recovery_device_id_hint, vault_recovery_options,
 };
 pub use vault_access_diagnostics::{
-    VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
-    VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus,
-    VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic, diagnose_vault_access,
+    DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticsReport,
+    VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic, VaultEventPayloadAccessDiagnostic,
+    VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus, VaultRecordDecryptabilityStatus,
+    VaultSecretAccessDiagnostic, diagnose_vault_access,
 };
 pub use vault_architecture::{
-    DeviceMode, OnboardingType, ProviderReplicationCapability, ReplicationType, SentinelPolicy,
+    DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
+    ProviderReplicationCapability, ReplicationType, SentinelConfiguration, SentinelPolicy,
     SharedJoinerIdentityKind, SharedStorageGrantOutcome, SharedStorageGrantRequest,
     VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
     prepare_shared_storage_grant, provider_replication_capability,
     validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_client_policy::{
-    DeviceProtectionStatus, JoinEnrollmentState, RemoteVaultAssessDecision,
+    ActiveVaultStore, DeviceProtectionStatus, JoinEnrollmentState, RemoteVaultAssessDecision,
     RemoteVaultRecoveryState, SentinelVaultUnlockState, UnauthenticatedSyncDecision,
-    VaultClientPolicy, VaultEditBlockReason,
+    VaultAccessObservation, VaultClientPolicy, VaultEditDecision, VaultSwitchDecision,
 };
 pub use vault_connect::{
     LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,
@@ -295,10 +301,12 @@ pub use vault_epoch_crypto::{
 };
 pub use vault_event_session::VaultEventSession;
 pub use vault_format::{
-    VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
-    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_architecture,
-    read_vault_name, read_vault_password_entries, read_vault_schema_version, read_vault_store_id,
-    read_vault_unlock, read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,
+    VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
+    VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,
+    deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
+    read_vault_architecture, read_vault_name, read_vault_password_entries,
+    read_vault_schema_version, read_vault_store_id, read_vault_unlock, read_vault_version,
+    serialize_stored, serialize_stored_yaml_with_unlock,
     serialize_stored_yaml_with_unlock_and_name,
     serialize_stored_yaml_with_unlock_name_architecture, set_vault_name,
 };
@@ -312,10 +320,11 @@ pub use vault_ids::{
 pub use vault_runtime_policy::{
     ClientRunMode, DEFAULT_VAULT_IDLE_TIMEOUT_MS, DEFAULT_VAULT_IDLE_WARNING_MS,
     DEFAULT_VAULT_SYNC_INTERVAL_MS, MIN_VAULT_IDLE_TIMEOUT_MS, MIN_VAULT_SYNC_INTERVAL_MS,
-    VaultRuntimePolicy,
+    RuntimeConfigValue, VaultRuntimePolicy,
 };
 pub use vault_search_catalog::{
-    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SecretSearchCatalog, SecretSearchCatalogReconcile,
+    SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SecretSearchCatalog,
+    SecretSearchCatalogReconcile,
 };
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
@@ -324,19 +333,20 @@ pub use vault_sentinel_genesis::{
 };
 pub use vault_sentinel_unlock::{respond_to_sentinel_unlock_request, start_sentinel_unlock};
 pub use vault_session::{
-    DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage,
+    DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage, SecretTypeFilter,
     apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
     decrypt_encrypted_secret, query_encrypted_secrets,
 };
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_sync::{
-    VaultRevision, VaultSyncAction, compare_vault_sync, compare_vault_sync_with_common,
-    read_vault_revision, vault_content_hash,
+    CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, compare_vault_sync,
+    compare_vault_sync_with_common, read_vault_revision, vault_content_hash,
 };
 pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
 pub use vault_sync_store::{
-    MemoryVaultStore, RevisionGuardedWrite, fan_out_sync, reconcile_vault_stores,
-    reconcile_vault_stores_with_common, resolve_conflict_keep_local, resolve_conflict_keep_remote,
+    MemoryVaultStore, RevisionGuardedWrite, StoreRevision, StoreRevisionRef, fan_out_sync,
+    reconcile_vault_stores, reconcile_vault_stores_with_common, resolve_conflict_keep_local,
+    resolve_conflict_keep_remote,
 };
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,

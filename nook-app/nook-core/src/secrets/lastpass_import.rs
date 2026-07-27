@@ -184,13 +184,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_logins_and_secure_notes_with_quoted_multiline_values() {
+    fn converts_logins_and_secure_notes_with_quoted_multiline_values() -> anyhow::Result<()> {
         let export = concat!(
             "url,username,password,extra,name,grouping,fav\n",
             "https://github.com/login,alice,secret,\"Recovery codes,\nelsewhere\",GitHub,Work,1\n",
             "http://sn,,,\"# Private note\n\nKeep offline\",Recovery,Personal,0\n",
         );
-        let plan = plan_lastpass_import(export).unwrap();
+        let plan = plan_lastpass_import(export)?;
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(
@@ -210,16 +210,17 @@ mod tests {
                 note: "# Private note\n\nKeep offline\n\n## LastPass\n- group: Personal".to_owned(),
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_reordered_headers_bom_extra_columns_and_blank_rows() {
+    fn accepts_reordered_headers_bom_extra_columns_and_blank_rows() -> anyhow::Result<()> {
         let export = concat!(
             "\u{feff}name,password,url,extra,username,fav,grouping,totp,ignored\n",
             "Router,router-secret,,note,admin,false,Home,otpauth://totp/router?secret=ABC,value\n",
             ",,,,,,,,\n",
         );
-        let plan = plan_lastpass_import(export).unwrap();
+        let plan = plan_lastpass_import(export)?;
         assert_eq!(plan.source_count, 1);
         assert_eq!(
             plan.items,
@@ -234,6 +235,7 @@ mod tests {
                 .to_owned(),
             })]
         );
+        Ok(())
     }
 
     #[test]

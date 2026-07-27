@@ -6,6 +6,7 @@ import {
   type NookPendingSyncConflict as PendingSyncConflict,
 } from '$app-wasm'
 import { syncConflictLabel } from '$lib/vault/sync'
+import { intoWasmStringValue } from '$lib/wasm-string-value'
 
 function buildConflict(kind?: string): PendingSyncConflict {
   return kind === 'store_id'
@@ -48,7 +49,9 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(60_000)
+    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('1000'))).toBe(
+      60_000,
+    )
   })
 
   test('e2e build honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -56,7 +59,9 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(1000)
+    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('1000'))).toBe(
+      1000,
+    )
   })
 
   test('dev mode honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -64,7 +69,9 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs('500')).toBe(500)
+    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('500'))).toBe(
+      500,
+    )
   })
 })
 

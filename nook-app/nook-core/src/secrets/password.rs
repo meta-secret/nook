@@ -78,16 +78,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generates_password_with_requested_length() {
+    fn generates_password_with_requested_length() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 24,
             lowercase: true,
             uppercase: true,
             numbers: true,
             symbols: false,
-        })
-        .unwrap();
+        })?;
         assert_eq!(password.len(), 24);
+        Ok(())
     }
 
     #[test]
@@ -99,7 +99,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("at least one character set"));
     }
 
@@ -112,37 +112,36 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("between 8 and 128"));
     }
 
     #[test]
-    fn uses_only_selected_charsets() {
+    fn uses_only_selected_charsets() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 32,
             lowercase: true,
             uppercase: false,
             numbers: true,
             symbols: false,
-        })
-        .unwrap();
+        })?;
         assert!(
             password
                 .chars()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_min_and_max_length() {
+    fn accepts_min_and_max_length() -> anyhow::Result<()> {
         let min = generate_password(&PasswordOptions {
             length: MIN_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
-        .unwrap();
+        })?;
         assert_eq!(min.len(), MIN_PASSWORD_LENGTH);
 
         let max = generate_password(&PasswordOptions {
@@ -151,9 +150,9 @@ mod tests {
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
-        .unwrap();
+        })?;
         assert_eq!(max.len(), MAX_PASSWORD_LENGTH);
+        Ok(())
     }
 
     #[test]
@@ -165,20 +164,20 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .unwrap_err();
+        .expect_err("password test should reject invalid input");
         assert!(err.to_string().contains("between 8 and 128"));
     }
 
     #[test]
-    fn symbols_only_charset() {
+    fn symbols_only_charset() -> anyhow::Result<()> {
         let password = generate_password(&PasswordOptions {
             length: 16,
             lowercase: false,
             uppercase: false,
             numbers: false,
             symbols: true,
-        })
-        .unwrap();
+        })?;
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
+        Ok(())
     }
 }

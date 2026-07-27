@@ -5,7 +5,7 @@
 //! methods are reachable when the vault is in password mode — the
 //! password-mode counterpart is `connectWithPassword` (`manager::password`).
 
-use super::NookVaultManager;
+use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
@@ -250,7 +250,7 @@ impl NookVaultManager {
         &mut self,
         roster: &[nook_core::VaultMember],
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
-        let policy = self.vault.architecture.sentinel.unwrap_or_default();
+        let policy = self.vault.architecture.sentinel.policy_or_default();
         if roster.len() > usize::from(policy.required_participants) {
             return Err(nook_core::MultiDeviceError::SentinelGenesisRosterFull.into());
         }
@@ -293,9 +293,11 @@ impl NookVaultManager {
                 ciphertext: envelope.ciphertext,
             });
         }
-        if let Some(sentinel) = self.vault.architecture.sentinel.as_mut() {
-            sentinel.ready_participants = u8::try_from(shares.len()).unwrap_or(u8::MAX);
-        }
+        self.vault.architecture.sentinel =
+            nook_core::SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
+                ready_participants: u8::try_from(shares.len()).unwrap_or(u8::MAX),
+                ..policy
+            });
         Ok(Some(nook_core::VaultOperation::SentinelSharesIssued {
             shares,
         }))
@@ -430,7 +432,7 @@ impl NookVaultManager {
             self.persist_vault_change(Vec::new()).await?;
             self.vault.secrets_key.clear();
             self.vault.members_key.clear();
-            self.vault.crypto = None;
+            self.vault.crypto = VaultCryptoState::Locked;
             return Ok(Vec::new());
         }
 

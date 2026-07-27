@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
   NookVaultClientPolicy,
+  NookVaultSwitchState,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   activeVaultProviders,
@@ -54,17 +55,29 @@ describe('portable vault client policy', () => {
       expect(
         policy.unauthenticatedSyncDecision(
           true,
+          true,
           VaultAccessStatus.Ready,
           JoinEnrollmentState.Pending,
           false,
         ),
       ).toBe(UnauthenticatedSyncDecision.Approved)
-      expect(policy.vaultSwitchTarget(' store-b ', 'store-a', false)).toBe(
-        'store-b',
+      const switchVault = policy.vaultSwitchTarget(
+        ' store-b ',
+        true,
+        'store-a',
+        false,
       )
-      expect(policy.vaultSwitchTarget('store-a', 'store-a', false)).toBe(
-        undefined,
+      expect(switchVault.state).toBe(NookVaultSwitchState.Switch)
+      expect(switchVault.target()).toBe('store-b')
+      switchVault.free()
+      const noSwitch = policy.vaultSwitchTarget(
+        'store-a',
+        true,
+        'store-a',
+        false,
       )
+      expect(noSwitch.state).toBe(NookVaultSwitchState.NoChange)
+      noSwitch.free()
     } finally {
       policy.free()
     }
@@ -88,24 +101,16 @@ describe('portable vault client policy', () => {
     ).toEqual(['local-a'])
   })
 
-  test('normalizes a legacy Google Drive draft before manager connection', () => {
-    const args = stagedRemoteStorageArgs(
-      'oauth-file',
-      undefined,
-      'nook-events',
-      {
+  test('rejects an invalid OAuth preset without a legacy fallback', () => {
+    expect(() =>
+      stagedRemoteStorageArgs('oauth-file', undefined, 'nook-events', {
         preset: '' as OAuthFilePreset,
         accessToken: 'token',
         fileId: 'file-id',
         fileName: 'stored-name',
-      },
-    )
-    expect(args).toBeDefined()
-    try {
-      expect(args?.mode).toBe('google-drive')
-      expect(args?.repo).toBe('file-id\tnook-events')
-    } finally {
-      args?.free()
-    }
+        driveMode: 'private',
+        iCloudMode: 'private',
+      }),
+    ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
   })
 })

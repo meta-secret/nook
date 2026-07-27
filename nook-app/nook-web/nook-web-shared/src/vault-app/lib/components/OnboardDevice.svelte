@@ -31,6 +31,7 @@
     type NookPasswordEntrySummary,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
     firstCompatibleProvider,
     onboardingType,
@@ -177,7 +178,7 @@
   )
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return peekEnrollmentIssuedAt(enrollmentCode) ?? ''
+    return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode)) ?? ''
   })
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,

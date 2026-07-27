@@ -140,14 +140,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn imports_chromium_login_and_preserves_name_and_note() {
+    fn imports_chromium_login_and_preserves_name_and_note() -> anyhow::Result<()> {
         let csv = concat!(
             "name,url,username,password,note\n",
             "\"Example, Inc\",https://example.com/login,alice@example.com,secret,",
             "\"Recovery, information\"\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)?;
 
         assert_eq!(plan.source_count, 1);
         assert_eq!(plan.skipped_unsupported, 0);
@@ -161,14 +161,15 @@ mod tests {
                     .to_owned(),
             })]
         );
+        Ok(())
     }
 
     #[test]
-    fn supports_bom_reordered_headers_and_common_aliases() {
+    fn supports_bom_reordered_headers_and_common_aliases() -> anyhow::Result<()> {
         let csv =
             "\u{feff}Password,User_Name,Website URL,Title,Notes\nsecret,alice,,Example,Personal\n";
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)?;
 
         assert_eq!(
             plan.items,
@@ -179,44 +180,48 @@ mod tests {
                 notes: "Personal".to_owned(),
             })]
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_minimal_google_documented_columns_and_skips_empty_rows() {
+    fn accepts_minimal_google_documented_columns_and_skips_empty_rows() -> anyhow::Result<()> {
         let csv = concat!(
             "url,username,password\n",
             "https://example.com,alice,secret\n",
             ",,\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)?;
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.items.len(), 1);
         assert_eq!(plan.skipped_unsupported, 1);
+        Ok(())
     }
 
     #[test]
-    fn preserves_leading_and_trailing_password_whitespace() {
+    fn preserves_leading_and_trailing_password_whitespace() -> anyhow::Result<()> {
         let csv = "url,username,password\nhttps://example.com,alice,\" secret \"\n";
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
         };
 
         assert_eq!(login.password, " secret ");
+        Ok(())
     }
 
     #[test]
-    fn skips_rows_without_a_password_but_preserves_whitespace_only_passwords() {
+    fn skips_rows_without_a_password_but_preserves_whitespace_only_passwords() -> anyhow::Result<()>
+    {
         let csv = concat!(
             "url,username,password\n",
             "https://example.com,alice,\n",
             "https://spaces.example,alice,\"   \"\n"
         );
 
-        let plan = plan_chrome_passwords_import(csv).unwrap();
+        let plan = plan_chrome_passwords_import(csv)?;
 
         assert_eq!(plan.source_count, 2);
         assert_eq!(plan.skipped_unsupported, 1);
@@ -224,12 +229,13 @@ mod tests {
             panic!("expected login");
         };
         assert_eq!(login.password, "   ");
+        Ok(())
     }
 
     #[test]
     fn rejects_unrelated_csv_headers() {
         let error = plan_chrome_passwords_import("service,login,secret\nExample,alice,password\n")
-            .unwrap_err();
+            .expect_err("chrome passwords import test should reject invalid input");
 
         assert!(matches!(
             error,

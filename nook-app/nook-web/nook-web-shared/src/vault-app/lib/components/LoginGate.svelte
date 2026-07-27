@@ -39,6 +39,7 @@
     peekEnrollmentEntryLabel,
     SentinelGenesisPhase,
   } from '$app-wasm'
+  import { takeWasmStringValue } from '$lib/wasm-string-value'
 
   let {
     vault,
@@ -245,8 +246,12 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
-      passwordEntryLabel={peekEnrollmentEntryLabel(prefillEnrollmentCode)}
+      passwordEntryId={takeWasmStringValue(
+        peekEnrollmentEntryId(prefillEnrollmentCode),
+      )}
+      passwordEntryLabel={takeWasmStringValue(
+        peekEnrollmentEntryLabel(prefillEnrollmentCode),
+      )}
       {isVerifying}
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}

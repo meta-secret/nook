@@ -89,49 +89,51 @@ mod tests {
     use super::*;
     use crate::SymmetricKey;
 
-    fn test_key() -> SymmetricKey {
-        SymmetricKey::parse("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-            .unwrap()
+    fn test_key() -> anyhow::Result<SymmetricKey> {
+        Ok(SymmetricKey::parse(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )?)
     }
 
     #[test]
-    fn roundtrip_with_cached_crypto() {
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
-        let encrypted = crypto.encrypt_value("hello world").unwrap();
-        let decrypted = crypto.decrypt_value(&encrypted).unwrap();
+    fn roundtrip_with_cached_crypto() -> anyhow::Result<()> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let encrypted = crypto.encrypt_value("hello world")?;
+        let decrypted = crypto.decrypt_value(&encrypted)?;
         assert_eq!(decrypted.as_str(), "hello world");
+        Ok(())
     }
 
     #[test]
-    fn wrong_passphrase_fails() {
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
-        let encrypted = crypto.encrypt_value("secret").unwrap();
-        let wrong =
-            VaultCrypto::new(&SymmetricKey::parse("cafebabe".repeat(8).as_str()).unwrap()).unwrap();
+    fn wrong_passphrase_fails() -> anyhow::Result<()> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let encrypted = crypto.encrypt_value("secret")?;
+        let wrong = VaultCrypto::new(&SymmetricKey::parse("cafebabe".repeat(8).as_str())?)?;
         assert!(wrong.decrypt_value(&encrypted).is_err());
+        Ok(())
     }
 
     #[test]
-    fn encrypt_is_nondeterministic() {
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
-        let a = crypto.encrypt_value("same").unwrap();
-        let b = crypto.encrypt_value("same").unwrap();
+    fn encrypt_is_nondeterministic() -> anyhow::Result<()> {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let a = crypto.encrypt_value("same")?;
+        let b = crypto.encrypt_value("same")?;
         assert_ne!(a, b);
-        assert_eq!(crypto.decrypt_value(&a).unwrap().as_str(), "same");
-        assert_eq!(crypto.decrypt_value(&b).unwrap().as_str(), "same");
+        assert_eq!(crypto.decrypt_value(&a)?.as_str(), "same");
+        assert_eq!(crypto.decrypt_value(&b)?.as_str(), "same");
+        Ok(())
     }
 
     #[test]
-    fn bulk_roundtrip_is_practical_for_password_manager_imports() {
+    fn bulk_roundtrip_is_practical_for_password_manager_imports() -> anyhow::Result<()> {
         let started = std::time::Instant::now();
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = (0..1_300)
             .map(|index| crypto.encrypt_value(format!("secret-{index}")))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+            .collect::<Result<Vec<_>, _>>()?;
         for (index, ciphertext) in encrypted.iter().enumerate() {
             assert_eq!(
-                crypto.decrypt_value(ciphertext).unwrap().as_str(),
+                crypto.decrypt_value(ciphertext)?.as_str(),
                 format!("secret-{index}")
             );
         }
@@ -140,5 +142,6 @@ mod tests {
             "1,300-record roundtrip took {:?}",
             started.elapsed()
         );
+        Ok(())
     }
 }

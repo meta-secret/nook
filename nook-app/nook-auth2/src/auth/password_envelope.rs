@@ -145,14 +145,20 @@ impl VaultUnlock {
         }
     }
 
-    #[must_use]
-    pub fn password_entry(&self, id: &str) -> Option<&PasswordUnlockEntry> {
-        self.password_entries().iter().find(|entry| entry.id == id)
+    pub fn password_entry(&self, id: &str) -> PasswordResult<&PasswordUnlockEntry> {
+        self.password_entries()
+            .iter()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| PasswordError::EntryNotFound {
+                entry_id: id.to_owned(),
+            })
     }
 
-    #[must_use]
-    pub fn password_envelope(&self) -> Option<&PasswordEnvelope> {
-        self.password_entries().first().map(|entry| &entry.envelope)
+    pub fn password_envelope(&self) -> PasswordResult<&PasswordEnvelope> {
+        self.password_entries()
+            .first()
+            .map(|entry| &entry.envelope)
+            .ok_or(PasswordError::EnvelopeNotFound)
     }
 }
 
@@ -362,19 +368,17 @@ fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> Passw
 mod tests {
     use super::*;
 
-    fn sample_keys() -> VaultKeys {
-        VaultKeys {
-            secrets_key: SymmetricKey::parse(&"deadbeefdeadbeefdeadbeefdeadbeef".repeat(2))
-                .unwrap(),
-            members_key: SymmetricKey::parse(&"abadcafeabadcafeabadcafeabadcafe".repeat(2))
-                .unwrap(),
-        }
+    fn sample_keys() -> anyhow::Result<VaultKeys> {
+        Ok(VaultKeys {
+            secrets_key: SymmetricKey::parse(&"deadbeefdeadbeefdeadbeefdeadbeef".repeat(2))?,
+            members_key: SymmetricKey::parse(&"abadcafeabadcafeabadcafeabadcafe".repeat(2))?,
+        })
     }
 
     #[test]
-    fn roundtrip_attach_and_resolve() {
-        let keys = sample_keys();
-        let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
+    fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
+        let keys = sample_keys()?;
+        let envelope = attach_password_envelope(&keys, "correct horse battery staple")?;
         assert_eq!(envelope.version, 1);
         assert_eq!(envelope.kdf, "scrypt");
         assert!(
@@ -384,25 +388,27 @@ mod tests {
                 .contains("BEGIN AGE ENCRYPTED FILE")
         );
 
-        let resolved =
-            resolve_keys_from_password(&envelope, "correct horse battery staple").unwrap();
+        let resolved = resolve_keys_from_password(&envelope, "correct horse battery staple")?;
         assert_eq!(resolved, keys);
+        Ok(())
     }
 
     #[test]
-    fn wrong_password_fails() {
-        let envelope =
-            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+    fn wrong_password_fails() -> anyhow::Result<()> {
+        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         let err = resolve_keys_from_password(&envelope, "wrong password something else");
         assert!(err.is_err());
         assert!(!verify_password(&envelope, "wrong password something else"));
         assert!(verify_password(&envelope, "correct horse battery staple"));
+        Ok(())
     }
 
     #[test]
-    fn short_password_rejected() {
-        let err = attach_password_envelope(&sample_keys(), "abc").unwrap_err();
+    fn short_password_rejected() -> anyhow::Result<()> {
+        let err = attach_password_envelope(&sample_keys()?, "abc")
+            .expect_err("password envelope test should reject invalid input");
         assert!(err.to_string().contains("at least"));
+        Ok(())
     }
 
     #[test]
@@ -421,45 +427,51 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_version_rejected() {
+    fn unsupported_version_rejected() -> anyhow::Result<()> {
         let mut envelope =
-            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+            attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         envelope.version = 99;
         assert!(resolve_keys_from_password(&envelope, "correct horse battery staple").is_err());
+        Ok(())
     }
 
     #[test]
-    fn unsupported_kdf_rejected() {
+    fn unsupported_kdf_rejected() -> anyhow::Result<()> {
         let mut envelope =
-            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+            attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         envelope.kdf = "argon2".to_owned();
         assert!(resolve_keys_from_password(&envelope, "correct horse battery staple").is_err());
+        Ok(())
     }
 
     #[test]
-    fn ciphertext_is_nondeterministic() {
-        let keys = sample_keys();
-        let a = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
-        let b = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
+    fn ciphertext_is_nondeterministic() -> anyhow::Result<()> {
+        let keys = sample_keys()?;
+        let a = attach_password_envelope(&keys, "correct horse battery staple")?;
+        let b = attach_password_envelope(&keys, "correct horse battery staple")?;
         assert_ne!(a.ciphertext, b.ciphertext);
+        Ok(())
     }
 
     #[test]
-    fn vault_unlock_keys_variant_serialises_with_type_tag() {
-        let yaml = serde_yaml::to_string(&VaultUnlock::Keys).unwrap();
+    fn vault_unlock_keys_variant_serialises_with_type_tag() -> anyhow::Result<()> {
+        let yaml = serde_yaml::to_string(&VaultUnlock::Keys)?;
         assert!(yaml.as_str().contains("type: keys"));
         assert!(!yaml.as_str().contains("envelope:"));
 
-        let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
+        let parsed: VaultUnlock = serde_yaml::from_str(&yaml)?;
         assert_eq!(parsed, VaultUnlock::Keys);
         assert!(!parsed.is_password());
-        assert!(parsed.password_envelope().is_none());
+        assert!(matches!(
+            parsed.password_envelope(),
+            Err(PasswordError::EnvelopeNotFound)
+        ));
+        Ok(())
     }
 
     #[test]
-    fn vault_unlock_password_variant_roundtrips() {
-        let envelope =
-            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+    fn vault_unlock_password_variant_roundtrips() -> anyhow::Result<()> {
+        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         let value = VaultUnlock::Passwords {
             entries: vec![PasswordUnlockEntry {
                 id: "entry-1".to_owned(),
@@ -468,17 +480,18 @@ mod tests {
                 envelope: envelope.clone(),
             }],
         };
-        let yaml = serde_yaml::to_string(&value).unwrap();
+        let yaml = serde_yaml::to_string(&value)?;
         assert!(yaml.as_str().contains("type: password"));
         assert!(yaml.as_str().contains("entries:"));
         assert!(yaml.as_str().contains("john's password"));
 
-        let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
+        let parsed: VaultUnlock = serde_yaml::from_str(&yaml)?;
         assert!(parsed.is_password());
         assert_eq!(parsed.password_entries().len(), 1);
         assert_eq!(
-            parsed.password_envelope().map(|e| e.ciphertext.trim()),
-            Some(envelope.ciphertext.trim()),
+            parsed.password_envelope()?.ciphertext.trim(),
+            envelope.ciphertext.trim(),
         );
+        Ok(())
     }
 }

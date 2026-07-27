@@ -17,15 +17,20 @@ pub enum ClientRunMode {
 }
 
 impl ClientRunMode {
-    #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Result<Self, String> {
         match value {
-            "localDev" | "local" | "development" | "test" => Some(Self::Local),
-            "dev" => Some(Self::Dev),
-            "prod" | "production" => Some(Self::Prod),
-            _ => None,
+            "localDev" | "local" | "development" | "test" => Ok(Self::Local),
+            "dev" => Ok(Self::Dev),
+            "prod" | "production" => Ok(Self::Prod),
+            unknown => Err(format!("unknown client run mode: {unknown}")),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeConfigValue<'a> {
+    Unset,
+    Set(&'a str),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,7 +74,7 @@ impl VaultRuntimePolicy {
     }
 
     #[must_use]
-    pub fn resolve_vault_idle_timeout_ms(self, raw: Option<&str>) -> u32 {
+    pub fn resolve_vault_idle_timeout_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_TIMEOUT_MS;
         }
@@ -77,7 +82,7 @@ impl VaultRuntimePolicy {
     }
 
     #[must_use]
-    pub fn resolve_vault_idle_warning_ms(self, raw: Option<&str>) -> u32 {
+    pub fn resolve_vault_idle_warning_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_WARNING_MS;
         }
@@ -85,7 +90,7 @@ impl VaultRuntimePolicy {
     }
 
     #[must_use]
-    pub fn resolve_vault_sync_interval_ms(self, raw: Option<&str>) -> u32 {
+    pub fn resolve_vault_sync_interval_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
         if !self.allow_fast_sync() {
             return DEFAULT_VAULT_SYNC_INTERVAL_MS;
         }
@@ -94,13 +99,16 @@ impl VaultRuntimePolicy {
     }
 }
 
-fn parse_config_millis(raw: Option<&str>, min: u32) -> Option<u32> {
-    let raw = raw?.trim();
+fn parse_config_millis(raw: RuntimeConfigValue<'_>, min: u32) -> Result<u32, ()> {
+    let RuntimeConfigValue::Set(raw) = raw else {
+        return Err(());
+    };
+    let raw = raw.trim();
     if raw.is_empty() {
-        return None;
+        return Err(());
     }
-    let value = raw.parse::<u32>().ok()?;
-    (value >= min).then_some(value)
+    let value = raw.parse::<u32>().map_err(|_| ())?;
+    if value >= min { Ok(value) } else { Err(()) }
 }
 
 #[cfg(test)]
@@ -110,30 +118,27 @@ mod tests {
     #[test]
     fn run_mode_aliases_are_classified_in_core() {
         for alias in ["localDev", "local", "development", "test"] {
-            assert_eq!(ClientRunMode::parse(alias), Some(ClientRunMode::Local));
+            assert_eq!(ClientRunMode::parse(alias), Ok(ClientRunMode::Local));
         }
-        assert_eq!(ClientRunMode::parse("dev"), Some(ClientRunMode::Dev));
-        assert_eq!(ClientRunMode::parse("prod"), Some(ClientRunMode::Prod));
-        assert_eq!(
-            ClientRunMode::parse("production"),
-            Some(ClientRunMode::Prod)
-        );
-        assert_eq!(ClientRunMode::parse("preview"), None);
+        assert_eq!(ClientRunMode::parse("dev"), Ok(ClientRunMode::Dev));
+        assert_eq!(ClientRunMode::parse("prod"), Ok(ClientRunMode::Prod));
+        assert_eq!(ClientRunMode::parse("production"), Ok(ClientRunMode::Prod));
+        assert!(ClientRunMode::parse("preview").is_err());
     }
 
     #[test]
     fn production_ignores_unsafe_fast_overrides() {
         let policy = VaultRuntimePolicy::new(ClientRunMode::Prod, false);
         assert_eq!(
-            policy.resolve_vault_idle_timeout_ms(Some("1000")),
+            policy.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000")),
             DEFAULT_VAULT_IDLE_TIMEOUT_MS
         );
         assert_eq!(
-            policy.resolve_vault_idle_warning_ms(Some("0")),
+            policy.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0")),
             DEFAULT_VAULT_IDLE_WARNING_MS
         );
         assert_eq!(
-            policy.resolve_vault_sync_interval_ms(Some("250")),
+            policy.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("250")),
             DEFAULT_VAULT_SYNC_INTERVAL_MS
         );
         assert!(!policy.expose_debug_hooks());
@@ -142,21 +147,30 @@ mod tests {
     #[test]
     fn local_and_explicit_test_modes_honor_valid_overrides() {
         let local = VaultRuntimePolicy::new(ClientRunMode::Local, false);
-        assert_eq!(local.resolve_vault_idle_timeout_ms(Some("1200")), 1200);
-        assert_eq!(local.resolve_vault_idle_warning_ms(Some("0")), 0);
-        assert_eq!(local.resolve_vault_sync_interval_ms(Some("300")), 300);
         assert_eq!(
-            local.resolve_vault_idle_timeout_ms(Some("999")),
+            local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1200")),
+            1200
+        );
+        assert_eq!(
+            local.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0")),
+            0
+        );
+        assert_eq!(
+            local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("300")),
+            300
+        );
+        assert_eq!(
+            local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("999")),
             DEFAULT_VAULT_IDLE_TIMEOUT_MS
         );
         assert_eq!(
-            local.resolve_vault_sync_interval_ms(Some("249")),
+            local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("249")),
             DEFAULT_VAULT_SYNC_INTERVAL_MS
         );
 
         let production_test = VaultRuntimePolicy::new(ClientRunMode::Prod, true);
         assert_eq!(
-            production_test.resolve_vault_idle_timeout_ms(Some("1000")),
+            production_test.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000")),
             1000
         );
         assert!(production_test.expose_debug_hooks());

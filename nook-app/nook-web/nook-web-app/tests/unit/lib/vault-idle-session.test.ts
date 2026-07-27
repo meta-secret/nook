@@ -4,6 +4,7 @@ import initNookWasm, {
   NookRuntimeConfig,
 } from '$app-wasm'
 import { createVaultIdleSessionTracker } from '$lib/vault-idle-session'
+import { intoWasmStringValue } from '$lib/wasm-string-value'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -15,8 +16,12 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(config.resolveVaultIdleTimeoutMs()).toBe(5 * 60_000)
-    expect(config.resolveVaultIdleTimeoutMs('1000')).toBe(5 * 60_000)
+    expect(
+      config.resolveVaultIdleTimeoutMs(intoWasmStringValue(undefined)),
+    ).toBe(5 * 60_000)
+    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('1000'))).toBe(
+      5 * 60_000,
+    )
   })
 
   test('e2e build honors VITE_VAULT_IDLE_TIMEOUT_MS', () => {
@@ -24,7 +29,9 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultIdleTimeoutMs('2500')).toBe(2500)
+    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('2500'))).toBe(
+      2500,
+    )
   })
 
   test('rejects values below minimum in dev/e2e', () => {
@@ -32,7 +39,9 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultIdleTimeoutMs('100')).toBe(5 * 60_000)
+    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('100'))).toBe(
+      5 * 60_000,
+    )
   })
 })
 
@@ -42,7 +51,9 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       false,
     )
-    expect(config.resolveVaultIdleWarningMs()).toBe(30_000)
+    expect(
+      config.resolveVaultIdleWarningMs(intoWasmStringValue(undefined)),
+    ).toBe(30_000)
   })
 
   test('e2e can disable warning', () => {
@@ -50,7 +61,7 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       true,
     )
-    expect(config.resolveVaultIdleWarningMs('0')).toBe(0)
+    expect(config.resolveVaultIdleWarningMs(intoWasmStringValue('0'))).toBe(0)
   })
 })
 

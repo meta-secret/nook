@@ -97,7 +97,7 @@ describe.sequential(
       expect(loaded.providers[0]?.githubPat).toBe(pat)
     })
 
-    test('loadAuthProviders upgrades legacy plaintext rows to sealed storage', async () => {
+    test('loadAuthProviders rejects plaintext rows without a legacy fallback', async () => {
       const pat = 'github_pat_33LEGACYplainROW'
       await new Promise<void>((resolve, reject) => {
         const request = indexedDB.open('nook_auth', 1)
@@ -137,13 +137,12 @@ describe.sequential(
         }
       })
 
-      const loaded = await manager.loadAuthProviders()
-      expect(loaded.providers[0]?.githubPat).toBe(pat)
+      await expect(manager.loadAuthProviders()).rejects.toThrow(
+        'Provider credential is not age-encrypted.',
+      )
 
       const raw = await readRawAuthProvidersFromIdb()
-      const storedPat = raw.providers[0]?.githubPat
-      expect(storedPat).toContain(AGE_ARMOR_MARKER)
-      expect(storedPat).not.toContain('LEGACYplain')
+      expect(raw.providers[0]?.githubPat).toBe(pat)
     })
 
     test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
@@ -161,6 +160,8 @@ describe.sequential(
               refreshToken: refresh,
               fileName: 'nook-events',
               accountEmail: 'me@example.com',
+              driveMode: 'private',
+              iCloudMode: 'private',
             },
             createdAt: '2026-06-24T00:00:00.000Z',
           },

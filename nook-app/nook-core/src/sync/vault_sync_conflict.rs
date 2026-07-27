@@ -36,22 +36,6 @@ impl VaultSyncConflict {
             Self::StoreId(_) => VaultSyncConflictKind::StoreId,
         }
     }
-
-    #[must_use]
-    pub const fn content(&self) -> Option<&ContentSyncConflict> {
-        match self {
-            Self::Content(conflict) => Some(conflict),
-            Self::StoreId(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn store_id(&self) -> Option<&StoreIdSyncConflict> {
-        match self {
-            Self::Content(_) => None,
-            Self::StoreId(conflict) => Some(conflict),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -65,20 +49,25 @@ mod tests {
             remote_version: 5,
         });
         assert_eq!(content.kind(), VaultSyncConflictKind::Content);
-        assert_eq!(content.content().map(|value| value.local_version), Some(4));
-        assert!(content.store_id().is_none());
+        assert!(matches!(
+            content,
+            VaultSyncConflict::Content(ContentSyncConflict {
+                local_version: 4,
+                remote_version: 5
+            })
+        ));
 
         let store_id = VaultSyncConflict::StoreId(StoreIdSyncConflict {
             local_store_id: "local".to_owned(),
             remote_store_id: "remote".to_owned(),
         });
         assert_eq!(store_id.kind(), VaultSyncConflictKind::StoreId);
-        assert!(store_id.content().is_none());
-        assert_eq!(
-            store_id
-                .store_id()
-                .map(|value| value.remote_store_id.as_str()),
-            Some("remote")
-        );
+        assert!(matches!(
+            store_id,
+            VaultSyncConflict::StoreId(StoreIdSyncConflict {
+                local_store_id,
+                remote_store_id
+            }) if local_store_id == "local" && remote_store_id == "remote"
+        ));
     }
 }

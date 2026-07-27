@@ -7,21 +7,45 @@
 use std::collections::HashMap;
 
 use crate::errors::VaultSyncError;
-use crate::vault_sync::{VaultSyncAction, compare_vault_sync_with_common};
+use crate::vault_sync::{CommonContentHash, VaultSyncAction, compare_vault_sync_with_common};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
-/// A single vault blob plus an optional provider revision token (e.g. GitHub sha).
+/// Provider revision state for stores that may not have been written remotely yet.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StoreRevision {
+    #[default]
+    Unversioned,
+    Version(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreRevisionRef<'a> {
+    Unversioned,
+    Version(&'a str),
+}
+
+impl StoreRevision {
+    #[must_use]
+    pub fn as_ref(&self) -> StoreRevisionRef<'_> {
+        match self {
+            Self::Unversioned => StoreRevisionRef::Unversioned,
+            Self::Version(revision) => StoreRevisionRef::Version(revision),
+        }
+    }
+}
+
+/// A single vault blob plus its explicit provider revision state.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MemoryVaultStore {
     blob: String,
-    revision: Option<String>,
+    revision: StoreRevision,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RevisionGuardedWrite {
     Written { revision: String },
-    AlreadyPresent { revision: Option<String> },
+    AlreadyPresent { revision: StoreRevision },
 }
 
 impl MemoryVaultStore {
@@ -34,7 +58,7 @@ impl MemoryVaultStore {
     pub fn with_blob(blob: impl Into<String>) -> Self {
         Self {
             blob: blob.into(),
-            revision: None,
+            revision: StoreRevision::Unversioned,
         }
     }
 
@@ -42,7 +66,7 @@ impl MemoryVaultStore {
     pub fn with_blob_and_revision(blob: impl Into<String>, revision: impl Into<String>) -> Self {
         Self {
             blob: blob.into(),
-            revision: Some(revision.into()),
+            revision: StoreRevision::Version(revision.into()),
         }
     }
 
@@ -52,15 +76,15 @@ impl MemoryVaultStore {
     }
 
     #[must_use]
-    pub fn revision(&self) -> Option<&str> {
-        self.revision.as_deref()
+    pub fn revision(&self) -> StoreRevisionRef<'_> {
+        self.revision.as_ref()
     }
 
     pub fn set_blob(&mut self, blob: impl Into<String>) {
         self.blob = blob.into();
     }
 
-    pub fn set_revision(&mut self, revision: Option<String>) {
+    pub fn set_revision(&mut self, revision: StoreRevision) {
         self.revision = revision;
     }
 
@@ -79,7 +103,7 @@ impl MemoryVaultStore {
     pub fn write_if_revision_matches_or_same_content(
         &mut self,
         content: impl Into<String>,
-        expected_revision: Option<&str>,
+        expected_revision: StoreRevisionRef<'_>,
     ) -> VaultSyncResult<RevisionGuardedWrite> {
         let content = content.into();
         if self.blob.trim() == content.trim() {
@@ -87,12 +111,12 @@ impl MemoryVaultStore {
                 revision: self.revision.clone(),
             });
         }
-        if self.revision.as_deref() != expected_revision {
+        if self.revision.as_ref() != expected_revision {
             return Err(VaultSyncError::RemoteChangedDuringWrite);
         }
         self.blob = content;
-        let next = next_revision(self.revision.as_deref());
-        self.revision = Some(next.clone());
+        let next = next_revision(self.revision.as_ref());
+        self.revision = StoreRevision::Version(next.clone());
         Ok(RevisionGuardedWrite::Written { revision: next })
     }
 }
@@ -106,7 +130,7 @@ pub fn reconcile_vault_stores(
     local: &mut MemoryVaultStore,
     remote: &mut MemoryVaultStore,
 ) -> VaultSyncResult<VaultSyncAction> {
-    reconcile_vault_stores_with_common(local, remote, None)
+    reconcile_vault_stores_with_common(local, remote, CommonContentHash::Unknown)
 }
 
 /// Compare local vs remote against a remembered common content hash and apply
@@ -114,7 +138,7 @@ pub fn reconcile_vault_stores(
 pub fn reconcile_vault_stores_with_common(
     local: &mut MemoryVaultStore,
     remote: &mut MemoryVaultStore,
-    last_common_content_hash: Option<&str>,
+    last_common_content_hash: CommonContentHash<'_>,
 ) -> VaultSyncResult<VaultSyncAction> {
     let action =
         compare_vault_sync_with_common(local.blob(), remote.blob(), last_common_content_hash)?;
@@ -150,7 +174,7 @@ pub fn fan_out_sync(
 /// After user picks "keep local" in a conflict dialog — push local to remote.
 pub fn resolve_conflict_keep_local(local: &MemoryVaultStore, remote: &mut MemoryVaultStore) {
     remote.blob.clone_from(&local.blob);
-    remote.revision = Some(next_revision(remote.revision.as_deref()));
+    remote.revision = StoreRevision::Version(next_revision(remote.revision.as_ref()));
 }
 
 /// After user picks "keep remote" — adopt remote into local.
@@ -172,17 +196,20 @@ fn apply_vault_sync_action(
         }
         VaultSyncAction::PushLocal => {
             remote.blob.clone_from(&local.blob);
-            remote.revision = Some(next_revision(remote.revision.as_deref()));
+            remote.revision = StoreRevision::Version(next_revision(remote.revision.as_ref()));
         }
     }
 }
 
-fn next_revision(current: Option<&str>) -> String {
-    let n = current
-        .and_then(|s| s.strip_prefix("rev-"))
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(0)
-        .saturating_add(1);
+fn next_revision(current: StoreRevisionRef<'_>) -> String {
+    let current_number = match current {
+        StoreRevisionRef::Unversioned => 0,
+        StoreRevisionRef::Version(value) => value
+            .strip_prefix("rev-")
+            .and_then(|number| number.parse::<u64>().ok())
+            .unwrap_or(0),
+    };
+    let n = current_number.saturating_add(1);
     format!("rev-{n}")
 }
 
@@ -192,71 +219,78 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn reconcile_push_local_copies_blob_and_bumps_revision() {
+    fn reconcile_push_local_copies_blob_and_bumps_revision() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(3, store_id, "local");
+        let local_blob = sample_yaml(3, store_id, "local")?;
         let mut local = MemoryVaultStore::with_blob(local_blob);
         let mut remote = MemoryVaultStore::with_blob_and_revision("", "rev-0");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::PushLocal);
         assert_eq!(remote.blob(), local.blob());
-        assert_eq!(remote.revision(), Some("rev-1"));
+        assert_eq!(remote.revision(), StoreRevisionRef::Version("rev-1"));
+        Ok(())
     }
 
     #[test]
-    fn reconcile_adopt_remote_updates_local() {
+    fn reconcile_adopt_remote_updates_local() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
-        let remote_blob = sample_yaml(5, store_id, "remote");
-        let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local"));
+        let remote_blob = sample_yaml(5, store_id, "remote")?;
+        let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local")?);
         let mut remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::AdoptRemote);
         assert_eq!(local.blob(), remote_blob);
-        assert_eq!(local.revision(), Some("rev-9"));
+        assert_eq!(local.revision(), StoreRevisionRef::Version("rev-9"));
+        Ok(())
     }
 
     #[test]
-    fn reconcile_conflict_leaves_stores_unchanged() {
+    fn reconcile_conflict_leaves_stores_unchanged() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(2, store_id, "a");
-        let remote_blob = sample_yaml(2, store_id, "b");
+        let local_blob = sample_yaml(2, store_id, "a")?;
+        let remote_blob = sample_yaml(2, store_id, "b")?;
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        let action = reconcile_vault_stores(&mut local, &mut remote)?;
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
+        Ok(())
     }
 
     #[test]
-    fn reconcile_with_common_hash_preserves_divergent_branches() {
+    fn reconcile_with_common_hash_preserves_divergent_branches() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
-        let base_blob = sample_yaml(2, store_id, "base");
-        let local_blob = sample_yaml(4, store_id, "local");
-        let remote_blob = sample_yaml(3, store_id, "remote");
+        let base_blob = sample_yaml(2, store_id, "base")?;
+        let local_blob = sample_yaml(4, store_id, "local")?;
+        let remote_blob = sample_yaml(3, store_id, "remote")?;
         let base_hash = crate::vault_sync::vault_content_hash(&base_blob);
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action =
-            reconcile_vault_stores_with_common(&mut local, &mut remote, Some(&base_hash)).unwrap();
+        let action = reconcile_vault_stores_with_common(
+            &mut local,
+            &mut remote,
+            CommonContentHash::Known(&base_hash),
+        )?;
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
+        Ok(())
     }
 
     #[test]
-    fn fan_out_pushes_to_multiple_remotes() {
+    fn fan_out_pushes_to_multiple_remotes() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
-        let local_blob = sample_yaml(4, store_id, "canonical");
+        let local_blob = sample_yaml(4, store_id, "canonical")?;
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remotes = HashMap::from([
             (
                 "github-a".to_owned(),
-                MemoryVaultStore::with_blob(sample_yaml(1, store_id, "stale-a")),
+                MemoryVaultStore::with_blob(sample_yaml(1, store_id, "stale-a")?),
             ),
             (
                 "github-b".to_owned(),
@@ -264,7 +298,7 @@ mod tests {
             ),
         ]);
 
-        let results = fan_out_sync(&mut local, &mut remotes).unwrap();
+        let results = fan_out_sync(&mut local, &mut remotes)?;
         assert_eq!(results.len(), 2);
         assert!(
             results
@@ -273,5 +307,6 @@ mod tests {
         );
         assert_eq!(remotes["github-a"].blob(), local_blob);
         assert_eq!(remotes["github-b"].blob(), local_blob);
+        Ok(())
     }
 }

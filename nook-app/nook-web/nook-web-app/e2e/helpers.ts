@@ -2418,6 +2418,8 @@ type SeededAuthProvider = {
     preset: string
     accessToken: string
     fileName: string
+    driveMode: 'private' | 'shared'
+    iCloudMode: 'private' | 'shared'
     accountEmail?: string
     folderId?: string
   }
@@ -2557,6 +2559,8 @@ export async function seedExtraOauthFileProviders(
         preset: 'google-drive',
         accessToken: provider.accessToken,
         fileName: provider.fileName,
+        driveMode: provider.folderId ? 'shared' : 'private',
+        iCloudMode: 'private',
         accountEmail: provider.accountEmail,
         folderId: provider.folderId,
       },

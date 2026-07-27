@@ -33,6 +33,7 @@ import {
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
   UnauthenticatedSyncDecision,
+  NookVaultSwitchState,
   activeVaultProviders as wasmActiveVaultProviders,
   get_translation_catalog as getTranslationCatalog,
   localProviderIdForActiveVault,
@@ -118,6 +119,10 @@ import type {
   SentinelStoredDeliverySummary,
   SentinelUnlockSessionStatus,
 } from "$lib/vault/sentinel-unlock";
+import {
+  intoWasmStringValue,
+  takeWasmStringValue,
+} from "$lib/wasm-string-value";
 
 const vaultLog = createLogger("vault");
 
@@ -271,12 +276,10 @@ export class VaultState {
   }
 
   get editsBlocked(): boolean {
-    return (
-      this.clientPolicy.editBlockReason(
-        this.securityConflicts.length,
-        this.syncBlocked,
-        this.architectureCanCreateSecret,
-      ) !== undefined
+    return this.clientPolicy.editsBlocked(
+      this.securityConflicts.length,
+      this.syncBlocked,
+      this.architectureCanCreateSecret,
     );
   }
 
@@ -628,8 +631,10 @@ export class VaultState {
       this.errorMsg = "";
     }
     try {
-      const savedLocale = parseAppLocale(
-        localStorage.getItem("nook_locale") ?? undefined,
+      const savedLocale = takeWasmStringValue(
+        parseAppLocale(
+          intoWasmStringValue(localStorage.getItem("nook_locale") ?? undefined),
+        ),
       ) as NookAppLocale | undefined;
       const browserLocale = this.browserLocale.appLocale() as NookAppLocale;
       const locale = savedLocale ?? browserLocale;
@@ -994,12 +999,18 @@ export class VaultState {
 
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: StoreId): Promise<void> {
-    const target = this.clientPolicy.vaultSwitchTarget(
+    const switchDecision = this.clientPolicy.vaultSwitchTarget(
       storeId,
-      this.activeVaultStoreId,
+      this.activeVaultStoreId !== undefined,
+      this.activeVaultStoreId ?? "",
       this.isVerifying,
     );
-    if (!target) return;
+    if (switchDecision.state !== NookVaultSwitchState.Switch) {
+      switchDecision.free();
+      return;
+    }
+    const target = switchDecision.target();
+    switchDecision.free();
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();
@@ -1188,10 +1199,14 @@ export class VaultState {
     if (this.idleSessionTracker) return;
     this.idleSessionTracker = createVaultIdleSessionTracker({
       timeoutMs: this.runtimeConfig.resolveVaultIdleTimeoutMs(
-        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+        intoWasmStringValue(
+          import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+        ),
       ),
       warningMs: this.runtimeConfig.resolveVaultIdleWarningMs(
-        import.meta.env.VITE_VAULT_IDLE_WARNING_MS,
+        intoWasmStringValue(
+          import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
+        ),
       ),
       onExpire: () => this.lockVaultDueToIdle(),
       onWarning: () => this.showIdleLockWarning(),
@@ -1295,7 +1310,8 @@ export class VaultState {
 
     const decision = this.clientPolicy.unauthenticatedSyncDecision(
       result.changed,
-      result.accessStatus,
+      result.accessStatus !== undefined,
+      result.accessStatus ?? VaultAccessStatus.NewVault,
       this.joinEnrollmentPrompt,
       this.awaitingJoinApproval,
     );
@@ -1562,8 +1578,8 @@ export class VaultState {
       }),
       providerId,
       yaml,
-      revision,
-      managerStoreId || undefined,
+      intoWasmStringValue(revision),
+      intoWasmStringValue(managerStoreId || undefined),
       isoTimestamp(),
     ).providers;
     await this.persistProviders();
@@ -1806,7 +1822,7 @@ export class VaultState {
     const page = await this.enqueueStorage(() =>
       this.manager!.queryPreparedSecretPage(
         query,
-        this.secretTypeFilter,
+        intoWasmStringValue(this.secretTypeFilter),
         requestedOffset,
         this.secretPageSize,
       ),
@@ -1829,7 +1845,7 @@ export class VaultState {
       const lastPage = await this.enqueueStorage(() =>
         this.manager!.querySecretPage(
           query,
-          this.secretTypeFilter,
+          intoWasmStringValue(this.secretTypeFilter),
           lastOffset,
           this.secretPageSize,
         ),

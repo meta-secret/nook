@@ -317,8 +317,13 @@ impl NookVaultManager {
         }
         self.purge_legacy_plaintext_search_catalog().await?;
         let _ = self.status.tx.send("READY".to_owned());
-        NookSecretPage::from_core(self.query_secret_page("", None, 0, page_limit)?)
-            .map_err(Into::into)
+        NookSecretPage::from_core(self.query_secret_page(
+            "",
+            nook_core::SecretTypeFilter::All,
+            0,
+            page_limit,
+        )?)
+        .map_err(Into::into)
     }
 
     async fn load_password_unlock_records(
@@ -470,9 +475,9 @@ mod wasm_tests {
             &records,
             &nook_core::VaultUnlock::Keys,
             std::slice::from_ref(&password_entry),
-            Some(&store_id),
-            Some("Projection rejection test"),
-            None,
+            nook_core::VaultStoreIdentityRef::Assigned(&store_id),
+            nook_core::VaultNameRef::Named("Projection rejection test"),
+            nook_core::VaultVersionWrite::Initial,
         )
         .expect("projection yaml");
         import_vault_blob(yaml.as_str(), Some("Projection rejection test"))

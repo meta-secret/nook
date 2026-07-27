@@ -85,13 +85,12 @@ pub enum VaultConnectIntent {
 }
 
 impl VaultConnectIntent {
-    #[must_use]
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Result<Self, String> {
         match value {
-            "create-new" => Some(Self::CreateNew),
-            "open-existing" => Some(Self::OpenExisting),
-            "add-sync-provider" => Some(Self::AddSyncProvider),
-            _ => None,
+            "create-new" => Ok(Self::CreateNew),
+            "open-existing" => Ok(Self::OpenExisting),
+            "add-sync-provider" => Ok(Self::AddSyncProvider),
+            unknown => Err(format!("unknown vault connect intent: {unknown}")),
         }
     }
 
@@ -258,6 +257,20 @@ pub enum SharedJoinerIdentityKind {
     Email,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "preset", rename_all = "snake_case")]
+pub enum ProviderOauthPreset {
+    NotApplicable,
+    Preset(OauthFilePreset),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "kind", rename_all = "snake_case")]
+pub enum ProviderJoinerIdentity {
+    NotRequired,
+    Required(SharedJoinerIdentityKind),
+}
+
 impl SharedJoinerIdentityKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -271,12 +284,10 @@ impl SharedJoinerIdentityKind {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderReplicationCapability {
     pub provider_type: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub oauth_preset: Option<String>,
+    pub oauth_preset: ProviderOauthPreset,
     pub supports_personal: bool,
     pub supports_shared: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shared_joiner_identity: Option<SharedJoinerIdentityKind>,
+    pub shared_joiner_identity: ProviderJoinerIdentity,
 }
 
 impl ProviderReplicationCapability {
@@ -294,8 +305,36 @@ impl ProviderReplicationCapability {
 pub struct SentinelPolicy {
     pub threshold: u8,
     pub required_participants: u8,
-    #[serde(default)]
     pub ready_participants: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(tag = "state", content = "policy", rename_all = "snake_case")]
+pub enum SentinelConfiguration {
+    #[default]
+    Disabled,
+    Enabled(SentinelPolicy),
+}
+
+impl SentinelConfiguration {
+    #[must_use]
+    pub const fn policy_or_default(self) -> SentinelPolicy {
+        match self {
+            Self::Disabled => SentinelPolicy {
+                threshold: 2,
+                required_participants: 3,
+                ready_participants: 0,
+            },
+            Self::Enabled(policy) => policy,
+        }
+    }
+
+    pub fn policy(self) -> ValidationResult<SentinelPolicy> {
+        match self {
+            Self::Enabled(policy) => Ok(policy),
+            Self::Disabled => Err(ValidationError::InvalidSentinelPolicy),
+        }
+    }
 }
 
 impl Default for SentinelPolicy {
@@ -342,8 +381,8 @@ pub struct VaultArchitecture {
     #[serde(default, skip_serializing_if = "replication_is_default")]
     pub replication_type: ReplicationType,
     /// Sentinel quorum policy.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sentinel: Option<SentinelPolicy>,
+    #[serde(default)]
+    pub sentinel: SentinelConfiguration,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
@@ -357,7 +396,7 @@ impl Default for VaultArchitecture {
             device_mode: DeviceMode::Standard,
             vault_type: VaultType::Simple,
             replication_type: ReplicationType::Personal,
-            sentinel: None,
+            sentinel: SentinelConfiguration::Disabled,
         }
     }
 }
@@ -372,11 +411,14 @@ impl VaultArchitecture {
             device_mode,
             vault_type,
             replication_type,
-            sentinel: (vault_type == VaultType::Sentinel).then_some(SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 0,
-            }),
+            sentinel: match vault_type {
+                VaultType::Simple => SentinelConfiguration::Disabled,
+                VaultType::Sentinel => SentinelConfiguration::Enabled(SentinelPolicy {
+                    threshold: 2,
+                    required_participants: 2,
+                    ready_participants: 0,
+                }),
+            },
         };
         architecture.validate()?;
         Ok(architecture)
@@ -388,7 +430,7 @@ impl VaultArchitecture {
             device_mode,
             vault_type: VaultType::Simple,
             replication_type: ReplicationType::Personal,
-            sentinel: None,
+            sentinel: SentinelConfiguration::Disabled,
         }
     }
 
@@ -398,19 +440,19 @@ impl VaultArchitecture {
             device_mode,
             vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
-            sentinel: Some(policy),
+            sentinel: SentinelConfiguration::Enabled(policy),
         }
     }
 
     pub fn validate(&self) -> ValidationResult<()> {
         match self.vault_type {
             VaultType::Simple => {
-                if self.sentinel.is_some() {
+                if !matches!(self.sentinel, SentinelConfiguration::Disabled) {
                     return Err(ValidationError::SimpleVaultHasSentinelPolicy);
                 }
             }
             VaultType::Sentinel => {
-                let policy = self.sentinel.unwrap_or_default();
+                let policy = self.sentinel.policy()?;
                 policy.validate()?;
             }
         }
@@ -465,14 +507,14 @@ impl VaultArchitecture {
                     return Err(ValidationError::SentinelVaultHasFullKeyEnvelopes);
                 }
                 if shares.is_empty() {
-                    return if self.sentinel.unwrap_or_default().ready_participants == 0 {
+                    return if self.sentinel.policy()?.ready_participants == 0 {
                         Ok(())
                     } else {
                         Err(ValidationError::InvalidSentinelShareSet)
                     };
                 }
 
-                let policy = self.sentinel.unwrap_or_default();
+                let policy = self.sentinel.policy()?;
                 if shares.len() != usize::from(policy.required_participants)
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
@@ -502,7 +544,7 @@ impl VaultArchitecture {
     pub fn can_create_secret(&self) -> bool {
         match self.vault_type {
             VaultType::Simple => true,
-            VaultType::Sentinel => self.sentinel.unwrap_or_default().is_ready(),
+            VaultType::Sentinel => self.sentinel.policy_or_default().is_ready(),
         }
     }
 
@@ -519,48 +561,58 @@ impl VaultArchitecture {
 
     #[must_use]
     pub fn is_sentinel_ready(&self) -> bool {
-        self.vault_type == VaultType::Sentinel && self.sentinel.unwrap_or_default().is_ready()
+        self.vault_type == VaultType::Sentinel && self.sentinel.policy_or_default().is_ready()
     }
 }
 
 #[must_use]
 pub fn provider_replication_capability(
     provider_type: StorageProviderType,
-    oauth_preset: Option<OauthFilePreset>,
+    oauth_preset: ProviderOauthPreset,
 ) -> ProviderReplicationCapability {
     match provider_type {
         StorageProviderType::Local | StorageProviderType::LocalFolder => {
             ProviderReplicationCapability {
                 provider_type: provider_type.as_str().to_owned(),
-                oauth_preset: None,
+                oauth_preset: ProviderOauthPreset::NotApplicable,
                 supports_personal: true,
                 supports_shared: false,
-                shared_joiner_identity: None,
+                shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
             }
         }
         StorageProviderType::Github => ProviderReplicationCapability {
             provider_type: provider_type.as_str().to_owned(),
-            oauth_preset: None,
+            oauth_preset: ProviderOauthPreset::NotApplicable,
             supports_personal: true,
             supports_shared: false,
-            shared_joiner_identity: None,
+            shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
         },
         StorageProviderType::OauthFile => {
-            let preset = oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive);
+            let ProviderOauthPreset::Preset(preset) = oauth_preset else {
+                return ProviderReplicationCapability {
+                    provider_type: provider_type.as_str().to_owned(),
+                    oauth_preset: ProviderOauthPreset::NotApplicable,
+                    supports_personal: false,
+                    supports_shared: false,
+                    shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
+                };
+            };
             match preset {
                 OauthFilePreset::GoogleDrive => ProviderReplicationCapability {
                     provider_type: provider_type.as_str().to_owned(),
-                    oauth_preset: Some(preset.as_str().to_owned()),
+                    oauth_preset: ProviderOauthPreset::Preset(preset),
                     supports_personal: true,
                     supports_shared: true,
-                    shared_joiner_identity: Some(SharedJoinerIdentityKind::Email),
+                    shared_joiner_identity: ProviderJoinerIdentity::Required(
+                        SharedJoinerIdentityKind::Email,
+                    ),
                 },
                 OauthFilePreset::ICloud => ProviderReplicationCapability {
                     provider_type: provider_type.as_str().to_owned(),
-                    oauth_preset: Some(preset.as_str().to_owned()),
+                    oauth_preset: ProviderOauthPreset::Preset(preset),
                     supports_personal: true,
                     supports_shared: true,
-                    shared_joiner_identity: None,
+                    shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
                 },
             }
         }
@@ -569,7 +621,7 @@ pub fn provider_replication_capability(
 
 pub fn validate_provider_replication(
     provider_type: StorageProviderType,
-    oauth_preset: Option<OauthFilePreset>,
+    oauth_preset: ProviderOauthPreset,
     replication_type: ReplicationType,
 ) -> ValidationResult<ProviderReplicationCapability> {
     let capability = provider_replication_capability(provider_type, oauth_preset);
@@ -578,7 +630,10 @@ pub fn validate_provider_replication(
     }
     Err(ValidationError::UnsupportedProviderReplication {
         provider_type: capability.provider_type,
-        oauth_preset: capability.oauth_preset.unwrap_or_default(),
+        oauth_preset: match capability.oauth_preset {
+            ProviderOauthPreset::NotApplicable => String::new(),
+            ProviderOauthPreset::Preset(preset) => preset.as_str().to_owned(),
+        },
         replication_type: replication_type.as_str().to_owned(),
     })
 }
@@ -586,7 +641,7 @@ pub fn validate_provider_replication(
 pub fn validate_architecture_for_provider(
     architecture: &VaultArchitecture,
     provider_type: StorageProviderType,
-    oauth_preset: Option<OauthFilePreset>,
+    oauth_preset: ProviderOauthPreset,
 ) -> ValidationResult<ProviderReplicationCapability> {
     architecture.validate()?;
     validate_provider_replication(provider_type, oauth_preset, architecture.replication_type)
@@ -684,7 +739,13 @@ pub fn prepare_shared_storage_grant(
         Some(preset) if !preset.trim().is_empty() => Some(OauthFilePreset::parse(preset)?),
         _ => None,
     };
-    let capability = provider_replication_capability(provider_type, oauth_preset);
+    let capability = provider_replication_capability(
+        provider_type,
+        match oauth_preset {
+            Some(preset) => ProviderOauthPreset::Preset(preset),
+            None => ProviderOauthPreset::NotApplicable,
+        },
+    );
     let identity = request.joiner_identity.trim();
     if identity.is_empty() {
         return Err(ValidationError::SharedJoinerIdentityRequired);
@@ -719,49 +780,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn architecture_omits_default_personal_replication() {
+    fn architecture_omits_default_personal_replication() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::simple_personal(DeviceMode::Standard);
-        let encoded = serde_json::to_value(&architecture).unwrap();
+        let encoded = serde_json::to_value(&architecture)?;
         assert!(encoded.get("replication_type").is_none());
         let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
             "device_mode": "standard",
             "vault_type": "simple",
             "replication_type": "personal"
-        }))
-        .unwrap();
+        }))?;
         assert_eq!(decoded, architecture);
+        Ok(())
     }
 
     #[test]
-    fn draft_builds_the_vault_type_specific_policy() {
+    fn draft_builds_the_vault_type_specific_policy() -> anyhow::Result<()> {
         let simple = VaultArchitecture::draft(
             DeviceMode::AntiHacker,
             VaultType::Simple,
             ReplicationType::Shared,
-        )
-        .unwrap();
+        )?;
         assert_eq!(simple.device_mode, DeviceMode::AntiHacker);
         assert_eq!(simple.replication_type, ReplicationType::Shared);
-        assert!(simple.sentinel.is_none());
+        assert_eq!(simple.sentinel, SentinelConfiguration::Disabled);
 
         let sentinel = VaultArchitecture::draft(
             DeviceMode::Standard,
             VaultType::Sentinel,
             ReplicationType::Personal,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             sentinel.sentinel,
-            Some(SentinelPolicy {
+            SentinelConfiguration::Enabled(SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 0,
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn sentinel_architecture_uses_only_sentinel_wire_names() {
+    fn sentinel_architecture_uses_only_sentinel_wire_names() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -771,24 +831,27 @@ mod tests {
             },
         );
 
-        let encoded = serde_json::to_value(&architecture).unwrap();
+        let encoded = serde_json::to_value(&architecture)?;
         assert_eq!(encoded["vault_type"], "sentinel");
         assert!(encoded.get("sentinel").is_some());
 
         let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
             "vault_type": "sentinel",
             "sentinel": {
-                "threshold": 2,
-                "required_participants": 3,
-                "ready_participants": 0
+                "state": "enabled",
+                "policy": {
+                    "threshold": 2,
+                    "required_participants": 3,
+                    "ready_participants": 0
+                }
             }
-        }))
-        .unwrap();
+        }))?;
         assert_eq!(decoded, architecture);
+        Ok(())
     }
 
     #[test]
-    fn defaults_match_current_vault_behavior() {
+    fn defaults_match_current_vault_behavior() -> anyhow::Result<()> {
         let architecture = VaultArchitecture::default();
         assert_eq!(architecture.device_mode, DeviceMode::Standard);
         assert_eq!(architecture.vault_type, VaultType::Simple);
@@ -798,17 +861,21 @@ mod tests {
             architecture.onboarding_type(),
             OnboardingType::PersonalCredentialTransfer
         );
-        architecture.validate().unwrap();
+        architecture.validate()?;
+        Ok(())
     }
 
     #[test]
-    fn provider_capability_matrix_is_fail_closed() {
-        validate_provider_replication(StorageProviderType::Github, None, ReplicationType::Personal)
-            .unwrap();
+    fn provider_capability_matrix_is_fail_closed() -> anyhow::Result<()> {
+        validate_provider_replication(
+            StorageProviderType::Github,
+            ProviderOauthPreset::NotApplicable,
+            ReplicationType::Personal,
+        )?;
         assert!(
             validate_provider_replication(
                 StorageProviderType::Github,
-                None,
+                ProviderOauthPreset::NotApplicable,
                 ReplicationType::Shared,
             )
             .is_err()
@@ -816,50 +883,57 @@ mod tests {
 
         let gdrive = validate_provider_replication(
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::GoogleDrive),
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
             ReplicationType::Shared,
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             gdrive.shared_joiner_identity,
-            Some(SharedJoinerIdentityKind::Email)
+            ProviderJoinerIdentity::Required(SharedJoinerIdentityKind::Email)
         );
 
         let icloud = validate_provider_replication(
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::ICloud),
+            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
             ReplicationType::Shared,
-        )
-        .unwrap();
-        assert_eq!(icloud.shared_joiner_identity, None);
+        )?;
+        assert_eq!(
+            icloud.shared_joiner_identity,
+            ProviderJoinerIdentity::NotRequired
+        );
+        Ok(())
     }
 
     #[test]
-    fn grouped_architecture_matrix_validates_provider_replication() {
+    fn grouped_architecture_matrix_validates_provider_replication() -> anyhow::Result<()> {
         let simple_personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
-        validate_architecture_for_provider(&simple_personal, StorageProviderType::Github, None)
-            .unwrap();
+        validate_architecture_for_provider(
+            &simple_personal,
+            StorageProviderType::Github,
+            ProviderOauthPreset::NotApplicable,
+        )?;
         validate_architecture_for_provider(
             &simple_personal,
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::GoogleDrive),
-        )
-        .unwrap();
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+        )?;
 
         let simple_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default()
         };
         assert!(
-            validate_architecture_for_provider(&simple_shared, StorageProviderType::Github, None)
-                .is_err()
+            validate_architecture_for_provider(
+                &simple_shared,
+                StorageProviderType::Github,
+                ProviderOauthPreset::NotApplicable
+            )
+            .is_err()
         );
         validate_architecture_for_provider(
             &simple_shared,
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::GoogleDrive),
-        )
-        .unwrap();
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+        )?;
 
         let sentinel_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
@@ -869,8 +943,11 @@ mod tests {
                 ready_participants: 2,
             },
         );
-        validate_architecture_for_provider(&sentinel_ready, StorageProviderType::Github, None)
-            .unwrap();
+        validate_architecture_for_provider(
+            &sentinel_ready,
+            StorageProviderType::Github,
+            ProviderOauthPreset::NotApplicable,
+        )?;
 
         let sentinel_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
@@ -879,19 +956,22 @@ mod tests {
         validate_architecture_for_provider(
             &sentinel_shared,
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::GoogleDrive),
-        )
-        .unwrap();
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+        )?;
         assert!(
-            validate_architecture_for_provider(&sentinel_shared, StorageProviderType::Github, None)
-                .is_err()
+            validate_architecture_for_provider(
+                &sentinel_shared,
+                StorageProviderType::Github,
+                ProviderOauthPreset::NotApplicable
+            )
+            .is_err()
         );
         validate_architecture_for_provider(
             &sentinel_shared,
             StorageProviderType::OauthFile,
-            Some(OauthFilePreset::ICloud),
-        )
-        .unwrap();
+            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
+        )?;
+        Ok(())
     }
 
     #[test]
@@ -913,7 +993,8 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation() {
+    fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation()
+    -> anyhow::Result<()> {
         let not_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
@@ -922,7 +1003,7 @@ mod tests {
                 ready_participants: 2,
             },
         );
-        not_ready.validate().unwrap();
+        not_ready.validate()?;
         assert!(!not_ready.can_create_secret());
 
         let ready = VaultArchitecture::sentinel_personal(
@@ -933,7 +1014,7 @@ mod tests {
                 ready_participants: 3,
             },
         );
-        ready.validate().unwrap();
+        ready.validate()?;
         assert!(ready.can_create_secret());
 
         let invalid = VaultArchitecture::sentinel_personal(
@@ -945,14 +1026,15 @@ mod tests {
             },
         );
         assert!(invalid.validate().is_err());
+        Ok(())
     }
 
     #[test]
-    fn sentinel_secret_creation_requires_actual_share_records() {
-        let keys = crate::generate_vault_keys().unwrap();
-        let first = crate::DeviceIdentity::generate().unwrap();
-        let second = crate::DeviceIdentity::generate().unwrap();
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
+    fn sentinel_secret_creation_requires_actual_share_records() -> anyhow::Result<()> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -966,13 +1048,15 @@ mod tests {
         assert!(!ready.can_create_secret_with_records(&[]));
         assert!(!ready.can_create_secret_with_records(&shares[..1]));
         assert!(ready.can_create_secret_with_records(&shares));
+        Ok(())
     }
 
     #[test]
-    fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets() {
-        let keys = crate::generate_vault_keys().unwrap();
-        let first = crate::DeviceIdentity::generate().unwrap();
-        let second = crate::DeviceIdentity::generate().unwrap();
+    fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets()
+    -> anyhow::Result<()> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -982,12 +1066,10 @@ mod tests {
             },
         );
         let shares =
-            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)
-                .unwrap();
-        architecture.validate_records(&shares).unwrap();
+            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        architecture.validate_records(&shares)?;
 
-        let auth =
-            crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key).unwrap();
+        let auth = crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key)?;
         let mut shares_with_auth = shares.clone();
         shares_with_auth.push(auth);
         assert_eq!(
@@ -1015,29 +1097,30 @@ mod tests {
 
         let mut duplicate_index = shares;
         let first_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str()).unwrap();
+            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str())?;
         let mut second_envelope =
-            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str()).unwrap();
+            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())?;
         second_envelope.share_index = first_envelope.share_index;
-        duplicate_index[1].value = crate::StoredRecordPayload::from_trusted(
-            serde_json::to_string(&second_envelope).unwrap(),
-        );
+        duplicate_index[1].value =
+            crate::StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
         assert_eq!(
             architecture.validate_records(&duplicate_index),
             Err(ValidationError::InvalidSentinelShareSet)
         );
+        Ok(())
     }
 
     #[test]
-    fn simple_record_validation_rejects_sentinel_shares() {
-        let keys = crate::generate_vault_keys().unwrap();
-        let first = crate::DeviceIdentity::generate().unwrap();
-        let second = crate::DeviceIdentity::generate().unwrap();
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
+    fn simple_record_validation_rejects_sentinel_shares() -> anyhow::Result<()> {
+        let keys = crate::generate_vault_keys()?;
+        let first = crate::DeviceIdentity::generate()?;
+        let second = crate::DeviceIdentity::generate()?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)
         );
+        Ok(())
     }
 
     #[test]
@@ -1067,7 +1150,8 @@ mod tests {
     }
 
     #[test]
-    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() {
+    fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() -> anyhow::Result<()>
+    {
         // Core validates only; WASM upgrades ManualGrantRequired → Granted after
         // Drive folder create + permissions.create succeed.
         let request = SharedStorageGrantRequest {
@@ -1079,7 +1163,7 @@ mod tests {
             storage_target_id: None,
             access_token: Some("ya29.owner-token".to_owned()),
         };
-        let outcome = prepare_shared_storage_grant(&request).unwrap();
+        let outcome = prepare_shared_storage_grant(&request)?;
         assert_eq!(
             outcome,
             SharedStorageGrantOutcome::ManualGrantRequired {
@@ -1095,7 +1179,7 @@ mod tests {
             ..request.clone()
         };
         assert_eq!(
-            prepare_shared_storage_grant(&existing_target).unwrap(),
+            prepare_shared_storage_grant(&existing_target)?,
             SharedStorageGrantOutcome::ManualGrantRequired {
                 instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
@@ -1119,45 +1203,48 @@ mod tests {
             ..request
         };
         assert_eq!(
-            prepare_shared_storage_grant(&github).unwrap(),
+            prepare_shared_storage_grant(&github)?,
             SharedStorageGrantOutcome::Unsupported {
                 reason_key: "architecture_modes.shared_grant_unsupported".to_owned(),
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn shared_storage_grant_granted_outcome_carries_storage_target() {
+    fn shared_storage_grant_granted_outcome_carries_storage_target() -> anyhow::Result<()> {
         let granted = SharedStorageGrantOutcome::Granted {
             note: "Shared Drive folder ready.".to_owned(),
             storage_target_id: "folder-abc".to_owned(),
             storage_target_name: Some("Nook shared vault".to_owned()),
         };
-        let json = serde_json::to_value(&granted).unwrap();
+        let json = serde_json::to_value(&granted)?;
         assert_eq!(json["kind"], "granted");
         assert_eq!(json["storageTargetId"], "folder-abc");
         assert_eq!(json["storageTargetName"], "Nook shared vault");
-        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json)?;
         assert_eq!(roundtrip, granted);
+        Ok(())
     }
 
     #[test]
-    fn shared_storage_manual_grant_preserves_created_target() {
+    fn shared_storage_manual_grant_preserves_created_target() -> anyhow::Result<()> {
         let manual = SharedStorageGrantOutcome::ManualGrantRequired {
             instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_id: Some("folder-created-before-permission-failed".to_owned()),
             storage_target_name: Some("Nook shared vault".to_owned()),
         };
-        let json = serde_json::to_value(&manual).unwrap();
+        let json = serde_json::to_value(&manual)?;
         assert_eq!(json["kind"], "manual-grant-required");
         assert_eq!(
             json["storageTargetId"],
             "folder-created-before-permission-failed"
         );
         assert_eq!(json["storageTargetName"], "Nook shared vault");
-        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json)?;
         assert_eq!(roundtrip, manual);
+        Ok(())
     }
 
     #[test]
@@ -1207,7 +1294,7 @@ mod tests {
         assert!(!VaultConnectIntent::OpenExisting.permits_empty_remote_genesis());
         assert_eq!(
             VaultConnectIntent::parse("open-existing"),
-            Some(VaultConnectIntent::OpenExisting)
+            Ok(VaultConnectIntent::OpenExisting)
         );
     }
 

@@ -10,6 +10,10 @@ import initNookWasm, {
   translateFromCatalog,
 } from '$app-wasm'
 import { HELP_SECTIONS } from '$lib/help-content'
+import {
+  intoWasmStringValue,
+  takeWasmStringValue,
+} from '$lib/wasm-string-value'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -42,17 +46,27 @@ describe('locale', () => {
   })
 
   test('parseAppLocale accepts only supported values', () => {
-    expect(parseAppLocale('en')).toBe('en')
-    expect(parseAppLocale('ru')).toBe('ru')
-    expect(parseAppLocale('de')).toBeUndefined()
-    expect(parseAppLocale(undefined)).toBeUndefined()
+    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('en')))).toBe(
+      'en',
+    )
+    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('ru')))).toBe(
+      'ru',
+    )
+    expect(
+      takeWasmStringValue(parseAppLocale(intoWasmStringValue('de'))),
+    ).toBeUndefined()
+    expect(
+      takeWasmStringValue(parseAppLocale(intoWasmStringValue(undefined))),
+    ).toBeUndefined()
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
-    expect(resolveAppLocaleFromTag('ru-RU')).toBe('ru')
-    expect(resolveAppLocaleFromTag('ru_BY')).toBe('ru')
-    expect(resolveAppLocaleFromTag('en-GB')).toBe('en')
-    expect(resolveAppLocaleFromTag('de-DE')).toBeUndefined()
+    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
+    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
+    expect(takeWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
+    expect(
+      takeWasmStringValue(resolveAppLocaleFromTag('de-DE')),
+    ).toBeUndefined()
   })
 
   test('resolveAppLocaleFromTags respects preference order', () => {

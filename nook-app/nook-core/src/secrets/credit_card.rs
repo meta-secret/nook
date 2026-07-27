@@ -211,7 +211,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accepts_valid_visa_test_number_and_masks_last4() {
+    fn accepts_valid_visa_test_number_and_masks_last4() -> anyhow::Result<()> {
         let card = CreditCardSecret::from_fields(
             "Personal Visa",
             "Ada Lovelace",
@@ -220,8 +220,7 @@ mod tests {
             "30",
             "123",
             "work card",
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(card.number, "4111111111111111");
         assert_eq!(card.expiration_month, "12");
@@ -229,6 +228,7 @@ mod tests {
         assert_eq!(card.last4(), "1111");
         assert_eq!(card.masked_number(), "•••• 1111");
         assert_eq!(card.expiration_display(), "12/2030");
+        Ok(())
     }
 
     #[test]
@@ -252,11 +252,11 @@ mod tests {
     }
 
     #[test]
-    fn allows_empty_optional_fields() {
-        let card =
-            CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "").unwrap();
+    fn allows_empty_optional_fields() -> anyhow::Result<()> {
+        let card = CreditCardSecret::from_fields("Debit", "", "4111111111111111", "", "", "", "")?;
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());
         assert!(card.expiration_display().is_empty());
+        Ok(())
     }
 }

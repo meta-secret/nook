@@ -2,8 +2,8 @@
 
 use crate::canonical::EventId;
 use crate::epoch::{
-    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
-    operation_starts_epoch,
+    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
+    concurrent_epoch_rotations_conflict, operation_starts_epoch,
 };
 use crate::event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
 use crate::graph::EventGraph;
@@ -17,19 +17,31 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedSecret {
     pub record: StoredSecretRecord,
-    pub identity_fingerprint: Option<SecretFingerprint>,
-    pub fingerprint: Option<SecretFingerprint>,
+    pub identity_fingerprint: SecretFingerprint,
+    pub fingerprint: SecretFingerprint,
     pub created_by: EventId,
-    pub deleted_by: Option<EventId>,
-    pub replaced_from: Option<SecretId>,
+    pub lifecycle: ProjectedSecretLifecycle,
+    pub origin: ProjectedSecretOrigin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectedSecretLifecycle {
+    Live,
+    Deleted { by: EventId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectedSecretOrigin {
+    Created,
+    Replacement { from: SecretId },
 }
 
 impl ProjectedSecret {
     #[must_use]
     pub fn is_live(&self, graph: &EventGraph) -> bool {
-        match &self.deleted_by {
-            None => true,
-            Some(deleter) => !graph.is_ancestor(&self.created_by, deleter),
+        match &self.lifecycle {
+            ProjectedSecretLifecycle::Live => true,
+            ProjectedSecretLifecycle::Deleted { by } => !graph.is_ancestor(&self.created_by, by),
         }
     }
 }
@@ -53,7 +65,7 @@ pub struct SecurityConflict {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultProjection {
     pub store_id: StoreId,
-    pub current_epoch: Option<KeyEpoch>,
+    pub epoch: ProjectionEpoch,
     pub epoch_history: Vec<EpochRecord>,
     pub secrets: BTreeMap<SecretId, ProjectedSecret>,
     pub password_entries: Vec<PasswordUnlockEntry>,
@@ -63,11 +75,17 @@ pub struct VaultProjection {
     pub cleared: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectionEpoch {
+    BeforeGenesis,
+    Current(KeyEpoch),
+}
+
 impl Default for VaultProjection {
     fn default() -> Self {
         Self {
             store_id: StoreId::parse("store_abcdefghijk").expect("valid default store id"),
-            current_epoch: None,
+            epoch: ProjectionEpoch::BeforeGenesis,
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),
             password_entries: Vec::new(),
@@ -121,7 +139,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
         }
 
         for operation in &event.body.operations {
-            if let Some(reason) = operation_starts_epoch(operation) {
+            if let EpochTransition::Rotated(reason) = operation_starts_epoch(operation) {
                 epoch_events.insert(event_id.clone(), reason);
             }
             apply_operation(
@@ -134,7 +152,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
 
         if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
             let epoch = KeyEpoch(epoch_id);
-            if projection.current_epoch.as_ref() != Some(&epoch) {
+            if projection.epoch != ProjectionEpoch::Current(epoch.clone()) {
                 if let Some(reason) = epoch_events.get(&event_id).copied() {
                     projection.epoch_history.push(EpochRecord {
                         epoch: epoch.clone(),
@@ -142,7 +160,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
                         reason,
                     });
                 }
-                projection.current_epoch = Some(epoch);
+                projection.epoch = ProjectionEpoch::Current(epoch);
             }
         }
     }
@@ -152,6 +170,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
     Ok(projection)
 }
 
+#[allow(clippy::too_many_lines)] // One exhaustive match keeps event projection behavior auditable.
 fn apply_operation(
     projection: &mut VaultProjection,
     event_id: &EventId,
@@ -165,28 +184,39 @@ fn apply_operation(
             ..
         } => {
             for secret in secrets {
-                insert_secret(projection, event_id, secret, None);
+                insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
             projection.password_entries.clone_from(password_entries);
         }
         VaultOperation::EpochCheckpoint { secrets, .. } => {
             for secret in secrets {
-                insert_secret(projection, event_id, secret, None);
+                insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
         }
         VaultOperation::SecretCreated { secret } => {
-            insert_secret(projection, event_id, secret, None);
+            insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
         }
         VaultOperation::SecretDeleted { secret_id } => {
             if let Some(entry) = projection.secrets.get_mut(secret_id) {
-                entry.deleted_by = Some(event_id.clone());
+                entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                    by: event_id.clone(),
+                };
             }
         }
         VaultOperation::SecretReplaced { old_id, new_secret } => {
             if let Some(entry) = projection.secrets.get_mut(old_id) {
-                entry.deleted_by = Some(event_id.clone());
+                entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                    by: event_id.clone(),
+                };
             }
-            insert_secret(projection, event_id, new_secret, Some(old_id.clone()));
+            insert_secret(
+                projection,
+                event_id,
+                new_secret,
+                ProjectedSecretOrigin::Replacement {
+                    from: old_id.clone(),
+                },
+            );
             replacements_by_old
                 .entry(old_id.clone())
                 .or_default()
@@ -199,7 +229,9 @@ fn apply_operation(
         } => {
             for rejected in rejected_secret_ids {
                 if let Some(entry) = projection.secrets.get_mut(rejected) {
-                    entry.deleted_by = Some(event_id.clone());
+                    entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                        by: event_id.clone(),
+                    };
                 }
             }
             replacements_by_old.remove(old_id);
@@ -207,9 +239,6 @@ fn apply_operation(
             if let Some(chosen) = projection.secrets.get(chosen_secret_id) {
                 let _ = chosen;
             }
-        }
-        VaultOperation::SecretFingerprintsBackfilled { fingerprints } => {
-            apply_fingerprint_backfill(projection, fingerprints);
         }
         VaultOperation::VaultCleared => {
             projection.cleared = true;
@@ -256,23 +285,11 @@ fn apply_operation(
     }
 }
 
-fn apply_fingerprint_backfill(
-    projection: &mut VaultProjection,
-    fingerprints: &[crate::SecretFingerprintAssignment],
-) {
-    for assignment in fingerprints {
-        if let Some(secret) = projection.secrets.get_mut(&assignment.secret_id) {
-            secret.identity_fingerprint = Some(assignment.identity_fingerprint.clone());
-            secret.fingerprint = Some(assignment.fingerprint.clone());
-        }
-    }
-}
-
 fn insert_secret(
     projection: &mut VaultProjection,
     event_id: &EventId,
     secret: &EncryptedSecretPayload,
-    replaced_from: Option<SecretId>,
+    origin: ProjectedSecretOrigin,
 ) {
     projection.secrets.insert(
         secret.id.clone(),
@@ -281,8 +298,8 @@ fn insert_secret(
             identity_fingerprint: secret.identity_fingerprint.clone(),
             fingerprint: secret.fingerprint.clone(),
             created_by: event_id.clone(),
-            deleted_by: None,
-            replaced_from,
+            lifecycle: ProjectedSecretLifecycle::Live,
+            origin,
         },
     );
 }
@@ -374,7 +391,7 @@ mod tests {
         build_genesis_import_event,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key as key, store};
-    use crate::{EventResult, SecretFingerprint, SecretFingerprintAssignment};
+    use crate::{EventResult, SecretFingerprint};
     use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
     use nook_auth2::SecretType;
@@ -415,12 +432,12 @@ mod tests {
         VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store(),
-                actor_id: actor(signing_key),
-                actor_signing_public_key: Some(public_key(signing_key)),
+                store_id: store()?,
+                actor_id: actor(signing_key)?,
+                actor_signing_public_key: public_key(signing_key),
                 parents,
                 created_at: ts("2026-06-28T00:00:00Z"),
-                key_epoch: epoch(),
+                key_epoch: epoch()?,
                 operations: vec![operation],
             },
             signing_key,
@@ -441,8 +458,10 @@ mod tests {
                     id: sid(new_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-identity:{new_id}"
+                    )),
+                    fingerprint: SecretFingerprint::from_trusted(format!("test-version:{new_id}")),
                 },
             },
         )
@@ -450,11 +469,11 @@ mod tests {
 
     const STORE: &str = "store_testtoken11";
 
-    fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventId {
+    fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventResult<EventId> {
         let event = build_genesis_import_event(
-            &store(),
-            &actor(signing_key),
-            &epoch(),
+            &store()?,
+            &actor(signing_key)?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
@@ -462,163 +481,127 @@ mod tests {
             },
             &ts("2026-06-28T00:00:00Z"),
             signing_key,
-        )
-        .unwrap();
-        let id = event.id().unwrap();
-        graph.insert(event, STORE).unwrap();
-        id
+        )?;
+        let id = event.id()?;
+        graph.insert(event, STORE)?;
+        Ok(id)
     }
 
     fn secret_created(
         parents: Vec<EventId>,
         secret_id: &str,
         signing_key: &SigningKey,
-    ) -> VaultEvent {
+    ) -> EventResult<VaultEvent> {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(signing_key),
-            actor_signing_public_key: Some(public_key(signing_key)),
+            store_id: store()?,
+            actor_id: actor(signing_key)?,
+            actor_signing_public_key: public_key(signing_key),
             parents,
             created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretCreated {
                 secret: EncryptedSecretPayload {
                     id: sid(secret_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-identity:{secret_id}"
+                    )),
+                    fingerprint: SecretFingerprint::from_trusted(format!(
+                        "test-version:{secret_id}"
+                    )),
                 },
             }],
         };
-        VaultEvent::sign(body, signing_key).unwrap()
+        VaultEvent::sign(body, signing_key)
     }
 
     #[test]
-    fn concurrent_secret_additions_both_survive() {
+    fn concurrent_secret_additions_both_survive() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
-        let a = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
-        let b = secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key);
-        graph.insert(a, STORE).unwrap();
-        graph.insert(b, STORE).unwrap();
-
-        let projection = project_vault(&graph, STORE).unwrap();
-        assert_eq!(projection.live_secrets(&graph).len(), 2);
-        assert!(!projection.has_blocking_conflicts());
-    }
-
-    #[test]
-    fn fingerprint_backfill_updates_projection_without_changing_ciphertext() -> EventResult<()> {
-        let signing_key = key();
-        let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id], "secret_fingerprint1", &signing_key);
-        let created_id = created.id()?;
-        graph.insert(created, STORE)?;
-
-        let fingerprint =
-            SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)));
-        let body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
-            parents: vec![created_id],
-            created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
-            operations: vec![VaultOperation::SecretFingerprintsBackfilled {
-                fingerprints: vec![SecretFingerprintAssignment {
-                    secret_id: sid("secret_fingerprint1"),
-                    identity_fingerprint: fingerprint.clone(),
-                    fingerprint: fingerprint.clone(),
-                }],
-            }],
-        };
-        graph.insert(VaultEvent::sign(body, &signing_key)?, STORE)?;
+        let a = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
+        let b = secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key)?;
+        graph.insert(a, STORE)?;
+        graph.insert(b, STORE)?;
 
         let projection = project_vault(&graph, STORE)?;
-        let projected = projection.secrets.get(&sid("secret_fingerprint1")).unwrap();
-        assert_eq!(projected.fingerprint.as_ref(), Some(&fingerprint));
-        assert_eq!(
-            projected.record.value.as_str(),
-            "cipher-secret_fingerprint1"
-        );
+        assert_eq!(projection.live_secrets(&graph).len(), 2);
+        assert!(!projection.has_blocking_conflicts());
         Ok(())
     }
 
     #[test]
-    fn causal_delete_hides_secret() {
+    fn causal_delete_hides_secret() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
-        let created_id = created.id().unwrap();
-        graph.insert(created, STORE).unwrap();
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
+        let created_id = created.id()?;
+        graph.insert(created, STORE)?;
 
         let delete_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
+            actor_signing_public_key: public_key(&signing_key),
             parents: vec![created_id],
             created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretDeleted {
                 secret_id: sid("secret_aaaaaaaaaaa"),
             }],
         };
-        let deleted = VaultEvent::sign(delete_body, &signing_key).unwrap();
-        graph.insert(deleted, STORE).unwrap();
+        let deleted = VaultEvent::sign(delete_body, &signing_key)?;
+        graph.insert(deleted, STORE)?;
 
-        let projection = project_vault(&graph, STORE).unwrap();
+        let projection = project_vault(&graph, STORE)?;
         assert!(projection.live_secrets(&graph).is_empty());
+        Ok(())
     }
 
     #[test]
-    fn concurrent_replacements_create_conflict_group() {
+    fn concurrent_replacements_create_conflict_group() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
-        let base_id = base.id().unwrap();
-        graph.insert(base, STORE).unwrap();
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key)?;
+        let base_id = base.id()?;
+        graph.insert(base, STORE)?;
 
-        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa").unwrap();
-        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb").unwrap();
-        graph.insert(r1, STORE).unwrap();
-        graph.insert(r2, STORE).unwrap();
+        let r1 = replacement_event(&signing_key, &base_id, "secret_newaaaaaaa")?;
+        let r2 = replacement_event(&signing_key, &base_id, "secret_newbbbbbbb")?;
+        graph.insert(r1, STORE)?;
+        graph.insert(r2, STORE)?;
 
-        let projection = project_vault(&graph, STORE).unwrap();
+        let projection = project_vault(&graph, STORE)?;
         assert_eq!(projection.live_secrets(&graph).len(), 2);
         assert!(
             projection
                 .replacement_conflicts
                 .contains_key(&sid("secret_original1"))
         );
+        Ok(())
     }
 
     #[test]
-    fn projection_is_replay_invariant() {
+    fn projection_is_replay_invariant() -> anyhow::Result<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        graph
-            .insert(
-                secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
-                STORE,
-            )
-            .unwrap();
-        graph
-            .insert(
-                secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key),
-                STORE,
-            )
-            .unwrap();
-        assert_projection_permutation_invariant(&graph, STORE).unwrap();
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        graph.insert(
+            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?,
+            STORE,
+        )?;
+        graph.insert(
+            secret_created(vec![genesis_id], "secret_bbbbbbbbbbb", &signing_key)?,
+            STORE,
+        )?;
+        assert_projection_permutation_invariant(&graph, STORE)?;
+        Ok(())
     }
 
     #[test]
@@ -631,9 +614,9 @@ mod tests {
             envelope: password_envelope("imported"),
         };
         let event = build_genesis_import_event(
-            &store(),
-            &actor(&signing_key),
-            &epoch(),
+            &store()?,
+            &actor(&signing_key)?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: genesis_source_hash(),
                 secrets: vec![],
@@ -654,7 +637,7 @@ mod tests {
     fn password_entry_events_add_rotate_and_remove() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
         let add = signed_operation(
             &signing_key,
@@ -711,8 +694,8 @@ mod tests {
     fn secret_conflict_resolved_picks_winner() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key)?;
         let base_id = base.id()?;
         graph.insert(base, STORE)?;
 
@@ -723,12 +706,12 @@ mod tests {
 
         let resolve_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
+            actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretConflictResolved {
                 old_id: sid("secret_original1"),
                 chosen_secret_id: sid("secret_newaaaaaaa"),
@@ -750,21 +733,21 @@ mod tests {
     fn vault_cleared_empties_projection() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
         graph.insert(
-            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
+            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?,
             STORE,
         )?;
         assert_eq!(project_vault(&graph, STORE)?.live_secrets(&graph).len(), 1);
 
         let clear_body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
+            store_id: store()?,
+            actor_id: actor(&signing_key)?,
+            actor_signing_public_key: public_key(&signing_key),
             parents: graph.heads(),
             created_at: ts("2026-06-28T00:00:01Z"),
-            key_epoch: epoch(),
+            key_epoch: epoch()?,
             operations: vec![VaultOperation::VaultCleared],
         };
         let cleared = VaultEvent::sign(clear_body, &signing_key)?;
@@ -782,26 +765,28 @@ mod tests {
     fn concurrent_deletes_tombstone_secret() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
-        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
+        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key)?;
         let created_id = created.id()?;
         graph.insert(created, STORE)?;
 
-        let delete_body = |parents: Vec<EventId>| VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: store(),
-            actor_id: actor(&signing_key),
-            actor_signing_public_key: Some(public_key(&signing_key)),
-            parents,
-            created_at: ts("2026-06-28T00:00:00Z"),
-            key_epoch: epoch(),
-            operations: vec![VaultOperation::SecretDeleted {
-                secret_id: sid("secret_aaaaaaaaaaa"),
-            }],
+        let delete_body = |parents: Vec<EventId>| -> EventResult<VaultEventBody> {
+            Ok(VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store()?,
+                actor_id: actor(&signing_key)?,
+                actor_signing_public_key: public_key(&signing_key),
+                parents,
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch()?,
+                operations: vec![VaultOperation::SecretDeleted {
+                    secret_id: sid("secret_aaaaaaaaaaa"),
+                }],
+            })
         };
 
-        let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()]), &signing_key)?;
-        let d2 = VaultEvent::sign(delete_body(vec![created_id]), &signing_key)?;
+        let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()])?, &signing_key)?;
+        let d2 = VaultEvent::sign(delete_body(vec![created_id])?, &signing_key)?;
         graph.insert(d1, STORE)?;
         graph.insert(d2, STORE)?;
 
@@ -814,20 +799,20 @@ mod tests {
     fn concurrent_security_rotations_surface_conflict() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
         let revoke = signed_operation(
             &signing_key,
             vec![genesis_id.clone()],
             VaultOperation::DeviceRevoked {
-                device_id: DeviceId::parse("abcd1234ef567890").unwrap(),
+                device_id: DeviceId::parse("abcd1234ef567890")?,
             },
         )?;
         let rotate = signed_operation(
             &signing_key,
             vec![genesis_id],
             VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001").unwrap(),
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
                 envelope: password_envelope_fixture("x"),
             },
         )?;
@@ -844,11 +829,11 @@ mod tests {
     fn three_way_fork_projection_is_replay_invariant() -> EventResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
-        let genesis_id = genesis(&mut graph, &signing_key);
+        let genesis_id = genesis(&mut graph, &signing_key)?;
 
-        let a = secret_created(vec![genesis_id.clone()], "secret_forkaaaaaa", &signing_key);
-        let b = secret_created(vec![genesis_id.clone()], "secret_forkbbbbbb", &signing_key);
-        let c = secret_created(vec![genesis_id], "secret_forkcccccc", &signing_key);
+        let a = secret_created(vec![genesis_id.clone()], "secret_forkaaaaaa", &signing_key)?;
+        let b = secret_created(vec![genesis_id.clone()], "secret_forkbbbbbb", &signing_key)?;
+        let c = secret_created(vec![genesis_id], "secret_forkcccccc", &signing_key)?;
         graph.insert(a, STORE)?;
         graph.insert(b, STORE)?;
         graph.insert(c, STORE)?;

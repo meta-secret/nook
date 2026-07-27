@@ -65,6 +65,30 @@ test('offer PIN device protection when passkeys are unavailable', async ({
     page.getByTestId('device-protection-pin-setup-btn'),
   ).toBeEnabled()
   await demoBeat(page)
+
+  await page.getByTestId('device-protection-pin-input').fill('123456')
+  await page.getByTestId('device-protection-pin-confirm').fill('123456')
+  await page.getByTestId('device-protection-pin-setup-btn').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await demoBeat(page)
+
+  await page.getByTestId('header-lock-vault-btn').click()
+  await page.getByTestId('unlock-vault-btn').click()
+  await expect(
+    page.getByTestId('device-protection-pin-unlock-btn'),
+  ).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await demoBeat(page)
+
+  await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+  await page.getByTestId('device-protection-pin-unlock-btn').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await demoBeat(page)
 })
 
 test('reject an empty folder before existing-vault recovery', async ({

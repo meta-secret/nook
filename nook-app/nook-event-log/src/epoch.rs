@@ -28,6 +28,12 @@ pub enum EpochRotationReason {
     DeviceRevoked,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpochTransition {
+    Unchanged,
+    Rotated(EpochRotationReason),
+}
+
 impl EpochRotationReason {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -50,18 +56,25 @@ pub struct EpochRecord {
 
 /// Detect whether an operation starts a new key epoch.
 #[must_use]
-pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotationReason> {
+pub fn operation_starts_epoch(operation: &VaultOperation) -> EpochTransition {
     match operation {
-        VaultOperation::VaultImported { .. } => Some(EpochRotationReason::Genesis),
-        VaultOperation::PasswordRotated { .. } => Some(EpochRotationReason::PasswordRotated),
-        VaultOperation::PasswordRemoved { .. } => Some(EpochRotationReason::PasswordRemoved),
-        VaultOperation::DeviceRevoked { .. } => Some(EpochRotationReason::DeviceRevoked),
+        VaultOperation::VaultImported { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::Genesis)
+        }
+        VaultOperation::PasswordRotated { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
+        }
+        VaultOperation::PasswordRemoved { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::PasswordRemoved)
+        }
+        VaultOperation::DeviceRevoked { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::DeviceRevoked)
+        }
         VaultOperation::EpochCheckpoint { .. }
         | VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
         | VaultOperation::SentinelParticipantEnrolled { .. }
@@ -69,7 +82,7 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotatio
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }
-        | VaultOperation::VaultCleared => None,
+        | VaultOperation::VaultCleared => EpochTransition::Unchanged,
     }
 }
 
@@ -93,11 +106,12 @@ pub fn concurrent_epoch_rotations_conflict(
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
 
     #[test]
-    fn password_and_revoke_rotations_conflict_when_concurrent() {
+    fn password_and_revoke_rotations_conflict_when_concurrent() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRotated,
             EpochRotationReason::DeviceRevoked
@@ -106,33 +120,36 @@ mod tests {
             EpochRotationReason::Genesis,
             EpochRotationReason::PasswordRotated
         ));
+        Ok(())
     }
 
     #[test]
-    fn password_removed_and_rotated_conflict_when_concurrent() {
+    fn password_removed_and_rotated_conflict_when_concurrent() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::PasswordRemoved,
             EpochRotationReason::PasswordRotated
         ));
+        Ok(())
     }
 
     #[test]
-    fn concurrent_revokes_conflict() {
+    fn concurrent_revokes_conflict() -> anyhow::Result<()> {
         assert!(concurrent_epoch_rotations_conflict(
             EpochRotationReason::DeviceRevoked,
             EpochRotationReason::DeviceRevoked
         ));
+        Ok(())
     }
 
     #[test]
-    fn operation_starts_epoch_maps_security_ops() {
+    fn operation_starts_epoch_maps_security_ops() -> anyhow::Result<()> {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::VaultImported {
                 source_content_hash: crate::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }),
-            Some(EpochRotationReason::Genesis)
+            EpochTransition::Rotated(EpochRotationReason::Genesis)
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::PasswordRotated {
@@ -144,7 +161,7 @@ mod tests {
                     ciphertext: "c".to_owned()
                 },
             }),
-            Some(EpochRotationReason::PasswordRotated)
+            EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SecretCreated {
@@ -152,26 +169,29 @@ mod tests {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: crate::SecretFingerprint::from_trusted(
+                        "test-identity".to_owned(),
+                    ),
+                    fingerprint: crate::SecretFingerprint::from_trusted("test-version".to_owned(),),
                 },
             }),
-            None
+            EpochTransition::Unchanged
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelParticipantEnrolled {
-                device_id: crate::DeviceId::parse("0123456789abcdef").unwrap(),
+                device_id: crate::DeviceId::parse("0123456789abcdef")?,
                 encryption_public_key: crate::DevicePublicKey::from_trusted(
                     "age-public-key".to_owned(),
                 ),
                 signing_public_key: crate::DeviceSigningPublicKey::from_trusted("a".repeat(64)),
                 label: crate::MemberLabel::from_trusted("Phone".to_owned()),
             }),
-            None
+            EpochTransition::Unchanged
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelSharesIssued { shares: Vec::new() }),
-            None
+            EpochTransition::Unchanged
         );
+        Ok(())
     }
 }

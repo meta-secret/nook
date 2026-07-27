@@ -45,7 +45,9 @@ use crate::storage::{
     indexed_db::load_from_indexed_db,
 };
 use crate::types::records_to_vec;
-use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
+use crate::{
+    NookJoinRequest, NookSecretRecord, NookStringValue, NookVaultArchitecture, NookVaultMember,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -58,7 +60,6 @@ struct StorageSession {
     drive_event_parent: nook_core::DriveEventParent,
     /// `CloudKit` database/zone routing for private or shared iCloud providers.
     icloud_event_target: nook_core::ICloudEventTarget,
-    file_sha: Option<String>,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` -> 404).
     github_root_empty: bool,
     /// When true, the next `connect` loads vault YAML from the browser cache
@@ -76,17 +77,140 @@ impl Default for StorageSession {
             remote_path: String::new(),
             drive_event_parent: nook_core::DriveEventParent::AppDataFolder,
             icloud_event_target: nook_core::ICloudEventTarget::Private,
-            file_sha: None,
             github_root_empty: false,
             use_local_cache_for_connect: false,
         }
     }
 }
 
+enum VaultCryptoState {
+    Locked,
+    Unlocked(nook_core::VaultCrypto),
+}
+
+impl VaultCryptoState {
+    fn get(&self) -> Result<&nook_core::VaultCrypto, NookError> {
+        match self {
+            Self::Unlocked(crypto) => Ok(crypto),
+            Self::Locked => Err(NookError::Encryption(
+                "Vault crypto not initialized.".to_owned(),
+            )),
+        }
+    }
+
+    fn is_unlocked(&self) -> bool {
+        matches!(self, Self::Unlocked(..))
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", content = "name", rename_all = "camelCase")]
+enum VaultNameState {
+    Unnamed,
+    Named(String),
+}
+
+enum SearchCatalogState {
+    Unavailable,
+    Ready(nook_core::SecretSearchCatalog),
+}
+
+enum SearchCatalogRestore {
+    Rebuild,
+    Restored(nook_core::SecretSearchCatalog),
+}
+
+enum CeremonyState<T> {
+    Inactive,
+    Active(T),
+}
+
+enum EventLogSyncIssueState {
+    Clear,
+    Pending {
+        provider_label: String,
+        classification: nook_core::RemoteEventLogClassification,
+    },
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookEventLogSyncIssueState {
+    Clear,
+    Pending,
+}
+
+#[wasm_bindgen]
+pub struct NookEventLogSyncIssueResult(EventLogSyncIssueState);
+
+#[wasm_bindgen]
+impl NookEventLogSyncIssueResult {
+    #[wasm_bindgen(getter)]
+    pub fn state(&self) -> NookEventLogSyncIssueState {
+        match self.0 {
+            EventLogSyncIssueState::Clear => NookEventLogSyncIssueState::Clear,
+            EventLogSyncIssueState::Pending { .. } => NookEventLogSyncIssueState::Pending,
+        }
+    }
+
+    pub fn issue(&self) -> Result<crate::NookEventLogSyncIssue, JsError> {
+        match &self.0 {
+            EventLogSyncIssueState::Pending {
+                provider_label,
+                classification,
+            } => Ok(crate::NookEventLogSyncIssue::new(
+                provider_label.clone(),
+                classification.clone(),
+            )),
+            EventLogSyncIssueState::Clear => Err(JsError::new("No event-log sync issue.")),
+        }
+    }
+}
+
+impl<T> CeremonyState<T> {
+    fn get(&self, message: &'static str) -> Result<&T, JsError> {
+        match self {
+            Self::Active(session) => Ok(session),
+            Self::Inactive => Err(JsError::new(message)),
+        }
+    }
+
+    fn get_mut(&mut self, message: &'static str) -> Result<&mut T, JsError> {
+        match self {
+            Self::Active(session) => Ok(session),
+            Self::Inactive => Err(JsError::new(message)),
+        }
+    }
+}
+
+impl SearchCatalogState {
+    fn get(&self) -> Result<&nook_core::SecretSearchCatalog, NookError> {
+        match self {
+            Self::Ready(catalog) => Ok(catalog),
+            Self::Unavailable => Err(NookError::Database(
+                "Secret search catalog is unavailable.".to_owned(),
+            )),
+        }
+    }
+
+    fn get_mut(&mut self) -> Result<&mut nook_core::SecretSearchCatalog, NookError> {
+        match self {
+            Self::Ready(catalog) => Ok(catalog),
+            Self::Unavailable => Err(NookError::Database(
+                "Secret search catalog is unavailable.".to_owned(),
+            )),
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready(..))
+    }
+}
+
 struct VaultSessionState {
     secrets_key: String,
     members_key: String,
-    crypto: Option<nook_core::VaultCrypto>,
+    crypto: VaultCryptoState,
     meta: nook_core::VaultMetaState,
     last_synced_content: String,
     /// Active unlock mode for this vault.
@@ -96,13 +220,13 @@ struct VaultSessionState {
     /// Logical secret-store id - persisted in vault YAML and mirrored on saved providers.
     store_id: String,
     /// Human-readable vault label persisted in vault YAML.
-    vault_name: Option<String>,
+    vault_name: VaultNameState,
     /// Monotonic vault revision - incremented on every save.
     vault_version: u64,
     /// Grouped architecture modes persisted in vault YAML.
     architecture: nook_core::VaultArchitecture,
     /// Searchable metadata held only in WASM memory while the vault is unlocked.
-    search_catalog: Option<nook_core::SecretSearchCatalog>,
+    search_catalog: SearchCatalogState,
     search_catalog_store_id: String,
     search_catalog_dirty: bool,
     search_catalog_pending_bucket_mask: u64,
@@ -113,16 +237,16 @@ impl Default for VaultSessionState {
         Self {
             secrets_key: String::new(),
             members_key: String::new(),
-            crypto: None,
+            crypto: VaultCryptoState::Locked,
             meta: nook_core::VaultMetaState::default(),
             last_synced_content: String::new(),
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
             store_id: String::new(),
-            vault_name: None,
+            vault_name: VaultNameState::Unnamed,
             vault_version: 0,
             architecture: nook_core::VaultArchitecture::default(),
-            search_catalog: None,
+            search_catalog: SearchCatalogState::Unavailable,
             search_catalog_store_id: String::new(),
             search_catalog_dirty: true,
             search_catalog_pending_bucket_mask: 0,
@@ -137,16 +261,16 @@ impl VaultSessionState {
         let architecture = self.architecture.clone();
         self.secrets_key.zeroize();
         self.members_key.zeroize();
-        self.crypto = None;
+        self.crypto = VaultCryptoState::Locked;
         self.meta = nook_core::VaultMetaState::default();
         self.last_synced_content.clear();
         self.unlock = nook_core::VaultUnlock::Keys;
         self.password_entries.clear();
         self.store_id.clear();
-        self.vault_name = None;
+        self.vault_name = VaultNameState::Unnamed;
         self.vault_version = 0;
         self.architecture = architecture;
-        self.search_catalog = None;
+        self.search_catalog = SearchCatalogState::Unavailable;
         self.search_catalog_store_id.clear();
         self.search_catalog_dirty = true;
         self.search_catalog_pending_bucket_mask = 0;
@@ -232,22 +356,21 @@ pub struct NookVaultManager {
     /// Public-only, pre-vault Sentinel reverse-onboarding state. Draft ceremonies
     /// deliberately live only in memory: they have no store id and must never
     /// be mistaken for a persisted vault.
-    pub(in crate::manager) sentinel_genesis: Option<nook_core::SentinelGenesisSession>,
+    pub(in crate::manager) sentinel_genesis: CeremonyState<nook_core::SentinelGenesisSession>,
     /// Portable setup phase remains available after the draft session is
     /// consumed by finalization.
     pub(in crate::manager) sentinel_genesis_phase: nook_core::SentinelGenesisPhase,
     /// Exact request this device answered as a Sentinel participant. A returned
     /// share delivery must bind to this request before it may be persisted.
     pub(in crate::manager) pending_sentinel_genesis_request:
-        Option<nook_core::SentinelGenesisRequest>,
+        CeremonyState<nook_core::SentinelGenesisRequest>,
     /// Opaque, session-bound quorum unlock state. It contains encrypted records
     /// and signed ciphertext responses, never plaintext SLIP-0039 mnemonics.
-    pub(in crate::manager) sentinel_unlock: Option<nook_core::SentinelUnlockSession>,
+    pub(in crate::manager) sentinel_unlock: CeremonyState<nook_core::SentinelUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
     /// Typed recovery issue captured before an event-log sync aborts.
-    pub(in crate::manager) event_log_sync_issue:
-        Option<(String, nook_core::RemoteEventLogClassification)>,
+    pub(in crate::manager) event_log_sync_issue: EventLogSyncIssueState,
 }
 
 impl Drop for NookVaultManager {
@@ -257,19 +380,19 @@ impl Drop for NookVaultManager {
         self.device.identity_private_key.zeroize();
         self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
-        self.sentinel_genesis = None;
+        self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
-        self.pending_sentinel_genesis_request = None;
-        self.sentinel_unlock = None;
+        self.pending_sentinel_genesis_request = CeremonyState::Inactive;
+        self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
-        self.event_log_sync_issue = None;
+        self.event_log_sync_issue = EventLogSyncIssueState::Clear;
     }
 }
 
 fn restore_secret_search_catalog(
     buckets: Vec<(u8, String)>,
     crypto: &nook_core::VaultCrypto,
-) -> Option<nook_core::SecretSearchCatalog> {
+) -> SearchCatalogRestore {
     let mut catalog = nook_core::SecretSearchCatalog::default();
     for (bucket, ciphertext) in buckets {
         let result = nook_core::AgeArmoredCiphertext::parse(&ciphertext)
@@ -287,16 +410,16 @@ fn restore_secret_search_catalog(
                 reason = %error,
                 "discarding an invalid encrypted secret search catalog"
             );
-            return None;
+            return SearchCatalogRestore::Rebuild;
         }
     }
-    Some(catalog)
+    SearchCatalogRestore::Restored(catalog)
 }
 
 async fn load_encrypted_secret_search_catalog(
     store_id: &str,
     crypto: &nook_core::VaultCrypto,
-) -> Option<nook_core::SecretSearchCatalog> {
+) -> SearchCatalogRestore {
     match crate::storage::indexed_db::load_secret_search_catalog_buckets(store_id).await {
         Ok(buckets) => restore_secret_search_catalog(buckets, crypto),
         Err(error) => {
@@ -306,7 +429,7 @@ async fn load_encrypted_secret_search_catalog(
                 reason = %error,
                 "encrypted secret search catalog is unavailable; rebuilding in memory"
             );
-            None
+            SearchCatalogRestore::Rebuild
         }
     }
 }
@@ -321,12 +444,13 @@ fn encrypt_secret_search_catalog_buckets(
         if pending_mask & (1_u64 << bucket) == 0 {
             continue;
         }
-        let ciphertext = if let Some(mut json) = catalog.bucket_json(bucket)? {
-            let ciphertext = crypto.encrypt_value(&json)?;
-            json.zeroize();
-            Some(ciphertext.as_str().to_owned())
-        } else {
-            None
+        let ciphertext = match catalog.bucket_json(bucket)? {
+            nook_core::SearchCatalogBucketPayload::Json(mut json) => {
+                let ciphertext = crypto.encrypt_value(&json)?;
+                json.zeroize();
+                Some(ciphertext.as_str().to_owned())
+            }
+            nook_core::SearchCatalogBucketPayload::Empty => None,
         };
         writes.push((bucket, ciphertext));
     }
@@ -351,33 +475,27 @@ impl NookVaultManager {
             ));
         }
         let store_id = self.vault.store_id.clone();
-        if self.vault.search_catalog_store_id != store_id || self.vault.search_catalog.is_none() {
-            let crypto =
-                self.vault.crypto.as_ref().ok_or_else(|| {
-                    NookError::Encryption("Vault crypto not initialized.".to_owned())
-                })?;
+        if self.vault.search_catalog_store_id != store_id || !self.vault.search_catalog.is_ready() {
+            let crypto = self.vault.crypto.get()?;
             let restored = load_encrypted_secret_search_catalog(&store_id, crypto).await;
-            self.vault.search_catalog = if let Some(catalog) = restored {
-                Some(catalog)
-            } else {
-                Some(nook_core::SecretSearchCatalog::default())
+            self.vault.search_catalog = match restored {
+                SearchCatalogRestore::Restored(catalog) => SearchCatalogState::Ready(catalog),
+                SearchCatalogRestore::Rebuild => {
+                    SearchCatalogState::Ready(nook_core::SecretSearchCatalog::default())
+                }
             };
             self.vault.search_catalog_store_id.clone_from(&store_id);
             self.vault.search_catalog_dirty = true;
         }
 
         if self.vault.search_catalog_dirty {
-            let crypto =
-                self.vault.crypto.as_ref().ok_or_else(|| {
-                    NookError::Encryption("Vault crypto not initialized.".to_owned())
-                })?;
+            let crypto = self.vault.crypto.get()?;
             let integrity_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-            let outcome = self
-                .vault
-                .search_catalog
-                .as_mut()
-                .expect("search catalog was initialized above")
-                .reconcile(&self.vault.meta.secrets, crypto, &integrity_key)?;
+            let outcome = self.vault.search_catalog.get_mut()?.reconcile(
+                &self.vault.meta.secrets,
+                crypto,
+                &integrity_key,
+            )?;
             self.vault.search_catalog_dirty = false;
             for bucket in outcome.changed_buckets() {
                 self.vault.search_catalog_pending_bucket_mask |= 1_u64 << bucket;
@@ -395,15 +513,8 @@ impl NookVaultManager {
 
         let pending_mask = self.vault.search_catalog_pending_bucket_mask;
         if pending_mask != 0 {
-            let crypto =
-                self.vault.crypto.as_ref().ok_or_else(|| {
-                    NookError::Encryption("Vault crypto not initialized.".to_owned())
-                })?;
-            let catalog = self
-                .vault
-                .search_catalog
-                .as_ref()
-                .expect("search catalog was initialized above");
+            let crypto = self.vault.crypto.get()?;
+            let catalog = self.vault.search_catalog.get()?;
             let writes = encrypt_secret_search_catalog_buckets(catalog, crypto, pending_mask)?;
             if let Err(error) =
                 crate::storage::indexed_db::save_secret_search_catalog_buckets(&store_id, &writes)
@@ -431,22 +542,21 @@ impl NookVaultManager {
             device: DeviceSessionState::default(),
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
-            sentinel_genesis: None,
+            sentinel_genesis: CeremonyState::Inactive,
             sentinel_genesis_phase: nook_core::SentinelGenesisPhase::Inactive,
-            pending_sentinel_genesis_request: None,
-            sentinel_unlock: None,
+            pending_sentinel_genesis_request: CeremonyState::Inactive,
+            sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutboxState::default(),
-            event_log_sync_issue: None,
+            event_log_sync_issue: EventLogSyncIssueState::Clear,
         }
     }
 
     #[wasm_bindgen(js_name = takeEventLogSyncIssue)]
-    pub fn take_event_log_sync_issue(&mut self) -> Option<crate::NookEventLogSyncIssue> {
-        self.event_log_sync_issue
-            .take()
-            .map(|(provider_label, classification)| {
-                crate::NookEventLogSyncIssue::new(provider_label, classification)
-            })
+    pub fn take_event_log_sync_issue(&mut self) -> NookEventLogSyncIssueResult {
+        NookEventLogSyncIssueResult(std::mem::replace(
+            &mut self.event_log_sync_issue,
+            EventLogSyncIssueState::Clear,
+        ))
     }
 
     #[wasm_bindgen(getter)]
@@ -506,23 +616,21 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(getter, js_name = vaultName)]
-    pub fn vault_name(&self) -> Option<String> {
-        self.vault.vault_name.clone()
+    pub fn vault_name(&self) -> NookStringValue {
+        match &self.vault.vault_name {
+            VaultNameState::Unnamed => NookStringValue::unavailable(),
+            VaultNameState::Named(name) => NookStringValue::from_value(name),
+        }
     }
 
     #[wasm_bindgen(js_name = setVaultName)]
     pub fn set_vault_name(&mut self, name: &str) {
         let trimmed = name.trim();
         self.vault.vault_name = if trimmed.is_empty() {
-            None
+            VaultNameState::Unnamed
         } else {
-            Some(trimmed.to_owned())
+            VaultNameState::Named(trimmed.to_owned())
         };
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn file_sha(&self) -> Option<String> {
-        self.storage.file_sha.clone()
     }
 
     #[wasm_bindgen(getter)]
@@ -553,14 +661,13 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = "resetVaultSession")]
     pub fn reset_vault_session(&mut self) {
         self.vault.reset();
-        self.storage.file_sha = None;
         self.storage.github_root_empty = false;
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
-        self.sentinel_genesis = None;
+        self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
-        self.pending_sentinel_genesis_request = None;
-        self.sentinel_unlock = None;
+        self.pending_sentinel_genesis_request = CeremonyState::Inactive;
+        self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
     }
 
@@ -609,20 +716,16 @@ impl NookVaultManager {
     pub(crate) fn query_secret_page(
         &self,
         query: &str,
-        secret_type_filter: Option<nook_core::SecretType>,
+        secret_type_filter: nook_core::SecretTypeFilter,
         offset: u32,
         limit: u32,
     ) -> Result<nook_core::SecretPage, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let offset = usize::try_from(offset).unwrap_or(usize::MAX);
         let limit = usize::try_from(limit).unwrap_or(nook_core::DEFAULT_SECRET_PAGE_SIZE);
         if !self.vault.search_catalog_dirty
             && self.vault.search_catalog_store_id == self.vault.store_id
-            && let Some(catalog) = self.vault.search_catalog.as_ref()
+            && let SearchCatalogState::Ready(catalog) = &self.vault.search_catalog
         {
             return Ok(catalog.query(query, secret_type_filter, offset, limit));
         }
@@ -638,11 +741,7 @@ impl NookVaultManager {
 
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         records_to_vec(
             self.vault
                 .meta
@@ -678,9 +777,12 @@ impl NookVaultManager {
                 &records,
                 &self.vault.unlock,
                 &self.vault.password_entries,
-                Some(self.vault.store_id.as_str()),
-                self.vault.vault_name.as_deref(),
-                None,
+                nook_core::VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
+                match &self.vault.vault_name {
+                    VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
+                    VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+                },
+                nook_core::VaultVersionWrite::Initial,
                 &self.vault.architecture,
             )?
             .into_inner(),
@@ -721,7 +823,7 @@ impl NookVaultManager {
         self.vault.unlock = metadata.unlock;
         self.vault.password_entries = metadata.password_entries;
         self.vault.store_id = metadata.store_id;
-        self.vault.vault_name = Some(metadata.vault_name);
+        self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
         self.vault.vault_version = metadata.version;
         self.vault.architecture = metadata.architecture;
         Ok(())
@@ -735,7 +837,8 @@ impl NookVaultManager {
         self.vault.secrets_key = secrets_key.to_owned();
         self.vault.members_key = members_key.to_owned();
         let parsed_secrets = nook_core::SymmetricKey::parse(secrets_key)?;
-        self.vault.crypto = Some(nook_core::VaultCrypto::new(&parsed_secrets)?);
+        self.vault.crypto =
+            VaultCryptoState::Unlocked(nook_core::VaultCrypto::new(&parsed_secrets)?);
         Ok(())
     }
 
@@ -744,7 +847,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_vault_crypto_from_cache(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.vault.crypto.is_some() {
+        if self.vault.crypto.is_unlocked() {
             return Ok(());
         }
         if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
@@ -779,11 +882,13 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
         let members_key = self.vault.members_key.clone();
-        if let Some(member_records) = nook_core::ensure_self_in_roster(
-            &records,
-            identity,
-            &nook_core::SymmetricKey::parse(&members_key)?,
-        )? {
+        if let nook_core::SelfRosterSync::Updated(member_records) =
+            nook_core::ensure_self_in_roster(
+                &records,
+                identity,
+                &nook_core::SymmetricKey::parse(&members_key)?,
+            )?
+        {
             nook_core::apply_member_records(&mut self.vault.meta, &member_records);
         }
         Ok(())
@@ -832,7 +937,6 @@ impl NookVaultManager {
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
-        self.storage.file_sha = None;
 
         match mode {
             nook_core::StorageMode::Local => {
@@ -894,7 +998,7 @@ impl NookVaultManager {
         if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
             self.vault.password_entries.clear();
             self.vault.unlock = nook_core::VaultUnlock::Keys;
-            self.vault.vault_name = None;
+            self.vault.vault_name = VaultNameState::Unnamed;
         }
 
         if mode != nook_core::StorageMode::Local {

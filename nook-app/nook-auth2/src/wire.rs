@@ -273,58 +273,75 @@ impl<'de> Deserialize<'de> for Sha256Hex {
     }
 }
 
-/// Ed25519 verifying key as 64-hex raw bytes (event join operations).
+/// Ed25519 verifying-key state used by persisted membership and event records.
+///
+/// Model an unavailable key explicitly instead of using `Option<T>` in domain
+/// code. Current signed events require an `Ed25519Hex` value.
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DeviceSigningPublicKey(String);
+pub enum DeviceSigningPublicKey {
+    #[default]
+    Unavailable,
+    Ed25519Hex(String),
+}
 
 impl DeviceSigningPublicKey {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
         let hex = raw.trim();
         if hex.is_empty() {
-            return Ok(Self(String::new()));
+            return Ok(Self::Unavailable);
         }
         if hex.len() != HEX_32_BYTE_LEN || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(ValidationError::DeviceSigningPublicKeyInvalid);
         }
-        Ok(Self(hex.to_owned()))
+        Ok(Self::Ed25519Hex(hex.to_owned()))
     }
 
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.0
+        match self {
+            Self::Unavailable => "",
+            Self::Ed25519Hex(value) => value,
+        }
     }
 
     #[must_use]
     pub fn into_inner(self) -> String {
-        self.0
+        match self {
+            Self::Unavailable => String::new(),
+            Self::Ed25519Hex(value) => value,
+        }
     }
 
     #[must_use]
     pub fn from_trusted(value: String) -> Self {
-        Self(value)
+        if value.is_empty() {
+            Self::Unavailable
+        } else {
+            Self::Ed25519Hex(value)
+        }
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        matches!(self, Self::Unavailable)
     }
 }
 
 impl fmt::Display for DeviceSigningPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(self.as_str())
     }
 }
 
 impl AsRef<str> for DeviceSigningPublicKey {
     fn as_ref(&self) -> &str {
-        &self.0
+        self.as_str()
     }
 }
 
 impl Serialize for DeviceSigningPublicKey {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0)
+        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -428,69 +445,79 @@ impl<'de> Deserialize<'de> for OpaqueCiphertext {
 pub type Url64EncodedString = CompactToken;
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use age::secrecy::ExposeSecret;
     use age::x25519::Identity;
 
     #[test]
-    fn symmetric_key_roundtrip_and_generate() {
-        let key = SymmetricKey::generate().unwrap();
+    fn symmetric_key_roundtrip_and_generate() -> anyhow::Result<()> {
+        let key = SymmetricKey::generate()?;
         assert_eq!(key.as_str().len(), 64);
-        assert_eq!(SymmetricKey::parse(key.as_str()).unwrap(), key);
+        assert_eq!(SymmetricKey::parse(key.as_str())?, key);
         assert_eq!(key.to_string(), key.as_str());
         assert_eq!(key.into_inner().len(), 64);
+        Ok(())
     }
 
     #[test]
-    fn age_armored_accepts_valid_armor() {
+    fn age_armored_accepts_valid_armor() -> anyhow::Result<()> {
         let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nabc\n-----END AGE ENCRYPTED FILE-----";
-        let parsed = AgeArmoredCiphertext::parse(armor).unwrap();
+        let parsed = AgeArmoredCiphertext::parse(armor)?;
         assert_eq!(parsed.as_str(), armor);
         let trusted = AgeArmoredCiphertext::from_trusted_armored(armor.to_owned());
         assert_eq!(parsed, trusted);
+        Ok(())
     }
 
     #[test]
-    fn device_keys_parse_from_generated_identity() {
+    fn device_keys_parse_from_generated_identity() -> anyhow::Result<()> {
         let identity = Identity::generate();
         let public = identity.to_public().to_string();
         let secret = identity.to_string().expose_secret().to_owned();
-        let pk = DevicePublicKey::parse(&public).unwrap();
+        let pk = DevicePublicKey::parse(&public)?;
         assert_eq!(pk.as_str(), public);
-        let sk = DeviceIdentitySecret::parse(&secret).unwrap();
+        let sk = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(sk.as_str(), secret);
         assert_eq!(format!("{sk:?}"), "DeviceIdentitySecret([REDACTED])");
+        Ok(())
     }
 
     #[test]
-    fn sha256_hex_parse_and_serde() {
+    fn sha256_hex_parse_and_serde() -> anyhow::Result<()> {
         let hex = Sha256Hex::from_trusted("deadbeef".repeat(8));
-        assert_eq!(Sha256Hex::parse(hex.as_str()).unwrap(), hex);
+        assert_eq!(Sha256Hex::parse(hex.as_str())?, hex);
         assert!(Sha256Hex::parse("short").is_err());
-        let roundtripped: Sha256Hex =
-            serde_json::from_str(&serde_json::to_string(&hex).unwrap()).unwrap();
+        let roundtripped: Sha256Hex = serde_json::from_str(&serde_json::to_string(&hex)?)?;
         assert_eq!(roundtripped, hex);
+        Ok(())
     }
 
     #[test]
-    fn device_signing_public_key_allows_empty_or_hex() {
-        assert!(DeviceSigningPublicKey::parse("").unwrap().is_empty());
+    fn device_signing_public_key_names_unavailable_and_ed25519_states() -> anyhow::Result<()> {
+        assert_eq!(
+            DeviceSigningPublicKey::parse("")?,
+            DeviceSigningPublicKey::Unavailable
+        );
         let pk = DeviceSigningPublicKey::from_trusted("ab".repeat(32));
-        assert_eq!(DeviceSigningPublicKey::parse(pk.as_str()).unwrap(), pk);
+        assert!(matches!(&pk, DeviceSigningPublicKey::Ed25519Hex(_)));
+        assert_eq!(DeviceSigningPublicKey::parse(pk.as_str())?, pk);
         assert!(DeviceSigningPublicKey::parse("not-hex").is_err());
+        Ok(())
     }
 
     #[test]
-    fn password_entry_id_requires_compact_token() {
-        let id = PasswordEntryId::parse("pwdentry001").unwrap();
-        assert_eq!(PasswordEntryId::parse(id.as_str()).unwrap(), id);
+    fn password_entry_id_requires_compact_token() -> anyhow::Result<()> {
+        let id = PasswordEntryId::parse("pwdentry001")?;
+        assert_eq!(PasswordEntryId::parse(id.as_str())?, id);
         assert!(PasswordEntryId::parse("").is_err());
         assert!(PasswordEntryId::parse("too-long-token-value").is_err());
+        Ok(())
     }
 
     #[test]
-    fn invalid_key_and_ciphertext_strings_fail_validation() {
+    fn invalid_key_and_ciphertext_strings_fail_validation() -> anyhow::Result<()> {
         assert!(SymmetricKey::parse("short").is_err());
         assert!(SymmetricKey::parse(&"zz".repeat(32)).is_err());
         assert!(AgeArmoredCiphertext::parse("plain text").is_err());
@@ -500,19 +527,17 @@ mod tests {
         assert!(SigningSeedHex::parse(&"zz".repeat(32)).is_err());
         assert!(IsoTimestamp::parse("").is_err());
         assert!(IsoTimestamp::parse("not-a-date").is_err());
+        Ok(())
     }
 
     #[test]
-    fn string_newtypes_expose_display_as_ref_and_inner_values() {
+    fn string_newtypes_expose_display_as_ref_and_inner_values() -> anyhow::Result<()> {
         let seed_hex = "ab".repeat(32);
-        let seed = SigningSeedHex::parse(&seed_hex).unwrap();
+        let seed = SigningSeedHex::parse(&seed_hex)?;
         assert_eq!(seed.as_str(), seed_hex);
         assert_eq!(seed.as_ref(), seed_hex);
         assert_eq!(seed.to_string(), seed_hex);
-        assert_eq!(
-            serde_json::to_string(&seed).unwrap(),
-            format!("\"{seed_hex}\"")
-        );
+        assert_eq!(serde_json::to_string(&seed)?, format!("\"{seed_hex}\""));
         assert_eq!(seed.clone().into_inner(), seed_hex);
 
         let trusted_seed = SigningSeedHex::from_trusted(seed_hex.clone());
@@ -523,7 +548,7 @@ mod tests {
         assert_eq!(label.as_ref(), "Laptop");
         assert_eq!(label.to_string(), "Laptop");
         assert_eq!(label.clone().into_inner(), "Laptop");
-        let decoded_label: MemberLabel = serde_json::from_str("\"Laptop\"").unwrap();
+        let decoded_label: MemberLabel = serde_json::from_str("\"Laptop\"")?;
         assert_eq!(decoded_label, label);
 
         let opaque = OpaqueCiphertext::from_trusted("sealed".to_owned());
@@ -531,7 +556,7 @@ mod tests {
         assert_eq!(opaque.as_ref(), "sealed");
         assert_eq!(opaque.to_string(), "sealed");
         assert_eq!(opaque.clone().into_inner(), "sealed");
-        let decoded_opaque: OpaqueCiphertext = serde_json::from_str("\"sealed\"").unwrap();
+        let decoded_opaque: OpaqueCiphertext = serde_json::from_str("\"sealed\"")?;
         assert_eq!(decoded_opaque, opaque);
 
         let plaintext = DecryptedPlaintext::from_trusted("secret".to_owned());
@@ -539,42 +564,41 @@ mod tests {
         assert_eq!(plaintext.as_ref(), "secret");
         assert_eq!(plaintext.to_string(), "secret");
         assert_eq!(plaintext.into_inner(), "secret");
+        Ok(())
     }
 
     #[test]
-    fn timestamp_and_signing_key_roundtrip_through_serde() {
-        let ts = IsoTimestamp::parse("2026-07-07T03:00:00Z").unwrap();
+    fn timestamp_and_signing_key_roundtrip_through_serde() -> anyhow::Result<()> {
+        let ts = IsoTimestamp::parse("2026-07-07T03:00:00Z")?;
         assert_eq!(ts.as_str(), "2026-07-07T03:00:00Z");
         assert_eq!(ts.as_ref(), ts.as_str());
         assert_eq!(ts.to_string(), ts.as_str());
         assert_eq!(ts.clone().into_inner(), ts.as_str());
         assert_eq!(IsoTimestamp::from_trusted(ts.as_str().to_owned()), ts);
-        let decoded_ts: IsoTimestamp =
-            serde_json::from_str(&serde_json::to_string(&ts).unwrap()).unwrap();
+        let decoded_ts: IsoTimestamp = serde_json::from_str(&serde_json::to_string(&ts)?)?;
         assert_eq!(decoded_ts, ts);
 
-        let signing = DeviceSigningPublicKey::parse(&"cd".repeat(32)).unwrap();
+        let signing = DeviceSigningPublicKey::parse(&"cd".repeat(32))?;
         assert!(!signing.is_empty());
         assert_eq!(signing.as_ref(), signing.as_str());
         assert_eq!(signing.to_string(), signing.as_str());
         assert_eq!(signing.clone().into_inner(), signing.as_str());
         let decoded_signing: DeviceSigningPublicKey =
-            serde_json::from_str(&serde_json::to_string(&signing).unwrap()).unwrap();
+            serde_json::from_str(&serde_json::to_string(&signing)?)?;
         assert_eq!(decoded_signing, signing);
+        Ok(())
     }
 
     #[test]
-    fn device_identity_secret_can_be_unwrapped_without_debug_leak() {
+    fn device_identity_secret_can_be_unwrapped_without_debug_leak() -> anyhow::Result<()> {
         let identity = Identity::generate();
         let secret = identity.to_string().expose_secret().to_owned();
-        let wrapped = DeviceIdentitySecret::parse(&secret).unwrap();
+        let wrapped = DeviceIdentitySecret::parse(&secret)?;
         assert_eq!(wrapped.as_ref(), secret);
         assert_eq!(wrapped.to_string(), secret);
         assert_eq!(format!("{wrapped:?}"), "DeviceIdentitySecret([REDACTED])");
-        assert_eq!(
-            serde_json::to_string(&wrapped).unwrap(),
-            format!("\"{secret}\"")
-        );
+        assert_eq!(serde_json::to_string(&wrapped)?, format!("\"{secret}\""));
         assert_eq!(wrapped.into_inner(), secret);
+        Ok(())
     }
 }

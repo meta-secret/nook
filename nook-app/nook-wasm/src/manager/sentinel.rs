@@ -4,7 +4,7 @@
 //! their local encrypted share inside Rust and return a signed response that is
 //! session-bound and encrypted to the requester.
 
-use super::NookVaultManager;
+use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
@@ -33,7 +33,7 @@ struct StoredSentinelGenesisDelivery {
 #[serde(rename_all = "camelCase")]
 struct PendingSentinelGenesisFinalization {
     store_id: String,
-    vault_name: Option<String>,
+    vault_name: VaultNameState,
     architecture: nook_core::VaultArchitecture,
     yaml: String,
     request: nook_core::SentinelGenesisRequest,
@@ -86,7 +86,7 @@ impl NookVaultManager {
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
         self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Complete;
-        self.pending_sentinel_genesis_request = None;
+        self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(package.delivery.store_id.to_string())
     }
 
@@ -158,13 +158,8 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
         let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;
-        self.sentinel_genesis = Some(session);
-        self.sentinel_genesis_phase = self
-            .sentinel_genesis
-            .as_ref()
-            .map_or(nook_core::SentinelGenesisPhase::Inactive, |session| {
-                nook_core::SentinelGenesisPhase::from_session(session)
-            });
+        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::from_session(&session);
+        self.sentinel_genesis = CeremonyState::Active(session);
         Ok(self.sentinel_genesis_status())
     }
 
@@ -173,8 +168,7 @@ impl NookVaultManager {
     pub fn sentinel_genesis_request_json(&self) -> Result<String, JsError> {
         let session = self
             .sentinel_genesis
-            .as_ref()
-            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
+            .get("No Sentinel genesis ceremony is active.")?;
         Ok(
             serde_json::to_string(&nook_core::sentinel_genesis_request(session))
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
@@ -221,7 +215,7 @@ impl NookVaultManager {
         )?;
         let response_json = serde_json::to_string(&response)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        self.pending_sentinel_genesis_request = Some(request);
+        self.pending_sentinel_genesis_request = CeremonyState::Active(request);
         Ok(response_json)
     }
 
@@ -231,7 +225,7 @@ impl NookVaultManager {
         let request_json = nook_core::normalize_sentinel_genesis_request(request_json)?;
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        self.pending_sentinel_genesis_request = Some(request);
+        self.pending_sentinel_genesis_request = CeremonyState::Active(request);
         Ok(())
     }
 
@@ -245,8 +239,7 @@ impl NookVaultManager {
     ) -> Result<NookSentinelGenesisStatus, JsError> {
         let session = self
             .sentinel_genesis
-            .as_mut()
-            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
+            .get_mut("No Sentinel genesis ceremony is active.")?;
         let response_json =
             nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
         nook_core::add_sentinel_genesis_participant_payload_with_label(
@@ -260,10 +253,12 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = sentinelGenesisStatus)]
     pub fn sentinel_genesis_status(&self) -> NookSentinelGenesisStatus {
-        let Some(session) = self.sentinel_genesis.as_ref() else {
-            return NookSentinelGenesisStatus::from_phase(self.sentinel_genesis_phase);
-        };
-        NookSentinelGenesisStatus::from_session(session)
+        match &self.sentinel_genesis {
+            CeremonyState::Active(session) => NookSentinelGenesisStatus::from_session(session),
+            CeremonyState::Inactive => {
+                NookSentinelGenesisStatus::from_phase(self.sentinel_genesis_phase)
+            }
+        }
     }
 
     #[wasm_bindgen(getter, js_name = sentinelGenesisPhase)]
@@ -311,11 +306,7 @@ impl NookVaultManager {
     ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let policy = self
-            .vault
-            .architecture
-            .sentinel
-            .ok_or(nook_core::MultiDeviceError::InvalidSentinelThreshold)?;
+        let policy = self.vault.architecture.sentinel.policy()?;
         let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
         let records = self.stored_records_snapshot();
         let mut session = nook_core::start_sentinel_unlock(
@@ -341,7 +332,7 @@ impl NookVaultManager {
             )?;
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
         }
-        self.sentinel_unlock = Some(session);
+        self.sentinel_unlock = CeremonyState::Active(session);
         Ok(self.sentinel_unlock_session_status())
     }
 
@@ -349,8 +340,7 @@ impl NookVaultManager {
     pub fn sentinel_unlock_request_json(&self) -> Result<String, JsError> {
         let session = self
             .sentinel_unlock
-            .as_ref()
-            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?;
+            .get("No Sentinel unlock ceremony is active.")?;
         Ok(
             serde_json::to_string(&nook_core::sentinel_unlock_request(session))
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
@@ -425,18 +415,19 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let session = self
             .sentinel_unlock
-            .as_mut()
-            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?;
+            .get_mut("No Sentinel unlock ceremony is active.")?;
         nook_core::add_sentinel_unlock_response(session, response)?;
         Ok(self.sentinel_unlock_session_status())
     }
 
     #[wasm_bindgen(js_name = sentinelUnlockSessionStatus)]
     pub fn sentinel_unlock_session_status(&self) -> NookSentinelUnlockSessionStatus {
-        let Some(session) = self.sentinel_unlock.as_ref() else {
-            return NookSentinelUnlockSessionStatus::inactive();
-        };
-        NookSentinelUnlockSessionStatus::from_status(nook_core::sentinel_unlock_status(session))
+        match &self.sentinel_unlock {
+            CeremonyState::Active(session) => NookSentinelUnlockSessionStatus::from_status(
+                nook_core::sentinel_unlock_status(session),
+            ),
+            CeremonyState::Inactive => NookSentinelUnlockSessionStatus::inactive(),
+        }
     }
 
     #[wasm_bindgen(js_name = finalizeSentinelUnlock)]
@@ -444,8 +435,7 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity()?;
         let session = self
             .sentinel_unlock
-            .as_ref()
-            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?
+            .get("No Sentinel unlock ceremony is active.")?
             .clone();
         let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
         let records = self.stored_records_snapshot();
@@ -456,8 +446,9 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        self.sentinel_unlock = None;
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        self.sentinel_unlock = CeremonyState::Inactive;
+        Ok(records)
     }
 
     /// Atomically create the complete encrypted Sentinel projection. No vault key
@@ -476,8 +467,7 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let session = self
             .sentinel_genesis
-            .as_ref()
-            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?
+            .get("No Sentinel genesis ceremony is active.")?
             .clone();
         let genesis_request = session.request.clone();
         let participants = session.participants().to_vec();
@@ -488,9 +478,12 @@ impl NookVaultManager {
             &output.stored_records,
             &nook_core::VaultUnlock::Keys,
             &[],
-            Some(&store_id),
-            vault_name.as_deref(),
-            None,
+            nook_core::VaultStoreIdentityRef::Assigned(&store_id),
+            match &vault_name {
+                VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
+                VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+            },
+            nook_core::VaultVersionWrite::Initial,
             &output.architecture,
         )?;
         let pending = PendingSentinelGenesisFinalization {
@@ -507,6 +500,7 @@ impl NookVaultManager {
         // This public/encrypted plan is the commit marker. Every subsequent
         // write is idempotent and a retry resumes this exact store/root.
         save_sentinel_genesis_finalization_pending(&pending_json).await?;
+        self.sentinel_genesis = CeremonyState::Inactive;
         self.complete_sentinel_genesis_finalization(pending).await
     }
 
@@ -522,12 +516,7 @@ impl NookVaultManager {
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
         let request = self
             .pending_sentinel_genesis_request
-            .as_ref()
-            .ok_or_else(|| {
-                JsError::new(
-                    "Paste the initiator request in the share section before accepting delivery.",
-                )
-            })?
+            .get("Paste the initiator request in the share section before accepting delivery.")?
             .clone();
         let identity = self.ensure_device_identity()?;
         let record =
@@ -546,7 +535,7 @@ impl NookVaultManager {
         .await?;
 
         self.install_accepted_sentinel_delivery(&delivery, &record);
-        self.pending_sentinel_genesis_request = None;
+        self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
@@ -615,7 +604,7 @@ impl NookVaultManager {
         )
         .await?;
         clear_sentinel_genesis_finalization_pending().await?;
-        self.sentinel_genesis = None;
+        self.sentinel_genesis = CeremonyState::Inactive;
         self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
 
         Ok(NookSentinelGenesisFinalizeResult::from_core(
@@ -689,7 +678,7 @@ impl NookVaultManager {
         }
         self.vault.secrets_key.clear();
         self.vault.members_key.clear();
-        self.vault.crypto = None;
+        self.vault.crypto = VaultCryptoState::Locked;
         self.vault.last_synced_content = content.to_owned();
         Ok(())
     }
@@ -735,11 +724,12 @@ impl NookVaultManager {
         let share_count = u8::try_from(self.vault.meta.sentinel_shares.len())
             .map_err(|_| nook_core::MultiDeviceError::InvalidSentinelThreshold)?;
         self.vault.architecture.vault_type = nook_core::VaultType::Sentinel;
-        self.vault.architecture.sentinel = Some(nook_core::SentinelPolicy {
-            threshold,
-            required_participants: required,
-            ready_participants: share_count,
-        });
+        self.vault.architecture.sentinel =
+            nook_core::SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
+                threshold,
+                required_participants: required,
+                ready_participants: share_count,
+            });
         Ok(())
     }
 }
@@ -763,7 +753,7 @@ mod tests {
         )
         .expect("session");
         let mut manager = NookVaultManager::new();
-        manager.sentinel_genesis = Some(session);
+        manager.sentinel_genesis = CeremonyState::Active(session);
 
         let mut status = manager.sentinel_genesis_status();
         assert_eq!(
@@ -806,6 +796,7 @@ mod tests {
             .vault
             .architecture
             .sentinel
+            .policy()
             .expect("sentinel policy");
         assert_eq!(policy.threshold, 3);
         assert_eq!(policy.required_participants, 5);
@@ -831,7 +822,10 @@ mod tests {
             manager.vault.architecture.vault_type,
             nook_core::VaultType::Simple
         );
-        assert!(manager.vault.architecture.sentinel.is_none());
+        assert_eq!(
+            manager.vault.architecture.sentinel,
+            nook_core::SentinelConfiguration::Disabled
+        );
     }
 
     #[test]

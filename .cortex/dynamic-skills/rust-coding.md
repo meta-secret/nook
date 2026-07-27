@@ -8,9 +8,11 @@ workflows.
 
 ## Problem Pattern
 
-An `Option<T>` often means one Rust shape is being reused across different
-worlds. The code says "maybe this field exists," but the real product model is
-usually "this value is in one named state or another named state."
+An `Option<T>` can mean one Rust shape is being reused across different worlds.
+The code says "maybe this field exists," but the real product model may be
+"this value is in one named state or another named state." Required persisted
+values are another failure mode: `Option<T>` permits an invalid record to enter
+the model and postpones rejection until unrelated domain logic runs.
 
 When you see `Option<T>`, ask:
 
@@ -26,8 +28,23 @@ When you see `Option<T>`, ask:
 - Model different workflow states as enum variants, not optional fields inside a
   reused struct.
 - Put fields only on the variant/sub-struct that actually owns them.
-- Use `Option<T>` only when absence is truly a field-level fact inside one
-  workflow, not a disguised variant.
+- Required persisted or signed values use required validated newtypes, never
+  `Option<T>`, empty strings, or a `Missing` enum variant.
+- Use `Option<T>` only when absence is the truthful structural contract, not a
+  disguised product state. Legitimate examples include iterator/lookup results,
+  an optional caller filter, an uninitialized cache, and external API fields.
+- When a missing value violates an invariant, add a precise `thiserror` variant,
+  return `Result<T, DomainError>`, and propagate it with `?`. Do not use either
+  `Option<T>` or a decorative `Missing` enum variant for failure.
+- When absence means unauthenticated, unauthorized, pending, unsupported,
+  configured versus unconfigured, or another named state, use an enum and put
+  state-specific values on the owning variant.
+- Do not create a one-variant wrapper enum just to avoid `Option<T>`. If callers
+  genuinely ask a lookup question, `Option<T>` is the precise Rust result.
+- Do not call `.unwrap()` in authored Rust. Production code returns, propagates,
+  or explicitly classifies failure. Tests prefer `Result`/`?`; when the test is
+  asserting a fixture invariant, use `expect` with enough context to identify
+  the failed setup.
 - Do not use `String` for typed domain values such as timestamps, YAML payloads,
   YAML payloads, storage/provider types, vault/store ids, event ids, or secret
   keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
@@ -94,19 +111,50 @@ pub enum SyncProviderTarget {
 }
 ```
 
-Persisted compatibility shapes may still have optional fields because older
-JSON or browser storage may be incomplete. Do not let that optionality leak into
-the domain model; classify it while converting:
+Do not preserve optional persisted fields as a compatibility fallback. Current
+Nook schemas deserialize directly into required validated values or explicit
+state enums and reject incomplete data:
 
 ```rust
-let target = match non_empty(provider.github_pat.as_deref()) {
-    Some(pat) => SyncProviderTarget::Github(GithubSyncTarget {
-        repo: non_empty(provider.github_repo.as_deref()).unwrap_or(default_repo),
-        pat,
-    }),
-    None => SyncProviderTarget::Empty,
-};
+#[derive(Deserialize)]
+struct StoredGithubSyncTarget {
+    repo: GithubRepository,
+    pat: GithubPersonalAccessToken,
+}
+
+enum SyncProviderTarget {
+    Github(StoredGithubSyncTarget),
+    NotConfigured,
+}
 ```
+
+Required signed event data does not use compatibility optionality in the
+current domain shape:
+
+```rust
+struct EncryptedSecretPayload {
+    identity_fingerprint: SecretFingerprint,
+    fingerprint: SecretFingerprint,
+}
+
+enum DeviceSigningPublicKey {
+    Unavailable,
+    Ed25519Hex(String),
+}
+
+struct VaultEventBody {
+    actor_signing_public_key: DeviceSigningPublicKey,
+}
+```
+
+The two fingerprints are deliberately distinct. The identity fingerprint
+excludes the password/secret value so imports can recognize one logical item.
+The version fingerprint includes the secret value so the same identity with a
+different password remains a separate version instead of being overwritten.
+Both are required and non-empty on encrypted event payloads. The signing-key
+type names unavailability explicitly, but current signed events still require
+the field and reject that variant. Missing fields are not backfilled through a
+compatibility DTO.
 
 Avoid raw timestamps or payload strings:
 
@@ -172,17 +220,34 @@ vault.runtimeConfig.resolveVaultIdleTimeoutMs(
 
 ## Scope
 
-Applies to Rust domain and bridge code in `nook-core` and `nook-wasm`,
+Applies to authored Rust domain and bridge code across Nook, especially
+`nook-auth2`, `nook-event-log`, `nook-core`, and `nook-wasm`,
 especially provider targets, enrollment payloads, vault state, sync state,
 storage modes, credential states, and WASM DTOs.
 
-Does not require replacing optional fields in raw persisted JSON structs when
-the optionality exists only to deserialize old or incomplete storage. Those
-structs must convert into a typed enum before domain decisions are made.
+Raw external API or user-controlled partial-input DTOs may remain permissive.
+Convert them immediately into domain enums, required validated newtypes, or
+typed errors. Persisted Nook schemas do not receive a legacy fallback unless a
+task explicitly requires a migration.
+
+It also does not replace idiomatic `Option<T>` return values from maps,
+iterators, parsers, searches, or caches when the caller is genuinely asking
+whether a value exists.
 
 ## Validation
 
 - Add or update tests for each new enum state.
+- Make fallible Rust tests return `Result<(), E>` and use `?` for setup and
+  verification. Do not silence `unwrap_used` by mechanically replacing
+  `.unwrap()` with `.expect(...)`; reserve `expect` for a deliberately asserted
+  infallible local invariant.
+- Do not use `Box<dyn std::error::Error>` as a catch-all test error. Return the
+  concrete crate error for one error family, or `anyhow::Result` when the test
+  intentionally combines unrelated error types.
+- Add deserialization tests proving required persisted values reject missing and
+  empty input.
+- Run Clippy for all targets with `clippy::unwrap_used` denied and verify a
+  repository search has no authored `.unwrap()` calls.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p

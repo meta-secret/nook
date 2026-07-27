@@ -165,7 +165,7 @@ pub fn finalize_sentinel_genesis(
         // Compatibility-only persisted field; it does not affect Sentinel
         // genesis, readiness, quorum, or later provider configuration.
         replication_type: ReplicationType::Personal,
-        sentinel: Some(SentinelPolicy {
+        sentinel: crate::SentinelConfiguration::Enabled(SentinelPolicy {
             threshold: policy.threshold,
             required_participants: policy.participant_count,
             ready_participants: policy.participant_count,

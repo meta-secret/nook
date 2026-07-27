@@ -256,10 +256,11 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn canonical_json_sorts_object_keys() {
+    fn canonical_json_sorts_object_keys() -> anyhow::Result<()> {
         let value = json!({"b": 2, "a": {"d": 4, "c": 3}});
-        let bytes = canonical_json_bytes(&value).unwrap();
+        let bytes = canonical_json_bytes(&value)?;
         assert_eq!(bytes, br#"{"a":{"c":3,"d":4},"b":2}"#);
+        Ok(())
     }
 
     #[test]
@@ -273,16 +274,17 @@ mod tests {
     }
 
     #[test]
-    fn storage_path_is_flat_yaml() {
-        let id = EventId::parse("sha256u:ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0").unwrap();
+    fn storage_path_is_flat_yaml() -> anyhow::Result<()> {
+        let id = EventId::parse("sha256u:ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0")?;
         assert_eq!(
             id.storage_path(),
             "nook-log/v1/events/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
         );
+        Ok(())
     }
 
     #[test]
-    fn ed25519_sign_verify_roundtrip() {
+    fn ed25519_sign_verify_roundtrip() -> anyhow::Result<()> {
         use ed25519_dalek::SigningKey;
         use rand_core::OsRng;
 
@@ -290,21 +292,21 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
         let body = b"canonical-body";
         let sig = sign_body(body, &signing_key);
-        verify_body_signature(body, &sig, &verifying_key).unwrap();
+        verify_body_signature(body, &sig, &verifying_key)?;
+        Ok(())
     }
 
     #[test]
-    fn event_id_and_signature_serde_roundtrip() {
-        let id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
-        let roundtripped: EventId =
-            serde_json::from_str(&serde_json::to_string(&id).unwrap()).unwrap();
+    fn event_id_and_signature_serde_roundtrip() -> anyhow::Result<()> {
+        let id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let roundtripped: EventId = serde_json::from_str(&serde_json::to_string(&id)?)?;
         assert_eq!(roundtripped, id);
 
         let signing_key = ed25519_dalek::SigningKey::generate(&mut rand_core::OsRng);
         let sig = sign_body(b"body", &signing_key);
-        let sig_back: Ed25519Signature =
-            serde_json::from_str(&serde_json::to_string(&sig).unwrap()).unwrap();
+        let sig_back: Ed25519Signature = serde_json::from_str(&serde_json::to_string(&sig)?)?;
         assert_eq!(sig_back, sig);
         assert!(Ed25519Signature::parse("bad-signature").is_err());
+        Ok(())
     }
 }

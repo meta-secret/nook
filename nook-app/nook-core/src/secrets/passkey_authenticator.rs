@@ -531,11 +531,11 @@ mod tests {
     }
 
     #[test]
-    fn registration_builds_valid_es256_none_attestation() {
-        let result = create_website_passkey(&registration_request(), &[]).unwrap();
-        result.credential.validate().unwrap();
-        let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object).unwrap();
-        let value: Value = ciborium::de::from_reader(attestation.as_slice()).unwrap();
+    fn registration_builds_valid_es256_none_attestation() -> anyhow::Result<()> {
+        let result = create_website_passkey(&registration_request(), &[])?;
+        result.credential.validate()?;
+        let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object)?;
+        let value: Value = ciborium::de::from_reader(attestation.as_slice())?;
         let Value::Map(entries) = value else {
             panic!("attestation must be a map")
         };
@@ -545,11 +545,12 @@ mod tests {
                 .any(|(key, value)| key == &Value::Text("fmt".to_owned())
                     && value == &Value::Text("none".to_owned()))
         );
+        Ok(())
     }
 
     #[test]
-    fn assertion_signature_verifies_and_counter_advances() {
-        let registration = create_website_passkey(&registration_request(), &[]).unwrap();
+    fn assertion_signature_verifies_and_counter_advances() -> anyhow::Result<()> {
+        let registration = create_website_passkey(&registration_request(), &[])?;
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
             challenge: challenge(9),
@@ -560,31 +561,27 @@ mod tests {
             user_verification_required: true,
         };
         let assertion =
-            assert_website_passkey(&request, std::slice::from_ref(&registration.credential))
-                .unwrap();
+            assert_website_passkey(&request, std::slice::from_ref(&registration.credential))?;
         assert_eq!(assertion.updated_credential.signature_count, 1);
-        let auth_data = URL_SAFE_NO_PAD
-            .decode(&assertion.authenticator_data)
-            .unwrap();
-        let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json).unwrap();
+        let auth_data = URL_SAFE_NO_PAD.decode(&assertion.authenticator_data)?;
+        let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json)?;
         let mut signed = auth_data;
         signed.extend_from_slice(&Sha256::digest(client_data));
-        let signature =
-            Signature::from_der(&URL_SAFE_NO_PAD.decode(assertion.signature).unwrap()).unwrap();
+        let signature = Signature::from_der(&URL_SAFE_NO_PAD.decode(assertion.signature)?)?;
         let PasskeyCredentialKey::Es256 {
             public_key_cose, ..
         } = &registration.credential.key;
-        let (x, y) =
-            cose_coordinates(&URL_SAFE_NO_PAD.decode(public_key_cose.encoded()).unwrap()).unwrap();
+        let (x, y) = cose_coordinates(&URL_SAFE_NO_PAD.decode(public_key_cose.encoded())?)?;
         let mut point = vec![4];
         point.extend_from_slice(&x);
         point.extend_from_slice(&y);
-        let verifying = VerifyingKey::from_sec1_bytes(&point).unwrap();
-        verifying.verify(&signed, &signature).unwrap();
+        let verifying = VerifyingKey::from_sec1_bytes(&point)?;
+        verifying.verify(&signed, &signature)?;
+        Ok(())
     }
 
     #[test]
-    fn origin_algorithm_lookup_and_ambiguity_fail_closed() {
+    fn origin_algorithm_lookup_and_ambiguity_fail_closed() -> anyhow::Result<()> {
         let mut request = registration_request();
         request.origin = "https://example.net".to_owned();
         assert_eq!(
@@ -598,12 +595,8 @@ mod tests {
             Err(PasskeyAuthenticatorError::UnsupportedAlgorithm)
         );
 
-        let first = create_website_passkey(&registration_request(), &[])
-            .unwrap()
-            .credential;
-        let second = create_website_passkey(&registration_request(), &[])
-            .unwrap()
-            .credential;
+        let first = create_website_passkey(&registration_request(), &[])?.credential;
+        let second = create_website_passkey(&registration_request(), &[])?.credential;
         let assertion = PasskeyAssertionRequest {
             origin: "https://example.com".to_owned(),
             challenge: challenge(3),
@@ -622,11 +615,12 @@ mod tests {
                 "relying party public suffix"
             ))
         );
+        Ok(())
     }
 
     #[test]
-    fn concurrent_counter_variants_resume_from_the_highest_counter() {
-        let registration = create_website_passkey(&registration_request(), &[]).unwrap();
+    fn concurrent_counter_variants_resume_from_the_highest_counter() -> anyhow::Result<()> {
+        let registration = create_website_passkey(&registration_request(), &[])?;
         let mut older = registration.credential.clone();
         older.signature_count = 2;
         let mut newer = registration.credential;
@@ -641,19 +635,16 @@ mod tests {
             user_verification_required: true,
         };
 
-        let assertion = assert_website_passkey(&request, &[older, newer]).unwrap();
+        let assertion = assert_website_passkey(&request, &[older, newer])?;
 
         assert_eq!(assertion.updated_credential.signature_count, 8);
+        Ok(())
     }
 
     #[test]
-    fn credential_key_validation_rejects_mismatched_public_key() {
-        let first = create_website_passkey(&registration_request(), &[])
-            .unwrap()
-            .credential;
-        let second = create_website_passkey(&registration_request(), &[])
-            .unwrap()
-            .credential;
+    fn credential_key_validation_rejects_mismatched_public_key() -> anyhow::Result<()> {
+        let first = create_website_passkey(&registration_request(), &[])?.credential;
+        let second = create_website_passkey(&registration_request(), &[])?.credential;
         let PasskeyCredentialKey::Es256 {
             private_key_pkcs8, ..
         } = &first.key;
@@ -664,13 +655,12 @@ mod tests {
             validate_es256_credential_key(private_key_pkcs8, Some(public_key_cose)),
             Err(PasskeyAuthenticatorError::InvalidKeyMaterial)
         );
+        Ok(())
     }
 
     #[test]
-    fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed() {
-        let credential = create_website_passkey(&registration_request(), &[])
-            .unwrap()
-            .credential;
+    fn exclusions_malformed_descriptors_and_exhausted_counters_fail_closed() -> anyhow::Result<()> {
+        let credential = create_website_passkey(&registration_request(), &[])?.credential;
         let mut excluded_request = registration_request();
         excluded_request.exclude_credentials = vec![PasskeyCredentialDescriptor {
             id: credential.credential_id.clone(),
@@ -705,5 +695,6 @@ mod tests {
             assert_website_passkey(&assertion_request, &[exhausted]),
             Err(PasskeyAuthenticatorError::SignatureCounterExhausted)
         );
+        Ok(())
     }
 }

@@ -547,14 +547,14 @@ mod tests {
 
     use super::*;
 
-    fn build_1pux(attributes: &str, data: &str) -> Vec<u8> {
+    fn build_1pux(attributes: &str, data: &str) -> anyhow::Result<Vec<u8>> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer.start_file("export.attributes", options).unwrap();
-        writer.write_all(attributes.as_bytes()).unwrap();
-        writer.start_file("export.data", options).unwrap();
-        writer.write_all(data.as_bytes()).unwrap();
-        writer.finish().unwrap().into_inner()
+        writer.start_file("export.attributes", options)?;
+        writer.write_all(attributes.as_bytes())?;
+        writer.start_file("export.data", options)?;
+        writer.write_all(data.as_bytes())?;
+        Ok(writer.finish()?.into_inner())
     }
 
     fn current_attributes() -> &'static str {
@@ -562,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_login_password_and_secure_note_items() {
+    fn converts_login_password_and_secure_note_items() -> anyhow::Result<()> {
         let data = r#"{
           "accounts":[{
             "vaults":[{
@@ -611,7 +611,7 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)).unwrap();
+        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
         assert_eq!(plan.source_count, 3);
         assert_eq!(plan.skipped_unsupported, 0);
         assert_eq!(plan.items.len(), 3);
@@ -641,10 +641,11 @@ mod tests {
                     .to_owned(),
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn accepts_wrapped_items_and_skips_unsupported_categories() {
+    fn accepts_wrapped_items_and_skips_unsupported_categories() -> anyhow::Result<()> {
         let data = r#"{
           "accounts": [{
             "vaults": [{
@@ -662,7 +663,7 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)).unwrap();
+        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
         assert_eq!(plan.source_count, 4);
         assert_eq!(plan.skipped_unsupported, 2);
         assert_eq!(plan.items.len(), 2);
@@ -672,21 +673,20 @@ mod tests {
         assert_eq!(card.number, "4111111111111111");
         assert_eq!(card.expiration_month, "12");
         assert_eq!(card.expiration_year, "2030");
+        Ok(())
     }
 
     #[test]
-    fn rejects_non_archives_missing_entries_and_unknown_versions() {
+    fn rejects_non_archives_missing_entries_and_unknown_versions() -> anyhow::Result<()> {
         assert!(matches!(
             plan_onepassword_import(b"not a zip"),
             Err(OnePasswordImportError::InvalidArchive(_))
         ));
 
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-        writer
-            .start_file("export.attributes", SimpleFileOptions::default())
-            .unwrap();
-        writer.write_all(current_attributes().as_bytes()).unwrap();
-        let missing_data = writer.finish().unwrap().into_inner();
+        writer.start_file("export.attributes", SimpleFileOptions::default())?;
+        writer.write_all(current_attributes().as_bytes())?;
+        let missing_data = writer.finish()?.into_inner();
         assert!(matches!(
             plan_onepassword_import(&missing_data),
             Err(OnePasswordImportError::MissingEntry("export.data"))
@@ -695,11 +695,12 @@ mod tests {
         let future = build_1pux(
             r#"{"version":4,"description":"1Password Unencrypted Export"}"#,
             r#"{"accounts":[]}"#,
-        );
+        )?;
         assert!(matches!(
             plan_onepassword_import(&future),
             Err(OnePasswordImportError::UnsupportedVersion(4))
         ));
+        Ok(())
     }
 
     #[test]

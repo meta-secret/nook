@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 
-use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
+use crate::model::{
+    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+};
 
 #[async_trait]
 pub trait TaskStore: Clone + Send + Sync + 'static {
@@ -10,11 +12,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()>;
 
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> anyhow::Result<Option<ClaimedTask>>;
+    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome>;
 
     async fn heartbeat(
         &self,
@@ -31,7 +29,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
-        artifact: Option<&Artifact>,
+        artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool>;
 
     async fn fail(
@@ -61,7 +59,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, Artifact, AttemptId, ClaimedTask, EnqueueTask, LeaseToken, TaskId,
+        AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken,
+        TaskId,
     };
 
     #[derive(Debug, Clone)]
@@ -100,7 +99,7 @@ mod tests {
         }
 
         async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
-            task.validate().map_err(anyhow::Error::msg)?;
+            task.validate()?;
             let tasks = self.tasks.lock().expect("store lock");
             let ready = task.dependencies.iter().all(|dependency| {
                 tasks
@@ -125,7 +124,7 @@ mod tests {
             &self,
             _agent_id: &AgentId,
             lease_seconds: i64,
-        ) -> anyhow::Result<Option<ClaimedTask>> {
+        ) -> anyhow::Result<ClaimOutcome> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let completed = tasks
                 .iter()
@@ -144,22 +143,20 @@ mod tests {
                         .iter()
                         .all(|dependency| completed.contains(&dependency.as_str().to_owned()))
             }) else {
-                return Ok(None);
+                return Ok(ClaimOutcome::NoTask);
             };
             task.status = "RUNNING";
             task.attempt_count += 1;
-            let lease_token =
-                LeaseToken::new(Uuid::new_v4().to_string()).map_err(anyhow::Error::msg)?;
+            let lease_token = LeaseToken::new(Uuid::new_v4().to_string())?;
             task.lease_token = Some(lease_token.clone());
             task.lease_until =
                 Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
-            Ok(Some(ClaimedTask {
+            Ok(ClaimOutcome::Claimed(ClaimedTask {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
                 source_commit: task.definition.source_commit.clone(),
-                attempt_id: AttemptId::new(Uuid::new_v4().to_string())
-                    .map_err(anyhow::Error::msg)?,
+                attempt_id: AttemptId::new(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
                 dependency_context: Vec::new(),
@@ -190,7 +187,7 @@ mod tests {
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
             _summary: &str,
-            _artifact: Option<&Artifact>,
+            _artifact: &CompletionArtifact,
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
@@ -267,7 +264,7 @@ mod tests {
             blocker: &EnqueueTask,
             _reason: &str,
         ) -> anyhow::Result<bool> {
-            blocker.validate().map_err(anyhow::Error::msg)?;
+            blocker.validate()?;
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
             if task.lease_token.as_ref() != Some(&claimed.lease_token) {
@@ -305,109 +302,114 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn concurrent_workers_cannot_claim_the_same_attempt() {
+    async fn concurrent_workers_cannot_claim_the_same_attempt() -> anyhow::Result<()> {
         let store = MemoryStore::default();
-        store.enqueue(&task("task-1", Vec::new())).await.unwrap();
-        let agent_a = AgentId::new("agent-a").unwrap();
-        let agent_b = AgentId::new("agent-b").unwrap();
+        store.enqueue(&task("task-1", Vec::new())).await?;
+        let agent_a = AgentId::new("agent-a")?;
+        let agent_b = AgentId::new("agent-b")?;
         let (claim_a, claim_b) =
             tokio::join!(store.claim(&agent_a, 300), store.claim(&agent_b, 300));
 
-        let claims = [claim_a.unwrap(), claim_b.unwrap()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let claims = match (claim_a?, claim_b?) {
+            (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask)
+            | (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => vec![claim],
+            _ => Vec::new(),
+        };
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0].attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn incomplete_dependencies_block_claiming() {
+    async fn incomplete_dependencies_block_claiming() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let dependency = task("dependency", Vec::new());
-        store.enqueue(&dependency).await.unwrap();
+        store.enqueue(&dependency).await?;
         store
             .enqueue(&task("dependent", vec![dependency.id.clone()]))
-            .await
-            .unwrap();
-        let agent = AgentId::new("agent").unwrap();
+            .await?;
+        let agent = AgentId::new("agent")?;
 
-        let first = store.claim(&agent, 300).await.unwrap().unwrap();
+        let first = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(first.id, dependency.id);
-        assert!(store.claim(&agent, 300).await.unwrap().is_none());
+        assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
     }
 
     #[tokio::test]
-    async fn rollout_release_does_not_consume_an_attempt() {
+    async fn rollout_release_does_not_consume_an_attempt() -> anyhow::Result<()> {
         let store = MemoryStore::default();
-        store.enqueue(&task("task-1", Vec::new())).await.unwrap();
-        let agent = AgentId::new("agent").unwrap();
+        store.enqueue(&task("task-1", Vec::new())).await?;
+        let agent = AgentId::new("agent")?;
 
-        let first = store.claim(&agent, 300).await.unwrap().unwrap();
-        assert!(store.release(&first, &agent).await.unwrap());
-        let replacement = store.claim(&agent, 300).await.unwrap().unwrap();
+        let first = store.claim(&agent, 300).await?.into_claimed()?;
+        assert!(store.release(&first, &agent).await?);
+        let replacement = store.claim(&agent, 300).await?.into_claimed()?;
 
         assert_eq!(replacement.attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn discovered_blocker_is_prioritized_and_resumes_original_task() {
+    async fn discovered_blocker_is_prioritized_and_resumes_original_task() -> anyhow::Result<()> {
         let store = MemoryStore::default();
-        store.enqueue(&task("original", Vec::new())).await.unwrap();
-        let agent = AgentId::new("agent").unwrap();
-        let original = store.claim(&agent, 300).await.unwrap().unwrap();
+        store.enqueue(&task("original", Vec::new())).await?;
+        let agent = AgentId::new("agent")?;
+        let original = store.claim(&agent, 300).await?.into_claimed()?;
         let mut blocker = task("blocker", Vec::new());
         blocker.priority = 100;
 
         assert!(
             store
                 .block(&original, &agent, &blocker, "blocked by prerequisite")
-                .await
-                .unwrap()
+                .await?
         );
-        let blocker_claim = store.claim(&agent, 300).await.unwrap().unwrap();
+        let blocker_claim = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
-                .complete(&blocker_claim, &agent, "blocker fixed", None)
-                .await
-                .unwrap()
+                .complete(
+                    &blocker_claim,
+                    &agent,
+                    "blocker fixed",
+                    &CompletionArtifact::NotProduced
+                )
+                .await?
         );
-        let resumed = store.claim(&agent, 300).await.unwrap().unwrap();
+        let resumed = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn expired_lease_rejects_stale_worker_and_allows_retry() {
+    async fn expired_lease_rejects_stale_worker_and_allows_retry() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let definition = task("task-1", Vec::new());
-        store.enqueue(&definition).await.unwrap();
-        let agent_a = AgentId::new("agent-a").unwrap();
-        let agent_b = AgentId::new("agent-b").unwrap();
-        let stale = store.claim(&agent_a, 300).await.unwrap().unwrap();
+        store.enqueue(&definition).await?;
+        let agent_a = AgentId::new("agent-a")?;
+        let agent_b = AgentId::new("agent-b")?;
+        let stale = store.claim(&agent_a, 300).await?.into_claimed()?;
         store.expire(&definition.id);
-        let current = store.claim(&agent_b, 300).await.unwrap().unwrap();
+        let current = store.claim(&agent_b, 300).await?.into_claimed()?;
 
         assert_ne!(stale.lease_token, current.lease_token);
         assert_eq!(current.attempt_number, 2);
         assert!(
             !store
                 .heartbeat(&stale.id, &agent_a, &stale.lease_token, 300)
-                .await
-                .unwrap()
+                .await?
         );
         assert!(
             !store
-                .complete(&stale, &agent_a, "late", None)
-                .await
-                .unwrap()
+                .complete(&stale, &agent_a, "late", &CompletionArtifact::NotProduced)
+                .await?
         );
         assert!(
             store
-                .complete(&current, &agent_b, "done", None)
-                .await
-                .unwrap()
+                .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
+                .await?
         );
+        Ok(())
     }
 }

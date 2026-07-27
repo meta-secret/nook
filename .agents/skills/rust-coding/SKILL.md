@@ -7,6 +7,15 @@ core rule aggressively: if a Rust struct contains `Option<T>`, ask what named
 state the absence represents. Prefer enums with per-variant structs over shared
 DTOs with optional fields, string tags, or sentinel values.
 
+Do not apply this as a textual ban on `Option<T>`. Keep it for truthful
+structural absence such as iterator and lookup results, optional external
+inputs, caches, and raw compatibility DTOs. Required persisted values use
+required validated newtypes. Named product/lifecycle/auth states use enums.
+
+Do not use `.unwrap()` in authored Rust. Production code propagates or
+classifies failure; tests use `Result`/`?` when practical or `expect` with a
+fixture-specific invariant. Keep `clippy::unwrap_used` denied for every target.
+
 When the optionality comes from persisted JSON or browser storage, keep the raw
 compatibility shape only at the boundary and convert it into a typed Rust enum
 before domain logic.

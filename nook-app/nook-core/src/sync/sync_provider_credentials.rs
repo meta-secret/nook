@@ -3,7 +3,8 @@
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey,
-    encrypt_for_recipient, errors::MultiDeviceResult,
+    encrypt_for_recipient,
+    errors::{MultiDeviceError, MultiDeviceResult},
 };
 
 /// Marker substring present in every age-armored credential ciphertext.
@@ -86,11 +87,7 @@ pub fn seal_provider_credentials_for_public_key(
     Ok(())
 }
 
-fn open_optional(
-    identity: &DeviceIdentity,
-    field: &mut Option<String>,
-    had_plaintext: &mut bool,
-) -> MultiDeviceResult<()> {
+fn open_optional(identity: &DeviceIdentity, field: &mut Option<String>) -> MultiDeviceResult<()> {
     let Some(text) = field.clone() else {
         return Ok(());
     };
@@ -100,42 +97,39 @@ fn open_optional(
     if is_sealed_credential(&text) {
         *field = Some(identity.open_utf8(&AgeArmoredCiphertext::parse(&text)?)?);
     } else {
-        *had_plaintext = true;
+        return Err(MultiDeviceError::UnsealedProviderCredential);
     }
     Ok(())
 }
 
-fn open_required(
-    identity: &DeviceIdentity,
-    field: &mut String,
-    had_plaintext: &mut bool,
-) -> MultiDeviceResult<()> {
+fn open_required(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
     if field.is_empty() {
         return Ok(());
     }
     if is_sealed_credential(field) {
         *field = identity.open_utf8(&AgeArmoredCiphertext::parse(field)?)?;
     } else {
-        *had_plaintext = true;
+        return Err(MultiDeviceError::UnsealedProviderCredential);
     }
     Ok(())
 }
 
-/// Unseal credential fields in `snapshot` (in place). Returns `true` when any
-/// field was still plaintext (legacy rows that should be re-saved sealed).
+/// Unseal credential fields in `snapshot` (in place).
+///
+/// Plaintext stored credentials are rejected; only the current encrypted
+/// storage schema is accepted.
 pub fn open_provider_credentials(
     identity: &DeviceIdentity,
     snapshot: &mut AuthProvidersSnapshotData,
-) -> MultiDeviceResult<bool> {
-    let mut had_plaintext = false;
+) -> MultiDeviceResult<()> {
     for provider in &mut snapshot.providers {
-        open_optional(identity, &mut provider.github_pat, &mut had_plaintext)?;
+        open_optional(identity, &mut provider.github_pat)?;
         if let Some(oauth) = provider.oauth_file.as_mut() {
-            open_required(identity, &mut oauth.access_token, &mut had_plaintext)?;
-            open_optional(identity, &mut oauth.refresh_token, &mut had_plaintext)?;
+            open_required(identity, &mut oauth.access_token)?;
+            open_optional(identity, &mut oauth.refresh_token)?;
         }
     }
-    Ok(had_plaintext)
+    Ok(())
 }
 
 fn field_is_presealed(value: &str) -> bool {
@@ -166,7 +160,9 @@ pub fn provider_credentials_are_presealed(snapshot: &AuthProvidersSnapshotData) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DeviceIdentity, OAuthFileConfigData, StorageProviderData};
+    use crate::{
+        DeviceIdentity, ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
+    };
 
     fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
@@ -190,24 +186,21 @@ mod tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: Some(OAuthFileConfigData {
-                    preset: "google-drive".to_owned(),
+                    preset: OauthFilePreset::GoogleDrive,
                     access_token: access.to_owned(),
                     refresh_token: refresh.map(str::to_owned),
                     expires_at: None,
                     file_id: None,
                     folder_id: None,
-                    drive_mode: Some(crate::GoogleDriveMode::Private),
-                    icloud_mode: None,
+                    drive_mode: crate::GoogleDriveMode::Private,
+                    icloud_mode: ICloudMode::Private,
                     icloud_share_target: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),
                 local_folder: None,
                 store_id: None,
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
+                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,
@@ -215,28 +208,35 @@ mod tests {
     }
 
     #[test]
-    fn seal_and_open_github_pat_round_trips() {
-        let identity = DeviceIdentity::generate().unwrap();
+    fn seal_and_open_github_pat_round_trips() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11AAAAbbbbCCCC";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
-        let stored = snapshot.providers[0].github_pat.as_ref().unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)?;
+        let stored = snapshot.providers[0]
+            .github_pat
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&identity, &mut opened).unwrap());
+        open_provider_credentials(&identity, &mut opened)?;
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        Ok(())
     }
 
     #[test]
-    fn seal_and_open_oauth_tokens_round_trips() {
-        let identity = DeviceIdentity::generate().unwrap();
+    fn seal_and_open_oauth_tokens_round_trips() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
         let mut snapshot = oauth_snapshot(access, Some(refresh));
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
-        let oauth = snapshot.providers[0].oauth_file.as_ref().unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)?;
+        let oauth = snapshot.providers[0]
+            .oauth_file
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(&oauth.access_token));
         assert!(
             oauth
@@ -245,64 +245,83 @@ mod tests {
                 .is_some_and(|value| is_sealed_credential(value))
         );
         assert!(!oauth.access_token.contains(access));
-        assert!(!oauth.refresh_token.as_ref().unwrap().contains(refresh));
+        assert!(
+            !oauth
+                .refresh_token
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("sealed refresh token must exist"))?
+                .contains(refresh)
+        );
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&identity, &mut opened).unwrap());
-        let opened_oauth = opened.providers[0].oauth_file.as_ref().unwrap();
+        open_provider_credentials(&identity, &mut opened)?;
+        let opened_oauth = opened.providers[0]
+            .oauth_file
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert_eq!(opened_oauth.access_token, access);
         assert_eq!(opened_oauth.refresh_token.as_deref(), Some(refresh));
+        Ok(())
     }
 
     #[test]
-    fn open_reports_legacy_plaintext_without_decrypting() {
-        let identity = DeviceIdentity::generate().unwrap();
+    fn open_rejects_plaintext_credentials() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11LEGACY";
         let mut snapshot = github_snapshot(pat);
-        assert!(open_provider_credentials(&identity, &mut snapshot).unwrap());
-        assert_eq!(snapshot.providers[0].github_pat.as_deref(), Some(pat));
+        assert!(matches!(
+            open_provider_credentials(&identity, &mut snapshot),
+            Err(MultiDeviceError::UnsealedProviderCredential)
+        ));
+        Ok(())
     }
 
     #[test]
-    fn seal_is_idempotent_for_already_sealed_fields() {
-        let identity = DeviceIdentity::generate().unwrap();
+    fn seal_is_idempotent_for_already_sealed_fields() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11AAAA");
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)?;
         let sealed_once = snapshot.providers[0].github_pat.clone();
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)?;
         assert_eq!(snapshot.providers[0].github_pat, sealed_once);
+        Ok(())
     }
 
     #[test]
-    fn sealed_credentials_fail_on_wrong_device() {
-        let owner = DeviceIdentity::generate().unwrap();
-        let other = DeviceIdentity::generate().unwrap();
+    fn sealed_credentials_fail_on_wrong_device() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let other = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11SECRET");
-        seal_provider_credentials(&owner, &mut snapshot).unwrap();
+        seal_provider_credentials(&owner, &mut snapshot)?;
         assert!(open_provider_credentials(&other, &mut snapshot).is_err());
+        Ok(())
     }
 
     #[test]
-    fn seal_for_public_key_opens_on_recipient_device() {
-        let extension = DeviceIdentity::generate().unwrap();
+    fn seal_for_public_key_opens_on_recipient_device() -> anyhow::Result<()> {
+        let extension = DeviceIdentity::generate()?;
         let pat = "github_pat_11EXTENSIONgrant";
         let mut snapshot = github_snapshot(pat);
-        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot).unwrap();
-        let stored = snapshot.providers[0].github_pat.as_ref().unwrap();
+        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)?;
+        let stored = snapshot.providers[0]
+            .github_pat
+            .as_ref()
+            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(!open_provider_credentials(&extension, &mut opened).unwrap());
+        open_provider_credentials(&extension, &mut opened)?;
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        Ok(())
     }
 
     #[test]
-    fn presealed_check_accepts_sealed_or_empty_credentials() {
-        let identity = DeviceIdentity::generate().unwrap();
+    fn presealed_check_accepts_sealed_or_empty_credentials() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11PRESEAL");
         assert!(!provider_credentials_are_presealed(&snapshot));
-        seal_provider_credentials(&identity, &mut snapshot).unwrap();
+        seal_provider_credentials(&identity, &mut snapshot)?;
         assert!(provider_credentials_are_presealed(&snapshot));
         assert!(provider_credentials_are_presealed(
             &AuthProvidersSnapshotData {
@@ -310,5 +329,6 @@ mod tests {
                 active_vault_store_id: Some("store-1".to_owned()),
             }
         ));
+        Ok(())
     }
 }

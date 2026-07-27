@@ -35,6 +35,12 @@ pub enum PasswordError {
     #[error("Password envelope work factor must be between 1 and 63.")]
     InvalidWorkFactor,
 
+    #[error("Password unlock entry not found: {entry_id}")]
+    EntryNotFound { entry_id: String },
+
+    #[error("Vault has no password unlock entries.")]
+    EnvelopeNotFound,
+
     #[error("Envelope plaintext is not valid UTF-8")]
     EnvelopePlaintextUtf8(#[source] std::string::FromUtf8Error),
 
