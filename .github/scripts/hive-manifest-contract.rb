@@ -562,7 +562,7 @@ hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
 hive_bwrap_smoke = File.read(
-  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-socket-smoke.py")
+  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-mailbox-smoke.py")
 )
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
@@ -588,9 +588,15 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("--unshare-pid") &&
        infra_taskfile.include?("--ro-bind / /") &&
        infra_taskfile.include?("--bind /workspace /workspace") &&
-       infra_taskfile.include?("task-bound publication socket through Bubblewrap") &&
+       infra_taskfile.include?("task-bound publication mailbox through Bubblewrap") &&
        infra_taskfile.include?("/usr/local/libexec/hive-bwrap-publication-smoke.py") &&
-       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_SOCKET"') &&
+       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_DIRECTORY"') &&
+       hive_bwrap_smoke.include?('"HIVE_PUBLICATION_VERIFY_KEY"') &&
+       hive_bwrap_smoke.include?('"openssl"') &&
+       hive_bwrap_smoke.include?("hashlib.sha256") &&
+       hive_bwrap_smoke.include?('"acknowledgement_signature"') &&
+       hive_bwrap_smoke.include?('"authorization_secret"') &&
+       hive_bwrap_smoke.include?('"signature"') &&
        hive_bwrap_smoke.include?('"--tmpfs"') &&
        hive_bwrap_smoke.include?('dir="/workspace"') &&
        hive_bwrap_smoke.include?("timeout=10") &&
@@ -598,6 +604,7 @@ unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        hive_bwrap_smoke.include?('"hive"') &&
        hive_bwrap_smoke.include?('"github"') &&
        hive_bwrap_smoke.include?('"ping"') &&
+       !hive_bwrap_smoke.include?("socket.") &&
        infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
 end

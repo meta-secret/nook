@@ -41,7 +41,8 @@ pub struct CodexOptions {
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
-    pub publication_socket: Option<PathBuf>,
+    pub publication_directory: Option<PathBuf>,
+    pub publication_verifying_key: Option<String>,
 }
 
 impl CodexOptions {
@@ -52,7 +53,8 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
-            publication_socket: None,
+            publication_directory: None,
+            publication_verifying_key: None,
         }
     }
 
@@ -61,8 +63,13 @@ impl CodexOptions {
         self
     }
 
-    pub fn with_publication_socket(mut self, publication_socket: PathBuf) -> Self {
-        self.publication_socket = Some(publication_socket);
+    pub fn with_publication_capability(
+        mut self,
+        publication_directory: PathBuf,
+        publication_verifying_key: String,
+    ) -> Self {
+        self.publication_directory = Some(publication_directory);
+        self.publication_verifying_key = Some(publication_verifying_key);
         self
     }
 }
@@ -208,10 +215,16 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         Constrained::allow_any(permission_profile),
     )
     .map_err(|error| CodexError::Configuration(error.to_string()))?;
-    if let Some(publication_socket) = &options.publication_socket {
+    if let Some(publication_directory) = &options.publication_directory {
         permissions.shell_environment_policy.r#set.insert(
-            "HIVE_PUBLICATION_SOCKET".to_owned(),
-            publication_socket.display().to_string(),
+            "HIVE_PUBLICATION_DIRECTORY".to_owned(),
+            publication_directory.display().to_string(),
+        );
+    }
+    if let Some(publication_verifying_key) = &options.publication_verifying_key {
+        permissions.shell_environment_policy.r#set.insert(
+            "HIVE_PUBLICATION_VERIFY_KEY".to_owned(),
+            publication_verifying_key.clone(),
         );
     }
     let model_reasoning_effort =
@@ -223,6 +236,13 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
                 ))
             })?;
 
+    let mut workspace_roots = vec![cwd.clone()];
+    if let Some(publication_directory) = &options.publication_directory {
+        workspace_roots.push(
+            AbsolutePathBuf::from_absolute_path_checked(publication_directory)
+                .map_err(|error| CodexError::Configuration(error.to_string()))?,
+        );
+    }
     let mut config = Config {
         config_layer_stack: ConfigLayerStack::default(),
         startup_warnings: Vec::new(),
@@ -272,7 +292,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         tui_session_picker_view: SessionPickerViewMode::Dense,
         tui_vim_mode_default: false,
         cwd: cwd.clone(),
-        workspace_roots: vec![cwd],
+        workspace_roots,
         workspace_roots_explicit: true,
         cli_auth_credentials_store_mode: AuthCredentialsStoreMode::File,
         mcp_servers: Constrained::allow_any(HashMap::new()),
@@ -952,7 +972,8 @@ mod tests {
                 main_execve_wrapper_exe: Some(PathBuf::from("/bin/codex-execve-wrapper")),
             },
             access: CodexAccess::ReadOnly,
-            publication_socket: None,
+            publication_directory: None,
+            publication_verifying_key: None,
         };
         let config = new_config(&options)?;
 
@@ -992,27 +1013,45 @@ mod tests {
     }
 
     #[test]
-    fn task_thread_receives_only_its_ephemeral_publication_socket() -> anyhow::Result<()> {
+    fn task_thread_receives_only_its_ephemeral_publication_directory() -> anyhow::Result<()> {
         let repository = tempfile::tempdir()?;
-        let publication_socket = PathBuf::from("/tmp/hive-capability/broker.sock");
+        let publication_directory = PathBuf::from("/workspace/hive-publication-capability");
+        let publication_verifying_key = "11".repeat(32);
         let config = new_config(
             &CodexOptions::new(repository.path().to_owned())
                 .with_workspace_write()
-                .with_publication_socket(publication_socket.clone()),
+                .with_publication_capability(
+                    publication_directory.clone(),
+                    publication_verifying_key.clone(),
+                ),
         )?;
 
         assert_eq!(
             config.permissions.permission_profile(),
             &PermissionProfile::workspace_write()
         );
+        assert_eq!(config.workspace_roots.len(), 2);
+        assert_eq!(
+            config.workspace_roots[1].as_ref(),
+            publication_directory.as_path()
+        );
         assert_eq!(
             config
                 .permissions
                 .shell_environment_policy
                 .r#set
-                .get("HIVE_PUBLICATION_SOCKET")
+                .get("HIVE_PUBLICATION_DIRECTORY")
                 .map(String::as_str),
-            publication_socket.to_str()
+            publication_directory.to_str()
+        );
+        assert_eq!(
+            config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .get("HIVE_PUBLICATION_VERIFY_KEY")
+                .map(String::as_str),
+            Some(publication_verifying_key.as_str())
         );
         assert!(
             !config
@@ -1020,6 +1059,13 @@ mod tests {
                 .shell_environment_policy
                 .r#set
                 .contains_key("HIVE_PUBLICATION_FD")
+        );
+        assert!(
+            !config
+                .permissions
+                .shell_environment_policy
+                .r#set
+                .contains_key("HIVE_PUBLICATION_SOCKET")
         );
         Ok(())
     }

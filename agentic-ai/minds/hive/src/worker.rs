@@ -204,8 +204,10 @@ impl<S: TaskStore> Worker<S> {
                     let mut codex_options =
                         CodexOptions::new(repository.clone()).with_workspace_write();
                     if let Some(capability) = &publication_capability {
-                        codex_options =
-                            codex_options.with_publication_socket(capability.socket().to_owned());
+                        codex_options = codex_options.with_publication_capability(
+                            capability.directory().to_owned(),
+                            capability.verifying_key().to_owned(),
+                        );
                     }
                     codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
@@ -238,8 +240,10 @@ impl<S: TaskStore> Worker<S> {
                 let prompt = task_prompt(task, publication.merge_commit.as_deref());
                 let mut codex_options = CodexOptions::new(repository).with_workspace_write();
                 if let Some(capability) = &publication_capability {
-                    codex_options =
-                        codex_options.with_publication_socket(capability.socket().to_owned());
+                    codex_options = codex_options.with_publication_capability(
+                        capability.directory().to_owned(),
+                        capability.verifying_key().to_owned(),
+                    );
                 }
                 codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
@@ -794,8 +798,11 @@ fn task_prompt(task: &ClaimedTask, recovered_merge_commit: Option<&str>) -> Stri
             "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
          Use only repository Taskfile commands for formatting and validation. Use \
          `hive github publish --title <title> --body <body>` to push the deterministic \
-         task branch and create or update its PR, `hive github inspect` to wait for and \
-         address exact-head checks and every review surface, `hive github reply-thread`, \
+         task branch and create or update its PR, `hive github inspect --page N` to traverse \
+         bounded review pages, `hive github inspect-detail --kind KIND --id ID --offset N` to \
+         retrieve every chunk of a truncated record, \
+         every page while waiting for and addressing exact-head checks and every review surface, \
+         `hive github reply-thread`, \
          `hive github resolve-thread`, and `hive github reply-feedback` after each targeted \
          fix, `hive github merge \
          --expected-head <sha>` \

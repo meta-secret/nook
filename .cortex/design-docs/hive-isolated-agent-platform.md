@@ -335,18 +335,37 @@ Codex cannot read the token or issue arbitrary authenticated requests.
 
 The worker binds this API before repository execution and opens one ephemeral
 publication capability in a random private directory beneath the task's bound
-`/workspace`. Its Unix socket is mode `0600`, and the worker preconnects one
-fresh broker stream before each `hive github` invocation, so an interrupted
-client cannot leave a reply queued for the next command. The bound workspace
-keeps the socket visible when Bubblewrap replaces `/tmp`; passing its path
-through the task's filtered shell environment avoids relying on inherited
-descriptors that Codex closes at its shell exec boundary. Deployment
-verification executes the real
+`/workspace`. The capability is a filesystem mailbox with `0700` directories
+and unique atomic request/response files. The worker preconnects one fresh
+broker stream before consuming each `hive github` request. Before executing an
+operation, the relay signs the exact request digest and the client returns a
+one-time authorization secret whose hash was committed inside that request.
+Substitution before acknowledgement cannot be authorized by the original
+client, and mutation after acknowledgement fails the relay's digest recheck.
+Matching responses
+by random request identifier means an interrupted client cannot leave a reply
+queued for the next command. Each response is signed with a per-task ephemeral
+Ed25519 key over the request identifier, exact submitted-request digest, and
+response; Codex receives only the verification key, so task-controlled
+repository code cannot substitute requests or forge publication results. The
+client remains attached
+until the broker answers or the enclosing worker task lifecycle cancels it,
+avoiding ambiguous timeouts after GitHub mutations. Inspection is exposed as
+bounded `--page N` output whose strings are reduced against the signed
+envelope's serialized-byte ceiling. Every truncated record remains losslessly
+available through chunked `hive github inspect-detail --kind ... --id ...`
+continuation, so large PR histories remain traversable without a whole-response
+size failure or discarded review content. Reply markers are evaluated across all
+comment pages even when the requested inspection page contains older feedback.
+The bound workspace remains visible when
+Bubblewrap replaces `/tmp`; regular file operations also preserve Codex's
+deny-network policy and avoid relying on inherited descriptors that Codex
+closes at its shell exec boundary. Deployment verification executes the real
 `hive github ping` client through the distribution Bubblewrap implementation.
-Codex's restricted network policy continues to deny network access while the
-local socket reaches only the already-bound typed broker channel. Main-repair
-tasks receive the bounded publication capability path; all other task kinds
-receive no capability path and remain broker-disabled.
+Main-repair tasks receive the bounded publication mailbox path; all other task
+kinds receive no capability path and remain broker-disabled.
+The capability directory is an explicit workspace root for the Main-repair
+Codex thread, and broker readiness is bounded before task execution proceeds.
 The broker
 reads the worker tree through a read-only mount,
 copies authored files into its own private checkout, and runs Git only there
