@@ -38,7 +38,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> EventResult<(VaultEven
         schema_version: VaultEventSchemaVersion::CURRENT,
         store_id: input.store_id.clone(),
         actor_id: input.actor_id.clone(),
-        actor_signing_public_key: Some(input.signing_identity.public_key()),
+        actor_signing_public_key: input.signing_identity.public_key(),
         parents,
         created_at: input.created_at.clone(),
         key_epoch: input.key_epoch.clone(),
@@ -54,8 +54,8 @@ pub fn encrypted_secret_from_armored(
     id: &SecretId,
     secret_type: nook_auth2::SecretType,
     ciphertext: &str,
-    identity_fingerprint: Option<SecretFingerprint>,
-    fingerprint: Option<SecretFingerprint>,
+    identity_fingerprint: SecretFingerprint,
+    fingerprint: SecretFingerprint,
 ) -> EncryptedSecretPayload {
     EncryptedSecretPayload {
         id: id.clone(),
@@ -156,7 +156,8 @@ mod tests {
 
     #[test]
     fn observed_heads_rejects_invalid_parent_id() {
-        let err = ObservedHeads::parse(&["not-an-event-id".to_owned()]).unwrap_err();
+        let err = ObservedHeads::parse(&["not-an-event-id".to_owned()])
+            .expect_err("builder test should reject invalid input");
         assert!(matches!(
             err,
             crate::EventError::EventIdMissingPrefix { .. }

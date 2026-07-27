@@ -116,8 +116,8 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(store_id.as_str()),
-            None,
+            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            crate::VaultVersionWrite::Initial,
         )
         .map_err(Into::into)
     }
@@ -177,9 +177,9 @@ mod tests {
                 entries: password_entries.clone(),
             },
             &password_entries,
-            Some(store_id.as_str()),
-            Some("Team Vault"),
-            Some(42),
+            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            crate::VaultNameRef::Named("Team Vault"),
+            crate::VaultVersionWrite::Version(42),
         )?;
         let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(

@@ -144,7 +144,7 @@ fn validate_provider_snapshot(
 mod tests {
     use super::*;
     use crate::{
-        DeviceIdentity, OAuthFileConfigData, SigningIdentity, StorageProviderData,
+        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
         finalize_sentinel_genesis_shares, start_sentinel_genesis,
     };
 
@@ -157,17 +157,14 @@ mod tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: Some(OAuthFileConfigData {
-                    preset: "google-drive".to_owned(),
+                    preset: OauthFilePreset::GoogleDrive,
                     access_token: "member-secret-token".to_owned(),
                     file_name: Some("nook-events".to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
                 local_folder: None,
                 store_id: Some(store_id.to_owned()),
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
+                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-07-12T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: Some(store_id.to_owned()),
@@ -175,49 +172,45 @@ mod tests {
     }
 
     #[test]
-    fn member_package_round_trips_share_and_provider_for_exact_device() {
-        let owner = DeviceIdentity::generate().unwrap();
-        let member = DeviceIdentity::generate().unwrap();
-        let owner_signing = SigningIdentity::generate().unwrap().0;
-        let member_signing = SigningIdentity::generate().unwrap().0;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".to_owned()).unwrap();
+    fn member_package_round_trips_share_and_provider_for_exact_device() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let member = DeviceIdentity::generate()?;
+        let owner_signing = SigningIdentity::generate()?.0;
+        let member_signing = SigningIdentity::generate()?.0;
+        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".to_owned())?;
         let response = crate::respond_to_sentinel_genesis_request(
             &session.request,
             &member,
             &member_signing,
             "Member".to_owned(),
-        )
-        .unwrap();
-        crate::add_sentinel_genesis_response(&mut session, response).unwrap();
+        )?;
+        crate::add_sentinel_genesis_response(&mut session, response)?;
         let request = session.request.clone();
-        let store_id = crate::generate_store_id().unwrap();
+        let store_id = crate::generate_store_id()?;
         let issued =
-            finalize_sentinel_genesis_shares(session, &store_id, owner_signing.signing_key())
-                .unwrap();
+            finalize_sentinel_genesis_shares(session, &store_id, owner_signing.signing_key())?;
         let delivery = issued
             .deliveries
             .into_iter()
             .find(|delivery| delivery.device_id == *member.device_id())
-            .unwrap();
+            .ok_or_else(|| std::io::Error::other("member delivery must exist"))?;
         let package = create_sentinel_onboarding_package(
             request,
             delivery,
             &provider_snapshot(store_id.as_str()),
-        )
-        .unwrap();
-        let encoded = serde_json::to_string(&package).unwrap();
+        )?;
+        let encoded = serde_json::to_string(&package)?;
         assert!(!encoded.contains("member-secret-token"));
 
-        let compact = encode_sentinel_onboarding_package(&package).unwrap();
+        let compact = encode_sentinel_onboarding_package(&package)?;
         assert!(
             compact.len() < 2_900,
             "compact package was {} bytes",
             compact.len()
         );
-        let package = decode_sentinel_onboarding_package(&compact).unwrap();
+        let package = decode_sentinel_onboarding_package(&compact)?;
 
-        let accepted = accept_sentinel_onboarding_package(&package, &member).unwrap();
+        let accepted = accept_sentinel_onboarding_package(&package, &member)?;
         assert!(
             accepted
                 .share_record
@@ -229,23 +222,25 @@ mod tests {
             accepted.provider_snapshot.providers[0]
                 .oauth_file
                 .as_ref()
-                .unwrap()
+                .ok_or_else(|| std::io::Error::other("provider OAuth fixture must exist"))?
                 .access_token,
             "member-secret-token"
         );
+        Ok(())
     }
 
     #[test]
-    fn oversized_onboarding_payload_is_rejected_before_deserialization() {
-        let oversized_len = usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES + 1).unwrap();
+    fn oversized_onboarding_payload_is_rejected_before_deserialization() -> anyhow::Result<()> {
+        let oversized_len = usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES + 1)?;
         let oversized = vec![b'x'; oversized_len];
         let mut deflater = DeflateEncoder::new(Vec::new(), Compression::best());
-        deflater.write_all(&oversized).unwrap();
-        let compressed_payload = URL_SAFE_NO_PAD.encode(deflater.finish().unwrap());
+        deflater.write_all(&oversized)?;
+        let compressed_payload = URL_SAFE_NO_PAD.encode(deflater.finish()?);
 
         assert!(matches!(
             decode_sentinel_onboarding_package(&compressed_payload),
             Err(MultiDeviceError::InvalidSentinelGenesisPayload)
         ));
+        Ok(())
     }
 }

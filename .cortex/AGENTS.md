@@ -50,6 +50,35 @@ tests first when the fault is reproducible at the typed boundary, then keep the
 Playwright test for the user-visible flow. Full policy:
 [rules.md §4](rules.md#4-testing-requirements).
 
+## ⛔ Non-negotiable: Rust domain absence must be explicit
+
+Before adding or preserving `Option<T>` in authored Rust, determine what
+`None` means. Required persisted values stay required validated values. Named
+product, lifecycle, authorization, or workflow states use enums with
+variant-owned data instead of `Option<T>` field bags. `Option<T>` remains
+appropriate only when absence is the truthful structural contract, including
+iterator/lookup results, optional external inputs, and caches. When absence
+violates an invariant, return `Result<T, DomainError>`, add a precise
+`thiserror` variant, and propagate with `?`; do not model failure as either
+`None` or a fake state enum.
+
+Do not create one-variant wrapper enums merely to avoid the spelling
+`Option<T>`. The objective is to make illegal domain states unrepresentable,
+not to reject idiomatic Rust. Full contract and examples:
+[dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
+
+Authored Rust must not call `.unwrap()`. Production paths propagate or classify
+failure. Rust tests that perform fallible setup or verification return
+`Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to
+`.expect(...)` is forbidden. Keep `expect` only when the test is deliberately
+asserting an infallible local construction and the panic itself documents that
+specific invariant. Do not erase test errors behind
+`Box<dyn std::error::Error>`: use the concrete crate error when one error family
+is involved, or `anyhow::Result` when a test composes unrelated fallible APIs.
+Workspace Clippy configuration enforces `unwrap_used` across all targets, and
+reviews treat repetitive test `expect` chains or boxed dynamic test errors as
+refactoring debt rather than acceptable test setup.
+
 ## ⛔ Non-negotiable: squash merge every PR
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).

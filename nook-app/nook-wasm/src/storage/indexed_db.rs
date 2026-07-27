@@ -213,14 +213,19 @@ async fn idb_delete_key(key: &str) -> Result<(), NookError> {
 }
 
 fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
-    nook_core::read_vault_store_id(content)
-        .map_err(|e| NookError::Database(e.to_string()))?
-        .filter(|id| !id.trim().is_empty())
-        .ok_or_else(|| NookError::Database("Vault YAML is missing store_id.".to_owned()))
+    match nook_core::read_vault_store_id(content).map_err(|e| NookError::Database(e.to_string()))? {
+        nook_core::VaultStoreIdentity::Assigned(store_id) => Ok(store_id),
+        nook_core::VaultStoreIdentity::Unassigned => Err(NookError::Database(
+            "Vault YAML is missing store_id.".to_owned(),
+        )),
+    }
 }
 
 fn label_from_yaml(content: &str) -> Option<String> {
-    nook_core::read_vault_name(content).ok().flatten()
+    match nook_core::read_vault_name(content) {
+        Ok(nook_core::VaultName::Named(name)) => Some(name),
+        Ok(nook_core::VaultName::Unnamed) | Err(_) => None,
+    }
 }
 
 fn default_registry_label(store_id: &str) -> String {
@@ -405,12 +410,35 @@ pub(crate) async fn device_identity_protection_status() -> Result<&'static str, 
     Ok(wrapped.protection_mode())
 }
 
-pub(crate) async fn device_identity_device_mode() -> Result<Option<&'static str>, NookError> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StoredDeviceMode {
+    Missing,
+    Pin,
+    Standard,
+    AntiHacker,
+}
+
+impl StoredDeviceMode {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Pin => "pin",
+            Self::Standard => "standard",
+            Self::AntiHacker => "anti-hacker",
+        }
+    }
+}
+
+pub(crate) async fn device_identity_device_mode() -> Result<StoredDeviceMode, NookError> {
     let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
-        return Ok(None);
+        return Ok(StoredDeviceMode::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-    Ok(wrapped.device_mode())
+    Ok(match wrapped {
+        nook_core::WrappedDeviceIdentity::Pin(_) => StoredDeviceMode::Pin,
+        nook_core::WrappedDeviceIdentity::PasskeyDerived(_) => StoredDeviceMode::Standard,
+        nook_core::WrappedDeviceIdentity::PasskeyWrappedLocal(_) => StoredDeviceMode::AntiHacker,
+    })
 }
 
 pub(crate) async fn load_wrapped_device_identity()
@@ -495,72 +523,72 @@ mod device_identity_storage_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn verified_passkey_identity_metadata_round_trips() {
+    async fn verified_passkey_identity_metadata_round_trips() -> Result<(), wasm_bindgen::JsError> {
         let _ = rexie::Rexie::delete("nook_db").await;
-        assert_eq!(
-            device_identity_protection_status().await.expect("status"),
-            "missing"
-        );
+        assert_eq!(device_identity_protection_status().await?, "missing");
 
-        let setup = nook_core::DeviceKeyProtectionSetup::generate().expect("setup");
+        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
         let secret =
-            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])
-                .expect("derive identity");
-        let identity = nook_core::DeviceIdentity::from_secret_str(&secret).expect("identity");
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
+        let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
         let wrapped = nook_core::passkey_derived_device_identity_record(
             &[7u8; 32],
             setup.user_handle(),
             setup.prf_input(),
-        )
-        .expect("record");
-        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped)
-            .await
-            .expect("persist identity metadata");
+        )?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
-        let (_, reloaded) = load_wrapped_device_identity()
-            .await
-            .expect("load")
-            .expect("record");
+        let (_, reloaded) = load_wrapped_device_identity().await?.ok_or_else(|| {
+            wasm_bindgen::JsError::new("wrapped device identity record should exist")
+        })?;
         assert_eq!(reloaded.protection_mode(), "passkey");
-        assert_eq!(reloaded.device_mode(), Some("standard"));
+        assert_eq!(reloaded.device_mode()?, "standard");
         assert_eq!(
-            device_identity_device_mode().await.expect("device mode"),
-            Some("standard")
+            device_identity_device_mode().await?,
+            StoredDeviceMode::Standard
         );
-        assert_eq!(
-            reloaded.user_handle_bytes().expect("user handle"),
-            setup.user_handle()
-        );
+        assert_eq!(reloaded.user_handle_bytes()?, setup.user_handle());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn verified_sentinel_genesis_share_delivery_round_trips() {
+    async fn pin_identity_reports_explicit_pin_device_mode() -> Result<(), wasm_bindgen::JsError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let wrapped =
+            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+
+        assert_eq!(device_identity_device_mode().await?, StoredDeviceMode::Pin);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn verified_sentinel_genesis_share_delivery_round_trips()
+    -> Result<(), wasm_bindgen::JsError> {
         let _ = rexie::Rexie::delete("nook_db").await;
         let store_id = "store_testsentinel11";
         let device_id = "0123456789abcdef";
         let payload = r#"{"version":1,"ciphertext":"verified"}"#;
 
-        save_sentinel_genesis_share_delivery(store_id, device_id, payload)
-            .await
-            .expect("persist verified delivery");
+        save_sentinel_genesis_share_delivery(store_id, device_id, payload).await?;
 
         assert_eq!(
             load_sentinel_genesis_share_delivery(store_id, device_id)
-                .await
-                .expect("load delivery")
+                .await?
                 .as_deref(),
             Some(payload)
         );
         assert_eq!(
-            list_sentinel_genesis_share_deliveries(device_id)
-                .await
-                .expect("list delivery catalog"),
+            list_sentinel_genesis_share_deliveries(device_id).await?,
             vec![SentinelGenesisShareCatalogEntry {
                 store_id: store_id.to_owned(),
                 device_id: device_id.to_owned(),
                 delivery_json: payload.to_owned(),
             }]
         );
+        Ok(())
     }
 }
 

@@ -64,6 +64,22 @@ or is publishing its own self-signed membership event under a narrow policy:
 - `sentinel-participant-enrolled` — never self-signed; must be signed by an
   already-authorized actor (owner approval / genesis).
 
+The current event body requires the signing-key field. The shared signing-key
+type explicitly distinguishes `Unavailable` from a validated Ed25519 hex key,
+but current signed events reject `Unavailable`. Missing fields are not
+backfilled or accepted through a compatibility shape.
+
+Every encrypted secret payload also requires two non-empty vault-keyed tags:
+
+- `identity_fingerprint` identifies the logical item while excluding its
+  password/secret value and provider metadata;
+- `fingerprint` identifies one complete secret version, including the
+  password/secret value and bound to the logical identity.
+
+They cannot be collapsed: matching identity with a different version is how
+import reconciliation preserves a changed password as a separate item instead
+of silently overwriting it.
+
 ### Sentinel genesis correction
 
 The target Sentinel lifecycle does not build a vault roster incrementally through

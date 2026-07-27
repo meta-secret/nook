@@ -14,6 +14,9 @@ pub enum VaultSyncError {
         remote_store: String,
     },
 
+    #[error("Non-empty vault is missing required store_id")]
+    MissingStoreId,
+
     #[error("sync provider {provider_id} disappeared during fan-out")]
     ProviderDisappeared { provider_id: String },
 

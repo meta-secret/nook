@@ -7,22 +7,25 @@ type ProviderSyncStatusLabels = {
 
 /** Format persisted provider sync metadata for the settings provider row. */
 export function formatProviderSyncStatus(
-  provider: Pick<StorageProvider, "lastSyncedAt" | "lastSyncedVersion">,
+  provider: Pick<StorageProvider, "syncCheckpoint">,
   locale: string,
   labels: ProviderSyncStatusLabels,
 ): string {
-  if (!provider.lastSyncedAt) return labels.notSyncedYet;
+  if (provider.syncCheckpoint?.state !== "synced") {
+    return labels.notSyncedYet;
+  }
 
-  const syncedAt = new Date(provider.lastSyncedAt);
+  const syncedAt = new Date(provider.syncCheckpoint.synced_at);
   if (Number.isNaN(syncedAt.getTime())) return labels.notSyncedYet;
 
   const timestamp = new Intl.DateTimeFormat(locale, {
     dateStyle: "short",
     timeStyle: "short",
   }).format(syncedAt);
+  const syncedVersion = provider.syncCheckpoint.version;
   const version =
-    provider.lastSyncedVersion != undefined && provider.lastSyncedVersion > 0
-      ? ` · v${provider.lastSyncedVersion}`
+    syncedVersion.state === "version" && syncedVersion.version > 0
+      ? ` · v${syncedVersion.version}`
       : "";
 
   return `${labels.lastSynced} ${timestamp}${version}`;

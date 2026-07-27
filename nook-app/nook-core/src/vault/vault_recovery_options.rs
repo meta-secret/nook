@@ -140,7 +140,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse(STORE_ID).expect("store"),
             actor_id: signing.actor_id().expect("actor"),
-            actor_signing_public_key: Some(signing.public_key()),
+            actor_signing_public_key: signing.public_key(),
             parents: vec![parent],
             created_at: timestamp(created_at),
             key_epoch: EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())

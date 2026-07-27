@@ -372,72 +372,65 @@ mod tests {
         policy: SentinelUnlockPolicy,
     }
 
-    fn fixture() -> Fixture {
+    fn fixture() -> anyhow::Result<Fixture> {
         let participants = (0..3)
-            .map(|_| DeviceIdentity::generate().unwrap())
-            .collect::<Vec<_>>();
+            .map(|_| DeviceIdentity::generate())
+            .collect::<Result<Vec<_>, _>>()?;
         let recipients = participants
             .iter()
             .map(|identity| (identity.device_id().clone(), identity.public_key()))
             .collect::<Vec<_>>();
-        let (keys, records) =
-            create_sentinel_root_share_records_for_recipients(&recipients, 2).unwrap();
+        let (keys, records) = create_sentinel_root_share_records_for_recipients(&recipients, 2)?;
         let requester = participants[2].clone();
-        Fixture {
+        Ok(Fixture {
             keys,
             records,
             participants,
             requester,
             requester_signing: signing_key(90),
-            store_id: StoreId::parse("store_AAAAAAAAAAA").unwrap(),
+            store_id: StoreId::parse("store_AAAAAAAAAAA")?,
             policy: SentinelUnlockPolicy {
                 threshold: 2,
                 required_participants: 3,
             },
-        }
+        })
     }
 
-    fn session(fixture: &Fixture) -> SentinelUnlockSession {
-        start_sentinel_unlock(
+    fn session(fixture: &Fixture) -> anyhow::Result<SentinelUnlockSession> {
+        Ok(start_sentinel_unlock(
             fixture.store_id.clone(),
             fixture.policy,
             &fixture.records,
             &fixture.requester,
             &fixture.requester_signing,
-        )
-        .unwrap()
+        )?)
     }
 
     fn response(
         fixture: &Fixture,
         request: &SentinelUnlockRequest,
         index: usize,
-    ) -> SentinelUnlockResponse {
-        respond_to_sentinel_unlock_request(
+    ) -> anyhow::Result<SentinelUnlockResponse> {
+        Ok(respond_to_sentinel_unlock_request(
             request,
             &fixture.records,
             &fixture.participants[index],
-            &signing_key(u8::try_from(index + 1).unwrap()),
+            &signing_key(u8::try_from(index + 1)?),
             &signing_public_key(&fixture.requester_signing),
-        )
-        .unwrap()
+        )?)
     }
 
     #[test]
-    fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() {
-        let fixture = fixture();
-        let mut session = session(&fixture);
+    fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() -> anyhow::Result<()> {
+        let fixture = fixture()?;
+        let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
-        let first = response(&fixture, &request, 0);
-        let second = response(&fixture, &request, 1);
+        let first = response(&fixture, &request, 0)?;
+        let second = response(&fixture, &request, 1)?;
         let local_plaintext =
-            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0]).unwrap();
-        assert!(
-            !serde_json::to_string(&first)
-                .unwrap()
-                .contains(&local_plaintext.share)
-        );
-        add_sentinel_unlock_response(&mut session, first).unwrap();
+            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0])?;
+        assert!(!serde_json::to_string(&first)?.contains(&local_plaintext.share));
+        add_sentinel_unlock_response(&mut session, first)?;
         assert_eq!(
             sentinel_unlock_status(&session),
             SentinelUnlockStatus {
@@ -446,61 +439,64 @@ mod tests {
                 ready: false,
             }
         );
-        add_sentinel_unlock_response(&mut session, second).unwrap();
+        add_sentinel_unlock_response(&mut session, second)?;
         assert!(sentinel_unlock_status(&session).ready);
         assert_eq!(
-            finalize_sentinel_unlock(session, &fixture.requester).unwrap(),
+            finalize_sentinel_unlock(session, &fixture.requester)?,
             fixture.keys
         );
+        Ok(())
     }
 
     #[test]
-    fn below_quorum_and_wrong_requester_are_rejected() {
-        let fixture = fixture();
-        let mut session = session(&fixture);
+    fn below_quorum_and_wrong_requester_are_rejected() -> anyhow::Result<()> {
+        let fixture = fixture()?;
+        let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
-        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)).unwrap();
+        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)?)?;
         assert!(matches!(
             finalize_sentinel_unlock(session.clone(), &fixture.requester),
             Err(MultiDeviceError::NotEnoughSentinelShares { .. })
         ));
-        let wrong = DeviceIdentity::generate().unwrap();
+        let wrong = DeviceIdentity::generate()?;
         assert!(matches!(
             finalize_sentinel_unlock(session, &wrong),
             Err(MultiDeviceError::SentinelUnlockRecipientMismatch)
         ));
+        Ok(())
     }
 
     #[test]
-    fn duplicate_device_and_share_index_are_rejected() {
-        let fixture = fixture();
-        let mut session = session(&fixture);
+    fn duplicate_device_and_share_index_are_rejected() -> anyhow::Result<()> {
+        let fixture = fixture()?;
+        let mut session = session(&fixture)?;
         let request = sentinel_unlock_request(&session);
-        let first = response(&fixture, &request, 0);
+        let first = response(&fixture, &request, 0)?;
         let duplicate_index = first.share_index;
-        add_sentinel_unlock_response(&mut session, first.clone()).unwrap();
+        add_sentinel_unlock_response(&mut session, first.clone())?;
         assert!(matches!(
             add_sentinel_unlock_response(&mut session, first),
             Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
         ));
 
-        let mut second = response(&fixture, &request, 1);
+        let mut second = response(&fixture, &request, 1)?;
         second.share_index = duplicate_index;
         second.signature = hex::encode(
             signing_key(2)
-                .sign(&response_signing_bytes(&second).unwrap())
+                .sign(&response_signing_bytes(&second)?)
                 .to_bytes(),
         );
         assert!(matches!(
             add_sentinel_unlock_response(&mut session, second),
             Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
         ));
+        Ok(())
     }
 
     #[test]
-    fn tampered_request_response_and_wrong_session_are_rejected() {
-        let fixture = fixture();
-        let mut first_session = session(&fixture);
+    fn tampered_request_response_and_wrong_session_are_rejected() -> anyhow::Result<()> {
+        let fixture = fixture()?;
+        let mut first_session = session(&fixture)?;
         let first_request = sentinel_unlock_request(&first_session);
         let mut tampered_request = first_request.clone();
         tampered_request.policy.threshold = 3;
@@ -515,8 +511,8 @@ mod tests {
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
 
-        let response = response(&fixture, &first_request, 0);
-        let second_session = session(&fixture);
+        let response = response(&fixture, &first_request, 0)?;
+        let second_session = session(&fixture)?;
         let mut wrong_session = second_session;
         assert!(matches!(
             add_sentinel_unlock_response(&mut wrong_session, response.clone()),
@@ -529,12 +525,13 @@ mod tests {
             add_sentinel_unlock_response(&mut first_session, tampered_response),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
+        Ok(())
     }
 
     #[test]
-    fn unenrolled_requester_receives_no_unlock_response() {
-        let fixture = fixture();
-        let unknown_identity = DeviceIdentity::generate().unwrap();
+    fn unenrolled_requester_receives_no_unlock_response() -> anyhow::Result<()> {
+        let fixture = fixture()?;
+        let unknown_identity = DeviceIdentity::generate()?;
         let unknown_signing = signing_key(91);
         let session = start_sentinel_unlock(
             fixture.store_id.clone(),
@@ -542,8 +539,7 @@ mod tests {
             &fixture.records,
             &unknown_identity,
             &unknown_signing,
-        )
-        .unwrap();
+        )?;
         let request = sentinel_unlock_request(&session);
 
         assert!(matches!(
@@ -556,5 +552,6 @@ mod tests {
             ),
             Err(MultiDeviceError::InvalidSentinelUnlockPayload)
         ));
+        Ok(())
     }
 }

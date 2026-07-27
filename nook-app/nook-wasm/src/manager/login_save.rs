@@ -17,11 +17,7 @@ impl NookVaultManager {
         username: &str,
         password: &str,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut owned_logins = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
             if *secret_type != nook_core::SecretType::Login {

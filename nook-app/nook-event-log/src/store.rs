@@ -291,7 +291,7 @@ mod tests {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse(STORE)?,
             actor_id: SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
-            actor_signing_public_key: Some(public_key(signing_key)),
+            actor_signing_public_key: public_key(signing_key),
             parents: vec![parent],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
@@ -300,8 +300,12 @@ mod tests {
                     id: SecretId::from_vault_record(secret_id),
                     secret_type: SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
-                    identity_fingerprint: None,
-                    fingerprint: None,
+                    identity_fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                        "test-identity:{secret_id}"
+                    )),
+                    fingerprint: crate::SecretFingerprint::from_trusted(format!(
+                        "test-version:{secret_id}"
+                    )),
                 },
             }],
         };
@@ -410,7 +414,8 @@ mod tests {
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let mut local = LocalEventStore::new();
-        let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE).unwrap_err();
+        let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE)
+            .expect_err("store test should reject invalid input");
         assert!(matches!(
             err,
             crate::EventError::RemoteEventIdMismatch { .. }
@@ -446,7 +451,8 @@ mod tests {
         let bytes = serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
-        let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE).unwrap_err();
+        let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE)
+            .expect_err("store test should reject invalid input");
         assert!(matches!(
             err,
             crate::EventError::RemoteEventIdMismatch { .. }
@@ -532,7 +538,7 @@ mod tests {
     fn classify_remote_event_log_fails_closed_on_unreadable_event() -> EventResult<()> {
         let event_id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let err = classify_remote_event_log(&[(event_id, b"not event yaml".to_vec())], Some(STORE))
-            .unwrap_err();
+            .expect_err("store test should reject invalid input");
         assert!(matches!(err, crate::EventError::ParseRemoteEvent(_)));
         Ok(())
     }
@@ -546,7 +552,8 @@ mod tests {
         let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
-        let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE).unwrap_err();
+        let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE)
+            .expect_err("store test should reject invalid input");
         assert!(matches!(
             err,
             crate::EventError::SignatureVerificationFailed

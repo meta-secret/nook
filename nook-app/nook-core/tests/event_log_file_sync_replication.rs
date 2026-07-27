@@ -311,8 +311,12 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
             id: SecretId::from_vault_record("secret_replaceaaaa"),
             secret_type: SecretType::Login,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-a".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: nook_core::SecretFingerprint::from_trusted(
+                "test:replace-a-identity".to_owned(),
+            ),
+            fingerprint: nook_core::SecretFingerprint::from_trusted(
+                "test:replace-a-version".to_owned(),
+            ),
         },
     }])?;
     device_b.session.heads = vec![shared_head];
@@ -322,8 +326,12 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
             id: SecretId::from_vault_record("secret_replacebbbb"),
             secret_type: SecretType::Login,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-b".to_owned()),
-            identity_fingerprint: None,
-            fingerprint: None,
+            identity_fingerprint: nook_core::SecretFingerprint::from_trusted(
+                "test:replace-b-identity".to_owned(),
+            ),
+            fingerprint: nook_core::SecretFingerprint::from_trusted(
+                "test:replace-b-version".to_owned(),
+            ),
         },
     }])?;
 

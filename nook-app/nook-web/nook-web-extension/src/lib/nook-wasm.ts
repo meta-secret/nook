@@ -4,6 +4,10 @@ import {
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
 import {
+  intoWasmStringValue,
+  takeWasmStringValue,
+} from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
+import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
   buildPasskeyPrfRequestOptions,
@@ -328,7 +332,9 @@ export async function parseStoredAppLocale(
   value: string | undefined,
 ): Promise<NookAppLocale | undefined> {
   await ensureNookWasm()
-  return wasmParseAppLocale(value) as NookAppLocale | undefined
+  return takeWasmStringValue(wasmParseAppLocale(intoWasmStringValue(value))) as
+    | NookAppLocale
+    | undefined
 }
 
 export async function resolveAppLocaleFromTags(

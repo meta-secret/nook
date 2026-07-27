@@ -22,8 +22,8 @@ fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Vault
         &records,
         &VaultUnlock::Keys,
         &[],
-        Some(store_id.as_str()),
-        None,
+        nook_core::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        nook_core::VaultVersionWrite::Initial,
     )
     .map_err(nook_core::VaultError::from)?
     .into_inner())

@@ -103,6 +103,8 @@ test.describe('sync provider credential encryption', () => {
             refreshToken: refresh,
             preset: 'google-drive',
             fileName: 'nook-events',
+            driveMode: 'private',
+            iCloudMode: 'private',
             accountEmail: 'me@example.com',
           },
           createdAt: new Date().toISOString(),

@@ -345,22 +345,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn workbench_checkout_reuses_the_same_public_git_snapshot() {
-        let origin = tempfile::tempdir().unwrap();
-        let checkout = tempfile::tempdir().unwrap();
+    async fn workbench_checkout_reuses_the_same_public_git_snapshot() -> anyhow::Result<()> {
+        let origin = tempfile::tempdir()?;
+        let checkout = tempfile::tempdir()?;
         let checkout_path = checkout.path().join("workbench");
-        let git = |args: &[&str]| {
+        let git = |args: &[&str]| -> anyhow::Result<()> {
             let status = StdCommand::new("git")
                 .arg("-C")
                 .arg(origin.path())
                 .args(args)
-                .status()
-                .unwrap();
-            assert!(status.success());
+                .status()?;
+            anyhow::ensure!(status.success(), "test Git command failed: {args:?}");
+            Ok(())
         };
-        git(&["init", "--initial-branch=main"]);
-        std::fs::write(origin.path().join("README.md"), "first\n").unwrap();
-        git(&["add", "README.md"]);
+        git(&["init", "--initial-branch=main"])?;
+        std::fs::write(origin.path().join("README.md"), "first\n")?;
+        git(&["add", "README.md"])?;
         git(&[
             "-c",
             "user.name=Hive Test",
@@ -369,18 +369,15 @@ mod tests {
             "commit",
             "-m",
             "first",
-        ]);
+        ])?;
 
-        let first = sync_workbench_checkout(origin.path().to_str().unwrap(), &checkout_path)
-            .await
-            .unwrap();
-        let unchanged = sync_workbench_checkout(origin.path().to_str().unwrap(), &checkout_path)
-            .await
-            .unwrap();
+        let repository_url = origin.path().to_string_lossy();
+        let first = sync_workbench_checkout(&repository_url, &checkout_path).await?;
+        let unchanged = sync_workbench_checkout(&repository_url, &checkout_path).await?;
         assert_eq!(first, unchanged);
 
-        std::fs::write(origin.path().join("README.md"), "second\n").unwrap();
-        git(&["add", "README.md"]);
+        std::fs::write(origin.path().join("README.md"), "second\n")?;
+        git(&["add", "README.md"])?;
         git(&[
             "-c",
             "user.name=Hive Test",
@@ -389,22 +386,20 @@ mod tests {
             "commit",
             "-m",
             "second",
-        ]);
-        let changed = sync_workbench_checkout(origin.path().to_str().unwrap(), &checkout_path)
-            .await
-            .unwrap();
+        ])?;
+        let changed = sync_workbench_checkout(&repository_url, &checkout_path).await?;
         assert_ne!(first, changed);
         assert_eq!(
-            std::fs::read_to_string(checkout_path.join("README.md")).unwrap(),
+            std::fs::read_to_string(checkout_path.join("README.md"))?,
             "second\n"
         );
         let reachable = StdCommand::new("git")
             .arg("-C")
             .arg(&checkout_path)
             .args(["rev-list", "--all", "--count"])
-            .output()
-            .unwrap();
+            .output()?;
         assert!(reachable.status.success());
-        assert_eq!(String::from_utf8(reachable.stdout).unwrap().trim(), "1");
+        assert_eq!(String::from_utf8(reachable.stdout)?.trim(), "1");
+        Ok(())
     }
 }

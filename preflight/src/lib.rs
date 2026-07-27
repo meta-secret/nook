@@ -816,32 +816,28 @@ mod tests {
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
-    fn reports_only_cache_mounts_in_dockerfiles() {
-        let root = temporary_directory();
-        fs::create_dir_all(root.join("nested")).unwrap();
-        fs::create_dir_all(root.join("nook-app/nook-wasm")).unwrap();
+    fn reports_only_cache_mounts_in_dockerfiles() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        fs::create_dir_all(root.join("nested"))?;
+        fs::create_dir_all(root.join("nook-app/nook-wasm"))?;
         fs::create_dir_all(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm"),
-        )
-        .unwrap();
+        )?;
         fs::write(
             root.join("nested/build.Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             root.join("nook-app/nook-wasm/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/wasm-cache true\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             root.join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/Dockerfile"),
             "FROM scratch\nRUN --mount=type=cache,target=/generated-cache true\n",
-        )
-        .unwrap();
-        fs::write(root.join("notes.txt"), "--mount=type=cache").unwrap();
+        )?;
+        fs::write(root.join("notes.txt"), "--mount=type=cache")?;
 
-        let violations = dockerfile_cache_mounts(&root).unwrap();
+        let violations = dockerfile_cache_mounts(&root)?;
 
         assert_eq!(
             violations,
@@ -860,15 +856,18 @@ mod tests {
                 },
             ]
         );
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
-    fn fails_when_repository_root_contains_no_dockerfiles() {
-        let root = temporary_directory();
-        let error = dockerfile_cache_mounts(&root).unwrap_err();
+    fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        let error =
+            dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
@@ -956,46 +955,41 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
     }
 
     #[test]
-    fn reports_authored_null_while_preserving_external_contracts() {
-        let root = temporary_directory();
+    fn reports_authored_null_while_preserving_external_contracts() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
         let web_root = root.join("nook-app/nook-web");
         let app_source = web_root.join("nook-web-app/src");
         let extension_source = web_root.join("nook-web-extension/src/content");
         let select_source = web_root.join("nook-web-shared/src/vault-app/lib/components/ui/select");
         let scripts = web_root.join("nook-web-extension/scripts");
-        fs::create_dir_all(&app_source).unwrap();
-        fs::create_dir_all(&extension_source).unwrap();
-        fs::create_dir_all(&select_source).unwrap();
-        fs::create_dir_all(&scripts).unwrap();
+        fs::create_dir_all(&app_source)?;
+        fs::create_dir_all(&extension_source)?;
+        fs::create_dir_all(&select_source)?;
+        fs::create_dir_all(&scripts)?;
         fs::write(
             app_source.join("state.ts"),
             "const nullableName = 'annulled'\n// provider returned null\nconst message = \"provider returned null\"\nconst template = `provider returned null`\nconst matcher = /null|nil/\nconst interpolation = `value: ${null}`\nlet value: string | null = null\nconst ratio = amount / null\nconst assertedRatio = value! / (fallback ?? null)\nconst incrementedRatio = index++ / null\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             app_source.join("panel.svelte"),
             "<p>null is external</p>\n<!-- {null} is documentation -->\n<Child value={null} />\n{#if true}\n  {@const fallback = null}\n{/if}\n<script lang=\"ts\">\n  const message = 'null'\n  let value = null\n</script>\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             extension_source.join("webauthn-page.ts"),
             "getPublicKey: () => null,\nfallback: () => Promise<Credential | null>,\n): Promise<Credential | null> {\nreturn new Promise<Credential | null>((resolve, reject) => {\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             extension_source.join("chrome.d.ts"),
             "type External = string | null\n",
-        )
-        .unwrap();
+        )?;
         fs::write(
             select_source.join("select-trigger.svelte"),
             "ref = $bindable(null),\n",
-        )
-        .unwrap();
-        fs::write(scripts.join("build.ts"), "const value = null\n").unwrap();
+        )?;
+        fs::write(scripts.join("build.ts"), "const value = null\n")?;
 
         assert_eq!(
-            typescript_null_absence_sentinels(&root).unwrap(),
+            typescript_null_absence_sentinels(&root)?,
             vec![
                 Violation {
                     path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
@@ -1035,7 +1029,8 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
                 },
             ]
         );
-        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 
     #[test]
@@ -1090,16 +1085,13 @@ export function configuredCapability(): NookProviderReplicationCapability {
         assert_eq!(typescript_boundary_violation_lines(source), vec![6]);
     }
 
-    fn temporary_directory() -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+    fn temporary_directory() -> anyhow::Result<PathBuf> {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let process_id = std::process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path =
             std::env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
-        fs::create_dir(&path).unwrap();
-        path
+        fs::create_dir(&path)?;
+        Ok(path)
     }
 }

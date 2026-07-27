@@ -38,8 +38,8 @@ pub fn reencrypt_user_secrets_for_epoch(
             id: record.key.clone(),
             secret_type,
             ciphertext: OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
-            identity_fingerprint: Some(identity_fingerprint),
-            fingerprint: Some(fingerprint),
+            identity_fingerprint,
+            fingerprint,
         });
     }
     Ok(out)
@@ -97,39 +97,34 @@ mod tests {
     };
 
     #[test]
-    fn reencrypt_produces_decryptable_new_epoch_secrets() {
-        let old_key =
-            SymmetricKey::parse("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-                .unwrap();
+    fn reencrypt_produces_decryptable_new_epoch_secrets() -> anyhow::Result<()> {
+        let old_key = SymmetricKey::parse(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )?;
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_testtoken1"),
             secret_type: Some(crate::SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(
-                VaultCrypto::new(&old_key)
-                    .unwrap()
-                    .encrypt_value(
-                        SecretValue::ApiKey(ApiKeySecret {
-                            website_url: "https://example.com".to_owned(),
-                            key: "hunter2".to_owned(),
-                            expires_at: String::new(),
-                        })
-                        .to_yaml()
-                        .unwrap(),
-                    )
-                    .unwrap(),
+                VaultCrypto::new(&old_key)?.encrypt_value(
+                    SecretValue::ApiKey(ApiKeySecret {
+                        website_url: "https://example.com".to_owned(),
+                        key: "hunter2".to_owned(),
+                        expires_at: String::new(),
+                    })
+                    .to_yaml()?,
+                )?,
             ),
         };
-        let new_key =
-            SymmetricKey::parse("cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe")
-                .unwrap();
-        let payloads = reencrypt_user_secrets_for_epoch(&[record], &old_key, &new_key).unwrap();
-        let new_crypto = VaultCrypto::new(&new_key).unwrap();
-        let plaintext = new_crypto
-            .decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
-                payloads[0].ciphertext.as_str().to_owned(),
-            ))
-            .unwrap();
+        let new_key = SymmetricKey::parse(
+            "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+        )?;
+        let payloads = reencrypt_user_secrets_for_epoch(&[record], &old_key, &new_key)?;
+        let new_crypto = VaultCrypto::new(&new_key)?;
+        let plaintext = new_crypto.decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
+            payloads[0].ciphertext.as_str().to_owned(),
+        ))?;
         assert!(plaintext.as_str().contains("hunter2"));
+        Ok(())
     }
 
     #[test]

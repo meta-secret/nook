@@ -10,11 +10,7 @@ impl NookVaultManager {
         &self,
         query: &str,
     ) -> Result<Vec<NookAuthenticatorAccount>, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut accounts = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
             if *secret_type != nook_core::SecretType::Authenticator {
@@ -41,11 +37,7 @@ impl NookVaultManager {
         unix_seconds: u32,
     ) -> Result<NookTotpCode, NookError> {
         let id = nook_core::SecretId::parse(secret_id)?;
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let result = match &record.data {
@@ -125,7 +117,7 @@ mod wasm_tests {
                 note: "not an authenticator".to_owned(),
             }),
         );
-        manager.vault.crypto = Some(crypto);
+        manager.vault.crypto = crate::manager::VaultCryptoState::Unlocked(crypto);
 
         let all = manager
             .list_authenticator_accounts("")

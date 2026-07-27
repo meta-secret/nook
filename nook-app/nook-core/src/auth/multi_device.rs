@@ -100,7 +100,6 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::SecretFingerprintsBackfilled { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
         | VaultOperation::PasswordRemoved { .. }
@@ -217,30 +216,28 @@ mod tests {
         parents: Vec<EventId>,
         operations: Vec<VaultOperation>,
         timestamp: &str,
-    ) -> VaultEvent {
-        VaultEvent::sign(
+    ) -> anyhow::Result<VaultEvent> {
+        Ok(VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
                 store_id: store_id.clone(),
-                actor_id: signing.actor_id().unwrap(),
-                actor_signing_public_key: Some(signing.public_key()),
+                actor_id: signing.actor_id()?,
+                actor_signing_public_key: signing.public_key(),
                 parents,
-                created_at: IsoTimestamp::parse(timestamp).unwrap(),
+                created_at: IsoTimestamp::parse(timestamp)?,
                 key_epoch: EventId::from_sha256_hex(
                     crate::sha256_hex(store_id.as_str().as_bytes()).as_str(),
-                )
-                .unwrap(),
+                )?,
                 operations,
             },
             signing.signing_key(),
-        )
-        .unwrap()
+        )?)
     }
 
     #[test]
-    fn sentinel_event_materialization_retains_complete_public_roster() {
-        let identity = DeviceIdentity::generate().unwrap();
-        let (signing, _) = SigningIdentity::generate().unwrap();
+    fn sentinel_event_materialization_retains_complete_public_roster() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
         let operation = VaultOperation::SentinelParticipantEnrolled {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key(),
@@ -248,18 +245,18 @@ mod tests {
             label: MemberLabel::from_trusted("Owner".to_owned()),
         };
         let mut state = VaultMetaState::default();
-        apply_vault_meta_operation(&mut state, &operation, "2026-07-09T00:00:00Z").unwrap();
+        apply_vault_meta_operation(&mut state, &operation, "2026-07-09T00:00:00Z")?;
         let participant = state
             .sentinel_participants
             .get(identity.device_id())
-            .unwrap();
+            .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?;
         assert_eq!(participant.encryption_public_key, identity.public_key());
         assert_eq!(participant.signing_public_key, signing.public_key());
         assert_eq!(participant.label, "Owner");
 
-        let members_key = crate::generate_symmetric_key().unwrap();
-        let records = sentinel_member_records_from_public_roster(&state, &members_key).unwrap();
-        let roster = crate::resolve_member_roster(&records, &members_key).unwrap();
+        let members_key = crate::generate_symmetric_key()?;
+        let records = sentinel_member_records_from_public_roster(&state, &members_key)?;
+        let roster = crate::resolve_member_roster(&records, &members_key)?;
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].device_id, *identity.device_id());
 
@@ -270,28 +267,27 @@ mod tests {
                 label: MemberLabel::from_trusted("Renamed".to_owned()),
             },
             "2026-07-09T00:01:00Z",
-        )
-        .unwrap();
+        )?;
         assert_eq!(
             state
                 .sentinel_participants
                 .get(identity.device_id())
-                .unwrap()
+                .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?
                 .label,
             "Renamed"
         );
+        Ok(())
     }
 
     #[test]
-    fn extension_access_follows_approval_and_revocation_events() {
-        let owner = DeviceIdentity::generate().unwrap();
-        let extension = DeviceIdentity::generate().unwrap();
-        let (signing, _) = SigningIdentity::generate().unwrap();
-        let keys = crate::generate_vault_keys().unwrap();
-        let auth =
-            crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key).unwrap();
-        let envelopes = crate::parse_auth_envelopes(auth.value.as_str()).unwrap();
-        let store_id = crate::generate_store_id().unwrap();
+    fn extension_access_follows_approval_and_revocation_events() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let extension = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
+        let keys = crate::generate_vault_keys()?;
+        let auth = crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key)?;
+        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
+        let store_id = crate::generate_store_id()?;
         let mut graph = EventGraph::new();
         let approval = signed_event(
             &signing,
@@ -313,29 +309,23 @@ mod tests {
                 },
             ],
             "2026-07-14T00:00:00Z",
-        );
-        let approval_id = approval.id().unwrap();
-        graph.insert(approval, store_id.as_str()).unwrap();
+        )?;
+        let approval_id = approval.id()?;
+        graph.insert(approval, store_id.as_str())?;
 
-        assert!(
-            event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &signing.public_key(),
-            )
-            .unwrap()
-        );
-        let (other_signing, _) = SigningIdentity::generate().unwrap();
-        assert!(
-            !event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &other_signing.public_key(),
-            )
-            .unwrap()
-        );
+        assert!(event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &signing.public_key(),
+        )?);
+        let (other_signing, _) = SigningIdentity::generate()?;
+        assert!(!event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &other_signing.public_key(),
+        )?);
         assert!(
             event_graph_has_active_device_access(
                 &graph,
@@ -354,16 +344,14 @@ mod tests {
                 device_id: extension.device_id().clone(),
             }],
             "2026-07-14T00:01:00Z",
-        );
-        graph.insert(revocation, store_id.as_str()).unwrap();
-        assert!(
-            !event_graph_has_active_device_access(
-                &graph,
-                extension.device_id(),
-                &extension.public_key(),
-                &signing.public_key(),
-            )
-            .unwrap()
-        );
+        )?;
+        graph.insert(revocation, store_id.as_str())?;
+        assert!(!event_graph_has_active_device_access(
+            &graph,
+            extension.device_id(),
+            &extension.public_key(),
+            &signing.public_key(),
+        )?);
+        Ok(())
     }
 }

@@ -7,6 +7,9 @@ description = "Kata-isolated Nook AI worker coordinated through Neo4j"
 repository.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "hive"
 path = "src/main.rs"

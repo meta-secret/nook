@@ -37,7 +37,7 @@ pub enum CodexAccess {
 #[derive(Debug, Clone)]
 pub struct CodexOptions {
     pub repo_root: PathBuf,
-    pub model: Option<String>,
+    pub model: String,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
@@ -48,7 +48,7 @@ impl CodexOptions {
     pub fn new(repo_root: PathBuf) -> Self {
         Self {
             repo_root,
-            model: Some(DEFAULT_CODEX_MODEL.to_owned()),
+            model: DEFAULT_CODEX_MODEL.to_owned(),
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
@@ -227,7 +227,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         config_layer_stack: ConfigLayerStack::default(),
         startup_warnings: Vec::new(),
         bypass_hook_trust: false,
-        model: options.model.clone(),
+        model: Some(options.model.clone()),
         service_tier: None,
         review_model: None,
         model_context_window: None,
@@ -940,11 +940,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn configures_an_ephemeral_read_only_core_thread() {
-        let repository = tempfile::tempdir().unwrap();
+    fn configures_an_ephemeral_read_only_core_thread() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
-            model: Some("test-model".into()),
+            model: "test-model".into(),
             reasoning_effort: "low".into(),
             arg0_paths: Arg0DispatchPaths {
                 codex_self_exe: Some(PathBuf::from("/bin/meta-agent")),
@@ -954,7 +954,7 @@ mod tests {
             access: CodexAccess::ReadOnly,
             publication_fd: None,
         };
-        let config = new_config(&options).unwrap();
+        let config = new_config(&options)?;
 
         assert_eq!(config.model.as_deref(), Some("test-model"));
         assert_eq!(
@@ -978,26 +978,27 @@ mod tests {
             config.permissions.permission_profile(),
             &PermissionProfile::read_only()
         );
+        Ok(())
     }
 
     #[test]
-    fn defaults_to_gpt_5_6_terra_with_light_reasoning() {
-        let repository = tempfile::tempdir().unwrap();
+    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned());
 
-        assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
+        assert_eq!(options.model, DEFAULT_CODEX_MODEL);
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
+        Ok(())
     }
 
     #[test]
-    fn task_thread_inherits_only_the_preconnected_publication_capability() {
-        let repository = tempfile::tempdir().unwrap();
+    fn task_thread_inherits_only_the_preconnected_publication_capability() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
         let config = new_config(
             &CodexOptions::new(repository.path().to_owned())
                 .with_workspace_write()
                 .with_publication_fd(17),
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(
             config.permissions.permission_profile(),
@@ -1012,6 +1013,7 @@ mod tests {
                 .map(String::as_str),
             Some("17")
         );
+        Ok(())
     }
 
     #[test]
@@ -1049,37 +1051,39 @@ mod tests {
     }
 
     #[test]
-    fn execution_options_enable_workspace_write() {
-        let repository = tempfile::tempdir().unwrap();
+    fn execution_options_enable_workspace_write() -> anyhow::Result<()> {
+        let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
-        let config = new_config(&options).unwrap();
+        let config = new_config(&options)?;
 
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
             config.permissions.permission_profile(),
             &PermissionProfile::workspace_write()
         );
+        Ok(())
     }
 
     #[test]
-    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() {
+    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
 
-        progress.reasoning_delta("Inspecting ").unwrap();
-        progress.reasoning_delta("the repository.\n").unwrap();
-        progress.announce_plan_output().unwrap();
-        progress.announce_plan_output().unwrap();
-        progress.finish_reasoning().unwrap();
+        progress.reasoning_delta("Inspecting ")?;
+        progress.reasoning_delta("the repository.\n")?;
+        progress.announce_plan_output()?;
+        progress.announce_plan_output()?;
+        progress.finish_reasoning()?;
 
         assert_eq!(
-            String::from_utf8(progress.writer).unwrap(),
+            String::from_utf8(progress.writer)?,
             "  ↳ Inspecting the repository.\n  ◆  Building feature plan\n     Writing structured tasks and dependencies\n"
         );
         assert!(progress.plan_output_announced);
+        Ok(())
     }
 
     #[test]
-    fn inspection_progress_hides_shell_commands_behind_readable_steps() {
+    fn inspection_progress_hides_shell_commands_behind_readable_steps() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let commands = [
             vec![
@@ -1100,9 +1104,9 @@ mod tests {
         ];
 
         for command in commands {
-            progress.inspection(&command).unwrap();
+            progress.inspection(&command)?;
         }
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer)?;
 
         assert!(output.contains("01  Discovering project instructions"));
         assert!(output.contains("02  Searching implementation"));
@@ -1110,61 +1114,59 @@ mod tests {
         assert!(output.contains(".cortex/AGENTS.md"));
         assert!(!output.contains("/bin/zsh"));
         assert!(!output.contains("rg -n"));
+        Ok(())
     }
 
     #[test]
-    fn failed_inspection_includes_the_command_for_debugging() {
+    fn failed_inspection_includes_the_command_for_debugging() -> anyhow::Result<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
-        progress.failed_inspection(2, &command).unwrap();
-        let output = String::from_utf8(progress.writer).unwrap();
+        progress.failed_inspection(2, &command)?;
+        let output = String::from_utf8(progress.writer)?;
 
         assert!(output.contains("Repository inspection failed (exit 2)"));
         assert!(output.contains("/bin/zsh -lc rg missing-file"));
+        Ok(())
     }
 
     #[test]
-    fn task_progress_logs_only_fixed_secret_safe_metadata() {
+    fn task_progress_logs_only_fixed_secret_safe_metadata() -> anyhow::Result<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
 
-        progress.line("36", "●", "start", "Agent started").unwrap();
-        progress
-            .command_finished(
-                &["cargo".into(), "test".into(), "-p".into(), "core".into()],
-                0,
-                1.24,
-            )
-            .unwrap();
-        progress
-            .line("33", "!", "warning", "Embedded turn reported a warning")
-            .unwrap();
-        progress.announce_finalizing().unwrap();
-        progress.announce_finalizing().unwrap();
+        progress.line("36", "●", "start", "Agent started")?;
+        progress.command_finished(
+            &["cargo".into(), "test".into(), "-p".into(), "core".into()],
+            0,
+            1.24,
+        )?;
+        progress.line("33", "!", "warning", "Embedded turn reported a warning")?;
+        progress.announce_finalizing()?;
+        progress.announce_finalizing()?;
 
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer)?;
         assert!(output.contains("core-agent"));
         assert!(output.contains("result  · 1.2s · verification completed"));
         assert!(output.contains("Embedded turn reported a warning"));
         assert_eq!(output.matches("Finalizing task result").count(), 1);
+        Ok(())
     }
 
     #[test]
-    fn task_progress_does_not_reveal_failed_commands_or_output() {
+    fn task_progress_does_not_reveal_failed_commands_or_output() -> anyhow::Result<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
 
-        progress
-            .command_finished(
-                &["secret-command".into(), "credential-value".into()],
-                1,
-                0.5,
-            )
-            .unwrap();
+        progress.command_finished(
+            &["secret-command".into(), "credential-value".into()],
+            1,
+            0.5,
+        )?;
 
-        let output = String::from_utf8(progress.writer).unwrap();
+        let output = String::from_utf8(progress.writer)?;
         assert!(output.contains("failed  · Repository command exited with status 1"));
         assert!(!output.contains("secret-command"));
         assert!(!output.contains("credential-value"));
+        Ok(())
     }
 
     #[test]

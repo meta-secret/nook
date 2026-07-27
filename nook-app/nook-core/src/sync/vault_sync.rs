@@ -23,6 +23,13 @@ pub enum VaultSyncAction {
     Conflict,
 }
 
+/// Causal ancestry known for a provider during vault reconciliation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommonContentHash<'a> {
+    Unknown,
+    Known(&'a str),
+}
+
 impl VaultSyncAction {
     /// Stable tag returned to the web layer after blob reconciliation.
     #[must_use]
@@ -42,7 +49,13 @@ pub struct VaultRevision {
     pub version: u64,
     /// SHA-256 hex digest of trimmed UTF-8 content (for conflict detection).
     pub content_hash: String,
-    pub store_id: Option<String>,
+    pub store: VaultRevisionStore,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultRevisionStore {
+    EmptyVault,
+    Identified(String),
 }
 
 /// Read revision metadata without decrypting secret values.
@@ -52,13 +65,17 @@ pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
         return Ok(VaultRevision {
             version: 0,
             content_hash: content_hash(trimmed),
-            store_id: None,
+            store: VaultRevisionStore::EmptyVault,
         });
     }
+    let store_id = match read_vault_store_id(trimmed)? {
+        crate::VaultStoreIdentity::Assigned(store_id) => store_id,
+        crate::VaultStoreIdentity::Unassigned => return Err(VaultSyncError::MissingStoreId),
+    };
     Ok(VaultRevision {
         version: crate::read_vault_version(trimmed)?,
         content_hash: content_hash(trimmed),
-        store_id: read_vault_store_id(trimmed)?,
+        store: VaultRevisionStore::Identified(store_id),
     })
 }
 
@@ -71,7 +88,7 @@ pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
 /// 4. Higher `vault_version` wins → [`AdoptRemote`] or [`PushLocal`].
 /// 5. Equal version, different content → [`VaultSyncAction::Conflict`].
 pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyncAction> {
-    compare_vault_sync_with_common(local, remote, None)
+    compare_vault_sync_with_common(local, remote, CommonContentHash::Unknown)
 }
 
 /// Decide how to reconcile local vs remote vault blobs, using the last
@@ -84,7 +101,7 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyn
 pub fn compare_vault_sync_with_common(
     local: &str,
     remote: &str,
-    last_common_content_hash: Option<&str>,
+    last_common_content_hash: CommonContentHash<'_>,
 ) -> VaultSyncResult<VaultSyncAction> {
     let local_trim = local.trim();
     let remote_trim = remote.trim();
@@ -106,7 +123,10 @@ pub fn compare_vault_sync_with_common(
     let local_rev = read_vault_revision(local_trim)?;
     let remote_rev = read_vault_revision(remote_trim)?;
 
-    if let (Some(local_store), Some(remote_store)) = (&local_rev.store_id, &remote_rev.store_id)
+    if let (
+        VaultRevisionStore::Identified(local_store),
+        VaultRevisionStore::Identified(remote_store),
+    ) = (&local_rev.store, &remote_rev.store)
         && local_store != remote_store
     {
         tracing::warn!(
@@ -121,11 +141,11 @@ pub fn compare_vault_sync_with_common(
         });
     }
 
-    if let Some(base_hash) = last_common_content_hash
-        .map(str::trim)
-        .filter(|hash| !hash.is_empty())
+    if let CommonContentHash::Known(base_hash) = last_common_content_hash
+        && !base_hash.trim().is_empty()
         && local_rev.content_hash != remote_rev.content_hash
     {
+        let base_hash = base_hash.trim();
         let local_matches_base = local_rev.content_hash == base_hash;
         let remote_matches_base = remote_rev.content_hash == base_hash;
         if local_matches_base && !remote_matches_base {
@@ -182,97 +202,103 @@ mod tests {
     use crate::test_support::sample_vault_yaml as sample_yaml;
 
     #[test]
-    fn identical_content_is_unchanged() {
-        let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test");
+    fn identical_content_is_unchanged() -> anyhow::Result<()> {
+        let yaml = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
-            compare_vault_sync(&yaml, &yaml).unwrap(),
+            compare_vault_sync(&yaml, &yaml)?,
             VaultSyncAction::Unchanged
         );
+        Ok(())
     }
 
     #[test]
-    fn empty_local_adopts_remote() {
-        let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test");
+    fn empty_local_adopts_remote() -> anyhow::Result<()> {
+        let remote = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
         assert_eq!(
-            compare_vault_sync("", &remote).unwrap(),
+            compare_vault_sync("", &remote)?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn empty_remote_pushes_local() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "test");
-        assert_eq!(
-            compare_vault_sync(&local, "").unwrap(),
-            VaultSyncAction::PushLocal
-        );
+    fn empty_remote_pushes_local() -> anyhow::Result<()> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "test")?;
+        assert_eq!(compare_vault_sync(&local, "")?, VaultSyncAction::PushLocal);
+        Ok(())
     }
 
     #[test]
-    fn higher_remote_version_wins() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b");
+    fn higher_remote_version_wins() -> anyhow::Result<()> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn higher_local_version_pushes() {
-        let local = sample_yaml(5, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
+    fn higher_local_version_pushes() -> anyhow::Result<()> {
+        let local = sample_yaml(5, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::PushLocal
         );
+        Ok(())
     }
 
     #[test]
-    fn same_version_different_content_is_conflict() {
-        let local = sample_yaml(2, "store_AAAAAAAAAAA", "a");
-        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
+    fn same_version_different_content_is_conflict() -> anyhow::Result<()> {
+        let local = sample_yaml(2, "store_AAAAAAAAAAA", "a")?;
+        let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b")?;
         assert_eq!(
-            compare_vault_sync(&local, &remote).unwrap(),
+            compare_vault_sync(&local, &remote)?,
             VaultSyncAction::Conflict
         );
+        Ok(())
     }
 
     #[test]
-    fn common_hash_allows_single_successor_to_win() {
-        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
-        let local = sample_yaml(3, "store_AAAAAAAAAAA", "local");
+    fn common_hash_allows_single_successor_to_win() -> anyhow::Result<()> {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
+        let local = sample_yaml(3, "store_AAAAAAAAAAA", "local")?;
         let remote = base.clone();
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::PushLocal
         );
         assert_eq!(
-            compare_vault_sync_with_common(&remote, &local, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&remote, &local, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::AdoptRemote
         );
+        Ok(())
     }
 
     #[test]
-    fn common_hash_rejects_divergent_scalar_winner() {
-        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
-        let local = sample_yaml(4, "store_AAAAAAAAAAA", "local");
-        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote");
+    fn common_hash_rejects_divergent_scalar_winner() -> anyhow::Result<()> {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base")?;
+        let local = sample_yaml(4, "store_AAAAAAAAAAA", "local")?;
+        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote")?;
         let base_hash = vault_content_hash(&base);
 
         assert_eq!(
-            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
+            compare_vault_sync_with_common(&local, &remote, CommonContentHash::Known(&base_hash))?,
             VaultSyncAction::Conflict
         );
+        Ok(())
     }
 
     #[test]
-    fn store_id_mismatch_is_error() {
-        let local = sample_yaml(1, "store_AAAAAAAAAAA", "");
-        let remote = sample_yaml(1, "store_BBBBBBBBBBB", "");
+    fn store_id_mismatch_is_error() -> anyhow::Result<()> {
+        let local = sample_yaml(1, "store_AAAAAAAAAAA", "")?;
+        let remote = sample_yaml(1, "store_BBBBBBBBBBB", "")?;
         assert!(compare_vault_sync(&local, &remote).is_err());
+        Ok(())
     }
 
     #[test]

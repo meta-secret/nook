@@ -149,14 +149,13 @@ impl Database {
         &self,
         crypto: &VaultCrypto,
     ) -> DatabaseResult<Vec<StoredSecretRecord>> {
-        let mut keys: Vec<&SecretId> = self.records.keys().collect();
-        keys.sort();
-        let mut stored_records = Vec::with_capacity(keys.len());
-        for key in keys {
-            let record = self.records.get(key).unwrap();
+        let mut records: Vec<&SecretRecord> = self.records.values().collect();
+        records.sort_by(|left, right| left.id.cmp(&right.id));
+        let mut stored_records = Vec::with_capacity(records.len());
+        for record in records {
             let yaml = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
-                key: key.clone(),
+                key: record.id.clone(),
                 secret_type: Some(record.secret_type),
                 value: StoredRecordPayload::from_age_armored(crypto.encrypt_value(&yaml)?),
             });
@@ -185,6 +184,7 @@ impl Database {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::Database;
     use crate::secret_types::StoredRecordPayload;
@@ -198,8 +198,8 @@ mod tests {
     const TEST_PASSPHRASE: &str =
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
-    fn test_key() -> crate::SymmetricKey {
-        crate::SymmetricKey::parse(TEST_PASSPHRASE).unwrap()
+    fn test_key() -> anyhow::Result<crate::SymmetricKey> {
+        Ok(crate::SymmetricKey::parse(TEST_PASSPHRASE)?)
     }
 
     fn api_key(value: &str) -> SecretValue {
@@ -218,21 +218,22 @@ mod tests {
     }
 
     #[test]
-    fn database_roundtrip() {
+    fn database_roundtrip() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("foo"), api_key("bar"));
         db.insert(sid("hello"), api_key("world"));
 
         let parsed = db.clone();
         assert_eq!(parsed.list(), db.list());
+        Ok(())
     }
 
     #[test]
-    fn stored_yaml_encrypts_values_only() {
+    fn stored_yaml_encrypts_values_only() -> anyhow::Result<()> {
         let passphrase = TEST_PASSPHRASE;
 
         let db = sample_db();
-        let stored = db.to_stored_yaml(passphrase).unwrap();
+        let stored = db.to_stored_yaml(passphrase)?;
 
         assert!(stored.as_str().contains("github.com"));
         assert!(stored.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
@@ -241,37 +242,38 @@ mod tests {
         assert!(!stored.as_str().contains("token-abc"));
         assert!(!stored.as_str().contains("\\n"));
 
-        let restored = Database::from_stored_yaml(&stored, passphrase).unwrap();
+        let restored = Database::from_stored_yaml(&stored, passphrase)?;
         assert_eq!(restored.list(), db.list());
+        Ok(())
     }
 
     #[test]
-    fn stored_auto_accepts_yaml() {
+    fn stored_auto_accepts_yaml() -> anyhow::Result<()> {
         let passphrase = TEST_PASSPHRASE;
         let mut db = Database::new();
         db.insert(sid("x"), api_key("y"));
-        let yaml = db.to_stored_yaml(passphrase).unwrap();
+        let yaml = db.to_stored_yaml(passphrase)?;
 
         assert_eq!(
-            Database::from_stored_auto(yaml.as_str(), passphrase)
-                .unwrap()
-                .list(),
+            Database::from_stored_auto(yaml.as_str(), passphrase)?.list(),
             db.list()
         );
+        Ok(())
     }
 
     #[test]
-    fn to_stored_writes_yaml() {
+    fn to_stored_writes_yaml() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("a"), api_key("1"));
         let passphrase = TEST_PASSPHRASE;
 
-        let yaml = db.to_stored(passphrase).unwrap();
+        let yaml = db.to_stored(passphrase)?;
         assert!(yaml.as_str().contains("secrets:"));
+        Ok(())
     }
 
     #[test]
-    fn example_fixtures_roundtrip() {
+    fn example_fixtures_roundtrip() -> anyhow::Result<()> {
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
         let passphrase = TEST_PASSPHRASE;
 
@@ -282,106 +284,113 @@ mod tests {
         assert!(yaml.as_str().contains('|'));
 
         let from_yaml =
-            Database::from_stored_yaml(&StoredVaultYaml::from_trusted(yaml.clone()), passphrase)
-                .unwrap();
+            Database::from_stored_yaml(&StoredVaultYaml::from_trusted(yaml.clone()), passphrase)?;
         let ids: Vec<_> = from_yaml
             .list()
             .into_iter()
             .map(|record| record.id.to_string())
             .collect();
         assert_eq!(ids, vec!["github.com", "notes", "work-vpn"]);
+        Ok(())
     }
 
     #[test]
-    fn wrong_passphrase_fails() {
+    fn wrong_passphrase_fails() -> anyhow::Result<()> {
         const WRONG_PASSPHRASE: &str =
             "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
         let db = sample_db();
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE)?;
         assert!(Database::from_stored_yaml(&stored_yaml, WRONG_PASSPHRASE).is_err());
         assert!(Database::from_stored_auto(stored_yaml.as_str(), WRONG_PASSPHRASE).is_err());
+        Ok(())
     }
 
     #[test]
-    fn empty_vault_roundtrip_yaml() {
+    fn empty_vault_roundtrip_yaml() -> anyhow::Result<()> {
         let db = Database::new();
         assert!(db.list().is_empty());
 
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE)?;
 
         assert!(
-            Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)
-                .unwrap()
+            Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)?
                 .list()
                 .is_empty()
         );
         assert!(
-            Database::from_stored_auto(stored_yaml.as_str(), TEST_PASSPHRASE)
-                .unwrap()
+            Database::from_stored_auto(stored_yaml.as_str(), TEST_PASSPHRASE)?
                 .list()
                 .is_empty()
         );
+        Ok(())
     }
 
     #[test]
-    fn insert_overwrites_duplicate_key() {
+    fn insert_overwrites_duplicate_key() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("site"), api_key("old"));
         db.insert(sid("site"), api_key("new"));
 
         assert_eq!(db.list().len(), 1);
         assert_eq!(db.list()[0].data, api_key("new"));
+        Ok(())
     }
 
     #[test]
-    fn remove_returns_previous_value() {
+    fn remove_returns_previous_value() -> anyhow::Result<()> {
         let mut db = sample_db();
         assert_eq!(
-            db.remove(&sid("github.com")).unwrap().data,
+            db.remove(&sid("github.com"))
+                .ok_or_else(|| std::io::Error::other("removed record must exist"))?
+                .data,
             api_key("hunter2")
         );
         assert_eq!(db.remove(&sid("github.com")), None);
         assert_eq!(db.list().len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn list_is_sorted_by_key() {
+    fn list_is_sorted_by_key() -> anyhow::Result<()> {
         let records = sample_db().list();
         let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(keys, vec!["github.com", "work-vpn"]);
+        Ok(())
     }
 
     #[test]
-    fn unicode_and_special_characters_roundtrip() {
+    fn unicode_and_special_characters_roundtrip() -> anyhow::Result<()> {
         let key = "🔐 café.example.com";
         let value = "パスワード \"quotes\" \\ backslash\nline2";
         let mut db = Database::new();
         db.insert(sid(key), api_key(value));
 
-        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE).unwrap();
+        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE)?;
+        let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)?;
         assert_eq!(from_yaml.list()[0].id.as_str(), key);
         assert_eq!(from_yaml.list()[0].data, api_key(value));
+        Ok(())
     }
 
     #[test]
-    fn empty_secret_value_roundtrip() {
+    fn empty_secret_value_roundtrip() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("empty-value"), api_key(""));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
+        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
         assert_eq!(restored.list()[0].data, api_key(""));
+        Ok(())
     }
 
     #[test]
-    fn mutate_through_stored_yaml_roundtrip() {
+    fn mutate_through_stored_yaml_roundtrip() -> anyhow::Result<()> {
         let mut db = sample_db();
         db.insert(sid("new-entry"), api_key("added-later"));
         db.remove(&sid("work-vpn"));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        let mut restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
+        let mut restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
         restored.insert(sid("another"), api_key("value"));
 
         let keys: Vec<String> = restored
@@ -393,38 +402,40 @@ mod tests {
         assert!(keys.contains(&"new-entry".to_owned()));
         assert!(keys.contains(&"another".to_owned()));
         assert!(!keys.contains(&"work-vpn".to_owned()));
+        Ok(())
     }
 
     #[test]
-    fn multiline_secret_uses_yaml_block_scalar_not_escapes() {
+    fn multiline_secret_uses_yaml_block_scalar_not_escapes() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(sid("notes"), api_key("line-one\nline-two\nline-three"));
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
         assert!(stored.as_str().contains('|'));
         assert!(!stored.as_str().contains("\\n"));
 
-        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
+        let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?;
         assert_eq!(
             restored.list()[0].data,
             api_key("line-one\nline-two\nline-three")
         );
+        Ok(())
     }
 
     #[test]
-    fn stored_records_from_armored_is_sorted_and_preserves_ciphertext() {
+    fn stored_records_from_armored_is_sorted_and_preserves_ciphertext() -> anyhow::Result<()> {
         use crate::VaultCrypto;
         use std::collections::HashMap;
 
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let crypto = VaultCrypto::new(&test_key()?)?;
         let mut armored = HashMap::new();
         armored.insert(
             sid("z-last"),
-            crypto.encrypt_value("z").unwrap().as_str().to_owned(),
+            crypto.encrypt_value("z")?.as_str().to_owned(),
         );
         armored.insert(
             sid("a-first"),
-            crypto.encrypt_value("a").unwrap().as_str().to_owned(),
+            crypto.encrypt_value("a")?.as_str().to_owned(),
         );
 
         let secret_types = HashMap::from([
@@ -436,28 +447,31 @@ mod tests {
         assert_eq!(records[0].key.as_str(), "a-first");
         assert_eq!(records[1].key.as_str(), "z-last");
         assert_ne!(records[0].value.as_str(), records[1].value.as_str());
+        Ok(())
     }
 
     #[test]
-    fn stored_records_from_armored_empty() {
+    fn stored_records_from_armored_empty() -> anyhow::Result<()> {
         use std::collections::HashMap;
 
         assert!(Database::stored_records_from_armored(&HashMap::new(), &HashMap::new()).is_empty());
+        Ok(())
     }
 
     #[test]
-    fn stored_records_with_crypto_roundtrip() {
+    fn stored_records_with_crypto_roundtrip() -> anyhow::Result<()> {
         use crate::VaultCrypto;
 
-        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let crypto = VaultCrypto::new(&test_key()?)?;
         let db = sample_db();
-        let stored = db.to_stored_records_with_crypto(&crypto).unwrap();
-        let restored = Database::from_stored_records_with_crypto(&stored, &crypto).unwrap();
+        let stored = db.to_stored_records_with_crypto(&crypto)?;
+        let restored = Database::from_stored_records_with_crypto(&stored, &crypto)?;
         assert_eq!(restored.list(), db.list());
+        Ok(())
     }
 
     #[test]
-    fn stored_type_is_plaintext_and_selects_decrypted_payload() {
+    fn stored_type_is_plaintext_and_selects_decrypted_payload() -> anyhow::Result<()> {
         let mut db = Database::new();
         db.insert(
             sid("login-id"),
@@ -469,19 +483,18 @@ mod tests {
             }),
         );
 
-        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        let stored = db.to_stored_yaml(TEST_PASSPHRASE)?;
         assert!(stored.as_str().contains("type: login"));
         assert!(!stored.as_str().contains("private-password"));
         assert_eq!(
-            Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
-                .unwrap()
-                .list(),
+            Database::from_stored_yaml(&stored, TEST_PASSPHRASE)?.list(),
             db.list()
         );
+        Ok(())
     }
 
     #[test]
-    fn typed_payload_yaml_preserves_multiline_notes() {
+    fn typed_payload_yaml_preserves_multiline_notes() -> anyhow::Result<()> {
         let value = SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -489,27 +502,24 @@ mod tests {
             notes: "first line\nsecond line\nthird line".to_owned(),
         });
 
-        let yaml = value.to_yaml().unwrap();
+        let yaml = value.to_yaml()?;
         assert!(yaml.as_str().contains("notes: |-"));
         assert!(yaml.as_str().contains("  second line"));
-        assert_eq!(
-            SecretValue::from_yaml(SecretType::Login, &yaml).unwrap(),
-            value
-        );
+        assert_eq!(SecretValue::from_yaml(SecretType::Login, &yaml)?, value);
+        Ok(())
     }
 
     #[test]
-    fn missing_or_mismatched_type_metadata_is_rejected() {
-        let crypto = crate::VaultCrypto::new(&test_key()).unwrap();
+    fn missing_or_mismatched_type_metadata_is_rejected() -> anyhow::Result<()> {
+        let crypto = crate::VaultCrypto::new(&test_key()?)?;
         let login_yaml = crate::SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
             password: "secret".to_owned(),
             notes: String::new(),
         })
-        .to_yaml()
-        .unwrap();
-        let ciphertext = crypto.encrypt_value(login_yaml.as_str()).unwrap();
+        .to_yaml()?;
+        let ciphertext = crypto.encrypt_value(login_yaml.as_str())?;
 
         let missing = StoredSecretRecord {
             key: sid("missing"),
@@ -524,13 +534,15 @@ mod tests {
             value: StoredRecordPayload::from_age_armored(ciphertext),
         };
         assert!(Database::from_stored_records_with_crypto(&[mismatched], &crypto).is_err());
+        Ok(())
     }
 
     #[test]
-    fn validate_before_insert_rejects_blank_label() {
+    fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
         use crate::{validate_secret_data, validate_secret_id};
 
         assert!(validate_secret_id("   ").is_err());
         assert!(validate_secret_data("").is_err());
+        Ok(())
     }
 }

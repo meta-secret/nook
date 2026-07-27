@@ -27,7 +27,8 @@ import {
   NookVaultArchitecture,
   RemoteVaultAssessDecision,
   UnauthenticatedSyncDecision,
-  VaultEditBlockReason,
+  VaultEditDecision,
+  NookVaultSwitchState,
   activeVaultProviders as wasmActiveVaultProviders,
   get_translation_catalog as getTranslationCatalog,
   localProviderIdForActiveVault,
@@ -112,6 +113,10 @@ import type {
   SentinelUnlockSessionStatus,
   SentinelUnlockStatus,
 } from "$lib/vault/sentinel-unlock";
+import {
+  intoWasmStringValue,
+  takeWasmStringValue,
+} from "$lib/wasm-string-value";
 
 const vaultLog = createLogger("vault");
 
@@ -338,11 +343,11 @@ export class VaultState {
       this.architectureCanCreateSecret,
     );
     switch (reason) {
-      case VaultEditBlockReason.SecurityConflict:
+      case VaultEditDecision.BlockedSecurityConflict:
         return this.t("auth_storage.security_conflict_edits");
-      case VaultEditBlockReason.SyncConflict:
+      case VaultEditDecision.BlockedSyncConflict:
         return this.t("auth_storage.sync_blocked_edits");
-      case VaultEditBlockReason.Architecture:
+      case VaultEditDecision.BlockedByArchitecture:
         return this.t("architecture_modes.sentinel_secret_creation_blocked");
       default:
         return undefined;
@@ -416,7 +421,9 @@ export class VaultState {
   /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
   syncIntervalMs(): number {
     return this.runtimeConfig.resolveVaultSyncIntervalMs(
-      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+      intoWasmStringValue(
+        import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+      ),
     );
   }
 
@@ -756,8 +763,10 @@ export class VaultState {
       this.errorMsg = "";
     }
     try {
-      const savedLocale = parseAppLocale(
-        localStorage.getItem("nook_locale") ?? undefined,
+      const savedLocale = takeWasmStringValue(
+        parseAppLocale(
+          intoWasmStringValue(localStorage.getItem("nook_locale") ?? undefined),
+        ),
       ) as NookAppLocale | undefined;
       const browserLocale = this.browserLocale.appLocale() as NookAppLocale;
       const locale = savedLocale ?? browserLocale;
@@ -1212,12 +1221,18 @@ export class VaultState {
 
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: string): Promise<void> {
-    const target = this.clientPolicy.vaultSwitchTarget(
+    const switchDecision = this.clientPolicy.vaultSwitchTarget(
       storeId,
-      this.activeVaultStoreId ?? undefined,
+      this.activeVaultStoreId !== undefined,
+      this.activeVaultStoreId ?? "",
       this.isVerifying,
     );
-    if (!target) return;
+    if (switchDecision.state !== NookVaultSwitchState.Switch) {
+      switchDecision.free();
+      return;
+    }
+    const target = switchDecision.target();
+    switchDecision.free();
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();
@@ -1417,10 +1432,14 @@ export class VaultState {
     if (this.idleSessionTracker) return;
     this.idleSessionTracker = createVaultIdleSessionTracker({
       timeoutMs: this.runtimeConfig.resolveVaultIdleTimeoutMs(
-        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+        intoWasmStringValue(
+          import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+        ),
       ),
       warningMs: this.runtimeConfig.resolveVaultIdleWarningMs(
-        import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
+        intoWasmStringValue(
+          import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
+        ),
       ),
       onExpire: () => this.lockVaultDueToIdle(),
       onWarning: () => this.showIdleLockWarning(),
@@ -1524,7 +1543,8 @@ export class VaultState {
 
     const decision = this.clientPolicy.unauthenticatedSyncDecision(
       result.changed,
-      result.accessStatus ?? undefined,
+      result.accessStatus !== undefined,
+      result.accessStatus ?? VaultAccessStatus.NewVault,
       this.joinEnrollmentPrompt,
       this.awaitingJoinApproval,
     );
@@ -1786,8 +1806,8 @@ export class VaultState {
       plainProviderSnapshot(this.providers, this.activeVaultStoreId),
       providerId,
       yaml,
-      revision ?? undefined,
-      managerStoreId || undefined,
+      intoWasmStringValue(revision),
+      intoWasmStringValue(managerStoreId || undefined),
       isoTimestamp(),
     ).providers;
     await this.persistProviders();
@@ -2051,7 +2071,7 @@ export class VaultState {
       }
       return this.manager!.querySecretPage(
         query,
-        this.secretTypeFilter,
+        intoWasmStringValue(this.secretTypeFilter),
         requestedOffset,
         this.secretPageSize,
       );
@@ -2074,7 +2094,7 @@ export class VaultState {
       const lastPage = await this.enqueueStorage(() =>
         this.manager!.querySecretPage(
           query,
-          this.secretTypeFilter,
+          intoWasmStringValue(this.secretTypeFilter),
           lastOffset,
           this.secretPageSize,
         ),

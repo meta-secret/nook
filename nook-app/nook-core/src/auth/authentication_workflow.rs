@@ -139,6 +139,27 @@ pub struct AuthenticationWorkflowSnapshot {
     pub observation_index: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationWorkflowMatch {
+    NoMatch,
+    Matched(AuthenticationWorkflowSnapshot),
+}
+
+impl AuthenticationWorkflowMatch {
+    pub const fn snapshot(
+        self,
+    ) -> Result<AuthenticationWorkflowSnapshot, AuthenticationWorkflowNotDetected> {
+        match self {
+            Self::NoMatch => Err(AuthenticationWorkflowNotDetected),
+            Self::Matched(snapshot) => Ok(snapshot),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("authentication workflow was not detected")]
+pub struct AuthenticationWorkflowNotDetected;
+
 impl AuthenticationWorkflowSnapshot {
     const fn new(
         kind: AuthenticationWorkflowKind,
@@ -177,17 +198,23 @@ const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -
 #[must_use]
 pub fn classify_authentication_workflow_candidates(
     observations: &[AuthenticationPageObservation],
-) -> Option<AuthenticationWorkflowSnapshot> {
-    let mut selected: Option<AuthenticationWorkflowSnapshot> = None;
+) -> AuthenticationWorkflowMatch {
+    let mut selected = AuthenticationWorkflowMatch::NoMatch;
     for (index, observation) in observations.iter().copied().enumerate() {
-        let Some(mut candidate) = classify_authentication_workflow(observation) else {
+        let AuthenticationWorkflowMatch::Matched(mut candidate) =
+            classify_authentication_workflow(observation)
+        else {
             continue;
         };
         candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
-        if selected.is_none_or(|current| {
-            workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
-        }) {
-            selected = Some(candidate);
+        let replace = match selected {
+            AuthenticationWorkflowMatch::NoMatch => true,
+            AuthenticationWorkflowMatch::Matched(current) => {
+                workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
+            }
+        };
+        if replace {
+            selected = AuthenticationWorkflowMatch::Matched(candidate);
         }
     }
     selected
@@ -195,10 +222,10 @@ pub fn classify_authentication_workflow_candidates(
 
 const fn classify_enrollment_workflow(
     observation: AuthenticationPageObservation,
-) -> Option<AuthenticationWorkflowSnapshot> {
+) -> AuthenticationWorkflowMatch {
     if observation.authenticator_setup_hint {
         if observation.one_time_code_field_count > 0 {
-            return Some(AuthenticationWorkflowSnapshot::new(
+            return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Verification,
                 AuthenticationWorkflowAction::FillTotp,
@@ -206,7 +233,7 @@ const fn classify_enrollment_workflow(
                 5,
             ));
         }
-        return Some(AuthenticationWorkflowSnapshot::new(
+        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Setup,
             AuthenticationWorkflowAction::EnrollAuthenticator,
@@ -215,7 +242,7 @@ const fn classify_enrollment_workflow(
         ));
     }
     if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
-        return Some(AuthenticationWorkflowSnapshot::new(
+        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Recovery,
             AuthenticationWorkflowAction::TakeOver,
@@ -223,7 +250,7 @@ const fn classify_enrollment_workflow(
             5,
         ));
     }
-    None
+    AuthenticationWorkflowMatch::NoMatch
 }
 
 const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
@@ -265,18 +292,21 @@ const fn apply_passkey_proposal(
 }
 
 #[must_use]
+#[allow(clippy::too_many_lines)] // One exhaustive decision table keeps workflow precedence visible.
 pub const fn classify_authentication_workflow(
     observation: AuthenticationPageObservation,
-) -> Option<AuthenticationWorkflowSnapshot> {
+) -> AuthenticationWorkflowMatch {
     if !observation.has_authentication_fields() {
-        return None;
+        return AuthenticationWorkflowMatch::NoMatch;
     }
-    if let Some(enrollment) = classify_enrollment_workflow(observation) {
-        return Some(enrollment);
+    if let AuthenticationWorkflowMatch::Matched(enrollment) =
+        classify_enrollment_workflow(observation)
+    {
+        return AuthenticationWorkflowMatch::Matched(enrollment);
     }
 
     if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
-        return Some(apply_passkey_proposal(
+        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::PasswordChange,
@@ -289,7 +319,7 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.new_password_field_count > 0 {
-        return Some(apply_passkey_proposal(
+        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Signup,
@@ -307,7 +337,7 @@ pub const fn classify_authentication_workflow(
         } else {
             AuthenticationWorkflowAction::TakeOver
         };
-        return Some(AuthenticationWorkflowSnapshot::new(
+        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpChallenge,
             AuthenticationWorkflowStage::SecondFactor,
             action,
@@ -320,7 +350,7 @@ pub const fn classify_authentication_workflow(
         && observation.generic_password_field_count > 0)
         || observation.generic_password_field_count > 1
     {
-        return Some(AuthenticationWorkflowSnapshot::new(
+        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Manual,
             AuthenticationWorkflowStage::Manual,
             AuthenticationWorkflowAction::TakeOver,
@@ -330,7 +360,7 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.password_field_count() > 0 {
-        return Some(apply_passkey_proposal(
+        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
@@ -343,7 +373,7 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.username_field_count > 0 {
-        return Some(apply_passkey_proposal(
+        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
@@ -356,7 +386,7 @@ pub const fn classify_authentication_workflow(
     }
 
     if observation.passkey_control_present || observation.matching_passkey_account_count > 0 {
-        return Some(apply_passkey_proposal(
+        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
             observation,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
@@ -368,7 +398,7 @@ pub const fn classify_authentication_workflow(
         ));
     }
 
-    Some(AuthenticationWorkflowSnapshot::new(
+    AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
         AuthenticationWorkflowKind::Manual,
         AuthenticationWorkflowStage::Manual,
         AuthenticationWorkflowAction::TakeOver,
@@ -387,16 +417,19 @@ mod tests {
 
     #[test]
     fn ignores_pages_without_authentication_fields() {
-        assert_eq!(classify_authentication_workflow(observation()), None);
+        assert_eq!(
+            classify_authentication_workflow(observation()),
+            AuthenticationWorkflowMatch::NoMatch
+        );
     }
 
     #[test]
-    fn classifies_single_and_multi_page_logins() {
+    fn classifies_single_and_multi_page_logins() -> anyhow::Result<()> {
         let username_only = AuthenticationPageObservation {
             username_field_count: 1,
             ..observation()
         };
-        let login = classify_authentication_workflow(username_only).unwrap();
+        let login = classify_authentication_workflow(username_only).snapshot()?;
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!((login.current_step, login.total_steps), (1, 3));
@@ -407,7 +440,7 @@ mod tests {
             ..observation()
         };
         assert_eq!(
-            classify_authentication_workflow(password_login).unwrap(),
+            classify_authentication_workflow(password_login).snapshot()?,
             AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::Login,
                 AuthenticationWorkflowStage::Credentials,
@@ -416,16 +449,17 @@ mod tests {
                 3,
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn distinguishes_signup_from_password_change() {
+    fn distinguishes_signup_from_password_change() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 2,
             ..observation()
         };
-        let signup = classify_authentication_workflow(signup).unwrap();
+        let signup = classify_authentication_workflow(signup).snapshot()?;
         assert_eq!(signup.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(
             signup.action,
@@ -438,7 +472,7 @@ mod tests {
             new_password_field_count: 2,
             ..observation()
         };
-        let password_change = classify_authentication_workflow(password_change).unwrap();
+        let password_change = classify_authentication_workflow(password_change).snapshot()?;
         assert_eq!(
             password_change.kind,
             AuthenticationWorkflowKind::PasswordChange
@@ -451,29 +485,31 @@ mod tests {
             (password_change.current_step, password_change.total_steps),
             (2, 4)
         );
+        Ok(())
     }
 
     #[test]
-    fn signup_with_manual_checkpoint_yields_to_takeover() {
+    fn signup_with_manual_checkpoint_yields_to_takeover() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
             manual_checkpoint_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(signup).unwrap();
+        let snapshot = classify_authentication_workflow(signup).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn classifies_authenticator_setup_and_verify_enrollment() {
+    fn classifies_authenticator_setup_and_verify_enrollment() -> anyhow::Result<()> {
         let setup = AuthenticationPageObservation {
             authenticator_setup_hint: true,
             ..observation()
         };
-        let setup = classify_authentication_workflow(setup).unwrap();
+        let setup = classify_authentication_workflow(setup).snapshot()?;
         assert_eq!(setup.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(setup.stage, AuthenticationWorkflowStage::Setup);
         assert_eq!(
@@ -486,77 +522,83 @@ mod tests {
             one_time_code_field_count: 1,
             ..observation()
         };
-        let verify = classify_authentication_workflow(verify).unwrap();
+        let verify = classify_authentication_workflow(verify).snapshot()?;
         assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
         assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
+        Ok(())
     }
 
     #[test]
-    fn classifies_standalone_one_time_code_as_second_factor() {
+    fn classifies_standalone_one_time_code_as_second_factor() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             ..observation()
         };
-        let code = classify_authentication_workflow(code).unwrap();
+        let code = classify_authentication_workflow(code).snapshot()?;
         assert_eq!(code.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!((code.current_step, code.total_steps), (2, 3));
+        Ok(())
     }
 
     #[test]
-    fn backup_code_link_does_not_hide_an_active_totp_challenge() {
+    fn backup_code_link_does_not_hide_an_active_totp_challenge() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
             backup_codes_hint: true,
             ..observation()
         };
-        let code = classify_authentication_workflow(code).unwrap();
+        let code = classify_authentication_workflow(code).snapshot()?;
         assert_eq!(code.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(code.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(code.action, AuthenticationWorkflowAction::FillTotp);
+        Ok(())
     }
 
     #[test]
-    fn combined_password_and_code_fields_yield_to_manual_second_factor() {
+    fn combined_password_and_code_fields_yield_to_manual_second_factor() -> anyhow::Result<()> {
         let combined = AuthenticationPageObservation {
             current_password_field_count: 1,
             one_time_code_field_count: 1,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(combined).unwrap();
+        let snapshot = classify_authentication_workflow(combined).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::SecondFactor);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn generic_multi_password_forms_never_offer_login_fill() {
+    fn generic_multi_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
         let ambiguous = AuthenticationPageObservation {
             username_field_count: 1,
             generic_password_field_count: 2,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(ambiguous).unwrap();
+        let snapshot = classify_authentication_workflow(ambiguous).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn current_plus_generic_password_forms_never_offer_login_fill() {
+    fn current_plus_generic_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
         let ambiguous_change = AuthenticationPageObservation {
             current_password_field_count: 1,
             generic_password_field_count: 1,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(ambiguous_change).unwrap();
+        let snapshot = classify_authentication_workflow(ambiguous_change).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        Ok(())
     }
 
     #[test]
-    fn separate_login_form_takes_precedence_over_signup_or_password_reset() {
+    fn separate_login_form_takes_precedence_over_signup_or_password_reset() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -568,17 +610,18 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, login]).unwrap();
+        let snapshot = classify_authentication_workflow_candidates(&[signup, login]).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(
             snapshot.action,
             AuthenticationWorkflowAction::ContinueWithNook
         );
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 
     #[test]
-    fn active_totp_takes_precedence_over_unrelated_signup() {
+    fn active_totp_takes_precedence_over_unrelated_signup() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
@@ -589,50 +632,54 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, code]).unwrap();
+        let snapshot = classify_authentication_workflow_candidates(&[signup, code]).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 
     #[test]
-    fn login_with_matching_passkeys_proposes_use() {
+    fn login_with_matching_passkeys_proposes_use() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
             matching_passkey_account_count: 2,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(login).unwrap();
+        let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert!(snapshot.requires_human_approval);
+        Ok(())
     }
 
     #[test]
-    fn passkey_control_without_matches_proposes_create() {
+    fn passkey_control_without_matches_proposes_create() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             username_field_count: 1,
             passkey_control_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(login).unwrap();
+        let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
     }
 
     #[test]
-    fn passkey_only_control_classifies_as_login_create() {
+    fn passkey_only_control_classifies_as_login_create() -> anyhow::Result<()> {
         let passkey_only = AuthenticationPageObservation {
             passkey_control_present: true,
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(passkey_only).unwrap();
+        let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
+        Ok(())
     }
 
     #[test]
-    fn matching_passkeys_prefer_use_over_password_continue_candidate() {
+    fn matching_passkeys_prefer_use_over_password_continue_candidate() -> anyhow::Result<()> {
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
             ..observation()
@@ -643,8 +690,10 @@ mod tests {
             ..observation()
         };
         let snapshot =
-            classify_authentication_workflow_candidates(&[password_login, passkey_login]).unwrap();
+            classify_authentication_workflow_candidates(&[password_login, passkey_login])
+                .snapshot()?;
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 }

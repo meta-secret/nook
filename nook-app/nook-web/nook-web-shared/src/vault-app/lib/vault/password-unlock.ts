@@ -38,6 +38,7 @@ import {
   isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,
 } from "$lib/vault/sentinel-unlock";
+import { takeWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-password");
 
@@ -356,17 +357,19 @@ export async function connectWithEnrollmentCode(
 
     let enrollmentStorageArgs: [string, string, string];
     if (payload.provider.type === GITHUB_PROVIDER_TYPE) {
-      const githubPat = payload.provider.githubPat ?? "";
-      const githubRepo = payload.provider.githubRepo ?? "";
+      const githubPat = takeWasmStringValue(payload.provider.githubPat) ?? "";
+      const githubRepo = takeWasmStringValue(payload.provider.githubRepo) ?? "";
       state.storageMode = "github";
       state.githubPat = githubPat;
       state.githubRepo = githubRepo;
       state.loginSetupType = "github";
       enrollmentStorageArgs = ["github", githubPat, githubRepo];
     } else if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
-      const preset = (payload.provider.oauthPreset ??
+      const preset = (takeWasmStringValue(payload.provider.oauthPreset) ??
         "google-drive") as OAuthFilePreset;
-      const storageTargetId = payload.provider.sharedStorageTargetId?.trim();
+      const storageTargetId = takeWasmStringValue(
+        payload.provider.sharedStorageTargetId,
+      )?.trim();
       await state.loadProviders();
       let provider = findSharedGrantProvider(
         state.providers,
@@ -386,6 +389,8 @@ export async function connectWithEnrollmentCode(
           accessToken: tokens.accessToken,
           folderId: storageTargetId || undefined,
           fileName: "nook-events",
+          driveMode: "shared",
+          iCloudMode: "private",
         });
         provider = {
           id: "enrollment-shared-oauth",
@@ -418,6 +423,8 @@ export async function connectWithEnrollmentCode(
             ...(provider?.oauthFile ?? {
               preset: "icloud",
               accessToken: tokens.accessToken,
+              driveMode: "private",
+              iCloudMode: "shared",
             }),
             iCloudMode: "shared",
             iCloudShareTarget: accepted.storageTargetId,
@@ -454,14 +461,17 @@ export async function connectWithEnrollmentCode(
         type: "oauth-file",
         label: "Enrollment OAuth provider",
         oauthFile: {
-          preset: (payload.provider.oauthPreset ??
+          preset: (takeWasmStringValue(payload.provider.oauthPreset) ??
             "google-drive") as OAuthFilePreset,
-          accessToken: payload.provider.oauthAccessToken ?? "",
-          refreshToken: payload.provider.oauthRefreshToken ?? undefined,
-          expiresAt: payload.provider.oauthExpiresAt ?? undefined,
-          fileId: payload.provider.oauthFileId ?? undefined,
-          fileName: payload.provider.oauthFileName ?? undefined,
-          accountEmail: payload.provider.oauthAccountEmail ?? undefined,
+          accessToken:
+            takeWasmStringValue(payload.provider.oauthAccessToken) ?? "",
+          refreshToken: takeWasmStringValue(payload.provider.oauthRefreshToken),
+          expiresAt: takeWasmStringValue(payload.provider.oauthExpiresAt),
+          fileId: takeWasmStringValue(payload.provider.oauthFileId),
+          fileName: takeWasmStringValue(payload.provider.oauthFileName),
+          accountEmail: takeWasmStringValue(payload.provider.oauthAccountEmail),
+          driveMode: "private",
+          iCloudMode: "private",
         },
         createdAt: isoTimestamp(),
       };
@@ -721,12 +731,12 @@ export async function issueEnrollmentCode(
         : undefined,
       sharedStorageTargetId,
     );
-    const vaultName = await state.enqueueStorage(
-      () => state.manager!.vaultName ?? "",
+    const vaultName = takeWasmStringValue(
+      await state.enqueueStorage(() => state.manager!.vaultName),
     );
     const payload = new NookEnrollmentIssueInput(
       provider,
-      vaultName,
+      vaultName ?? "",
       entryId,
       isoTimestamp(),
     );

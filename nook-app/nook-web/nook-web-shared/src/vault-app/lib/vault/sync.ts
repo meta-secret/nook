@@ -4,12 +4,14 @@ import { createLogger } from "$lib/log";
 import {
   importLocalVaultBlob,
   JoinEnrollmentState,
+  NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   readLocalVaultYaml,
   VaultSyncConflictKind,
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 import * as localLoginActions from "$lib/vault/local-login";
+import { intoWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-sync");
 
@@ -100,8 +102,14 @@ export async function stageStagedProviderSyncIssue(
   args: [string, string, string],
 ): Promise<boolean> {
   const manager = state.manager;
-  const issue = manager?.takeEventLogSyncIssue();
-  if (!issue) return false;
+  const issueResult = manager?.takeEventLogSyncIssue();
+  if (!issueResult) return false;
+  if (issueResult.state === NookEventLogSyncIssueState.Clear) {
+    issueResult.free();
+    return false;
+  }
+  const issue = issueResult.issue();
+  issueResult.free();
   try {
     if (!issue.isStoreMismatch) return false;
     const localStoreId = issue.localStoreId;
@@ -163,7 +171,9 @@ export function startVaultSync(state: VaultState) {
     return;
   }
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
-    import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+    intoWasmStringValue(
+      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+    ),
   );
   const needsRemoteUpdates =
     state.isAuthenticated ||
@@ -668,7 +678,12 @@ export async function syncProviderById(
     return;
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e);
-    const eventLogIssue = state.manager.takeEventLogSyncIssue();
+    const eventLogIssueResult = state.manager.takeEventLogSyncIssue();
+    const eventLogIssue =
+      eventLogIssueResult.state === NookEventLogSyncIssueState.Pending
+        ? eventLogIssueResult.issue()
+        : undefined;
+    eventLogIssueResult.free();
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
     let localFolderIssue: LocalFolderMultipleVaultsIssue | undefined;

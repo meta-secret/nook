@@ -201,11 +201,17 @@ impl PasskeyDeviceProtectionMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasskeyRegistrationPrfOutput<'a> {
+    Unavailable,
+    Available(&'a [u8]),
+}
+
 pub fn resolve_passkey_registration(
     credential_id: &[u8],
     user_handle: &[u8],
     prf_input: &[u8],
-    prf_output: Option<&[u8]>,
+    prf_output: PasskeyRegistrationPrfOutput<'_>,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     resolve_passkey_registration_for_mode(
         credential_id,
@@ -220,11 +226,11 @@ pub fn resolve_passkey_registration_for_mode(
     credential_id: &[u8],
     user_handle: &[u8],
     prf_input: &[u8],
-    prf_output: Option<&[u8]>,
+    prf_output: PasskeyRegistrationPrfOutput<'_>,
     mode: PasskeyDeviceProtectionMode,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     match prf_output {
-        Some(output) => finish_passkey_device_identity_for_mode(
+        PasskeyRegistrationPrfOutput::Available(output) => finish_passkey_device_identity_for_mode(
             credential_id,
             user_handle,
             prf_input,
@@ -233,8 +239,10 @@ pub fn resolve_passkey_registration_for_mode(
         )
         .map(Box::new)
         .map(PasskeyRegistrationResolution::Complete),
-        None => PasskeyAssertionRequest::new(credential_id, prf_input)
-            .map(PasskeyRegistrationResolution::NeedsAssertion),
+        PasskeyRegistrationPrfOutput::Unavailable => {
+            PasskeyAssertionRequest::new(credential_id, prf_input)
+                .map(PasskeyRegistrationResolution::NeedsAssertion)
+        }
     }
 }
 
@@ -437,12 +445,11 @@ impl WrappedDeviceIdentity {
     ///
     /// PIN fallback is not a `device_mode` value (`standard` / `anti-hacker`);
     /// callers that need the storage kind should use [`Self::protection_mode`].
-    #[must_use]
-    pub fn device_mode(&self) -> Option<&'static str> {
+    pub fn device_mode(&self) -> DeviceKeyProtectionResult<&'static str> {
         match self {
-            Self::PasskeyDerived(_) => Some(PasskeyDeviceProtectionMode::Standard.as_str()),
-            Self::PasskeyWrappedLocal(_) => Some(PasskeyDeviceProtectionMode::AntiHacker.as_str()),
-            Self::Pin(_) => None,
+            Self::PasskeyDerived(_) => Ok(PasskeyDeviceProtectionMode::Standard.as_str()),
+            Self::PasskeyWrappedLocal(_) => Ok(PasskeyDeviceProtectionMode::AntiHacker.as_str()),
+            Self::Pin(_) => Err(DeviceKeyProtectionError::UnsupportedParameters),
         }
     }
 }
@@ -820,58 +827,58 @@ mod tests {
     }
 
     #[test]
-    fn setup_uses_random_user_handle_and_deterministic_prf_input() {
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
-        let other = DeviceKeyProtectionSetup::generate().unwrap();
+    fn setup_uses_random_user_handle_and_deterministic_prf_input() -> anyhow::Result<()> {
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let other = DeviceKeyProtectionSetup::generate()?;
         assert_eq!(setup.user_handle().len(), 32);
         assert_eq!(setup.prf_input().len(), 32);
         assert_ne!(setup.user_handle(), other.user_handle());
         assert_eq!(setup.prf_input(), deterministic_passkey_prf_input());
         assert_eq!(setup.prf_input(), other.prf_input());
+        Ok(())
     }
 
     #[test]
-    fn passkey_prf_derives_stable_age_identity() {
+    fn passkey_prf_derives_stable_age_identity() -> anyhow::Result<()> {
         let user_handle = [8u8; 32];
         let prf_output = [10u8; 32];
-        let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap();
-        let same = derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap();
-        let different_user =
-            derive_device_identity_from_passkey_prf(&[9u8; 32], &prf_output).unwrap();
-        let different_prf =
-            derive_device_identity_from_passkey_prf(&user_handle, &[11u8; 32]).unwrap();
+        let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
+        let same = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
+        let different_user = derive_device_identity_from_passkey_prf(&[9u8; 32], &prf_output)?;
+        let different_prf = derive_device_identity_from_passkey_prf(&user_handle, &[11u8; 32])?;
 
         assert_eq!(identity, same);
         assert_ne!(identity, different_user);
         assert_ne!(identity, different_prf);
         assert!(identity.as_str().starts_with("AGE-SECRET-KEY-"));
+        Ok(())
     }
 
     #[test]
-    fn passkey_derived_record_stores_only_recovery_metadata() {
+    fn passkey_derived_record_stores_only_recovery_metadata() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
         let record =
-            passkey_derived_device_identity_record(&credential_id, &user_handle, &prf_input)
-                .unwrap();
-        let json = serialize_wrapped_device_identity(&record).unwrap();
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+            passkey_derived_device_identity_record(&credential_id, &user_handle, &prf_input)?;
+        let json = serialize_wrapped_device_identity(&record)?;
+        let parsed = parse_wrapped_device_identity(&json)?;
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.credential_id_bytes().unwrap(), credential_id);
-        assert_eq!(parsed.user_handle_bytes().unwrap(), user_handle);
-        assert_eq!(parsed.prf_input_bytes().unwrap(), prf_input);
+        assert_eq!(parsed.credential_id_bytes()?, credential_id);
+        assert_eq!(parsed.user_handle_bytes()?, user_handle);
+        assert_eq!(parsed.prf_input_bytes()?, prf_input);
         assert_eq!(
             passkey_derived_record(&parsed).version,
             PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION
         );
         assert!(!json.contains("ciphertext"));
         assert!(!json.contains("AGE-SECRET-KEY-"));
+        Ok(())
     }
 
     #[test]
-    fn anti_hacker_record_wraps_random_identity_locally() {
+    fn anti_hacker_record_wraps_random_identity_locally() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
@@ -881,32 +888,32 @@ mod tests {
             &user_handle,
             &prf_input,
             &prf_output,
-        )
-        .unwrap();
-        let json = serialize_wrapped_device_identity(material.record()).unwrap();
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+        )?;
+        let json = serialize_wrapped_device_identity(material.record())?;
+        let parsed = parse_wrapped_device_identity(&json)?;
         let record = passkey_wrapped_record(&parsed);
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.device_mode(), Some("anti-hacker"));
+        assert_eq!(parsed.device_mode()?, "anti-hacker");
         assert_eq!(
             record.version,
             PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION
         );
-        assert_eq!(parsed.credential_id_bytes().unwrap(), credential_id);
-        assert_eq!(parsed.user_handle_bytes().unwrap(), user_handle);
-        assert_eq!(parsed.prf_input_bytes().unwrap(), prf_input);
+        assert_eq!(parsed.credential_id_bytes()?, credential_id);
+        assert_eq!(parsed.user_handle_bytes()?, user_handle);
+        assert_eq!(parsed.prf_input_bytes()?, prf_input);
         assert!(json.contains("ciphertext"));
         assert!(json.contains("nonce"));
         assert!(!json.contains("AGE-SECRET-KEY-"));
         assert_ne!(
             material.identity_secret(),
-            &derive_device_identity_from_passkey_prf(&user_handle, &prf_output).unwrap()
+            &derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?
         );
+        Ok(())
     }
 
     #[test]
-    fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf() {
+    fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
         let prf_input = deterministic_passkey_prf_input();
@@ -916,102 +923,90 @@ mod tests {
             &user_handle,
             &prf_input,
             &prf_output,
-        )
-        .unwrap();
+        )?;
 
         let unlocked =
-            unlock_passkey_device_identity(material.device_id(), material.record(), &prf_output)
-                .unwrap();
+            unlock_passkey_device_identity(material.device_id(), material.record(), &prf_output)?;
         assert_eq!(&unlocked, material.identity_secret());
         assert!(
             unlock_passkey_device_identity(material.device_id(), material.record(), &[11u8; 32])
                 .is_err()
         );
 
-        let recovered =
-            recover_passkey_device_identity(&credential_id, &user_handle, &prf_output).unwrap();
+        let recovered = recover_passkey_device_identity(&credential_id, &user_handle, &prf_output)?;
         assert_ne!(recovered.device_id(), material.device_id());
+        Ok(())
     }
 
     fn approved_mock_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
         setup: &DeviceKeyProtectionSetup,
-    ) -> MockPasskeyRegistration {
-        authenticator
-            .register(
-                MockPasskeyRegistrationRequest::new(
-                    TEST_RP_ID,
-                    "Test passkey",
-                    setup.user_handle().to_vec(),
-                    setup.prf_input().to_vec(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .unwrap()
+    ) -> anyhow::Result<MockPasskeyRegistration> {
+        Ok(authenticator.register(
+            MockPasskeyRegistrationRequest::new(
+                TEST_RP_ID,
+                "Test passkey",
+                setup.user_handle().to_vec(),
+                setup.prf_input().to_vec(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?)
     }
 
     fn complete_mock_registration(
         authenticator: &mut MemoryPasskeyAuthenticator,
-    ) -> (
+    ) -> anyhow::Result<(
         DeviceKeyProtectionSetup,
         MockPasskeyRegistration,
         PasskeyDeviceIdentityMaterial,
-    ) {
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
-        let registration = approved_mock_registration(authenticator, &setup);
+    )> {
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let registration = approved_mock_registration(authenticator, &setup)?;
         let resolution = resolve_passkey_registration(
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            Some(registration.prf_output()),
-        )
-        .unwrap();
+            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
+        )?;
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
             panic!("registration should complete from create() PRF output");
         };
-        (setup, registration, *material)
+        Ok((setup, registration, *material))
     }
 
     #[test]
-    fn passkey_workflow_setup_completes_with_registration_prf() {
+    fn passkey_workflow_setup_completes_with_registration_prf() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let (setup, registration, material) = complete_mock_registration(&mut authenticator);
+        let (setup, registration, material) = complete_mock_registration(&mut authenticator)?;
 
         assert_eq!(
-            material.record().credential_id_bytes().unwrap(),
+            material.record().credential_id_bytes()?,
             registration.credential_id()
         );
-        assert_eq!(
-            material.record().user_handle_bytes().unwrap(),
-            setup.user_handle()
-        );
-        assert_eq!(
-            material.record().prf_input_bytes().unwrap(),
-            setup.prf_input()
-        );
+        assert_eq!(material.record().user_handle_bytes()?, setup.user_handle());
+        assert_eq!(material.record().prf_input_bytes()?, setup.prf_input());
         assert_eq!(
             material.identity_secret(),
             &derive_device_identity_from_passkey_prf(
                 setup.user_handle(),
                 registration.prf_output()
-            )
-            .unwrap()
+            )?
         );
+        Ok(())
     }
 
     #[test]
-    fn mode_aware_registration_creates_wrapped_local_identity() {
+    fn mode_aware_registration_creates_wrapped_local_identity() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
-        let registration = approved_mock_registration(&mut authenticator, &setup);
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let resolution = resolve_passkey_registration_for_mode(
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            Some(registration.prf_output()),
+            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
             PasskeyDeviceProtectionMode::AntiHacker,
-        )
-        .unwrap();
+        )?;
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
             panic!("registration should complete from create() PRF output");
         };
@@ -1019,20 +1014,20 @@ mod tests {
             material.record(),
             WrappedDeviceIdentity::PasskeyWrappedLocal(_)
         ));
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_prf_missing_registration_falls_back_to_assertion() {
+    fn passkey_workflow_prf_missing_registration_falls_back_to_assertion() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
-        let registration = approved_mock_registration(&mut authenticator, &setup);
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let resolution = resolve_passkey_registration(
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            None,
-        )
-        .unwrap();
+            PasskeyRegistrationPrfOutput::Unavailable,
+        )?;
 
         let PasskeyRegistrationResolution::NeedsAssertion(request) = resolution else {
             panic!("registration without PRF output should request assertion fallback");
@@ -1040,100 +1035,94 @@ mod tests {
         assert_eq!(request.credential_id(), registration.credential_id());
         assert_eq!(request.prf_input(), setup.prf_input());
 
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::with_allowed_credential(
-                    TEST_RP_ID,
-                    request.credential_id().to_vec(),
-                    request.prf_input().to_vec(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .unwrap();
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::with_allowed_credential(
+                TEST_RP_ID,
+                request.credential_id().to_vec(),
+                request.prf_input().to_vec(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
         let material = finish_passkey_device_identity(
             assertion.credential_id(),
             setup.user_handle(),
             request.prf_input(),
             assertion.prf_output(),
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(
-            material.record().credential_id_bytes().unwrap(),
+            material.record().credential_id_bytes()?,
             registration.credential_id()
         );
         assert_eq!(
             material.identity_secret(),
-            &derive_device_identity_from_passkey_prf(setup.user_handle(), assertion.prf_output())
-                .unwrap()
+            &derive_device_identity_from_passkey_prf(setup.user_handle(), assertion.prf_output())?
         );
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_unlock_succeeds_from_stored_metadata() {
+    fn passkey_workflow_unlock_succeeds_from_stored_metadata() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::with_allowed_credential(
-                    TEST_RP_ID,
-                    request.credential_id().to_vec(),
-                    request.prf_input().to_vec(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .unwrap();
+        let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
+        let request = passkey_assertion_request(material.record())?;
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::with_allowed_credential(
+                TEST_RP_ID,
+                request.credential_id().to_vec(),
+                request.prf_input().to_vec(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
 
         let unlocked = unlock_passkey_device_identity(
             material.device_id(),
             material.record(),
             assertion.prf_output(),
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(assertion.credential_id(), registration.credential_id());
         assert_eq!(&unlocked, material.identity_secret());
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_recovery_reconstructs_metadata_after_local_record_loss() {
+    fn passkey_workflow_recovery_reconstructs_metadata_after_local_record_loss()
+    -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let (_, registration, original) = complete_mock_registration(&mut authenticator);
+        let (_, registration, original) = complete_mock_registration(&mut authenticator)?;
         let recovery_request = passkey_recovery_request();
-        let assertion = authenticator
-            .authenticate(
-                &MockPasskeyAssertionRequest::discoverable(
-                    TEST_RP_ID,
-                    recovery_request.prf_input().to_vec(),
-                ),
-                MockPasskeyUserAuthorization::Approved,
-            )
-            .unwrap();
+        let assertion = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::discoverable(
+                TEST_RP_ID,
+                recovery_request.prf_input().to_vec(),
+            ),
+            MockPasskeyUserAuthorization::Approved,
+        )?;
 
         let recovered = recover_passkey_device_identity(
             assertion.credential_id(),
             assertion.user_handle(),
             assertion.prf_output(),
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(recovered.device_id(), original.device_id());
         assert_eq!(recovered.identity_secret(), original.identity_secret());
         assert_eq!(
-            recovered.record().credential_id_bytes().unwrap(),
+            recovered.record().credential_id_bytes()?,
             registration.credential_id()
         );
         assert_eq!(
-            recovered.record().prf_input_bytes().unwrap(),
+            recovered.record().prf_input_bytes()?,
             deterministic_passkey_prf_input()
         );
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_denial_blocks_registration_and_assertion() {
+    fn passkey_workflow_denial_blocks_registration_and_assertion() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let setup = DeviceKeyProtectionSetup::generate()?;
         let denied_registration = authenticator.register(
             MockPasskeyRegistrationRequest::new(
                 TEST_RP_ID,
@@ -1148,14 +1137,14 @@ mod tests {
             Err(MockPasskeyError::AuthorizationDenied)
         ));
 
-        let registration = approved_mock_registration(&mut authenticator, &setup);
+        let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let PasskeyRegistrationResolution::NeedsAssertion(request) = resolve_passkey_registration(
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            None,
-        )
-        .unwrap() else {
+            PasskeyRegistrationPrfOutput::Unavailable,
+        )?
+        else {
             panic!("registration without PRF output should request assertion fallback");
         };
         let denied_assertion = authenticator.authenticate(
@@ -1171,13 +1160,14 @@ mod tests {
             denied_assertion,
             Err(MockPasskeyError::AuthorizationDenied)
         ));
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_wrong_rp_or_unknown_credential_is_rejected() {
+    fn passkey_workflow_wrong_rp_or_unknown_credential_is_rejected() -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
+        let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
+        let request = passkey_assertion_request(material.record())?;
 
         let wrong_rp = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
@@ -1201,13 +1191,15 @@ mod tests {
             unknown_credential,
             Err(MockPasskeyError::NoMatchingCredential)
         ));
+        Ok(())
     }
 
     #[test]
-    fn passkey_workflow_reconstructs_request_metadata_and_rejects_mismatched_identity() {
+    fn passkey_workflow_reconstructs_request_metadata_and_rejects_mismatched_identity()
+    -> anyhow::Result<()> {
         let mut authenticator = MemoryPasskeyAuthenticator::new();
-        let (_, registration, material) = complete_mock_registration(&mut authenticator);
-        let request = passkey_assertion_request(material.record()).unwrap();
+        let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
+        let request = passkey_assertion_request(material.record())?;
 
         assert_eq!(request.credential_id(), registration.credential_id());
         assert_eq!(request.prf_input(), deterministic_passkey_prf_input());
@@ -1217,6 +1209,7 @@ mod tests {
             unlock_passkey_device_identity(material.device_id(), material.record(), &wrong_output),
             Err(DeviceKeyProtectionError::DeviceIdentityMismatch)
         ));
+        Ok(())
     }
 
     #[test]
@@ -1248,33 +1241,35 @@ mod tests {
     }
 
     #[test]
-    fn pin_wrap_round_trips_and_serializes_without_plaintext() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
-        let json = serialize_wrapped_device_identity(&record).unwrap();
+    fn pin_wrap_round_trips_and_serializes_without_plaintext() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?.secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")?;
+        let json = serialize_wrapped_device_identity(&record)?;
         assert!(!json.contains(identity.as_str()));
         assert!(json.contains(r#""protection":"pin""#));
 
-        let parsed = parse_wrapped_device_identity(&json).unwrap();
+        let parsed = parse_wrapped_device_identity(&json)?;
         assert_eq!(parsed.protection_mode(), "pin");
-        let decrypted = unwrap_device_identity_with_pin(&parsed, "123456").unwrap();
+        let decrypted = unwrap_device_identity_with_pin(&parsed, "123456")?;
         assert_eq!(decrypted, identity);
+        Ok(())
     }
 
     #[test]
-    fn wrong_pin_does_not_decrypt() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+    fn wrong_pin_does_not_decrypt() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?.secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")?;
         assert!(matches!(
             unwrap_device_identity_with_pin(&record, "654321"),
             Err(DeviceKeyProtectionError::Decrypt)
         ));
+        Ok(())
     }
 
     #[test]
-    fn pin_metadata_and_ciphertext_reject_tampering() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+    fn pin_metadata_and_ciphertext_reject_tampering() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?.secret_string();
+        let record = wrap_device_identity_with_pin(&identity, "123456")?;
 
         let mut metadata_tampered = record.clone();
         let WrappedDeviceIdentity::Pin(pin) = &mut metadata_tampered else {
@@ -1290,26 +1285,28 @@ mod tests {
         let WrappedDeviceIdentity::Pin(pin) = &mut ciphertext_tampered else {
             panic!("expected pin record");
         };
-        let mut ciphertext = decode_field("ciphertext", &pin.ciphertext).unwrap();
+        let mut ciphertext = decode_field("ciphertext", &pin.ciphertext)?;
         ciphertext[0] ^= 0x80;
         pin.ciphertext = encode(&ciphertext);
         assert!(matches!(
             unwrap_device_identity_with_pin(&ciphertext_tampered, "123456"),
             Err(DeviceKeyProtectionError::Decrypt)
         ));
+        Ok(())
     }
 
     #[test]
-    fn pin_requires_minimum_length() {
-        let identity = DeviceIdentity::generate().unwrap().secret_string();
+    fn pin_requires_minimum_length() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?.secret_string();
         assert!(matches!(
             wrap_device_identity_with_pin(&identity, "12345"),
             Err(DeviceKeyProtectionError::PinTooShort)
         ));
-        let record = wrap_device_identity_with_pin(&identity, "123456").unwrap();
+        let record = wrap_device_identity_with_pin(&identity, "123456")?;
         assert!(matches!(
             unwrap_device_identity_with_pin(&record, "12345"),
             Err(DeviceKeyProtectionError::PinTooShort)
         ));
+        Ok(())
     }
 }

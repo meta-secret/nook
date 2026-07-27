@@ -323,6 +323,7 @@ pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretVa
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use crate::{
@@ -332,25 +333,25 @@ mod tests {
     };
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
-    fn key(byte: char) -> SymmetricKey {
-        SymmetricKey::parse(&byte.to_string().repeat(64)).unwrap()
+    fn key(byte: char) -> anyhow::Result<SymmetricKey> {
+        Ok(SymmetricKey::parse(&byte.to_string().repeat(64))?)
     }
 
-    fn authenticator(secret: &str, backup_codes: &[&str]) -> SecretValue {
-        SecretValue::Authenticator(AuthenticatorSecret {
+    fn authenticator(secret: &str, backup_codes: &[&str]) -> anyhow::Result<SecretValue> {
+        Ok(SecretValue::Authenticator(AuthenticatorSecret {
             issuer: "Example".to_owned(),
             account: "alice@example.com".to_owned(),
             website_url: String::new(),
-            secret: TotpSecret::parse(secret).unwrap(),
+            secret: TotpSecret::parse(secret)?,
             algorithm: TotpAlgorithm::Sha1,
-            digits: TotpDigits::parse(6).unwrap(),
-            period: TotpPeriod::parse(30).unwrap(),
+            digits: TotpDigits::parse(6)?,
+            period: TotpPeriod::parse(30)?,
             backup_codes: backup_codes.iter().map(ToString::to_string).collect(),
-        })
+        }))
     }
 
     #[test]
-    fn fingerprints_are_vault_scoped_and_deterministic() {
+    fn fingerprints_are_vault_scoped_and_deterministic() -> anyhow::Result<()> {
         let value = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -358,27 +359,28 @@ mod tests {
             notes: "personal".to_owned(),
         });
         assert_eq!(
-            secret_fingerprint(&value, &key('a')),
-            secret_fingerprint(&value, &key('a'))
+            secret_fingerprint(&value, &key('a')?),
+            secret_fingerprint(&value, &key('a')?)
         );
         assert_ne!(
-            secret_fingerprint(&value, &key('a')),
-            secret_fingerprint(&value, &key('b'))
+            secret_fingerprint(&value, &key('a')?),
+            secret_fingerprint(&value, &key('b')?)
         );
         assert!(
-            secret_identity_fingerprint(&value, &key('a'))
+            secret_identity_fingerprint(&value, &key('a')?)
                 .as_str()
                 .starts_with(IDENTITY_FINGERPRINT_SCHEME)
         );
-        assert!(secret_fingerprint(&value, &key('a')).is_current_secret_version());
+        assert!(secret_fingerprint(&value, &key('a')?).is_current_secret_version());
         assert!(
             !SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)))
                 .is_current_secret_version()
         );
+        Ok(())
     }
 
     #[test]
-    fn identity_ignores_password_and_provider_metadata() {
+    fn identity_ignores_password_and_provider_metadata() -> anyhow::Result<()> {
         let bitwarden = SecretValue::Login(LoginSecret {
             website_url: " https://example.com ".to_owned(),
             username: "alice".to_owned(),
@@ -392,13 +394,14 @@ mod tests {
             notes: "shared note\n\n## 1Password\n- vault: Personal".to_owned(),
         });
         assert_eq!(
-            secret_identity_fingerprint(&bitwarden, &key('a')),
-            secret_identity_fingerprint(&onepassword, &key('a'))
+            secret_identity_fingerprint(&bitwarden, &key('a')?),
+            secret_identity_fingerprint(&onepassword, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn different_passwords_are_different_versions() {
+    fn different_passwords_are_different_versions() -> anyhow::Result<()> {
         assert_ne!(
             secret_fingerprint(
                 &SecretValue::Login(LoginSecret {
@@ -407,7 +410,7 @@ mod tests {
                     password: "old".to_owned(),
                     notes: String::new(),
                 }),
-                &key('a')
+                &key('a')?
             ),
             secret_fingerprint(
                 &SecretValue::Login(LoginSecret {
@@ -416,13 +419,14 @@ mod tests {
                     password: "new".to_owned(),
                     notes: String::new(),
                 }),
-                &key('a')
+                &key('a')?
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn login_versions_ignore_all_supported_importer_metadata() {
+    fn login_versions_ignore_all_supported_importer_metadata() -> anyhow::Result<()> {
         let chrome = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -437,13 +441,14 @@ mod tests {
         });
 
         assert_eq!(
-            secret_fingerprint(&chrome, &key('a')),
-            secret_fingerprint(&apple, &key('a'))
+            secret_fingerprint(&chrome, &key('a')?),
+            secret_fingerprint(&apple, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn meaningful_secure_note_changes_remain_distinct() {
+    fn meaningful_secure_note_changes_remain_distinct() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Recovery".to_owned(),
             note: "first".to_owned(),
@@ -453,13 +458,14 @@ mod tests {
             note: "second".to_owned(),
         });
         assert_ne!(
-            secret_fingerprint(&first, &key('a')),
-            secret_fingerprint(&second, &key('a'))
+            secret_fingerprint(&first, &key('a')?),
+            secret_fingerprint(&second, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn login_only_import_markers_remain_meaningful_in_secure_notes() {
+    fn login_only_import_markers_remain_meaningful_in_secure_notes() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Migration guide".to_owned(),
             note: "Steps\n\n## Apple Passwords\nUse the first export".to_owned(),
@@ -470,13 +476,14 @@ mod tests {
         });
 
         assert_ne!(
-            secret_fingerprint(&first, &key('a')),
-            secret_fingerprint(&second, &key('a'))
+            secret_fingerprint(&first, &key('a')?),
+            secret_fingerprint(&second, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn secure_note_versions_ignore_all_provider_metadata() {
+    fn secure_note_versions_ignore_all_provider_metadata() -> anyhow::Result<()> {
         let providers = [
             "## Bitwarden\n- field.folder: Personal",
             "## 1Password\n- format: 1PUX\n- PIN: 1234",
@@ -488,7 +495,7 @@ mod tests {
                 title: "Recovery".to_owned(),
                 note: format!("same note\n\n{}", providers[0]),
             }),
-            &key('a'),
+            &key('a')?,
         );
 
         for metadata in providers {
@@ -496,12 +503,13 @@ mod tests {
                 title: "Recovery".to_owned(),
                 note: format!("same note\n\n{metadata}"),
             });
-            assert_eq!(secret_fingerprint(&note, &key('a')), expected);
+            assert_eq!(secret_fingerprint(&note, &key('a')?), expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn user_authored_provider_sections_remain_meaningful() {
+    fn user_authored_provider_sections_remain_meaningful() -> anyhow::Result<()> {
         for heading in ["## LastPass", "## Proton Pass"] {
             let first = SecretValue::SecureNote(SecureNoteSecret {
                 title: "Migration diary".to_owned(),
@@ -513,14 +521,15 @@ mod tests {
             });
 
             assert_ne!(
-                secret_fingerprint(&first, &key('a')),
-                secret_fingerprint(&second, &key('a'))
+                secret_fingerprint(&first, &key('a')?),
+                secret_fingerprint(&second, &key('a')?)
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn generated_metadata_after_a_user_provider_section_is_still_ignored() {
+    fn generated_metadata_after_a_user_provider_section_is_still_ignored() -> anyhow::Result<()> {
         let first = SecretValue::SecureNote(SecureNoteSecret {
             title: "Migration diary".to_owned(),
             note: "Notes\n\n## LastPass\n- diary: first export\n\n## LastPass\n- group: Personal"
@@ -533,41 +542,45 @@ mod tests {
         });
 
         assert_eq!(
-            secret_fingerprint(&first, &key('a')),
-            secret_fingerprint(&second, &key('a'))
+            secret_fingerprint(&first, &key('a')?),
+            secret_fingerprint(&second, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn authenticator_identity_excludes_secret_material() {
-        let first = authenticator("JBSWY3DPEHPK3PXP", &["alpha"]);
-        let second = authenticator("KRSXG5DSNFXGOIDB", &["beta"]);
+    fn authenticator_identity_excludes_secret_material() -> anyhow::Result<()> {
+        let first = authenticator("JBSWY3DPEHPK3PXP", &["alpha"])?;
+        let second = authenticator("KRSXG5DSNFXGOIDB", &["beta"])?;
         assert_eq!(
-            secret_identity_fingerprint(&first, &key('a')),
-            secret_identity_fingerprint(&second, &key('a'))
+            secret_identity_fingerprint(&first, &key('a')?),
+            secret_identity_fingerprint(&second, &key('a')?)
         );
         assert_ne!(
-            secret_fingerprint(&first, &key('a')),
-            secret_fingerprint(&second, &key('a'))
+            secret_fingerprint(&first, &key('a')?),
+            secret_fingerprint(&second, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn authenticator_backup_code_order_does_not_create_a_new_version() {
+    fn authenticator_backup_code_order_does_not_create_a_new_version() -> anyhow::Result<()> {
         assert_eq!(
             secret_fingerprint(
-                &authenticator("JBSWY3DPEHPK3PXP", &["alpha", "beta"]),
-                &key('a')
+                &authenticator("JBSWY3DPEHPK3PXP", &["alpha", "beta"])?,
+                &key('a')?
             ),
             secret_fingerprint(
-                &authenticator("JBSWY3DPEHPK3PXP", &["beta", "alpha"]),
-                &key('a')
+                &authenticator("JBSWY3DPEHPK3PXP", &["beta", "alpha"])?,
+                &key('a')?
             )
         );
+        Ok(())
     }
 
     #[test]
-    fn passkey_identity_is_stable_while_counter_updates_create_new_versions() {
+    fn passkey_identity_is_stable_while_counter_updates_create_new_versions() -> anyhow::Result<()>
+    {
         let registration = create_website_passkey(
             &PasskeyRegistrationRequest {
                 origin: "https://login.example.com".to_owned(),
@@ -587,8 +600,7 @@ mod tests {
                 user_verification_required: true,
             },
             &[],
-        )
-        .unwrap();
+        )?;
         let first = SecretValue::Passkey(registration.credential);
         let mut updated = first.clone();
         let SecretValue::Passkey(updated_passkey) = &mut updated else {
@@ -597,17 +609,18 @@ mod tests {
         updated_passkey.signature_count = 1;
 
         assert_eq!(
-            secret_identity_fingerprint(&first, &key('a')),
-            secret_identity_fingerprint(&updated, &key('a'))
+            secret_identity_fingerprint(&first, &key('a')?),
+            secret_identity_fingerprint(&updated, &key('a')?)
         );
         assert_ne!(
-            secret_fingerprint(&first, &key('a')),
-            secret_fingerprint(&updated, &key('a'))
+            secret_fingerprint(&first, &key('a')?),
+            secret_fingerprint(&updated, &key('a')?)
         );
+        Ok(())
     }
 
     #[test]
-    fn matching_login_versions_merge_provider_fields() {
+    fn matching_login_versions_merge_provider_fields() -> anyhow::Result<()> {
         let existing = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -628,5 +641,6 @@ mod tests {
         assert_eq!(merged.notes.matches("note").count(), 1);
         let merged_again = enrich_secret(&SecretValue::Login(merged.clone()), &incoming);
         assert_eq!(merged_again, SecretValue::Login(merged));
+        Ok(())
     }
 }

@@ -404,6 +404,7 @@ async function applyICloudOAuthTokens(
     accessToken: tokens.accessToken,
     fileId: state.oauthFile?.fileId,
     folderId: state.oauthFile?.folderId,
+    driveMode: "private",
     iCloudMode:
       state.oauthFile?.iCloudMode ??
       (state.oauthFile?.iCloudShareTarget?.trim() ? "shared" : "private"),
@@ -473,6 +474,7 @@ async function applyGoogleOAuthTokens(
     driveMode:
       state.oauthFile?.driveMode ??
       (state.oauthFile?.folderId?.trim() ? "shared" : "private"),
+    iCloudMode: "private",
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||

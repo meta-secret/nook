@@ -7,6 +7,24 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[derive(Debug, thiserror::Error)]
+pub enum GeneratorError {
+    #[error("invalid graph YAML: {0}")]
+    InvalidYaml(#[from] serde_yaml::Error),
+    #[error("domain {domain} is missing a task definition")]
+    MissingTaskDefinition { domain: String },
+    #[error("task output reference must be a string")]
+    InvalidTaskOutputReference,
+    #[error("task error reference must be a string")]
+    InvalidTaskErrorReference,
+    #[error("generated Rust syntax is invalid: {0}")]
+    InvalidGeneratedRust(#[from] syn::Error),
+    #[error("failed to read graph YAML: {0}")]
+    ReadGraph(#[from] std::io::Error),
+}
+
+pub type GeneratorResult<T> = Result<T, GeneratorError>;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GraphYaml {
     pub graph: BTreeMap<String, BTreeMap<String, serde_yaml::Value>>,
@@ -20,8 +38,26 @@ pub struct TaskNodeSpecWrapper {
     pub depends_on: Vec<String>,
     #[serde(default = "default_retries")]
     pub retries: usize,
-    pub output: Option<String>,
-    pub error: Option<String>,
+    #[serde(default)]
+    pub output: TaskOutputReference,
+    #[serde(default)]
+    pub error: TaskErrorReference,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(untagged)]
+pub enum TaskOutputReference {
+    Named(String),
+    #[default]
+    Automatic,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(untagged)]
+pub enum TaskErrorReference {
+    Named(String),
+    #[default]
+    NotDeclared,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -83,7 +119,7 @@ fn generate_payload_tokens(struct_ident: &Ident, attrs: &[String]) -> TokenStrea
 }
 
 /// Generates strongly-typed, compile-time self-orchestrating Rust task code using `quote!`.
-pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_rust_code(yaml_content: &str) -> GeneratorResult<String> {
     let parsed: GraphYaml = serde_yaml::from_str(yaml_content)?;
     let mut mod_tokens = TokenStream::new();
 
@@ -93,16 +129,28 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let (_task_key, task_val) = domain_map
             .iter()
             .find(|(k, _)| k.ends_with("_task") || k.contains("task"))
-            .ok_or_else(|| format!("Domain '{}' is missing a task definition", domain_name))?;
+            .ok_or_else(|| GeneratorError::MissingTaskDefinition {
+                domain: domain_name.clone(),
+            })?;
 
         let task_spec: TaskNodeSpecWrapper = if task_val.get("task").is_some() {
             let task_inner = &task_val["task"];
             let mut spec: TaskNodeSpecWrapper = serde_yaml::from_value(task_inner.clone())?;
             if let Some(out_val) = task_val.get("output") {
-                spec.output = out_val.as_str().map(|s| s.to_string());
+                spec.output = TaskOutputReference::Named(
+                    out_val
+                        .as_str()
+                        .ok_or(GeneratorError::InvalidTaskOutputReference)?
+                        .to_owned(),
+                );
             }
             if let Some(err_val) = task_val.get("error") {
-                spec.error = err_val.as_str().map(|s| s.to_string());
+                spec.error = TaskErrorReference::Named(
+                    err_val
+                        .as_str()
+                        .ok_or(GeneratorError::InvalidTaskErrorReference)?
+                        .to_owned(),
+                );
             }
             spec
         } else {
@@ -119,10 +167,10 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let description = &task_spec.attrs.description;
         let retries = task_spec.retries;
 
-        let output_key = task_spec
-            .output
-            .clone()
-            .unwrap_or_else(|| format!("{}_output", task_id));
+        let output_key = match &task_spec.output {
+            TaskOutputReference::Named(key) => key.clone(),
+            TaskOutputReference::Automatic => format!("{}_output", task_id),
+        };
 
         let output_spec: PayloadSpec = domain_map
             .get(&output_key)
@@ -132,15 +180,16 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let output_ident = to_pascal_ident(&output_key);
         let output_tokens = generate_payload_tokens(&output_ident, &output_spec.attrs);
 
-        let error_tokens = if let Some(err_key) = &task_spec.error {
-            let err_spec: PayloadSpec = domain_map
-                .get(err_key)
-                .map(|v| serde_yaml::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
-            let err_ident = to_pascal_ident(err_key);
-            generate_payload_tokens(&err_ident, &err_spec.attrs)
-        } else {
-            quote! {}
+        let error_tokens = match &task_spec.error {
+            TaskErrorReference::Named(err_key) => {
+                let err_spec: PayloadSpec = domain_map
+                    .get(err_key)
+                    .map(|v| serde_yaml::from_value(v.clone()).unwrap_or_default())
+                    .unwrap_or_default();
+                let err_ident = to_pascal_ident(err_key);
+                generate_payload_tokens(&err_ident, &err_spec.attrs)
+            }
+            TaskErrorReference::NotDeclared => quote! {},
         };
 
         let retriable_impl = quote! {
@@ -248,7 +297,7 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
 }
 
 /// Reads a YAML file from disk and returns the generated Rust source code string.
-pub fn generate_from_file<P: AsRef<Path>>(path: P) -> Result<String, Box<dyn std::error::Error>> {
+pub fn generate_from_file<P: AsRef<Path>>(path: P) -> GeneratorResult<String> {
     let content = std::fs::read_to_string(path)?;
     generate_rust_code(&content)
 }

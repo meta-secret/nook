@@ -30,6 +30,7 @@
   import type { AppKind } from '$lib/app-kind'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import { peekEnrollmentEntryId, peekEnrollmentEntryLabel } from '$app-wasm'
+  import { takeWasmStringValue } from '$lib/wasm-string-value'
 
   let {
     vault,
@@ -235,8 +236,12 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
-      passwordEntryLabel={peekEnrollmentEntryLabel(prefillEnrollmentCode)}
+      passwordEntryId={takeWasmStringValue(
+        peekEnrollmentEntryId(prefillEnrollmentCode),
+      )}
+      passwordEntryLabel={takeWasmStringValue(
+        peekEnrollmentEntryLabel(prefillEnrollmentCode),
+      )}
       {isVerifying}
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}

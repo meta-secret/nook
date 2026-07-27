@@ -92,7 +92,7 @@ mod tests {
     use crate::SecretId;
 
     fn secret_id(label: &str) -> SecretId {
-        crate::validate_secret_id(label).expect("valid secret id")
+        crate::validate_secret_id(&format!("secret_SMypl8K0w9{label}")).expect("valid secret id")
     }
 
     fn login(website_url: &str, username: &str, password: &str) -> LoginSecret {

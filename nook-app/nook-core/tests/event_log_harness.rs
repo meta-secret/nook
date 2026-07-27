@@ -86,8 +86,8 @@ impl EventLogDevice {
                 &SecretId::from_vault_record(secret_id),
                 SecretType::ApiKey,
                 ciphertext.as_str(),
-                None,
-                None,
+                nook_core::SecretFingerprint::from_trusted(format!("test-identity:{secret_id}")),
+                nook_core::SecretFingerprint::from_trusted(format!("test-version:{secret_id}")),
             ),
         }])
     }
@@ -116,8 +116,8 @@ impl EventLogDevice {
                 &SecretId::from_vault_record(secret_id),
                 SecretType::Login,
                 ciphertext.as_str(),
-                Some(identity),
-                Some(version),
+                identity,
+                version,
             ),
         }])
     }
@@ -151,12 +151,7 @@ impl EventLogDevice {
             .secrets
             .iter()
             .filter(|(_, secret)| secret.is_live(&graph))
-            .filter_map(|(_, secret)| {
-                secret
-                    .identity_fingerprint
-                    .as_ref()
-                    .map(|fp| fp.as_str().to_owned())
-            })
+            .map(|(_, secret)| secret.identity_fingerprint.as_str().to_owned())
             .collect::<Vec<_>>();
         fingerprints.sort();
         Ok(fingerprints)
@@ -239,8 +234,14 @@ fn genesis_yaml(
         &keys.members_key,
     )?];
     records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
-    serialize_stored_yaml_with_unlock(&records, &VaultUnlock::Keys, &[], Some(store_id), None)
-        .map_err(Into::into)
+    serialize_stored_yaml_with_unlock(
+        &records,
+        &VaultUnlock::Keys,
+        &[],
+        nook_core::VaultStoreIdentityRef::Assigned(store_id),
+        nook_core::VaultVersionWrite::Initial,
+    )
+    .map_err(Into::into)
 }
 
 /// Remote provider bucket keyed by provider id.
