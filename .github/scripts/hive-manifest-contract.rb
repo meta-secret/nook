@@ -101,6 +101,10 @@ end
 unless worker_environment["HIVE_TASK_TIMEOUT_SECONDS"] == "21600"
   raise "Hive worker must allow the complete six-hour repair lifecycle"
 end
+unless worker_environment["HIVE_LEASE_SECONDS"] == "3600" &&
+       worker_environment["HIVE_HEARTBEAT_SECONDS"] == "60"
+  raise "Hive workers must renew a one-hour lease every minute"
+end
 unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-terra" &&
        worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
   raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"

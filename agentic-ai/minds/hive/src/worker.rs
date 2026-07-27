@@ -385,6 +385,7 @@ async fn heartbeat_loop<S: TaskStore>(
     mut stop: watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
     let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_seconds));
+    let mut renewal = 0_u64;
     interval.tick().await;
     loop {
         tokio::select! {
@@ -405,6 +406,11 @@ async fn heartbeat_loop<S: TaskStore>(
                 if !accepted {
                     return Err(anyhow!("lease was replaced or expired"));
                 }
+                renewal += 1;
+                eprintln!(
+                    "Hive lease heartbeat accepted task={} renewal={renewal}",
+                    task.id
+                );
             }
         }
     }

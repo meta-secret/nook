@@ -76,7 +76,7 @@ spec:
             - name: HIVE_WORKSPACE
               value: /workspace
             - name: HIVE_LEASE_SECONDS
-              value: "300"
+              value: "3600"
             - name: HIVE_HEARTBEAT_SECONDS
               value: "60"
             - name: HIVE_TASK_TIMEOUT_SECONDS

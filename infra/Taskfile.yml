@@ -2558,12 +2558,19 @@ tasks:
             --output /dev/null \
             https://api.github.com/repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform?ref=main ||
           true
-        kubectl logs deployment/hive \
+        kubectl get pods \
           --namespace hive-system \
-          --all-containers \
-          --prefix \
-          --since=3m \
-          --tail=100 || true
+          -l app.kubernetes.io/name=hive \
+          -o name |
+        sort |
+        while IFS= read -r pod; do
+          kubectl logs "$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --since=10m \
+            --tail=200 || true
+        done
         kubectl logs deployment/hive-workbench-dispatcher \
           --namespace hive-system \
           --all-containers \
