@@ -201,11 +201,17 @@ impl PasskeyDeviceProtectionMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasskeyRegistrationPrfOutput<'a> {
+    Unavailable,
+    Available(&'a [u8]),
+}
+
 pub fn resolve_passkey_registration(
     credential_id: &[u8],
     user_handle: &[u8],
     prf_input: &[u8],
-    prf_output: Option<&[u8]>,
+    prf_output: PasskeyRegistrationPrfOutput<'_>,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     resolve_passkey_registration_for_mode(
         credential_id,
@@ -220,11 +226,11 @@ pub fn resolve_passkey_registration_for_mode(
     credential_id: &[u8],
     user_handle: &[u8],
     prf_input: &[u8],
-    prf_output: Option<&[u8]>,
+    prf_output: PasskeyRegistrationPrfOutput<'_>,
     mode: PasskeyDeviceProtectionMode,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     match prf_output {
-        Some(output) => finish_passkey_device_identity_for_mode(
+        PasskeyRegistrationPrfOutput::Available(output) => finish_passkey_device_identity_for_mode(
             credential_id,
             user_handle,
             prf_input,
@@ -233,8 +239,10 @@ pub fn resolve_passkey_registration_for_mode(
         )
         .map(Box::new)
         .map(PasskeyRegistrationResolution::Complete),
-        None => PasskeyAssertionRequest::new(credential_id, prf_input)
-            .map(PasskeyRegistrationResolution::NeedsAssertion),
+        PasskeyRegistrationPrfOutput::Unavailable => {
+            PasskeyAssertionRequest::new(credential_id, prf_input)
+                .map(PasskeyRegistrationResolution::NeedsAssertion)
+        }
     }
 }
 
@@ -437,12 +445,11 @@ impl WrappedDeviceIdentity {
     ///
     /// PIN fallback is not a `device_mode` value (`standard` / `anti-hacker`);
     /// callers that need the storage kind should use [`Self::protection_mode`].
-    #[must_use]
-    pub fn device_mode(&self) -> Option<&'static str> {
+    pub fn device_mode(&self) -> DeviceKeyProtectionResult<&'static str> {
         match self {
-            Self::PasskeyDerived(_) => Some(PasskeyDeviceProtectionMode::Standard.as_str()),
-            Self::PasskeyWrappedLocal(_) => Some(PasskeyDeviceProtectionMode::AntiHacker.as_str()),
-            Self::Pin(_) => None,
+            Self::PasskeyDerived(_) => Ok(PasskeyDeviceProtectionMode::Standard.as_str()),
+            Self::PasskeyWrappedLocal(_) => Ok(PasskeyDeviceProtectionMode::AntiHacker.as_str()),
+            Self::Pin(_) => Err(DeviceKeyProtectionError::UnsupportedParameters),
         }
     }
 }
@@ -911,7 +918,12 @@ mod tests {
         let record = passkey_wrapped_record(&parsed);
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.device_mode(), Some("anti-hacker"));
+        assert_eq!(
+            parsed
+                .device_mode()
+                .expect("device key protection test setup should succeed"),
+            "anti-hacker"
+        );
         assert_eq!(
             record.version,
             PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION
@@ -1003,7 +1015,7 @@ mod tests {
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            Some(registration.prf_output()),
+            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
         )
         .expect("device key protection test setup should succeed");
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
@@ -1058,7 +1070,7 @@ mod tests {
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            Some(registration.prf_output()),
+            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
             PasskeyDeviceProtectionMode::AntiHacker,
         )
         .expect("device key protection test setup should succeed");
@@ -1081,7 +1093,7 @@ mod tests {
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            None,
+            PasskeyRegistrationPrfOutput::Unavailable,
         )
         .expect("device key protection test setup should succeed");
 
@@ -1215,7 +1227,7 @@ mod tests {
             registration.credential_id(),
             setup.user_handle(),
             setup.prf_input(),
-            None,
+            PasskeyRegistrationPrfOutput::Unavailable,
         )
         .expect("device key protection test setup should succeed") else {
             panic!("registration without PRF output should request assertion fallback");

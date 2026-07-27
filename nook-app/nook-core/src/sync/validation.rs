@@ -112,10 +112,11 @@ impl StorageProviderType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum OAuthFilePreset {
+    #[default]
     GoogleDrive,
     #[serde(rename = "icloud")]
     ICloud,
@@ -187,7 +188,7 @@ fn parse_provider_visibility<T: Copy>(
     shared: T,
 ) -> ValidationResult<T> {
     match value.trim() {
-        "" | "private" => Ok(private),
+        "private" => Ok(private),
         "shared" => Ok(shared),
         other => Err(ValidationError::UnknownStorageMode {
             mode: format!("{provider}:{other}"),
@@ -952,12 +953,14 @@ mod tests {
     fn sample_records() -> Vec<SecretRecord> {
         vec![
             SecretRecord {
-                id: validate_secret_id("github.com").expect("validation test setup should succeed"),
+                id: validate_secret_id("secret_SMypl8K0w9Y")
+                    .expect("validation test setup should succeed"),
                 secret_type: SecretType::ApiKey,
                 data: value("a"),
             },
             SecretRecord {
-                id: validate_secret_id("work-vpn").expect("validation test setup should succeed"),
+                id: validate_secret_id("secret_SMypl8K0w9Z")
+                    .expect("validation test setup should succeed"),
                 secret_type: SecretType::ApiKey,
                 data: value("b"),
             },
@@ -1231,10 +1234,10 @@ mod tests {
     fn validate_secret_fields() {
         assert!(validate_secret_id("  ").is_err());
         assert_eq!(
-            validate_secret_id(" github ")
+            validate_secret_id(" secret_SMypl8K0w9Y ")
                 .expect("validation test setup should succeed")
                 .as_str(),
-            "github"
+            "secret_SMypl8K0w9Y"
         );
         assert!(validate_secret_data("").is_err());
         assert!(validate_secret_data("x").is_ok());
@@ -1263,9 +1266,9 @@ mod tests {
 
     #[test]
     fn filter_secrets_case_insensitive() {
-        let filtered = filter_secrets(&sample_records(), "GIT");
+        let filtered = filter_secrets(&sample_records(), "W9Y");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id.as_str(), "github.com");
+        assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
     }
 
     #[test]
@@ -1414,10 +1417,10 @@ mod tests {
     }
 
     #[test]
-    fn filter_secrets_matches_substring_in_label() {
-        let filtered = filter_secrets(&sample_records(), ".com");
+    fn filter_secrets_matches_substring_in_id() {
+        let filtered = filter_secrets(&sample_records(), "K0w9Y");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id.as_str(), "github.com");
+        assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
     }
 
     #[test]
@@ -1428,7 +1431,8 @@ mod tests {
     #[test]
     fn filter_secrets_does_not_search_values() {
         let records = vec![SecretRecord {
-            id: validate_secret_id("label").expect("validation test setup should succeed"),
+            id: validate_secret_id("secret_SMypl8K0w9X")
+                .expect("validation test setup should succeed"),
             secret_type: SecretType::ApiKey,
             data: value("find-me"),
         }];
@@ -1477,15 +1481,16 @@ mod tests {
     }
 
     #[test]
-    fn google_drive_mode_is_explicit_and_backward_compatible() {
+    fn google_drive_mode_requires_an_explicit_current_value() {
         assert_eq!(
-            GoogleDriveMode::parse("").expect("validation test setup should succeed"),
+            GoogleDriveMode::parse("private").expect("validation test setup should succeed"),
             GoogleDriveMode::Private
         );
         assert_eq!(
             GoogleDriveMode::parse("shared").expect("validation test setup should succeed"),
             GoogleDriveMode::Shared
         );
+        assert!(GoogleDriveMode::parse("").is_err());
         assert!(GoogleDriveMode::parse("public").is_err());
     }
 
@@ -1532,15 +1537,16 @@ mod tests {
     }
 
     #[test]
-    fn icloud_mode_is_explicit_and_backward_compatible() {
+    fn icloud_mode_requires_an_explicit_current_value() {
         assert_eq!(
-            ICloudMode::parse("").expect("validation test setup should succeed"),
+            ICloudMode::parse("private").expect("validation test setup should succeed"),
             ICloudMode::Private
         );
         assert_eq!(
             ICloudMode::parse("shared").expect("validation test setup should succeed"),
             ICloudMode::Shared
         );
+        assert!(ICloudMode::parse("").is_err());
         assert!(ICloudMode::parse("public").is_err());
     }
 

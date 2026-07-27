@@ -27,6 +27,33 @@ pub enum VaultEditBlockReason {
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultEditDecision {
+    Allowed,
+    BlockedSecurityConflict,
+    BlockedSyncConflict,
+    BlockedByArchitecture,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultAccessObservation {
+    Unavailable,
+    Available(VaultAccessStatus),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActiveVaultStore<'a> {
+    Unselected,
+    Selected(&'a str),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VaultSwitchDecision {
+    NoChange,
+    SwitchTo(String),
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RemoteVaultAssessDecision {
     Continue,
     PromptRecoveryFromCache,
@@ -52,17 +79,17 @@ impl VaultClientPolicy {
         security_conflict_count: usize,
         has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
-    ) -> Option<VaultEditBlockReason> {
+    ) -> VaultEditDecision {
         if security_conflict_count > 0 {
-            return Some(VaultEditBlockReason::SecurityConflict);
+            return VaultEditDecision::BlockedSecurityConflict;
         }
         if has_sync_conflict {
-            return Some(VaultEditBlockReason::SyncConflict);
+            return VaultEditDecision::BlockedSyncConflict;
         }
         if !architecture_allows_secret_creation {
-            return Some(VaultEditBlockReason::Architecture);
+            return VaultEditDecision::BlockedByArchitecture;
         }
-        None
+        VaultEditDecision::Allowed
     }
 
     #[must_use]
@@ -156,7 +183,7 @@ impl VaultClientPolicy {
     #[must_use]
     pub const fn unauthenticated_sync_decision(
         changed: bool,
-        access_status: Option<VaultAccessStatus>,
+        access_status: VaultAccessObservation,
         join_state: JoinEnrollmentState,
         awaiting_join_approval: bool,
     ) -> UnauthenticatedSyncDecision {
@@ -164,13 +191,19 @@ impl VaultClientPolicy {
             return UnauthenticatedSyncDecision::Ignore;
         }
         match (access_status, join_state, awaiting_join_approval) {
-            (Some(VaultAccessStatus::Ready), JoinEnrollmentState::Pending, _) => {
-                UnauthenticatedSyncDecision::Approved
+            (
+                VaultAccessObservation::Available(VaultAccessStatus::Ready),
+                JoinEnrollmentState::Pending,
+                _,
+            ) => UnauthenticatedSyncDecision::Approved,
+            (VaultAccessObservation::Available(VaultAccessStatus::Ready), _, true) => {
+                UnauthenticatedSyncDecision::AutoConnect
             }
-            (Some(VaultAccessStatus::Ready), _, true) => UnauthenticatedSyncDecision::AutoConnect,
-            (Some(VaultAccessStatus::JoinPending), JoinEnrollmentState::None, _) => {
-                UnauthenticatedSyncDecision::MarkJoinPending
-            }
+            (
+                VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
+                JoinEnrollmentState::None,
+                _,
+            ) => UnauthenticatedSyncDecision::MarkJoinPending,
             _ => UnauthenticatedSyncDecision::Ignore,
         }
     }
@@ -206,17 +239,20 @@ impl VaultClientPolicy {
     #[must_use]
     pub fn vault_switch_target(
         requested_store_id: &str,
-        active_store_id: Option<&str>,
+        active_store_id: ActiveVaultStore<'_>,
         verifying: bool,
-    ) -> Option<String> {
+    ) -> VaultSwitchDecision {
         let requested_store_id = requested_store_id.trim();
         if verifying
             || requested_store_id.is_empty()
-            || active_store_id.is_some_and(|active| active.trim() == requested_store_id)
+            || matches!(
+                active_store_id,
+                ActiveVaultStore::Selected(active) if active.trim() == requested_store_id
+            )
         {
-            return None;
+            return VaultSwitchDecision::NoChange;
         }
-        Some(requested_store_id.to_owned())
+        VaultSwitchDecision::SwitchTo(requested_store_id.to_owned())
     }
 }
 
@@ -228,17 +264,20 @@ mod tests {
     fn edit_blocking_has_security_first_precedence() {
         assert_eq!(
             VaultClientPolicy::edit_block_reason(1, true, false),
-            Some(VaultEditBlockReason::SecurityConflict)
+            VaultEditDecision::BlockedSecurityConflict
         );
         assert_eq!(
             VaultClientPolicy::edit_block_reason(0, true, false),
-            Some(VaultEditBlockReason::SyncConflict)
+            VaultEditDecision::BlockedSyncConflict
         );
         assert_eq!(
             VaultClientPolicy::edit_block_reason(0, false, false),
-            Some(VaultEditBlockReason::Architecture)
+            VaultEditDecision::BlockedByArchitecture
         );
-        assert_eq!(VaultClientPolicy::edit_block_reason(0, false, true), None);
+        assert_eq!(
+            VaultClientPolicy::edit_block_reason(0, false, true),
+            VaultEditDecision::Allowed
+        );
     }
 
     #[test]
@@ -334,7 +373,7 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::unauthenticated_sync_decision(
                 false,
-                Some(VaultAccessStatus::Ready),
+                VaultAccessObservation::Available(VaultAccessStatus::Ready),
                 JoinEnrollmentState::Pending,
                 true
             ),
@@ -343,7 +382,7 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::unauthenticated_sync_decision(
                 true,
-                Some(VaultAccessStatus::Ready),
+                VaultAccessObservation::Available(VaultAccessStatus::Ready),
                 JoinEnrollmentState::Pending,
                 true
             ),
@@ -352,7 +391,7 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::unauthenticated_sync_decision(
                 true,
-                Some(VaultAccessStatus::Ready),
+                VaultAccessObservation::Available(VaultAccessStatus::Ready),
                 JoinEnrollmentState::None,
                 true
             ),
@@ -361,7 +400,7 @@ mod tests {
         assert_eq!(
             VaultClientPolicy::unauthenticated_sync_decision(
                 true,
-                Some(VaultAccessStatus::JoinPending),
+                VaultAccessObservation::Available(VaultAccessStatus::JoinPending),
                 JoinEnrollmentState::None,
                 false
             ),
@@ -396,16 +435,28 @@ mod tests {
     #[test]
     fn vault_switch_target_is_trimmed_and_rejects_noops() {
         assert_eq!(
-            VaultClientPolicy::vault_switch_target(" store-b ", Some("store-a"), false),
-            Some("store-b".to_owned())
+            VaultClientPolicy::vault_switch_target(
+                " store-b ",
+                ActiveVaultStore::Selected("store-a"),
+                false
+            ),
+            VaultSwitchDecision::SwitchTo("store-b".to_owned())
         );
         assert_eq!(
-            VaultClientPolicy::vault_switch_target("store-a", Some(" store-a "), false),
-            None
+            VaultClientPolicy::vault_switch_target(
+                "store-a",
+                ActiveVaultStore::Selected(" store-a "),
+                false
+            ),
+            VaultSwitchDecision::NoChange
         );
         assert_eq!(
-            VaultClientPolicy::vault_switch_target("store-b", Some("store-a"), true),
-            None
+            VaultClientPolicy::vault_switch_target(
+                "store-b",
+                ActiveVaultStore::Selected("store-a"),
+                true
+            ),
+            VaultSwitchDecision::NoChange
         );
     }
 }

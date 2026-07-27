@@ -1,10 +1,15 @@
 //! Vault access diagnostics bridge.
 
-use super::NookVaultManager;
+use super::{NookVaultManager, VaultNameState};
 use crate::storage::event_db::load_local_event_store;
 use crate::types::{NookVaultAccessReport, NookVaultRecoveryOptions};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+enum DiagnosticProjection {
+    Unavailable,
+    Loaded(nook_core::VaultProjection),
+}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -21,11 +26,10 @@ impl NookVaultManager {
         let store = load_local_event_store(&store_id).await?;
         let graph = store.load_graph(&store_id)?;
         let options = nook_core::vault_recovery_options(&graph, &store_id)?;
-        let vault_name = self
-            .vault
-            .vault_name
-            .clone()
-            .unwrap_or_else(|| nook_core::default_vault_name_for_store_id(&store_id));
+        let vault_name = match &self.vault.vault_name {
+            VaultNameState::Named(name) => name.clone(),
+            VaultNameState::Unnamed => nook_core::default_vault_name_for_store_id(&store_id),
+        };
         Ok(NookVaultRecoveryOptions::from_core(
             store_id, vault_name, options,
         ))
@@ -36,13 +40,16 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity()?;
         let records = self.stored_records_snapshot();
         let mut events = Vec::new();
-        let mut projection = None;
+        let mut projection = DiagnosticProjection::Unavailable;
         let mut warnings = Vec::new();
 
         if !self.vault.store_id.trim().is_empty() {
             let store = load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
-            projection = Some(nook_core::project_vault(&graph, &self.vault.store_id)?);
+            projection = DiagnosticProjection::Loaded(nook_core::project_vault(
+                &graph,
+                &self.vault.store_id,
+            )?);
             for event_id in store.event_ids() {
                 let Some(bytes) = store.get_bytes(&event_id) else {
                     warnings.push(format!(
@@ -59,8 +66,14 @@ impl NookVaultManager {
             }
         }
 
+        let projection = match &projection {
+            DiagnosticProjection::Unavailable => nook_core::ProjectionDiagnosticInput::Unavailable,
+            DiagnosticProjection::Loaded(projection) => {
+                nook_core::ProjectionDiagnosticInput::Available(projection)
+            }
+        };
         let mut report =
-            nook_core::diagnose_vault_access(&records, &identity, projection.as_ref(), &events)?;
+            nook_core::diagnose_vault_access(&records, &identity, projection, &events)?;
         report.warnings.extend(warnings);
         Ok(NookVaultAccessReport::from_core(report)?)
     }

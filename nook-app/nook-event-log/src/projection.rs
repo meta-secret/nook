@@ -2,8 +2,8 @@
 
 use crate::canonical::EventId;
 use crate::epoch::{
-    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
-    operation_starts_epoch,
+    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
+    concurrent_epoch_rotations_conflict, operation_starts_epoch,
 };
 use crate::event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
 use crate::graph::EventGraph;
@@ -20,16 +20,28 @@ pub struct ProjectedSecret {
     pub identity_fingerprint: SecretFingerprint,
     pub fingerprint: SecretFingerprint,
     pub created_by: EventId,
-    pub deleted_by: Option<EventId>,
-    pub replaced_from: Option<SecretId>,
+    pub lifecycle: ProjectedSecretLifecycle,
+    pub origin: ProjectedSecretOrigin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectedSecretLifecycle {
+    Live,
+    Deleted { by: EventId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectedSecretOrigin {
+    Created,
+    Replacement { from: SecretId },
 }
 
 impl ProjectedSecret {
     #[must_use]
     pub fn is_live(&self, graph: &EventGraph) -> bool {
-        match &self.deleted_by {
-            None => true,
-            Some(deleter) => !graph.is_ancestor(&self.created_by, deleter),
+        match &self.lifecycle {
+            ProjectedSecretLifecycle::Live => true,
+            ProjectedSecretLifecycle::Deleted { by } => !graph.is_ancestor(&self.created_by, by),
         }
     }
 }
@@ -53,7 +65,7 @@ pub struct SecurityConflict {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultProjection {
     pub store_id: StoreId,
-    pub current_epoch: Option<KeyEpoch>,
+    pub epoch: ProjectionEpoch,
     pub epoch_history: Vec<EpochRecord>,
     pub secrets: BTreeMap<SecretId, ProjectedSecret>,
     pub password_entries: Vec<PasswordUnlockEntry>,
@@ -63,11 +75,17 @@ pub struct VaultProjection {
     pub cleared: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectionEpoch {
+    BeforeGenesis,
+    Current(KeyEpoch),
+}
+
 impl Default for VaultProjection {
     fn default() -> Self {
         Self {
             store_id: StoreId::parse("store_abcdefghijk").expect("valid default store id"),
-            current_epoch: None,
+            epoch: ProjectionEpoch::BeforeGenesis,
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),
             password_entries: Vec::new(),
@@ -121,7 +139,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
         }
 
         for operation in &event.body.operations {
-            if let Some(reason) = operation_starts_epoch(operation) {
+            if let EpochTransition::Rotated(reason) = operation_starts_epoch(operation) {
                 epoch_events.insert(event_id.clone(), reason);
             }
             apply_operation(
@@ -134,7 +152,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
 
         if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
             let epoch = KeyEpoch(epoch_id);
-            if projection.current_epoch.as_ref() != Some(&epoch) {
+            if projection.epoch != ProjectionEpoch::Current(epoch.clone()) {
                 if let Some(reason) = epoch_events.get(&event_id).copied() {
                     projection.epoch_history.push(EpochRecord {
                         epoch: epoch.clone(),
@@ -142,7 +160,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
                         reason,
                     });
                 }
-                projection.current_epoch = Some(epoch);
+                projection.epoch = ProjectionEpoch::Current(epoch);
             }
         }
     }
@@ -152,6 +170,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
     Ok(projection)
 }
 
+#[allow(clippy::too_many_lines)] // One exhaustive match keeps event projection behavior auditable.
 fn apply_operation(
     projection: &mut VaultProjection,
     event_id: &EventId,
@@ -165,28 +184,39 @@ fn apply_operation(
             ..
         } => {
             for secret in secrets {
-                insert_secret(projection, event_id, secret, None);
+                insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
             projection.password_entries.clone_from(password_entries);
         }
         VaultOperation::EpochCheckpoint { secrets, .. } => {
             for secret in secrets {
-                insert_secret(projection, event_id, secret, None);
+                insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
             }
         }
         VaultOperation::SecretCreated { secret } => {
-            insert_secret(projection, event_id, secret, None);
+            insert_secret(projection, event_id, secret, ProjectedSecretOrigin::Created);
         }
         VaultOperation::SecretDeleted { secret_id } => {
             if let Some(entry) = projection.secrets.get_mut(secret_id) {
-                entry.deleted_by = Some(event_id.clone());
+                entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                    by: event_id.clone(),
+                };
             }
         }
         VaultOperation::SecretReplaced { old_id, new_secret } => {
             if let Some(entry) = projection.secrets.get_mut(old_id) {
-                entry.deleted_by = Some(event_id.clone());
+                entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                    by: event_id.clone(),
+                };
             }
-            insert_secret(projection, event_id, new_secret, Some(old_id.clone()));
+            insert_secret(
+                projection,
+                event_id,
+                new_secret,
+                ProjectedSecretOrigin::Replacement {
+                    from: old_id.clone(),
+                },
+            );
             replacements_by_old
                 .entry(old_id.clone())
                 .or_default()
@@ -199,7 +229,9 @@ fn apply_operation(
         } => {
             for rejected in rejected_secret_ids {
                 if let Some(entry) = projection.secrets.get_mut(rejected) {
-                    entry.deleted_by = Some(event_id.clone());
+                    entry.lifecycle = ProjectedSecretLifecycle::Deleted {
+                        by: event_id.clone(),
+                    };
                 }
             }
             replacements_by_old.remove(old_id);
@@ -274,7 +306,7 @@ fn insert_secret(
     projection: &mut VaultProjection,
     event_id: &EventId,
     secret: &EncryptedSecretPayload,
-    replaced_from: Option<SecretId>,
+    origin: ProjectedSecretOrigin,
 ) {
     projection.secrets.insert(
         secret.id.clone(),
@@ -283,8 +315,8 @@ fn insert_secret(
             identity_fingerprint: secret.identity_fingerprint.clone(),
             fingerprint: secret.fingerprint.clone(),
             created_by: event_id.clone(),
-            deleted_by: None,
-            replaced_from,
+            lifecycle: ProjectedSecretLifecycle::Live,
+            origin,
         },
     );
 }

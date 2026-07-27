@@ -1,6 +1,6 @@
 //! Event-log persistence and provider fan-out.
 
-use super::NookVaultManager;
+use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
@@ -258,7 +258,7 @@ impl NookVaultManager {
         save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
+        if self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         } else {
             for operation in &operations {
@@ -317,9 +317,12 @@ impl NookVaultManager {
             &records,
             &self.vault.unlock,
             &self.vault.password_entries,
-            Some(self.vault.store_id.as_str()),
-            self.vault.vault_name.as_deref(),
-            None,
+            nook_core::VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
+            match &self.vault.vault_name {
+                VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
+                VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+            },
+            nook_core::VaultVersionWrite::Initial,
             &self.vault.architecture,
         )?;
         save_to_indexed_db(yaml.as_str()).await?;
@@ -374,8 +377,10 @@ impl NookVaultManager {
                 local_store_id,
                 remote_store_id,
             } => {
-                self.event_log_sync_issue =
-                    Some((provider_label.to_owned(), classification.clone()));
+                self.event_log_sync_issue = EventLogSyncIssueState::Pending {
+                    provider_label: provider_label.to_owned(),
+                    classification: classification.clone(),
+                };
                 Err(Self::provider_store_mismatch_error(
                     provider_label,
                     local_store_id,
@@ -383,8 +388,10 @@ impl NookVaultManager {
                 ))
             }
             RemoteEventLogClassification::MultipleStores { store_ids } => {
-                self.event_log_sync_issue =
-                    Some((provider_label.to_owned(), classification.clone()));
+                self.event_log_sync_issue = EventLogSyncIssueState::Pending {
+                    provider_label: provider_label.to_owned(),
+                    classification: classification.clone(),
+                };
                 Err(Self::provider_multiple_stores_error(
                     provider_label,
                     store_ids,
@@ -571,7 +578,7 @@ impl NookVaultManager {
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         let unlocked =
-            self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
+            self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if unlocked {
             self.apply_event_projection_to_session().await?;
         }
@@ -1037,7 +1044,8 @@ impl NookVaultManager {
         self.sync_events_from_current_provider().await?;
         let changed = self.event_log.heads != before;
         if changed
-            && (self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok())
+            && (self.vault.crypto.is_unlocked()
+                || self.ensure_vault_crypto_from_cache().await.is_ok())
         {
             self.apply_event_projection_to_session().await?;
         }
@@ -1174,6 +1182,7 @@ impl NookVaultManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
@@ -1192,6 +1201,7 @@ mod tests {
         );
         let issue = manager
             .take_event_log_sync_issue()
+            .issue()
             .expect("typed sync issue");
         assert!(issue.is_store_mismatch());
         assert_eq!(issue.local_store_id().as_deref(), Some("store_local12345"));

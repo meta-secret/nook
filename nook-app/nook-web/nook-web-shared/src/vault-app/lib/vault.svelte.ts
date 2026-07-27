@@ -27,7 +27,8 @@ import {
   NookVaultArchitecture,
   RemoteVaultAssessDecision,
   UnauthenticatedSyncDecision,
-  VaultEditBlockReason,
+  VaultEditDecision,
+  NookVaultSwitchState,
   activeVaultProviders as wasmActiveVaultProviders,
   get_translation_catalog as getTranslationCatalog,
   localProviderIdForActiveVault,
@@ -338,11 +339,11 @@ export class VaultState {
       this.architectureCanCreateSecret,
     );
     switch (reason) {
-      case VaultEditBlockReason.SecurityConflict:
+      case VaultEditDecision.BlockedSecurityConflict:
         return this.t("auth_storage.security_conflict_edits");
-      case VaultEditBlockReason.SyncConflict:
+      case VaultEditDecision.BlockedSyncConflict:
         return this.t("auth_storage.sync_blocked_edits");
-      case VaultEditBlockReason.Architecture:
+      case VaultEditDecision.BlockedByArchitecture:
         return this.t("architecture_modes.sentinel_secret_creation_blocked");
       default:
         return undefined;
@@ -1212,12 +1213,18 @@ export class VaultState {
 
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: string): Promise<void> {
-    const target = this.clientPolicy.vaultSwitchTarget(
+    const switchDecision = this.clientPolicy.vaultSwitchTarget(
       storeId,
-      this.activeVaultStoreId ?? undefined,
+      this.activeVaultStoreId !== undefined,
+      this.activeVaultStoreId ?? "",
       this.isVerifying,
     );
-    if (!target) return;
+    if (switchDecision.state !== NookVaultSwitchState.Switch) {
+      switchDecision.free();
+      return;
+    }
+    const target = switchDecision.target();
+    switchDecision.free();
     this.helpOpen = false;
     this.cancelProviderSetup();
     this.cancelAddProvider();
@@ -1524,7 +1531,8 @@ export class VaultState {
 
     const decision = this.clientPolicy.unauthenticatedSyncDecision(
       result.changed,
-      result.accessStatus ?? undefined,
+      result.accessStatus !== undefined,
+      result.accessStatus ?? VaultAccessStatus.NewVault,
       this.joinEnrollmentPrompt,
       this.awaitingJoinApproval,
     );

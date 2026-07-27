@@ -38,9 +38,9 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() {
         &shares,
         &VaultUnlock::Keys,
         &[],
-        Some(store_id.as_str()),
-        None,
-        None,
+        nook_core::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        nook_core::VaultNameRef::Unnamed,
+        nook_core::VaultVersionWrite::Initial,
         &architecture,
     )
     .expect("sentinel vault workflow test setup should succeed");

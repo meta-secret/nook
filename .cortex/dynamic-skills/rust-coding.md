@@ -32,8 +32,10 @@ When you see `Option<T>`, ask:
   `Option<T>`, empty strings, or a `Missing` enum variant.
 - Use `Option<T>` only when absence is the truthful structural contract, not a
   disguised product state. Legitimate examples include iterator/lookup results,
-  an optional caller filter, an uninitialized cache, external API fields, and
-  compatibility wire shapes that are classified immediately at the boundary.
+  an optional caller filter, an uninitialized cache, and external API fields.
+- When a missing value violates an invariant, add a precise `thiserror` variant,
+  return `Result<T, DomainError>`, and propagate it with `?`. Do not use either
+  `Option<T>` or a decorative `Missing` enum variant for failure.
 - When absence means unauthenticated, unauthorized, pending, unsupported,
   configured versus unconfigured, or another named state, use an enum and put
   state-specific values on the owning variant.
@@ -220,9 +222,10 @@ Applies to authored Rust domain and bridge code across Nook, especially
 especially provider targets, enrollment payloads, vault state, sync state,
 storage modes, credential states, and WASM DTOs.
 
-Does not require replacing optional fields in raw persisted JSON structs when
-the optionality exists only to deserialize old or incomplete storage. Those
-structs must convert into a typed enum before domain decisions are made.
+Raw external API or user-controlled partial-input DTOs may remain permissive.
+Convert them immediately into domain enums, required validated newtypes, or
+typed errors. Persisted Nook schemas do not receive a legacy fallback unless a
+task explicitly requires a migration.
 
 It also does not replace idiomatic `Option<T>` return values from maps,
 iterators, parsers, searches, or caches when the caller is genuinely asking

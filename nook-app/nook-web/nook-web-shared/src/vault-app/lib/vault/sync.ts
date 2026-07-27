@@ -4,6 +4,7 @@ import { createLogger } from "$lib/log";
 import {
   importLocalVaultBlob,
   JoinEnrollmentState,
+  NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   readLocalVaultYaml,
   VaultSyncConflictKind,
@@ -100,8 +101,14 @@ export async function stageStagedProviderSyncIssue(
   args: [string, string, string],
 ): Promise<boolean> {
   const manager = state.manager;
-  const issue = manager?.takeEventLogSyncIssue();
-  if (!issue) return false;
+  const issueResult = manager?.takeEventLogSyncIssue();
+  if (!issueResult) return false;
+  if (issueResult.state === NookEventLogSyncIssueState.Clear) {
+    issueResult.free();
+    return false;
+  }
+  const issue = issueResult.issue();
+  issueResult.free();
   try {
     if (!issue.isStoreMismatch) return false;
     const localStoreId = issue.localStoreId;
@@ -668,7 +675,12 @@ export async function syncProviderById(
     return;
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e);
-    const eventLogIssue = state.manager.takeEventLogSyncIssue();
+    const eventLogIssueResult = state.manager.takeEventLogSyncIssue();
+    const eventLogIssue =
+      eventLogIssueResult.state === NookEventLogSyncIssueState.Pending
+        ? eventLogIssueResult.issue()
+        : undefined;
+    eventLogIssueResult.free();
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
     let localFolderIssue: LocalFolderMultipleVaultsIssue | undefined;

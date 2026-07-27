@@ -8,8 +8,8 @@
 use super::vault_session::decrypt_encrypted_secret;
 use crate::errors::{SessionError, VaultResult};
 use crate::{
-    MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType, StoredRecordPayload,
-    SymmetricKey, VaultCrypto,
+    MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType, SecretTypeFilter,
+    StoredRecordPayload, SymmetricKey, VaultCrypto,
 };
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
@@ -147,7 +147,7 @@ impl SecretSearchCatalog {
     }
 
     /// Serialize one bucket for immediate encryption by the persistence adapter.
-    pub fn bucket_json(&self, bucket: u8) -> VaultResult<Option<String>> {
+    pub fn bucket_json(&self, bucket: u8) -> VaultResult<SearchCatalogBucketPayload> {
         if bucket >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             return Err(SessionError::SearchCatalogInvalid(format!(
                 "bucket {bucket} is out of range"
@@ -161,14 +161,14 @@ impl SecretSearchCatalog {
             .map(|(id, entry)| (id.clone(), entry.clone()))
             .collect::<BTreeMap<_, _>>();
         if entries.is_empty() {
-            return Ok(None);
+            return Ok(SearchCatalogBucketPayload::Empty);
         }
         serde_json::to_string(&SecretSearchCatalogBucket {
             version: SEARCH_CATALOG_BUCKET_VERSION,
             bucket,
             entries,
         })
-        .map(Some)
+        .map(SearchCatalogBucketPayload::Json)
         .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()).into())
     }
 
@@ -224,14 +224,14 @@ impl SecretSearchCatalog {
     pub fn query(
         &self,
         query: &str,
-        secret_type_filter: Option<SecretType>,
+        secret_type_filter: SecretTypeFilter,
         offset: usize,
         limit: usize,
     ) -> SecretPage {
         let needle = query.trim().to_lowercase();
         let limit = limit.clamp(1, MAX_SECRET_PAGE_SIZE);
         let matches = self.entries.values().filter(|entry| {
-            secret_type_filter.is_none_or(|expected| entry.item.secret_type() == expected)
+            secret_type_filter.matches(entry.item.secret_type())
                 && (needle.is_empty() || entry.normalized_search_text.contains(&needle))
         });
         let total = matches.clone().count();
@@ -247,6 +247,12 @@ impl SecretSearchCatalog {
             limit,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SearchCatalogBucketPayload {
+    Empty,
+    Json(String),
 }
 
 fn search_catalog_bucket(id: &SecretId) -> u8 {
@@ -318,7 +324,7 @@ mod tests {
             );
         }
 
-        let page = catalog.query("needle-account", None, 0, 50);
+        let page = catalog.query("needle-account", SecretTypeFilter::All, 0, 50);
         assert_eq!(page.total, 1);
         assert_eq!(
             page.records[0].id,
@@ -338,7 +344,9 @@ mod tests {
             SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key),
         );
 
-        let json = catalog.bucket_json(bucket)?.expect("bucket is non-empty");
+        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
+            panic!("bucket is non-empty");
+        };
         assert!(json.contains("visible-user"));
         assert!(!json.contains("never-catalogued"));
         let ciphertext = crypto.encrypt_value(&json)?;
@@ -348,7 +356,12 @@ mod tests {
         let plaintext = crypto.decrypt_value(&ciphertext)?;
         let mut restored = SecretSearchCatalog::default();
         restored.restore_bucket_json(bucket, plaintext.as_str())?;
-        assert_eq!(restored.query("visible-user", None, 0, 50).total, 1);
+        assert_eq!(
+            restored
+                .query("visible-user", SecretTypeFilter::All, 0, 50)
+                .total,
+            1
+        );
         Ok(())
     }
 
@@ -407,8 +420,18 @@ mod tests {
             changed.changed_buckets().collect::<Vec<_>>(),
             vec![search_catalog_bucket(&changed_id)]
         );
-        assert_eq!(catalog.query("changed-user", None, 0, 50).total, 1);
-        assert_eq!(catalog.query("changed-password", None, 0, 50).total, 0);
+        assert_eq!(
+            catalog
+                .query("changed-user", SecretTypeFilter::All, 0, 50)
+                .total,
+            1
+        );
+        assert_eq!(
+            catalog
+                .query("changed-password", SecretTypeFilter::All, 0, 50)
+                .total,
+            0
+        );
         Ok(())
     }
 
@@ -438,16 +461,26 @@ mod tests {
         catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
 
         let bucket = search_catalog_bucket(&record.id);
-        let tampered_json = catalog
-            .bucket_json(bucket)?
-            .expect("catalog bucket exists")
-            .replace("trusted-user", "forged-user");
+        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
+            panic!("catalog bucket exists");
+        };
+        let tampered_json = json.replace("trusted-user", "forged-user");
         let mut tampered = SecretSearchCatalog::default();
         tampered.restore_bucket_json(bucket, &tampered_json)?;
         let outcome = tampered.reconcile(&secrets, &crypto, &keys.secrets_key)?;
         assert_eq!((outcome.added, outcome.updated, outcome.removed), (0, 1, 0));
-        assert_eq!(tampered.query("forged-user", None, 0, 50).total, 0);
-        assert_eq!(tampered.query("trusted-user", None, 0, 50).total, 1);
+        assert_eq!(
+            tampered
+                .query("forged-user", SecretTypeFilter::All, 0, 50)
+                .total,
+            0
+        );
+        assert_eq!(
+            tampered
+                .query("trusted-user", SecretTypeFilter::All, 0, 50)
+                .total,
+            1
+        );
         Ok(())
     }
 }

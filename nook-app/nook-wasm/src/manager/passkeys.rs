@@ -116,11 +116,7 @@ impl NookVaultManager {
     }
 
     fn decrypt_passkeys(&self) -> Result<DecryptedPasskeys, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut passkeys = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
             if *secret_type != nook_core::SecretType::Passkey {
@@ -146,12 +142,7 @@ impl NookVaultManager {
         let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key);
         let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key);
         let mut yaml = value.to_yaml()?;
-        let ciphertext = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(yaml.as_str())?;
+        let ciphertext = self.vault.crypto.get()?.encrypt_value(yaml.as_str())?;
         yaml.zeroize_plaintext();
         value.zeroize_plaintext();
         Ok(nook_core::encrypted_secret_from_armored(

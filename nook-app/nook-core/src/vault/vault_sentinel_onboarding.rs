@@ -144,7 +144,7 @@ fn validate_provider_snapshot(
 mod tests {
     use super::*;
     use crate::{
-        DeviceIdentity, OAuthFileConfigData, SigningIdentity, StorageProviderData,
+        DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
         finalize_sentinel_genesis_shares, start_sentinel_genesis,
     };
 
@@ -157,17 +157,14 @@ mod tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: Some(OAuthFileConfigData {
-                    preset: "google-drive".to_owned(),
+                    preset: OauthFilePreset::GoogleDrive,
                     access_token: "member-secret-token".to_owned(),
                     file_name: Some("nook-events".to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
                 local_folder: None,
                 store_id: Some(store_id.to_owned()),
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
+                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-07-12T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: Some(store_id.to_owned()),

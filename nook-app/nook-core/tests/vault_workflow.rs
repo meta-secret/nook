@@ -9,11 +9,15 @@ use nook_core::{
     validate_secret_id,
 };
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 const TEST_PASSPHRASE: &str = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
 fn sid(label: &str) -> SecretId {
-    SecretId::parse(label).unwrap_or_else(|_| SecretId::from_vault_record(label))
+    let mut hasher = DefaultHasher::new();
+    label.hash(&mut hasher);
+    let token = URL_SAFE_NO_PAD.encode(hasher.finish().to_be_bytes());
+    SecretId::parse(&format!("secret_{token}")).expect("vault workflow test id should be valid")
 }
 
 fn api_key(value: &str) -> SecretValue {
@@ -138,7 +142,7 @@ fn passkey_round_trips_through_encrypted_vault_storage() {
         restored
             .list()
             .iter()
-            .find(|record| record.id.as_str() == "passkey-example")
+            .find(|record| record.id == sid("passkey-example"))
             .expect("vault workflow test setup should succeed")
             .data,
         expected
@@ -151,7 +155,7 @@ fn incremental_add_secret_matches_full_reencrypt() {
     let db = sample_db();
     let mut armored = armored_cache_from_db(&db, &crypto);
 
-    let label = validate_secret_id("  api.example.com  ")
+    let label = validate_secret_id("  secret_SMypl8K0w9Y  ")
         .expect("vault workflow test setup should succeed");
     validate_secret_data("generated-secret").expect("vault workflow test setup should succeed");
     armored.insert(
@@ -185,7 +189,7 @@ fn incremental_delete_secret() {
     let (restored, _) = load_vault(&yaml, &crypto);
 
     assert_eq!(restored.list().len(), 1);
-    assert_eq!(restored.list()[0].id.as_str(), "github.com");
+    assert_eq!(restored.list()[0].id, sid("github.com"));
 }
 
 #[test]
@@ -194,11 +198,12 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
 
-    let old_id = "github.com";
+    let old_secret_id = sid("github.com");
+    let old_id = old_secret_id.as_str().to_owned();
     let old_yaml = api_key_yaml("hunter2");
-    db.insert(sid(old_id), api_key("hunter2"));
+    db.insert(old_secret_id.clone(), api_key("hunter2"));
     state.secrets.insert(
-        sid(old_id),
+        old_secret_id.clone(),
         (
             SecretType::ApiKey,
             StoredRecordPayload::from_trusted(
@@ -211,15 +216,16 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
         ),
     );
 
-    let new_id = "github-updated.com";
+    let new_secret_id = sid("github-updated.com");
+    let new_id = new_secret_id.as_str().to_owned();
     let new_yaml = api_key_yaml("new-token");
     replace_secret(
         &mut db,
         &mut state,
         &crypto,
         &ReplaceSecretInput {
-            old_id,
-            new_id,
+            old_id: &old_id,
+            new_id: &new_id,
             secret_type: SecretType::ApiKey,
             data_yaml: &new_yaml,
         },
@@ -230,10 +236,10 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
     assert_eq!(db.list()[0].id.as_str(), new_id);
     assert_eq!(db.list()[0].data, api_key("new-token"));
 
-    assert!(!state.secrets.contains_key(&sid(old_id)));
-    assert!(state.secrets.contains_key(&sid(new_id)));
+    assert!(!state.secrets.contains_key(&old_secret_id));
+    assert!(state.secrets.contains_key(&new_secret_id));
     assert_eq!(
-        state.secrets.get(&sid(new_id)).map(|(t, _)| *t),
+        state.secrets.get(&new_secret_id).map(|(t, _)| *t),
         Some(SecretType::ApiKey)
     );
 
@@ -241,7 +247,7 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
         .decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
             state
                 .secrets
-                .get(&sid(new_id))
+                .get(&new_secret_id)
                 .expect("vault workflow test setup should succeed")
                 .1
                 .as_str()
@@ -256,14 +262,16 @@ fn incremental_replace_secret_rejects_missing_old_id() {
     let crypto = VaultCrypto::new(&test_key()).expect("vault workflow test setup should succeed");
     let mut db = Database::new();
     let mut state = VaultMetaState::default();
+    let missing_id = sid("missing").into_inner();
+    let new_id = sid("new-id").into_inner();
 
     let err = replace_secret(
         &mut db,
         &mut state,
         &crypto,
         &ReplaceSecretInput {
-            old_id: "missing",
-            new_id: "new-id",
+            old_id: &missing_id,
+            new_id: &new_id,
             secret_type: SecretType::ApiKey,
             data_yaml: &api_key_yaml("value"),
         },
@@ -306,14 +314,16 @@ fn incremental_replace_secret_rejects_duplicate_new_id() {
             ),
         ),
     );
+    let replace_id = sid("replace-me").into_inner();
+    let keep_id = sid("keep").into_inner();
 
     let err = replace_secret(
         &mut db,
         &mut state,
         &crypto,
         &ReplaceSecretInput {
-            old_id: "replace-me",
-            new_id: "keep",
+            old_id: &replace_id,
+            new_id: &keep_id,
             secret_type: SecretType::ApiKey,
             data_yaml: &api_key_yaml("c"),
         },
@@ -348,7 +358,7 @@ fn incremental_update_secret_replaces_armored_entry() {
         restored
             .list()
             .iter()
-            .find(|r| r.id.as_str() == "github.com")
+            .find(|r| r.id == sid("github.com"))
             .expect("vault workflow test setup should succeed")
             .data,
         api_key("new-password")
@@ -398,8 +408,11 @@ fn filter_secrets_on_loaded_vault() {
     let (db, _) = load_vault(&yaml, &crypto);
     let records = db.list();
 
-    assert_eq!(filter_secrets(&records, "hub").len(), 1);
-    assert_eq!(filter_secrets(&records, "vpn").len(), 1);
+    assert_eq!(
+        filter_secrets(&records, sid("github.com").as_str()).len(),
+        1
+    );
+    assert_eq!(filter_secrets(&records, sid("work-vpn").as_str()).len(), 1);
     assert!(filter_secrets(&records, "missing").is_empty());
     assert_eq!(filter_secrets(&records, ""), records);
 }
@@ -421,8 +434,11 @@ fn yaml_vault_survives_add_delete_add_cycle() {
     let (final_db, _) = load_vault(&final_yaml, &crypto);
 
     let records = final_db.list();
-    let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
-    assert_eq!(keys, vec!["github.com", "prod"]);
+    let keys: Vec<String> = records.iter().map(|r| r.id.as_str().to_owned()).collect();
+    assert_eq!(
+        keys,
+        vec![sid("github.com").into_inner(), sid("prod").into_inner()]
+    );
 }
 
 #[test]
@@ -435,8 +451,8 @@ fn stored_records_from_armored_matches_serialize_order() {
         .collect();
     let records = Database::stored_records_from_armored(&armored, &secret_types);
 
-    assert_eq!(records[0].key.as_str(), "github.com");
-    assert_eq!(records[1].key.as_str(), "work-vpn");
+    assert_eq!(records[0].key, sid("github.com"));
+    assert_eq!(records[1].key, sid("work-vpn"));
     assert!(
         records[0]
             .value

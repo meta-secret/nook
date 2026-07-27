@@ -26,8 +26,10 @@ fn is_sentinel_ceremony_required(err: &NookError) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use crate::manager::VaultNameState;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -39,7 +41,7 @@ mod tests {
         manager.sync_outbox.storage_mode = nook_core::StorageMode::GoogleDrive;
         manager.sync_outbox.access_token = "rejected-token".to_owned();
         manager.sync_outbox.repo_arg = "rejected-file".to_owned();
-        manager.vault.vault_name = Some("Local vault".to_owned());
+        manager.vault.vault_name = VaultNameState::Named("Local vault".to_owned());
 
         manager
             .restore_local_after_provider_assessment()
@@ -55,14 +57,17 @@ mod tests {
         );
         assert!(manager.sync_outbox.access_token.is_empty());
         assert!(manager.sync_outbox.repo_arg.is_empty());
-        assert_eq!(manager.vault.vault_name.as_deref(), Some("Local vault"));
+        assert!(matches!(
+            &manager.vault.vault_name,
+            VaultNameState::Named(name) if name == "Local vault"
+        ));
     }
 
     #[wasm_bindgen_test]
     async fn remote_store_discovery_drops_stale_vault_session_state() {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_stale12345".to_owned();
-        manager.vault.vault_name = Some("Stale vault".to_owned());
+        manager.vault.vault_name = VaultNameState::Named("Stale vault".to_owned());
 
         let discovered = manager
             .discover_remote_vault_store_id("local".to_owned(), String::new(), String::new())
@@ -71,7 +76,7 @@ mod tests {
 
         assert!(discovered.is_empty());
         assert!(manager.vault.store_id.is_empty());
-        assert!(manager.vault.vault_name.is_none());
+        assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
     }
 }
 
@@ -358,8 +363,18 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
-        if let Some(message) = nook_core::explain_connect_blocked(&records, identity) {
-            return Err(NookError::Database(message));
+        match nook_core::assess_connect_access(&records, identity) {
+            nook_core::ConnectAccessStatus::Ready => {}
+            nook_core::ConnectAccessStatus::JoinPending => {
+                return Err(NookError::Database(
+                    "Join request pending. An enrolled device must approve before you can connect. After approval, click Connect vault again.".to_owned(),
+                ));
+            }
+            nook_core::ConnectAccessStatus::NeedsEnrollment => {
+                return Err(NookError::Database(
+                    "This device is not enrolled yet. Request access from an enrolled device, then connect again.".to_owned(),
+                ));
+            }
         }
         let projection = self.serialize_current_projection_yaml()?;
         match self.load_stored_vault_or_sentinel_ceremony(&projection, identity) {

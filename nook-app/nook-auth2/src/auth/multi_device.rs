@@ -978,17 +978,26 @@ pub fn enroll_device_with_dec(
 }
 
 /// If this device holds `members_key` but has no roster row, add itself (fallback when approver missed it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SelfRosterSync {
+    Current,
+    Updated(Vec<StoredSecretRecord>),
+}
+
 pub fn ensure_self_in_roster(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
     members_key: &SymmetricKey,
-) -> MultiDeviceResult<Option<Vec<StoredSecretRecord>>> {
+) -> MultiDeviceResult<SelfRosterSync> {
     let roster = resolve_member_roster(records, members_key)?;
     if roster.iter().any(|m| m.auth_id == identity.auth_id()) {
-        return Ok(None);
+        return Ok(SelfRosterSync::Current);
     }
     let updated = roster_add_member(roster, member_from_identity(identity, "self-sync"));
-    Ok(Some(build_members_records(&updated, members_key)?))
+    Ok(SelfRosterSync::Updated(build_members_records(
+        &updated,
+        members_key,
+    )?))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1044,23 +1053,6 @@ pub fn pending_join_for_device(
     list_join_requests(records)
         .into_iter()
         .find(|join| join.device_id == *device_id)
-}
-
-/// User-facing hint when `connect` cannot decrypt because this device has no auth row yet.
-#[must_use]
-pub fn explain_connect_blocked(
-    records: &[StoredSecretRecord],
-    identity: &DeviceIdentity,
-) -> Option<String> {
-    match assess_connect_access(records, identity) {
-        ConnectAccessStatus::Ready => None,
-        ConnectAccessStatus::JoinPending => Some(
-            "Join request pending. An enrolled device must approve before you can connect. After approval, click Connect vault again.".to_owned(),
-        ),
-        ConnectAccessStatus::NeedsEnrollment => Some(
-            "This device is not enrolled yet. Request access from an enrolled device, then connect again.".to_owned(),
-        ),
-    }
 }
 
 fn resolve_auth_envelopes(
@@ -1847,17 +1839,6 @@ mod tests {
             assess_connect_access(&records, &stranger),
             ConnectAccessStatus::NeedsEnrollment
         );
-        assert!(explain_connect_blocked(&records, &genesis).is_none());
-        assert!(
-            explain_connect_blocked(&records, &pending)
-                .expect("multi device test setup should succeed")
-                .contains("Join request pending")
-        );
-        assert!(
-            explain_connect_blocked(&records, &stranger)
-                .expect("multi device test setup should succeed")
-                .contains("not enrolled")
-        );
     }
 
     #[test]
@@ -1931,13 +1912,13 @@ mod tests {
             .filter(|record| record.key.as_str() != member_stored_key(&joiner.auth_id()))
             .cloned()
             .collect::<Vec<_>>();
-        let repaired = ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key)
-            .expect("multi device test setup should succeed");
-        assert!(repaired.is_some());
-        replace_member_records(
-            &mut missing_joiner_roster,
-            repaired.expect("multi device test setup should succeed"),
-        );
+        let SelfRosterSync::Updated(repaired) =
+            ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key)
+                .expect("multi device test setup should succeed")
+        else {
+            panic!("missing roster member should produce an update");
+        };
+        replace_member_records(&mut missing_joiner_roster, repaired);
 
         let roster = resolve_member_roster(&missing_joiner_roster, &keys.members_key)
             .expect("multi device test setup should succeed");
@@ -1947,10 +1928,10 @@ mod tests {
                 .iter()
                 .any(|member| member.auth_id == joiner.auth_id())
         );
-        assert!(
+        assert_eq!(
             ensure_self_in_roster(&missing_joiner_roster, &joiner, &keys.members_key)
-                .expect("multi device test setup should succeed")
-                .is_none()
+                .expect("multi device test setup should succeed"),
+            SelfRosterSync::Current
         );
     }
 

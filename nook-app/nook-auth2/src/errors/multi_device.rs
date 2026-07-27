@@ -27,6 +27,9 @@ pub enum MultiDeviceError {
     #[error("Invalid device identity: {0}")]
     InvalidDeviceIdentity(String),
 
+    #[error("Provider credential is not age-encrypted.")]
+    UnsealedProviderCredential,
+
     #[error("Invalid join request JSON")]
     JoinRequestJson(#[source] serde_json::Error),
 

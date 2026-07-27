@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 
-use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
+use crate::model::{
+    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+};
 
 #[async_trait]
 pub trait TaskStore: Clone + Send + Sync + 'static {
@@ -10,11 +12,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()>;
 
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> anyhow::Result<Option<ClaimedTask>>;
+    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome>;
 
     async fn heartbeat(
         &self,
@@ -31,7 +29,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
-        artifact: Option<&Artifact>,
+        artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool>;
 
     async fn fail(
@@ -61,7 +59,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, Artifact, AttemptId, ClaimedTask, EnqueueTask, LeaseToken, TaskId,
+        AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken,
+        TaskId,
     };
 
     #[derive(Debug, Clone)]
@@ -125,7 +124,7 @@ mod tests {
             &self,
             _agent_id: &AgentId,
             lease_seconds: i64,
-        ) -> anyhow::Result<Option<ClaimedTask>> {
+        ) -> anyhow::Result<ClaimOutcome> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let completed = tasks
                 .iter()
@@ -144,7 +143,7 @@ mod tests {
                         .iter()
                         .all(|dependency| completed.contains(&dependency.as_str().to_owned()))
             }) else {
-                return Ok(None);
+                return Ok(ClaimOutcome::NoTask);
             };
             task.status = "RUNNING";
             task.attempt_count += 1;
@@ -153,7 +152,7 @@ mod tests {
             task.lease_token = Some(lease_token.clone());
             task.lease_until =
                 Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
-            Ok(Some(ClaimedTask {
+            Ok(ClaimOutcome::Claimed(ClaimedTask {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
@@ -190,7 +189,7 @@ mod tests {
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
             _summary: &str,
-            _artifact: Option<&Artifact>,
+            _artifact: &CompletionArtifact,
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
@@ -316,13 +315,14 @@ mod tests {
         let (claim_a, claim_b) =
             tokio::join!(store.claim(&agent_a, 300), store.claim(&agent_b, 300));
 
-        let claims = [
+        let claims = match (
             claim_a.expect("store test setup should succeed"),
             claim_b.expect("store test setup should succeed"),
-        ]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+        ) {
+            (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask)
+            | (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => vec![claim],
+            _ => Vec::new(),
+        };
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0].attempt_number, 1);
     }
@@ -345,6 +345,7 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         assert_eq!(first.id, dependency.id);
         assert!(
@@ -352,7 +353,7 @@ mod tests {
                 .claim(&agent, 300)
                 .await
                 .expect("store test setup should succeed")
-                .is_none()
+                .is_idle()
         );
     }
 
@@ -369,6 +370,7 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         assert!(
             store
@@ -380,6 +382,7 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
 
         assert_eq!(replacement.attempt_number, 1);
@@ -397,6 +400,7 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         let mut blocker = task("blocker", Vec::new());
         blocker.priority = 100;
@@ -411,11 +415,17 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
-                .complete(&blocker_claim, &agent, "blocker fixed", None)
+                .complete(
+                    &blocker_claim,
+                    &agent,
+                    "blocker fixed",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("store test setup should succeed")
         );
@@ -423,6 +433,7 @@ mod tests {
             .claim(&agent, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         assert_eq!(resumed.id, original.id);
         assert_eq!(resumed.attempt_number, 1);
@@ -442,12 +453,14 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
         store.expire(&definition.id);
         let current = store
             .claim(&agent_b, 300)
             .await
             .expect("store test setup should succeed")
+            .into_claimed()
             .expect("store test setup should succeed");
 
         assert_ne!(stale.lease_token, current.lease_token);
@@ -460,13 +473,13 @@ mod tests {
         );
         assert!(
             !store
-                .complete(&stale, &agent_a, "late", None)
+                .complete(&stale, &agent_a, "late", &CompletionArtifact::NotProduced)
                 .await
                 .expect("store test setup should succeed")
         );
         assert!(
             store
-                .complete(&current, &agent_b, "done", None)
+                .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
                 .await
                 .expect("store test setup should succeed")
         );

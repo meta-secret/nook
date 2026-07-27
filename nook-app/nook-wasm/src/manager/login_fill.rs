@@ -15,11 +15,7 @@ impl NookVaultManager {
         &self,
         origin: &str,
     ) -> Result<Vec<NookLoginAccount>, NookError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut accounts = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
             if *secret_type != nook_core::SecretType::Login {
@@ -43,11 +39,7 @@ impl NookVaultManager {
         origin: &str,
     ) -> Result<NookLoginFillCredential, NookError> {
         let id = nook_core::SecretId::parse(secret_id)?;
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let credential = match &record.data {

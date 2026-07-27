@@ -37,7 +37,7 @@ pub enum CodexAccess {
 #[derive(Debug, Clone)]
 pub struct CodexOptions {
     pub repo_root: PathBuf,
-    pub model: Option<String>,
+    pub model: String,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
@@ -48,7 +48,7 @@ impl CodexOptions {
     pub fn new(repo_root: PathBuf) -> Self {
         Self {
             repo_root,
-            model: Some(DEFAULT_CODEX_MODEL.to_owned()),
+            model: DEFAULT_CODEX_MODEL.to_owned(),
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
@@ -227,7 +227,7 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
         config_layer_stack: ConfigLayerStack::default(),
         startup_warnings: Vec::new(),
         bypass_hook_trust: false,
-        model: options.model.clone(),
+        model: Some(options.model.clone()),
         service_tier: None,
         review_model: None,
         model_context_window: None,
@@ -944,7 +944,7 @@ mod tests {
         let repository = tempfile::tempdir().expect("codex test setup should succeed");
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
-            model: Some("test-model".into()),
+            model: "test-model".into(),
             reasoning_effort: "low".into(),
             arg0_paths: Arg0DispatchPaths {
                 codex_self_exe: Some(PathBuf::from("/bin/meta-agent")),
@@ -985,7 +985,7 @@ mod tests {
         let repository = tempfile::tempdir().expect("codex test setup should succeed");
         let options = CodexOptions::new(repository.path().to_owned());
 
-        assert_eq!(options.model.as_deref(), Some(DEFAULT_CODEX_MODEL));
+        assert_eq!(options.model, DEFAULT_CODEX_MODEL);
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
     }
 

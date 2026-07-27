@@ -839,7 +839,8 @@ mod tests {
             "FROM scratch\nRUN --mount=type=cache,target=/generated-cache true\n",
         )
         .expect("lib test setup should succeed");
-        fs::write(root.join("notes.txt"), "--mount=type=cache").expect("lib test setup should succeed");
+        fs::write(root.join("notes.txt"), "--mount=type=cache")
+            .expect("lib test setup should succeed");
 
         let violations = dockerfile_cache_mounts(&root).expect("lib test setup should succeed");
 
@@ -866,7 +867,8 @@ mod tests {
     #[test]
     fn fails_when_repository_root_contains_no_dockerfiles() {
         let root = temporary_directory();
-        let error = dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
+        let error =
+            dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
         fs::remove_dir_all(root).expect("lib test setup should succeed");
     }

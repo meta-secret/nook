@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::install_rustls_crypto_provider;
 use crate::model::{
-    AgentId, Artifact, AttemptId, ClaimedTask, DependencyResult, EnqueueTask, LeaseToken, TaskId,
+    AgentId, Artifact, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, DependencyResult,
+    EnqueueTask, LeaseToken, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -405,11 +406,7 @@ impl TaskStore for Neo4jTaskStore {
         Ok(())
     }
 
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> anyhow::Result<Option<ClaimedTask>> {
+    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
                 let attempt_id =
@@ -476,7 +473,7 @@ impl TaskStore for Neo4jTaskStore {
                     .await?;
                 let Some(candidate) = candidates.next(transaction.handle()).await? else {
                     transaction.commit().await?;
-                    return Ok(None);
+                    return Ok(ClaimOutcome::NoTask);
                 };
                 let task_id: String = candidate.get("id")?;
 
@@ -563,11 +560,11 @@ impl TaskStore for Neo4jTaskStore {
                     .await?;
                 let Some(row) = rows.next(transaction.handle()).await? else {
                     transaction.rollback().await?;
-                    return Ok(None);
+                    return Ok(ClaimOutcome::NoTask);
                 };
                 let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
                 transaction.commit().await?;
-                Ok(Some(claimed))
+                Ok(ClaimOutcome::Claimed(claimed))
             }
             .await;
 
@@ -656,7 +653,7 @@ impl TaskStore for Neo4jTaskStore {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
-        artifact: Option<&Artifact>,
+        artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool> {
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
@@ -695,7 +692,7 @@ impl TaskStore for Neo4jTaskStore {
             return Ok(false);
         }
 
-        if let Some(artifact) = artifact {
+        if let CompletionArtifact::Produced(artifact) = artifact {
             transaction
                 .run(
                     query(
@@ -906,7 +903,7 @@ mod tests {
     use super::{
         CLAIM_RETRY_LIMIT, Neo4jTaskStore, is_transient_claim_error, transient_claim_retry_delay,
     };
-    use crate::model::{AgentId, Artifact, EnqueueTask, TaskId};
+    use crate::model::{AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskId};
     use crate::store::TaskStore;
 
     fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
@@ -990,6 +987,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim dependency")
+            .into_claimed()
             .expect("dependency available");
         assert_eq!(dependency_claim.id, dependency.id);
         assert!(
@@ -997,7 +995,7 @@ mod tests {
                 .claim(&agent_b, 300)
                 .await
                 .expect("blocked claim")
-                .is_none(),
+                .is_idle(),
             "dependent task must remain blocked"
         );
         let artifact = Artifact {
@@ -1013,7 +1011,7 @@ mod tests {
                     &dependency_claim,
                     &agent_a,
                     "dependency complete",
-                    Some(&artifact),
+                    &CompletionArtifact::Produced(artifact.clone()),
                 )
                 .await
                 .expect("complete dependency")
@@ -1052,8 +1050,8 @@ mod tests {
         let claim_b = claim_b_result.expect("agent b claim");
         let claim_c = claim_c_result.expect("agent c claim");
         let (stale_claim, stale_agent, retry_agent) = match (claim_b, claim_c) {
-            (Some(claim), None) => (claim, &agent_b, &agent_c),
-            (None, Some(claim)) => (claim, &agent_c, &agent_b),
+            (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask) => (claim, &agent_b, &agent_c),
+            (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => (claim, &agent_c, &agent_b),
             _ => panic!("only one worker may win a claim"),
         };
         assert_eq!(
@@ -1077,6 +1075,7 @@ mod tests {
             .claim(retry_agent, 300)
             .await
             .expect("retry claim")
+            .into_claimed()
             .expect("expired task is claimable");
         assert_eq!(retry_claim.attempt_number, 2);
         assert!(
@@ -1087,7 +1086,12 @@ mod tests {
         );
         assert!(
             !store
-                .complete(&stale_claim, stale_agent, "stale completion", None)
+                .complete(
+                    &stale_claim,
+                    stale_agent,
+                    "stale completion",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("stale completion")
         );
@@ -1104,7 +1108,7 @@ mod tests {
                     &retry_claim,
                     retry_agent,
                     "retry complete",
-                    Some(&dependent_artifact),
+                    &CompletionArtifact::Produced(dependent_artifact.clone()),
                 )
                 .await
                 .expect("current completion")
@@ -1118,6 +1122,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim descendant")
+            .into_claimed()
             .expect("descendant available");
         assert_eq!(
             descendant_claim.dependency_artifacts,
@@ -1126,7 +1131,12 @@ mod tests {
         );
         assert!(
             store
-                .complete(&descendant_claim, &agent_a, "descendant complete", None)
+                .complete(
+                    &descendant_claim,
+                    &agent_a,
+                    "descendant complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete descendant")
         );
@@ -1143,6 +1153,7 @@ mod tests {
                 .claim(&agent_a, 300)
                 .await
                 .expect("claim branch")
+                .into_claimed()
                 .expect("branch available");
             assert_eq!(claim.id, branch.id);
             let branch_artifact = Artifact {
@@ -1154,7 +1165,12 @@ mod tests {
             };
             assert!(
                 store
-                    .complete(&claim, &agent_a, "branch complete", Some(&branch_artifact))
+                    .complete(
+                        &claim,
+                        &agent_a,
+                        "branch complete",
+                        &CompletionArtifact::Produced(branch_artifact.clone())
+                    )
                     .await
                     .expect("complete branch")
             );
@@ -1168,6 +1184,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim diamond")
+            .into_claimed()
             .expect("diamond available");
         assert_eq!(
             diamond_claim
@@ -1180,7 +1197,12 @@ mod tests {
         );
         assert!(
             store
-                .complete(&diamond_claim, &agent_a, "diamond complete", None)
+                .complete(
+                    &diamond_claim,
+                    &agent_a,
+                    "diamond complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete diamond")
         );
@@ -1209,6 +1231,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim rollout task")
+            .into_claimed()
             .expect("rollout task available");
         assert!(
             store
@@ -1220,11 +1243,17 @@ mod tests {
             .claim(&agent_b, 300)
             .await
             .expect("reclaim rollout task")
+            .into_claimed()
             .expect("released task available");
         assert_eq!(resumed.attempt_number, 1);
         assert!(
             store
-                .complete(&resumed, &agent_b, "rollout recovery complete", None)
+                .complete(
+                    &resumed,
+                    &agent_b,
+                    "rollout recovery complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete released task")
         );
@@ -1254,6 +1283,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim original")
+            .into_claimed()
             .expect("original available");
         assert!(
             store
@@ -1270,11 +1300,17 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim blocker")
+            .into_claimed()
             .expect("blocker available");
         assert_eq!(blocker_claim.id, blocker.id);
         assert!(
             store
-                .complete(&blocker_claim, &agent_a, "blocker complete", None)
+                .complete(
+                    &blocker_claim,
+                    &agent_a,
+                    "blocker complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete blocker")
         );
@@ -1282,12 +1318,18 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("resume original")
+            .into_claimed()
             .expect("original resumed");
         assert_eq!(resumed_original.id, original.id);
         assert_eq!(resumed_original.attempt_number, 1);
         assert!(
             store
-                .complete(&resumed_original, &agent_a, "original complete", None)
+                .complete(
+                    &resumed_original,
+                    &agent_a,
+                    "original complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete resumed original")
         );
@@ -1301,6 +1343,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim reused original")
+            .into_claimed()
             .expect("reused original available");
         assert!(
             store
@@ -1317,6 +1360,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("resume task with completed blocker")
+            .into_claimed()
             .expect("task with completed blocker is ready");
         assert_eq!(resumed_reused.id, reused.id);
         assert_eq!(resumed_reused.attempt_number, 1);
@@ -1326,7 +1370,7 @@ mod tests {
                     &resumed_reused,
                     &agent_a,
                     "completed reused-blocker task",
-                    None,
+                    &CompletionArtifact::NotProduced,
                 )
                 .await
                 .expect("complete reused-blocker task")
@@ -1349,6 +1393,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim cycle root")
+            .into_claimed()
             .expect("cycle root available");
         let mut existing_dependent = cycle_dependent.clone();
         existing_dependent.dependencies.clear();
@@ -1365,7 +1410,12 @@ mod tests {
         );
         assert!(
             store
-                .complete(&cycle_claim, &agent_a, "cycle root complete", None)
+                .complete(
+                    &cycle_claim,
+                    &agent_a,
+                    "cycle root complete",
+                    &CompletionArtifact::NotProduced
+                )
                 .await
                 .expect("complete cycle root")
         );
@@ -1373,6 +1423,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim cycle dependent")
+            .into_claimed()
             .expect("cycle dependent available");
         assert!(
             store
@@ -1380,7 +1431,7 @@ mod tests {
                     &cycle_dependent_claim,
                     &agent_a,
                     "cycle dependent complete",
-                    None,
+                    &CompletionArtifact::NotProduced,
                 )
                 .await
                 .expect("complete cycle dependent")
@@ -1404,6 +1455,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim exhausted task")
+            .into_claimed()
             .expect("exhausted task available");
         assert!(
             store
@@ -1545,6 +1597,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim parent that discovers an exhausted blocker")
+            .into_claimed()
             .expect("parent available");
         assert!(
             store
@@ -1633,6 +1686,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim expired blocker parent")
+            .into_claimed()
             .expect("expired blocker parent available");
         store
             .graph
@@ -1689,6 +1743,7 @@ mod tests {
             .claim(&agent_a, 300)
             .await
             .expect("claim final-lease task")
+            .into_claimed()
             .expect("final-lease task available");
         assert_eq!(lease_claim.id, lease_exhausted.id);
         store
@@ -1707,7 +1762,7 @@ mod tests {
                 .claim(&agent_b, 300)
                 .await
                 .expect("final lease expiry transition")
-                .is_none()
+                .is_idle()
         );
         let mut lease_failed_rows = store
             .graph

@@ -77,9 +77,9 @@ mod tests {
             &shares,
             &VaultUnlock::Keys,
             &[],
-            Some(store_id.as_str()),
-            None,
-            None,
+            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            crate::VaultNameRef::Unnamed,
+            crate::VaultVersionWrite::Initial,
             &architecture,
         )?;
 

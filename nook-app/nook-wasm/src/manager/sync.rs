@@ -40,7 +40,7 @@ impl NookVaultManager {
             self.event_log.enabled = true;
             let event_changed = self.sync_event_log_from_storage().await.unwrap_or(false);
             let changed = event_changed;
-            if self.vault.crypto.is_some() {
+            if self.vault.crypto.is_unlocked() {
                 if changed {
                     self.persist_projection_cache().await?;
                 }

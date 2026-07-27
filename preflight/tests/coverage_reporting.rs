@@ -70,7 +70,8 @@ fn reports_coverage_from_structured_json() {
     write_coverage_directory(&current, 92.625, 90.0);
     write_coverage_directory(&base, 91.125, 90.0);
 
-    let report = coverage_report(&current, &base).expect("coverage reporting test setup should succeed");
+    let report =
+        coverage_report(&current, &base).expect("coverage reporting test setup should succeed");
 
     assert_close(report.current, 92.625);
     assert_close(report.base, 91.125);
@@ -100,9 +101,11 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() {
     let base = root.join("base");
     write_coverage_directory(&current, 92.0, 90.0);
     write_coverage_directory(&base, 91.0, 90.0);
-    fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n").expect("coverage reporting test setup should succeed");
+    fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n")
+        .expect("coverage reporting test setup should succeed");
 
-    let error = coverage_report(&current, &base).expect_err("coverage reporting test should reject invalid input");
+    let error = coverage_report(&current, &base)
+        .expect_err("coverage reporting test should reject invalid input");
 
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("summary.json"));
@@ -166,8 +169,10 @@ fn write_coverage_directory(directory: &Path, percent: f64, floor: f64) {
         .to_string(),
     )
     .expect("coverage reporting test setup should succeed");
-    fs::write(directory.join("summary.txt"), "summary").expect("coverage reporting test setup should succeed");
-    fs::write(directory.join("lcov.info"), "lcov").expect("coverage reporting test setup should succeed");
+    fs::write(directory.join("summary.txt"), "summary")
+        .expect("coverage reporting test setup should succeed");
+    fs::write(directory.join("lcov.info"), "lcov")
+        .expect("coverage reporting test setup should succeed");
     fs::write(
         directory.join("coverage-floor.json"),
         format!(r#"{{"lines_percent":{floor}}}"#),

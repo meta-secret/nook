@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
   NookVaultClientPolicy,
+  NookVaultSwitchState,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   activeVaultProviders,
@@ -54,17 +55,29 @@ describe('portable vault client policy', () => {
       expect(
         policy.unauthenticatedSyncDecision(
           true,
+          true,
           VaultAccessStatus.Ready,
           JoinEnrollmentState.Pending,
           false,
         ),
       ).toBe(UnauthenticatedSyncDecision.Approved)
-      expect(policy.vaultSwitchTarget(' store-b ', 'store-a', false)).toBe(
-        'store-b',
+      const switchVault = policy.vaultSwitchTarget(
+        ' store-b ',
+        true,
+        'store-a',
+        false,
       )
-      expect(policy.vaultSwitchTarget('store-a', 'store-a', false)).toBe(
-        undefined,
+      expect(switchVault.state).toBe(NookVaultSwitchState.Switch)
+      expect(switchVault.target()).toBe('store-b')
+      switchVault.free()
+      const noSwitch = policy.vaultSwitchTarget(
+        'store-a',
+        true,
+        'store-a',
+        false,
       )
+      expect(noSwitch.state).toBe(NookVaultSwitchState.NoChange)
+      noSwitch.free()
     } finally {
       policy.free()
     }

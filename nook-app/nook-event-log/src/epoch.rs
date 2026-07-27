@@ -28,6 +28,12 @@ pub enum EpochRotationReason {
     DeviceRevoked,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpochTransition {
+    Unchanged,
+    Rotated(EpochRotationReason),
+}
+
 impl EpochRotationReason {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -50,12 +56,20 @@ pub struct EpochRecord {
 
 /// Detect whether an operation starts a new key epoch.
 #[must_use]
-pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotationReason> {
+pub fn operation_starts_epoch(operation: &VaultOperation) -> EpochTransition {
     match operation {
-        VaultOperation::VaultImported { .. } => Some(EpochRotationReason::Genesis),
-        VaultOperation::PasswordRotated { .. } => Some(EpochRotationReason::PasswordRotated),
-        VaultOperation::PasswordRemoved { .. } => Some(EpochRotationReason::PasswordRemoved),
-        VaultOperation::DeviceRevoked { .. } => Some(EpochRotationReason::DeviceRevoked),
+        VaultOperation::VaultImported { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::Genesis)
+        }
+        VaultOperation::PasswordRotated { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
+        }
+        VaultOperation::PasswordRemoved { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::PasswordRemoved)
+        }
+        VaultOperation::DeviceRevoked { .. } => {
+            EpochTransition::Rotated(EpochRotationReason::DeviceRevoked)
+        }
         VaultOperation::EpochCheckpoint { .. }
         | VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretDeleted { .. }
@@ -69,7 +83,7 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotatio
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }
-        | VaultOperation::VaultCleared => None,
+        | VaultOperation::VaultCleared => EpochTransition::Unchanged,
     }
 }
 
@@ -132,7 +146,7 @@ mod tests {
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }),
-            Some(EpochRotationReason::Genesis)
+            EpochTransition::Rotated(EpochRotationReason::Genesis)
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::PasswordRotated {
@@ -144,7 +158,7 @@ mod tests {
                     ciphertext: "c".to_owned()
                 },
             }),
-            Some(EpochRotationReason::PasswordRotated)
+            EpochTransition::Rotated(EpochRotationReason::PasswordRotated)
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SecretCreated {
@@ -158,7 +172,7 @@ mod tests {
                     fingerprint: crate::SecretFingerprint::from_trusted("test-version".to_owned(),),
                 },
             }),
-            None
+            EpochTransition::Unchanged
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelParticipantEnrolled {
@@ -170,11 +184,11 @@ mod tests {
                 signing_public_key: crate::DeviceSigningPublicKey::from_trusted("a".repeat(64)),
                 label: crate::MemberLabel::from_trusted("Phone".to_owned()),
             }),
-            None
+            EpochTransition::Unchanged
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SentinelSharesIssued { shares: Vec::new() }),
-            None
+            EpochTransition::Unchanged
         );
     }
 }

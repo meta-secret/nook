@@ -234,8 +234,14 @@ fn genesis_yaml(
         &keys.members_key,
     )?];
     records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
-    serialize_stored_yaml_with_unlock(&records, &VaultUnlock::Keys, &[], Some(store_id), None)
-        .map_err(Into::into)
+    serialize_stored_yaml_with_unlock(
+        &records,
+        &VaultUnlock::Keys,
+        &[],
+        nook_core::VaultStoreIdentityRef::Assigned(store_id),
+        nook_core::VaultVersionWrite::Initial,
+    )
+    .map_err(Into::into)
 }
 
 /// Remote provider bucket keyed by provider id.

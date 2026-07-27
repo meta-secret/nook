@@ -145,14 +145,20 @@ impl VaultUnlock {
         }
     }
 
-    #[must_use]
-    pub fn password_entry(&self, id: &str) -> Option<&PasswordUnlockEntry> {
-        self.password_entries().iter().find(|entry| entry.id == id)
+    pub fn password_entry(&self, id: &str) -> PasswordResult<&PasswordUnlockEntry> {
+        self.password_entries()
+            .iter()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| PasswordError::EntryNotFound {
+                entry_id: id.to_owned(),
+            })
     }
 
-    #[must_use]
-    pub fn password_envelope(&self) -> Option<&PasswordEnvelope> {
-        self.password_entries().first().map(|entry| &entry.envelope)
+    pub fn password_envelope(&self) -> PasswordResult<&PasswordEnvelope> {
+        self.password_entries()
+            .first()
+            .map(|entry| &entry.envelope)
+            .ok_or(PasswordError::EnvelopeNotFound)
     }
 }
 
@@ -459,7 +465,10 @@ mod tests {
             serde_yaml::from_str(&yaml).expect("password envelope test setup should succeed");
         assert_eq!(parsed, VaultUnlock::Keys);
         assert!(!parsed.is_password());
-        assert!(parsed.password_envelope().is_none());
+        assert!(matches!(
+            parsed.password_envelope(),
+            Err(PasswordError::EnvelopeNotFound)
+        ));
     }
 
     #[test]
@@ -485,8 +494,12 @@ mod tests {
         assert!(parsed.is_password());
         assert_eq!(parsed.password_entries().len(), 1);
         assert_eq!(
-            parsed.password_envelope().map(|e| e.ciphertext.trim()),
-            Some(envelope.ciphertext.trim()),
+            parsed
+                .password_envelope()
+                .expect("password envelope test setup should succeed")
+                .ciphertext
+                .trim(),
+            envelope.ciphertext.trim(),
         );
     }
 }

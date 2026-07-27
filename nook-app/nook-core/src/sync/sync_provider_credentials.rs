@@ -3,7 +3,8 @@
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey,
-    encrypt_for_recipient, errors::MultiDeviceResult,
+    encrypt_for_recipient,
+    errors::{MultiDeviceError, MultiDeviceResult},
 };
 
 /// Marker substring present in every age-armored credential ciphertext.
@@ -86,11 +87,7 @@ pub fn seal_provider_credentials_for_public_key(
     Ok(())
 }
 
-fn open_optional(
-    identity: &DeviceIdentity,
-    field: &mut Option<String>,
-    had_plaintext: &mut bool,
-) -> MultiDeviceResult<()> {
+fn open_optional(identity: &DeviceIdentity, field: &mut Option<String>) -> MultiDeviceResult<()> {
     let Some(text) = field.clone() else {
         return Ok(());
     };
@@ -100,42 +97,39 @@ fn open_optional(
     if is_sealed_credential(&text) {
         *field = Some(identity.open_utf8(&AgeArmoredCiphertext::parse(&text)?)?);
     } else {
-        *had_plaintext = true;
+        return Err(MultiDeviceError::UnsealedProviderCredential);
     }
     Ok(())
 }
 
-fn open_required(
-    identity: &DeviceIdentity,
-    field: &mut String,
-    had_plaintext: &mut bool,
-) -> MultiDeviceResult<()> {
+fn open_required(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
     if field.is_empty() {
         return Ok(());
     }
     if is_sealed_credential(field) {
         *field = identity.open_utf8(&AgeArmoredCiphertext::parse(field)?)?;
     } else {
-        *had_plaintext = true;
+        return Err(MultiDeviceError::UnsealedProviderCredential);
     }
     Ok(())
 }
 
-/// Unseal credential fields in `snapshot` (in place). Returns `true` when any
-/// field was still plaintext (legacy rows that should be re-saved sealed).
+/// Unseal credential fields in `snapshot` (in place).
+///
+/// Plaintext stored credentials are rejected; only the current encrypted
+/// storage schema is accepted.
 pub fn open_provider_credentials(
     identity: &DeviceIdentity,
     snapshot: &mut AuthProvidersSnapshotData,
-) -> MultiDeviceResult<bool> {
-    let mut had_plaintext = false;
+) -> MultiDeviceResult<()> {
     for provider in &mut snapshot.providers {
-        open_optional(identity, &mut provider.github_pat, &mut had_plaintext)?;
+        open_optional(identity, &mut provider.github_pat)?;
         if let Some(oauth) = provider.oauth_file.as_mut() {
-            open_required(identity, &mut oauth.access_token, &mut had_plaintext)?;
-            open_optional(identity, &mut oauth.refresh_token, &mut had_plaintext)?;
+            open_required(identity, &mut oauth.access_token)?;
+            open_optional(identity, &mut oauth.refresh_token)?;
         }
     }
-    Ok(had_plaintext)
+    Ok(())
 }
 
 fn field_is_presealed(value: &str) -> bool {
@@ -166,7 +160,9 @@ pub fn provider_credentials_are_presealed(snapshot: &AuthProvidersSnapshotData) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DeviceIdentity, OAuthFileConfigData, StorageProviderData};
+    use crate::{
+        DeviceIdentity, ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
+    };
 
     fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
@@ -190,24 +186,21 @@ mod tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: Some(OAuthFileConfigData {
-                    preset: "google-drive".to_owned(),
+                    preset: OauthFilePreset::GoogleDrive,
                     access_token: access.to_owned(),
                     refresh_token: refresh.map(str::to_owned),
                     expires_at: None,
                     file_id: None,
                     folder_id: None,
-                    drive_mode: Some(crate::GoogleDriveMode::Private),
-                    icloud_mode: None,
+                    drive_mode: crate::GoogleDriveMode::Private,
+                    icloud_mode: ICloudMode::Private,
                     icloud_share_target: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),
                 local_folder: None,
                 store_id: None,
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
+                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,
@@ -230,10 +223,8 @@ mod tests {
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(
-            !open_provider_credentials(&identity, &mut opened)
-                .expect("sync provider credentials test setup should succeed")
-        );
+        open_provider_credentials(&identity, &mut opened)
+            .expect("sync provider credentials test setup should succeed");
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
     }
 
@@ -267,10 +258,8 @@ mod tests {
         );
 
         let mut opened = snapshot;
-        assert!(
-            !open_provider_credentials(&identity, &mut opened)
-                .expect("sync provider credentials test setup should succeed")
-        );
+        open_provider_credentials(&identity, &mut opened)
+            .expect("sync provider credentials test setup should succeed");
         let opened_oauth = opened.providers[0]
             .oauth_file
             .as_ref()
@@ -280,16 +269,15 @@ mod tests {
     }
 
     #[test]
-    fn open_reports_legacy_plaintext_without_decrypting() {
+    fn open_rejects_plaintext_credentials() {
         let identity = DeviceIdentity::generate()
             .expect("sync provider credentials test setup should succeed");
         let pat = "github_pat_11LEGACY";
         let mut snapshot = github_snapshot(pat);
-        assert!(
-            open_provider_credentials(&identity, &mut snapshot)
-                .expect("sync provider credentials test setup should succeed")
-        );
-        assert_eq!(snapshot.providers[0].github_pat.as_deref(), Some(pat));
+        assert!(matches!(
+            open_provider_credentials(&identity, &mut snapshot),
+            Err(MultiDeviceError::UnsealedProviderCredential)
+        ));
     }
 
     #[test]
@@ -333,10 +321,8 @@ mod tests {
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
-        assert!(
-            !open_provider_credentials(&extension, &mut opened)
-                .expect("sync provider credentials test setup should succeed")
-        );
+        open_provider_credentials(&extension, &mut opened)
+            .expect("sync provider credentials test setup should succeed");
         assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
     }
 

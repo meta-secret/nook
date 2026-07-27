@@ -20,8 +20,26 @@ pub struct TaskNodeSpecWrapper {
     pub depends_on: Vec<String>,
     #[serde(default = "default_retries")]
     pub retries: usize,
-    pub output: Option<String>,
-    pub error: Option<String>,
+    #[serde(default)]
+    pub output: TaskOutputReference,
+    #[serde(default)]
+    pub error: TaskErrorReference,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(untagged)]
+pub enum TaskOutputReference {
+    Named(String),
+    #[default]
+    Automatic,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(untagged)]
+pub enum TaskErrorReference {
+    Named(String),
+    #[default]
+    NotDeclared,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -99,10 +117,20 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
             let task_inner = &task_val["task"];
             let mut spec: TaskNodeSpecWrapper = serde_yaml::from_value(task_inner.clone())?;
             if let Some(out_val) = task_val.get("output") {
-                spec.output = out_val.as_str().map(|s| s.to_string());
+                spec.output = TaskOutputReference::Named(
+                    out_val
+                        .as_str()
+                        .ok_or("task output reference must be a string")?
+                        .to_owned(),
+                );
             }
             if let Some(err_val) = task_val.get("error") {
-                spec.error = err_val.as_str().map(|s| s.to_string());
+                spec.error = TaskErrorReference::Named(
+                    err_val
+                        .as_str()
+                        .ok_or("task error reference must be a string")?
+                        .to_owned(),
+                );
             }
             spec
         } else {
@@ -119,10 +147,10 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let description = &task_spec.attrs.description;
         let retries = task_spec.retries;
 
-        let output_key = task_spec
-            .output
-            .clone()
-            .unwrap_or_else(|| format!("{}_output", task_id));
+        let output_key = match &task_spec.output {
+            TaskOutputReference::Named(key) => key.clone(),
+            TaskOutputReference::Automatic => format!("{}_output", task_id),
+        };
 
         let output_spec: PayloadSpec = domain_map
             .get(&output_key)
@@ -132,15 +160,16 @@ pub fn generate_rust_code(yaml_content: &str) -> Result<String, Box<dyn std::err
         let output_ident = to_pascal_ident(&output_key);
         let output_tokens = generate_payload_tokens(&output_ident, &output_spec.attrs);
 
-        let error_tokens = if let Some(err_key) = &task_spec.error {
-            let err_spec: PayloadSpec = domain_map
-                .get(err_key)
-                .map(|v| serde_yaml::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
-            let err_ident = to_pascal_ident(err_key);
-            generate_payload_tokens(&err_ident, &err_spec.attrs)
-        } else {
-            quote! {}
+        let error_tokens = match &task_spec.error {
+            TaskErrorReference::Named(err_key) => {
+                let err_spec: PayloadSpec = domain_map
+                    .get(err_key)
+                    .map(|v| serde_yaml::from_value(v.clone()).unwrap_or_default())
+                    .unwrap_or_default();
+                let err_ident = to_pascal_ident(err_key);
+                generate_payload_tokens(&err_ident, &err_spec.attrs)
+            }
+            TaskErrorReference::NotDeclared => quote! {},
         };
 
         let retriable_impl = quote! {

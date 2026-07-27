@@ -1,11 +1,9 @@
 //! `nook_auth` `IndexedDB` persistence for sync-provider credentials.
 //!
-//! Owns the full non-network load pipeline (normalize → device-key unseal →
-//! legacy `localStorage` seed → field migration → re-persist) and seals
+//! Owns the full non-network load pipeline (normalize → device-key unseal) and seals
 //! credential fields (GitHub PAT, OAuth tokens) with this browser's age device
 //! identity so nothing sensitive is stored in plaintext. Pure snapshot
-//! transforms live in `nook_core`; this module adds the `IndexedDB` I/O, sealing,
-//! and browser storage access.
+//! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
 use nook_core::{
     AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
@@ -17,8 +15,6 @@ use crate::NookError;
 const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
 const STATE_KEY: &str = "providers";
-const LEGACY_STORAGE_MODE_KEY: &str = "nook_storage_mode";
-const LEGACY_GITHUB_PAT_KEY: &str = "nook_github_pat";
 
 fn idb_err(context: &str, error: impl std::fmt::Debug) -> NookError {
     NookError::IndexedDb(format!("{context}: {error:?}"))
@@ -86,64 +82,18 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
     Ok(())
 }
 
-fn legacy_local_storage() -> Option<web_sys::Storage> {
-    web_sys::window()?.local_storage().ok().flatten()
-}
-
-fn new_id() -> Result<String, NookError> {
-    Ok(nook_core::generate_id()?.to_string())
-}
-
-fn now_iso() -> String {
-    js_sys::Date::new_0().to_iso_string().into()
-}
-
-/// Full load pipeline: read, unseal, normalize provider fields, and re-save
-/// sealed credentials when anything changed.
+/// Full load pipeline: read, normalize, and unseal the current provider schema.
 pub(crate) async fn load_auth_providers(
     identity: &DeviceIdentity,
 ) -> Result<NormalizedAuthSnapshot, NookError> {
     let raw = read_raw_snapshot().await?;
     let normalized = nook_core::normalize_auth_snapshot(&raw);
     let mut snapshot = normalized.snapshot;
-    let had_plaintext = open_provider_credentials(identity, &mut snapshot)?;
-
-    let mut seeded_legacy = false;
-    let legacy_storage = if snapshot.providers.is_empty() {
-        legacy_local_storage()
-    } else {
-        None
-    };
-    if let Some(storage) = legacy_storage {
-        let mode = storage.get_item(LEGACY_STORAGE_MODE_KEY).ok().flatten();
-        let pat = storage
-            .get_item(LEGACY_GITHUB_PAT_KEY)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        if let Some(seeded) = nook_core::seed_provider_from_legacy_storage(
-            &snapshot,
-            mode.as_deref(),
-            &pat,
-            &new_id()?,
-            &now_iso(),
-        ) {
-            snapshot = seeded;
-            seeded_legacy = true;
-            let _ = storage.remove_item(LEGACY_STORAGE_MODE_KEY);
-            let _ = storage.remove_item(LEGACY_GITHUB_PAT_KEY);
-        }
-    }
-
-    let (migrated, changed_fields) = nook_core::migrate_provider_fields(&snapshot);
-    snapshot = migrated;
-
-    let changed = normalized.changed || had_plaintext || seeded_legacy || changed_fields;
-    if changed {
-        save_auth_providers(identity, &snapshot).await?;
-    }
-
-    Ok(NormalizedAuthSnapshot { snapshot, changed })
+    open_provider_credentials(identity, &mut snapshot)?;
+    Ok(NormalizedAuthSnapshot {
+        snapshot,
+        changed: normalized.changed,
+    })
 }
 
 /// Seal credential fields and persist the snapshot.
@@ -173,7 +123,7 @@ pub(crate) async fn save_presealed_auth_providers(
     let existing = nook_core::normalize_auth_snapshot(&raw).snapshot;
     if !provider_credentials_are_presealed(&existing) {
         return Err(NookError::Decryption(
-            "auth-provider-plaintext-migration-required".to_owned(),
+            "auth-provider-credential-must-be-encrypted".to_owned(),
         ));
     }
     let merged = nook_core::replace_active_vault_provider_grants(&existing, snapshot);
@@ -270,24 +220,14 @@ mod wasm_idb_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn load_upgrades_legacy_plaintext_to_sealed_storage() {
+    async fn load_rejects_plaintext_credentials() {
         clear_auth_snapshot().await;
         let identity = DeviceIdentity::generate().expect("identity");
-        let pat = "github_pat_33LEGACYplain";
+        let pat = "github_pat_33PLAINTEXT";
         write_snapshot(&github_snapshot(pat))
             .await
             .expect("write plaintext");
-        let loaded = load_auth_providers(&identity).await.expect("load");
-        assert_eq!(
-            loaded.snapshot.providers[0].github_pat.as_deref(),
-            Some(pat)
-        );
-        let raw = read_raw_snapshot().await.expect("read raw");
-        let stored_pat = raw["providers"][0]["githubPat"]
-            .as_str()
-            .expect("githubPat");
-        assert!(nook_core::is_sealed_credential(stored_pat));
-        assert!(!stored_pat.contains("LEGACYplain"));
+        assert!(load_auth_providers(&identity).await.is_err());
     }
 
     #[wasm_bindgen_test]
@@ -304,22 +244,19 @@ mod wasm_idb_tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: Some(OAuthFileConfigData {
-                    preset: "google-drive".to_owned(),
+                    preset: OauthFilePreset::GoogleDrive,
                     access_token: access.to_owned(),
                     refresh_token: Some(refresh.to_owned()),
                     expires_at: None,
                     file_id: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: None,
-                    drive_mode: Some(nook_core::GoogleDriveMode::Private),
+                    drive_mode: nook_core::GoogleDriveMode::Private,
                     folder_id: None,
                 }),
                 local_folder: None,
                 store_id: None,
-                last_synced_version: None,
-                last_synced_at: None,
-                last_sync_revision: None,
-                last_common_content_hash: None,
+                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,
@@ -388,11 +325,11 @@ mod wasm_idb_tests {
     async fn presealed_save_rejects_existing_plaintext_provider_rows() {
         clear_auth_snapshot().await;
         write_snapshot(&github_snapshot_with_id(
-            "gh-legacy",
-            "github_pat_legacy_plaintext",
+            "gh-plaintext",
+            "github_pat_plaintext",
         ))
         .await
-        .expect("write legacy plaintext");
+        .expect("write plaintext");
 
         let identity = DeviceIdentity::generate().expect("identity");
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
@@ -401,13 +338,13 @@ mod wasm_idb_tests {
         assert!(matches!(
             result,
             Err(NookError::Decryption(message))
-                if message == "auth-provider-plaintext-migration-required"
+                if message == "auth-provider-credential-must-be-encrypted"
         ));
 
         let raw = read_raw_snapshot().await.expect("read raw");
         assert_eq!(
             raw["providers"][0]["githubPat"].as_str(),
-            Some("github_pat_legacy_plaintext")
+            Some("github_pat_plaintext")
         );
     }
 

@@ -57,8 +57,10 @@ Before adding or preserving `Option<T>` in authored Rust, determine what
 product, lifecycle, authorization, or workflow states use enums with
 variant-owned data instead of `Option<T>` field bags. `Option<T>` remains
 appropriate only when absence is the truthful structural contract, including
-iterator/lookup results, optional external inputs, caches, and compatibility
-wire shapes that are converted into typed domain states at the boundary.
+iterator/lookup results, optional external inputs, and caches. When absence
+violates an invariant, return `Result<T, DomainError>`, add a precise
+`thiserror` variant, and propagate with `?`; do not model failure as either
+`None` or a fake state enum.
 
 Do not create one-variant wrapper enums merely to avoid the spelling
 `Option<T>`. The objective is to make illegal domain states unrepresentable,

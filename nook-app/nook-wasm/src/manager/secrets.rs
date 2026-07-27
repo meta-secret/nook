@@ -276,11 +276,7 @@ impl NookVaultManager {
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key);
         let dedup_state = self.live_secret_dedup_state().await?;
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let (existing_by_identity, backfill) =
             import_fingerprints(dedup_state, crypto, &secrets_key, items.len())?;
         let mut seen_versions = existing_by_identity
@@ -341,6 +337,7 @@ impl NookVaultManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod import_tests {
     use super::*;
 
@@ -413,14 +410,14 @@ impl NookVaultManager {
     pub fn query_secret_page_js(
         &self,
         query: &str,
-        secret_type_filter: Option<String>,
+        secret_type_filter: wasm_bindgen::JsValue,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let secret_type_filter = secret_type_filter
-            .as_deref()
-            .map(nook_core::SecretType::parse)
-            .transpose()?;
+        let secret_type_filter = match secret_type_filter.as_string() {
+            Some(value) => nook_core::SecretTypeFilter::Only(nook_core::SecretType::parse(&value)?),
+            None => nook_core::SecretTypeFilter::All,
+        };
         Ok(NookSecretPage::from_core(self.query_secret_page(
             query,
             secret_type_filter,
@@ -432,11 +429,7 @@ impl NookVaultManager {
     /// Decrypt one full record only after an explicit reveal or secret-value copy.
     #[wasm_bindgen(js_name = decryptSecret)]
     pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let id = nook_core::SecretId::from_vault_record(id);
         let record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         tracing::info!(
@@ -454,11 +447,7 @@ impl NookVaultManager {
         id: &str,
         unix_seconds: u32,
     ) -> Result<NookTotpCode, JsError> {
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         let id = nook_core::SecretId::from_vault_record(id);
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
@@ -540,12 +529,7 @@ impl NookVaultManager {
         let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
         typed_value.zeroize_plaintext();
 
-        let armored = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(&data)?;
+        let armored = self.vault.crypto.get()?.encrypt_value(&data)?;
         let ciphertext = armored.as_str().to_owned();
         self.vault.meta.secrets.insert(
             id.clone(),
@@ -745,11 +729,7 @@ impl NookVaultManager {
             nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
         let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
         typed_value.zeroize_plaintext();
-        let crypto = self
-            .vault
-            .crypto
-            .as_ref()
-            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let crypto = self.vault.crypto.get()?;
         nook_core::replace_encrypted_secret(
             &mut self.vault.meta,
             crypto,

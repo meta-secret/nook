@@ -36,12 +36,13 @@ pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservation, NookAuthenticationPageObservations,
+    NookAuthenticationWorkflowMatch, NookAuthenticationWorkflowMatchState,
     NookAuthenticationWorkflowSnapshot, NookBrowserLocale, NookClientRunMode,
-    NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput,
-    NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder, NookImportResult,
-    NookJoinRequest, NookLoginAccount, NookLoginFillCredential, NookOtpauthPreview,
-    NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration, NookPasskeySetup,
-    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookClientRunModeUtil, NookDecryptedEnrollmentPayload, NookDiagnosticEpochState,
+    NookEnrollmentIssueInput, NookEnrollmentProvider, NookEventLogSyncIssue, NookGoogleDriveFolder,
+    NookImportResult, NookJoinRequest, NookLoginAccount, NookLoginFillCredential,
+    NookOtpauthPreview, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration,
+    NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
     NookProviderReplicationCapability, NookReplacementCandidate, NookReplacementConflict,
     NookRuntimeConfig, NookSecretFormFields, NookSecretPage, NookSecurityConflict,
     NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
@@ -52,7 +53,7 @@ pub use types::{
     NookVaultRecoveryDevice, NookVaultRecoveryOptions, NookVaultSecretAccessDiagnostic,
     NookVaultSecurityRecommendations, NookVaultSyncResult, NookWebsiteLoginSavePlan,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
@@ -115,9 +116,10 @@ pub fn assess_vault_security(
 #[must_use]
 pub fn authentication_workflow_snapshot(
     observations: &NookAuthenticationPageObservations,
-) -> Option<NookAuthenticationWorkflowSnapshot> {
-    nook_core::classify_authentication_workflow_candidates(observations.as_core())
-        .map(NookAuthenticationWorkflowSnapshot::from_core)
+) -> NookAuthenticationWorkflowMatch {
+    NookAuthenticationWorkflowMatch::from_core(
+        nook_core::classify_authentication_workflow_candidates(observations.as_core()),
+    )
 }
 
 #[wasm_bindgen(js_name = classifyAuthenticationOutcome)]
@@ -136,14 +138,18 @@ pub fn classify_authentication_outcome(
 #[wasm_bindgen(js_name = parseAppLocale)]
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn parse_app_locale(value: Option<String>) -> Option<String> {
-    nook_core::parse_app_locale(value.as_deref()?).map(str::to_owned)
+pub fn parse_app_locale(value: JsValue) -> JsValue {
+    let locale = match value.as_string() {
+        Some(value) => nook_core::parse_app_locale(&value),
+        None => nook_core::AppLocale::Unsupported,
+    };
+    app_locale_to_js(locale)
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTag)]
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> Option<String> {
-    nook_core::resolve_app_locale_from_tag(tag).map(str::to_owned)
+pub fn resolve_app_locale_from_tag(tag: &str) -> JsValue {
+    app_locale_to_js(nook_core::resolve_app_locale_from_tag(tag))
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTags)]
@@ -151,6 +157,15 @@ pub fn resolve_app_locale_from_tag(tag: &str) -> Option<String> {
 #[allow(clippy::needless_pass_by_value)]
 pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
     nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+}
+
+fn app_locale_to_js(locale: nook_core::AppLocale) -> JsValue {
+    match locale {
+        nook_core::AppLocale::English | nook_core::AppLocale::Russian => {
+            JsValue::from_str(locale.code())
+        }
+        nook_core::AppLocale::Unsupported => JsValue::UNDEFINED,
+    }
 }
 
 #[wasm_bindgen]
@@ -642,16 +657,24 @@ pub fn update_provider_sync_metadata(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
     vault_yaml: &str,
-    revision: Option<String>,
-    manager_store_id: Option<String>,
+    revision: wasm_bindgen::JsValue,
+    manager_store_id: wasm_bindgen::JsValue,
     synced_at: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
+    let revision = revision.as_string();
+    let manager_store_id = manager_store_id.as_string();
     snapshot.providers = nook_core::update_provider_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
-        revision.as_deref(),
-        manager_store_id.as_deref(),
+        match revision.as_deref() {
+            Some(value) => nook_core::ProviderSyncRevisionRef::Revision(value),
+            None => nook_core::ProviderSyncRevisionRef::Unreported,
+        },
+        match manager_store_id.as_deref() {
+            Some(value) => nook_core::ManagerStoreScopeRef::Store(value),
+            None => nook_core::ManagerStoreScopeRef::Unscoped,
+        },
         synced_at,
     );
     Ok(snapshot)
@@ -951,9 +974,8 @@ async fn create_and_grant_drive_folder(
 /// folder or create one when no target exists. Falls back to
 /// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
 fn is_google_drive_shared_grant_request(provider_type: &str, oauth_preset: Option<&str>) -> bool {
-    let oauth_preset = oauth_preset.unwrap_or_default().trim();
     provider_type.trim() == "oauth-file"
-        && (oauth_preset.is_empty() || oauth_preset == "google-drive")
+        && oauth_preset.is_some_and(|preset| preset.trim() == "google-drive")
 }
 
 #[wasm_bindgen(js_name = prepareSharedStorageGrant)]
@@ -1156,29 +1178,38 @@ pub fn normalize_enrollment_code(code: &str) -> String {
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryId)]
 #[must_use]
-pub fn peek_enrollment_entry_id(code: &str) -> Option<String> {
+pub fn peek_enrollment_entry_id(code: &str) -> wasm_bindgen::JsValue {
     let code = nook_core::normalize_enrollment_code(code);
-    nook_core::peek_enrollment_entry_id(&code)
+    nook_core::peek_enrollment_entry_id(&code).map_or(wasm_bindgen::JsValue::UNDEFINED, |value| {
+        wasm_bindgen::JsValue::from_str(&value)
+    })
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
 #[must_use]
-pub fn peek_enrollment_entry_label(code: &str) -> Option<String> {
+pub fn peek_enrollment_entry_label(code: &str) -> wasm_bindgen::JsValue {
     let code = nook_core::normalize_enrollment_code(code);
-    nook_core::peek_enrollment_entry_label(&code)
+    match nook_core::peek_enrollment_entry_label(&code) {
+        Ok(nook_core::EnrollmentEntryLabel::Labeled(label)) => {
+            wasm_bindgen::JsValue::from_str(&label)
+        }
+        Ok(nook_core::EnrollmentEntryLabel::Unlabeled) | Err(_) => wasm_bindgen::JsValue::UNDEFINED,
+    }
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
 #[must_use]
-pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
+pub fn peek_enrollment_issued_at(code: &str) -> wasm_bindgen::JsValue {
     let code = nook_core::normalize_enrollment_code(code);
-    nook_core::peek_enrollment_issued_at(&code)
+    nook_core::peek_enrollment_issued_at(&code).map_or(wasm_bindgen::JsValue::UNDEFINED, |value| {
+        wasm_bindgen::JsValue::from_str(&value)
+    })
 }
 
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Load the persisted sync-provider snapshot from `nook_auth`, including
-    /// normalization, legacy migration, and device-key credential unsealing.
+    /// current-schema normalization and device-key credential unsealing.
     /// Migration bookkeeping stays inside Rust; callers receive only the
     /// snapshot they actually use.
     #[wasm_bindgen(js_name = loadAuthProviders)]
@@ -1435,7 +1466,7 @@ pub fn vault_connect_intent_permits_empty_remote_genesis(
     intent_name: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
     let intent = nook_core::VaultConnectIntent::parse(intent_name)
-        .ok_or_else(|| wasm_bindgen::JsError::new("Unknown vault connect intent"))?;
+        .map_err(|error| wasm_bindgen::JsError::new(&error))?;
     Ok(intent.permits_empty_remote_genesis())
 }
 
@@ -2298,7 +2329,9 @@ mod wasm_tests {
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
-        let snapshot = authentication_workflow_snapshot(&observations).expect("login workflow");
+        let snapshot = authentication_workflow_snapshot(&observations)
+            .snapshot()
+            .expect("login workflow");
 
         assert_eq!(snapshot.kind_name(), "login");
         assert_eq!(snapshot.stage_name(), "credentials");
@@ -2449,9 +2482,12 @@ mod tests {
     use super::is_google_drive_shared_grant_request;
 
     #[test]
-    fn legacy_empty_oauth_preset_is_a_google_drive_grant() {
-        assert!(is_google_drive_shared_grant_request("oauth-file", None));
-        assert!(is_google_drive_shared_grant_request("oauth-file", Some("")));
+    fn google_drive_grant_requires_explicit_preset() {
+        assert!(!is_google_drive_shared_grant_request("oauth-file", None));
+        assert!(!is_google_drive_shared_grant_request(
+            "oauth-file",
+            Some("")
+        ));
         assert!(is_google_drive_shared_grant_request(
             "oauth-file",
             Some("google-drive")

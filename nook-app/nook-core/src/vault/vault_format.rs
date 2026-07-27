@@ -13,6 +13,36 @@ pub enum VaultFormat {
     Yaml,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultStoreIdentity {
+    Unassigned,
+    Assigned(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultStoreIdentityRef<'a> {
+    Unassigned,
+    Assigned(&'a str),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultName {
+    Unnamed,
+    Named(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultNameRef<'a> {
+    Unnamed,
+    Named(&'a str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultVersionWrite {
+    Initial,
+    Version(u64),
+}
+
 impl VaultFormat {
     #[must_use]
     pub fn from_path(path: &str) -> Self {
@@ -255,20 +285,35 @@ pub fn read_vault_schema_version(stored: &str) -> VaultFormatResult<u32> {
 }
 
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<VaultYamlBlob> {
-    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None, None)
+    serialize_stored_yaml_with_unlock(
+        records,
+        &VaultUnlock::Keys,
+        &[],
+        VaultStoreIdentityRef::Unassigned,
+        VaultVersionWrite::Initial,
+    )
 }
 
-fn resolve_store_id_for_write(store_id: Option<&str>) -> VaultFormatResult<Option<String>> {
-    match store_id.map(str::trim).filter(|id| !id.is_empty()) {
-        Some(id) => Ok(Some(crate::normalize_store_id(id)?.to_string())),
-        None => Ok(None),
+fn resolve_store_id_for_write(
+    store_id: VaultStoreIdentityRef<'_>,
+) -> VaultFormatResult<VaultStoreIdentity> {
+    match store_id {
+        VaultStoreIdentityRef::Assigned(id) if !id.trim().is_empty() => Ok(
+            VaultStoreIdentity::Assigned(crate::normalize_store_id(id.trim())?.to_string()),
+        ),
+        VaultStoreIdentityRef::Unassigned | VaultStoreIdentityRef::Assigned(_) => {
+            Ok(VaultStoreIdentity::Unassigned)
+        }
     }
 }
 
-fn resolve_vault_name_for_write(name: Option<&str>) -> Option<String> {
-    name.map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
+fn resolve_vault_name_for_write(name: VaultNameRef<'_>) -> VaultName {
+    match name {
+        VaultNameRef::Named(value) if !value.trim().is_empty() => {
+            VaultName::Named(value.trim().to_owned())
+        }
+        VaultNameRef::Unnamed | VaultNameRef::Named(_) => VaultName::Unnamed,
+    }
 }
 
 #[must_use]
@@ -288,15 +333,15 @@ pub fn serialize_stored_yaml_with_unlock(
     records: &[StoredSecretRecord],
     unlock: &VaultUnlock,
     password_entries: &[PasswordUnlockEntry],
-    store_id: Option<&str>,
-    vault_version: Option<u64>,
+    store_id: VaultStoreIdentityRef<'_>,
+    vault_version: VaultVersionWrite,
 ) -> VaultFormatResult<VaultYamlBlob> {
     serialize_stored_yaml_with_unlock_and_name(
         records,
         unlock,
         password_entries,
         store_id,
-        None,
+        VaultNameRef::Unnamed,
         vault_version,
     )
 }
@@ -306,9 +351,9 @@ pub fn serialize_stored_yaml_with_unlock_and_name(
     records: &[StoredSecretRecord],
     unlock: &VaultUnlock,
     password_entries: &[PasswordUnlockEntry],
-    store_id: Option<&str>,
-    vault_name: Option<&str>,
-    vault_version: Option<u64>,
+    store_id: VaultStoreIdentityRef<'_>,
+    vault_name: VaultNameRef<'_>,
+    vault_version: VaultVersionWrite,
 ) -> VaultFormatResult<VaultYamlBlob> {
     serialize_stored_yaml_with_unlock_name_architecture(
         records,
@@ -326,17 +371,26 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
     records: &[StoredSecretRecord],
     unlock: &VaultUnlock,
     password_entries: &[PasswordUnlockEntry],
-    store_id: Option<&str>,
-    vault_name: Option<&str>,
-    vault_version: Option<u64>,
+    store_id: VaultStoreIdentityRef<'_>,
+    vault_name: VaultNameRef<'_>,
+    vault_version: VaultVersionWrite,
     architecture: &VaultArchitecture,
 ) -> VaultFormatResult<VaultYamlBlob> {
     architecture.validate_records(records)?;
     let mut vault = partition_yaml_records(records);
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
-    vault.vault_version = vault_version.unwrap_or(0);
-    vault.store_id = resolve_store_id_for_write(store_id)?;
-    vault.name = resolve_vault_name_for_write(vault_name);
+    vault.vault_version = match vault_version {
+        VaultVersionWrite::Initial => 0,
+        VaultVersionWrite::Version(version) => version,
+    };
+    vault.store_id = match resolve_store_id_for_write(store_id)? {
+        VaultStoreIdentity::Assigned(store_id) => Some(store_id),
+        VaultStoreIdentity::Unassigned => None,
+    };
+    vault.name = match resolve_vault_name_for_write(vault_name) {
+        VaultName::Named(name) => Some(name),
+        VaultName::Unnamed => None,
+    };
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.architecture = architecture.clone();
     vault.password_entries = password_entries.to_vec();
@@ -346,18 +400,19 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
 }
 
 /// Read the human-readable vault label from on-disk YAML.
-pub fn read_vault_name(stored: &str) -> VaultFormatResult<Option<String>> {
+pub fn read_vault_name(stored: &str) -> VaultFormatResult<VaultName> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(None);
+        return Ok(VaultName::Unnamed);
     }
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
     ensure_supported_vault_schema(vault.schema_version)?;
-    Ok(vault
-        .name
-        .and_then(|name| resolve_vault_name_for_write(Some(&name))))
+    Ok(match vault.name {
+        Some(name) => resolve_vault_name_for_write(VaultNameRef::Named(&name)),
+        None => VaultName::Unnamed,
+    })
 }
 
 /// Update the human-readable vault label without decrypting records.
@@ -370,7 +425,10 @@ pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBl
     let mut vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
     ensure_supported_vault_schema(vault.schema_version)?;
-    vault.name = resolve_vault_name_for_write(Some(name));
+    vault.name = match resolve_vault_name_for_write(VaultNameRef::Named(name)) {
+        VaultName::Named(name) => Some(name),
+        VaultName::Unnamed => None,
+    };
     serde_yaml::to_string(&vault)
         .map(VaultYamlBlob::from_trusted)
         .map_err(VaultFormatError::YamlSerialize)
@@ -417,18 +475,20 @@ pub fn read_vault_password_entries(stored: &str) -> VaultFormatResult<Vec<Passwo
 }
 
 /// Read the logical secret-store id from on-disk YAML.
-pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
+pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<VaultStoreIdentity> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(None);
+        return Ok(VaultStoreIdentity::Unassigned);
     }
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
     ensure_supported_vault_schema(vault.schema_version)?;
     match vault.store_id {
-        Some(id) => Ok(Some(crate::validate_store_id(&id)?.to_string())),
-        None => Ok(None),
+        Some(id) => Ok(VaultStoreIdentity::Assigned(
+            crate::validate_store_id(&id)?.to_string(),
+        )),
+        None => Ok(VaultStoreIdentity::Unassigned),
     }
 }
 
@@ -677,7 +737,7 @@ mod tests {
         use crate::multi_device::{DeviceIdentity, JoinRequest};
 
         let device_id = "abc123def4567890";
-        let auth_id = "a".repeat(64);
+        let auth_id = format!("key_{}", "a".repeat(64));
         let joiner = DeviceIdentity::generate().expect("vault format test setup should succeed");
         let join_request = JoinRequest {
             device_id: joiner.device_id().clone(),
@@ -729,7 +789,7 @@ mod tests {
 
     #[test]
     fn yaml_members_section_uses_pk_id_and_ciphertext() {
-        let auth_id = "c".repeat(64);
+        let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
             key: sid(&format!("member:{auth_id}")),
             secret_type: None,
@@ -750,7 +810,7 @@ mod tests {
         let parsed = deserialize_stored_yaml(stored.as_str())
             .expect("vault format test setup should succeed");
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), format!("member:key_{auth_id}"));
+        assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
     }
 
     #[test]
@@ -780,8 +840,8 @@ mod tests {
             &[],
             &VaultUnlock::Keys,
             std::slice::from_ref(&entry),
-            Some("store_SMypl8K0w9Y"),
-            Some(1),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultVersionWrite::Version(1),
         )
         .expect("vault format test setup should succeed");
         assert!(!yaml.as_str().contains("unlock:"));
@@ -829,8 +889,8 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some("store_SMypl8K0w9Y"),
-            Some(1),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultVersionWrite::Version(1),
         )
         .expect("vault format test setup should succeed");
         assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
@@ -847,7 +907,7 @@ mod tests {
         );
         assert_eq!(
             read_vault_store_id(yaml.as_str()).expect("vault format test setup should succeed"),
-            Some("store_SMypl8K0w9Y".to_owned())
+            VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
         );
     }
 
@@ -857,7 +917,7 @@ mod tests {
             device_mode: crate::DeviceMode::AntiHacker,
             vault_type: crate::VaultType::Sentinel,
             replication_type: crate::ReplicationType::Shared,
-            sentinel: Some(crate::SentinelPolicy {
+            sentinel: crate::SentinelConfiguration::Enabled(crate::SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 0,
@@ -867,9 +927,9 @@ mod tests {
             &[],
             &VaultUnlock::Keys,
             &[],
-            Some("store_SMypl8K0w9Y"),
-            Some("Team vault"),
-            Some(7),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultNameRef::Named("Team vault"),
+            VaultVersionWrite::Version(7),
             &architecture,
         )
         .expect("vault format test setup should succeed");
@@ -954,9 +1014,9 @@ secrets: []
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some("store_SMypl8K0w9Y"),
-            Some("Anti-hacker vault"),
-            Some(1),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultNameRef::Named("Anti-hacker vault"),
+            VaultVersionWrite::Version(1),
             &architecture,
         )
         .expect("vault format test setup should succeed");
@@ -995,9 +1055,9 @@ secrets: []
             &shares,
             &VaultUnlock::Keys,
             &[],
-            Some("store_SMypl8K0w9Y"),
-            Some("Sentinel vault"),
-            Some(1),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultNameRef::Named("Sentinel vault"),
+            VaultVersionWrite::Version(1),
             &architecture,
         )
         .expect("vault format test setup should succeed");
@@ -1018,15 +1078,15 @@ secrets: []
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some("store_SMypl8K0w9Y"),
-            Some("  Personal vault  "),
-            Some(1),
+            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
+            VaultNameRef::Named("  Personal vault  "),
+            VaultVersionWrite::Version(1),
         )
         .expect("vault format test setup should succeed");
         assert!(yaml.as_str().contains("name: Personal vault"));
         assert_eq!(
             read_vault_name(yaml.as_str()).expect("vault format test setup should succeed"),
-            Some("Personal vault".to_owned())
+            VaultName::Named("Personal vault".to_owned())
         );
         assert_eq!(
             deserialize_stored_yaml(yaml.as_str()).expect("vault format test setup should succeed"),
@@ -1037,7 +1097,7 @@ secrets: []
             .expect("vault format test setup should succeed");
         assert_eq!(
             read_vault_name(renamed.as_str()).expect("vault format test setup should succeed"),
-            Some("Work vault".to_owned())
+            VaultName::Named("Work vault".to_owned())
         );
         assert_eq!(
             read_vault_version(renamed.as_str()).expect("vault format test setup should succeed"),
@@ -1045,7 +1105,7 @@ secrets: []
         );
         assert_eq!(
             read_vault_store_id(renamed.as_str()).expect("vault format test setup should succeed"),
-            Some("store_SMypl8K0w9Y".to_owned())
+            VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
         );
         assert_eq!(
             deserialize_stored_yaml(renamed.as_str())
@@ -1070,7 +1130,7 @@ secrets: []
 
     #[test]
     fn yaml_auth_envelopes_roundtrip_through_internal_json() {
-        let auth_id = "b".repeat(64);
+        let auth_id = format!("key_{}", "b".repeat(64));
         let record = auth_to_stored_record(AuthYamlRecord {
             pk_id: auth_id.clone(),
             secrets_key: "-----BEGIN AGE ENCRYPTED FILE-----\ns\n-----END AGE ENCRYPTED FILE-----"
@@ -1089,7 +1149,7 @@ secrets: []
         let parsed =
             deserialize_stored_yaml(yaml.as_str()).expect("vault format test setup should succeed");
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), format!("key_{auth_id}"));
+        assert_eq!(parsed[0].key.as_str(), auth_id);
 
         let env = crate::parse_auth_envelopes(parsed[0].value.as_str())
             .expect("vault format test setup should succeed");

@@ -43,6 +43,13 @@ pub struct Artifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "artifact", rename_all = "snake_case")]
+pub enum CompletionArtifact {
+    NotProduced,
+    Produced(Artifact),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimedTask {
     pub id: TaskId,
     pub kind: String,
@@ -53,6 +60,27 @@ pub struct ClaimedTask {
     pub lease_token: LeaseToken,
     pub dependency_context: Vec<DependencyResult>,
     pub dependency_artifacts: Vec<Artifact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "task", rename_all = "snake_case")]
+pub enum ClaimOutcome {
+    NoTask,
+    Claimed(ClaimedTask),
+}
+
+impl ClaimOutcome {
+    #[must_use]
+    pub const fn is_idle(&self) -> bool {
+        matches!(self, Self::NoTask)
+    }
+
+    pub fn into_claimed(self) -> Result<ClaimedTask, &'static str> {
+        match self {
+            Self::Claimed(task) => Ok(task),
+            Self::NoTask => Err("no task was claimable"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,82 +131,53 @@ impl EnqueueTask {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TerminalResult {
-    pub status: TerminalStatus,
-    pub summary: String,
-    pub changed_files: Vec<String>,
-    pub tests: Vec<String>,
-    pub blocker: BlockerResult,
-}
-
-impl TerminalResult {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.summary.trim().is_empty() {
-            return Err("terminal result summary must not be empty".to_owned());
-        }
-        if self.changed_files.iter().any(|path| path.trim().is_empty()) {
-            return Err("terminal result changed_files entries must not be empty".to_owned());
-        }
-        if self.tests.iter().any(|test| test.trim().is_empty()) {
-            return Err("terminal result tests entries must not be empty".to_owned());
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlockerResult {
-    pub present: bool,
-    pub id: String,
-    pub title: String,
-    pub prompt: String,
-}
-
-impl BlockerResult {
-    pub fn none() -> Self {
-        Self {
-            present: false,
-            id: String::new(),
-            title: String::new(),
-            prompt: String::new(),
-        }
-    }
-
-    pub fn into_request(self) -> Result<Option<BlockerRequest>, String> {
-        if !self.present {
-            if self.id.is_empty() && self.title.is_empty() && self.prompt.is_empty() {
-                return Ok(None);
-            }
-            return Err("an absent blocker must have empty id, title, and prompt".to_owned());
-        }
-        if self.title.trim().is_empty() || self.prompt.trim().is_empty() {
-            return Err("a present blocker must include a title and prompt".to_owned());
-        }
-        Ok(Some(BlockerRequest {
-            id: TaskId::new(self.id)?,
-            title: self.title,
-            prompt: self.prompt,
-        }))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockerRequest {
     pub id: TaskId,
     pub title: String,
     pub prompt: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TerminalStatus {
-    Completed,
-    Blocked,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum TerminalResult {
+    Completed {
+        summary: String,
+        changed_files: Vec<String>,
+        tests: Vec<String>,
+    },
+    Blocked {
+        summary: String,
+        changed_files: Vec<String>,
+        tests: Vec<String>,
+        blocker: BlockerRequest,
+    },
+}
+
+impl TerminalResult {
+    pub fn summary(&self) -> &str {
+        match self {
+            Self::Completed { summary, .. } | Self::Blocked { summary, .. } => summary,
+        }
+    }
+
+    pub fn changed_files(&self) -> &[String] {
+        match self {
+            Self::Completed { changed_files, .. } | Self::Blocked { changed_files, .. } => {
+                changed_files
+            }
+        }
+    }
+
+    pub fn tests(&self) -> &[String] {
+        match self {
+            Self::Completed { tests, .. } | Self::Blocked { tests, .. } => tests,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockerResult, EnqueueTask, TaskId, TerminalResult, TerminalStatus};
+    use super::{EnqueueTask, TaskId};
 
     #[test]
     fn enqueue_rejects_self_dependency() {
@@ -197,114 +196,5 @@ mod tests {
             task.validate().expect_err("self dependency must fail"),
             "a task cannot depend on itself"
         );
-    }
-
-    #[test]
-    fn blocker_result_has_one_strict_object_shape() {
-        assert_eq!(
-            BlockerResult::none()
-                .into_request()
-                .expect("absent blocker"),
-            None
-        );
-        assert!(
-            BlockerResult {
-                present: false,
-                id: "unexpected".to_owned(),
-                title: String::new(),
-                prompt: String::new(),
-            }
-            .into_request()
-            .expect_err("absent blocker details must be empty")
-            .contains("absent blocker")
-        );
-        let blocker = BlockerResult {
-            present: true,
-            id: "repair-cache".to_owned(),
-            title: "Repair the cache".to_owned(),
-            prompt: "Restore the cache invariant".to_owned(),
-        }
-        .into_request()
-        .expect("valid blocker")
-        .expect("present blocker");
-        assert_eq!(blocker.id.as_str(), "repair-cache");
-    }
-
-    #[test]
-    fn terminal_results_decode_completed_and_blocked_shapes() {
-        let completed: TerminalResult = serde_json::from_str(
-            r#"{
-              "status":"completed",
-              "summary":"done",
-              "changed_files":[],
-              "tests":[],
-              "blocker":{"present":false,"id":"","title":"","prompt":""}
-            }"#,
-        )
-        .expect("completed terminal result");
-        assert_eq!(completed.status, TerminalStatus::Completed);
-        assert_eq!(
-            completed
-                .blocker
-                .into_request()
-                .expect("completed blocker shape"),
-            None
-        );
-
-        let blocked: TerminalResult = serde_json::from_str(
-            r#"{
-              "status":"blocked",
-              "summary":"needs cache repair",
-              "changed_files":[],
-              "tests":[],
-              "blocker":{
-                "present":true,
-                "id":"repair-cache",
-                "title":"Repair cache",
-                "prompt":"Restore the cache invariant"
-              }
-            }"#,
-        )
-        .expect("blocked terminal result");
-        assert_eq!(blocked.status, TerminalStatus::Blocked);
-        assert_eq!(
-            blocked
-                .blocker
-                .into_request()
-                .expect("blocked blocker shape")
-                .expect("present blocker")
-                .id
-                .as_str(),
-            "repair-cache"
-        );
-    }
-
-    #[test]
-    fn terminal_result_rejects_empty_content_outside_the_schema_subset() {
-        let valid = TerminalResult {
-            status: TerminalStatus::Completed,
-            summary: "done".to_owned(),
-            changed_files: vec!["src/main.rs".to_owned()],
-            tests: vec!["cargo test".to_owned()],
-            blocker: BlockerResult::none(),
-        };
-        valid.validate().expect("non-empty terminal result");
-
-        for invalid in [
-            TerminalResult {
-                summary: " ".to_owned(),
-                ..valid.clone()
-            },
-            TerminalResult {
-                changed_files: vec![String::new()],
-                ..valid.clone()
-            },
-            TerminalResult {
-                tests: vec!["\t".to_owned()],
-                ..valid
-            },
-        ] {
-            assert!(invalid.validate().is_err());
-        }
     }
 }

@@ -14,7 +14,9 @@ use tokio::sync::watch;
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, TerminalResult, TerminalStatus};
+use crate::model::{
+    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TerminalResult,
+};
 use crate::publication::{
     PublicationBinding, bind_publication_task, open_publication_capability,
     publication_delivery_verified,
@@ -35,7 +37,7 @@ pub struct WorkerConfig {
     pub task_timeout_seconds: u64,
     pub poll_min_seconds: u64,
     pub poll_max_seconds: u64,
-    pub model: Option<String>,
+    pub model: String,
     pub reasoning_effort: String,
     pub arg0_paths: Arg0DispatchPaths,
     pub auth_socket: PathBuf,
@@ -81,12 +83,13 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 ));
             }
-            if let Some(task) = self
+            match self
                 .store
                 .claim(&self.config.agent_id, self.config.lease_seconds)
                 .await?
             {
-                break task;
+                ClaimOutcome::Claimed(task) => break task,
+                ClaimOutcome::NoTask => {}
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
@@ -197,9 +200,7 @@ impl<S: TaskStore> Worker<S> {
                     if let Some(capability) = &publication_capability {
                         codex_options = codex_options.with_publication_fd(capability.raw_fd());
                     }
-                    if let Some(model) = &self.config.model {
-                        codex_options.model = Some(model.clone());
-                    }
+                    codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                     codex_options
                         .reasoning_effort
@@ -219,7 +220,7 @@ impl<S: TaskStore> Worker<S> {
                     .context("embedded Codex dependency resolution failed")?;
                     let result: TerminalResult = serde_json::from_str(&resolution)
                         .context("Codex returned an invalid dependency resolution result")?;
-                    if result.status != TerminalStatus::Completed {
+                    if !matches!(result, TerminalResult::Completed { .. }) {
                         return Err(anyhow!("Codex could not integrate dependency artifacts"));
                     }
                     ensure_dependencies_resolved(&repository).await?;
@@ -232,9 +233,7 @@ impl<S: TaskStore> Worker<S> {
                 if let Some(capability) = &publication_capability {
                     codex_options = codex_options.with_publication_fd(capability.raw_fd());
                 }
-                if let Some(model) = &self.config.model {
-                    codex_options.model = Some(model.clone());
-                }
+                codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                 codex_options
                     .reasoning_effort
@@ -246,19 +245,10 @@ impl<S: TaskStore> Worker<S> {
                         .context("embedded Codex execution failed")?;
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
-                result
-                    .validate()
-                    .map_err(anyhow::Error::msg)
-                    .context("Codex returned empty terminal result content")?;
-                let blocker = result
-                    .blocker
-                    .clone()
-                    .into_request()
-                    .map_err(anyhow::Error::msg)
-                    .context("Codex returned an invalid blocker result")?;
-                if result.status == TerminalStatus::Blocked {
-                    let blocker =
-                        blocker.context("Codex blocked the task without a structured blocker")?;
+                if let TerminalResult::Blocked {
+                    summary, blocker, ..
+                } = &result
+                {
                     if blocker.id == task.id {
                         return Err(anyhow!("a blocked task cannot name itself as its blocker"));
                     }
@@ -273,12 +263,7 @@ impl<S: TaskStore> Worker<S> {
                     };
                     let accepted = self
                         .store
-                        .block(
-                            task,
-                            &self.config.agent_id,
-                            &blocker,
-                            &bounded(&result.summary),
-                        )
+                        .block(task, &self.config.agent_id, &blocker, &bounded(summary))
                         .await?;
                     if !accepted {
                         return Err(anyhow!(
@@ -286,9 +271,6 @@ impl<S: TaskStore> Worker<S> {
                         ));
                     }
                     return Err(WorkerBlocked.into());
-                }
-                if blocker.is_some() {
-                    return Err(anyhow!("Codex returned a blocker for a completed task"));
                 }
                 if task.kind == "main-repair"
                     && !publication_delivery_verified(&self.config.publication_socket).await?
@@ -299,9 +281,9 @@ impl<S: TaskStore> Worker<S> {
                 }
                 let summary = bounded(&format!(
                     "{}\n\nChanged files:\n{}\n\nTests:\n{}",
-                    result.summary,
-                    bullet_list(&result.changed_files),
-                    bullet_list(&result.tests)
+                    result.summary(),
+                    bullet_list(result.changed_files()),
+                    bullet_list(result.tests())
                 ));
                 let repository = self.config.workspace.join("repository");
                 let artifact =
@@ -309,7 +291,7 @@ impl<S: TaskStore> Worker<S> {
                         .await?;
                 let accepted = self
                     .store
-                    .complete(task, &self.config.agent_id, &summary, artifact.as_ref())
+                    .complete(task, &self.config.agent_id, &summary, &artifact)
                     .await?;
                 if !accepted {
                     return Err(anyhow!(
@@ -716,7 +698,7 @@ async fn persistable_patch(
     task: &ClaimedTask,
     result: &TerminalResult,
     resumed: bool,
-) -> anyhow::Result<Option<Artifact>> {
+) -> anyhow::Result<CompletionArtifact> {
     let add_status = Command::new("git")
         .args(["add", "--intent-to-add", "--", "."])
         .current_dir(repository)
@@ -749,12 +731,12 @@ async fn persistable_patch(
         ));
     }
     if output.stdout.is_empty() {
-        if !resumed && !result.changed_files.is_empty() {
+        if !resumed && !result.changed_files().is_empty() {
             return Err(anyhow!(
                 "Codex reported changed files but produced no persistable git patch"
             ));
         }
-        return Ok(None);
+        return Ok(CompletionArtifact::NotProduced);
     }
 
     let content = String::from_utf8(output.stdout).context("task patch is not UTF-8")?;
@@ -767,7 +749,7 @@ async fn persistable_patch(
         },
     );
     let id = format!("{}:git-patch", task.attempt_id);
-    Ok(Some(Artifact {
+    Ok(CompletionArtifact::Produced(Artifact {
         uri: format!("hive://artifact/{id}"),
         id,
         kind: "git-patch".to_owned(),
@@ -853,8 +835,7 @@ mod tests {
         prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
-        Artifact, AttemptId, BlockerResult, ClaimedTask, LeaseToken, TaskId, TerminalResult,
-        TerminalStatus,
+        Artifact, AttemptId, ClaimedTask, CompletionArtifact, LeaseToken, TaskId, TerminalResult,
     };
     use sha2::{Digest, Sha256};
 
@@ -1009,18 +990,18 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
 
         let artifact = persistable_patch(repository.path(), baseline, &task, &result, false)
             .await
-            .expect("worker test setup should succeed")
-            .expect("patch artifact");
+            .expect("worker test setup should succeed");
+        let CompletionArtifact::Produced(artifact) = artifact else {
+            panic!("patch artifact");
+        };
 
         assert_eq!(artifact.kind, "git-patch");
         assert!(artifact.digest.starts_with("sha256:"));
@@ -1074,20 +1055,18 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
 
-        assert!(
+        assert!(matches!(
             persistable_patch(repository.path(), baseline.trim(), &task, &result, true)
                 .await
-                .expect("worker test setup should succeed")
-                .is_none()
-        );
+                .expect("worker test setup should succeed"),
+            CompletionArtifact::NotProduced
+        ));
     }
 
     #[tokio::test]
@@ -1219,17 +1198,17 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let result = TerminalResult {
-            status: TerminalStatus::Completed,
+        let result = TerminalResult::Completed {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
-            blocker: BlockerResult::none(),
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false)
             .await
-            .expect("worker test setup should succeed")
-            .expect("task patch");
+            .expect("worker test setup should succeed");
+        let CompletionArtifact::Produced(artifact) = artifact else {
+            panic!("task patch");
+        };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));
     }

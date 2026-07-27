@@ -9,7 +9,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 
-use crate::model::{AgentId, Artifact, ClaimedTask, EnqueueTask, LeaseToken, TaskId};
+use crate::model::{
+    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+};
 use crate::store::TaskStore;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,7 +40,7 @@ enum Request {
         task: ClaimedTask,
         agent_id: AgentId,
         summary: String,
-        artifact: Option<Artifact>,
+        artifact: CompletionArtifact,
     },
     Fail {
         task: ClaimedTask,
@@ -57,7 +59,7 @@ enum Request {
 #[serde(tag = "result", content = "value", rename_all = "snake_case")]
 enum Response {
     Unit,
-    Claim(Option<ClaimedTask>),
+    Claim(ClaimOutcome),
     Accepted(bool),
     Error(String),
 }
@@ -153,11 +155,7 @@ impl TaskStore for CoordinatorTaskStore {
         anyhow::bail!("workers are not authorized to enqueue tasks")
     }
 
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> anyhow::Result<Option<ClaimedTask>> {
+    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
         match self
             .request(Request::Claim {
                 agent_id: agent_id.clone(),
@@ -199,13 +197,13 @@ impl TaskStore for CoordinatorTaskStore {
         task: &ClaimedTask,
         agent_id: &AgentId,
         summary: &str,
-        artifact: Option<&Artifact>,
+        artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool> {
         self.accepted(Request::Complete {
             task: task.clone(),
             agent_id: agent_id.clone(),
             summary: summary.to_owned(),
-            artifact: artifact.cloned(),
+            artifact: artifact.clone(),
         })
         .await
     }
@@ -316,7 +314,7 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Re
             artifact,
         } => Ok(Response::Accepted(
             store
-                .complete(&task, &agent_id, &summary, artifact.as_ref())
+                .complete(&task, &agent_id, &summary, &artifact)
                 .await?,
         )),
         Request::Fail {

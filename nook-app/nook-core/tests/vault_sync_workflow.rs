@@ -4,10 +4,11 @@
 //! sync providers — no browser or network required.
 
 use nook_core::{
-    MemoryVaultStore, RevisionGuardedWrite, SecretId, StoredRecordPayload, StoredSecretRecord,
-    VaultSyncAction, VaultSyncError, VaultUnlock, compare_vault_sync, fan_out_sync,
-    read_vault_store_id, read_vault_version, reconcile_vault_stores, resolve_conflict_keep_local,
-    resolve_conflict_keep_remote, serialize_stored_yaml_with_unlock,
+    MemoryVaultStore, RevisionGuardedWrite, SecretId, StoreRevision, StoreRevisionRef,
+    StoredRecordPayload, StoredSecretRecord, VaultSyncAction, VaultSyncError, VaultUnlock,
+    compare_vault_sync, fan_out_sync, read_vault_store_id, read_vault_version,
+    reconcile_vault_stores, resolve_conflict_keep_local, resolve_conflict_keep_remote,
+    serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
 
@@ -24,8 +25,8 @@ fn sample_yaml(version: u64, armor_line: &str) -> String {
         }],
         &VaultUnlock::Keys,
         &[],
-        Some(STORE_ID),
-        Some(version),
+        nook_core::VaultStoreIdentityRef::Assigned(STORE_ID),
+        nook_core::VaultVersionWrite::Version(version),
     )
     .expect("vault sync workflow test setup should succeed")
     .into_inner()
@@ -102,14 +103,17 @@ fn stale_revision_write_reports_remote_changed_without_overwriting() {
     let mut remote =
         MemoryVaultStore::with_blob_and_revision(concurrent_remote_blob.clone(), "rev-2");
 
-    let result = remote.write_if_revision_matches_or_same_content(&local_save_blob, Some("rev-1"));
+    let result = remote.write_if_revision_matches_or_same_content(
+        &local_save_blob,
+        StoreRevisionRef::Version("rev-1"),
+    );
 
     assert!(matches!(
         result,
         Err(VaultSyncError::RemoteChangedDuringWrite)
     ));
     assert_eq!(remote.blob(), concurrent_remote_blob);
-    assert_eq!(remote.revision(), Some("rev-2"));
+    assert_eq!(remote.revision(), StoreRevisionRef::Version("rev-2"));
 }
 
 #[test]
@@ -118,17 +122,20 @@ fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob() {
     let mut remote = MemoryVaultStore::with_blob_and_revision(local_save_blob.clone(), "rev-2");
 
     let result = remote
-        .write_if_revision_matches_or_same_content(&local_save_blob, Some("rev-1"))
+        .write_if_revision_matches_or_same_content(
+            &local_save_blob,
+            StoreRevisionRef::Version("rev-1"),
+        )
         .expect("vault sync workflow test setup should succeed");
 
     assert_eq!(
         result,
         RevisionGuardedWrite::AlreadyPresent {
-            revision: Some("rev-2".to_owned())
+            revision: StoreRevision::Version("rev-2".to_owned())
         }
     );
     assert_eq!(remote.blob(), local_save_blob);
-    assert_eq!(remote.revision(), Some("rev-2"));
+    assert_eq!(remote.revision(), StoreRevisionRef::Version("rev-2"));
 }
 
 #[test]
@@ -214,6 +221,6 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() {
     );
     assert_eq!(
         read_vault_store_id(local.blob()).expect("vault sync workflow test setup should succeed"),
-        Some(store_id.to_owned())
+        nook_core::VaultStoreIdentity::Assigned(store_id.to_owned())
     );
 }

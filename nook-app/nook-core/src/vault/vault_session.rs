@@ -11,6 +11,22 @@ use std::hash::BuildHasher;
 pub const DEFAULT_SECRET_PAGE_SIZE: usize = 50;
 pub const MAX_SECRET_PAGE_SIZE: usize = 100;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretTypeFilter {
+    All,
+    Only(SecretType),
+}
+
+impl SecretTypeFilter {
+    #[must_use]
+    pub fn matches(self, candidate: SecretType) -> bool {
+        match self {
+            Self::All => true,
+            Self::Only(expected) => expected == candidate,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretPage {
     pub records: Vec<SecretListItem>,
@@ -56,7 +72,7 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     secrets: &HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
     crypto: &VaultCrypto,
     query: &str,
-    secret_type_filter: Option<SecretType>,
+    secret_type_filter: SecretTypeFilter,
     offset: usize,
     limit: usize,
 ) -> VaultResult<SecretPage> {
@@ -69,21 +85,17 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
         let total = ids
             .iter()
             .filter(|id| {
-                secret_type_filter.is_none_or(|expected| {
-                    secrets
-                        .get(id)
-                        .is_some_and(|(secret_type, _)| *secret_type == expected)
-                })
+                secrets
+                    .get(id)
+                    .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
             })
             .count();
         let records = ids
             .into_iter()
             .filter(|id| {
-                secret_type_filter.is_none_or(|expected| {
-                    secrets
-                        .get(id)
-                        .is_some_and(|(secret_type, _)| *secret_type == expected)
-                })
+                secrets
+                    .get(id)
+                    .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
             })
             .skip(offset)
             .take(limit)
@@ -108,7 +120,7 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     let mut records = Vec::with_capacity(limit);
     for id in ids {
         let (secret_type, payload) = secrets.get(&id).expect("secret id came from the same map");
-        if secret_type_filter.is_some_and(|expected| *secret_type != expected) {
+        if !secret_type_filter.matches(*secret_type) {
             continue;
         }
         let mut record = decrypt_secret_record(&id, *secret_type, payload, crypto)?;
@@ -267,7 +279,7 @@ mod tests {
             encrypted_record(&crypto, "secret_b", "bob", "pw-b")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", None, 1, 1)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "", SecretTypeFilter::All, 1, 1)?;
 
         assert_eq!(page.total, 3);
         assert_eq!(page.records.len(), 1);
@@ -287,7 +299,7 @@ mod tests {
             encrypted_record(&crypto, "secret_c", "team-carol", "hidden-c")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "team", None, 1, 1)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "team", SecretTypeFilter::All, 1, 1)?;
 
         assert_eq!(page.total, 2);
         assert_eq!(page.records.len(), 1);
@@ -310,7 +322,7 @@ mod tests {
             &secrets,
             &crypto,
             "",
-            Some(crate::SecretType::SecureNote),
+            SecretTypeFilter::Only(crate::SecretType::SecureNote),
             1,
             1,
         )?;
@@ -336,7 +348,7 @@ mod tests {
             &secrets,
             &crypto,
             "recovery",
-            Some(crate::SecretType::SecureNote),
+            SecretTypeFilter::Only(crate::SecretType::SecureNote),
             0,
             50,
         )?;
@@ -357,7 +369,7 @@ mod tests {
             "credential-must-not-cross-page-boundary",
         )?]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", None, 0, 50)?;
+        let page = query_encrypted_secrets(&secrets, &crypto, "", SecretTypeFilter::All, 0, 50)?;
         let debug = format!("{:?}", page.records);
 
         assert_eq!(page.records[0].summary(), "alice");
@@ -418,8 +430,14 @@ mod tests {
             "find-me-only-in-password",
         )?]);
 
-        let page =
-            query_encrypted_secrets(&secrets, &crypto, "find-me-only-in-password", None, 0, 50)?;
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "find-me-only-in-password",
+            SecretTypeFilter::All,
+            0,
+            50,
+        )?;
 
         assert_eq!(page.total, 0);
         assert!(page.records.is_empty());

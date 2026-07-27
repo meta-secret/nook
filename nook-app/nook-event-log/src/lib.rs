@@ -36,8 +36,8 @@ pub use canonical::{
     verify_body_signature,
 };
 pub use epoch::{
-    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
-    operation_starts_epoch,
+    EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
+    concurrent_epoch_rotations_conflict, operation_starts_epoch,
 };
 pub use errors::{EventError, EventResult};
 pub use event::{
@@ -49,7 +49,8 @@ pub use event::{
 pub use fingerprint::SecretFingerprint;
 pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use projection::{
-    ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
+    ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
+    SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
 pub use signing::SigningIdentity;

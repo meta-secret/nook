@@ -6,7 +6,6 @@
 //! private device material, or decrypted secret values.
 
 use crate::EventId;
-use crate::VaultProjection;
 use crate::errors::VaultResult;
 use crate::secret_types::{SecretType, StoredSecretRecord};
 use crate::vault_ids::{AuthKeyId, DeviceId, SecretId};
@@ -15,6 +14,7 @@ use crate::{
     DeviceIdentity, VaultCrypto, VaultMetaRecord, is_auth_id, parse_auth_envelopes,
     pending_join_for_device, resolve_members_key, resolve_secrets_key,
 };
+use crate::{ProjectionEpoch, VaultProjection};
 use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -112,7 +112,7 @@ pub struct VaultSecretAccessDiagnostic {
     pub secret_type: SecretType,
     pub status: VaultRecordDecryptabilityStatus,
     pub epoch_status: VaultEpochDiagnosticStatus,
-    pub epoch_id: Option<String>,
+    pub epoch: DiagnosticEpoch,
     pub explanation: String,
 }
 
@@ -139,22 +139,52 @@ pub struct VaultEventPayloadAccessDiagnostic {
 pub struct VaultAccessDiagnosticsReport {
     pub key_access: VaultKeyAccessDiagnostic,
     pub auth_key_ids: Vec<AuthKeyId>,
-    pub current_epoch: Option<String>,
+    pub current_epoch: DiagnosticEpoch,
     pub epoch_history: Vec<VaultEpochHistoryDiagnostic>,
     pub secrets: Vec<VaultSecretAccessDiagnostic>,
     pub events: Vec<VaultEventPayloadAccessDiagnostic>,
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "epochId", rename_all = "snake_case")]
+pub enum DiagnosticEpoch {
+    Unknown,
+    Known(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProjectionDiagnosticInput<'a> {
+    Unavailable,
+    Available(&'a VaultProjection),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SecretEpochRef<'a> {
+    Unknown,
+    Known(&'a EventId),
+}
+
+#[derive(Debug, Clone)]
+enum ResolvedSecretsKey {
+    Unavailable,
+    Available(crate::SymmetricKey),
+}
+
 struct EpochIndex {
-    current: Option<EventId>,
+    current: ProjectionEpochIndex,
     known: BTreeSet<EventId>,
     secret_epochs: BTreeMap<SecretId, EventId>,
 }
 
+enum ProjectionEpochIndex {
+    BeforeGenesis,
+    Current(EventId),
+}
+
 impl EpochIndex {
     fn from_projection(
-        projection: Option<&VaultProjection>,
+        projection: ProjectionDiagnosticInput<'_>,
         events: &[VaultEvent],
     ) -> VaultResult<Self> {
         let mut secret_epochs = BTreeMap::new();
@@ -162,26 +192,33 @@ impl EpochIndex {
         for event in events {
             event_epochs.insert(event.id()?, event.body.key_epoch.clone());
         }
-        if let Some(projection) = projection {
+        if let ProjectionDiagnosticInput::Available(projection) = projection {
             for (secret_id, projected) in &projection.secrets {
                 if let Some(epoch) = event_epochs.get(&projected.created_by) {
                     secret_epochs.insert(secret_id.clone(), epoch.clone());
                 }
             }
         }
-        let current = projection
-            .and_then(|projection| projection.current_epoch.as_ref())
-            .map(|epoch| epoch.as_event_id().clone());
-        let known = projection
-            .map(|projection| {
-                projection
-                    .epoch_history
-                    .iter()
-                    .map(|record| record.epoch.as_event_id().clone())
-                    .chain(current.iter().cloned())
-                    .collect()
-            })
-            .unwrap_or_default();
+        let current = match projection {
+            ProjectionDiagnosticInput::Unavailable => ProjectionEpochIndex::BeforeGenesis,
+            ProjectionDiagnosticInput::Available(projection) => match &projection.epoch {
+                ProjectionEpoch::BeforeGenesis => ProjectionEpochIndex::BeforeGenesis,
+                ProjectionEpoch::Current(epoch) => {
+                    ProjectionEpochIndex::Current(epoch.as_event_id().clone())
+                }
+            },
+        };
+        let mut known = match projection {
+            ProjectionDiagnosticInput::Unavailable => BTreeSet::new(),
+            ProjectionDiagnosticInput::Available(projection) => projection
+                .epoch_history
+                .iter()
+                .map(|record| record.epoch.as_event_id().clone())
+                .collect(),
+        };
+        if let ProjectionEpochIndex::Current(epoch) = &current {
+            known.insert(epoch.clone());
+        }
         Ok(Self {
             current,
             known,
@@ -189,11 +226,12 @@ impl EpochIndex {
         })
     }
 
-    fn classify(&self, epoch: Option<&EventId>) -> VaultEpochDiagnosticStatus {
-        let Some(epoch) = epoch else {
-            return VaultEpochDiagnosticStatus::UnknownEpoch;
+    fn classify(&self, epoch: SecretEpochRef<'_>) -> VaultEpochDiagnosticStatus {
+        let epoch = match epoch {
+            SecretEpochRef::Unknown => return VaultEpochDiagnosticStatus::UnknownEpoch,
+            SecretEpochRef::Known(epoch) => epoch,
         };
-        if self.current.as_ref() == Some(epoch) {
+        if matches!(&self.current, ProjectionEpochIndex::Current(current) if current == epoch) {
             return VaultEpochDiagnosticStatus::CurrentEpoch;
         }
         if self.known.contains(epoch) {
@@ -233,9 +271,12 @@ fn key_status_explanation(status: VaultKeyAccessDiagnosticStatus) -> &'static st
 fn key_access_status(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-    projection: Option<&VaultProjection>,
+    projection: ProjectionDiagnosticInput<'_>,
 ) -> VaultKeyAccessDiagnosticStatus {
-    if projection.is_some_and(|projection| projection.unresolved_schema) {
+    if matches!(
+        projection,
+        ProjectionDiagnosticInput::Available(projection) if projection.unresolved_schema
+    ) {
         return VaultKeyAccessDiagnosticStatus::UnsupportedEpoch;
     }
     if pending_join_for_device(records, identity.device_id()).is_some() {
@@ -364,10 +405,13 @@ fn auth_key_ids(records: &[StoredSecretRecord]) -> Vec<AuthKeyId> {
 fn diagnose_secret_records(
     records: &[StoredSecretRecord],
     key_status: VaultKeyAccessDiagnosticStatus,
-    secrets_key: Option<&crate::SymmetricKey>,
+    secrets_key: &ResolvedSecretsKey,
     epoch_index: &EpochIndex,
 ) -> Vec<VaultSecretAccessDiagnostic> {
-    let crypto = secrets_key.and_then(|key| VaultCrypto::new(key).ok());
+    let crypto = match secrets_key {
+        ResolvedSecretsKey::Unavailable => None,
+        ResolvedSecretsKey::Available(key) => VaultCrypto::new(key).ok(),
+    };
     let mut secrets = Vec::new();
     for record in records {
         let VaultMetaRecord::Secret(secret_id, secret_type, payload) =
@@ -375,7 +419,10 @@ fn diagnose_secret_records(
         else {
             continue;
         };
-        let epoch = epoch_index.secret_epochs.get(&secret_id);
+        let epoch = match epoch_index.secret_epochs.get(&secret_id) {
+            Some(epoch) => SecretEpochRef::Known(epoch),
+            None => SecretEpochRef::Unknown,
+        };
         let mut status = record_status_from_key_status(key_status);
         if status == VaultRecordDecryptabilityStatus::Decryptable {
             status = match (
@@ -393,7 +440,10 @@ fn diagnose_secret_records(
             secret_type,
             status,
             epoch_status: epoch_index.classify(epoch),
-            epoch_id: epoch.map(|epoch| epoch.as_str().to_owned()),
+            epoch: match epoch {
+                SecretEpochRef::Unknown => DiagnosticEpoch::Unknown,
+                SecretEpochRef::Known(epoch) => DiagnosticEpoch::Known(epoch.as_str().to_owned()),
+            },
             explanation: secret_status_explanation(status).to_owned(),
         });
     }
@@ -402,21 +452,20 @@ fn diagnose_secret_records(
 }
 
 fn epoch_history_diagnostics(
-    projection: Option<&VaultProjection>,
+    projection: ProjectionDiagnosticInput<'_>,
 ) -> Vec<VaultEpochHistoryDiagnostic> {
-    projection
-        .map(|projection| {
-            projection
-                .epoch_history
-                .iter()
-                .map(|record| VaultEpochHistoryDiagnostic {
-                    epoch_id: record.epoch.as_str().to_owned(),
-                    started_by: record.started_by.as_str().to_owned(),
-                    reason: record.reason.as_str().to_owned(),
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+    match projection {
+        ProjectionDiagnosticInput::Unavailable => Vec::new(),
+        ProjectionDiagnosticInput::Available(projection) => projection
+            .epoch_history
+            .iter()
+            .map(|record| VaultEpochHistoryDiagnostic {
+                epoch_id: record.epoch.as_str().to_owned(),
+                started_by: record.started_by.as_str().to_owned(),
+                reason: record.reason.as_str().to_owned(),
+            })
+            .collect(),
+    }
 }
 
 fn event_epoch_explanation(status: VaultEpochDiagnosticStatus) -> &'static str {
@@ -455,7 +504,7 @@ fn diagnose_event_payloads(
         {
             VaultEpochDiagnosticStatus::UnsupportedEpoch
         } else {
-            epoch_index.classify(Some(&event.body.key_epoch))
+            epoch_index.classify(SecretEpochRef::Known(&event.body.key_epoch))
         };
         diagnostics.push(VaultEventPayloadAccessDiagnostic {
             event_id: event_id.as_str().to_owned(),
@@ -473,11 +522,14 @@ fn diagnose_event_payloads(
 pub fn diagnose_vault_access(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-    projection: Option<&VaultProjection>,
+    projection: ProjectionDiagnosticInput<'_>,
     events: &[VaultEvent],
 ) -> VaultResult<VaultAccessDiagnosticsReport> {
     let epoch_index = EpochIndex::from_projection(projection, events)?;
-    let projection_unresolved = projection.is_some_and(|projection| projection.unresolved_schema);
+    let projection_unresolved = matches!(
+        projection,
+        ProjectionDiagnosticInput::Available(projection) if projection.unresolved_schema
+    );
     let key_status = key_access_status(records, identity, projection);
     let key_access = VaultKeyAccessDiagnostic {
         status: key_status,
@@ -486,20 +538,27 @@ pub fn diagnose_vault_access(
         explanation: key_status_explanation(key_status).to_owned(),
     };
     let secrets_key = if key_status == VaultKeyAccessDiagnosticStatus::EnrolledDecryptable {
-        resolve_secrets_key(records, identity).ok()
+        match resolve_secrets_key(records, identity) {
+            Ok(key) => ResolvedSecretsKey::Available(key),
+            Err(_) => ResolvedSecretsKey::Unavailable,
+        }
     } else {
-        None
+        ResolvedSecretsKey::Unavailable
+    };
+
+    let current_epoch = match &epoch_index.current {
+        ProjectionEpochIndex::BeforeGenesis => DiagnosticEpoch::Unknown,
+        ProjectionEpochIndex::Current(event_id) => {
+            DiagnosticEpoch::Known(event_id.as_str().to_owned())
+        }
     };
 
     Ok(VaultAccessDiagnosticsReport {
         key_access,
         auth_key_ids: auth_key_ids(records),
-        current_epoch: epoch_index
-            .current
-            .as_ref()
-            .map(|event_id| event_id.as_str().to_owned()),
+        current_epoch,
         epoch_history: epoch_history_diagnostics(projection),
-        secrets: diagnose_secret_records(records, key_status, secrets_key.as_ref(), &epoch_index),
+        secrets: diagnose_secret_records(records, key_status, &secrets_key, &epoch_index),
         events: diagnose_event_payloads(events, &epoch_index, projection_unresolved)?,
         warnings: Vec::new(),
     })
@@ -568,7 +627,12 @@ mod tests {
         )?];
         records.push(encrypted_secret("secret_diag001", &crypto, "token")?);
 
-        let report = diagnose_vault_access(&records, &identity, None, &[])?;
+        let report = diagnose_vault_access(
+            &records,
+            &identity,
+            ProjectionDiagnosticInput::Unavailable,
+            &[],
+        )?;
 
         assert_eq!(
             report.key_access.status,
@@ -592,7 +656,12 @@ mod tests {
             &keys.members_key,
         )?];
 
-        let report = diagnose_vault_access(&records, &current, None, &[])?;
+        let report = diagnose_vault_access(
+            &records,
+            &current,
+            ProjectionDiagnosticInput::Unavailable,
+            &[],
+        )?;
 
         assert_eq!(
             report.key_access.status,
@@ -605,7 +674,8 @@ mod tests {
     fn missing_auth_rows_report_auth_row_missing() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
 
-        let report = diagnose_vault_access(&[], &identity, None, &[])?;
+        let report =
+            diagnose_vault_access(&[], &identity, ProjectionDiagnosticInput::Unavailable, &[])?;
 
         assert_eq!(
             report.key_access.status,
@@ -629,7 +699,12 @@ mod tests {
             value: StoredRecordPayload::from_trusted("not age".to_owned()),
         });
 
-        let report = diagnose_vault_access(&records, &identity, None, &[])?;
+        let report = diagnose_vault_access(
+            &records,
+            &identity,
+            ProjectionDiagnosticInput::Unavailable,
+            &[],
+        )?;
 
         assert_eq!(
             report.secrets[0].status,
@@ -646,7 +721,12 @@ mod tests {
             ..VaultProjection::default()
         };
 
-        let report = diagnose_vault_access(&[], &identity, Some(&projection), &[])?;
+        let report = diagnose_vault_access(
+            &[],
+            &identity,
+            ProjectionDiagnosticInput::Available(&projection),
+            &[],
+        )?;
 
         assert_eq!(
             report.key_access.status,
@@ -685,12 +765,17 @@ mod tests {
             &signing_key,
         )?;
         let mut projection = VaultProjection {
-            current_epoch: Some(KeyEpoch(epoch)),
+            epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),
             ..VaultProjection::default()
         };
         projection.store_id = store_id;
 
-        let report = diagnose_vault_access(&[], &identity, Some(&projection), &[event])?;
+        let report = diagnose_vault_access(
+            &[],
+            &identity,
+            ProjectionDiagnosticInput::Available(&projection),
+            &[event],
+        )?;
 
         assert_eq!(report.events.len(), 1);
         assert_eq!(
@@ -766,12 +851,17 @@ mod tests {
         )?;
         let projection = VaultProjection {
             store_id,
-            current_epoch: Some(KeyEpoch(epoch)),
+            epoch: ProjectionEpoch::Current(KeyEpoch(epoch)),
             unresolved_schema: true,
             ..VaultProjection::default()
         };
 
-        let report = diagnose_vault_access(&[], &identity, Some(&projection), &[event])?;
+        let report = diagnose_vault_access(
+            &[],
+            &identity,
+            ProjectionDiagnosticInput::Available(&projection),
+            &[event],
+        )?;
 
         assert_eq!(
             report.events[0].epoch_status,

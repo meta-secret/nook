@@ -213,14 +213,19 @@ async fn idb_delete_key(key: &str) -> Result<(), NookError> {
 }
 
 fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
-    nook_core::read_vault_store_id(content)
-        .map_err(|e| NookError::Database(e.to_string()))?
-        .filter(|id| !id.trim().is_empty())
-        .ok_or_else(|| NookError::Database("Vault YAML is missing store_id.".to_owned()))
+    match nook_core::read_vault_store_id(content).map_err(|e| NookError::Database(e.to_string()))? {
+        nook_core::VaultStoreIdentity::Assigned(store_id) => Ok(store_id),
+        nook_core::VaultStoreIdentity::Unassigned => Err(NookError::Database(
+            "Vault YAML is missing store_id.".to_owned(),
+        )),
+    }
 }
 
 fn label_from_yaml(content: &str) -> Option<String> {
-    nook_core::read_vault_name(content).ok().flatten()
+    match nook_core::read_vault_name(content) {
+        Ok(nook_core::VaultName::Named(name)) => Some(name),
+        Ok(nook_core::VaultName::Unnamed) | Err(_) => None,
+    }
 }
 
 fn default_registry_label(store_id: &str) -> String {
@@ -410,7 +415,7 @@ pub(crate) async fn device_identity_device_mode() -> Result<Option<&'static str>
         return Ok(None);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
-    Ok(wrapped.device_mode())
+    Ok(Some(wrapped.device_mode()?))
 }
 
 pub(crate) async fn load_wrapped_device_identity()
@@ -522,7 +527,7 @@ mod device_identity_storage_tests {
             .expect("load")
             .expect("record");
         assert_eq!(reloaded.protection_mode(), "passkey");
-        assert_eq!(reloaded.device_mode(), Some("standard"));
+        assert_eq!(reloaded.device_mode().expect("device mode"), "standard");
         assert_eq!(
             device_identity_device_mode().await.expect("device mode"),
             Some("standard")

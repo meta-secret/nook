@@ -61,7 +61,7 @@ enum Command {
             env = "HIVE_CODEX_MODEL",
             default_value = DEFAULT_CODEX_MODEL
         )]
-        model: Option<String>,
+        model: String,
         #[arg(
             long,
             env = "HIVE_CODEX_REASONING_EFFORT",

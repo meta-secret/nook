@@ -228,10 +228,16 @@ pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[Stored
 pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultContentMetadata> {
     let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
     let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
-    let store_id = crate::read_vault_store_id(content)?
-        .ok_or(crate::errors::VaultFormatError::YamlMissingSections)?;
-    let vault_name = crate::read_vault_name(content)?
-        .unwrap_or_else(|| crate::default_vault_name_for_store_id(&store_id));
+    let store_id = match crate::read_vault_store_id(content)? {
+        crate::VaultStoreIdentity::Assigned(store_id) => store_id,
+        crate::VaultStoreIdentity::Unassigned => {
+            return Err(crate::errors::VaultFormatError::YamlMissingSections.into());
+        }
+    };
+    let vault_name = match crate::read_vault_name(content)? {
+        crate::VaultName::Named(name) => name,
+        crate::VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
+    };
     let version = crate::read_vault_version(content).unwrap_or(0);
     let architecture = crate::read_vault_architecture(content)?;
     Ok(VaultContentMetadata {
@@ -323,7 +329,7 @@ mod tests {
             device_mode: DeviceMode::Standard,
             vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
-            sentinel: Some(SentinelPolicy {
+            sentinel: crate::SentinelConfiguration::Enabled(SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
@@ -334,9 +340,9 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(store_id.as_str()),
-            None,
-            None,
+            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            crate::VaultNameRef::Unnamed,
+            crate::VaultVersionWrite::Initial,
             &architecture,
         )
         .expect_err("vault connect test should reject invalid input");
@@ -382,9 +388,9 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(store_id.as_str()),
-            None,
-            None,
+            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            crate::VaultNameRef::Unnamed,
+            crate::VaultVersionWrite::Initial,
             &architecture,
         )?;
 

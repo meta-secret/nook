@@ -169,7 +169,10 @@ impl NookVaultManager {
             &credential_id,
             &user_handle,
             &prf_input,
-            create_prf_output.as_deref().map(Vec::as_slice),
+            match create_prf_output.as_deref() {
+                Some(output) => nook_core::PasskeyRegistrationPrfOutput::Available(output),
+                None => nook_core::PasskeyRegistrationPrfOutput::Unavailable,
+            },
             mode,
         )?;
         let material = match resolution {

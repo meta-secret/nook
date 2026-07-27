@@ -15,8 +15,8 @@ pub(crate) fn sample_vault_yaml(version: u64, store_id: &str, armor_line: &str) 
         }],
         &VaultUnlock::Keys,
         &[],
-        Some(store_id),
-        Some(version),
+        crate::VaultStoreIdentityRef::Assigned(store_id),
+        crate::VaultVersionWrite::Version(version),
     )
     .expect("test support test setup should succeed")
     .into_inner()
@@ -41,8 +41,8 @@ pub(crate) fn simple_genesis_projection()
         &records,
         &VaultUnlock::Keys,
         &[],
-        Some(store_id.as_str()),
-        None,
+        crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        crate::VaultVersionWrite::Initial,
     )?;
     Ok((keys, identity, yaml))
 }

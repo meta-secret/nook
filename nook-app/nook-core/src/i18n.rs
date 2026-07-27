@@ -1,34 +1,63 @@
 const EN_JSON: &str = include_str!("../locales/en.json");
 const RU_JSON: &str = include_str!("../locales/ru.json");
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppLocale {
+    English,
+    Russian,
+    Unsupported,
+}
+
+impl AppLocale {
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::English => "en",
+            Self::Russian => "ru",
+            Self::Unsupported => "unsupported",
+        }
+    }
+
+    #[must_use]
+    pub const fn is_supported(self) -> bool {
+        !matches!(self, Self::Unsupported)
+    }
+}
+
 /// Returns a supported app locale for exact stored locale values.
 #[must_use]
-pub fn parse_app_locale(value: &str) -> Option<&'static str> {
+pub fn parse_app_locale(value: &str) -> AppLocale {
     match value {
-        "en" => Some("en"),
-        "ru" => Some("ru"),
-        _ => None,
+        "en" => AppLocale::English,
+        "ru" => AppLocale::Russian,
+        _ => AppLocale::Unsupported,
     }
 }
 
 /// Maps a BCP 47 language tag to a supported app locale, if any.
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> Option<&'static str> {
+pub fn resolve_app_locale_from_tag(tag: &str) -> AppLocale {
     let normalized = tag.trim().to_lowercase().replace('_', "-");
     if normalized.is_empty() {
-        return None;
+        return AppLocale::Unsupported;
     }
 
-    let language = normalized.split('-').next()?;
-    parse_app_locale(language)
+    match normalized.split('-').next() {
+        Some(language) => parse_app_locale(language),
+        None => AppLocale::Unsupported,
+    }
 }
 
 /// Picks the first supported locale from an ordered language tag list.
 #[must_use]
 pub fn resolve_app_locale_from_tags<'a>(tags: impl IntoIterator<Item = &'a str>) -> &'static str {
-    tags.into_iter()
-        .find_map(resolve_app_locale_from_tag)
-        .unwrap_or("en")
+    for tag in tags {
+        let locale = resolve_app_locale_from_tag(tag);
+        if locale.is_supported() {
+            return locale.code();
+        }
+    }
+    AppLocale::English.code()
 }
 
 /// Returns the entire JSON catalog for the requested locale.
@@ -264,18 +293,21 @@ mod tests {
 
     #[test]
     fn test_parse_app_locale_accepts_exact_supported_values() {
-        assert_eq!(parse_app_locale("en"), Some("en"));
-        assert_eq!(parse_app_locale("ru"), Some("ru"));
-        assert_eq!(parse_app_locale("en-US"), None);
-        assert_eq!(parse_app_locale(" de "), None);
+        assert_eq!(parse_app_locale("en"), AppLocale::English);
+        assert_eq!(parse_app_locale("ru"), AppLocale::Russian);
+        assert_eq!(parse_app_locale("en-US"), AppLocale::Unsupported);
+        assert_eq!(parse_app_locale(" de "), AppLocale::Unsupported);
     }
 
     #[test]
     fn test_resolve_app_locale_from_tag_maps_bcp_47_tags() {
-        assert_eq!(resolve_app_locale_from_tag("ru-RU"), Some("ru"));
-        assert_eq!(resolve_app_locale_from_tag("ru_BY"), Some("ru"));
-        assert_eq!(resolve_app_locale_from_tag("en-GB"), Some("en"));
-        assert_eq!(resolve_app_locale_from_tag(" de-DE "), None);
+        assert_eq!(resolve_app_locale_from_tag("ru-RU"), AppLocale::Russian);
+        assert_eq!(resolve_app_locale_from_tag("ru_BY"), AppLocale::Russian);
+        assert_eq!(resolve_app_locale_from_tag("en-GB"), AppLocale::English);
+        assert_eq!(
+            resolve_app_locale_from_tag(" de-DE "),
+            AppLocale::Unsupported
+        );
     }
 
     #[test]

@@ -15,6 +15,7 @@ import initNookWasm, {
   NookAuthenticationOutcomeObservation,
   NookAuthenticationPageObservation,
   NookAuthenticationPageObservations,
+  NookAuthenticationWorkflowMatchState,
   NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
@@ -111,20 +112,29 @@ export async function authenticationWorkflowSnapshot(
         input.free()
       }
     }
-    const snapshot = wasmAuthenticationWorkflowSnapshot(inputs) ?? undefined
-    if (!snapshot) return undefined
+    const workflowMatch = wasmAuthenticationWorkflowSnapshot(inputs)
     try {
-      return {
-        kind: snapshot.kindName,
-        stage: snapshot.stageName,
-        action: snapshot.actionName,
-        currentStep: snapshot.currentStep,
-        totalSteps: snapshot.totalSteps,
-        requiresHumanApproval: snapshot.requiresHumanApproval,
-        observationIndex: snapshot.observationIndex,
+      if (
+        workflowMatch.state === NookAuthenticationWorkflowMatchState.NoMatch
+      ) {
+        return undefined
+      }
+      const snapshot = workflowMatch.snapshot()
+      try {
+        return {
+          kind: snapshot.kindName,
+          stage: snapshot.stageName,
+          action: snapshot.actionName,
+          currentStep: snapshot.currentStep,
+          totalSteps: snapshot.totalSteps,
+          requiresHumanApproval: snapshot.requiresHumanApproval,
+          observationIndex: snapshot.observationIndex,
+        }
+      } finally {
+        snapshot.free()
       }
     } finally {
-      snapshot.free()
+      workflowMatch.free()
     }
   } finally {
     inputs.free()
