@@ -190,7 +190,7 @@ async fn reconcile_delivery<S: TaskStore>(
     run_attempt: u64,
 ) -> anyhow::Result<()> {
     let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
-    if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
+    if let Some(active_id) = store.active_delivery(source_commit, "main-repair").await? {
         if active_id == task_id {
             eprintln!(
                 "Hive Workbench delivery already current task={} source_commit={source_commit}",
