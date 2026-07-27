@@ -82,17 +82,29 @@ RUN mkdir -p lace/src hive/src \
     && touch lace/src/lib.rs hive/src/lib.rs hive/src/main.rs \
     && cargo fetch --locked
 
-# Production image builds use a release-profile cargo-chef layer. Verification
-# deliberately branches before this cook: Redis already supplies compiler
-# objects, while waiting for a dummy cook and then compiling the real Clippy/test
-# graphs serializes redundant Cargo work on every cold PR runner.
+# Production image builds use a release-profile cargo-chef layer.
 FROM fetched-dependencies AS dependencies
 COPY --from=chef-planner /build/recipe.json recipe.json
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo chef cook --release --recipe-path recipe.json \
     && nook-sccache-report hive-chef-release
 
-FROM fetched-dependencies AS source
+# Verification needs Cargo's real test and Clippy fingerprints, not only the
+# cargo-chef package versions. Build them once against stub roots in a
+# manifest-only layer, publish that layer from Main, then compile only Hive and
+# Lace source on pull requests. Redis remains the compiler-object fallback
+# while the BuildKit layer preserves Cargo metadata and linked dependencies.
+FROM fetched-dependencies AS verification-dependencies
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    cargo test --locked -p hive --no-run \
+    && nook-sccache-report hive-test-dependencies
+RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+    printf 'fn main() {}\n' > hive/src/main.rs \
+    && cargo clippy --locked -p hive --all-targets -- -D warnings \
+    && nook-sccache-report hive-clippy-dependencies \
+    && install -D /dev/null /opt/nook/hive-verification-dependencies
+
+FROM verification-dependencies AS source
 COPY lace/src lace/src
 COPY hive/src hive/src
 RUN find lace/src hive/src -type f -exec touch {} +
@@ -121,7 +133,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     mkdir -p /opt/nook/hive-tests \
     && cargo test --locked -p hive --no-run --message-format=json \
-      | tee /tmp/hive-test-artifacts.jsonl \
+      > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \
       /tmp/hive-test-artifacts.jsonl \
@@ -155,6 +167,11 @@ COPY lace/src lace/src
 COPY hive/src hive/src
 RUN find lace/src hive/src -type f -exec touch {} +
 
+FROM scratch AS cache-publish
+
+COPY --from=dependencies /build/recipe.json /hive-release-recipe.json
+COPY --from=verification-dependencies /opt/nook/hive-verification-dependencies /hive-verification-dependencies
+
 FROM release-source AS builder
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
     cargo build --locked --release -p hive \
@@ -168,7 +185,12 @@ RUN groupadd --gid 1000 hive \
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
 COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
-RUN chmod 0755 /usr/local/bin/hive-codex-linux-sandbox
+COPY hive/docker/bwrap-with-publication-fd.sh /usr/local/bin/bwrap
+COPY hive/docker/bwrap-publication-fd-smoke.py /usr/local/libexec/hive-bwrap-fd-smoke.py
+RUN chmod 0755 \
+      /usr/local/bin/hive-codex-linux-sandbox \
+      /usr/local/bin/bwrap \
+      /usr/local/libexec/hive-bwrap-fd-smoke.py
 
 USER 1000:1000
 WORKDIR /workspace

@@ -56,6 +56,10 @@ spec:
           imagePullPolicy: Always
           args: ["workbench-dispatcher"]
           env:
+            - name: HIVE_WORKBENCH_REPOSITORY_URL
+              value: https://github.com/meta-secret/nook-workbench.git
+            - name: HIVE_WORKBENCH_CHECKOUT
+              value: /tmp/nook-workbench
             - name: HIVE_WORKBENCH_POLL_SECONDS
               value: "120"
             - name: NEO4J_URI

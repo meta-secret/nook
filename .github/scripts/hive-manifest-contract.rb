@@ -150,6 +150,16 @@ unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
        false
   raise "Hive Workbench dispatcher must remain one token-free Kata replica"
 end
+dispatcher_environment = dispatcher_deployment
+  .dig("spec", "template", "spec", "containers")
+  .find { |container| container["name"] == "dispatcher" }
+  .fetch("env")
+  .to_h { |entry| [entry.fetch("name"), entry["value"]] }
+unless dispatcher_environment["HIVE_WORKBENCH_REPOSITORY_URL"] ==
+       "https://github.com/meta-secret/nook-workbench.git" &&
+       dispatcher_environment["HIVE_WORKBENCH_CHECKOUT"] == "/tmp/nook-workbench"
+  raise "Hive dispatcher must reconcile a cached public Workbench Git snapshot"
+end
 
 manifest_text = File.read(File.join(root, "infra/k0s/manifests/hive/deployment.yaml"))
 raise "Hive must not mount the host Docker socket" if manifest_text.include?("hostPath")
@@ -547,6 +557,12 @@ hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
+hive_bwrap_wrapper = File.read(
+  File.join(root, "agentic-ai/minds/hive/docker/bwrap-with-publication-fd.sh")
+)
+hive_bwrap_smoke = File.read(
+  File.join(root, "agentic-ai/minds/hive/docker/bwrap-publication-fd-smoke.py")
+)
 unless hive_dockerfile.match?(/apt-get install.*?bubblewrap/m)
   raise "Hive runtime must include bubblewrap for the Codex workspace sandbox"
 end
@@ -565,12 +581,22 @@ unless hive_dockerfile.include?(
        )
   raise "Hive runtime must inject Codex's nested Restricted-Pod procfs mode"
 end
+unless hive_dockerfile.include?(
+         "COPY hive/docker/bwrap-with-publication-fd.sh /usr/local/bin/bwrap"
+       ) &&
+       hive_bwrap_wrapper.include?('--keep-fd "$publication_fd"') &&
+       hive_bwrap_wrapper.include?('exec "$real_bwrap" "$@"')
+  raise "Hive runtime must preserve only the explicit publication descriptor through Bubblewrap"
+end
 unless infra_taskfile.include?('kubectl exec "$old_pod"') &&
        infra_taskfile.include?("/usr/bin/setpriv --no-new-privs") &&
        infra_taskfile.include?("/usr/bin/bwrap") &&
        infra_taskfile.include?("--unshare-pid") &&
        infra_taskfile.include?("--ro-bind / /") &&
        infra_taskfile.include?("--bind /workspace /workspace") &&
+       infra_taskfile.include?("publication descriptor through Bubblewrap") &&
+       infra_taskfile.include?("/usr/local/libexec/hive-bwrap-fd-smoke.py") &&
+       hive_bwrap_smoke.include?("os.fstat(fd)") &&
        infra_taskfile.include?("awk '/^Seccomp:/ {print $2}' /proc/self/status")
   raise "Hive deployment must exercise Bubblewrap inside the live Kata worker"
 end
@@ -583,9 +609,13 @@ unless hive_dockerfile.include?(
        )
   raise "Hive test compilation must propagate Cargo failures and export from scratch"
 end
-unless hive_taskfile.include?("--target dependencies") &&
+unless hive_taskfile.include?("--target cache-publish") &&
+       hive_dockerfile.include?("FROM fetched-dependencies AS verification-dependencies") &&
+       hive_dockerfile.include?("FROM scratch AS cache-publish") &&
+       hive_dockerfile.include?("hive-test-dependencies") &&
+       hive_dockerfile.include?("hive-clippy-dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
-  raise "Hive cache publication must export the manifest-keyed dependency graph"
+  raise "Hive cache publication must export release and verification dependency graphs"
 end
 unless hive_taskfile.include?(
          'SCCACHE_REDIS_PASSWORD_FILE: \'{{default "../../.nook/cache/redis-password"'

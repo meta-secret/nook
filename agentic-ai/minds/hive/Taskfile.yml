@@ -108,7 +108,7 @@ tasks:
           echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
           exit 1
         fi
-        test_environment=()
+        test_environment=(-e "RUST_BACKTRACE=1")
         if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
           : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
           test_environment+=(
@@ -177,7 +177,7 @@ tasks:
           echo "Refusing oversized Hive test export: ${test_kib} KiB" >&2
           exit 1
         fi
-        test_environment=()
+        test_environment=(-e "RUST_BACKTRACE=1")
         if [ -n "${HIVE_NEO4J_TEST_URI:-}" ]; then
           : "${HIVE_NEO4J_TEST_PASSWORD:?HIVE_NEO4J_TEST_PASSWORD is required with HIVE_NEO4J_TEST_URI}"
           test_environment+=(
@@ -195,7 +195,7 @@ tasks:
         BASH
 
   cache:publish:
-    desc: Publish the manifest-keyed Hive dependency graph after verification.
+    desc: Publish the manifest-keyed release and verification dependency graphs.
     dir: '{{.HIVE_DIR}}'
     preconditions:
       - sh: test -n "${HIVE_CACHE_TO:-}"
@@ -206,7 +206,7 @@ tasks:
         set -euo pipefail
         command=(docker buildx build
           --platform linux/amd64
-          --target dependencies
+          --target cache-publish
           --output type=cacheonly
           --cache-to "$HIVE_CACHE_TO")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
