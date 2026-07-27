@@ -35,6 +35,7 @@ spec:
             - /bin/bash
             - -ceu
             - |
+              rm -f /trust/ca-certificates.crt
               cat /etc/ssl/certs/ca-certificates.crt /run/neo4j/ca.crt \
                 > /trust/ca-certificates.crt
               chmod 0444 /trust/ca-certificates.crt
