@@ -247,9 +247,7 @@ fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
             compact
                 .windows(pattern.len())
                 .enumerate()
-                .filter_map(|(start, window)| {
-                    (window == pattern).then_some(source_lines[start])
-                }),
+                .filter_map(|(start, window)| (window == pattern).then_some(source_lines[start])),
         );
     }
     lines.sort_unstable();
@@ -1208,10 +1206,7 @@ let providerId = $state<string>()
 let selectedStoreId = $state<StoreId>()
 ";
 
-        assert_eq!(
-            widened_domain_identifier_state_lines(source),
-            vec![2, 3]
-        );
+        assert_eq!(widened_domain_identifier_state_lines(source), vec![2, 3]);
     }
 
     #[test]
