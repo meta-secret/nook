@@ -371,12 +371,10 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
     );
   } else {
     const snapshot = ensureLocalProviderRowWasm(
-      JSON.parse(
-        JSON.stringify({
-          providers: state.providers,
-          activeVaultStoreId: state.activeVaultStoreId ?? undefined,
-        }),
-      ) as AuthProvidersSnapshot,
+      {
+        providers: state.providers,
+        activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+      } as AuthProvidersSnapshot,
       vaultStoreId ?? undefined,
     );
     state.providers = snapshot.providers;

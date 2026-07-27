@@ -18,7 +18,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelGenesisPhase,
-    sentinelGenesisPhaseName,
+    sentinelGenesisPhaseTranslationKey,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
@@ -768,7 +768,9 @@
             >
               {status === SentinelGenesisPhase.Inactive
                 ? vault.t('login.sentinel_card_stack_pre_genesis')
-                : sentinelGenesisPhaseName(status).toUpperCase()}
+                : vault
+                    .t(sentinelGenesisPhaseTranslationKey(status))
+                    .toUpperCase()}
             </span>
           </div>
 

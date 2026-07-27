@@ -56,10 +56,10 @@ pub use types::{
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen(js_name = sentinelGenesisPhaseName)]
+#[wasm_bindgen(js_name = sentinelGenesisPhaseTranslationKey)]
 #[must_use]
-pub fn sentinel_genesis_phase_name(phase: nook_core::SentinelGenesisPhase) -> String {
-    phase.as_str().to_owned()
+pub fn sentinel_genesis_phase_translation_key(phase: nook_core::SentinelGenesisPhase) -> String {
+    phase.translation_key().to_owned()
 }
 
 #[derive(thiserror::Error, Debug)]
