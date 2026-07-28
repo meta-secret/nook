@@ -273,6 +273,7 @@ reaper_command = reaper_deployment
 unless reaper_command.include?("token('/run/kubernetes/token')") &&
        reaper_command.include?('expected = token("/run/reaper-auth/token")') &&
        reaper_command.include?("def reconcile_neo4j_policy():") &&
+       reaper_command.include?('"hive-observer-egress"') &&
        reaper_command.include?('"resourceVersion": policy["metadata"][') &&
        reaper_command.include?("if error.code != 409:") &&
        reaper_command.include?("time.sleep(10)")

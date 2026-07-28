@@ -1,0 +1,6 @@
+{
+  "product_name": "Центр управления Hive",
+  "unavailable": "Hive сейчас недоступен",
+  "unavailable_description": "Не удалось получить состояние наблюдателя.",
+  "retry_connection": "Повторить"
+}

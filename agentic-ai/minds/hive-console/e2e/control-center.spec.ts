@@ -18,6 +18,8 @@ const snapshot: ObserverSnapshot = {
     search_tasks: 'Search tasks',
     no_tasks: 'No tasks yet',
     no_tasks_description: 'New work will appear here when Hive is triggered.',
+    no_search_results: 'No matching tasks',
+    no_search_results_description: 'Adjust the search to see other tasks.',
     no_attention: 'Nothing needs intervention',
     no_attention_description: 'There are no blocked, stale, or failed tasks.',
     task_details: 'Task details',
@@ -106,6 +108,8 @@ const snapshot: ObserverSnapshot = {
           message: 'Running repository command',
           detail: '',
           created_at: now - 18_000,
+          attempt_id: 'attempt-2',
+          attempt_number: 2,
         },
         {
           id: 'activity-2',
@@ -113,6 +117,8 @@ const snapshot: ObserverSnapshot = {
           message: 'Applying repository changes',
           detail: '',
           created_at: now - 2 * 60_000,
+          attempt_id: 'attempt-2',
+          attempt_number: 2,
         },
         {
           id: 'activity-1',
@@ -120,6 +126,8 @@ const snapshot: ObserverSnapshot = {
           message: 'Agent started',
           detail: '',
           created_at: now - 12 * 60_000,
+          attempt_id: 'attempt-2',
+          attempt_number: 2,
         },
       ],
     },
@@ -151,6 +159,8 @@ const snapshot: ObserverSnapshot = {
           message: 'Repository command failed',
           detail: 'task hive:verify · status 1 · 401.2s',
           created_at: now - 9 * 60_000,
+          attempt_id: 'failed-attempt-3',
+          attempt_number: 3,
         },
       ],
     },
@@ -288,4 +298,31 @@ test('uses immediate task navigation with reduced motion', async ({ page }) => {
     'data-scroll-behavior',
     'auto',
   );
+});
+
+test('keeps an explicitly closed inspector closed during search', async ({
+  page,
+}) => {
+  await routeSnapshot(page);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Close details' }).click();
+  await page.getByPlaceholder('Search tasks').fill('completed');
+  await expect(page.locator('.detail-header')).toHaveCount(0);
+});
+
+test('distinguishes no search results and labels activity attempts', async ({
+  page,
+}) => {
+  await routeSnapshot(page);
+  await page.goto('/');
+
+  await expect(
+    page.locator('.timeline').getByText('Attempt 2').first(),
+  ).toBeVisible();
+  await page.getByPlaceholder('Search tasks').fill('not-a-real-task');
+  await expect(page.getByText('No matching tasks')).toBeVisible();
+  await expect(
+    page.getByText('Adjust the search to see other tasks.'),
+  ).toBeVisible();
 });

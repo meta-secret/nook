@@ -25,6 +25,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObserverCopy,
     ObserverSnapshot,
   } from './types';
+  import { emergencyCopy } from './emergency-copy';
 
   let snapshot = $state<ObserverSnapshot | undefined>(undefined);
   let selectedId = $state<string | undefined>(undefined);
@@ -32,8 +33,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   let loading = $state(true);
   let unavailable = $state(false);
   let detailPanel = $state<HTMLElement | undefined>(undefined);
+  let detailsClosed = $state(false);
 
-  const copy = $derived(snapshot?.copy ?? emergencyCopy());
+  const copy = $derived(
+    snapshot?.copy ?? emergencyCopy(navigator.language || 'en'),
+  );
   const selected = $derived(
     snapshot?.tasks.find((task) => task.id === selectedId),
   );
@@ -82,6 +86,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   $effect(() => {
     if (
       search.trim().length > 0 &&
+      !detailsClosed &&
       !filteredTasks.some((task) => task.id === selectedId)
     ) {
       selectedId = filteredTasks[0]?.id;
@@ -105,10 +110,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       snapshot = next;
       unavailable = false;
       if (
-        selectedId === undefined ||
+        (!detailsClosed && selectedId === undefined) ||
         !next.tasks.some((task) => task.id === selectedId)
       ) {
-        selectedId = next.tasks[0]?.id;
+        if (!detailsClosed) selectedId = next.tasks[0]?.id;
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -165,6 +170,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   }
 
   function selectTask(taskId: string) {
+    detailsClosed = false;
     selectedId = taskId;
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
@@ -177,61 +183,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     });
   }
 
-  function emergencyCopy(): ObserverCopy {
-    const russian = navigator.language.toLocaleLowerCase().startsWith('ru');
-    const unavailableCopy = russian
-      ? {
-          name: 'Центр управления Hive',
-          unavailable: 'Hive сейчас недоступен',
-          description: 'Не удалось получить состояние наблюдателя.',
-          retry: 'Повторить',
-        }
-      : {
-          name: 'Hive Control Center',
-          unavailable: 'Hive is unavailable',
-          description: 'The observer state could not be loaded.',
-          retry: 'Try again',
-        };
-    return {
-      product_name: unavailableCopy.name,
-      product_description: '',
-      overview: '',
-      workers: '',
-      queue: '',
-      needs_attention: '',
-      recent_activity: '',
-      all_tasks: '',
-      search_tasks: '',
-      no_tasks: '',
-      no_tasks_description: '',
-      no_attention: '',
-      no_attention_description: '',
-      task_details: '',
-      trigger: '',
-      source_revision: '',
-      current_attempt: '',
-      dependencies: '',
-      timeline: '',
-      no_activity: '',
-      no_dependencies: '',
-      attempt: '',
-      last_seen: '',
-      updated: '',
-      stale: '',
-      healthy: '',
-      idle: '',
-      running: '',
-      ready: '',
-      blocked: '',
-      failed: '',
-      cancelling: '',
-      cancelled: '',
-      completed: '',
-      unavailable: unavailableCopy.unavailable,
-      unavailable_description: unavailableCopy.description,
-      retry_connection: unavailableCopy.retry,
-      close_details: '',
-    };
+  function closeDetails() {
+    detailsClosed = true;
+    selectedId = undefined;
   }
 </script>
 
@@ -391,8 +345,16 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {:else}
             <div class="empty-state">
               <CircleDashed size={24} />
-              <strong>{copy.no_tasks}</strong>
-              <p>{copy.no_tasks_description}</p>
+              <strong>
+                {search.trim().length > 0
+                  ? copy.no_search_results
+                  : copy.no_tasks}
+              </strong>
+              <p>
+                {search.trim().length > 0
+                  ? copy.no_search_results_description
+                  : copy.no_tasks_description}
+              </p>
             </div>
           {/each}
         </div>
@@ -415,7 +377,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
             <button
               class="icon-button"
               aria-label={copy.close_details}
-              onclick={() => (selectedId = undefined)}
+              onclick={closeDetails}
             >
               <X size={18} />
             </button>
@@ -487,7 +449,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
             {#if selected.activity.length > 0}
               <ol class="timeline">
                 {#each selected.activity as entry (entry.id)}
-                  {@render TimelineEntry(entry, relativeTime)}
+                  {@render TimelineEntry(entry, copy, relativeTime)}
                 {/each}
               </ol>
             {:else}
@@ -551,6 +513,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
 {#snippet TimelineEntry(
   entry: ObservedActivity,
+  copy: ObserverCopy,
   relativeTime: (timestamp: number) => string,
 )}
   <li class={`timeline-${entry.kind}`}>
@@ -560,6 +523,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         <strong>{entry.message}</strong>
         <time>{relativeTime(entry.created_at)}</time>
       </div>
+      {#if entry.attempt_number > 0}
+        <span>{copy.attempt} {entry.attempt_number}</span>
+      {/if}
       {#if entry.detail}
         <code>{entry.detail}</code>
       {/if}

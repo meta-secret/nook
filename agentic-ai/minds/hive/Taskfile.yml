@@ -48,7 +48,7 @@ tasks:
         console_container="$(docker create "$console_image")"
         docker cp "$console_container:/console/." "$formatted/hive-console"
         docker rm "$console_container" >/dev/null
-        for path in src e2e index.html svelte.config.js tsconfig.json vite.config.ts playwright.config.ts .prettierrc PRODUCT.md DESIGN.md package.json; do
+        for path in src e2e locales index.html svelte.config.js tsconfig.json vite.config.ts playwright.config.ts .prettierrc PRODUCT.md DESIGN.md package.json; do
           rm -rf "hive-console/$path"
            cp -R "$formatted/hive-console/$path" "hive-console/$path"
          done

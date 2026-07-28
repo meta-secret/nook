@@ -8,8 +8,8 @@
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "dev": "vite --host 127.0.0.1",
-    "format": "prettier --write \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"*.{ts,js,json,md,html}\" .prettierrc",
-    "format:check": "prettier --check \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"*.{ts,js,json,md,html}\" .prettierrc",
+    "format": "prettier --write \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"locales/**/*.json\" \"*.{ts,js,json,md,html}\" .prettierrc",
+    "format:check": "prettier --check \"src/**/*.{ts,svelte,css}\" \"e2e/**/*.ts\" \"locales/**/*.json\" \"*.{ts,js,json,md,html}\" .prettierrc",
     "test:e2e": "playwright test"
   },
   "dependencies": {

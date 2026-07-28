@@ -75,6 +75,8 @@ pub struct ObservedActivity {
     pub message: String,
     pub detail: String,
     pub created_at: i64,
+    pub attempt_id: String,
+    pub attempt_number: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -90,6 +92,8 @@ pub struct ObserverCopy {
     pub search_tasks: &'static str,
     pub no_tasks: &'static str,
     pub no_tasks_description: &'static str,
+    pub no_search_results: &'static str,
+    pub no_search_results_description: &'static str,
     pub no_attention: &'static str,
     pub no_attention_description: &'static str,
     pub task_details: &'static str,
@@ -134,6 +138,8 @@ impl ObserverCopy {
                 search_tasks: "Поиск задач",
                 no_tasks: "Задач пока нет",
                 no_tasks_description: "Новые задачи появятся здесь после запуска Hive.",
+                no_search_results: "Ничего не найдено",
+                no_search_results_description: "Измените запрос, чтобы увидеть другие задачи.",
                 no_attention: "Вмешательство не требуется",
                 no_attention_description: "Заблокированных, устаревших или неудачных задач нет.",
                 task_details: "Сведения о задаче",
@@ -175,6 +181,8 @@ impl ObserverCopy {
             search_tasks: "Search tasks",
             no_tasks: "No tasks yet",
             no_tasks_description: "New work will appear here when Hive is triggered.",
+            no_search_results: "No matching tasks",
+            no_search_results_description: "Adjust the search to see other tasks.",
             no_attention: "Nothing needs intervention",
             no_attention_description: "There are no blocked, stale, or failed tasks.",
             task_details: "Task details",
@@ -388,7 +396,12 @@ impl Neo4jTaskStore {
                             coalesce(latest.attempt.status, '') AS latest_attempt_status,
                             coalesce(latest.attempt.started_at, 0) AS latest_attempt_started_at,
                             coalesce(latest.attempt.completed_at, 0) AS latest_attempt_completed_at,
-                            substring(replace(coalesce(latest.attempt.error, ''), '\n', ' '), 0, 600)
+                            substring(replace(coalesce(
+                              latest.attempt.error,
+                              task.failure_reason,
+                              task.blocked_reason,
+                              ''
+                            ), '\n', ' '), 0, 600)
                               AS latest_error,
                             substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
                               AS latest_summary
@@ -527,7 +540,8 @@ impl Neo4jTaskStore {
                  CALL {
                    WITH task
                    MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
-                   RETURN activity
+                   OPTIONAL MATCH (activity)-[:FOR_ATTEMPT]->(attempt:Attempt)
+                   RETURN activity, attempt
                    ORDER BY activity.created_at DESC, activity.id DESC
                    LIMIT 100
                  }
@@ -536,7 +550,9 @@ impl Neo4jTaskStore {
                         activity.kind AS kind,
                         activity.message AS message,
                         coalesce(activity.detail, '') AS detail,
-                        activity.created_at AS created_at
+                        activity.created_at AS created_at,
+                        coalesce(attempt.id, '') AS attempt_id,
+                        coalesce(attempt.number, 0) AS attempt_number
                  ORDER BY task_id, activity.created_at DESC, activity.id DESC",
                 )
                 .param("task_ids", task_ids),
@@ -554,6 +570,8 @@ impl Neo4jTaskStore {
                 message: localized_activity(&message, locale).to_owned(),
                 detail: row.get("detail")?,
                 created_at: row.get("created_at")?,
+                attempt_id: row.get("attempt_id")?,
+                attempt_number: row.get("attempt_number")?,
             });
         }
         Ok(())

@@ -10,6 +10,8 @@ export type ObserverCopy = {
   search_tasks: string;
   no_tasks: string;
   no_tasks_description: string;
+  no_search_results: string;
+  no_search_results_description: string;
   no_attention: string;
   no_attention_description: string;
   task_details: string;
@@ -57,6 +59,8 @@ export type ObservedActivity = {
   message: string;
   detail: string;
   created_at: number;
+  attempt_id: string;
+  attempt_number: number;
 };
 
 export type ObservedTask = {
