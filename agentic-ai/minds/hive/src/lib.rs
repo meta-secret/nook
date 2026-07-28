@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 pub mod auth;
 pub mod codex;
 pub mod coordinator;
+mod delivery;
 pub mod dispatcher;
 pub mod model;
 pub mod neo4j;

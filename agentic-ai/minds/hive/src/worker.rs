@@ -14,6 +14,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
+use crate::delivery::verify_main_repair_delivery;
 use crate::model::{
     ActivityLease, AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
     TaskActivity, TaskTrigger, TerminalResult,
@@ -216,7 +217,7 @@ impl<S: TaskStore> Worker<S> {
                         preparation.baseline
                     };
                     let prompt = task_prompt(task);
-                    let mut codex_options = CodexOptions::new(repository)
+                    let mut codex_options = CodexOptions::new(repository.clone())
                         .with_workspace_write()
                         .with_activity_sender(activity_tx.clone());
                     codex_options.model.clone_from(&self.config.model);
@@ -254,6 +255,13 @@ impl<S: TaskStore> Worker<S> {
                             blocker,
                             reason: bounded(summary),
                         });
+                    }
+                    if task.kind == "main-repair" {
+                        verify_main_repair_delivery(
+                            &repository,
+                            &repair_branch_name(task.id.as_str()),
+                        )
+                        .await?;
                     }
                     let summary = bounded(&format!(
                         "{}\n\nChanged files:\n{}\n\nTests:\n{}",
@@ -822,7 +830,8 @@ fn task_prompt(task: &ClaimedTask) -> String {
          You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
          `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
          authenticated Git push. Reuse or create the deterministic branch \
-         `{branch}`, publish the repair PR, apply and verify the `ci:full-e2e` label, traverse all \
+         `{branch}`, publish the repair PR with a `[Hive]` title and both the `hive` and \
+         `ci:full-e2e` labels, traverse all \
          checks and review feedback, fix and reply \
          to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
          readiness audit, squash-merge, verify the \
@@ -941,6 +950,8 @@ mod tests {
         assert!(prompt.contains("codex/hive-main-failure-recovery"));
         assert!(prompt.contains("replacement Pod"));
         assert!(prompt.contains("Main verification"));
+        assert!(prompt.contains("[Hive]"));
+        assert!(prompt.contains("`hive`"));
         assert!(prompt.contains("ci:full-e2e"));
         assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
         Ok(())
