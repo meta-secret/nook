@@ -77,12 +77,12 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         "test \"$client_exists\" = true",
         "test -s \"$secret_dir/password\"",
         "kubectl apply -f -",
-        "if test \"$client_secret_before\" != \"$client_secret_after\"",
-        "client_secret_changed=true",
+        "Refusing divergent non-empty Neo4j credentials",
+        "hive.nook.sh/neo4j-client-sha256",
         "auth_secret_needs_reconcile=true",
         "hive-workbench-dispatcher",
         "hive-observer",
-        "kubectl rollout restart",
+        "kubectl patch",
         "kubectl rollout status",
     ] {
         assert!(
@@ -125,8 +125,8 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         .find("kubectl rollout status statefulset/hive-neo4j")
         .expect("Neo4j availability wait");
     let client_restart = reconciliation
-        .find("if test \"$client_secret_changed\" = true")
-        .expect("client restart gate");
+        .find("hive.nook.sh/neo4j-client-sha256")
+        .expect("client checksum rollout gate");
     assert!(
         client_restart > neo4j_ready,
         "clients restart only after Neo4j is available"

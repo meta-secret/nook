@@ -213,6 +213,19 @@ tasks:
               tr -d '\r\n' > "$secret_dir/password"
             auth_secret_needs_reconcile=true
           fi
+          if test "$client_exists" = true; then
+            kubectl get secret hive-neo4j-client \
+              --namespace hive-system \
+              -o jsonpath='{.data.NEO4J_PASSWORD}' |
+              base64 --decode |
+              tr -d '\r\n' > "$secret_dir/client-password"
+            if test -s "$secret_dir/client-password" &&
+              test "$(cat "$secret_dir/password")" !=
+                "$(cat "$secret_dir/client-password")"; then
+              echo "Refusing divergent non-empty Neo4j credentials" >&2
+              exit 1
+            fi
+          fi
         else
           kubectl get secret hive-neo4j-client \
             --namespace hive-system \
@@ -234,12 +247,6 @@ tasks:
             -o yaml |
             kubectl apply -f -
         fi
-        client_secret_before="$(
-          kubectl get secret hive-neo4j-client \
-            --namespace hive-system \
-            -o jsonpath='{.data.NEO4J_PASSWORD}' 2>/dev/null ||
-            true
-        )"
         cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
         kubectl create secret generic hive-neo4j-client \
           --namespace hive-system \
@@ -247,16 +254,10 @@ tasks:
           --dry-run=client \
           -o yaml |
           kubectl apply -f -
-        client_secret_after="$(
-          kubectl get secret hive-neo4j-client \
-            --namespace hive-system \
-            -o jsonpath='{.data.NEO4J_PASSWORD}'
+        client_secret_checksum="$(
+          sha256sum "$secret_dir/NEO4J_PASSWORD" |
+            cut -d' ' -f1
         )"
-        client_secret_changed=false
-        if test "$client_secret_before" != "$client_secret_after"; then
-          client_secret_changed=true
-        fi
-        unset client_secret_before client_secret_after
         rm -rf "$secret_dir"
 
         curl -fsSL --retry 3 -o "$chart.next" \
@@ -280,22 +281,22 @@ tasks:
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \
           --timeout=10m
-        if test "$client_secret_changed" = true; then
-          for deployment in \
-            hive \
-            hive-workbench-dispatcher \
-            hive-observer; do
-            if kubectl get deployment "$deployment" \
-              --namespace hive-system >/dev/null 2>&1; then
-              kubectl rollout restart "deployment/$deployment" \
-                --namespace hive-system
-              kubectl rollout status "deployment/$deployment" \
-                --namespace hive-system \
-                --timeout=15m
-            fi
-          done
-        fi
-        unset client_secret_changed retained_storage auth_secret_needs_reconcile
+        for deployment in \
+          hive \
+          hive-workbench-dispatcher \
+          hive-observer; do
+          if kubectl get deployment "$deployment" \
+            --namespace hive-system >/dev/null 2>&1; then
+            kubectl patch "deployment/$deployment" \
+              --namespace hive-system \
+              --type merge \
+              -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"hive.nook.sh/neo4j-client-sha256\":\"$client_secret_checksum\"}}}}}"
+            kubectl rollout status "deployment/$deployment" \
+              --namespace hive-system \
+              --timeout=15m
+          fi
+        done
+        unset client_secret_checksum retained_storage auth_secret_needs_reconcile
         neo4j_service_ip="$(
           kubectl get service hive-neo4j \
             --namespace hive-data \
