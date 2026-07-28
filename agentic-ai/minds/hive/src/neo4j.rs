@@ -571,9 +571,11 @@ impl TaskStore for Neo4jTaskStore {
             .graph
             .execute(
                 query(
-                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt)
-                     OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
+                    "MATCH (task:Task {id: $task_id})
                      WHERE task.status IN ['CANCELLING', 'CANCELLED']
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
+                     WHERE attempt.lease_token = task.lease_token
+                     OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                      SET task.status = 'CANCELLED',
                          task.updated_at = timestamp(),
                          task.version = task.version + 1,

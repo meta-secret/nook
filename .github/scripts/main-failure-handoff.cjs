@@ -143,10 +143,13 @@ function retireSuccessfulMainIssue({ body, run, recordedAt }) {
   if (isStaleMainAttempt(body, run)) return body
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
   if (body.includes(marker) && body.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)) return body
+  const wasCompleted = /^status:\s*done$/m.test(body)
   let updated = replaceFrontmatterField(body, 'updated_at', requireTimestamp(recordedAt, 'recordedAt'))
   updated = replaceFrontmatterField(updated, 'status', 'done')
-  updated = replaceFrontmatterField(updated, 'owner', 'unassigned')
-  updated = clearDeliveryCompletion(updated)
+  if (!wasCompleted) {
+    updated = replaceFrontmatterField(updated, 'owner', 'unassigned')
+    updated = clearDeliveryCompletion(updated)
+  }
   updated = updated.replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, '')
   const entry = [
     marker,
@@ -278,7 +281,7 @@ function buildMainFailureIssue({
           clearDeliveryCompletion(
             existingBody
               .replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, '')
-              .replace(`${SUCCESSFUL_RERUN_RETIREMENT_MARKER}\n`, ''),
+              .replaceAll(`${SUCCESSFUL_RERUN_RETIREMENT_MARKER}\n`, ''),
           ),
           'status',
           'ready',

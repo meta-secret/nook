@@ -178,8 +178,13 @@ network = network_policies
 api_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-kubernetes-api" }
 raise "Hive worker Kubernetes API policy is missing" unless api_network
-unless api_network.dig("spec", "podSelector", "matchLabels", "app.kubernetes.io/name") == "hive"
-  raise "Only Hive worker Pods may reach the Kubernetes API"
+api_selector = api_network.dig("spec", "podSelector", "matchExpressions")&.first
+unless api_selector == {
+  "key" => "app.kubernetes.io/name",
+  "operator" => "In",
+  "values" => ["hive", "hive-workbench-dispatcher"]
+}
+  raise "Only Hive worker and dispatcher Pods may reach the Kubernetes API"
 end
 internet_block = network
   .dig("spec", "egress")

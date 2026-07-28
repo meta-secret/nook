@@ -120,6 +120,53 @@ test('retires an existing incident after a successful rerun', () => {
   assert.match(retired, /<!-- hive-retired:successful-rerun -->/)
 })
 
+test('reopens after repeated successful reruns without stale retirement markers', () => {
+  const initial = buildMainFailureIssue({
+    run: run(),
+    jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T06:00:00Z',
+  })
+  const first = retireSuccessfulMainIssue({
+    body: initial.body,
+    run: run({ run_attempt: 2, conclusion: 'success' }),
+    recordedAt: '2026-07-26T07:00:00Z',
+  })
+  const second = retireSuccessfulMainIssue({
+    body: first,
+    run: run({ run_attempt: 3, conclusion: 'success' }),
+    recordedAt: '2026-07-26T08:00:00Z',
+  })
+  const reopened = buildMainFailureIssue({
+    run: run({ run_attempt: 4 }),
+    jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T09:00:00Z',
+    existingBody: second,
+  })
+
+  assert.match(reopened.body, /^status: ready$/m)
+  assert.doesNotMatch(reopened.body, /<!-- hive-retired:successful-rerun -->/)
+})
+
+test('successful rerun preserves completed delivery evidence', () => {
+  const initial = buildMainFailureIssue({
+    run: run(),
+    jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T06:00:00Z',
+  })
+  const completed = `${initial.body
+    .replace(/^status: ready$/m, 'status: done')
+    .replace('- [ ]', '- [x]')}\n\n## Completion\n\n<!-- hive-delivery-complete -->\n- Repair PR: [#800](https://github.com/meta-secret/nook/pull/800)\n`
+  const retired = retireSuccessfulMainIssue({
+    body: completed,
+    run: run({ run_attempt: 2, conclusion: 'success' }),
+    recordedAt: '2026-07-26T07:00:00Z',
+  })
+
+  assert.match(retired, /<!-- hive-delivery-complete -->/)
+  assert.match(retired, /Repair PR: \[#800\]/)
+  assert.match(retired, /- \[x\] The failure is explained/)
+})
+
 test('reopens a completed incident for a later failed rerun', () => {
   const source = run()
   const initial = buildMainFailureIssue({
