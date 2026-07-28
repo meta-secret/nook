@@ -11,11 +11,23 @@ import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
+  const clearedThroughManager = await page.evaluate(async () => {
+    const manager = (
+      window as Window & {
+        __nookVault?: {
+          manager?: { deleteLocalBrowserData?: () => Promise<void> }
+        }
+      }
+    ).__nookVault?.manager
+    if (!manager?.deleteLocalBrowserData) return false
+    await manager.deleteLocalBrowserData()
+    return true
+  })
   await page.evaluate(
-    () =>
+    (vaultAlreadyCleared) =>
       new Promise<void>((resolve, reject) => {
         localStorage.clear()
-        let pending = 2
+        let pending = vaultAlreadyCleared ? 1 : 2
         const done = () => {
           pending -= 1
           if (pending === 0) resolve()
@@ -23,16 +35,19 @@ export async function clearBrowserVault(page: Page) {
         const onError = (err: DOMException | undefined) =>
           reject(err ?? new Error('IndexedDB delete failed'))
 
-        const vaultDb = indexedDB.deleteDatabase('nook_db')
-        vaultDb.onsuccess = done
-        vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
-        vaultDb.onblocked = done
+        if (!vaultAlreadyCleared) {
+          const vaultDb = indexedDB.deleteDatabase('nook_db')
+          vaultDb.onsuccess = done
+          vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
+          vaultDb.onblocked = done
+        }
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
         authDb.onerror = () => onError(authDb.error ?? undefined)
         authDb.onblocked = done
       }),
+    clearedThroughManager,
   )
 }
 
