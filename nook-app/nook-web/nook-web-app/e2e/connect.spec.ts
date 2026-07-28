@@ -28,7 +28,7 @@ test.describe('vault connect flow', () => {
         messageIncludes: 'connect complete',
       },
       {
-        scope: 'vault',
+        scope: 'vault-session',
         level: 'info',
         messageIncludes: 'vault session unlocked',
       },
