@@ -175,6 +175,10 @@ network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-egress" }
 api_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-kubernetes-api" }
+dispatcher_network = network_policies
+  .find { |document| document.dig("metadata", "name") == "hive-dispatcher-reaper" }
+reaper_network = network_policies
+  .find { |document| document.dig("metadata", "name") == "hive-reaper-controller" }
 raise "Hive worker Kubernetes API policy is missing" unless api_network
 unless api_network.dig("spec", "podSelector", "matchLabels", "app.kubernetes.io/name") == "hive"
   raise "Only Hive worker Pods may reach the Kubernetes API"
@@ -189,6 +193,30 @@ raise "Hive Internet egress rule is missing" unless internet_block
 private_ranges = %w[10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16]
 missing_ranges = private_ranges - internet_block.fetch("except")
 raise "Hive Internet egress includes private ranges: #{missing_ranges.join(", ")}" unless missing_ranges.empty?
+raise "Hive dispatcher egress policy is missing" unless dispatcher_network
+dispatcher_egress = dispatcher_network.dig("spec", "egress")
+dispatcher_ports = dispatcher_egress.flat_map { |rule| rule.fetch("ports", []) }
+unless dispatcher_ports.any? { |port| port["protocol"] == "UDP" && port["port"] == 53 } &&
+       dispatcher_ports.any? { |port| port["protocol"] == "TCP" && port["port"] == 7687 } &&
+       dispatcher_ports.any? { |port| port["protocol"] == "TCP" && port["port"] == 8080 } &&
+       dispatcher_ports.any? { |port| port["protocol"] == "TCP" && port["port"] == 443 }
+  raise "Hive dispatcher must reach DNS, Neo4j, the reaper, and GitHub"
+end
+dispatcher_internet = dispatcher_egress
+  .flat_map { |rule| rule.fetch("to", []) }
+  .map { |destination| destination["ipBlock"] }
+  .compact
+  .find { |block| block["cidr"] == "0.0.0.0/0" }
+unless dispatcher_internet && (private_ranges - dispatcher_internet.fetch("except")).empty?
+  raise "Hive dispatcher Internet egress must exclude private ranges"
+end
+raise "Hive reaper NetworkPolicy is missing" unless reaper_network
+reaper_callers = reaper_network.dig("spec", "ingress")
+  .flat_map { |rule| rule.fetch("from", []) }
+  .map { |source| source.dig("podSelector", "matchLabels", "app.kubernetes.io/name") }
+unless reaper_callers.include?("hive") && reaper_callers.include?("hive-workbench-dispatcher")
+  raise "Hive reaper must admit workers and the Workbench dispatcher"
+end
 unless reaper_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
        "hive-reaper-controller"
   raise "Hive reaper controller must use a distinct Pod-deletion identity"

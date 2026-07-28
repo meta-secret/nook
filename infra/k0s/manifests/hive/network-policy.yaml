@@ -82,12 +82,50 @@ spec:
     - Egress
   egress:
     - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              hive.nook.sh/role: data
+      ports:
+        - protocol: TCP
+          port: 7687
+    - to:
+        - ipBlock:
+            cidr: HIVE_NEO4J_SERVICE_CIDR
+        - ipBlock:
+            cidr: HIVE_NEO4J_ENDPOINT_CIDR
+      ports:
+        - protocol: TCP
+          port: 7687
+    - to:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: hive-reaper-controller
       ports:
         - protocol: TCP
           port: 8080
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 224.0.0.0/4
+      ports:
+        - protocol: TCP
+          port: 443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -131,6 +169,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: hive
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hive-workbench-dispatcher
       ports:
         - protocol: TCP
           port: 8080
