@@ -45,9 +45,9 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 
-  test('unlocks with PRF-enabled device keys from local login step', async ({
-    page,
-  }) => {
+  test(
+    'unlocks with PRF-enabled device keys from local login step',
+    async ({ page }) => {
     await disableLoginAutoUnlock(page)
     await page.reload()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
@@ -69,11 +69,12 @@ test.describe('login unlock flow (local-first)', () => {
         .prf?.enabled
     })
     expect(prfEnabledAfterReload).toBe(true)
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-  })
+      await page.getByTestId('unlock-vault-btn').click()
+      await expect(page.getByTestId('vault-panel')).toBeVisible({
+        timeout: UI_TIMEOUT_MS,
+      })
+    },
+  )
 
   test('switches to backup password and shows labelled entry picker', async ({
     page,
