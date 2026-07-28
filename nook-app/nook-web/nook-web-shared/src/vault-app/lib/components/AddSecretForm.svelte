@@ -1,33 +1,17 @@
 <script lang="ts">
+  import { ArrowLeft, RefreshCw } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
   import {
-    Globe,
-    Braces,
-    Sprout,
-    StickyNote,
-    ShieldCheck,
-    ArrowLeft,
-    KeyRound,
-    RefreshCw,
-    Eye,
-    EyeOff,
-    ChevronDown,
-    ChevronRight,
-    CreditCard,
-    Paperclip,
-  } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
-  import {
-    authenticatorSetupKeyChanged,
     buildSecretYaml,
     generateSecretId,
     type NookSecretRecord,
     type VaultItemType,
-    type SecretFormInput,
-  } from '$lib/nook'
-  import type { VaultState } from '$lib/vault.svelte'
-  import MarkdownEditor from './MarkdownEditor.svelte'
-  import SeedPhraseGrid from './SeedPhraseGrid.svelte'
-  import { defaultPasswordGenerationOptions } from '$web-shared/password/generator'
+  } from "$lib/nook";
+  import type { VaultState } from "$lib/vault.svelte";
+  import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
+  import SecretFields from "./add-secret/SecretFields.svelte";
+  import { SecretFormState } from "./add-secret/secret-form-state.svelte";
+  import SecretTypePicker from "./add-secret/SecretTypePicker.svelte";
 
   let {
     vault,
@@ -39,652 +23,138 @@
     initialItem = undefined,
     selectedType = $bindable<VaultItemType | undefined>(undefined),
   }: {
-    vault: VaultState
-    isSaving: boolean
+    vault: VaultState;
+    isSaving: boolean;
     onAddSecret: (
       id: string,
       type: VaultItemType,
       data: string,
-    ) => Promise<void>
+    ) => Promise<void>;
     onReplaceSecret?: (
       oldId: string,
       type: VaultItemType,
       data: string,
-    ) => Promise<void>
+    ) => Promise<void>;
     onGeneratePassword: (
       length: number,
       lowercase: boolean,
       uppercase: boolean,
       numbers: boolean,
       symbols: boolean,
-    ) => string
-    onCancel: () => void
-    initialItem?: NookSecretRecord | undefined
-    selectedType?: VaultItemType | undefined
-  } = $props()
+    ) => string;
+    onCancel: () => void;
+    initialItem?: NookSecretRecord | undefined;
+    selectedType?: VaultItemType | undefined;
+  } = $props();
 
-  const isEditMode = $derived(initialItem !== undefined)
-
-  let showPasswordOptions = $state(false)
-  let showPasswordValue = $state(false)
-
-  let websiteUrl = $state('')
-  let username = $state('')
-  let password = $state('')
-  let notes = $state('')
-  let apiKey = $state('')
-  let expiresAt = $state('')
-  let accountName = $state('')
-  let seedPhrase = $state('')
-  let seedPhraseValid = $state(false)
-  let noteTitle = $state('')
-  let noteBody = $state('')
-  let fileTitle = $state('')
-  let fileName = $state('')
-  let fileMimeType = $state('')
-  let fileSizeBytes = $state(0)
-  let fileContentBase64 = $state('')
-  let fileInputError = $state('')
-  let authenticatorIssuer = $state('')
-  let authenticatorAccount = $state('')
-  let authenticatorSecret = $state('')
-  let authenticatorAlgorithm = $state('SHA1')
-  let authenticatorDigits = $state('6')
-  let authenticatorPeriod = $state('30')
-  let authenticatorBackupCodes = $state('')
-  let cardTitle = $state('')
-  let cardholderName = $state('')
-  let cardNumber = $state('')
-  let expirationMonth = $state('')
-  let expirationYear = $state('')
-  let cardCvv = $state('')
-  let cardNotes = $state('')
-  let showCardNumber = $state(false)
-  let showCvv = $state(false)
-  let submitError = $state('')
-
-  /** Must match `FILE_ATTACHMENT_MAX_BYTES` in nook-core. */
-  const FILE_ATTACHMENT_MAX_BYTES = 1_048_576
-
-  function bytesToBase64(bytes: Uint8Array): string {
-    let binary = ''
-    const chunk = 0x8000
-    for (let offset = 0; offset < bytes.length; offset += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
-    }
-    return btoa(binary)
-  }
-
-  function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  async function handleFileSelected(event: Event) {
-    const input = event.currentTarget as HTMLInputElement
-    const file = input.files?.[0]
-    fileInputError = ''
-    if (!file) return
-    if (file.size === 0) {
-      fileInputError = vault.t('add_secret.file_empty')
-      input.value = ''
-      return
-    }
-    if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
-      fileInputError = vault.t('add_secret.file_too_large', {
-        max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-      })
-      input.value = ''
-      return
-    }
-    const buffer = new Uint8Array(await file.arrayBuffer())
-    fileName = file.name
-    fileMimeType = file.type || 'application/octet-stream'
-    fileSizeBytes = buffer.byteLength
-    fileContentBase64 = bytesToBase64(buffer)
-    if (!fileTitle.trim()) {
-      fileTitle = file.name
-    }
-  }
-
-  let genLength = $state(defaultPasswordGenerationOptions.length)
-  let genUppercase = $state(defaultPasswordGenerationOptions.uppercase)
-  let genLowercase = $state(defaultPasswordGenerationOptions.lowercase)
-  let genNumbers = $state(defaultPasswordGenerationOptions.numbers)
-  let genSymbols = $state(defaultPasswordGenerationOptions.symbols)
+  const state = new SecretFormState();
+  const isEditMode = $derived(initialItem !== undefined);
 
   const typeTitle = $derived(
     isEditMode
-      ? selectedType === 'login'
-        ? vault.t('add_secret.title_edit_login')
-        : selectedType === 'api-key'
-          ? vault.t('add_secret.title_edit_api_key')
-          : selectedType === 'seed-phrase'
-            ? vault.t('add_secret.title_edit_seed_phrase')
-            : selectedType === 'secure-note'
-              ? vault.t('add_secret.title_edit_secure_note')
-              : selectedType === 'authenticator'
-                ? vault.t('add_secret.title_edit_authenticator')
-                : selectedType === 'credit-card'
-                  ? vault.t('add_secret.title_edit_credit_card')
-                  : selectedType === 'file-attachment'
-                    ? vault.t('add_secret.title_edit_file_attachment')
-                    : vault.t('add_secret.title_edit_item')
-      : selectedType === 'login'
-        ? vault.t('add_secret.title_new_login')
-        : selectedType === 'api-key'
-          ? vault.t('add_secret.title_new_api_key')
-          : selectedType === 'seed-phrase'
-            ? vault.t('add_secret.title_new_seed_phrase')
-            : selectedType === 'secure-note'
-              ? vault.t('add_secret.title_new_secure_note')
-              : selectedType === 'authenticator'
-                ? vault.t('add_secret.title_new_authenticator')
-                : selectedType === 'credit-card'
-                  ? vault.t('add_secret.title_new_credit_card')
-                  : selectedType === 'file-attachment'
-                    ? vault.t('add_secret.title_new_file_attachment')
-                    : vault.t('add_secret.title_add_item'),
-  )
+      ? selectedType === "login"
+        ? vault.t("add_secret.title_edit_login")
+        : selectedType === "api-key"
+          ? vault.t("add_secret.title_edit_api_key")
+          : selectedType === "seed-phrase"
+            ? vault.t("add_secret.title_edit_seed_phrase")
+            : selectedType === "secure-note"
+              ? vault.t("add_secret.title_edit_secure_note")
+              : selectedType === "authenticator"
+                ? vault.t("add_secret.title_edit_authenticator")
+                : selectedType === "credit-card"
+                  ? vault.t("add_secret.title_edit_credit_card")
+                  : selectedType === "file-attachment"
+                    ? vault.t("add_secret.title_edit_file_attachment")
+                    : vault.t("add_secret.title_edit_item")
+      : selectedType === "login"
+        ? vault.t("add_secret.title_new_login")
+        : selectedType === "api-key"
+          ? vault.t("add_secret.title_new_api_key")
+          : selectedType === "seed-phrase"
+            ? vault.t("add_secret.title_new_seed_phrase")
+            : selectedType === "secure-note"
+              ? vault.t("add_secret.title_new_secure_note")
+              : selectedType === "authenticator"
+                ? vault.t("add_secret.title_new_authenticator")
+                : selectedType === "credit-card"
+                  ? vault.t("add_secret.title_new_credit_card")
+                  : selectedType === "file-attachment"
+                    ? vault.t("add_secret.title_new_file_attachment")
+                    : vault.t("add_secret.title_add_item"),
+  );
 
   $effect(() => {
-    const item = initialItem
-    if (!item) return
-    selectedType = item.type as VaultItemType
-    if (item.type === 'login') {
-      websiteUrl = item.websiteUrl
-      username = item.username
-      password = item.password
-      notes = item.notes ?? ''
-    } else if (item.type === 'api-key') {
-      websiteUrl = item.websiteUrl
-      apiKey = item.primaryCredential || item.key
-      expiresAt = item.expiresAt ?? ''
-    } else if (item.type === 'seed-phrase') {
-      accountName = item.name
-      seedPhrase = item.seed
-    } else if (item.type === 'secure-note') {
-      noteTitle = item.title
-      noteBody = item.note
-    } else if (item.type === 'file-attachment') {
-      fileTitle = item.title
-      fileName = item.fileName
-      fileMimeType = item.mimeType
-      fileSizeBytes = item.sizeBytes
-      fileContentBase64 = item.contentBase64
-    } else if (item.type === 'authenticator') {
-      websiteUrl = item.websiteUrl ?? ''
-      authenticatorIssuer = item.issuer
-      authenticatorAccount = item.account
-      authenticatorSecret = item.totpSecret
-      authenticatorAlgorithm = item.algorithm
-      authenticatorDigits = String(item.digits)
-      authenticatorPeriod = String(item.period)
-      authenticatorBackupCodes = item.backupCodes.join('\n')
-    } else if (item.type === 'credit-card') {
-      cardTitle = item.title
-      cardholderName = item.cardholderName
-      cardNumber = item.cardNumber
-      expirationMonth = item.expirationMonth
-      expirationYear = item.expirationYear
-      cardCvv = item.cvv
-      cardNotes = item.notes ?? ''
-    }
-  })
-
-  function secretFields(): SecretFormInput {
-    if (selectedType === 'login') {
-      return {
-        type: 'login',
-        websiteUrl: websiteUrl.trim(),
-        username: username.trim(),
-        password,
-        notes: notes.trim(),
-      }
-    }
-    if (selectedType === 'api-key') {
-      return {
-        type: 'api-key',
-        websiteUrl: websiteUrl.trim(),
-        key: apiKey,
-        expiresAt,
-      }
-    }
-    if (selectedType === 'seed-phrase') {
-      return {
-        type: 'seed-phrase',
-        name: accountName.trim(),
-        seed: seedPhrase.trim(),
-      }
-    }
-    if (selectedType === 'authenticator') {
-      const setupKeyChanged =
-        initialItem?.type === 'authenticator' &&
-        authenticatorSetupKeyChanged(
-          initialItem.totpSecret,
-          authenticatorSecret,
-        )
-      return {
-        type: 'authenticator',
-        websiteUrl: websiteUrl.trim(),
-        issuer: authenticatorIssuer.trim(),
-        account: authenticatorAccount.trim(),
-        totpSecret: authenticatorSecret.trim(),
-        algorithm: setupKeyChanged ? 'SHA1' : authenticatorAlgorithm,
-        digits: setupKeyChanged ? '6' : authenticatorDigits,
-        period: setupKeyChanged ? '30' : authenticatorPeriod,
-        backupCodes: setupKeyChanged ? '' : authenticatorBackupCodes,
-      }
-    }
-    if (selectedType === 'credit-card') {
-      return {
-        type: 'credit-card',
-        title: cardTitle.trim(),
-        cardholderName: cardholderName.trim(),
-        number: cardNumber.trim(),
-        expirationMonth: expirationMonth.trim(),
-        expirationYear: expirationYear.trim(),
-        cvv: cardCvv.trim(),
-        notes: cardNotes.trim(),
-      }
-    }
-    if (selectedType === 'file-attachment') {
-      return {
-        type: 'file-attachment',
-        title: fileTitle.trim() || fileName.trim(),
-        fileName: fileName.trim(),
-        mimeType: fileMimeType.trim() || 'application/octet-stream',
-        sizeBytes: fileSizeBytes,
-        contentBase64: fileContentBase64,
-      }
-    }
-    return {
-      type: 'secure-note',
-      title: noteTitle.trim(),
-      note: noteBody,
-    }
-  }
+    const item = initialItem;
+    if (!item) return;
+    selectedType = item.type as VaultItemType;
+    state.load(item);
+  });
 
   function resetForm() {
-    selectedType = undefined
-    websiteUrl = ''
-    username = ''
-    password = ''
-    notes = ''
-    apiKey = ''
-    expiresAt = ''
-    accountName = ''
-    seedPhrase = ''
-    noteTitle = ''
-    noteBody = ''
-    fileTitle = ''
-    fileName = ''
-    fileMimeType = ''
-    fileSizeBytes = 0
-    fileContentBase64 = ''
-    fileInputError = ''
-    authenticatorIssuer = ''
-    authenticatorAccount = ''
-    authenticatorSecret = ''
-    authenticatorAlgorithm = 'SHA1'
-    authenticatorDigits = '6'
-    authenticatorPeriod = '30'
-    authenticatorBackupCodes = ''
-    cardTitle = ''
-    cardholderName = ''
-    cardNumber = ''
-    expirationMonth = ''
-    expirationYear = ''
-    cardCvv = ''
-    cardNotes = ''
-    submitError = ''
-    showPasswordOptions = false
-    showPasswordValue = false
-    showCardNumber = false
-    showCvv = false
+    selectedType = undefined;
+    state.reset();
   }
 
   function handleCancel() {
-    resetForm()
-    onCancel()
+    resetForm();
+    onCancel();
   }
 
-  async function handleSubmit(e: SubmitEvent) {
-    e.preventDefault()
-    if (!selectedType) return
-    submitError = ''
+  async function handleSubmit(event: SubmitEvent) {
+    event.preventDefault();
+    if (!selectedType) return;
+    state.submitError = "";
 
-    if (selectedType === 'secure-note' && !noteBody.trim()) return
-    if (selectedType === 'file-attachment' && !fileContentBase64) return
-    if (selectedType === 'seed-phrase' && !seedPhraseValid) return
+    if (selectedType === "secure-note" && !state.noteBody.trim()) return;
+    if (selectedType === "file-attachment" && !state.fileContentBase64) return;
+    if (selectedType === "seed-phrase" && !state.seedPhraseValid) return;
 
-    let dataYaml: string
+    let dataYaml: string;
     try {
-      dataYaml = buildSecretYaml(secretFields())
+      dataYaml = buildSecretYaml(state.toInput(selectedType, initialItem));
     } catch (error) {
-      submitError = vault.resolveErrorMessage(
+      state.submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),
-      )
-      return
+      );
+      return;
     }
 
     if (isEditMode && initialItem && onReplaceSecret) {
-      await onReplaceSecret(initialItem.id, selectedType, dataYaml)
+      await onReplaceSecret(initialItem.id, selectedType, dataYaml);
     } else {
-      const id = generateSecretId()
-      await onAddSecret(id, selectedType, dataYaml)
+      await onAddSecret(generateSecretId(), selectedType, dataYaml);
     }
-    resetForm()
-    onCancel()
+    resetForm();
+    onCancel();
   }
 
-  function generatePassword() {
-    password = onGeneratePassword(
-      genLength,
-      genLowercase,
-      genUppercase,
-      genNumbers,
-      genSymbols,
-    )
-  }
-
-  const isSecureNoteForm = $derived(selectedType === 'secure-note')
-
-  const canSubmit = $derived.by(() => {
-    if (isSaving || !selectedType) return false
-    if (selectedType === 'seed-phrase') return seedPhraseValid
-    if (selectedType === 'secure-note') return noteBody.trim().length > 0
-    if (selectedType === 'file-attachment') {
-      return fileContentBase64.length > 0 && fileName.trim().length > 0
-    }
-    if (selectedType === 'api-key') return apiKey.trim().length > 0
-    if (selectedType === 'authenticator') {
-      return (
-        authenticatorSecret.trim().length > 0 &&
-        (authenticatorIssuer.trim().length > 0 ||
-          authenticatorSecret.trim().startsWith('otpauth://'))
-      )
-    }
-    if (selectedType === 'login') {
-      return (
-        websiteUrl.trim().length > 0 &&
-        username.trim().length > 0 &&
-        password.length > 0
-      )
-    }
-    if (selectedType === 'credit-card') {
-      return cardTitle.trim().length > 0 && cardNumber.trim().length > 0
-    }
-    return false
-  })
-
+  const isSecureNoteForm = $derived(selectedType === "secure-note");
+  const canSubmit = $derived(state.canSubmit(selectedType, isSaving));
   const saveLabel = $derived(
     isSaving
-      ? vault.t('add_secret.working')
+      ? vault.t("add_secret.working")
       : isEditMode
-        ? vault.t('add_secret.save_changes')
-        : vault.t('common.save'),
-  )
+        ? vault.t("add_secret.save_changes")
+        : vault.t("common.save"),
+  );
 </script>
 
 {#if selectedType === undefined && !isEditMode}
-  <div class="space-y-5">
-    <div class="space-y-1">
-      <h3 class="text-base font-semibold text-foreground">
-        {vault.t('add_secret.what_saving')}
-      </h3>
-      <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t('add_secret.choose_type_desc')}
-      </p>
-    </div>
-    <div
-      class="grid grid-cols-1 gap-2 sm:grid-cols-2"
-      data-testid="item-type-picker"
-    >
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-login"
-        onclick={() => (selectedType = 'login')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <Globe class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.login')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.website_account_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-authenticator"
-        onclick={() => (selectedType = 'authenticator')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <ShieldCheck class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.authenticator')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.authenticator_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-api-key"
-        onclick={() => (selectedType = 'api-key')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <Braces class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.api_key')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.token_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-seed-phrase"
-        onclick={() => (selectedType = 'seed-phrase')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <Sprout class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.seed_phrase')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.bip39_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-secure-note"
-        onclick={() => (selectedType = 'secure-note')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <StickyNote class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.secure_note')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.private_text_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-credit-card"
-        onclick={() => (selectedType = 'credit-card')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <CreditCard class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.credit_card')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.credit_card_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-file-attachment"
-        onclick={() => (selectedType = 'file-attachment')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <Paperclip class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.file_attachment')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.file_attachment_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-      <button
-        type="button"
-        class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
-        data-testid="item-type-passkey"
-        onclick={() => (selectedType = 'passkey')}
-      >
-        <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
-        >
-          <KeyRound class="size-5" />
-        </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.passkey')}</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.passkey_desc')}</span
-          >
-        </span>
-        <ChevronRight
-          class="size-4 shrink-0 text-muted-foreground/55 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
-        />
-      </button>
-    </div>
-  </div>
-{:else if selectedType === 'passkey' && !isEditMode}
-  <div class="space-y-4" data-testid="passkey-creation-guidance">
-    <div
-      class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
-    >
-      <div class="flex min-w-0 items-center gap-2">
-        <button
-          type="button"
-          class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          onclick={() => (selectedType = undefined)}
-        >
-          <ArrowLeft class="size-3.5" />
-          {vault.t('add_secret.change_type')}
-        </button>
-        <span class="text-muted-foreground/50" aria-hidden="true">·</span>
-        <h3 class="truncate text-sm font-semibold text-foreground">
-          {vault.t('add_secret.title_new_passkey')}
-        </h3>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        class="sm:min-w-[5rem]"
-        data-testid="add-secret-cancel-btn"
-        onclick={handleCancel}
-      >
-        {vault.t('common.done')}
-      </Button>
-    </div>
-
-    <div
-      class="rounded-xl border border-border/40 bg-muted/15 p-5 sm:border-border"
-    >
-      <div
-        class="mb-4 flex size-12 items-center justify-center rounded-xl border border-border/60 bg-background text-primary"
-      >
-        <KeyRound class="size-6" />
-      </div>
-      <h4 class="text-base font-semibold text-foreground">
-        {vault.t('add_secret.passkey_creation_title')}
-      </h4>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
-        {vault.t('add_secret.passkey_creation_description')}
-      </p>
-      <p class="mt-3 text-xs leading-relaxed text-muted-foreground text-pretty">
-        {vault.t('add_secret.passkey_creation_hint')}
-      </p>
-    </div>
-  </div>
-{:else}
+  <SecretTypePicker {vault} onSelect={(type) => (selectedType = type)} />
+{:else if selectedType === "passkey" && !isEditMode}
+  <PasskeyCreationGuidance
+    {vault}
+    onBack={() => (selectedType = undefined)}
+    onDone={handleCancel}
+  />
+{:else if selectedType}
   <form
     onsubmit={handleSubmit}
     class={isSecureNoteForm
-      ? 'flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain'
-      : 'space-y-4'}
-    data-testid={isEditMode ? 'edit-secret-form' : undefined}
+      ? "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain"
+      : "space-y-4"}
+    data-testid={isEditMode ? "edit-secret-form" : undefined}
   >
     <div
       class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
@@ -694,10 +164,11 @@
           <button
             type="button"
             class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="change-secret-type-btn"
             onclick={() => (selectedType = undefined)}
           >
             <ArrowLeft class="size-3.5" />
-            {vault.t('add_secret.change_type')}
+            {vault.t("add_secret.change_type")}
           </button>
           <span class="text-muted-foreground/50" aria-hidden="true">·</span>
         {/if}
@@ -716,7 +187,7 @@
           data-testid="add-secret-cancel-btn"
           onclick={handleCancel}
         >
-          {vault.t('common.cancel')}
+          {vault.t("common.cancel")}
         </Button>
         <Button
           type="submit"
@@ -733,510 +204,16 @@
       </div>
     </div>
 
-    {#if submitError}
+    {#if state.submitError}
       <p
         class="text-sm text-destructive"
         role="alert"
         data-testid="secret-form-error"
       >
-        {submitError}
+        {state.submitError}
       </p>
     {/if}
 
-    {#if selectedType === 'login'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('add_secret.website_label')}</label
-        >
-        <input
-          id="secret-label"
-          type="text"
-          data-testid="secret-label"
-          bind:value={websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_website')}
-          required
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-    {:else if selectedType === 'api-key'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('add_secret.website_label')}</label
-        >
-        <input
-          id="secret-label"
-          type="text"
-          data-testid="secret-label"
-          bind:value={websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_website')}
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.api_key_website_hint')}
-        </p>
-      </div>
-    {/if}
-
-    {#if selectedType === 'login'}
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="login-username"
-            >{vault.t('vault.fields.username')}</label
-          >
-          <input
-            id="login-username"
-            data-testid="login-username"
-            bind:value={username}
-            autocomplete="username"
-            required
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="secret-value"
-            >{vault.t('vault.fields.password')}</label
-          >
-          <div class="relative">
-            <input
-              id="secret-value"
-              type={showPasswordValue ? 'text' : 'password'}
-              data-testid="secret-value"
-              bind:value={password}
-              autocomplete="new-password"
-              required
-              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-            />
-            <button
-              type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label={showPasswordValue
-                ? vault.t('vault.hide_value')
-                : vault.t('vault.show_value')}
-              data-testid="toggle-password-visibility"
-              onclick={() => (showPasswordValue = !showPasswordValue)}
-            >
-              {#if showPasswordValue}
-                <EyeOff class="size-4" />
-              {:else}
-                <Eye class="size-4" />
-              {/if}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="login-notes"
-          >{vault.t('add_secret.notes_label')}</label
-        >
-        <textarea
-          id="login-notes"
-          data-testid="login-notes"
-          bind:value={notes}
-          rows="3"
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
-      </div>
-
-      <div
-        class="rounded-xl border border-border/40 bg-muted/15 sm:border-border"
-      >
-        <button
-          type="button"
-          class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-          data-testid="password-generator-toggle"
-          aria-expanded={showPasswordOptions}
-          onclick={() => (showPasswordOptions = !showPasswordOptions)}
-        >
-          <span class="inline-flex items-center gap-2">
-            <KeyRound class="size-4" />
-            {vault.t('add_secret.generate_password')}
-          </span>
-          <ChevronDown
-            class="size-4 transition-transform {showPasswordOptions
-              ? 'rotate-180'
-              : ''}"
-          />
-        </button>
-        {#if showPasswordOptions}
-          <div
-            class="space-y-3 border-t border-border/35 px-4 py-3 sm:border-border"
-          >
-            <div class="flex items-center gap-3">
-              <label class="text-xs text-muted-foreground" for="password-length"
-                >{vault.t('add_secret.length')}</label
-              >
-              <input
-                id="password-length"
-                type="range"
-                min="8"
-                max="64"
-                bind:value={genLength}
-                class="h-1 flex-1 accent-primary"
-              />
-              <span class="w-6 text-right text-xs">{genLength}</span>
-            </div>
-            <div class="grid grid-cols-4 gap-2 text-xs">
-              <label
-                ><input type="checkbox" bind:checked={genLowercase} /> a-z</label
-              >
-              <label
-                ><input type="checkbox" bind:checked={genUppercase} /> A-Z</label
-              >
-              <label
-                ><input type="checkbox" bind:checked={genNumbers} /> 0-9</label
-              >
-              <label
-                ><input type="checkbox" bind:checked={genSymbols} />
-                {vault.t('add_secret.symbols')}</label
-              >
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="w-full"
-              data-testid="generate-password-btn"
-              onclick={generatePassword}
-            >
-              <RefreshCw class="size-3.5" />
-              {vault.t('add_secret.generate_btn')}
-            </Button>
-          </div>
-        {/if}
-      </div>
-    {:else if selectedType === 'api-key'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value"
-          >{vault.t('vault.fields.key')}</label
-        >
-        <textarea
-          id="secret-value"
-          data-testid="secret-value"
-          bind:value={apiKey}
-          rows="4"
-          placeholder={vault.t('add_secret.placeholder_key')}
-          required
-          spellcheck="false"
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="api-key-expiration"
-          >{vault.t('vault.fields.expires')}</label
-        >
-        <input
-          id="api-key-expiration"
-          type="date"
-          data-testid="api-key-expiration"
-          bind:value={expiresAt}
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-    {:else if selectedType === 'seed-phrase'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.account')}</label
-        >
-        <input
-          id="secret-label"
-          data-testid="secret-label"
-          bind:value={accountName}
-          placeholder="Main wallet"
-          required
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <span class="text-xs font-medium"
-          >{vault.t('vault.types.seed_phrase')}</span
-        >
-        <SeedPhraseGrid
-          {vault}
-          bind:value={seedPhrase}
-          bind:valid={seedPhraseValid}
-        />
-      </div>
-    {:else if selectedType === 'authenticator'}
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="authenticator-issuer"
-            >{vault.t('vault.fields.issuer')}</label
-          >
-          <input
-            id="authenticator-issuer"
-            data-testid="authenticator-issuer"
-            bind:value={authenticatorIssuer}
-            placeholder={vault.t('add_secret.placeholder_issuer')}
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          />
-        </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="authenticator-account"
-            >{vault.t('vault.fields.account')}</label
-          >
-          <input
-            id="authenticator-account"
-            data-testid="authenticator-account"
-            bind:value={authenticatorAccount}
-            placeholder={vault.t('add_secret.placeholder_authenticator_account')}
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          />
-        </div>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="authenticator-website"
-          >{vault.t('vault.fields.website')}</label
-        >
-        <input
-          id="authenticator-website"
-          type="text"
-          data-testid="authenticator-website"
-          bind:value={websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_authenticator_website')}
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.authenticator_website_hint')}
-        </p>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="authenticator-secret"
-          >{vault.t('vault.fields.authenticator_secret')}</label
-        >
-        <textarea
-          id="authenticator-secret"
-          data-testid="authenticator-secret"
-          bind:value={authenticatorSecret}
-          rows="3"
-          required
-          spellcheck="false"
-          placeholder={vault.t('add_secret.placeholder_authenticator_secret')}
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.authenticator_secret_hint')}
-        </p>
-      </div>
-    {:else if selectedType === 'credit-card'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.title')}</label
-        >
-        <input
-          id="secret-label"
-          type="text"
-          data-testid="secret-label"
-          bind:value={cardTitle}
-          placeholder={vault.t('add_secret.placeholder_title')}
-          required
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="credit-card-cardholder"
-          >{vault.t('vault.fields.cardholder_name')}</label
-        >
-        <input
-          id="credit-card-cardholder"
-          type="text"
-          data-testid="credit-card-cardholder"
-          bind:value={cardholderName}
-          placeholder={vault.t('add_secret.placeholder_cardholder')}
-          autocomplete="cc-name"
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="credit-card-number"
-          >{vault.t('vault.fields.card_number')}</label
-        >
-        <div class="relative">
-          <input
-            id="credit-card-number"
-            type={showCardNumber ? 'text' : 'password'}
-            data-testid="credit-card-number"
-            bind:value={cardNumber}
-            placeholder={vault.t('add_secret.placeholder_card_number')}
-            autocomplete="cc-number"
-            inputmode="numeric"
-            required
-            spellcheck="false"
-            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-          />
-          <button
-            type="button"
-            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label={showCardNumber
-              ? vault.t('vault.hide_value')
-              : vault.t('vault.show_value')}
-            data-testid="toggle-card-number-visibility"
-            onclick={() => (showCardNumber = !showCardNumber)}
-          >
-            {#if showCardNumber}
-              <EyeOff class="size-4" />
-            {:else}
-              <Eye class="size-4" />
-            {/if}
-          </button>
-        </div>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-3">
-        <div class="space-y-1.5 sm:col-span-2">
-          <span class="text-xs font-medium"
-            >{vault.t('vault.fields.expiration')}</span
-          >
-          <div class="grid grid-cols-2 gap-3">
-            <input
-              id="credit-card-exp-month"
-              type="text"
-              data-testid="credit-card-exp-month"
-              bind:value={expirationMonth}
-              placeholder={vault.t('add_secret.placeholder_expiration_month')}
-              aria-label={vault.t('add_secret.placeholder_expiration_month')}
-              autocomplete="cc-exp-month"
-              inputmode="numeric"
-              maxlength="2"
-              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-            />
-            <input
-              id="credit-card-exp-year"
-              type="text"
-              data-testid="credit-card-exp-year"
-              bind:value={expirationYear}
-              placeholder={vault.t('add_secret.placeholder_expiration_year')}
-              aria-label={vault.t('add_secret.placeholder_expiration_year')}
-              autocomplete="cc-exp-year"
-              inputmode="numeric"
-              maxlength="4"
-              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-            />
-          </div>
-        </div>
-        <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="credit-card-cvv"
-            >{vault.t('vault.fields.cvv')}</label
-          >
-          <div class="relative">
-            <input
-              id="credit-card-cvv"
-              type={showCvv ? 'text' : 'password'}
-              data-testid="credit-card-cvv"
-              bind:value={cardCvv}
-              placeholder={vault.t('add_secret.placeholder_cvv')}
-              autocomplete="cc-csc"
-              inputmode="numeric"
-              spellcheck="false"
-              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-            />
-            <button
-              type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label={showCvv
-                ? vault.t('vault.hide_value')
-                : vault.t('vault.show_value')}
-              data-testid="toggle-cvv-visibility"
-              onclick={() => (showCvv = !showCvv)}
-            >
-              {#if showCvv}
-                <EyeOff class="size-4" />
-              {:else}
-                <Eye class="size-4" />
-              {/if}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="credit-card-notes"
-          >{vault.t('add_secret.notes_label')}</label
-        >
-        <textarea
-          id="credit-card-notes"
-          data-testid="credit-card-notes"
-          bind:value={cardNotes}
-          rows="3"
-          placeholder={vault.t('add_secret.placeholder_notes')}
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
-      </div>
-    {:else if selectedType === 'file-attachment'}
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="file-attachment-title"
-          >{vault.t('vault.fields.title')}</label
-        >
-        <input
-          id="file-attachment-title"
-          data-testid="file-attachment-title"
-          bind:value={fileTitle}
-          placeholder={vault.t('add_secret.placeholder_file_title')}
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-      <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="file-attachment-input"
-          >{vault.t('vault.fields.file')}</label
-        >
-        <input
-          id="file-attachment-input"
-          type="file"
-          data-testid="file-attachment-input"
-          onchange={(event) => void handleFileSelected(event)}
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.file_attachment_hint', {
-            max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
-          })}
-        </p>
-        {#if fileInputError}
-          <p
-            class="text-sm text-destructive"
-            role="alert"
-            data-testid="file-attachment-error"
-          >
-            {fileInputError}
-          </p>
-        {/if}
-        {#if fileName}
-          <div
-            class="rounded-md border border-border/40 bg-muted/15 px-3 py-2 text-xs"
-            data-testid="file-attachment-selected"
-          >
-            <p class="truncate font-medium text-foreground">{fileName}</p>
-            <p class="mt-0.5 text-muted-foreground">
-              {formatFileSize(fileSizeBytes)}
-              {#if fileMimeType}
-                · {fileMimeType}
-              {/if}
-            </p>
-          </div>
-        {/if}
-      </div>
-    {:else}
-      <div class="shrink-0 space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.title')}</label
-        >
-        <input
-          id="secret-label"
-          data-testid="secret-label"
-          bind:value={noteTitle}
-          placeholder="Recovery instructions"
-          required
-          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        />
-      </div>
-      <div class="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-1.5">
-        <span class="shrink-0 text-xs font-medium"
-          >{vault.t('vault.fields.note')}
-          <span class="text-muted-foreground">(Markdown)</span></span
-        >
-        <MarkdownEditor
-          bind:value={noteBody}
-          placeholder={vault.t('add_secret.placeholder_note')}
-          fill
-        />
-      </div>
-    {/if}
+    <SecretFields {vault} {state} {selectedType} {onGeneratePassword} />
   </form>
 {/if}
