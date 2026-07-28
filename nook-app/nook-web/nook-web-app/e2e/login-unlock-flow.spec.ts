@@ -48,27 +48,26 @@ test.describe('login unlock flow (local-first)', () => {
   test(
     'unlocks with PRF-enabled device keys from local login step',
     async ({ page }) => {
-    await disableLoginAutoUnlock(page)
-    await page.reload()
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    const prfEnabledAfterReload = await page.evaluate(async () => {
-      const credential = await navigator.credentials.get({
-        publicKey: {
-          challenge: new Uint8Array([1]),
-          extensions: { prf: { eval: { first: new Uint8Array([2]) } } },
-        },
+      await disableLoginAutoUnlock(page)
+      await page.reload()
+      await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+        timeout: UI_TIMEOUT_MS,
       })
-      return (credential as PublicKeyCredential)
-        .getClientExtensionResults()
-        .prf?.enabled
-    })
-    expect(prfEnabledAfterReload).toBe(true)
+      await expect(
+        page.getByTestId('login-unlock-method-keys'),
+      ).toHaveAttribute('aria-checked', 'true')
+      const prfEnabledAfterReload = await page.evaluate(async () => {
+        const credential = await navigator.credentials.get({
+          publicKey: {
+            challenge: new Uint8Array([1]),
+            extensions: { prf: { eval: { first: new Uint8Array([2]) } } },
+          },
+        })
+        return (credential as PublicKeyCredential)
+          .getClientExtensionResults()
+          .prf?.enabled
+      })
+      expect(prfEnabledAfterReload).toBe(true)
       await page.getByTestId('unlock-vault-btn').click()
       await expect(page.getByTestId('vault-panel')).toBeVisible({
         timeout: UI_TIMEOUT_MS,
