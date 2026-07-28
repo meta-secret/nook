@@ -19,10 +19,30 @@ import {
   ICLOUD_ENVIRONMENT,
 } from "$lib/icloud-oauth-config";
 import { createLogger } from "$lib/log";
+import {
+  CLOUDKIT_SIGN_IN_BUTTON_ID,
+  CLOUDKIT_SIGN_OUT_BUTTON_ID,
+  cloudKitAuthTokenStore,
+  cloudKitSignInControlDiagnostics,
+  currentBrowserDiagnostics,
+  iCloudConfigDiagnostics,
+  isBraveBrowser,
+  loadCloudKitScript,
+  normalizeWebAuthToken,
+  sanitizedURLDiagnostics,
+  storeCloudKitWebAuthToken,
+  tokenDiagnostics,
+  webAuthTokenListeners,
+  webAuthTokenStorageDiagnostics,
+  type CloudKitAuthChallenge,
+  type CloudKitAuthError,
+  type CloudKitAuthErrorDetails,
+  type CloudKitContainer,
+  type CloudKitRecordInfo,
+  type CloudKitRecordInfosResponse,
+  type CloudKitUserIdentity,
+} from "$lib/icloud-cloudkit-runtime";
 
-const CLOUDKIT_SCRIPT_URL = "https://cdn.apple-cloudkit.com/ck/2/cloudkit.js";
-const CLOUDKIT_SIGN_IN_BUTTON_ID = "apple-sign-in-button";
-const CLOUDKIT_SIGN_OUT_BUTTON_ID = "apple-sign-out-button";
 export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000;
 const log = createLogger("icloud-oauth");
 
@@ -36,347 +56,6 @@ type ICloudWebAuthTokenRequestOptions = {
   signInTimeoutMs?: number;
   clickSignInControl?: boolean;
 };
-
-type CloudKitUserIdentity = {
-  userRecordName?: string;
-  nameComponents?: { givenName?: string; familyName?: string };
-  lookupInfo?: { emailAddress?: string };
-};
-
-type CloudKitZoneID = {
-  zoneName: string;
-  ownerRecordName?: string;
-};
-
-type CloudKitRecord = {
-  recordType: string;
-  recordName: string;
-  recordChangeTag?: string;
-  createShortGUID?: boolean;
-  shortGUID?: string;
-  fields?: Record<string, { value: unknown }>;
-};
-
-type CloudKitRecordsResponse = {
-  records: CloudKitRecord[];
-};
-
-type CloudKitRecordInfo = {
-  zoneID?: CloudKitZoneID;
-  rootRecordName?: string;
-  rootRecord?: CloudKitRecord;
-  participantStatus?: "INVITED" | "ACCEPTED" | "REMOVED" | "UNKNOWN";
-};
-
-type CloudKitRecordInfosResponse = {
-  results: CloudKitRecordInfo[];
-};
-
-type CloudKitDatabase = {
-  saveRecordZones: (zones: CloudKitZoneID[]) => Promise<unknown>;
-  saveRecords: (
-    records: CloudKitRecord | CloudKitRecord[],
-    options: { zoneID: string | CloudKitZoneID },
-  ) => Promise<CloudKitRecordsResponse>;
-  shareWithUI: (options: {
-    record: CloudKitRecord;
-    zoneID: string | CloudKitZoneID;
-    shareTitle: string;
-    shareType: string;
-    supportedAccess: Array<"PRIVATE" | "PUBLIC">;
-    supportedPermissions: Array<"READ_WRITE" | "READ_ONLY">;
-  }) => Promise<unknown>;
-};
-
-type CloudKitAuthError = {
-  _reason?: string;
-  code?: string | number;
-  errorCode?: string | number;
-  message?: string;
-  name?: string;
-  reason?: string;
-  redirectURL?: string;
-  serverErrorCode?: string | number;
-  status?: string | number;
-  statusCode?: string | number;
-  statusText?: string;
-  uuid?: string;
-};
-
-type CloudKitAuthErrorDetails = {
-  code?: string;
-  message?: string;
-  redirectURLPresent?: boolean;
-  redirectURLOrigin?: string;
-  redirectURLPathname?: string;
-  reason?: string;
-  status?: number;
-  statusText?: string;
-  uuidPresent?: boolean;
-};
-
-type CloudKitAuthChallenge = {
-  reason?: string;
-  redirectURL?: string;
-  serverErrorCode?: string;
-  uuid?: string;
-};
-
-type CloudKitContainer = {
-  setUpAuth: (options?: {
-    grabAuthToken?: boolean;
-    persist?: boolean;
-  }) => Promise<CloudKitUserIdentity | undefined>;
-  whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
-  fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
-  acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
-  fetchRecordInfos?: (
-    shortGUIDs: string[],
-  ) => Promise<CloudKitRecordInfosResponse>;
-  privateCloudDatabase?: CloudKitDatabase;
-  sharedCloudDatabase?: CloudKitDatabase;
-};
-
-type CloudKitAuthTokenStore = {
-  putToken: (containerIdentifier: string, authToken: unknown) => void;
-  getToken: (containerIdentifier: string) => unknown;
-};
-
-type CloudKitGlobal = {
-  configure: (config: {
-    containers: Array<{
-      containerIdentifier: string;
-      environment: "development" | "production";
-      apiTokenAuth: {
-        apiToken: string;
-        persist: boolean;
-        signInButton: {
-          id: string;
-          theme?: "black" | "white" | "white-with-outline";
-        };
-        signOutButton: {
-          id: string;
-          theme?: "black" | "white" | "white-with-outline";
-        };
-      };
-    }>;
-    services?: {
-      authTokenStore?: CloudKitAuthTokenStore;
-    };
-  }) => void;
-  getDefaultContainer: () => CloudKitContainer;
-};
-
-const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = "nook.icloud.webAuthToken.";
-
-const webAuthTokenListeners = new Set<(token: string) => void>();
-
-function tokenDiagnostics(token: string | undefined): {
-  present: boolean;
-  length: number;
-} {
-  return {
-    present: Boolean(token),
-    length: token?.length ?? 0,
-  };
-}
-
-function sanitizedURLDiagnostics(url: string | undefined): {
-  present: boolean;
-  origin?: string;
-  pathname?: string;
-} {
-  if (!url) {
-    return { present: false };
-  }
-  try {
-    const parsed = new URL(url);
-    return {
-      present: true,
-      origin: parsed.origin,
-      pathname: parsed.pathname,
-    };
-  } catch {
-    return { present: true };
-  }
-}
-
-function currentBrowserDiagnostics(): {
-  origin: string;
-  hostname: string;
-  pathname: string;
-  protocol: string;
-  isBrave: boolean;
-  isSecureContext: boolean;
-  topLevel: boolean;
-  visibilityState: DocumentVisibilityState;
-  userAgent: string;
-  cookieNames: string[];
-} {
-  return {
-    origin: window.location.origin,
-    hostname: window.location.hostname,
-    pathname: window.location.pathname,
-    protocol: window.location.protocol,
-    isBrave: isBraveBrowser(),
-    isSecureContext: window.isSecureContext,
-    topLevel: window.top === window.self,
-    visibilityState: document.visibilityState,
-    userAgent: navigator.userAgent,
-    cookieNames: document.cookie
-      .split(";")
-      .map((part) => part.trim().split("=")[0])
-      .filter(Boolean),
-  };
-}
-
-function isBraveBrowser(): boolean {
-  return Boolean((navigator as Navigator & { brave?: unknown }).brave);
-}
-
-function webAuthTokenStorageDiagnostics(): {
-  expectedKeyPresent: boolean;
-  storedKeyCount: number;
-  storedKeys: string[];
-} {
-  const storedKeys: string[] = [];
-  for (let index = 0; index < sessionStorage.length; index += 1) {
-    const key = sessionStorage.key(index);
-    if (key?.startsWith(ICLOUD_AUTH_TOKEN_STORAGE_PREFIX)) {
-      storedKeys.push(key);
-    }
-  }
-  const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`;
-  const expectedValue = sessionStorage.getItem(expectedKey) ?? undefined;
-  return {
-    expectedKeyPresent: expectedValue !== undefined,
-    storedKeyCount: storedKeys.length,
-    storedKeys,
-  };
-}
-
-function iCloudConfigDiagnostics(): {
-  container: string;
-  environment: typeof ICLOUD_ENVIRONMENT;
-  apiTokenConfigured: boolean;
-  apiTokenLength: number;
-} {
-  return {
-    container: ICLOUD_CONTAINER_ID,
-    environment: ICLOUD_ENVIRONMENT,
-    apiTokenConfigured: Boolean(ICLOUD_API_TOKEN.trim()),
-    apiTokenLength: ICLOUD_API_TOKEN.trim().length,
-  };
-}
-
-function elementDiagnostics(element: Element | undefined): {
-  present: boolean;
-  tag?: string;
-  id?: string;
-  className?: string;
-  role?: string;
-  childElementCount?: number;
-  textLength?: number;
-} {
-  if (!element) {
-    return { present: false };
-  }
-  return {
-    present: true,
-    tag: element.tagName,
-    id: element.id || undefined,
-    className:
-      typeof element.className === "string" && element.className
-        ? element.className
-        : undefined,
-    role: element.getAttribute("role") ?? undefined,
-    childElementCount: element.childElementCount,
-    textLength: element.textContent?.trim().length ?? 0,
-  };
-}
-
-function cloudKitSignInControlDiagnostics(): {
-  mount: ReturnType<typeof elementDiagnostics>;
-  control: ReturnType<typeof elementDiagnostics>;
-  signOutMount: ReturnType<typeof elementDiagnostics>;
-} {
-  const mount =
-    typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) ?? undefined);
-  const control =
-    mount?.querySelector<HTMLElement>(
-      'button, [role="button"], iframe, a, .apple-auth-button',
-    ) ?? undefined;
-  const signOutMount =
-    typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID) ?? undefined);
-  return {
-    mount: elementDiagnostics(mount),
-    control: elementDiagnostics(control),
-    signOutMount: elementDiagnostics(signOutMount),
-  };
-}
-
-function storeCloudKitWebAuthToken(
-  containerIdentifier: string,
-  authToken: unknown,
-): string | undefined {
-  const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
-  if (authToken == undefined) {
-    sessionStorage.removeItem(key);
-    log.info("CloudKit web auth token cleared", {
-      container: containerIdentifier,
-      expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
-    });
-    return undefined;
-  }
-  sessionStorage.setItem(key, JSON.stringify(authToken));
-  const token = normalizeWebAuthToken(authToken);
-  log.info("CloudKit web auth token stored", {
-    container: containerIdentifier,
-    expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
-    tokenType: typeof authToken,
-    normalized: tokenDiagnostics(token),
-  });
-  if (containerIdentifier === ICLOUD_CONTAINER_ID && token) {
-    for (const listener of webAuthTokenListeners) {
-      listener(token);
-    }
-  }
-  return token;
-}
-
-const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
-  putToken(containerIdentifier, authToken) {
-    log.debug("CloudKit putToken", {
-      container: containerIdentifier,
-      tokenType: typeof authToken,
-      hasValue: authToken != undefined,
-    });
-    storeCloudKitWebAuthToken(containerIdentifier, authToken);
-  },
-  getToken(containerIdentifier) {
-    const raw = sessionStorage.getItem(
-      `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
-    );
-    if (!raw) {
-      return undefined;
-    }
-    try {
-      return JSON.parse(raw) as unknown;
-    } catch {
-      return undefined;
-    }
-  },
-};
-
-declare global {
-  interface Window {
-    CloudKit?: CloudKitGlobal;
-  }
-}
 
 let initPromise: Promise<void> | undefined = undefined;
 let authSetupPromise: Promise<CloudKitUserIdentity | undefined> | undefined =
@@ -399,62 +78,6 @@ export function isICloudOAuthConfigured(): boolean {
   );
 }
 
-function loadCloudKitScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.CloudKit) {
-      log.info("CloudKit JS already loaded", currentBrowserDiagnostics());
-      resolve();
-      return;
-    }
-    const existing = document.querySelector(
-      `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
-    );
-    if (existing) {
-      log.info("CloudKit JS load waiting on existing script", {
-        scriptUrl: CLOUDKIT_SCRIPT_URL,
-      });
-      existing.addEventListener(
-        "load",
-        () => {
-          log.info("CloudKit JS loaded from existing script");
-          resolve();
-        },
-        { once: true },
-      );
-      existing.addEventListener(
-        "error",
-        () => {
-          log.warn("CloudKit JS existing script failed to load", {
-            scriptUrl: CLOUDKIT_SCRIPT_URL,
-          });
-          reject(new Error("Failed to load CloudKit JS."));
-        },
-        { once: true },
-      );
-      return;
-    }
-    log.info("CloudKit JS load started", {
-      scriptUrl: CLOUDKIT_SCRIPT_URL,
-      ...currentBrowserDiagnostics(),
-    });
-    const script = document.createElement("script");
-    script.src = CLOUDKIT_SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      log.info("CloudKit JS loaded", { scriptUrl: CLOUDKIT_SCRIPT_URL });
-      resolve();
-    };
-    script.onerror = () => {
-      log.warn("CloudKit JS failed to load", {
-        scriptUrl: CLOUDKIT_SCRIPT_URL,
-      });
-      reject(new Error("Failed to load CloudKit JS."));
-    };
-    document.head.appendChild(script);
-  });
-}
-
 function readWebAuthTokenFromCookie(): string | undefined {
   for (const part of document.cookie.split(";")) {
     const trimmed = part.trim();
@@ -473,28 +96,6 @@ function readWebAuthTokenFromCookie(): string | undefined {
         token: tokenDiagnostics(token),
       });
       return token;
-    }
-  }
-  return undefined;
-}
-
-function normalizeWebAuthToken(stored: unknown): string | undefined {
-  if (typeof stored === "string" && stored.trim()) {
-    return stored.trim();
-  }
-  if (stored != undefined && typeof stored === "object") {
-    const record = stored as Record<string, unknown>;
-    for (const key of [
-      "token",
-      "ckWebAuthToken",
-      "webAuthToken",
-      "authToken",
-      "value",
-    ]) {
-      const candidate = record[key];
-      if (typeof candidate === "string" && candidate.trim()) {
-        return candidate.trim();
-      }
     }
   }
   return undefined;
