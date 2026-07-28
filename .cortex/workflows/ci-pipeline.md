@@ -263,8 +263,8 @@ with `docker system prune --volumes`.
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
 
 1. **`e2e` project** — IndexedDB flows plus sync-provider specs through isolated e2e remotes. One Playwright process, fully parallel, one preview server.
-2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. It starts at 6 workers.
-3. **`unstable` project** — local provider/sync specs. It runs separately at 4 workers so their shared preview-server and WASM pressure stays bounded.
+2. **`stable` project** — IndexedDB-only specs for fast manual/debug runs. It starts at 3 workers.
+3. **`unstable` project** — local provider/sync specs. It runs separately at 2 workers so their shared preview-server and WASM pressure stays bounded.
 4. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; explicit manual runs only.
 
 When adding Google Drive or other sync providers, add local e2e remote specs to
@@ -274,7 +274,7 @@ the `e2e` list and thin live smoke specs to `e2e/live/`.
 
 Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults locally and override with `--workers=N` when you want more parallelism than the default. Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
 
-`sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. The local `stable` and `unstable` groups use `fullyParallel: true`, but run in separate invocations with 6 and 4 workers respectively.
+`sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. The local `stable` and `unstable` groups use `fullyParallel: true`, but run in separate invocations with 3 and 2 workers respectively.
 
 ## Rust dependency updates
 
@@ -367,8 +367,8 @@ Defined in `nook-app/nook-web/playwright.config.ts`:
 
 | Project     | Specs                                     | CI                           |
 | ----------- | ----------------------------------------- | ---------------------------- |
-| `stable`    | IndexedDB-only specs (6 workers)          | main, e2e-pr (manual/debug)  |
-| `unstable`  | Local-provider and sync specs (4 workers) | main, e2e-pr (manual)        |
+| `stable`    | IndexedDB-only specs (3 workers)          | main, e2e-pr (manual/debug)  |
+| `unstable`  | Local-provider and sync specs (2 workers) | main, e2e-pr (manual)        |
 | `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-pr (manual)              |
 | `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)   |
 

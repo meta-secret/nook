@@ -4,7 +4,7 @@ import { ensureAppWasm } from '$lib/wasm-bootstrap'
 
 // Keep the initial root identity: a replacement page can supply a new #app
 // while the asynchronous WASM bootstrap is pending.
-const target = document.getElementById('app')
+const target = document.getElementById('app') ?? undefined
 
 await ensureAppWasm()
 const { default: App } = await import('$vault-shared/App.svelte')

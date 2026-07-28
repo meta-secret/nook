@@ -33,6 +33,9 @@ thread_local! {
 pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> {
     if let Some(connection) =
         NOOK_DATABASE_CONNECTIONS.with(|connections| connections.borrow().first().cloned())
+        && connection
+            .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+            .is_ok()
     {
         return Ok(connection);
     }
@@ -51,6 +54,11 @@ pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> 
     );
     let connection = NOOK_DATABASE_CONNECTIONS.with(|connections| {
         let mut connections = connections.borrow_mut();
+        connections.retain(|existing| {
+            existing
+                .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+                .is_ok()
+        });
         if let Some(existing) = connections.first().cloned() {
             connections.push(connection);
             existing

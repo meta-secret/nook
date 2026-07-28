@@ -71,12 +71,16 @@ test.describe('sync provider credential encryption', () => {
     await waitForStorageChainIdle(page)
     await waitForVaultSyncIdle(page)
     await flushNookLogPersistQueue(page)
-    const logs = await fetchAppLogs(page, { minLevel: 'error', limit: 500 })
+    const logs = await fetchAppLogs(page, { minLevel: 'warn', limit: 500 })
     expect(
-      logs.entries.some((entry) =>
-        entry.message.includes(
-          'closure invoked recursively or after being dropped',
-        ),
+      logs.entries.some(
+        (entry) =>
+          entry.message.includes(
+            'closure invoked recursively or after being dropped',
+          ) ||
+          entry.data?.includes(
+            'closure invoked recursively or after being dropped',
+          ),
       ),
     ).toBe(false)
 

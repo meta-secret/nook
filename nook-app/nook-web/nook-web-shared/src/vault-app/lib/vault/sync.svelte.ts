@@ -677,7 +677,12 @@ export async function manualSync(state: SyncActionsContext) {
   // device-dependent sync in that state asks the WASM manager to encrypt before
   // vault crypto exists. Keep the device roster projection empty until a vault
   // or a connected sync provider exists.
-  if (!state.localVaultPresent && state.syncProviders.length === 0) {
+  if (
+    !state.clientPolicy.manualSyncHasTarget(
+      state.localVaultPresent,
+      state.syncProviders.length,
+    )
+  ) {
     state.pendingJoins = [];
     state.vaultMembers = [];
     return;

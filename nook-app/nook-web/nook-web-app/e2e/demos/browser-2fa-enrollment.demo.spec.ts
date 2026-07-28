@@ -38,10 +38,10 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  // Keep the demo page independent from the Nook app lifecycle while retaining
-  // a real web origin for the enrollment binding. Loading `/` starts the
-  // Svelte application, whose async bootstrap can race with `setContent()`.
-  await page.goto('/terms.html')
+  // Replace the document while the real app bootstrap is active. This covers
+  // the stale mount-target race while retaining a real origin for enrollment.
+  await page.goto('/app/', { waitUntil: 'commit' })
+  await page.locator('#app').waitFor({ state: 'attached' })
   await page.setContent(`<!doctype html>
     <html>
       <head>
@@ -111,7 +111,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
       .querySelector('#verify-form')
       ?.addEventListener('submit', (event) => {
         event.preventDefault()
-        const setup = document.querySelector('#setup')
+        const setup = document.querySelector('#app')
         setup?.remove()
         const success = document.createElement('main')
         success.id = 'success'

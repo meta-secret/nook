@@ -187,6 +187,19 @@ pub struct NookVaultClientPolicy;
 
 #[wasm_bindgen]
 impl NookVaultClientPolicy {
+    #[wasm_bindgen(js_name = manualSyncHasTarget)]
+    #[must_use]
+    pub fn manual_sync_has_target(
+        &self,
+        local_vault_present: bool,
+        sync_provider_count: u32,
+    ) -> bool {
+        nook_core::VaultClientPolicy::manual_sync_has_target(
+            local_vault_present,
+            sync_provider_count as usize,
+        )
+    }
+
     #[wasm_bindgen(js_name = remoteRecoveryPromptVisible)]
     #[must_use]
     pub fn remote_recovery_prompt_visible(
