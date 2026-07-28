@@ -79,6 +79,7 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         "kubectl apply -f -",
         "if test \"$client_secret_before\" != \"$client_secret_after\"",
         "client_secret_changed=true",
+        "auth_secret_needs_reconcile=true",
         "hive-workbench-dispatcher",
         "hive-observer",
         "kubectl rollout restart",
@@ -89,6 +90,16 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
             "Neo4j credential reconciliation is missing: {required}"
         );
     }
+    let retained_probe = tasks
+        .find("retained_storage=false")
+        .expect("retained storage probe");
+    let storage_apply = tasks
+        .find("manifests/neo4j/storage.yaml")
+        .expect("Neo4j storage apply");
+    assert!(
+        retained_probe < storage_apply,
+        "retained storage must be detected before this invocation creates the PVC"
+    );
 
     let generated = reconciliation
         .split_once("openssl rand -hex 32")

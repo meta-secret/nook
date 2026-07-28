@@ -16,6 +16,11 @@ tasks:
         kubectl() { sudo -n k0s kubectl "$@"; }
         sudo -n install -d -m 0750 /var/lib/hive/neo4j
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        retained_storage=false
+        if kubectl get pvc hive-neo4j-data \
+          --namespace hive-data >/dev/null 2>&1; then
+          retained_storage=true
+        fi
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
 
         secret_dir="$(mktemp -d)"
@@ -172,16 +177,19 @@ tasks:
           kubectl apply -f -
 
         auth_exists=false
+        auth_secret_needs_reconcile=false
         client_exists=false
         if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
           auth_exists=true
+        else
+          auth_secret_needs_reconcile=true
         fi
         if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
           client_exists=true
         fi
 
         if test "$auth_exists" = false && test "$client_exists" = false; then
-          if kubectl get pvc --namespace hive-data -o name | grep -q .; then
+          if test "$retained_storage" = true; then
             echo \
               "Refusing to generate Neo4j credentials while retained data exists" \
               >&2
@@ -203,6 +211,7 @@ tasks:
               -o jsonpath='{.data.NEO4J_PASSWORD}' |
               base64 --decode |
               tr -d '\r\n' > "$secret_dir/password"
+            auth_secret_needs_reconcile=true
           fi
         else
           kubectl get secret hive-neo4j-client \
@@ -213,14 +222,17 @@ tasks:
         fi
         test -s "$secret_dir/password"
 
-        if test "$auth_exists" = false; then
+        if test "$auth_secret_needs_reconcile" = true; then
           {
             printf 'neo4j/'
             cat "$secret_dir/password"
           } > "$secret_dir/NEO4J_AUTH"
           kubectl create secret generic hive-neo4j-auth \
             --namespace hive-data \
-            --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH"
+            --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH" \
+            --dry-run=client \
+            -o yaml |
+            kubectl apply -f -
         fi
         client_secret_before="$(
           kubectl get secret hive-neo4j-client \
@@ -283,7 +295,7 @@ tasks:
             fi
           done
         fi
-        unset client_secret_changed
+        unset client_secret_changed retained_storage auth_secret_needs_reconcile
         neo4j_service_ip="$(
           kubectl get service hive-neo4j \
             --namespace hive-data \
