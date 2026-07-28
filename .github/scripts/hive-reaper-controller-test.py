@@ -50,6 +50,10 @@ def main():
             ]
         }
     }
+    policies = {
+        "hive-worker-egress": policy,
+        "hive-dispatcher-reaper": copy.deepcopy(policy),
+    }
     patches = []
     policy_reads = 0
     ready_endpoint = True
@@ -71,24 +75,25 @@ def main():
                     }
                 ]
             }
-        if path.endswith("/networkpolicies/hive-worker-egress"):
+        if "/networkpolicies/" in path:
+            policy_name = path.rsplit("/", 1)[1]
             policy_reads += 1
             if policy_reads == 2:
-                policy["metadata"]["resourceVersion"] = "11"
-                policy["spec"]["egress"][0]["to"] = [
+                policies[policy_name]["metadata"]["resourceVersion"] = "11"
+                policies[policy_name]["spec"]["egress"][0]["to"] = [
                     {
                         "namespaceSelector": {
                             "matchLabels": {"role": "updated-data"}
                         }
                     }
                 ]
-            return copy.deepcopy(policy)
+            return copy.deepcopy(policies[policy_name])
         raise AssertionError(f"unexpected API path: {path}")
 
     def api_request(method, path, payload=None):
         nonlocal conflict_once
         patches.append((method, path, payload))
-        if conflict_once:
+        if conflict_once and path.endswith("/networkpolicies/hive-worker-egress"):
             conflict_once = False
             raise urllib.error.HTTPError(path, 409, "Conflict", {}, None)
         return b"{}"
@@ -97,8 +102,8 @@ def main():
     namespace["api_request"] = api_request
     namespace["reconcile_neo4j_policy"]()
 
-    assert len(patches) == 2, patches
-    method, path, payload = patches[-1]
+    assert len(patches) == 3, patches
+    method, path, payload = patches[1]
     assert method == "PATCH"
     assert path.endswith("/networkpolicies/hive-worker-egress")
     assert patches[0][2]["metadata"]["resourceVersion"] == "10"
@@ -114,14 +119,26 @@ def main():
     ]
     assert cidrs == [service_cidr, new_endpoint], cidrs
     assert old_endpoint not in cidrs
+    assert patches[2][1].endswith(
+        "/networkpolicies/hive-dispatcher-reaper"
+    ), patches
+    dispatcher_cidrs = [
+        destination["ipBlock"]["cidr"]
+        for rule in patches[2][2]["spec"]["egress"]
+        for destination in rule.get("to", [])
+        if "ipBlock" in destination
+    ]
+    assert dispatcher_cidrs == [service_cidr, new_endpoint], dispatcher_cidrs
 
-    policy = copy.deepcopy(payload)
-    policy["metadata"]["resourceVersion"] = "12"
+    policies["hive-worker-egress"] = copy.deepcopy(payload)
+    policies["hive-worker-egress"]["metadata"]["resourceVersion"] = "12"
+    policies["hive-dispatcher-reaper"] = copy.deepcopy(patches[2][2])
+    policies["hive-dispatcher-reaper"]["metadata"]["resourceVersion"] = "12"
     policy_reads = 2
     ready_endpoint = False
     patches.clear()
     namespace["reconcile_neo4j_policy"]()
-    assert len(patches) == 1, patches
+    assert len(patches) == 2, patches
     unready_payload = patches[0][2]
     unready_cidrs = [
         destination["ipBlock"]["cidr"]

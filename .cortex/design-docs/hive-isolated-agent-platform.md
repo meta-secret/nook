@@ -99,7 +99,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration | Raw Neo4j access or Kubernetes administrative credentials |
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
 | Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
-| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker egress policy | Codex auth or task execution |
+| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies | Codex auth or task execution |
 | Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
@@ -393,7 +393,7 @@ TypeScript PR audit without Docker.
 | Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
 | Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
 | Repository-scoped GitHub token | Main-repair worker | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential | Pod reaper and dedicated controller only | No |
+| Reaper controller credential | Pod reaper, Workbench dispatcher, and dedicated controller only | No |
 | Kubernetes auth-refresh token | Auth broker only | No |
 
 The Pod disables automatic service-account token mounting. Its service account
@@ -401,11 +401,13 @@ can patch only the Codex-auth Secret, and that projected token is mounted only
 by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
 controller with an opaque credential. The controller has a distinct workload
 identity restricted to `get`/`delete` labeled Hive Pods, reading only the
-Neo4j Service and Endpoints, and patching only the worker egress NetworkPolicy.
+Neo4j Service and Endpoints, and patching only the worker and dispatcher egress
+NetworkPolicies.
 It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
-StatefulSet or kubelet replacement cannot leave workers pinned to a stale
-endpoint. While Neo4j is unready, it removes the stale Pod address and retains
-only the stable Service address. Resource-version preconditions and bounded
+StatefulSet or kubelet replacement cannot leave workers or the dispatcher
+pinned to a stale endpoint. While Neo4j is unready, it removes the stale Pod
+address and retains only the stable Service address. Resource-version
+preconditions and bounded
 conflict retries prevent reconciliation from overwriting a concurrent policy
 change. The controller reloads both its projected Kubernetes token and the
 opaque reaper credential for every request, so normal token projection and
