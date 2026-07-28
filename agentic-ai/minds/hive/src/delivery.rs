@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
@@ -36,6 +37,7 @@ struct DeliveryCheck {
     status: String,
     conclusion: String,
     started_at: String,
+    workflow_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,6 +52,7 @@ struct DeliveryRun {
 pub(crate) async fn verify_main_repair_delivery(
     repository: &Path,
     branch: &str,
+    task_id: &str,
 ) -> anyhow::Result<()> {
     let pull_requests: Vec<DeliveryPullRequest> = serde_json::from_str(
         &gh_output(
@@ -73,7 +76,7 @@ pub(crate) async fn verify_main_repair_delivery(
 
     validate_hive_marker(pull_request)?;
     validate_merged_hive_pull_request(pull_request)?;
-    validate_required_pr_checks(pull_request)?;
+    validate_repository_checks(pull_request)?;
     validate_full_e2e_checks(pull_request)?;
     validate_review_and_deployment_readiness(repository, pull_request).await?;
     let merge_commit = pull_request
@@ -120,10 +123,8 @@ pub(crate) async fn verify_main_repair_delivery(
     )
     .context("GitHub returned invalid Main workflow state")?;
     runs.sort_by(|left, right| left.created_at.cmp(&right.created_at));
+    let mut applicable_runs = Vec::new();
     for run in runs {
-        if run.status != "completed" {
-            continue;
-        }
         let contains_merge = Command::new("git")
             .args([
                 "merge-base",
@@ -141,8 +142,23 @@ pub(crate) async fn verify_main_repair_delivery(
         if !contains_merge.success() {
             continue;
         }
+        applicable_runs.push(run);
+    }
+    let successful_main_sha = select_successful_main_run(&applicable_runs, &merge_commit.oid)?;
+    validate_workbench_completion(repository, task_id, pull_request, successful_main_sha).await?;
+    Ok(())
+}
+
+fn select_successful_main_run<'a>(
+    runs: &'a [DeliveryRun],
+    merge_commit: &str,
+) -> anyhow::Result<&'a str> {
+    for run in runs {
+        if run.status != "completed" {
+            continue;
+        }
         if run.conclusion == "success" {
-            return Ok(());
+            return Ok(run.head_sha.as_str());
         }
         if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
             continue;
@@ -155,7 +171,7 @@ pub(crate) async fn verify_main_repair_delivery(
     }
     anyhow::bail!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
-        merge_commit.oid
+        merge_commit
     )
 }
 
@@ -282,13 +298,12 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
         "Full browser e2e (main fix)",
         "Full extension e2e (main fix)",
     ] {
-        let latest = pull_request
+        let successful = pull_request
             .status_check_rollup
             .iter()
             .filter(|check| check.name == required_check)
-            .max_by(|left, right| left.started_at.cmp(&right.started_at));
-        if !latest.is_some_and(|check| check.status == "COMPLETED" && check.conclusion == "SUCCESS")
-        {
+            .any(successful_check);
+        if !successful {
             anyhow::bail!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number,
@@ -300,20 +315,52 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
     Ok(())
 }
 
-fn validate_required_pr_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
-    let latest = pull_request
+fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+    let verify_succeeded = pull_request
         .status_check_rollup
         .iter()
         .filter(|check| check.name == "Verify and preview")
-        .max_by(|left, right| left.started_at.cmp(&right.started_at));
-    if !latest.is_some_and(|check| check.status == "COMPLETED" && check.conclusion == "SUCCESS") {
+        .any(successful_check);
+    if !verify_succeeded {
         anyhow::bail!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
             pull_request.number,
             pull_request.head_ref_oid
         );
     }
+    let mut repository_checks = HashMap::<&str, Vec<&DeliveryCheck>>::new();
+    for check in &pull_request.status_check_rollup {
+        if !check.workflow_name.is_empty() {
+            repository_checks
+                .entry(&check.name)
+                .or_default()
+                .push(check);
+        }
+    }
+    for (name, checks) in repository_checks {
+        if checks.iter().any(|check| successful_check(check)) {
+            continue;
+        }
+        if checks.iter().any(|check| check.status != "COMPLETED") {
+            anyhow::bail!(
+                "Hive repair delivery is incomplete: repository check `{name}` is still running"
+            );
+        }
+        if let Some(check) = checks
+            .iter()
+            .find(|check| !matches!(check.conclusion.as_str(), "SKIPPED" | "NEUTRAL"))
+        {
+            anyhow::bail!(
+                "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
+                check.conclusion
+            );
+        }
+    }
     Ok(())
+}
+
+fn successful_check(check: &DeliveryCheck) -> bool {
+    check.status == "COMPLETED" && check.conclusion == "SUCCESS"
 }
 
 async fn validate_review_and_deployment_readiness(
@@ -332,36 +379,58 @@ async fn validate_review_and_deployment_readiness(
     let (owner, name) = name_with_owner
         .split_once('/')
         .context("GitHub repository identity is malformed")?;
-    let review_query = format!(
-        "query($number:Int!){{repository(owner:\"{owner}\",name:\"{name}\"){{pullRequest(number:$number){{reviewThreads(first:100){{nodes{{isResolved}}}}}}}}}}"
-    );
-    let review: serde_json::Value = serde_json::from_str(
-        &gh_output(
-            repository,
-            &[
-                "api",
-                "graphql",
-                "-F",
-                &format!("number={number}"),
-                "-f",
-                &format!("query={review_query}"),
-            ],
-        )
-        .await?,
-    )
-    .context("GitHub returned invalid Hive review state")?;
-    let unresolved = review
-        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
-        .and_then(serde_json::Value::as_array)
-        .context("GitHub review response omitted review threads")?
-        .iter()
-        .filter(|thread| {
-            thread
-                .get("isResolved")
-                .and_then(serde_json::Value::as_bool)
-                == Some(false)
-        })
-        .count();
+    let mut unresolved = 0;
+    let mut cursor: Option<String> = None;
+    loop {
+        let review_query = format!(
+            "query($number:Int!,$cursor:String){{repository(owner:\"{owner}\",name:\"{name}\"){{pullRequest(number:$number){{reviewThreads(first:100,after:$cursor){{nodes{{isResolved}} pageInfo{{hasNextPage endCursor}}}}}}}}}}"
+        );
+        let mut arguments = vec![
+            "api".to_owned(),
+            "graphql".to_owned(),
+            "-F".to_owned(),
+            format!("number={number}"),
+            "-f".to_owned(),
+            format!("query={review_query}"),
+        ];
+        if let Some(value) = cursor.as_deref() {
+            arguments.extend(["-F".to_owned(), format!("cursor={value}")]);
+        }
+        let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+        let review: serde_json::Value =
+            serde_json::from_str(&gh_output(repository, &references).await?)
+                .context("GitHub returned invalid Hive review state")?;
+        let threads = review
+            .pointer("/data/repository/pullRequest/reviewThreads")
+            .context("GitHub review response omitted review threads")?;
+        unresolved += threads
+            .get("nodes")
+            .and_then(serde_json::Value::as_array)
+            .context("GitHub review response omitted review thread nodes")?
+            .iter()
+            .filter(|thread| {
+                thread
+                    .get("isResolved")
+                    .and_then(serde_json::Value::as_bool)
+                    == Some(false)
+            })
+            .count();
+        if threads
+            .pointer("/pageInfo/hasNextPage")
+            .and_then(serde_json::Value::as_bool)
+            != Some(true)
+        {
+            break;
+        }
+        cursor = threads
+            .pointer("/pageInfo/endCursor")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        anyhow::ensure!(
+            cursor.is_some(),
+            "GitHub review pagination omitted its cursor"
+        );
+    }
     if unresolved > 0 {
         anyhow::bail!(
             "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
@@ -369,6 +438,7 @@ async fn validate_review_and_deployment_readiness(
             unresolved
         );
     }
+    validate_non_thread_feedback(repository, pull_request.number).await?;
 
     let deployments: serde_json::Value = serde_json::from_str(
         &gh_output(
@@ -389,39 +459,143 @@ async fn validate_review_and_deployment_readiness(
         .await?,
     )
     .context("GitHub returned invalid deployment state")?;
-    let deployment_id = deployments
+    let mut state = None;
+    for deployment_id in deployments
         .as_array()
-        .and_then(|items| items.first())
-        .and_then(|deployment| deployment.get("id"))
-        .and_then(serde_json::Value::as_u64)
-        .context("Hive repair delivery lacks an exact-head github-pages deployment")?;
-    let statuses: serde_json::Value = serde_json::from_str(
-        &gh_output(
-            repository,
-            &[
-                "api",
-                "-X",
-                "GET",
-                &format!("repos/{{owner}}/{{repo}}/deployments/{deployment_id}/statuses"),
-                "-f",
-                "per_page=1",
-            ],
+        .context("GitHub deployment response is not an array")?
+        .iter()
+        .filter_map(|deployment| deployment.get("id").and_then(serde_json::Value::as_u64))
+    {
+        let statuses: serde_json::Value = serde_json::from_str(
+            &gh_output(
+                repository,
+                &[
+                    "api",
+                    "-X",
+                    "GET",
+                    &format!("repos/{{owner}}/{{repo}}/deployments/{deployment_id}/statuses"),
+                    "-f",
+                    "per_page=1",
+                ],
+            )
+            .await?,
         )
-        .await?,
-    )
-    .context("GitHub returned invalid deployment status")?;
-    let state = statuses
-        .as_array()
-        .and_then(|items| items.first())
-        .and_then(|status| status.get("state"))
-        .and_then(serde_json::Value::as_str);
-    if state != Some("success") {
+        .context("GitHub returned invalid deployment status")?;
+        state = statuses
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(|status| status.get("state"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        if state.is_some() {
+            break;
+        }
+    }
+    if state.as_deref() != Some("success") {
         anyhow::bail!(
             "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
             pull_request.number,
-            state
+            state.as_deref()
         );
     }
+    Ok(())
+}
+
+async fn validate_non_thread_feedback(repository: &Path, number: u64) -> anyhow::Result<()> {
+    for surface in ["issues/{number}/comments", "pulls/{number}/reviews"] {
+        let endpoint = format!(
+            "repos/{{owner}}/{{repo}}/{}",
+            surface.replace("{number}", &number.to_string())
+        );
+        let pages: serde_json::Value = serde_json::from_str(
+            &gh_output(
+                repository,
+                &["api", "--paginate", "--slurp", endpoint.as_str()],
+            )
+            .await?,
+        )
+        .context("GitHub returned invalid paginated feedback")?;
+        let actionable = pages
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|page| page.as_array().into_iter().flatten())
+            .filter_map(|item| item.get("body").and_then(serde_json::Value::as_str))
+            .any(is_actionable_feedback);
+        if actionable {
+            anyhow::bail!(
+                "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_actionable_feedback(body: &str) -> bool {
+    [
+        "[P0",
+        "[P1",
+        "[P2",
+        "[P3",
+        "changes requested",
+        "request changes",
+    ]
+    .iter()
+    .any(|marker| {
+        body.to_ascii_lowercase()
+            .contains(&marker.to_ascii_lowercase())
+    })
+}
+
+async fn validate_workbench_completion(
+    repository: &Path,
+    task_id: &str,
+    pull_request: &DeliveryPullRequest,
+    main_sha: &str,
+) -> anyhow::Result<()> {
+    let task_base = task_id.split("-run-").next().unwrap_or(task_id);
+    anyhow::ensure!(
+        task_base.starts_with("main-failure-"),
+        "Hive repair task id does not identify its Workbench incident"
+    );
+    let endpoint = format!(
+        "repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform/{task_base}.md"
+    );
+    let incident = gh_output(
+        repository,
+        &[
+            "api",
+            "-H",
+            "Accept: application/vnd.github.raw+json",
+            endpoint.as_str(),
+        ],
+    )
+    .await
+    .context("read Hive Workbench completion record")?;
+    let completed_status = incident.lines().any(|line| {
+        matches!(
+            line.trim(),
+            "status: completed" | "status: complete" | "status: done"
+        )
+    });
+    anyhow::ensure!(
+        completed_status,
+        "Hive repair delivery is incomplete: Workbench incident {task_base}.md is not completed"
+    );
+    anyhow::ensure!(
+        incident.contains(&format!("#{}", pull_request.number))
+            || incident.contains(&format!("/pull/{}", pull_request.number)),
+        "Hive repair delivery is incomplete: Workbench incident does not link PR #{}",
+        pull_request.number
+    );
+    anyhow::ensure!(
+        incident.contains(main_sha),
+        "Hive repair delivery is incomplete: Workbench incident does not record green Main SHA {main_sha}"
+    );
+    anyhow::ensure!(
+        incident.to_ascii_lowercase().contains("worklog"),
+        "Hive repair delivery is incomplete: Workbench incident has no linked worklog"
+    );
     Ok(())
 }
 
@@ -480,8 +654,9 @@ async fn run_git_status(
 #[cfg(test)]
 mod tests {
     use super::{
-        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, delivery_generation,
-        latest_delivery_generation, validate_full_e2e_checks, validate_merged_hive_pull_request,
+        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
+        delivery_generation, latest_delivery_generation, select_successful_main_run,
+        validate_full_e2e_checks, validate_merged_hive_pull_request, validate_repository_checks,
     };
 
     fn pull_request(
@@ -514,12 +689,21 @@ mod tests {
                     status: "COMPLETED".to_owned(),
                     conclusion: "SUCCESS".to_owned(),
                     started_at: "2026-07-28T01:00:00Z".to_owned(),
+                    workflow_name: "PR".to_owned(),
                 },
                 DeliveryCheck {
                     name: "Full extension e2e (main fix)".to_owned(),
                     status: "COMPLETED".to_owned(),
                     conclusion: "SUCCESS".to_owned(),
                     started_at: "2026-07-28T01:00:00Z".to_owned(),
+                    workflow_name: "PR".to_owned(),
+                },
+                DeliveryCheck {
+                    name: "Verify and preview".to_owned(),
+                    status: "COMPLETED".to_owned(),
+                    conclusion: "SUCCESS".to_owned(),
+                    started_at: "2026-07-28T01:00:00Z".to_owned(),
+                    workflow_name: "PR".to_owned(),
                 },
             ],
         }
@@ -610,18 +794,77 @@ mod tests {
     }
 
     #[test]
-    fn delivery_requires_successful_full_e2e_on_the_current_head() {
+    fn merge_triggered_skipped_e2e_does_not_hide_pre_merge_success() {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Full extension e2e (main fix)".to_owned(),
             status: "COMPLETED".to_owned(),
-            conclusion: "FAILURE".to_owned(),
+            conclusion: "SKIPPED".to_owned(),
             started_at: "2026-07-28T02:00:00Z".to_owned(),
+            workflow_name: "PR".to_owned(),
         });
 
-        let error = validate_full_e2e_checks(&pull_request)
-            .expect_err("a failed extension suite cannot complete a Hive task");
+        validate_full_e2e_checks(&pull_request)
+            .expect("a successful exact-head run remains valid after the merge-triggered skip");
+    }
 
-        assert!(error.to_string().contains("Full extension e2e"));
+    #[test]
+    fn repository_workflow_failure_without_success_is_rejected() {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        pull_request.status_check_rollup.push(DeliveryCheck {
+            name: "Hive Rust and infrastructure verification".to_owned(),
+            status: "COMPLETED".to_owned(),
+            conclusion: "FAILURE".to_owned(),
+            started_at: "2026-07-28T02:00:00Z".to_owned(),
+            workflow_name: "Hive".to_owned(),
+        });
+
+        let error = validate_repository_checks(&pull_request)
+            .expect_err("a failed applicable repository workflow cannot complete a Hive task");
+        assert!(error.to_string().contains("Hive Rust"));
+    }
+
+    fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {
+        DeliveryRun {
+            head_sha: sha.to_owned(),
+            status: "completed".to_owned(),
+            conclusion: conclusion.to_owned(),
+            created_at: created_at.to_owned(),
+        }
+    }
+
+    #[test]
+    fn failed_repair_run_is_not_hidden_by_a_successful_descendant() {
+        let runs = vec![
+            run("repair", "failure", "2026-07-28T01:00:00Z"),
+            run("descendant", "success", "2026-07-28T02:00:00Z"),
+        ];
+        let error = select_successful_main_run(&runs, "merge")
+            .expect_err("an explicit failure must remain terminal");
+        assert!(error.to_string().contains("repair"));
+    }
+
+    #[test]
+    fn cancelled_run_can_coalesce_into_a_successful_descendant() {
+        let runs = vec![
+            run("repair", "cancelled", "2026-07-28T01:00:00Z"),
+            run("descendant", "success", "2026-07-28T02:00:00Z"),
+        ];
+        assert_eq!(
+            select_successful_main_run(&runs, "merge").expect("coalesced Main should pass"),
+            "descendant"
+        );
+    }
+
+    #[test]
+    fn first_successful_completed_descendant_is_selected_chronologically() {
+        let runs = vec![
+            run("first", "success", "2026-07-28T01:00:00Z"),
+            run("second", "success", "2026-07-28T02:00:00Z"),
+        ];
+        assert_eq!(
+            select_successful_main_run(&runs, "merge").expect("Main should pass"),
+            "first"
+        );
     }
 }

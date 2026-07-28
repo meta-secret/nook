@@ -260,6 +260,7 @@ impl<S: TaskStore> Worker<S> {
                         verify_main_repair_delivery(
                             &repository,
                             &repair_branch_name(task.id.as_str()),
+                            task.id.as_str(),
                         )
                         .await?;
                     }
