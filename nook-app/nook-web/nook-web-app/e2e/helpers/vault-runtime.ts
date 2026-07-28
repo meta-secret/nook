@@ -12,15 +12,27 @@ import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
   const clearedThroughManager = await page.evaluate(async () => {
-    const manager = (
+    const vault = (
       window as Window & {
         __nookVault?: {
+          initPromise?: Promise<void>
+          stopVaultSync?: () => void
+          waitForStorageChain?: () => Promise<void>
+          enqueueStorage?: <T>(operation: () => Promise<T>) => Promise<T>
           manager?: { deleteLocalBrowserData?: () => Promise<void> }
         }
       }
-    ).__nookVault?.manager
+    ).__nookVault
+    await vault?.initPromise
+    vault?.stopVaultSync?.()
+    await vault?.waitForStorageChain?.()
+    const manager = vault?.manager
     if (!manager?.deleteLocalBrowserData) return false
-    await manager.deleteLocalBrowserData()
+    if (vault.enqueueStorage) {
+      await vault.enqueueStorage(() => manager.deleteLocalBrowserData!())
+    } else {
+      await manager.deleteLocalBrowserData()
+    }
     return true
   })
   await page.evaluate(

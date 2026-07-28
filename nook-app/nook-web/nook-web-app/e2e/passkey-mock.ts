@@ -145,7 +145,8 @@ export function installMockPasskeyRuntime() {
           }
         }
       }) => {
-        if (localStorage.getItem('nook_e2e_passkey_mode') === 'cancel') {
+        const mode = localStorage.getItem('nook_e2e_passkey_mode')
+        if (mode === 'cancel') {
           throw new DOMException(
             'The operation was cancelled.',
             'NotAllowedError',
