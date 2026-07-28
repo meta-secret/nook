@@ -365,6 +365,10 @@ impl NookVaultManager {
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        // The default vault view uses an empty query, but it still decrypts
+        // records below. Restore the session key before either the default or
+        // search path reads the page after a provider/session transition.
+        self.ensure_vault_crypto_from_cache().await?;
         if !query.trim().is_empty() {
             self.prepare_secret_search_catalog().await?;
         }

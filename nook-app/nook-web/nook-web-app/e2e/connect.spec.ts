@@ -6,7 +6,9 @@ import {
   dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectAppLogMilestones,
+  flushNookLogPersistQueue,
   openLoginProviderSetup,
+  readPersistedAppLogs,
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
@@ -40,6 +42,15 @@ test.describe('vault connect flow', () => {
     ])
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await flushNookLogPersistQueue(page)
+    const logs = await readPersistedAppLogs(page)
+    expect(
+      logs?.some(
+        (entry) =>
+          entry.scope === 'vault-sync' &&
+          entry.message.includes('Vault crypto not initialized'),
+      ),
+    ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
     await expect(page.getByTestId('extension-install-setup')).toBeVisible()
     await expect(page.getByTestId('extension-install-setup')).toHaveAttribute(
