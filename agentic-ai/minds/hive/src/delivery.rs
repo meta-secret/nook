@@ -293,9 +293,8 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
             .iter()
             .filter(|check| check.name == required_check)
             .max_by(|left, right| left.started_at.cmp(&right.started_at));
-        if !latest.is_some_and(|check| {
-            check.status == "COMPLETED" && check.conclusion == "SUCCESS"
-        }) {
+        if !latest.is_some_and(|check| check.status == "COMPLETED" && check.conclusion == "SUCCESS")
+        {
             anyhow::bail!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number,
@@ -444,12 +443,7 @@ mod tests {
 
     #[test]
     fn delivery_accepts_a_merged_pull_request_with_its_commit() {
-        validate_merged_hive_pull_request(&pull_request(
-            42,
-            "repair",
-            "MERGED",
-            Some("abc123"),
-        ))
+        validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", Some("abc123")))
             .expect("the merged pull request should pass the local delivery invariant");
     }
 
@@ -467,7 +461,10 @@ mod tests {
             .expect("the latest delivery generation should be found");
 
         assert_eq!(latest.number, 42);
-        assert_eq!(delivery_generation("codex/hive-task", "codex/hive-task-g1"), None);
+        assert_eq!(
+            delivery_generation("codex/hive-task", "codex/hive-task-g1"),
+            None
+        );
     }
 
     #[test]
