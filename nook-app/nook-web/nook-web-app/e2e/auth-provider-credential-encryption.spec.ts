@@ -75,6 +75,16 @@ test.describe('sync provider credential encryption', () => {
     })
     await waitForAuthProvidersE2eHook(page)
 
+    await page.reload()
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await waitForAuthProvidersE2eHook(page)
+
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(
       raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
