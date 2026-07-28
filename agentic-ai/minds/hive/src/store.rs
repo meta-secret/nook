@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use crate::model::{
-    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+    LeaseToken, TaskId,
 };
 
 #[async_trait]
@@ -19,6 +20,13 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
     ) -> anyhow::Result<Option<TaskId>>;
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool>;
+
+    async fn cancellation_targets(
+        &self,
+        task_id: &TaskId,
+    ) -> anyhow::Result<Vec<CancellationTarget>>;
+
+    async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool>;
 
     async fn acknowledge_cancellation(
         &self,
@@ -73,8 +81,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken,
-        TaskId,
+        AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
+        EnqueueTask, LeaseToken, TaskId,
     };
 
     #[derive(Debug, Clone)]
@@ -242,6 +250,27 @@ mod tests {
             stored.status = "CANCELLED";
             stored.lease_token = None;
             stored.lease_until = None;
+            Ok(true)
+        }
+
+        async fn cancellation_targets(
+            &self,
+            _task_id: &TaskId,
+        ) -> anyhow::Result<Vec<CancellationTarget>> {
+            Ok(Vec::new())
+        }
+
+        async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let Some(task) = tasks.get_mut(task_id.as_str()) else {
+                return Ok(false);
+            };
+            if task.status != "CANCELLING" {
+                return Ok(false);
+            }
+            task.status = "CANCELLED";
+            task.lease_token = None;
+            task.lease_until = None;
             Ok(true)
         }
 

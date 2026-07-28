@@ -70,6 +70,12 @@ string_id!(AgentId);
 string_id!(AttemptId);
 string_id!(LeaseToken);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancellationTarget {
+    pub task_id: TaskId,
+    pub pod_name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: String,

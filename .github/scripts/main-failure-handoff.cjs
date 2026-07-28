@@ -8,6 +8,7 @@ const REPAIR_JOB_CONCLUSIONS = new Set([...FAILURE_CONCLUSIONS, 'cancelled'])
 
 // Kept only to reopen incidents retired by the former E2E suppression policy.
 const DEFERRED_E2E_RETIREMENT_MARKER = '<!-- hive-retired:deferred-e2e -->'
+const SUCCESSFUL_RERUN_RETIREMENT_MARKER = '<!-- hive-retired:successful-rerun -->'
 
 function requireString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -31,15 +32,12 @@ function requireTimestamp(value, label) {
   return timestamp
 }
 
-function requireMainFailure(run) {
+function requireMainRun(run) {
   if (!run || typeof run !== 'object') throw new Error('run must be an object')
   if (run.name !== 'Main') throw new Error(`expected Main workflow, got ${run.name}`)
   if (run.event !== 'push') throw new Error(`expected push event, got ${run.event}`)
   if (run.head_branch !== 'main') {
     throw new Error(`expected main branch, got ${run.head_branch}`)
-  }
-  if (!FAILURE_CONCLUSIONS.has(run.conclusion)) {
-    throw new Error(`expected unsuccessful conclusion, got ${run.conclusion}`)
   }
   requireInteger(run.id, 'run.id')
   requireInteger(run.run_attempt, 'run.run_attempt')
@@ -49,8 +47,16 @@ function requireMainFailure(run) {
   return headSha.toLowerCase()
 }
 
+function requireMainFailure(run) {
+  const headSha = requireMainRun(run)
+  if (!FAILURE_CONCLUSIONS.has(run.conclusion)) {
+    throw new Error(`expected unsuccessful conclusion, got ${run.conclusion}`)
+  }
+  return headSha
+}
+
 function incidentPathForRun(run) {
-  const headSha = requireMainFailure(run)
+  const headSha = requireMainRun(run)
   return `issues/hive-isolated-agent-platform/main-failure-${headSha}.md`
 }
 
@@ -114,18 +120,45 @@ function progressEntry({ run, recordedAt, failures }) {
   ].join('\n')
 }
 
-function latestMainAttempt(body, runId) {
-  if (typeof body !== 'string') return undefined
-  const attempts = [...body.matchAll(/<!-- main-run:(\d+):attempt:(\d+) -->/g)]
-    .filter((match) => Number.parseInt(match[1], 10) === runId)
-    .map((match) => Number.parseInt(match[2], 10))
-  return attempts.length === 0 ? undefined : Math.max(...attempts)
+function isStaleMainAttempt(body, run) {
+  requireMainRun(run)
+  const recorded = [...body.matchAll(/<!-- main-run:(\d+):attempt:(\d+) -->/g)].map(
+    (match) => ({
+      runId: Number.parseInt(match[1], 10),
+      attempt: Number.parseInt(match[2], 10),
+    }),
+  )
+  return recorded.some(
+    (entry) =>
+      entry.runId > run.id || (entry.runId === run.id && entry.attempt > run.run_attempt),
+  )
 }
 
-function isStaleMainAttempt(body, run) {
-  requireMainFailure(run)
-  const latest = latestMainAttempt(body, run.id)
-  return latest !== undefined && run.run_attempt < latest
+function retireSuccessfulMainIssue({ body, run, recordedAt }) {
+  requireMainRun(run)
+  if (run.conclusion !== 'success') {
+    throw new Error(`expected successful conclusion, got ${run.conclusion}`)
+  }
+  if (typeof body !== 'string' || body.length === 0) return undefined
+  if (isStaleMainAttempt(body, run)) return body
+  const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
+  if (body.includes(marker) && body.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)) return body
+  let updated = replaceFrontmatterField(body, 'updated_at', requireTimestamp(recordedAt, 'recordedAt'))
+  updated = replaceFrontmatterField(updated, 'status', 'done')
+  updated = replaceFrontmatterField(updated, 'owner', 'unassigned')
+  updated = clearDeliveryCompletion(updated)
+  updated = updated.replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, '')
+  const entry = [
+    marker,
+    `- ${recordedAt}: Main run [${run.id} attempt ${run.run_attempt}](${run.html_url})`,
+    `  succeeded for \`${run.head_sha}\`; any active Hive repair is retired.`,
+    SUCCESSFUL_RERUN_RETIREMENT_MARKER,
+  ].join('\n')
+  const findingsHeading = '\n## Findings and decisions\n'
+  if (!updated.includes(findingsHeading)) {
+    throw new Error('existing issue is missing Findings and decisions')
+  }
+  return updated.replace(findingsHeading, `\n${entry}\n${findingsHeading}`)
 }
 
 function newIssue({ run, recordedAt, failures, relatedPrs }) {
@@ -237,11 +270,15 @@ function buildMainFailureIssue({
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
   const hasNewAttempt = existingBody !== undefined && !existingBody.includes(marker)
   const actionableExistingBody =
-    hasNewAttempt || existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER)
+    hasNewAttempt ||
+    existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER) ||
+    existingBody?.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)
     ? replaceFrontmatterField(
         replaceFrontmatterField(
           clearDeliveryCompletion(
-            existingBody.replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, ''),
+            existingBody
+              .replace(`${DEFERRED_E2E_RETIREMENT_MARKER}\n\n`, '')
+              .replace(`${SUCCESSFUL_RERUN_RETIREMENT_MARKER}\n`, ''),
           ),
           'status',
           'ready',
@@ -276,5 +313,6 @@ module.exports = {
   failedJobNames,
   incidentPathForRun,
   isStaleMainAttempt,
+  retireSuccessfulMainIssue,
   requireMainFailure,
 }

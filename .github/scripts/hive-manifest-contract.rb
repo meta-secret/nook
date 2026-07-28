@@ -142,9 +142,11 @@ end
 unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
        dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
        "kata-dragonball" &&
+       dispatcher_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
+       "hive-workbench-dispatcher" &&
        dispatcher_deployment.dig("spec", "template", "spec", "automountServiceAccountToken") ==
-       false
-  raise "Hive Workbench dispatcher must remain one token-free Kata replica"
+       true
+  raise "Hive Workbench dispatcher must remain one Kata replica with cancellation-only Pod identity"
 end
 dispatcher_environment = dispatcher_deployment
   .dig("spec", "template", "spec", "containers")

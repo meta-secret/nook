@@ -118,7 +118,8 @@ The graph contains:
 Task definitions include a full 40-character `source_commit`. Every task in one
 dependency DAG must target the same source revision. Hive graph schema
 migrations are explicit and versioned; a binary refuses a graph newer than it
-supports.
+supports. Schema 5 introduces the persisted `CANCELLING` state and its
+Pod-termination acknowledgement contract.
 
 ### Stored readiness invariant
 
@@ -257,9 +258,13 @@ generation is still active, the dispatcher cancels it before enqueueing the new
 generation so the next worker receives the latest failed-job evidence without
 creating competing repairs. The dispatcher aborts that reconciliation cycle
 after requesting cancellation. The running worker then stops its Codex
-execution and atomically acknowledges termination in Neo4j; the old generation
-remains active in `CANCELLING` until that acknowledgement, so no replacement
-can become claimable merely because time elapsed. Reconciliation of the
+execution and atomically acknowledges termination in Neo4j. In parallel, the
+dispatcher deletes the exact worker Pod recorded for every cancelling root or
+exclusive blocker and waits for Kubernetes to confirm deletion before
+finalizing cancellation. This provides durable recovery when a worker crashes
+before acknowledging. The old generation and its cancelling descendants remain
+active until that proof, so no replacement can become claimable merely because
+time elapsed. Reconciliation of the
 already-current run/attempt generation is idempotent and never cancels it.
 Cancellation also cancels blockers exclusive to the superseded delivery;
 shared blockers remain available to other live dependents. Publication
@@ -273,9 +278,11 @@ GitHub Contents API requests on unchanged incidents. It remembers already
 reconciled incident filenames for the life of the Pod. Before enqueueing, the
 dispatcher fetches the referenced workflow run once and requires repository
 `meta-secret/nook`, workflow `Main`, push event, branch
-`main`, and the incident's exact source SHA. A later successful rerun therefore
-turns a stale Workbench incident into a no-op instead of spending an isolated
-worker on an already-recovered revision.
+`main`, and the incident's exact source SHA. Run IDs and attempts are ordered
+across the complete incident history, so an older workflow run cannot
+supersede newer evidence. A later successful rerun marks an existing incident
+retired; the same Pod-termination barrier stops any active repair before the
+revision becomes a no-op.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:

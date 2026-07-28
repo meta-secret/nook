@@ -7,6 +7,7 @@ const {
   failedJobNames,
   incidentPathForRun,
   isStaleMainAttempt,
+  retireSuccessfulMainIssue,
   requireMainFailure,
 } = require('./main-failure-handoff.cjs')
 
@@ -91,6 +92,32 @@ test('rejects stale rerun delivery before changing incident policy', () => {
   assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 2 })), true)
   assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 3 })), false)
   assert.equal(isStaleMainAttempt(current.body, run({ run_attempt: 4 })), false)
+  assert.equal(
+    isStaleMainAttempt(current.body, run({ id: 30189999999, run_attempt: 99 })),
+    true,
+  )
+  assert.equal(
+    isStaleMainAttempt(current.body, run({ id: 30190000001, run_attempt: 1 })),
+    false,
+  )
+})
+
+test('retires an existing incident after a successful rerun', () => {
+  const initial = buildMainFailureIssue({
+    run: run(),
+    jobs: [{ name: 'Web e2e', conclusion: 'failure' }],
+    recordedAt: '2026-07-26T06:00:00Z',
+  })
+  const repairedRun = run({ run_attempt: 2, conclusion: 'success' })
+  const retired = retireSuccessfulMainIssue({
+    body: initial.body.replace(/^status: ready$/m, 'status: in_progress'),
+    run: repairedRun,
+    recordedAt: '2026-07-26T07:00:00Z',
+  })
+
+  assert.match(retired, /^status: done$/m)
+  assert.match(retired, /<!-- main-run:30190000000:attempt:2 -->/)
+  assert.match(retired, /<!-- hive-retired:successful-rerun -->/)
 })
 
 test('reopens a completed incident for a later failed rerun', () => {
@@ -229,7 +256,10 @@ test('handoff workflow trusts default-branch code and writes only Workbench', ()
     workflow,
     /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
   )
-  assert.match(workflow, /"action_required","failure","startup_failure","timed_out"/)
+  assert.match(
+    workflow,
+    /"action_required","failure","startup_failure","timed_out","success"/,
+  )
   assert.doesNotMatch(workflow, /^\s+queue:/m)
   assert.match(workflow, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)

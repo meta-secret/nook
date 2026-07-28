@@ -236,9 +236,7 @@ impl<S: TaskStore> Worker<S> {
                         .block(task, &self.config.agent_id, &blocker, &bounded(summary))
                         .await?;
                     if !accepted {
-                        return Err(anyhow!(
-                            "task blocker was rejected because the lease is stale"
-                        ));
+                        return Err(WorkerCancellationRequested.into());
                     }
                     return Err(WorkerBlocked.into());
                 }
@@ -257,9 +255,7 @@ impl<S: TaskStore> Worker<S> {
                     .complete(task, &self.config.agent_id, &summary, &artifact)
                     .await?;
                 if !accepted {
-                    return Err(anyhow!(
-                        "task completion was rejected because the lease is stale"
-                    ));
+                    return Err(WorkerCancellationRequested.into());
                 }
                 Ok::<(), anyhow::Error>(())
             },

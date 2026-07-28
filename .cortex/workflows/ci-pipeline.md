@@ -680,7 +680,11 @@ rerun supersedes and cancels an active delivery before its new generation is
 enqueued. The failed reconciliation retries only after a poll interval longer
 than the worker heartbeat, but elapsed time is not the termination barrier:
 the old generation remains `CANCELLING` until its worker durably acknowledges
-that Codex execution stopped. Only then can the replacement become claimable.
+that Codex execution stopped or Kubernetes confirms deletion of the exact
+recorded worker Pod. Cancelling exclusive blocker Pods participate in the same
+barrier. Only then can the replacement become claimable. A successful rerun
+retires an existing incident and terminates any active delivery; run IDs and
+attempts are ordered across the incident so older workflow runs are ignored.
 Reconciliation of the already-current generation is idempotent and never
 cancels it.
 Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job

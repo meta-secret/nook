@@ -1,6 +1,37 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: hive-workbench-dispatcher
+  namespace: hive-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hive-workbench-dispatcher
+  namespace: hive-system
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hive-workbench-dispatcher
+  namespace: hive-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hive-workbench-dispatcher
+subjects:
+  - kind: ServiceAccount
+    name: hive-workbench-dispatcher
+    namespace: hive-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: hive-auth-persistence
   namespace: hive-system
 automountServiceAccountToken: false

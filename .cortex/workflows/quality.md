@@ -39,8 +39,10 @@ Use this workflow for quality, CI, and deployment changes.
     with generation-specific publication records and no completed publication
     reuse. A later failed rerun cancels and supersedes an active delivery before
     its new generation is enqueued. The old generation remains `CANCELLING`
-    until its worker durably acknowledges that Codex execution stopped, so
-    stale and replacement workers never execute concurrently;
+    until its worker durably acknowledges that Codex execution stopped or
+    Kubernetes confirms deletion of the exact recorded worker Pod. Cancelling
+    exclusive blockers share that barrier, so stale and replacement workers
+    never execute concurrently. Successful reruns retire active incidents;
     current-generation reconciliation is idempotent.
     A single isolated dispatcher enqueues actionable incidents, and one logical Hive
     task owns the normal PR, checks, review loop, squash merge, and replacement

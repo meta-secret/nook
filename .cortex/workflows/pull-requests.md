@@ -331,8 +331,10 @@ supersedes and cancels an active delivery before the new generation is
 enqueued. The dispatcher retries only after a poll interval longer than the
 worker heartbeat, while the durable barrier is the worker's Neo4j
 acknowledgement that the stale Codex execution stopped. The old generation
-remains `CANCELLING` until that acknowledgement; reconciliation of the current
-generation is idempotent.
+remains `CANCELLING` until worker acknowledgement or confirmed deletion of its
+recorded Kubernetes Pod, including cancelling exclusive blockers;
+reconciliation of the current generation is idempotent. Successful reruns
+retire existing incidents and stop active delivery.
 The isolated Hive dispatcher enqueues actionable incidents once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The

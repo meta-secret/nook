@@ -10,7 +10,8 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 
 use crate::model::{
-    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+    LeaseToken, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -169,6 +170,17 @@ impl TaskStore for CoordinatorTaskStore {
 
     async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
         anyhow::bail!("workers are not authorized to cancel tasks")
+    }
+
+    async fn cancellation_targets(
+        &self,
+        _task_id: &TaskId,
+    ) -> anyhow::Result<Vec<CancellationTarget>> {
+        anyhow::bail!("workers are not authorized to inspect cancellation targets")
+    }
+
+    async fn finalize_cancellation(&self, _task_id: &TaskId) -> anyhow::Result<bool> {
+        anyhow::bail!("workers are not authorized to finalize cancellation")
     }
 
     async fn acknowledge_cancellation(
