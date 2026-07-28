@@ -168,9 +168,28 @@ pub struct DependencyResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskTrigger {
+    AgentDependency,
+    GitHubMainFailure,
+    ManualCli,
+}
+
+impl TaskTrigger {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AgentDependency => "agent-dependency",
+            Self::GitHubMainFailure => "github-main-failure",
+            Self::ManualCli => "manual-cli",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnqueueTask {
     pub id: TaskId,
     pub kind: String,
+    pub trigger: TaskTrigger,
     pub prompt: String,
     pub source_commit: String,
     pub priority: i64,
@@ -351,7 +370,7 @@ impl TerminalResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnqueueTask, ModelError, TaskId, TerminalResult};
+    use super::{EnqueueTask, ModelError, TaskId, TaskTrigger, TerminalResult};
 
     #[test]
     fn enqueue_rejects_self_dependency() -> anyhow::Result<()> {
@@ -359,6 +378,7 @@ mod tests {
         let task = EnqueueTask {
             id: task_id.clone(),
             kind: "code".to_owned(),
+            trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 1,

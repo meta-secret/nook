@@ -76,6 +76,7 @@ const snapshot: ObserverSnapshot = {
     {
       id: 'main-repair-359c937a-run-302991001',
       kind: 'main-repair',
+      kind_label: 'Main repair',
       trigger: 'GitHub Actions · failed main workflow',
       status: 'RUNNING',
       source_commit: '359c937a97e69d42d7a456187c346c767ac6f72a',
@@ -125,6 +126,7 @@ const snapshot: ObserverSnapshot = {
     {
       id: 'dependency-cache-repair',
       kind: 'blocker',
+      kind_label: 'Blocking task',
       trigger: 'Agent task · dependency for main-repair-359c937a-run-302991001',
       status: 'FAILED',
       source_commit: '359c937a97e69d42d7a456187c346c767ac6f72a',
@@ -155,6 +157,7 @@ const snapshot: ObserverSnapshot = {
     {
       id: 'completed-doc-sync',
       kind: 'documentation',
+      kind_label: 'Documentation',
       trigger: 'Manual dispatch · Hive CLI',
       status: 'COMPLETED',
       source_commit: '359c937a97e69d42d7a456187c346c767ac6f72a',
@@ -196,7 +199,7 @@ test('shows worker health, attention, task evidence, and durable activity', asyn
     page.getByText('Needs attention', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('main repair', { exact: true }).first(),
+    page.getByText('Main repair', { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByText('Source revision')).toBeVisible();
   await expect(
@@ -224,13 +227,13 @@ test('keeps the task journey reachable on a phone', async ({ page }) => {
   await expect(page.getByText(/hive-7c4…c8-krx2p/)).toBeVisible();
   await page.getByPlaceholder('Search tasks').fill('completed');
   const completedTask = page.getByRole('button', {
-    name: /documentation Completed/,
+    name: /Documentation Completed/,
   });
   await expect(completedTask).toBeVisible();
   await completedTask.click();
   await expect(page.locator('.detail-panel')).toBeFocused();
   await expect(
-    page.getByRole('heading', { name: 'documentation', exact: true }),
+    page.getByRole('heading', { name: 'Documentation', exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: 'test-results/control-center-mobile.png',
@@ -252,4 +255,37 @@ test('explains an empty queue', async ({ page }) => {
   await expect(
     page.getByText('New work will appear here when Hive is triggered.'),
   ).toBeVisible();
+});
+
+test('declares the Russian interface language', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window.navigator, 'language', { value: 'ru-RU' });
+  });
+  await routeSnapshot(page);
+  await page.goto('/');
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+});
+
+test('uses immediate task navigation with reduced motion', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.addInitScript(() => {
+    HTMLElement.prototype.scrollIntoView = function (
+      options?: boolean | ScrollIntoViewOptions,
+    ) {
+      if (typeof options !== 'boolean') {
+        document.documentElement.dataset.scrollBehavior =
+          options?.behavior ?? 'auto';
+      }
+    };
+  });
+  await routeSnapshot(page);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: /Blocking task Failed/ }).click();
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-scroll-behavior',
+    'auto',
+  );
 });

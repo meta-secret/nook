@@ -330,6 +330,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.version = 0,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
+                                   task.trigger_kind = $trigger_kind,
                                    task.prompt = $prompt,
                                    task.source_commit = $source_commit,
                                    task.priority = $priority,
@@ -340,6 +341,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("id", task.id.as_str())
                 .param("enqueue_token", enqueue_token.as_str())
                 .param("kind", task.kind.as_str())
+                .param("trigger_kind", task.trigger.as_str())
                 .param("prompt", task.prompt.as_str())
                 .param("source_commit", task.source_commit.as_str())
                 .param("priority", task.priority)
@@ -1042,6 +1044,7 @@ impl TaskStore for Neo4jTaskStore {
                                    blocker.attempt_count = 0,
                                    blocker.version = 0,
                                    blocker.kind = $blocker_kind,
+                                   blocker.trigger_kind = $blocker_trigger_kind,
                                    blocker.prompt = $blocker_prompt,
                                    blocker.source_commit = $source_commit,
                                    blocker.priority = $blocker_priority,
@@ -1097,6 +1100,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("lease_token", task.lease_token.as_str())
                 .param("blocker_id", blocker.id.as_str())
                 .param("blocker_kind", blocker.kind.as_str())
+                .param("blocker_trigger_kind", blocker.trigger.as_str())
                 .param("blocker_prompt", blocker.prompt.as_str())
                 .param("source_commit", blocker.source_commit.as_str())
                 .param("blocker_priority", blocker.priority)

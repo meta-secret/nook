@@ -8,7 +8,7 @@ use hive::auth::run_auth_broker;
 use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
-use hive::model::{AgentId, EnqueueTask, TaskId};
+use hive::model::{AgentId, EnqueueTask, TaskId, TaskTrigger};
 use hive::observer::run_observer;
 use hive::{
     CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
@@ -332,6 +332,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 .enqueue(&EnqueueTask {
                     id: TaskId::new(id)?,
                     kind,
+                    trigger: TaskTrigger::ManualCli,
                     prompt,
                     source_commit,
                     priority,

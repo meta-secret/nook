@@ -2,7 +2,7 @@ use std::env;
 
 use hive::model::{
     ActivityKind, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskActivity,
-    TaskId,
+    TaskId, TaskTrigger,
 };
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
@@ -12,6 +12,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     EnqueueTask {
         id: TaskId::new(id).expect("valid task id"),
         kind: "integration".to_owned(),
+        trigger: TaskTrigger::ManualCli,
         prompt: "Exercise the production task store".to_owned(),
         source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         priority: 0,

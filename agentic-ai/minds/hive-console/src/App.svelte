@@ -91,6 +91,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   async function loadSnapshot(signal: AbortSignal | undefined = undefined) {
     try {
       const locale = navigator.language || 'en';
+      document.documentElement.lang = locale
+        .toLocaleLowerCase()
+        .startsWith('ru')
+        ? 'ru'
+        : 'en';
       const response = await fetch(
         `/api/overview?locale=${encodeURIComponent(locale)}`,
         { signal },
@@ -122,9 +127,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   }
 
   function isAgentHealthy(agent: ObservedAgent) {
-    return (
-      (snapshot?.generated_at ?? Date.now()) - agent.last_seen_at < 2 * 60_000
-    );
+    return !unavailable && Date.now() - agent.last_seen_at < 2 * 60_000;
   }
 
   function statusLabel(status: string) {
@@ -165,13 +168,13 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     selectedId = taskId;
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
-      detailPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
+        .matches
+        ? 'auto'
+        : 'smooth';
+      detailPanel?.scrollIntoView({ behavior, block: 'start' });
       detailPanel?.focus({ preventScroll: true });
     });
-  }
-
-  function taskKindLabel(kind: string) {
-    return kind.replace(/-/g, ' ');
   }
 
   function emergencyCopy(): ObserverCopy {
@@ -406,7 +409,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           <div class="detail-header">
             <div>
               <span class="detail-kicker">{copy.task_details}</span>
-              <h2>{taskKindLabel(selected.kind)}</h2>
+              <h2>{selected.kind_label}</h2>
               <code>{selected.id}</code>
             </div>
             <button
@@ -514,7 +517,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     {@render StatusMark(task.status)}
     <div class="task-copy">
       <div class="task-title">
-        <strong>{taskKindLabel(task.kind)}</strong>
+        <strong>{task.kind_label}</strong>
         <span class={`status-text status-${task.status.toLocaleLowerCase()}`}>
           {statusLabel(task.status)}
         </span>

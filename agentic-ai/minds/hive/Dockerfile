@@ -87,6 +87,16 @@ COPY hive-console/src src
 RUN bun run check \
     && bun run build
 
+FROM bun AS console-formatter
+WORKDIR /console
+COPY hive-console/package.json hive-console/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts hive-console/.prettierrc ./
+COPY hive-console/src src
+COPY hive-console/e2e e2e
+COPY hive-console/PRODUCT.md hive-console/DESIGN.md ./
+RUN bun run format
+
 FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml

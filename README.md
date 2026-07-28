@@ -381,6 +381,7 @@ task infra:k0s:network:refresh # recreate egress-capable Pods after a CNI migrat
 task infra:kata:verify      # prove a Pod is using the Kata guest kernel
 task infra:kata:diagnose    # bounded Kata installer and runtime evidence
 task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
+task infra:hive:dashboard   # open the cluster-private Hive Control Center locally
 task infra:hive:queue:status # inspect durable task and latest/previous attempt state
 task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded budget per Hive release
 task infra:services:diagnose # bounded Docker and Compose network evidence

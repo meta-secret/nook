@@ -91,7 +91,7 @@ mod tests {
     use super::TaskStore;
     use crate::model::{
         AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-        EnqueueTask, LeaseToken, TaskActivity, TaskId,
+        EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
     };
 
     #[derive(Debug, Clone)]
@@ -474,6 +474,7 @@ mod tests {
         EnqueueTask {
             id: TaskId::new(id).expect("valid id"),
             kind: "code".to_owned(),
+            trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 0,

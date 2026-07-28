@@ -17,6 +17,7 @@ use crate::neo4j::Neo4jTaskStore;
 use crate::store::TaskStore;
 
 const TASK_LIMIT: i64 = 200;
+const AGENT_PRESENCE_WINDOW_MS: i64 = 120_000;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ObserverSnapshot {
@@ -38,6 +39,9 @@ pub struct ObservedAgent {
 pub struct ObservedTask {
     pub id: String,
     pub kind: String,
+    pub kind_label: String,
+    #[serde(skip)]
+    pub trigger_kind: String,
     pub trigger: String,
     pub status: String,
     pub source_commit: String,
@@ -257,11 +261,8 @@ async fn task_detail(
 ) -> Result<Json<ObservedTask>, ObserverError> {
     state
         .store
-        .observer_snapshot(&locale.locale)
+        .observer_task(&task_id, &locale.locale)
         .await?
-        .tasks
-        .into_iter()
-        .find(|task| task.id == task_id)
         .map(Json)
         .ok_or_else(|| ObserverError::not_found("task was not found"))
 }
@@ -301,7 +302,7 @@ impl IntoResponse for ObserverError {
 
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> anyhow::Result<ObserverSnapshot> {
-        let mut tasks = self.observer_tasks().await?;
+        let mut tasks = self.observer_tasks("", TASK_LIMIT, locale).await?;
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
@@ -313,17 +314,34 @@ impl Neo4jTaskStore {
         })
     }
 
+    async fn observer_task(
+        &self,
+        task_id: &str,
+        locale: &str,
+    ) -> anyhow::Result<Option<ObservedTask>> {
+        let mut tasks = self.observer_tasks(task_id, 1, locale).await?;
+        self.attach_dependencies(&mut tasks).await?;
+        self.attach_triggers(&mut tasks, locale).await?;
+        self.attach_activity(&mut tasks, locale).await?;
+        Ok(tasks.pop())
+    }
+
     async fn observer_agents(&self) -> anyhow::Result<Vec<ObservedAgent>> {
         let mut rows = self
             .graph
-            .execute(query(
-                "MATCH (agent:Agent)
+            .execute(
+                query(
+                    "MATCH (agent:Agent)
+                 WHERE coalesce(agent.last_seen_at, agent.started_at, 0)
+                       >= timestamp() - $presence_window
                  RETURN agent.id AS id,
                         coalesce(agent.pod_name, '') AS pod_name,
                         coalesce(agent.status, 'IDLE') AS status,
                         coalesce(agent.last_seen_at, agent.started_at, 0) AS last_seen_at
                  ORDER BY pod_name, id",
-            ))
+                )
+                .param("presence_window", AGENT_PRESENCE_WINDOW_MS),
+            )
             .await?;
         let mut agents = Vec::new();
         while let Some(row) = rows.next().await? {
@@ -337,12 +355,18 @@ impl Neo4jTaskStore {
         Ok(agents)
     }
 
-    async fn observer_tasks(&self) -> anyhow::Result<Vec<ObservedTask>> {
+    async fn observer_tasks(
+        &self,
+        task_id: &str,
+        limit: i64,
+        locale: &str,
+    ) -> anyhow::Result<Vec<ObservedTask>> {
         let mut rows = self
             .graph
             .execute(
                 query(
                     "MATCH (task:Task)
+                     WHERE $task_id = '' OR task.id = $task_id
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                      WITH task, attempt, agent
@@ -350,6 +374,7 @@ impl Neo4jTaskStore {
                      WITH task, collect({attempt: attempt, agent: agent})[0] AS latest
                      RETURN task.id AS id,
                             coalesce(task.kind, '') AS kind,
+                            coalesce(task.trigger_kind, 'legacy-unknown') AS trigger_kind,
                             task.status AS status,
                             coalesce(task.source_commit, '') AS source_commit,
                             coalesce(task.priority, 0) AS priority,
@@ -367,10 +392,23 @@ impl Neo4jTaskStore {
                               AS latest_error,
                             substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
                               AS latest_summary
-                     ORDER BY updated_at DESC, created_at DESC
+                     ORDER BY
+                       CASE task.status
+                         WHEN 'READY' THEN 0
+                         WHEN 'RUNNING' THEN 1
+                         WHEN 'BLOCKED' THEN 2
+                         WHEN 'CANCELLING' THEN 3
+                         ELSE 4
+                       END,
+                       CASE WHEN task.status = 'READY' THEN task.priority ELSE 0 END DESC,
+                       CASE WHEN task.status = 'READY' THEN task.created_at ELSE 0 END ASC,
+                       CASE WHEN task.status = 'READY' THEN task.id ELSE '' END ASC,
+                       updated_at DESC,
+                       created_at DESC
                      LIMIT $limit",
                 )
-                .param("limit", TASK_LIMIT),
+                .param("task_id", task_id)
+                .param("limit", limit),
             )
             .await?;
         let mut tasks = Vec::new();
@@ -378,6 +416,8 @@ impl Neo4jTaskStore {
             tasks.push(ObservedTask {
                 id: row.get("id")?,
                 kind: row.get("kind")?,
+                kind_label: localized_task_kind(&row.get::<String>("kind")?, locale),
+                trigger_kind: row.get("trigger_kind")?,
                 trigger: String::new(),
                 status: row.get("status")?,
                 source_commit: row.get("source_commit")?,
@@ -407,15 +447,23 @@ impl Neo4jTaskStore {
             .enumerate()
             .map(|(index, task)| (task.id.clone(), index))
             .collect::<BTreeMap<_, _>>();
+        if by_id.is_empty() {
+            return Ok(());
+        }
+        let task_ids = by_id.keys().cloned().collect::<Vec<_>>();
         let mut rows = self
             .graph
-            .execute(query(
-                "MATCH (task:Task)-[:DEPENDS_ON]->(dependency:Task)
+            .execute(
+                query(
+                    "UNWIND $task_ids AS task_id
+                 MATCH (task:Task {id: task_id})-[:DEPENDS_ON]->(dependency:Task)
                  RETURN task.id AS task_id,
                         dependency.id AS dependency_id,
                         dependency.status AS dependency_status
                  ORDER BY dependency.created_at, dependency.id",
-            ))
+                )
+                .param("task_ids", task_ids),
+            )
             .await?;
         while let Some(row) = rows.next().await? {
             let task_id: String = row.get("task_id")?;
@@ -435,47 +483,25 @@ impl Neo4jTaskStore {
         tasks: &mut [ObservedTask],
         locale: &str,
     ) -> anyhow::Result<()> {
-        let parents = self.observer_dependency_parents().await?;
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         for task in tasks {
-            task.trigger = if task.kind == "main-repair" {
-                if russian {
+            task.trigger = match (task.trigger_kind.as_str(), russian) {
+                ("github-main-failure", true) => {
                     "GitHub Actions · ошибка workflow в main".to_owned()
-                } else {
+                }
+                ("github-main-failure", false) => {
                     "GitHub Actions · failed main workflow".to_owned()
                 }
-            } else if let Some(parent) = parents.get(&task.id) {
-                if russian {
-                    format!("Задача агента · зависимость для {parent}")
-                } else {
-                    format!("Agent task · dependency for {parent}")
-                }
-            } else if russian {
-                "Ручной запуск · Hive CLI".to_owned()
-            } else {
-                "Manual dispatch · Hive CLI".to_owned()
+                ("agent-dependency", true) => "Задача агента · зависимость".to_owned(),
+                ("agent-dependency", false) => "Agent task · dependency".to_owned(),
+                ("manual-cli", true) => "Ручной запуск · Hive CLI".to_owned(),
+                ("manual-cli", false) => "Manual dispatch · Hive CLI".to_owned(),
+                (_, true) => "Источник не записан".to_owned(),
+                (_, false) => "Source not recorded".to_owned(),
             };
         }
         Ok(())
-    }
-
-    async fn observer_dependency_parents(&self) -> anyhow::Result<BTreeMap<String, String>> {
-        let mut rows = self
-            .graph
-            .execute(query(
-                "MATCH (parent:Task)-[:DEPENDS_ON]->(task:Task)
-                 RETURN task.id AS task_id, parent.id AS parent_id
-                 ORDER BY parent.created_at, parent.id",
-            ))
-            .await?;
-        let mut parents = BTreeMap::new();
-        while let Some(row) = rows.next().await? {
-            parents
-                .entry(row.get("task_id")?)
-                .or_insert(row.get("parent_id")?);
-        }
-        Ok(parents)
     }
 
     async fn attach_activity(
@@ -488,27 +514,39 @@ impl Neo4jTaskStore {
             .enumerate()
             .map(|(index, task)| (task.id.clone(), index))
             .collect::<BTreeMap<_, _>>();
+        if by_id.is_empty() {
+            return Ok(());
+        }
+        let task_ids = by_id.keys().cloned().collect::<Vec<_>>();
         let mut rows = self
             .graph
-            .execute(query(
-                "MATCH (activity:TaskActivity)-[:FOR_TASK]->(task:Task)
+            .execute(
+                query(
+                    "UNWIND $task_ids AS task_id
+                 MATCH (task:Task {id: task_id})
+                 CALL {
+                   WITH task
+                   MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
+                   RETURN activity
+                   ORDER BY activity.created_at DESC, activity.id DESC
+                   LIMIT 100
+                 }
                  RETURN task.id AS task_id,
                         activity.id AS id,
                         activity.kind AS kind,
                         activity.message AS message,
                         coalesce(activity.detail, '') AS detail,
                         activity.created_at AS created_at
-                 ORDER BY activity.created_at DESC, activity.id DESC",
-            ))
+                 ORDER BY task_id, activity.created_at DESC, activity.id DESC",
+                )
+                .param("task_ids", task_ids),
+            )
             .await?;
         while let Some(row) = rows.next().await? {
             let task_id: String = row.get("task_id")?;
             let Some(index) = by_id.get(&task_id).copied() else {
                 continue;
             };
-            if tasks[index].activity.len() >= 100 {
-                continue;
-            }
             let message: String = row.get("message")?;
             tasks[index].activity.push(ObservedActivity {
                 id: row.get("id")?,
@@ -519,6 +557,18 @@ impl Neo4jTaskStore {
             });
         }
         Ok(())
+    }
+}
+
+fn localized_task_kind(kind: &str, locale: &str) -> String {
+    let russian =
+        locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
+    match (kind, russian) {
+        ("main-repair", true) => "Восстановление main".to_owned(),
+        ("blocker", true) => "Блокирующая задача".to_owned(),
+        ("main-repair", false) => "Main repair".to_owned(),
+        ("blocker", false) => "Blocking task".to_owned(),
+        (_, _) => kind.replace('-', " "),
     }
 }
 
@@ -554,7 +604,7 @@ fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObserverCopy, localized_activity};
+    use super::{ObserverCopy, localized_activity, localized_task_kind};
 
     #[test]
     fn observer_copy_preserves_english_and_russian_operator_meaning() {
@@ -570,6 +620,11 @@ mod tests {
         assert_eq!(
             localized_activity("activity.command_failed", "ru"),
             "Команда репозитория завершилась с ошибкой"
+        );
+        assert_eq!(localized_task_kind("main-repair", "en"), "Main repair");
+        assert_eq!(
+            localized_task_kind("main-repair", "ru"),
+            "Восстановление main"
         );
     }
 }

@@ -62,6 +62,7 @@ export type ObservedActivity = {
 export type ObservedTask = {
   id: string;
   kind: string;
+  kind_label: string;
   trigger: string;
   status: string;
   source_commit: string;
