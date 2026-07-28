@@ -1,3 +1,5 @@
+@import './alert.css';
+
 :root {
   font-family:
     Inter,
@@ -989,4 +991,3 @@ code {
     animation: none;
   }
 }
-@import './alert.css';
