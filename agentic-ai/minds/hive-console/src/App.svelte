@@ -74,11 +74,6 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const attentionTaskIds = $derived(
     new Set(attentionEntries.map(({ task }) => task.id)),
   );
-  const activeTasks = $derived(
-    (snapshot?.tasks ?? []).filter((task) =>
-      ['RUNNING', 'READY', 'BLOCKED', 'CANCELLING'].includes(task.status),
-    ),
-  );
   const recentActivity = $derived(
     (snapshot?.tasks ?? [])
       .flatMap((task) =>
@@ -290,7 +285,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
     <section class="pulse-bar" aria-label={copy.overview}>
       <div class="pulse-summary">
-        <strong>{activeTasks.length}</strong>
+        <strong>{snapshot?.active_task_count ?? 0}</strong>
         <span>{copy.queue.toLocaleLowerCase()}</span>
       </div>
       <div class="worker-capacity" aria-label={copy.workers}>
@@ -568,7 +563,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     class:active
     class:critical={alert.severity === 'critical'}
     class="alert-row"
-    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${task.id} ${observedAge}`}
+    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${observedAge} ${task.id}`}
     onclick={onselect}
   >
     <span class="alert-mark" aria-hidden="true"

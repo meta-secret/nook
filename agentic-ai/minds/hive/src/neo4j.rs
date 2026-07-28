@@ -1078,7 +1078,10 @@ impl TaskStore for Neo4jTaskStore {
                              ELSE 'BLOCKED'
                          END,
                          task.attempt_count = task.attempt_count - 1,
-                         task.blocked_reason = $reason,
+                         task.blocked_reason = CASE
+                           WHEN blocker.status = 'COMPLETED' THEN null
+                           ELSE $reason
+                         END,
                          task.failure_reason = CASE
                            WHEN blocker.status = 'FAILED'
                            THEN 'discovered blocker has already exhausted its retry budget'

@@ -548,6 +548,31 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("persist completed blocker dependency")
     );
+    let mut reused_state_rows = graph
+        .execute(
+            query(
+                "MATCH (task:Task {id: $id})
+                 RETURN task.status AS status,
+                        task.blocked_reason IS NULL AS cleared_blocked_reason",
+            )
+            .param("id", reused.id.as_str()),
+        )
+        .await
+        .expect("query completed-blocker reuse state");
+    let reused_state = reused_state_rows
+        .next()
+        .await
+        .expect("read completed-blocker reuse state")
+        .expect("completed-blocker reuse row");
+    assert_eq!(
+        reused_state.get::<String>("status").expect("reuse status"),
+        "READY"
+    );
+    assert!(
+        reused_state
+            .get::<bool>("cleared_blocked_reason")
+            .expect("cleared completed blocker reason")
+    );
     let resumed_reused = store
         .claim(&agent_a, 300)
         .await

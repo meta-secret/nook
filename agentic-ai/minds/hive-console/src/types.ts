@@ -113,6 +113,7 @@ export type ObserverSnapshot = {
   generated_at: number;
   copy: ObserverCopy;
   agents: ObservedAgent[];
+  active_task_count: number;
   tasks: ObservedTask[];
   alerts: ObservedAlert[];
   alerts_truncated: boolean;

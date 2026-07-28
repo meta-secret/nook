@@ -81,6 +81,7 @@ const snapshot: ObserverSnapshot = {
       last_seen_at: now - 11_000,
     },
   ],
+  active_task_count: 1,
   alerts: [
     {
       id: 'task-failed:dependency-cache-repair',

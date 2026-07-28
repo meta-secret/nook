@@ -34,6 +34,7 @@ pub struct ObserverSnapshot {
     pub generated_at: i64,
     pub copy: ObserverCopy,
     pub agents: Vec<ObservedAgent>,
+    pub active_task_count: i64,
     pub tasks: Vec<ObservedTask>,
     pub alerts: Vec<ObservedAlert>,
     pub alerts_truncated: bool,
@@ -541,6 +542,8 @@ impl Neo4jTaskStore {
             .await?;
         let alerts_truncated = attention_tasks.len() > ALERT_LIMIT;
         attention_tasks.truncate(ALERT_LIMIT);
+        let generated_at = OffsetDateTime::now_utc().unix_timestamp() * 1000;
+        let alerts = derive_alerts(&attention_tasks, generated_at, locale);
         let mut tasks = attention_tasks;
         for task in overview_tasks {
             if tasks.len() >= TASK_LIMIT as usize {
@@ -553,12 +556,11 @@ impl Neo4jTaskStore {
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
-        let generated_at = OffsetDateTime::now_utc().unix_timestamp() * 1000;
-        let alerts = derive_alerts(&tasks, generated_at, locale);
         Ok(ObserverSnapshot {
             generated_at,
             copy: ObserverCopy::for_locale(locale),
             agents: self.observer_agents().await?,
+            active_task_count: self.observer_active_task_count().await?,
             tasks,
             alerts,
             alerts_truncated,
@@ -604,6 +606,22 @@ impl Neo4jTaskStore {
             });
         }
         Ok(agents)
+    }
+
+    async fn observer_active_task_count(&self) -> anyhow::Result<i64> {
+        let mut rows = self
+            .graph
+            .execute(query(
+                "MATCH (task:Task)
+                 WHERE task.status IN ['RUNNING', 'READY', 'BLOCKED', 'CANCELLING']
+                 RETURN count(task) AS count",
+            ))
+            .await?;
+        let row = rows
+            .next()
+            .await?
+            .context("active task count query returned no row")?;
+        Ok(row.get("count")?)
     }
 
     async fn observer_tasks(
