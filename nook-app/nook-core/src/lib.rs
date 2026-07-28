@@ -228,6 +228,7 @@ pub use password_envelope::{
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
 };
+pub use secrets::{filter_secrets, validate_secret_data};
 pub use session::{ReplaceSecretInput, replace_encrypted_secret, replace_secret};
 pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials,
@@ -257,13 +258,12 @@ pub use validation::{
     GithubRepoName, GithubSyncTarget, GoogleDriveFolderId, GoogleDriveMode, ICloudEventTarget,
     ICloudMode, ICloudShareRole, ICloudSharedTarget, LocalFolderSyncTarget, OauthAccessToken,
     OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode,
-    StorageProviderType, SyncProviderTarget, filter_secrets, format_drive_storage_ref,
+    StorageProviderType, SyncProviderTarget, format_drive_storage_ref,
     format_drive_storage_ref_raw, format_sync_provider_cache_ref, has_provider_credentials,
     mask_github_pat, normalize_google_drive_folder_ref, parse_drive_storage_ref,
     staged_provider_default_label, storage_mode_for_provider, sync_provider_default_label,
     sync_provider_target_key, validate_connect, validate_drive_backup_name, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_storage_mode,
+    validate_github_repo_name, validate_oauth_access_token, validate_storage_mode,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, VaultRecoverySummary,
