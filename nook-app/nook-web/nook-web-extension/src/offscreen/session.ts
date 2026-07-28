@@ -9,17 +9,9 @@ import initNookWasm, {
   providerWasmArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import {
-  SessionOperationQueue,
-  type SessionOperationPriority,
-} from '../lib/session-operation-queue'
-import {
-  scrubProviderCredentials,
-  stageProviderCredentials,
-} from '../lib/provider-credential-staging'
+import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
-const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
 
 type DeviceResult = {
@@ -67,15 +59,7 @@ type PendingLoginSaveOffer = {
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
-let sessionOperations = new SessionOperationQueue()
-
-function replaceSessionOperations(
-  error = new Error(SESSION_LOCKED_ERROR),
-): void {
-  const previous = sessionOperations
-  sessionOperations = new SessionOperationQueue()
-  previous.close(error)
-}
+let sessionMessageDispatcher: ExtensionSessionMessageDispatcher | undefined
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
@@ -159,14 +143,14 @@ function scheduleSessionExpiry(generation: number): void {
         // still owns the manager when the session expires.
       }
     }
-    replaceSessionOperations()
+    sessionMessageDispatcher?.replaceOperations(new Error(SESSION_LOCKED_ERROR))
     chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
   }, SESSION_DURATION_MS)
 }
 
 async function activateSession(): Promise<DeviceResult> {
   // Expiry closes the queue permanently; unlock must install a fresh queue.
-  sessionOperations = new SessionOperationQueue()
+  sessionMessageDispatcher?.resetOperations()
   const activeManager = await getManager()
   sessionGeneration += 1
   scheduleSessionExpiry(sessionGeneration)
@@ -274,7 +258,9 @@ function resetSessionState(): void {
   }
   sessionDeadlineAt = 0
   sessionGeneration += 1
-  replaceSessionOperations(new Error('Extension session reset.'))
+  sessionMessageDispatcher?.replaceOperations(
+    new Error('Extension session reset.'),
+  )
   if (manager) {
     try {
       manager.lockDeviceIdentity()
@@ -930,258 +916,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
   }
 }
 
-function sessionMessagePriority(type: string): SessionOperationPriority {
-  switch (type) {
-    case 'nook:extension-session-reset':
-      return 'expiry'
-    case 'nook:extension-session-migrate-auth-providers':
-    case 'nook:extension-session-seal-identity-handoff':
-    case 'nook:extension-session-plan-login-save':
-    case 'nook:extension-session-commit-login-save':
-    case 'nook:extension-session-reveal-login':
-    case 'nook:extension-session-authenticator-code':
-    case 'nook:extension-session-authenticator-enroll-confirm':
-    case 'nook:extension-session-authenticator-backup-attach':
-    case 'nook:extension-session-list-logins':
-    case 'nook:extension-session-list-authenticators':
-    case 'nook:extension-session-register-passkey':
-    case 'nook:extension-session-assert-passkey':
-    case 'nook:extension-session-begin-passkey-setup':
-    case 'nook:extension-session-unlock-options':
-    case 'nook:extension-session-unlock-passkey':
-    case 'nook:extension-session-unlock-pin':
-      return 'interactive'
-    default:
-      return 'normal'
-  }
-}
-
-function requestedQueueExpiry(
-  payload: Record<string, unknown>,
-): number | undefined {
-  const value = payload.queueExpiresAt
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined
-  }
-  return Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS)
-}
-
-const sensitiveSessionFields: Readonly<
-  Record<string, readonly string[] | undefined>
-> = {
-  'nook:extension-session-finish-passkey-setup': [
-    'credentialId',
-    'userHandle',
-    'prfInput',
-    'prfOutput',
-  ],
-  'nook:extension-session-recover-passkey': [
-    'credentialId',
-    'userHandle',
-    'prfOutput',
-  ],
-  'nook:extension-session-unlock-passkey': ['prfOutput'],
-  'nook:extension-session-create-pin': ['pin'],
-  'nook:extension-session-unlock-pin': ['pin'],
-  'nook:extension-session-plan-login-save': ['password'],
-  'nook:extension-session-authenticator-enroll-preview': ['otpauthUri'],
-  'nook:extension-session-authenticator-enroll-code': ['otpauthUri'],
-  'nook:extension-session-authenticator-enroll-confirm': ['otpauthUri'],
-  'nook:extension-session-authenticator-backup-attach': ['codes'],
-}
-
-function copySensitiveValue(value: unknown): unknown {
-  if (Array.isArray(value)) return [...value]
-  if (value instanceof Uint8Array) return new Uint8Array(value)
-  return value
-}
-
-function clearSensitiveValue(value: unknown): void {
-  if (Array.isArray(value) || value instanceof Uint8Array) value.fill(0)
-}
-
-function enqueueSensitiveSessionMessage(
-  message: Record<string, unknown>,
-  payload: Record<string, unknown>,
-  fields: readonly string[],
-): Promise<unknown> {
-  let pendingPayload: Record<string, unknown> | undefined = { ...payload }
-  for (const field of fields) {
-    pendingPayload[field] = copySensitiveValue(payload[field])
-    clearSensitiveValue(payload[field])
-    payload[field] = typeof payload[field] === 'string' ? '' : []
-  }
-  const clearPending = () => {
-    if (!pendingPayload) return
-    for (const field of fields) {
-      clearSensitiveValue(pendingPayload[field])
-      pendingPayload[field] = undefined
-    }
-    pendingPayload = undefined
-  }
-  return sessionOperations.enqueue(
-    async () => {
-      const operationPayload = pendingPayload
-      pendingPayload = undefined
-      if (!operationPayload) {
-        throw new Error('Extension session request expired.')
-      }
-      try {
-        return await handleMessage({ ...message, payload: operationPayload })
-      } finally {
-        for (const field of fields) {
-          clearSensitiveValue(operationPayload[field])
-          operationPayload[field] = undefined
-        }
-      }
-    },
-    {
-      priority: 'interactive',
-      expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
-      onExpire: clearPending,
-    },
-  )
-}
-
-function enqueueVaultImportMessage(
-  message: Record<string, unknown>,
-  payload: Record<string, unknown>,
-): Promise<unknown> {
-  const stagedProviders = stageProviderCredentials(payload.providers)
-  // Pairing imports are one-shot and may run against a cold offscreen WASM
-  // runtime. Never expire them with the short interactive probe budget.
-  if (!stagedProviders || stagedProviders.length === 0) {
-    return sessionOperations.enqueue(
-      () =>
-        handleMessage({
-          ...message,
-          payload: {
-            ...payload,
-            providers: stagedProviders ?? payload.providers ?? [],
-          },
-        }),
-      { priority: 'interactive' },
-    )
-  }
-  payload.providers = []
-  let pendingPayload: Record<string, unknown> | undefined = {
-    ...payload,
-    providers: stagedProviders,
-  }
-  const clearPending = () => {
-    if (!pendingPayload) return
-    scrubProviderCredentials(pendingPayload.providers)
-    pendingPayload = undefined
-  }
-  return sessionOperations.enqueue(
-    async () => {
-      const operationPayload = pendingPayload
-      pendingPayload = undefined
-      if (!operationPayload) {
-        throw new Error('Extension session request expired.')
-      }
-      try {
-        return await handleMessage({ ...message, payload: operationPayload })
-      } finally {
-        scrubProviderCredentials(operationPayload.providers)
-        operationPayload.providers = []
-      }
-    },
-    {
-      priority: 'interactive',
-      onExpire: clearPending,
-    },
-  )
-}
-
-function enqueueSessionMessage(message: unknown): Promise<unknown> {
-  const type = messageType(message)
-  if (!type) return Promise.resolve(undefined)
-  const payload = messagePayload(message)
-  if (type === 'nook:extension-session-import-vault') {
-    return enqueueVaultImportMessage(
-      message as Record<string, unknown>,
-      payload,
-    )
-  }
-  const requestedExpiry = requestedQueueExpiry(payload)
-  const priority = requestedExpiry
-    ? payload.queuePriority === 'interactive'
-      ? 'interactive'
-      : 'probe'
-    : sessionMessagePriority(type)
-  const sensitiveFields = sensitiveSessionFields[type]
-  if (sensitiveFields) {
-    return enqueueSensitiveSessionMessage(
-      message as Record<string, unknown>,
-      payload,
-      sensitiveFields,
-    )
-  }
-
-  const expiresAt =
-    requestedExpiry ??
-    (priority === 'interactive'
-      ? Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS
-      : undefined)
-  return sessionOperations.enqueue(() => handleMessage(message), {
-    priority,
-    expiresAt,
-  })
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (messageType(message) === 'nook:extension-session-lock') return false
-  const serviceWorkerOnly =
-    messageType(message) === 'nook:extension-session-seal-identity-handoff' ||
-    messageType(message) === 'nook:extension-session-cancel-passkey'
-  const serviceWorkerSender =
-    sender.tab === undefined &&
-    (sender.url === undefined ||
-      sender.url === chrome.runtime.getURL('background/service-worker.js'))
-  if (
-    sender.id !== chrome.runtime.id ||
-    (serviceWorkerOnly && !serviceWorkerSender) ||
-    !messageType(message)?.startsWith('nook:extension-session-')
-  ) {
-    return false
-  }
-  if (messageType(message) === 'nook:extension-session-dismiss-login-save') {
-    void handleMessage(message)
-      .then((response) => sendResponse(response))
-      .catch((error: unknown) =>
-        sendResponse({
-          ok: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Extension session failed.',
-        }),
-      )
-    return true
-  }
-  if (messageType(message) === 'nook:extension-session-cancel-passkey') {
-    void handleMessage(message)
-      .then((response) => sendResponse(response))
-      .catch((error: unknown) =>
-        sendResponse({
-          ok: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Extension session failed.',
-        }),
-      )
-    return true
-  }
-  void enqueueSessionMessage(message)
-    .then((response) => sendResponse(response))
-    .catch((error: unknown) =>
-      sendResponse({
-        ok: false,
-        error:
-          error instanceof Error ? error.message : 'Extension session failed.',
-      }),
-    )
-  return true
+sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
+  handleMessage,
+  messagePayload,
+  messageType,
 })
+sessionMessageDispatcher.registerRuntimeListener()
