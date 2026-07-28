@@ -35,6 +35,8 @@ tasks:
           docker cp "$container:/build/$crate/src" "$formatted/$crate-src"
           cp -R "$formatted/$crate-src/." "$crate/src/"
         done
+        docker cp "$container:/build/hive/tests" "$formatted/hive-tests"
+        cp -R "$formatted/hive-tests/." "hive/tests/"
         BASH
 
   check:
