@@ -902,7 +902,7 @@ export async function resolveSyncConflictImportRemote(
           ? {
               ...provider,
               storeId: importedStoreId,
-              lastSyncedAt: new Date().toISOString(),
+              lastSyncedAt: new SvelteDate().toISOString(),
             }
           : provider,
       );
