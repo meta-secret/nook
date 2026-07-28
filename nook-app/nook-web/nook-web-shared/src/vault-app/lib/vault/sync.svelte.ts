@@ -1,3 +1,4 @@
+/** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";

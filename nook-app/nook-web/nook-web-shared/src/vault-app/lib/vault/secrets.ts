@@ -16,7 +16,7 @@ import {
   RemoteVaultRecoveryState,
   type NookSecretPage,
 } from "$app-wasm";
-import { syncLocalFolderProvider } from "$lib/vault/sync";
+import { syncLocalFolderProvider } from "$lib/vault/sync.svelte";
 import { intoWasmStringValue } from "$lib/wasm-string-value";
 import {
   isSentinelCeremonyRequiredError,

@@ -1,3 +1,4 @@
+/** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {

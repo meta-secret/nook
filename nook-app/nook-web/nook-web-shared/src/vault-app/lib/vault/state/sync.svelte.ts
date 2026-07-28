@@ -1,6 +1,6 @@
 import { SvelteDate } from "svelte/reactivity";
 import type { NookPendingSyncConflict } from "$app-wasm";
-import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync";
+import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync.svelte";
 export class VaultSyncState {
   lastSyncedAt = $state<SvelteDate>();
   isSyncing = $state(false);

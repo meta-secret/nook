@@ -1,3 +1,4 @@
+/** Device-protection actions that snapshot reactive state for persistence. */
 import {
   isPasskeyCeremonyNotAllowedError,
   isPasskeyPrfUnavailableError,
