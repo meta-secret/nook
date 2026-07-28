@@ -8,6 +8,11 @@ root = File.expand_path("../..", __dir__)
 load_yaml = lambda do |path|
   YAML.safe_load(File.read(File.join(root, path)), aliases: true)
 end
+load_yaml_stream = lambda do |path|
+  File.read(File.join(root, path))
+    .split(/^---\s*$/)
+    .map { |document| YAML.safe_load(document, aliases: true) }
+end
 
 deployment = load_yaml.call("infra/k0s/manifests/hive/deployment.yaml")
 dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml")
@@ -261,6 +266,21 @@ end
 unless reaper_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
        "hive-reaper-controller"
   raise "Hive reaper controller must use a distinct Pod-deletion identity"
+end
+reaper_rbac = load_yaml_stream.call("infra/k0s/manifests/hive/lifecycle-rbac.yaml")
+  .find do |document|
+    document["kind"] == "Role" &&
+      document.dig("metadata", "name") == "hive-reaper-controller"
+  end
+reconciled_policies = reaper_rbac.fetch("rules")
+  .find { |rule| rule["resources"] == ["networkpolicies"] }
+  .fetch("resourceNames")
+unless reconciled_policies.sort == %w[
+  hive-dispatcher-reaper
+  hive-observer-egress
+  hive-worker-egress
+]
+  raise "Hive reaper RBAC must cover every reconciled NetworkPolicy"
 end
 reaper_pod = reaper_deployment.dig("spec", "template", "spec")
 unless reaper_pod.dig("securityContext", "fsGroup") == 1000 &&

@@ -51,6 +51,7 @@ rules:
     resourceNames:
       - hive-worker-egress
       - hive-dispatcher-reaper
+      - hive-observer-egress
     verbs: ["get", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
