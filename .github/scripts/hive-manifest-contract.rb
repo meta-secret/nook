@@ -142,11 +142,9 @@ end
 unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
        dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
        "kata-dragonball" &&
-       dispatcher_deployment.dig("spec", "template", "spec", "serviceAccountName") ==
-       "hive-workbench-dispatcher" &&
        dispatcher_deployment.dig("spec", "template", "spec", "automountServiceAccountToken") ==
-       true
-  raise "Hive Workbench dispatcher must remain one Kata replica with cancellation-only Pod identity"
+       false
+  raise "Hive Workbench dispatcher must remain one token-free Kata replica"
 end
 dispatcher_environment = dispatcher_deployment
   .dig("spec", "template", "spec", "containers")
@@ -178,13 +176,8 @@ network = network_policies
 api_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-kubernetes-api" }
 raise "Hive worker Kubernetes API policy is missing" unless api_network
-api_selector = api_network.dig("spec", "podSelector", "matchExpressions")&.first
-unless api_selector == {
-  "key" => "app.kubernetes.io/name",
-  "operator" => "In",
-  "values" => ["hive", "hive-workbench-dispatcher"]
-}
-  raise "Only Hive worker and dispatcher Pods may reach the Kubernetes API"
+unless api_network.dig("spec", "podSelector", "matchLabels", "app.kubernetes.io/name") == "hive"
+  raise "Only Hive worker Pods may reach the Kubernetes API"
 end
 internet_block = network
   .dig("spec", "egress")

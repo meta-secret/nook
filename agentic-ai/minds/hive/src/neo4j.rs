@@ -2088,6 +2088,40 @@ mod tests {
         );
         assert!(store.cancellation_targets(&cancelling.id).await?.is_empty());
 
+        let forced = task(format!("forced-cancellation-{suffix}"), Vec::new());
+        store.enqueue(&forced).await?;
+        let prior_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert!(store.fail(&prior_claim, &agent_a, "prior failure").await?);
+        let current_claim = store.claim(&agent_b, 300).await?.into_claimed()?;
+        assert!(store.cancel(&forced.id, "superseded").await?);
+        assert!(store.finalize_cancellation(&forced.id).await?);
+        let mut forced_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $id})<-[:FOR_TASK]-(attempt:Attempt)
+                     RETURN attempt.status AS status
+                     ORDER BY attempt.number",
+                )
+                .param("id", forced.id.as_str()),
+            )
+            .await?;
+        let mut forced_statuses = Vec::new();
+        while let Some(row) = forced_rows.next().await? {
+            forced_statuses.push(row.get::<String>("status")?);
+        }
+        assert_eq!(forced_statuses, ["FAILED", "CANCELLED"]);
+        assert!(
+            !store
+                .complete(
+                    &current_claim,
+                    &agent_b,
+                    "late",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+
         store
             .graph
             .run(query("MATCH (node) DETACH DELETE node"))

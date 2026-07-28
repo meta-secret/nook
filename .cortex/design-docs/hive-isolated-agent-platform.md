@@ -259,9 +259,10 @@ generation so the next worker receives the latest failed-job evidence without
 creating competing repairs. The dispatcher aborts that reconciliation cycle
 after requesting cancellation. The running worker then stops its Codex
 execution and atomically acknowledges termination in Neo4j. In parallel, the
-dispatcher deletes the exact worker Pod recorded for every cancelling root or
-exclusive blocker and waits for Kubernetes to confirm deletion before
-finalizing cancellation. This provides durable recovery when a worker crashes
+dispatcher asks the credential-gated lifecycle controller to delete the exact
+worker Pod recorded for every cancelling root or exclusive blocker. The
+controller validates the worker label and waits for Kubernetes to confirm
+deletion before the dispatcher finalizes cancellation. This provides durable recovery when a worker crashes
 before acknowledging. The old generation and its cancelling descendants remain
 active until that proof, so no replacement can become claimable merely because
 time elapsed. Reconciliation of the

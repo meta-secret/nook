@@ -18,9 +18,8 @@ spec:
       labels:
         app.kubernetes.io/name: hive-workbench-dispatcher
     spec:
-      serviceAccountName: hive-workbench-dispatcher
       runtimeClassName: kata-dragonball
-      automountServiceAccountToken: true
+      automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
@@ -85,6 +84,9 @@ spec:
               readOnly: true
             - name: temporary
               mountPath: /tmp
+            - name: reaper-auth
+              mountPath: /run/reaper-auth
+              readOnly: true
           resources:
             requests:
               cpu: 10m
@@ -102,4 +104,8 @@ spec:
         - name: neo4j-ca
           secret:
             secretName: hive-neo4j-ca
+            defaultMode: 0400
+        - name: reaper-auth
+          secret:
+            secretName: hive-reaper-auth
             defaultMode: 0400

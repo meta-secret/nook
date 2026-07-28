@@ -272,33 +272,8 @@ async fn delete_worker_pod(pod_name: &str) -> anyhow::Result<()> {
     {
         anyhow::bail!("refusing invalid Hive worker Pod name");
     }
-    let host = std::env::var("KUBERNETES_SERVICE_HOST")
-        .context("KUBERNETES_SERVICE_HOST is unavailable")?;
-    let port = std::env::var("KUBERNETES_SERVICE_PORT_HTTPS").unwrap_or_else(|_| "443".to_owned());
-    let token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token";
-    let ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
-    let url = format!("https://{host}:{port}/api/v1/namespaces/hive-system/pods/{pod_name}");
-    let delete_status = kubernetes_request("DELETE", &url, token_path, ca_path).await?;
-    anyhow::ensure!(
-        matches!(delete_status, 200 | 202 | 404),
-        "Kubernetes rejected Hive worker Pod deletion with status {delete_status}"
-    );
-    for _ in 0..60 {
-        if kubernetes_request("GET", &url, token_path, ca_path).await? == 404 {
-            return Ok(());
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-    anyhow::bail!("Hive worker Pod {pod_name} did not terminate within 120 seconds")
-}
-
-async fn kubernetes_request(
-    method: &str,
-    url: &str,
-    token_path: &str,
-    ca_path: &str,
-) -> anyhow::Result<u16> {
-    let token = tokio::fs::read_to_string(token_path).await?;
+    let token = tokio::fs::read_to_string("/run/reaper-auth/token").await?;
+    let url = format!("http://hive-reaper.hive-system.svc.cluster.local:8080/reap/{pod_name}");
     let mut child = Command::new("curl")
         .args([
             "--silent",
@@ -308,36 +283,42 @@ async fn kubernetes_request(
             "--write-out",
             "%{http_code}",
             "--request",
-            method,
+            "POST",
             "--connect-timeout",
             "5",
             "--max-time",
-            "10",
-            "--cacert",
-            ca_path,
+            "130",
             "--config",
             "-",
-            url,
+            url.as_str(),
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .context("start Kubernetes Pod API request")?;
+        .context("start Hive lifecycle-controller request")?;
     child
         .stdin
         .take()
         .context("open Kubernetes request configuration")?
         .write_all(format!("header = \"Authorization: Bearer {}\"\n", token.trim()).as_bytes())
         .await
-        .context("write Kubernetes request configuration")?;
+        .context("write Hive lifecycle-controller request configuration")?;
     let output = child
         .wait_with_output()
         .await
-        .context("call Kubernetes Pod API")?;
-    anyhow::ensure!(output.status.success(), "Kubernetes Pod API request failed");
-    String::from_utf8(output.stdout)?
+        .context("call Hive lifecycle controller")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "Hive lifecycle-controller request failed"
+    );
+    let status: u16 = String::from_utf8(output.stdout)?
         .parse()
-        .context("decode Kubernetes Pod API status")
+        .context("decode Hive lifecycle-controller status")?;
+    anyhow::ensure!(
+        status == 204,
+        "Hive lifecycle controller returned status {status}"
+    );
+    Ok(())
 }
 
 fn incident_needs_reconciliation(

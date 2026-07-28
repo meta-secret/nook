@@ -16,10 +16,8 @@ metadata:
   namespace: hive-system
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: [hive, hive-workbench-dispatcher]
+    matchLabels:
+      app.kubernetes.io/name: hive
   policyTypes:
     - Egress
   egress:
@@ -74,14 +72,32 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: hive-dispatcher-reaper
+  namespace: hive-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hive-workbench-dispatcher
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hive-reaper-controller
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: hive-worker-kubernetes-api
   namespace: hive-system
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: [hive, hive-workbench-dispatcher]
+    matchLabels:
+      app.kubernetes.io/name: hive
   policyTypes:
     - Egress
   egress:
