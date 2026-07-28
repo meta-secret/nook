@@ -4,7 +4,6 @@ import {
   VaultAccessStatus,
   type JoinRequest,
   type NookImportResult,
-  type NookSecretListItem,
   type NookSecretRecord,
   type NookVaultSyncResult,
   type AuthenticatorCodeView,
@@ -21,13 +20,7 @@ import {
   isVaultSessionLocked,
   DeviceProtectionStatus,
   JoinEnrollmentState,
-  NookBrowserLocale,
-  NookClientRunModeUtil,
-  NookRuntimeConfig,
   SentinelGenesisPhase,
-  type NookSentinelGenesisDelivery,
-  type NookSentinelGenesisParticipantStatus,
-  NookVaultClientPolicy,
   NookVaultArchitecture,
   RemoteVaultAssessDecision,
   RemoteVaultRecoveryState,
@@ -35,7 +28,6 @@ import {
   UnauthenticatedSyncDecision,
   NookVaultSwitchState,
   activeVaultProviders as wasmActiveVaultProviders,
-  get_translation_catalog as getTranslationCatalog,
   localProviderIdForActiveVault,
   oauthRemoteStorageRef,
   parseAppLocale,
@@ -52,9 +44,7 @@ import {
   updateOauthRemoteRef,
   updateProviderSyncMetadata as wasmUpdateProviderSyncMetadata,
   wasmStorageArgs as wasmStorageArgsCore,
-  type NookLocalVaultEntry,
   type NookPendingSyncConflict,
-  type NookPasswordEntrySummary,
   type NookSecretPage,
   type NookStorageConnectArgs,
   type NookVaultManager,
@@ -62,24 +52,19 @@ import {
   type PasswordEntryId,
   type StartSentinelGenesisArgs,
   type StoreId,
-  type VaultRecoverySummary,
 } from "$app-wasm";
 import { APP_KIND } from "$lib/app-kind";
 import {
-  DEFAULT_GITHUB_REPO,
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-  type LocalFolderConfig,
   type GoogleDriveMode,
   type ICloudMode,
-  type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
-import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync";
 import {
   createVaultIdleSessionTracker,
   type VaultIdleSessionTracker,
@@ -90,10 +75,7 @@ import {
 } from "$lib/passkey-device-protection";
 import {
   canCreateSecret as architectureCanCreateSecret,
-  defaultVaultArchitecture,
   VaultType,
-  type DeviceMode,
-  type ReplicationType,
   type VaultArchitecture,
 } from "$lib/vault-architecture";
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
@@ -115,18 +97,13 @@ import {
   deleteLocalBrowserData as deleteBrowserData,
 } from "$lib/browser-data";
 import { SerialOperationQueue } from "$lib/serial-operation-queue";
-import type {
-  SentinelStoredDeliverySummary,
-  SentinelUnlockSessionStatus,
-} from "$lib/vault/sentinel-unlock";
+import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 import {
   intoWasmStringValue,
   takeWasmStringValue,
 } from "$lib/wasm-string-value";
 
 const vaultLog = createLogger("vault");
-
-type TranslationCatalog = string;
 
 function takeStorageArgsTuple(
   args: NookStorageConnectArgs,
@@ -138,133 +115,8 @@ function takeStorageArgsTuple(
   }
 }
 
-export class VaultState {
-  browserLocale = new NookBrowserLocale();
-  clientPolicy = new NookVaultClientPolicy();
-  runtimeConfig = new NookRuntimeConfig(
-    NookClientRunModeUtil.parse(
-      import.meta.env.VITE_NOOK_CLIENT_RUN_MODE ?? import.meta.env.MODE,
-    ),
-    import.meta.env.VITE_E2E_EXPOSE_VAULT === "true",
-  );
-
-  locale = $state<NookAppLocale>("en");
-  translations = $state<TranslationCatalog>(getTranslationCatalog("en"));
-
-  settingsOpen = $state(false);
-  settingsSection = $state<"storage" | "onboard" | "admin">("storage");
-  settingsAccordionSection = $state<"devices" | "language" | "danger">(
-    "devices",
-  );
-  adminAccordionSection = $state<
-    "vaults" | "storage" | "passwords" | "import-export"
-  >("vaults");
-  helpOpen = $state(false);
-
-  providers = $state.raw<StorageProvider[]>([]);
-  providersLoaded = $state(false);
-  /** Locally cached vaults on this browser (metadata only). */
-  localVaults = $state<NookLocalVaultEntry[]>([]);
-  /** Active vault store_id — sync providers and local blob are scoped to this. */
-  activeVaultStoreId = $state<StoreId>();
-  /** Login gate: user picked a vault but has not unlocked yet. */
-  selectedLoginVaultStoreId = $state<StoreId>();
-  /** True when the active vault blob exists in IndexedDB. */
-  localVaultPresent = $state(false);
-  localLoginPrepared = $state(false);
-  loginSetupType = $state<StorageProviderType>();
-  loginRequiresExistingVault = $state(false);
-  existingVaultRecoverySummary = $state<VaultRecoverySummary>();
-  addProviderOpen = $state(false);
-
-  storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
-  githubPat = $state("");
-  githubRepo = $state(DEFAULT_GITHUB_REPO);
-  oauthFile = $state.raw<OAuthFileConfig>();
-  localFolder = $state.raw<LocalFolderConfig>();
-  localFolderBackupSupported = $state(
-    typeof window !== "undefined" && isLocalFolderBackupSupported(),
-  );
-  vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
-  draftDeviceMode = $state<DeviceMode>("standard");
-  draftVaultType = $state(VaultType.Simple);
-  draftReplicationType = $state<ReplicationType>("personal");
-  sentinelGenesisPhase = $state<SentinelGenesisPhase>(
-    SentinelGenesisPhase.Inactive,
-  );
-  sentinelGenesisRequest = $state("");
-  sentinelGenesisParticipantCount = $state(0);
-  sentinelGenesisParticipants = $state<NookSentinelGenesisParticipantStatus[]>(
-    [],
-  );
-  sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
-  sentinelGenesisStoreId = $state<StoreId>();
-  oauthSetupPreset = $state<OAuthFilePreset>();
-  googleOAuthBusy = $state(false);
-  icloudOAuthPreparing = $state(false);
-  icloudOAuthReady = $state(false);
-  icloudOAuthBusy = $state(false);
-
-  manager = $state<NookVaultManager>();
-  deviceProtectionStatus = $state<DeviceProtectionStatus>(
-    DeviceProtectionStatus.Loading,
-  );
-  deviceProtectionLockedStatus = $state<DeviceProtectionStatus>(
-    DeviceProtectionStatus.Passkey,
-  );
-  isAuthenticated = $state(false);
-  /** True when the login gate should explain that the last lock was due to idle timeout. */
-  sessionExpiredByIdle = $state(false);
-  secrets = $state<NookSecretListItem[]>([]);
-  secretTotal = $state(0);
-  secretPageOffset = $state(0);
-  secretPageSize = 50;
-  secretQuery = $state("");
-  secretTypeFilter = $state<VaultItemType>();
+export class VaultState extends VaultStateSlices {
   private secretPageGeneration = 0;
-
-  errorMsg = $state("");
-  successMsg = $state("");
-  isVerifying = $state(false);
-  isSaving = $state(false);
-  isInitializing = $state(true);
-
-  deviceId = $state("");
-  devicePublicKey = $state("");
-  pendingJoins = $state<JoinRequest[]>([]);
-  vaultMembers = $state<VaultMember[]>([]);
-  enrollSecretsKey = $state("");
-  enrollMembersKey = $state("");
-  sharedJoinerIdentity = $state("");
-  sharedGrantInstructions = $state("");
-  joinEnrollmentPrompt = $state<JoinEnrollmentState>(JoinEnrollmentState.None);
-  /**
-   * True from the moment this device sends a join request until it unlocks.
-   * Survives the join dialog being dismissed, so background sync can still
-   * auto-connect when the approval lands (`applyVaultSyncResult`).
-   */
-  awaitingJoinApproval = $state(false);
-  lastSyncedAt = $state<SvelteDate>();
-  isSyncing = $state(false);
-  /** Provider id currently running a manual sync (Settings UI). */
-  syncingProviderId = $state<string>();
-  /** Background push to all sync providers after a local vault mutation. */
-  isFanOutSyncing = $state(false);
-  /** Concurrent secret replacement conflicts from the event log projection. */
-  replacementConflicts = $state<
-    Array<{
-      oldSecretId: string;
-      candidates: Array<{ eventId: string; secretId: string }>;
-    }>
-  >([]);
-  /** Concurrent key-epoch rotations; local writes fail closed while present. */
-  securityConflicts = $state<Array<{ events: string[]; reasons: string[] }>>(
-    [],
-  );
-  /** User must pick local vs remote before editing when versions match but content differs. */
-  pendingSyncConflict = $state<NookPendingSyncConflict>();
-  /** Local-folder provider points at a folder that contains several vault event logs. */
-  localFolderMultipleVaultsIssue = $state<LocalFolderMultipleVaultsIssue>();
   private architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
@@ -326,35 +178,6 @@ export class VaultState {
       this.isSaving,
     );
   }
-
-  /** Open the login password form after Connect finds a password-mode vault. */
-  loginPasswordPrompt = $state(false);
-  /** Sentinel vault needs a signed, session-bound quorum ceremony. */
-  sentinelCeremonyPrompt = $state(false);
-  sentinelUnlockStatus = $state<SentinelVaultUnlockState>(
-    SentinelVaultUnlockState.NotSentinel,
-  );
-  /** Public, signed Sentinel unlock request. It contains no share material. */
-  sentinelUnlockRequest = $state("");
-  /** Rust-owned unlock-session progress rendered by the web layer. */
-  sentinelUnlockSession = $state<SentinelUnlockSessionStatus>(
-    sentinelUnlockActions.inactiveSentinelUnlockSession(),
-  );
-  /** Provider-free encrypted deliveries available to this protected device. */
-  sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([]);
-  /** Missing-remote prompt and the selected recovery connection path. */
-  remoteVaultRecoveryState = $state<RemoteVaultRecoveryState>(
-    RemoteVaultRecoveryState.None,
-  );
-  isPasswordBusy = $state(false);
-  passwordError = $state("");
-  enrollmentCode = $state("");
-  prefillEnrollmentCode = $state("");
-  enrollmentFromUrlPending = $state(false);
-  loginEnrollmentCode = $state("");
-  passwordEntries = $state<NookPasswordEntrySummary[]>([]);
-  selectedPasswordEntryId = $state<PasswordEntryId>();
-  activeEnrollmentEntryId = $state<PasswordEntryId>();
 
   get hasPasswordEnvelope(): boolean {
     return this.passwordEntries.length > 0;
