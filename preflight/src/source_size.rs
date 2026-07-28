@@ -1,0 +1,540 @@
+use std::fs;
+use std::io;
+use std::path::{Component, Path, PathBuf};
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::{Attribute, Expr, Item, ItemMacro, ItemMod, Lit, LitStr, Meta, Token};
+
+pub const NON_RUST_LINE_LIMIT: usize = 1_000;
+pub const RUST_LINE_LIMIT: usize = 1_500;
+
+pub const SOURCE_SIZE_REMEDIATION: &str = "P1 source architecture violation: split production responsibilities along cohesive domain, capability, ownership, lifecycle, or dependency boundaries with narrow interfaces. For oversized Rust, extracting tests alone is prohibited. Arbitrary half-splits and numbered part modules are prohibited.";
+pub const UNIT_TEST_COLOCATION_REMEDIATION: &str = "P1 Rust test architecture violation: unit tests must be inline with the focused implementation module. Split production by domain or architectural responsibility and colocate each abstraction's tests. Separate crate-level tests are reserved for integration tests.";
+
+const SOURCE_EXTENSIONS: &[&str] = &[
+    "c", "cc", "cpp", "cs", "css", "go", "h", "hpp", "htm", "html", "java", "js", "jsx", "kt",
+    "kts", "mjs", "cjs", "php", "py", "rb", "rs", "scss", "sh", "svelte", "swift", "ts", "tsx",
+    "vue", "yaml", "yml",
+];
+
+const ALWAYS_EXCLUDED_DIRECTORY_NAMES: &[&str] =
+    &[".git", ".svelte-kit", ".wrangler", "node_modules"];
+const OUTPUT_DIRECTORY_NAMES: &[&str] = &["coverage", "dist", "target"];
+
+const EXCLUDED_REPOSITORY_PREFIXES: &[&str] = &[
+    ".agents/skills/impeccable",
+    "nook-app/nook-web/nook-web-shared/src/wasm",
+    "nook-app/nook-web/nook-web-shared/src/generated",
+];
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct SourceSizeViolation {
+    pub path: PathBuf,
+    pub lines: usize,
+    pub limit: usize,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ExternalUnitTestModuleViolation {
+    pub path: PathBuf,
+    pub line: usize,
+    pub test_module: PathBuf,
+}
+
+/// Finds authored source files whose physical line count exceeds the
+/// language-specific hard limit.
+///
+/// # Errors
+///
+/// Returns an error when the repository tree or a candidate source file cannot
+/// be read as UTF-8.
+pub fn source_size_violations(root: &Path) -> io::Result<Vec<SourceSizeViolation>> {
+    let mut violations = Vec::new();
+    scan_directory(root, root, &mut violations)?;
+    violations.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(violations)
+}
+
+/// Finds Rust unit-test modules stored in separate files under `src`.
+///
+/// Crate-level `tests` directories are integration-test boundaries and are not
+/// scanned by this rule.
+///
+/// # Errors
+///
+/// Returns an error when an authored Rust source or referenced test module
+/// cannot be read or parsed.
+pub fn external_rust_unit_test_modules(
+    root: &Path,
+) -> io::Result<Vec<ExternalUnitTestModuleViolation>> {
+    let mut violations = Vec::new();
+    scan_external_unit_tests(root, root, &mut violations)?;
+    violations.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then_with(|| left.line.cmp(&right.line))
+    });
+    Ok(violations)
+}
+
+fn scan_directory(
+    root: &Path,
+    directory: &Path,
+    violations: &mut Vec<SourceSizeViolation>,
+) -> io::Result<()> {
+    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+
+    for entry in entries {
+        let path = entry.path();
+        let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            if !is_excluded_directory(relative_path) {
+                scan_directory(root, &path, violations)?;
+            }
+            continue;
+        }
+
+        if !file_type.is_file() || is_excluded_path(relative_path) {
+            continue;
+        }
+
+        let Some(limit) = source_line_limit(relative_path) else {
+            continue;
+        };
+        let source = fs::read_to_string(&path)?;
+        let lines = source.lines().count();
+        if lines > limit {
+            violations.push(SourceSizeViolation {
+                path: relative_path.to_path_buf(),
+                lines,
+                limit,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn scan_external_unit_tests(
+    root: &Path,
+    directory: &Path,
+    violations: &mut Vec<ExternalUnitTestModuleViolation>,
+) -> io::Result<()> {
+    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+
+    for entry in entries {
+        let path = entry.path();
+        let relative_path = path.strip_prefix(root).map_err(io::Error::other)?;
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            if !is_excluded_directory(relative_path) {
+                scan_external_unit_tests(root, &path, violations)?;
+            }
+            continue;
+        }
+        if !file_type.is_file()
+            || is_excluded_path(relative_path)
+            || path.extension().and_then(|value| value.to_str()) != Some("rs")
+            || !relative_path
+                .components()
+                .any(|component| component.as_os_str() == "src")
+        {
+            continue;
+        }
+
+        let source = fs::read_to_string(&path)?;
+        let syntax = syn::parse_file(&source).map_err(invalid_rust_source)?;
+        collect_external_unit_test_modules(
+            root,
+            relative_path,
+            path.parent().unwrap_or_else(|| Path::new("")),
+            &module_directory_for_source(&path),
+            &syntax.items,
+            false,
+            violations,
+        )?;
+    }
+    Ok(())
+}
+
+fn collect_external_unit_test_modules(
+    root: &Path,
+    source_path: &Path,
+    include_directory: &Path,
+    module_directory: &Path,
+    items: &[Item],
+    test_context: bool,
+    violations: &mut Vec<ExternalUnitTestModuleViolation>,
+) -> io::Result<()> {
+    for item in items {
+        match item {
+            Item::Mod(module) => {
+                let module_test_context = test_context || is_cfg_test(&module.attrs);
+                if let Some((_, nested_items)) = &module.content {
+                    collect_external_unit_test_modules(
+                        root,
+                        source_path,
+                        include_directory,
+                        &module_directory.join(module.ident.to_string()),
+                        nested_items,
+                        module_test_context,
+                        violations,
+                    )?;
+                } else if module_test_context {
+                    record_external_unit_test_module(
+                        root,
+                        source_path,
+                        module.ident.span().start().line,
+                        &external_module_path(module_directory, module),
+                        violations,
+                    )?;
+                }
+            }
+            Item::Macro(item_macro)
+                if (test_context || is_cfg_test(&item_macro.attrs))
+                    && item_macro.mac.path.is_ident("include") =>
+            {
+                if let Some(path) = included_source_path(include_directory, item_macro) {
+                    record_external_unit_test_module(
+                        root,
+                        source_path,
+                        item_macro.mac.path.span().start().line,
+                        &path,
+                        violations,
+                    )?;
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn record_external_unit_test_module(
+    root: &Path,
+    source_path: &Path,
+    line: usize,
+    test_module: &Path,
+    violations: &mut Vec<ExternalUnitTestModuleViolation>,
+) -> io::Result<()> {
+    if test_module.is_file() {
+        violations.push(ExternalUnitTestModuleViolation {
+            path: source_path.to_path_buf(),
+            line,
+            test_module: test_module
+                .strip_prefix(root)
+                .map_err(io::Error::other)?
+                .to_path_buf(),
+        });
+    }
+    Ok(())
+}
+
+fn included_source_path(include_directory: &Path, item_macro: &ItemMacro) -> Option<PathBuf> {
+    syn::parse2::<LitStr>(item_macro.mac.tokens.clone())
+        .ok()
+        .map(|path| include_directory.join(path.value()))
+}
+
+fn is_cfg_test(attributes: &[Attribute]) -> bool {
+    attributes
+        .iter()
+        .any(|attribute| attribute.path().is_ident("cfg") && meta_contains_test(&attribute.meta))
+}
+
+fn meta_contains_test(meta: &Meta) -> bool {
+    meta_contains_test_with_polarity(meta, false)
+}
+
+fn meta_contains_test_with_polarity(meta: &Meta, negated: bool) -> bool {
+    match meta {
+        Meta::Path(path) => path.is_ident("test") && !negated,
+        Meta::NameValue(_) => false,
+        Meta::List(list) => list
+            .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+            .is_ok_and(|nested| {
+                let nested_negated = negated ^ list.path.is_ident("not");
+                nested
+                    .iter()
+                    .any(|meta| meta_contains_test_with_polarity(meta, nested_negated))
+            }),
+    }
+}
+
+fn module_directory_for_source(source_path: &Path) -> PathBuf {
+    let parent = source_path.parent().unwrap_or_else(|| Path::new(""));
+    match source_path.file_stem().and_then(|stem| stem.to_str()) {
+        Some("lib" | "main" | "mod") | None => parent.to_path_buf(),
+        Some(stem) => parent.join(stem),
+    }
+}
+
+fn external_module_path(module_directory: &Path, module: &ItemMod) -> PathBuf {
+    if let Some(path) = module.attrs.iter().find_map(path_attribute) {
+        return module_directory.join(path);
+    }
+
+    let module_name = module.ident.to_string();
+    let direct = module_directory.join(format!("{module_name}.rs"));
+    if direct.is_file() {
+        direct
+    } else {
+        module_directory.join(module_name).join("mod.rs")
+    }
+}
+
+fn path_attribute(attribute: &Attribute) -> Option<String> {
+    if !attribute.path().is_ident("path") {
+        return None;
+    }
+    let Meta::NameValue(name_value) = &attribute.meta else {
+        return None;
+    };
+    let Expr::Lit(expression) = &name_value.value else {
+        return None;
+    };
+    let Lit::Str(path) = &expression.lit else {
+        return None;
+    };
+    Some(path.value())
+}
+
+fn invalid_rust_source(error: syn::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, error)
+}
+
+fn source_line_limit(path: &Path) -> Option<usize> {
+    let extension = path.extension()?.to_str()?;
+    SOURCE_EXTENSIONS
+        .contains(&extension)
+        .then_some(if extension == "rs" {
+            RUST_LINE_LIMIT
+        } else {
+            NON_RUST_LINE_LIMIT
+        })
+}
+
+fn is_excluded_directory(path: &Path) -> bool {
+    if is_excluded_path(path) {
+        return true;
+    }
+    let names = path
+        .components()
+        .filter_map(|component| {
+            let Component::Normal(name) = component else {
+                return None;
+            };
+            name.to_str()
+        })
+        .collect::<Vec<_>>();
+    let source_index = names.iter().position(|name| *name == "src");
+    names.iter().enumerate().any(|(index, name)| {
+        ALWAYS_EXCLUDED_DIRECTORY_NAMES.contains(name)
+            || (OUTPUT_DIRECTORY_NAMES.contains(name)
+                && source_index.is_none_or(|source_index| index < source_index))
+    })
+}
+
+fn is_excluded_path(path: &Path) -> bool {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    EXCLUDED_REPOSITORY_PREFIXES.iter().any(|prefix| {
+        normalized == *prefix
+            || normalized
+                .strip_prefix(prefix)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ExternalUnitTestModuleViolation, NON_RUST_LINE_LIMIT, RUST_LINE_LIMIT, SourceSizeViolation,
+        external_rust_unit_test_modules, source_size_violations,
+    };
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn applies_language_specific_hard_limits() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        fs::write(root.join("at-limit.ts"), lines(NON_RUST_LINE_LIMIT))?;
+        fs::write(root.join("over-limit.ts"), lines(NON_RUST_LINE_LIMIT + 1))?;
+        fs::write(root.join("over-limit.html"), lines(NON_RUST_LINE_LIMIT + 1))?;
+        fs::write(root.join("over-limit.yml"), lines(NON_RUST_LINE_LIMIT + 1))?;
+        fs::write(root.join("at-limit.rs"), lines(RUST_LINE_LIMIT))?;
+        fs::write(root.join("over-limit.rs"), lines(RUST_LINE_LIMIT + 1))?;
+
+        assert_eq!(
+            source_size_violations(&root)?,
+            vec![
+                SourceSizeViolation {
+                    path: PathBuf::from("over-limit.html"),
+                    lines: NON_RUST_LINE_LIMIT + 1,
+                    limit: NON_RUST_LINE_LIMIT,
+                },
+                SourceSizeViolation {
+                    path: PathBuf::from("over-limit.rs"),
+                    lines: RUST_LINE_LIMIT + 1,
+                    limit: RUST_LINE_LIMIT,
+                },
+                SourceSizeViolation {
+                    path: PathBuf::from("over-limit.ts"),
+                    lines: NON_RUST_LINE_LIMIT + 1,
+                    limit: NON_RUST_LINE_LIMIT,
+                },
+                SourceSizeViolation {
+                    path: PathBuf::from("over-limit.yml"),
+                    lines: NON_RUST_LINE_LIMIT + 1,
+                    limit: NON_RUST_LINE_LIMIT,
+                },
+            ]
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn excludes_dependencies_outputs_and_non_source_fixtures() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        for directory in ["node_modules", "target", "coverage", "dist"] {
+            fs::create_dir(root.join(directory))?;
+            fs::write(
+                root.join(directory).join("oversized.ts"),
+                lines(NON_RUST_LINE_LIMIT + 1),
+            )?;
+        }
+        fs::write(
+            root.join("large-fixture.json"),
+            lines(NON_RUST_LINE_LIMIT + 1),
+        )?;
+        fs::create_dir_all(root.join("src/coverage"))?;
+        fs::write(
+            root.join("src/coverage/owned.ts"),
+            lines(NON_RUST_LINE_LIMIT + 1),
+        )?;
+
+        assert_eq!(
+            source_size_violations(&root)?,
+            vec![SourceSizeViolation {
+                path: PathBuf::from("src/coverage/owned.ts"),
+                lines: NON_RUST_LINE_LIMIT + 1,
+                limit: NON_RUST_LINE_LIMIT,
+            }]
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_external_unit_tests_but_allows_integration_tests() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        fs::create_dir_all(root.join("crate/src"))?;
+        fs::create_dir_all(root.join("crate/src/external"))?;
+        fs::create_dir_all(root.join("crate/src/platform"))?;
+        fs::create_dir_all(root.join("crate/tests"))?;
+        fs::write(
+            root.join("crate/src/lib.rs"),
+            "mod external;\nmod service;\n#[cfg(test)]\n#[path = \"service_tests.rs\"]\nmod tests;\nmod platform {\n    #[cfg(all(test, target_arch = \"wasm32\"))]\n    mod tests;\n}\n#[cfg(any(feature = \"support\", not(not(test))))]\nmod support;\n#[cfg(not(test))]\nmod production_only;\n#[cfg(test)]\ninclude!(\"included_tests.rs\");\n#[cfg(test)]\nmod inline_included {\n    include!(\"inline_tests.rs\");\n}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/external.rs"),
+            "pub fn value() -> usize { 1 }\n#[cfg(test)]\nmod tests;\n",
+        )?;
+        fs::write(
+            root.join("crate/src/external/tests.rs"),
+            "pub fn external_unit_fixture() -> usize { 1 }\n",
+        )?;
+        fs::write(
+            root.join("crate/src/service.rs"),
+            "pub fn value() -> usize { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn inline_unit_behavior() { assert_eq!(super::value(), 1); }\n}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/service_tests.rs"),
+            "#[tokio::test]\nasync fn unit_behavior() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/platform/tests.rs"),
+            "#[test]\nfn platform_behavior() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/support.rs"),
+            "pub fn support_fixture() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/production_only.rs"),
+            "pub fn production_behavior() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/included_tests.rs"),
+            "fn included_unit_behavior() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/src/inline_tests.rs"),
+            "fn inline_included_unit_behavior() {}\n",
+        )?;
+        fs::write(
+            root.join("crate/tests/public_contract.rs"),
+            "#[test]\nfn integration_behavior() {}\n",
+        )?;
+
+        assert_eq!(
+            external_rust_unit_test_modules(&root)?,
+            vec![
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/external.rs"),
+                    line: 3,
+                    test_module: PathBuf::from("crate/src/external/tests.rs"),
+                },
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/lib.rs"),
+                    line: 5,
+                    test_module: PathBuf::from("crate/src/service_tests.rs"),
+                },
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/lib.rs"),
+                    line: 8,
+                    test_module: PathBuf::from("crate/src/platform/tests.rs"),
+                },
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/lib.rs"),
+                    line: 11,
+                    test_module: PathBuf::from("crate/src/support.rs"),
+                },
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/lib.rs"),
+                    line: 15,
+                    test_module: PathBuf::from("crate/src/included_tests.rs"),
+                },
+                ExternalUnitTestModuleViolation {
+                    path: PathBuf::from("crate/src/lib.rs"),
+                    line: 18,
+                    test_module: PathBuf::from("crate/src/inline_tests.rs"),
+                },
+            ]
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
+
+    fn lines(count: usize) -> String {
+        "line\n".repeat(count)
+    }
+
+    fn temporary_directory() -> anyhow::Result<PathBuf> {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let process_id = std::process::id();
+        let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("nook-source-size-{process_id}-{unique}-{sequence}"));
+        fs::create_dir(&path)?;
+        Ok(path)
+    }
+}

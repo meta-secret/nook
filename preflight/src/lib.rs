@@ -1,4 +1,5 @@
 pub mod coverage;
+pub mod source_size;
 
 use std::collections::HashSet;
 use std::fs;
