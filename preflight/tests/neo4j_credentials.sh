@@ -12,6 +12,8 @@ source /dev/stdin <<<"$function_source"
 
 auth_present=false
 client_present=false
+auth_lookup_error=""
+client_lookup_error=""
 auth_value=""
 client_value=""
 apply_log="$(mktemp)"
@@ -24,15 +26,26 @@ kubectl() {
     local value=""
     case "$name" in
       hive-neo4j-auth)
+        if test -n "$auth_lookup_error"; then
+          printf '%s\n' "$auth_lookup_error" >&2
+          return 1
+        fi
         present="$auth_present"
         value="$auth_value"
         ;;
       hive-neo4j-client)
+        if test -n "$client_lookup_error"; then
+          printf '%s\n' "$client_lookup_error" >&2
+          return 1
+        fi
         present="$client_present"
         value="$client_value"
         ;;
     esac
-    test "$present" = true || return 1
+    if test "$present" != true; then
+      printf 'Error from server (NotFound): secrets "%s" not found\n' "$name" >&2
+      return 1
+    fi
     if [[ " $* " == *" -o jsonpath="* ]]; then
       printf %s "$value" | base64
     fi
@@ -108,6 +121,19 @@ if reconcile_neo4j_credentials "$directory" true 2>/dev/null; then
 fi
 test ! -s "$apply_log"
 rm -rf "$directory"
+
+# Transient lookup failures are not treated as confirmed Secret absence.
+auth_lookup_error='Unable to connect to the server'
+auth_present=false
+client_present=false
+directory="$(mktemp -d)"
+: >"$apply_log"
+if reconcile_neo4j_credentials "$directory" false 2>/dev/null; then
+  exit 1
+fi
+test ! -s "$apply_log"
+rm -rf "$directory"
+auth_lookup_error=""
 
 auth_present=true
 client_present=true

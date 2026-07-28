@@ -134,11 +134,23 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         .expect("Neo4j storage apply");
     assert!(
         retained_probe < storage_apply,
-        "retained storage must be detected before this invocation creates the PVC"
+        "retained storage must be detected before storage resources are applied"
     );
     assert!(
         tasks.contains("sudo -n find /var/lib/hive/neo4j"),
-        "retained host files must fail closed even when the PVC object is absent"
+        "retained host files must fail closed"
+    );
+    assert!(
+        !tasks[retained_probe..storage_apply].contains("kubectl get pvc"),
+        "an empty PVC from interrupted bootstrap is not retained Neo4j data"
+    );
+    assert!(
+        reconciliation.contains("if grep -Fq '(NotFound)'"),
+        "only a verified Secret NotFound response may be treated as absence"
+    );
+    assert!(
+        reconciliation.contains("Failed to inspect Secret"),
+        "other Secret lookup failures must be propagated"
     );
 
     let neo4j_ready = reconciliation

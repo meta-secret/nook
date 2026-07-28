@@ -17,13 +17,11 @@ tasks:
         sudo -n install -d -m 0750 /var/lib/hive/neo4j
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         retained_storage=false
-        if kubectl get pvc hive-neo4j-data \
-          --namespace hive-data >/dev/null 2>&1 ||
-          sudo -n find /var/lib/hive/neo4j \
-            -mindepth 1 \
-            -print \
-            -quit |
-            grep -q .; then
+        if sudo -n find /var/lib/hive/neo4j \
+          -mindepth 1 \
+          -print \
+          -quit |
+          grep -q .; then
           retained_storage=true
         fi
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
@@ -70,19 +68,46 @@ tasks:
         trap cleanup EXIT
         umask 077
         # NEO4J_CREDENTIAL_RECONCILIATION_BEGIN
+        neo4j_secret_exists() {
+          local name="$1"
+          local namespace="$2"
+          local error
+          if error="$(
+            kubectl get secret "$name" \
+              --namespace "$namespace" 2>&1 >/dev/null
+          )"; then
+            return 0
+          fi
+          if grep -Fq '(NotFound)' <<<"$error"; then
+            return 1
+          fi
+          printf 'Failed to inspect Secret %s/%s: %s\n' \
+            "$namespace" \
+            "$name" \
+            "$error" >&2
+          return 2
+        }
         reconcile_neo4j_credentials() {
           local secret_dir="$1"
           local retained_storage="$2"
           local auth_exists=false
           local auth_secret_needs_reconcile=false
           local client_exists=false
-          if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
+          if neo4j_secret_exists hive-neo4j-auth hive-data; then
             auth_exists=true
           else
-            auth_secret_needs_reconcile=true
+            case "$?" in
+              1) auth_secret_needs_reconcile=true ;;
+              *) return 1 ;;
+            esac
           fi
-          if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
+          if neo4j_secret_exists hive-neo4j-client hive-system; then
             client_exists=true
+          else
+            case "$?" in
+              1) ;;
+              *) return 1 ;;
+            esac
           fi
           if test "$auth_exists" = false && test "$client_exists" = false; then
             if test "$retained_storage" = true; then
