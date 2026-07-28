@@ -353,7 +353,9 @@ mod prepared_page_tests {
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = "store_default_page".to_owned();
+        manager.vault.store_id = nook_core::generate_store_id()
+            .map_err(|error| JsError::new(&error.to_string()))?
+            .to_string();
         manager.vault.last_synced_content = manager.serialize_current_projection_yaml()?;
         manager.vault.secrets_key.clear();
         manager.vault.members_key.clear();
