@@ -151,9 +151,22 @@ async fn dispatch_once<S: TaskStore>(
             continue;
         }
         let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
-        if body.contains(DEFERRED_E2E_RETIREMENT_MARKER)
-            || body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER)
-        {
+        if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
+            if let Some(task_id) = store.active_delivery(&source_commit, "main-repair").await? {
+                let cancelled = store
+                    .cancel(&task_id, "Main rerun succeeded")
+                    .await
+                    .with_context(|| format!("cancel {}", task_id))?;
+                eprintln!(
+                    "Hive Workbench successful rerun task={} cancelled={cancelled}",
+                    task_id
+                );
+                terminate_cancelled_workers(store, &task_id).await?;
+            }
+            reconciled_incidents.insert(name, body);
+            continue;
+        }
+        if body.contains(DEFERRED_E2E_RETIREMENT_MARKER) {
             for task_id in main_failure_task_ids(task_base, &body)? {
                 let cancelled = store
                     .cancel(&task_id, "Main rerun failed only deferred E2E jobs")
@@ -296,6 +309,10 @@ async fn kubernetes_request(
             "%{http_code}",
             "--request",
             method,
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "10",
             "--cacert",
             ca_path,
             "--config",

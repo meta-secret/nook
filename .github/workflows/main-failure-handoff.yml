@@ -126,16 +126,12 @@ jobs:
                 return
               }
 
-              if (run.conclusion === 'success' && !existing) {
-                core.info(`${incidentPath} has no failed incident to retire`)
-                return
-              }
               const incident =
                 run.conclusion === 'success'
                   ? {
                       path: incidentPath,
                       body: retireSuccessfulMainIssue({
-                        body: existing.body,
+                        body: existing?.body,
                         run,
                         recordedAt,
                       }),

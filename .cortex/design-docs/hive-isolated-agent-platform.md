@@ -282,7 +282,10 @@ dispatcher fetches the referenced workflow run once and requires repository
 across the complete incident history, so an older workflow run cannot
 supersede newer evidence. A later successful rerun marks an existing incident
 retired; the same Pod-termination barrier stops any active repair before the
-revision becomes a no-op.
+revision becomes a no-op. A success observed before any failure handoff writes
+a completed tombstone so delayed older failures remain stale. Retirement
+cancels only the current active generation; completed and failed generations
+remain immutable. Kubernetes Pod API calls use bounded request timeouts.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:

@@ -120,6 +120,18 @@ test('retires an existing incident after a successful rerun', () => {
   assert.match(retired, /<!-- hive-retired:successful-rerun -->/)
 })
 
+test('records a successful tombstone before any delayed failure handoff', () => {
+  const successful = run({ id: 30190000001, conclusion: 'success' })
+  const tombstone = retireSuccessfulMainIssue({
+    run: successful,
+    recordedAt: '2026-07-26T07:00:00Z',
+  })
+
+  assert.match(tombstone, /^status: done$/m)
+  assert.match(tombstone, /<!-- main-run:30190000001:attempt:1 -->/)
+  assert.equal(isStaleMainAttempt(tombstone, run({ id: 30190000000 })), true)
+})
+
 test('reopens after repeated successful reruns without stale retirement markers', () => {
   const initial = buildMainFailureIssue({
     run: run(),

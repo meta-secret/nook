@@ -139,7 +139,42 @@ function retireSuccessfulMainIssue({ body, run, recordedAt }) {
   if (run.conclusion !== 'success') {
     throw new Error(`expected successful conclusion, got ${run.conclusion}`)
   }
-  if (typeof body !== 'string' || body.length === 0) return undefined
+  if (typeof body !== 'string' || body.length === 0) {
+    const timestamp = requireTimestamp(recordedAt, 'recordedAt')
+    const shortSha = run.head_sha.slice(0, 12)
+    return `---
+title: Main verification state for ${shortSha}
+status: done
+priority: p1
+automation: hive
+owner: unassigned
+created_at: ${timestamp}
+updated_at: ${timestamp}
+source_issues: []
+related_prs: []
+depends_on: []
+---
+
+# Main verification state for ${shortSha}
+
+## Context
+
+The trusted Main workflow completed successfully before any older failed-run
+handoff for this revision was recorded.
+
+## Progress
+
+<!-- main-run:${run.id}:attempt:${run.run_attempt} -->
+- ${timestamp}: Main run [${run.id} attempt ${run.run_attempt}](${run.html_url})
+  succeeded for \`${run.head_sha}\`.
+${SUCCESSFUL_RERUN_RETIREMENT_MARKER}
+
+## Findings and decisions
+
+- This tombstone prevents an out-of-order older failure handoff from queuing an
+  obsolete Hive repair.
+`
+  }
   if (isStaleMainAttempt(body, run)) return body
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
   if (body.includes(marker) && body.includes(SUCCESSFUL_RERUN_RETIREMENT_MARKER)) return body
