@@ -72,6 +72,25 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+  await page.getByTestId('add-secret-btn').click()
+  await expect(page.getByTestId('add-secret-panel')).toBeVisible()
+  await page.getByTestId('help-open-btn').click()
+  await expect(page.getByTestId('help-page')).toBeVisible()
+  await page.getByTestId('help-header-close').click()
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+  await expect(page.getByTestId('app-shell-content')).toHaveClass(/\bpb-28\b/)
+  const themeToggle = page.getByTestId('theme-toggle-btn')
+  const initialThemeLabel = await themeToggle.getAttribute('aria-label')
+  await themeToggle.click()
+  await expect(themeToggle).not.toHaveAttribute(
+    'aria-label',
+    initialThemeLabel ?? '',
+  )
+  await page.getByTestId('help-open-btn').click()
+  await expect(page.getByTestId('help-page')).toBeVisible()
+  await page.getByTestId('help-header-close').click()
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible()
   await demoBeat(page)
 
   await page.getByTestId('header-lock-vault-btn').click()
