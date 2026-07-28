@@ -1116,36 +1116,36 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         ))
         .await
         .expect("create schema-3 fixture");
-    store.migrate().await.expect("migrate schema 3 to schema 5");
-    let mut schema_five_rows = graph
+    store.migrate().await.expect("migrate schema 3 to schema 6");
+    let mut schema_six_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (migration:HiveSchemaMigration {version: 5})
+             MATCH (migration:HiveSchemaMigration {version: 6})
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     migration.version AS version",
         ))
         .await
-        .expect("read schema-5 migration state");
-    let schema_five = schema_five_rows
+        .expect("read schema-6 migration state");
+    let schema_six = schema_six_rows
         .next()
         .await
-        .expect("read schema-4 row")
-        .expect("schema-5 migration row");
+        .expect("read schema-6 row")
+        .expect("schema-6 migration row");
     assert_eq!(
-        schema_five
+        schema_six
             .get::<String>("last_retry_release")
             .expect("initialized release marker"),
         ""
     );
     assert!(
-        schema_five
+        schema_six
             .get::<bool>("removed_legacy_marker")
             .expect("removed legacy marker")
     );
     assert_eq!(
-        schema_five.get::<i64>("version").expect("schema-5 version"),
-        5
+        schema_six.get::<i64>("version").expect("schema-6 version"),
+        6
     );
     let mut rollback_marker_rows = graph
         .execute(query(
