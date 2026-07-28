@@ -696,6 +696,8 @@ impl Neo4jTaskStore {
                                 'discovered blocker has already exhausted its retry budget'
                               OR coalesce(task.failure_reason, '') =
                                 'upstream task reused an exhausted blocker'
+                              OR coalesce(task.failure_reason, '') =
+                                'dependency failed before task enqueue'
                               AS dependency_failure
                      ORDER BY
                        CASE WHEN $attention_only = true THEN

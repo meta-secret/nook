@@ -697,6 +697,19 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .find(|alert| alert.task_id == stranded.id.as_str())
         .ok_or_else(|| anyhow::anyhow!("propagated dependency alert was missing"))?;
     assert_eq!(dependency_alert.kind, AlertKind::DependencyFailed);
+    let late_dependent = task(
+        format!("late-failed-dependent-{suffix}"),
+        vec![exhausted.id.clone()],
+    );
+    store.enqueue(&late_dependent).await?;
+    let late_dependency_alert = store
+        .observer_snapshot("en")
+        .await?
+        .alerts
+        .into_iter()
+        .find(|alert| alert.task_id == late_dependent.id.as_str())
+        .ok_or_else(|| anyhow::anyhow!("late dependency alert was missing"))?;
+    assert_eq!(late_dependency_alert.kind, AlertKind::DependencyFailed);
 
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();

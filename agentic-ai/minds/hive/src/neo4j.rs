@@ -397,10 +397,16 @@ impl TaskStore for Neo4jTaskStore {
                     "MATCH (task:Task {id: $id})
                      OPTIONAL MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
                      WITH task, count(dependency) AS dependency_count,
-                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END) AS completed_count
+                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END) AS completed_count,
+                          count(CASE WHEN dependency.status = 'FAILED' THEN 1 END) AS failed_count
                      SET task.status = CASE
+                       WHEN failed_count > 0 THEN 'FAILED'
                        WHEN dependency_count = completed_count THEN 'READY'
                        ELSE 'BLOCKED'
+                     END,
+                     task.failure_reason = CASE
+                       WHEN failed_count > 0 THEN 'dependency failed before task enqueue'
+                       ELSE null
                      END",
                 )
                 .param("id", task.id.as_str()),
