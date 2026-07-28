@@ -46,9 +46,7 @@ test.describe('sync provider credential encryption', () => {
     expect(decrypted.providers[0]?.githubPat).toBe(pat)
   })
 
-  test('load upgrades legacy plaintext IndexedDB rows to sealed storage', async ({
-    page,
-  }) => {
+  test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
@@ -67,14 +65,12 @@ test.describe('sync provider credential encryption', () => {
 
     await waitForAuthProvidersE2eHook(page)
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(
-      decrypted.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
-    ).toBe(pat)
+    await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
+      'Provider credential is not age-encrypted.',
+    )
 
     const raw = await readRawAuthProvidersFromIdb(page)
-    expectSealedCredential(
-      raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
+    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
       pat,
     )
   })
