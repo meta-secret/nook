@@ -78,6 +78,27 @@ RUN mkdir -p lace/src hive/src \
     && touch lace/src/lib.rs hive/src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
+FROM bun AS console-builder
+WORKDIR /console
+COPY hive-console/package.json hive-console/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts ./
+COPY hive-console/src src
+COPY hive-console/locales locales
+RUN bun run check \
+    && bun run build
+
+FROM bun AS console-formatter
+WORKDIR /console
+COPY hive-console/package.json hive-console/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY hive-console/index.html hive-console/svelte.config.js hive-console/tsconfig.json hive-console/vite.config.ts hive-console/playwright.config.ts hive-console/.prettierrc ./
+COPY hive-console/src src
+COPY hive-console/locales locales
+COPY hive-console/e2e e2e
+COPY hive-console/PRODUCT.md hive-console/DESIGN.md ./
+RUN bun run format
+
 FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY lace/Cargo.toml lace/Cargo.toml
@@ -201,6 +222,7 @@ RUN groupadd --gid 1000 hive \
     && install -d -o hive -g hive /workspace
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
+COPY --from=console-builder /console/dist /usr/local/share/hive-console
 COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
 RUN chmod 0755 /usr/local/bin/hive-codex-linux-sandbox
 

@@ -111,6 +111,17 @@ Durable Hive queue state is inspected through the repository Taskfile:
 task infra:hive:queue:status
 ```
 
+For a visual view of current workers, prioritized tasks, attention states, and
+the durable task timeline, open the cluster-private Hive Control Center through
+the repository-owned SSH tunnel:
+
+```bash
+task infra:hive:dashboard
+```
+
+The dashboard and observer are not publicly exposed and do not require a
+reusable browser credential.
+
 The status includes both the latest and previous attempt outcomes. For live
 renewal evidence and bounded logs from every worker Pod, use:
 

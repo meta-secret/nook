@@ -22,6 +22,9 @@ use serde::Serialize;
 use thiserror::Error;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc;
+
+use crate::model::{ActivityKind, TaskActivity};
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
@@ -42,6 +45,7 @@ pub struct CodexOptions {
     pub arg0_paths: Arg0DispatchPaths,
     pub access: CodexAccess,
     pub github_token: Option<String>,
+    pub activity_sender: Option<mpsc::UnboundedSender<TaskActivity>>,
 }
 
 impl CodexOptions {
@@ -53,11 +57,17 @@ impl CodexOptions {
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
             github_token: std::env::var("GH_TOKEN").ok(),
+            activity_sender: None,
         }
     }
 
     pub fn with_workspace_write(mut self) -> Self {
         self.access = CodexAccess::WorkspaceWrite;
+        self
+    }
+
+    pub fn with_activity_sender(mut self, sender: mpsc::UnboundedSender<TaskActivity>) -> Self {
+        self.activity_sender = Some(sender);
         self
     }
 }
@@ -147,7 +157,14 @@ impl InProcessCodexRunner {
                 .unwrap_or(&self.options.repo_root)
                 .join(".hive-local-executions.jsonl")
         });
-        let turn_result = submit_and_wait(&thread, prompt, kind, execution_log.as_deref()).await;
+        let turn_result = submit_and_wait(
+            &thread,
+            prompt,
+            kind,
+            execution_log.as_deref(),
+            self.options.activity_sender.as_ref(),
+        )
+        .await;
         let shutdown_result = thread.shutdown_and_wait().await;
         let _ = thread_manager.remove_thread(&thread_id).await;
 
@@ -364,6 +381,7 @@ async fn submit_and_wait(
     prompt: &str,
     kind: TurnKind,
     execution_log: Option<&Path>,
+    activity_sender: Option<&mpsc::UnboundedSender<TaskActivity>>,
 ) -> Result<String, CodexError> {
     let schema = match &kind {
         TurnKind::Planning => OUTPUT_SCHEMA,
@@ -400,6 +418,11 @@ async fn submit_and_wait(
         progress
             .observe(&event.msg)
             .map_err(|error| CodexError::Run(format!("failed to write progress: {error}")))?;
+        if let (Some(sender), Some(activity)) =
+            (activity_sender, task_activity_from_event(&event.msg))
+        {
+            let _ = sender.send(activity);
+        }
         if let (Some(path), EventMsg::ExecCommandEnd(execution)) = (execution_log, &event.msg) {
             record_local_execution(
                 path,
@@ -444,6 +467,83 @@ async fn submit_and_wait(
             _ => {}
         }
     }
+}
+
+fn task_activity_from_event(event: &EventMsg) -> Option<TaskActivity> {
+    let activity = match event {
+        EventMsg::TurnStarted(_) => TaskActivity {
+            kind: ActivityKind::Started,
+            message: "activity.agent_started".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::ExecCommandBegin(_) => TaskActivity {
+            kind: ActivityKind::Action,
+            message: "activity.command_running".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::ExecCommandEnd(event) => {
+            let category = local_execution_category(&event.command).unwrap_or("action");
+            let command = sanitized_execution_command(&event.command, category);
+            TaskActivity {
+                kind: if event.exit_code == 0 {
+                    ActivityKind::Result
+                } else {
+                    ActivityKind::Error
+                },
+                message: if event.exit_code == 0 {
+                    "activity.command_completed".to_owned()
+                } else {
+                    "activity.command_failed".to_owned()
+                },
+                detail: if event.exit_code == 0 {
+                    format!("{command} · {:.1}s", event.duration.as_secs_f64())
+                } else {
+                    format!(
+                        "{command} · status {} · {:.1}s",
+                        event.exit_code,
+                        event.duration.as_secs_f64()
+                    )
+                },
+            }
+        }
+        EventMsg::PatchApplyBegin(_) => TaskActivity {
+            kind: ActivityKind::Edit,
+            message: "activity.applying_changes".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::PatchApplyEnd(event) if !event.success => TaskActivity {
+            kind: ActivityKind::Error,
+            message: "activity.change_failed".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::Warning(_) | EventMsg::GuardianWarning(_) => TaskActivity {
+            kind: ActivityKind::Warning,
+            message: "activity.warning".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::StreamError(_) => TaskActivity {
+            kind: ActivityKind::Retry,
+            message: "activity.connection_retry".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::ModelReroute(_) => TaskActivity {
+            kind: ActivityKind::Retry,
+            message: "activity.model_rerouted".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::TurnComplete(_) => TaskActivity {
+            kind: ActivityKind::Report,
+            message: "activity.result_ready".to_owned(),
+            detail: String::new(),
+        },
+        EventMsg::Error(_) | EventMsg::TurnAborted(_) => TaskActivity {
+            kind: ActivityKind::Error,
+            message: "activity.execution_stopped".to_owned(),
+            detail: String::new(),
+        },
+        _ => return None,
+    };
+    Some(activity)
 }
 
 #[derive(Serialize)]
@@ -953,6 +1053,7 @@ mod tests {
             },
             access: CodexAccess::ReadOnly,
             github_token: None,
+            activity_sender: None,
         };
         let config = new_config(&options)?;
 

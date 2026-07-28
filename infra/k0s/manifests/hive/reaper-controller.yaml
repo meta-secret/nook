@@ -102,6 +102,7 @@ spec:
                   for policy_name in (
                       "hive-worker-egress",
                       "hive-dispatcher-reaper",
+                      "hive-observer-egress",
                   ):
                       reconcile_neo4j_policy_path(policy_name, destinations)
 

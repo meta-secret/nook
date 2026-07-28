@@ -102,10 +102,36 @@ service certificate, configures the chart with `server.bolt.tls_level=REQUIRED`,
 and stores the keys only in encrypted Kubernetes Secrets and the authenticated
 recovery bundle. Only the coordinator gets the Neo4j credential and CA.
 
+## Control Center
+
+The read-only Hive Control Center makes the durable task graph and live worker
+activity visible without exposing credentials, prompts, model reasoning, or raw
+command output. A token-free HTTP container talks only to a narrowly typed
+Unix-socket coordinator sidecar; only that sidecar holds the Neo4j credential
+and reads over the existing private TLS boundary. The observer serves:
+
+- worker presence and lease state,
+- attention-worthy failed and blocked tasks,
+- the bounded task queue and dependency graph,
+- sanitized semantic activity such as validation, changes, retries, and results.
+
+The Service remains cluster-private. Operators reach it through an SSH-backed
+local port-forward:
+
+```text
+task infra:hive:dashboard
+```
+
+The browser opens `http://127.0.0.1:18080` by default and refreshes every
+15 seconds. Set `HIVE_DASHBOARD_PORT` to use a different local port. The
+existing `task infra:hive:queue:status` command remains the compact terminal
+view, while `task infra:hive:diagnose` includes bounded observer logs.
+
 ## Graph schema
 
-Hive graph schema version `4` retains unique constraints for `Task`, `Agent`,
-`Attempt`, and `Artifact`, plus the task-claim index. Migration records are
+Hive graph schema version `6` retains unique constraints for `Task`, `Agent`,
+`Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
+and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
 run when the stored version is newer than the binary supports. Because Neo4j
 does not allow schema and data writes in one transaction, Hive applies the
@@ -115,9 +141,11 @@ after every statement succeeds.
 Version 2 adds the pinned `source_commit` task property. Version 3 initializes
 the original one-time retry marker. Version 4 replaces that marker with
 `last_retry_release`, allowing one explicit three-attempt recovery per deployed
-Hive image digest and atomically rearming failed blocker dependencies. To roll
-version 4 back, first stop every Hive worker and back up the Neo4j data volume,
-then delete only the version-4 `HiveSchemaMigration` node. Keep
+Hive image digest and atomically rearming failed blocker dependencies. Version
+5 adds the current task scheduling indexes. Version 6 adds bounded, sanitized
+`TaskActivity` events for the observer. To roll version 6 back, first stop every
+Hive worker and observer and back up the Neo4j data volume, then delete only the
+version-6 `HiveSchemaMigration` node and its `TaskActivity` nodes. Keep
 `last_retry_release` so a later forward migration cannot repeat a recovery for
 the same deployed image.
 
@@ -151,4 +179,5 @@ Runtime operations use the binary directly:
 hive migrate
 hive enqueue --id task-1 --source-commit <full-git-object-id> --prompt "Implement the feature"
 hive worker
+hive observer
 ```

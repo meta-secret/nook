@@ -10,12 +10,13 @@ use rand::RngExt;
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt as _;
 use tokio::process::Command;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{
-    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TerminalResult,
+    ActivityLease, AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -84,7 +85,11 @@ impl<S: TaskStore> Worker<S> {
                 .await?
             {
                 ClaimOutcome::Claimed(task) => break task,
-                ClaimOutcome::NoTask => {}
+                ClaimOutcome::NoTask => {
+                    self.store
+                        .register_agent(&self.config.agent_id, &self.config.pod_name)
+                        .await?;
+                }
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
@@ -159,105 +164,145 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
-                let repair_branch =
-                    (task.kind == "main-repair").then(|| repair_branch_name(task.id.as_str()));
-                let preparation = prepare_workspace(
-                    &self.config.workspace,
-                    &self.config.repository_url,
-                    &task.source_commit,
-                    repair_branch.as_deref(),
-                    &task.dependency_artifacts,
-                )
-                .await?;
-                let repository = self.config.workspace.join("repository");
-                let baseline = if preparation.conflicted {
-                    let mut codex_options =
-                        CodexOptions::new(repository.clone()).with_workspace_write();
+                let (activity_tx, activity_rx) = mpsc::unbounded_channel();
+                let activity_persistence = tokio::spawn(persist_activity(
+                    self.store.clone(),
+                    self.config.agent_id.clone(),
+                    task.clone(),
+                    activity_rx,
+                ));
+                let task_result = async {
+                    let repair_branch =
+                        (task.kind == "main-repair").then(|| repair_branch_name(task.id.as_str()));
+                    let preparation = prepare_workspace(
+                        &self.config.workspace,
+                        &self.config.repository_url,
+                        &task.source_commit,
+                        repair_branch.as_deref(),
+                        &task.dependency_artifacts,
+                    )
+                    .await?;
+                    let repository = self.config.workspace.join("repository");
+                    let baseline = if preparation.conflicted {
+                        let mut codex_options = CodexOptions::new(repository.clone())
+                            .with_workspace_write()
+                            .with_activity_sender(activity_tx.clone());
+                        codex_options.model.clone_from(&self.config.model);
+                        codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
+                        codex_options
+                            .reasoning_effort
+                            .clone_from(&self.config.reasoning_effort);
+                        let resolution = InProcessCodexRunner::with_external_auth(
+                            codex_options,
+                            external_auth.clone(),
+                        )
+                        .execute_task(
+                            task.id.as_str(),
+                            "Resolve only the dependency integration conflicts in this repository. \
+                         Apply every patch in .hive-pending in lexical order, resolve all Git \
+                         conflicts correctly, remove .hive-pending, and do not implement the \
+                         actual task yet. Return the required completed terminal result.",
+                        )
+                        .await
+                        .context("embedded Codex dependency resolution failed")?;
+                        let result: TerminalResult = serde_json::from_str(&resolution)
+                            .context("Codex returned an invalid dependency resolution result")?;
+                        if !matches!(result, TerminalResult::Completed { .. }) {
+                            return Err(anyhow!("Codex could not integrate dependency artifacts"));
+                        }
+                        ensure_dependencies_resolved(&repository).await?;
+                        commit_dependency_baseline(&repository).await?
+                    } else {
+                        preparation.baseline
+                    };
+                    let prompt = task_prompt(task);
+                    let mut codex_options = CodexOptions::new(repository)
+                        .with_workspace_write()
+                        .with_activity_sender(activity_tx.clone());
                     codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                     codex_options
                         .reasoning_effort
                         .clone_from(&self.config.reasoning_effort);
-                    let resolution = InProcessCodexRunner::with_external_auth(
-                        codex_options,
-                        external_auth.clone(),
+                    let raw_result =
+                        InProcessCodexRunner::with_external_auth(codex_options, external_auth)
+                            .execute_task(task.id.as_str(), &prompt)
+                            .await
+                            .context("embedded Codex execution failed")?;
+                    let result: TerminalResult = serde_json::from_str(&raw_result)
+                        .context("Codex returned an invalid terminal result")?;
+                    if let TerminalResult::Blocked {
+                        summary, blocker, ..
+                    } = &result
+                    {
+                        if blocker.id == task.id {
+                            return Err(anyhow!(
+                                "a blocked task cannot name itself as its blocker"
+                            ));
+                        }
+                        let blocker = EnqueueTask {
+                            id: blocker.id.clone(),
+                            kind: "blocker".to_owned(),
+                            trigger: TaskTrigger::AgentDependency,
+                            prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
+                            source_commit: task.source_commit.clone(),
+                            priority: if task.kind == "main-repair" { 200 } else { 10 },
+                            max_attempts: 3,
+                            dependencies: Vec::new(),
+                        };
+                        return Ok(TaskDisposition::Blocked {
+                            blocker,
+                            reason: bounded(summary),
+                        });
+                    }
+                    let summary = bounded(&format!(
+                        "{}\n\nChanged files:\n{}\n\nTests:\n{}",
+                        result.summary(),
+                        bullet_list(result.changed_files()),
+                        bullet_list(result.tests())
+                    ));
+                    let repository = self.config.workspace.join("repository");
+                    let artifact = persistable_patch(
+                        &repository,
+                        &baseline,
+                        task,
+                        &result,
+                        preparation.resumed,
                     )
-                    .execute_task(
-                        task.id.as_str(),
-                        "Resolve only the dependency integration conflicts in this repository. \
-                         Apply every patch in .hive-pending in lexical order, resolve all Git \
-                         conflicts correctly, remove .hive-pending, and do not implement the \
-                         actual task yet. Return the required completed terminal result.",
-                    )
-                    .await
-                    .context("embedded Codex dependency resolution failed")?;
-                    let result: TerminalResult = serde_json::from_str(&resolution)
-                        .context("Codex returned an invalid dependency resolution result")?;
-                    if !matches!(result, TerminalResult::Completed { .. }) {
-                        return Err(anyhow!("Codex could not integrate dependency artifacts"));
-                    }
-                    ensure_dependencies_resolved(&repository).await?;
-                    commit_dependency_baseline(&repository).await?
-                } else {
-                    preparation.baseline
-                };
-                let prompt = task_prompt(task);
-                let mut codex_options = CodexOptions::new(repository).with_workspace_write();
-                codex_options.model.clone_from(&self.config.model);
-                codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
-                codex_options
-                    .reasoning_effort
-                    .clone_from(&self.config.reasoning_effort);
-                let raw_result =
-                    InProcessCodexRunner::with_external_auth(codex_options, external_auth)
-                        .execute_task(task.id.as_str(), &prompt)
-                        .await
-                        .context("embedded Codex execution failed")?;
-                let result: TerminalResult = serde_json::from_str(&raw_result)
-                    .context("Codex returned an invalid terminal result")?;
-                if let TerminalResult::Blocked {
-                    summary, blocker, ..
-                } = &result
-                {
-                    if blocker.id == task.id {
-                        return Err(anyhow!("a blocked task cannot name itself as its blocker"));
-                    }
-                    let blocker = EnqueueTask {
-                        id: blocker.id.clone(),
-                        kind: "blocker".to_owned(),
-                        prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
-                        source_commit: task.source_commit.clone(),
-                        priority: if task.kind == "main-repair" { 200 } else { 10 },
-                        max_attempts: 3,
-                        dependencies: Vec::new(),
-                    };
-                    let accepted = self
-                        .store
-                        .block(task, &self.config.agent_id, &blocker, &bounded(summary))
-                        .await?;
-                    if !accepted {
-                        return Err(WorkerCancellationRequested.into());
-                    }
-                    return Err(WorkerBlocked.into());
-                }
-                let summary = bounded(&format!(
-                    "{}\n\nChanged files:\n{}\n\nTests:\n{}",
-                    result.summary(),
-                    bullet_list(result.changed_files()),
-                    bullet_list(result.tests())
-                ));
-                let repository = self.config.workspace.join("repository");
-                let artifact =
-                    persistable_patch(&repository, &baseline, task, &result, preparation.resumed)
-                        .await?;
-                let accepted = self
-                    .store
-                    .complete(task, &self.config.agent_id, &summary, &artifact)
                     .await?;
-                if !accepted {
-                    return Err(WorkerCancellationRequested.into());
+                    Ok::<TaskDisposition, anyhow::Error>(TaskDisposition::Completed {
+                        summary,
+                        artifact,
+                    })
                 }
-                Ok::<(), anyhow::Error>(())
+                .await;
+                drop(activity_tx);
+                activity_persistence
+                    .await
+                    .context("task activity persistence panicked")??;
+                let terminal_result: anyhow::Result<()> = match task_result? {
+                    TaskDisposition::Completed { summary, artifact } => {
+                        if !self
+                            .store
+                            .complete(task, &self.config.agent_id, &summary, &artifact)
+                            .await?
+                        {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Ok(())
+                    }
+                    TaskDisposition::Blocked { blocker, reason } => {
+                        if !self
+                            .store
+                            .block(task, &self.config.agent_id, &blocker, &reason)
+                            .await?
+                        {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Err(WorkerBlocked.into())
+                    }
+                };
+                terminal_result
             },
         );
         let mut terminate =
@@ -314,6 +359,21 @@ impl<S: TaskStore> Worker<S> {
     }
 }
 
+async fn persist_activity<S: TaskStore>(
+    store: S,
+    agent_id: AgentId,
+    task: ClaimedTask,
+    mut receiver: mpsc::UnboundedReceiver<TaskActivity>,
+) -> anyhow::Result<()> {
+    let lease = ActivityLease::from(&task);
+    while let Some(activity) = receiver.recv().await {
+        if !store.record_activity(&lease, &agent_id, &activity).await? {
+            return Err(WorkerCancellationRequested.into());
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("worker interrupted for rollout")]
 struct WorkerInterrupted;
@@ -321,6 +381,17 @@ struct WorkerInterrupted;
 #[derive(Debug, thiserror::Error)]
 #[error("worker persisted a blocking dependency")]
 struct WorkerBlocked;
+
+enum TaskDisposition {
+    Completed {
+        summary: String,
+        artifact: CompletionArtifact,
+    },
+    Blocked {
+        blocker: EnqueueTask,
+        reason: String,
+    },
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("worker cancellation requested")]

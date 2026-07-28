@@ -70,6 +70,41 @@ string_id!(AgentId);
 string_id!(AttemptId);
 string_id!(LeaseToken);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityKind {
+    Started,
+    Action,
+    Result,
+    Edit,
+    Warning,
+    Retry,
+    Report,
+    Error,
+}
+
+impl ActivityKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::Action => "action",
+            Self::Result => "result",
+            Self::Edit => "edit",
+            Self::Warning => "warning",
+            Self::Retry => "retry",
+            Self::Report => "report",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskActivity {
+    pub kind: ActivityKind,
+    pub message: String,
+    pub detail: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancellationTarget {
     pub task_id: TaskId,
@@ -106,6 +141,23 @@ pub struct ClaimedTask {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityLease {
+    pub task_id: TaskId,
+    pub attempt_id: AttemptId,
+    pub lease_token: LeaseToken,
+}
+
+impl From<&ClaimedTask> for ActivityLease {
+    fn from(task: &ClaimedTask) -> Self {
+        Self {
+            task_id: task.id.clone(),
+            attempt_id: task.attempt_id.clone(),
+            lease_token: task.lease_token.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", content = "task", rename_all = "snake_case")]
 pub enum ClaimOutcome {
     NoTask,
@@ -133,9 +185,28 @@ pub struct DependencyResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskTrigger {
+    AgentDependency,
+    GitHubMainFailure,
+    ManualCli,
+}
+
+impl TaskTrigger {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AgentDependency => "agent-dependency",
+            Self::GitHubMainFailure => "github-main-failure",
+            Self::ManualCli => "manual-cli",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnqueueTask {
     pub id: TaskId,
     pub kind: String,
+    pub trigger: TaskTrigger,
     pub prompt: String,
     pub source_commit: String,
     pub priority: i64,
@@ -316,7 +387,7 @@ impl TerminalResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnqueueTask, ModelError, TaskId, TerminalResult};
+    use super::{EnqueueTask, ModelError, TaskId, TaskTrigger, TerminalResult};
 
     #[test]
     fn enqueue_rejects_self_dependency() -> anyhow::Result<()> {
@@ -324,6 +395,7 @@ mod tests {
         let task = EnqueueTask {
             id: task_id.clone(),
             kind: "code".to_owned(),
+            trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 1,

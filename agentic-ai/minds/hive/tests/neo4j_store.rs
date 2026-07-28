@@ -1,6 +1,9 @@
 use std::env;
 
-use hive::model::{AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskId};
+use hive::model::{
+    ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskId, TaskTrigger,
+};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
@@ -9,6 +12,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     EnqueueTask {
         id: TaskId::new(id).expect("valid task id"),
         kind: "integration".to_owned(),
+        trigger: TaskTrigger::ManualCli,
         prompt: "Exercise the production task store".to_owned(),
         source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         priority: 0,
@@ -141,6 +145,54 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         vec![artifact.clone()],
         "a dependent task must receive the completed dependency patch"
     );
+    for sequence in 0..205 {
+        assert!(
+            store
+                .record_activity(
+                    &ActivityLease::from(&stale_claim),
+                    stale_agent,
+                    &TaskActivity {
+                        kind: ActivityKind::Action,
+                        message: "activity.command_running".to_owned(),
+                        detail: format!("bounded command {sequence}"),
+                    },
+                )
+                .await
+                .expect("record durable activity")
+        );
+    }
+    let mut activity_count_rows = graph
+        .execute(
+            query(
+                "MATCH (:TaskActivity)-[:FOR_TASK]->(:Task {id: $task_id})
+                 RETURN count(*) AS count",
+            )
+            .param("task_id", stale_claim.id.as_str()),
+        )
+        .await
+        .expect("query bounded task activity");
+    let activity_count = activity_count_rows
+        .next()
+        .await
+        .expect("read activity count")
+        .expect("activity count row")
+        .get::<i64>("count")
+        .expect("activity count");
+    assert_eq!(activity_count, 200, "durable activity must remain bounded");
+    let snapshot = store.observer_snapshot("en").await?;
+    let observed = snapshot
+        .tasks
+        .iter()
+        .find(|task| task.id == stale_claim.id.as_str())
+        .expect("claimed task in observer projection");
+    assert_eq!(observed.trigger, "Manual dispatch · Hive CLI");
+    assert_eq!(observed.activity.len(), 100);
+    assert!(
+        observed
+            .activity
+            .iter()
+            .all(|activity| activity.message == "Running repository command")
+    );
 
     graph
         .run(
@@ -164,6 +216,20 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .heartbeat(&stale_claim.id, stale_agent, &stale_claim.lease_token, 300,)
             .await
             .expect("stale heartbeat")
+    );
+    assert!(
+        !store
+            .record_activity(
+                &ActivityLease::from(&stale_claim),
+                stale_agent,
+                &TaskActivity {
+                    kind: ActivityKind::Error,
+                    message: "activity.execution_stopped".to_owned(),
+                    detail: String::new(),
+                },
+            )
+            .await
+            .expect("stale activity")
     );
     assert!(
         !store
@@ -1051,36 +1117,36 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         ))
         .await
         .expect("create schema-3 fixture");
-    store.migrate().await.expect("migrate schema 3 to schema 5");
-    let mut schema_five_rows = graph
+    store.migrate().await.expect("migrate schema 3 to schema 6");
+    let mut schema_six_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (migration:HiveSchemaMigration {version: 5})
+             MATCH (migration:HiveSchemaMigration {version: 6})
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
                     migration.version AS version",
         ))
         .await
-        .expect("read schema-5 migration state");
-    let schema_five = schema_five_rows
+        .expect("read schema-6 migration state");
+    let schema_six = schema_six_rows
         .next()
         .await
-        .expect("read schema-4 row")
-        .expect("schema-5 migration row");
+        .expect("read schema-6 row")
+        .expect("schema-6 migration row");
     assert_eq!(
-        schema_five
+        schema_six
             .get::<String>("last_retry_release")
             .expect("initialized release marker"),
         ""
     );
     assert!(
-        schema_five
+        schema_six
             .get::<bool>("removed_legacy_marker")
             .expect("removed legacy marker")
     );
     assert_eq!(
-        schema_five.get::<i64>("version").expect("schema-5 version"),
-        5
+        schema_six.get::<i64>("version").expect("schema-6 version"),
+        6
     );
     let mut rollback_marker_rows = graph
         .execute(query(

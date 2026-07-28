@@ -7,7 +7,7 @@ use anyhow::Context;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use crate::model::{EnqueueTask, TaskId};
+use crate::model::{EnqueueTask, TaskId, TaskTrigger};
 use crate::store::TaskStore;
 
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
@@ -233,6 +233,7 @@ async fn reconcile_delivery<S: TaskStore>(
     let task = EnqueueTask {
         id: task_id,
         kind: "main-repair".to_owned(),
+        trigger: TaskTrigger::GitHubMainFailure,
         prompt: body.to_owned(),
         source_commit: source_commit.to_owned(),
         priority: 100,

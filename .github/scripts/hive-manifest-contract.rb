@@ -11,6 +11,7 @@ end
 
 deployment = load_yaml.call("infra/k0s/manifests/hive/deployment.yaml")
 dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml")
+observer_deployment = load_yaml.call("infra/k0s/manifests/hive/observer.yaml")
 reaper_deployment = load_yaml.call("infra/k0s/manifests/hive/reaper-controller.yaml")
 pod = deployment.fetch("spec").fetch("template").fetch("spec")
 raise "Hive must keep four warm workers" unless deployment.dig("spec", "replicas") == 4
@@ -107,7 +108,8 @@ unless worker_environment["HIVE_CODEX_LINUX_SANDBOX_EXE"] ==
 end
 trust_initializers = [
   pod.fetch("initContainers"),
-  dispatcher_deployment.dig("spec", "template", "spec", "initContainers")
+  dispatcher_deployment.dig("spec", "template", "spec", "initContainers"),
+  observer_deployment.dig("spec", "template", "spec", "initContainers")
 ].map do |init_containers|
   init_containers.find { |container| container["name"] == "neo4j-trust" }
                  .fetch("command")
@@ -146,6 +148,35 @@ unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
        false
   raise "Hive Workbench dispatcher must remain one token-free Kata replica"
 end
+observer_pod = observer_deployment.dig("spec", "template", "spec")
+unless observer_deployment.dig("spec", "replicas") == 1 &&
+       observer_pod["automountServiceAccountToken"] == false &&
+       observer_pod["runtimeClassName"].nil?
+  raise "Hive observer must remain one token-free infrastructure replica"
+end
+observer = observer_pod.fetch("containers")
+  .find { |container| container["name"] == "observer" }
+observer_environment = observer.fetch("env").map { |entry| entry.fetch("name") }
+observer_coordinator = observer_pod.fetch("containers")
+  .find { |container| container["name"] == "coordinator" }
+observer_coordinator_environment = observer_coordinator.fetch("env")
+  .map { |entry| entry.fetch("name") }
+unless observer.fetch("args") == ["observer"] &&
+       observer_environment.include?("HIVE_COORDINATOR_SOCKET") &&
+       !observer_environment.include?("NEO4J_PASSWORD") &&
+       observer_coordinator.fetch("args") == ["observer-coordinator"] &&
+       observer_coordinator_environment.include?("NEO4J_PASSWORD") &&
+       observer.dig("securityContext", "readOnlyRootFilesystem") == true
+  raise "Hive observer must use the typed coordinator boundary without graph credentials"
+end
+observer_manifest_text = File.read(
+  File.join(root, "infra/k0s/manifests/hive/observer.yaml")
+)
+unless observer_manifest_text.include?("name: hive-observer") &&
+       observer_manifest_text.include?("type: ClusterIP") &&
+       observer_manifest_text.include?("path: /healthz")
+  raise "Hive observer must remain cluster-private and health-checked"
+end
 dispatcher_environment = dispatcher_deployment
   .dig("spec", "template", "spec", "containers")
   .find { |container| container["name"] == "dispatcher" }
@@ -177,6 +208,8 @@ api_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-worker-kubernetes-api" }
 dispatcher_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-dispatcher-reaper" }
+observer_network = network_policies
+  .find { |document| document.dig("metadata", "name") == "hive-observer-egress" }
 reaper_network = network_policies
   .find { |document| document.dig("metadata", "name") == "hive-reaper-controller" }
 raise "Hive worker Kubernetes API policy is missing" unless api_network
@@ -194,6 +227,14 @@ private_ranges = %w[10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0
 missing_ranges = private_ranges - internet_block.fetch("except")
 raise "Hive Internet egress includes private ranges: #{missing_ranges.join(", ")}" unless missing_ranges.empty?
 raise "Hive dispatcher egress policy is missing" unless dispatcher_network
+raise "Hive observer egress policy is missing" unless observer_network
+observer_ports = observer_network.dig("spec", "egress")
+  .flat_map { |rule| rule.fetch("ports", []) }
+unless observer_ports.any? { |port| port["protocol"] == "UDP" && port["port"] == 53 } &&
+       observer_ports.any? { |port| port["protocol"] == "TCP" && port["port"] == 7687 } &&
+       observer_ports.none? { |port| port["port"] == 443 }
+  raise "Hive observer may reach only DNS and Neo4j"
+end
 dispatcher_egress = dispatcher_network.dig("spec", "egress")
 dispatcher_ports = dispatcher_egress.flat_map { |rule| rule.fetch("ports", []) }
 unless dispatcher_ports.any? { |port| port["protocol"] == "UDP" && port["port"] == 53 } &&
@@ -239,6 +280,7 @@ reaper_command = reaper_deployment
 unless reaper_command.include?("token('/run/kubernetes/token')") &&
        reaper_command.include?('expected = token("/run/reaper-auth/token")') &&
        reaper_command.include?("def reconcile_neo4j_policy():") &&
+       reaper_command.include?('"hive-observer-egress"') &&
        reaper_command.include?('"resourceVersion": policy["metadata"][') &&
        reaper_command.include?("if error.code != 409:") &&
        reaper_command.include?("time.sleep(10)")

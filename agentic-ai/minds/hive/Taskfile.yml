@@ -37,6 +37,21 @@ tasks:
         done
         docker cp "$container:/build/hive/tests" "$formatted/hive-tests"
         cp -R "$formatted/hive-tests/." "hive/tests/"
+        console_image="${image}-console"
+        docker build \
+          --platform linux/amd64 \
+          --target console-formatter \
+          --tag "$console_image" \
+          --build-context "nook-app={{.NOOK_APP_CONTEXT}}" \
+          --file hive/Dockerfile \
+          .
+        console_container="$(docker create "$console_image")"
+        docker cp "$console_container:/console/." "$formatted/hive-console"
+        docker rm "$console_container" >/dev/null
+        for path in src e2e locales index.html svelte.config.js tsconfig.json vite.config.ts playwright.config.ts .prettierrc PRODUCT.md DESIGN.md package.json; do
+          rm -rf "hive-console/$path"
+           cp -R "$formatted/hive-console/$path" "hive-console/$path"
+         done
         BASH
 
   check:

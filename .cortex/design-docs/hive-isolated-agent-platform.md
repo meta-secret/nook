@@ -95,6 +95,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 | Main failure handoff | GitHub Actions | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures | Agent execution, raw failure logs, deployment |
 | Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
+| Control Center observer | Dedicated runc Pod | Read-only, localized task/worker projection and the static operator dashboard | Task mutation, Codex auth, GitHub credentials, or raw agent output |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
 | Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration | Raw Neo4j access or Kubernetes administrative credentials |
 | Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
@@ -113,13 +114,21 @@ The graph contains:
 (:Task)-[:DEPENDS_ON]->(:Task)
 (:Agent)-[:EXECUTED]->(:Attempt)-[:FOR_TASK]->(:Task)
 (:Attempt)-[:PRODUCED]->(:Artifact)
+(:TaskActivity)-[:FOR_TASK]->(:Task)
 ```
 
 Task definitions include a full 40-character `source_commit`. Every task in one
 dependency DAG must target the same source revision. Hive graph schema
 migrations are explicit and versioned; a binary refuses a graph newer than it
 supports. Schema 5 introduces the persisted `CANCELLING` state and its
-Pod-termination acknowledgement contract.
+Pod-termination acknowledgement contract. Schema 6 adds semantic task activity
+with a per-task bound of 200 events. Activity contains localized message keys,
+timestamps, categories, and bounded operational detail; it never stores raw
+model reasoning, command output, prompts, credentials, or repository secrets.
+New tasks also persist typed trigger provenance (`manual-cli`,
+`github-main-failure`, or `agent-dependency`) at enqueue time; the observer
+localizes that durable value and labels pre-migration tasks as unknown instead
+of guessing their source from task kind.
 
 ### Stored readiness invariant
 
@@ -418,6 +427,14 @@ outside the repository checkout. Hive records their category, timestamps,
 duration, outcome, and bounded command identity in the immutable Workbench
 statistics record.
 
+The same typed event stream feeds the bounded `TaskActivity` projection used by
+the Control Center. Its network-facing HTTP container has no graph credential;
+it can request only the overview or one task detail from a private Unix-socket
+coordinator sidecar. The credential-bearing sidecar reads only current workers,
+at most 200 tasks, and at most 100 recent activity entries for each task in a
+response. Task detail uses a direct task lookup, so completed work remains
+inspectable after it leaves the overview window.
+
 Completion, failure, release, blocker discovery, and heartbeat mutations are
 lease-token guarded. Blocker discovery additionally requires an unexpired
 lease, preventing a stale worker from changing dependencies after replacement
@@ -449,7 +466,13 @@ allowlist.
 
 Private, loopback, link-local, multicast, and cluster address ranges are
 excluded from general external egress. Neo4j Bolt and HTTP are never exposed on
-the machine's public address.
+the machine's public address. The Control Center is cluster-private and
+credential-free; operators reach it only through the repository-owned SSH
+port-forward:
+
+```text
+task infra:hive:dashboard
+```
 
 ## 8. Persistence and recovery
 

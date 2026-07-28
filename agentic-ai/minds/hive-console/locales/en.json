@@ -1,0 +1,6 @@
+{
+  "product_name": "Hive Control Center",
+  "unavailable": "Hive is unavailable",
+  "unavailable_description": "The observer state could not be loaded.",
+  "retry_connection": "Try again"
+}

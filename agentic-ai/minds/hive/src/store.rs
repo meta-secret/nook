@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::model::{
-    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    LeaseToken, TaskId,
+    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
+    EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 
 #[async_trait]
@@ -44,6 +44,15 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         lease_seconds: i64,
     ) -> anyhow::Result<bool>;
 
+    async fn record_activity(
+        &self,
+        _lease: &ActivityLease,
+        _agent_id: &AgentId,
+        _activity: &TaskActivity,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool>;
 
     async fn complete(
@@ -81,8 +90,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-        EnqueueTask, LeaseToken, TaskId,
+        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
+        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
     };
 
     #[derive(Debug, Clone)]
@@ -337,6 +346,23 @@ mod tests {
             Ok(accepted)
         }
 
+        async fn record_activity(
+            &self,
+            lease: &ActivityLease,
+            _agent_id: &AgentId,
+            _activity: &TaskActivity,
+        ) -> anyhow::Result<bool> {
+            Ok(self
+                .tasks
+                .lock()
+                .expect("store lock")
+                .get(lease.task_id.as_str())
+                .is_some_and(|stored| {
+                    stored.status == "RUNNING"
+                        && stored.lease_token.as_ref() == Some(&lease.lease_token)
+                }))
+        }
+
         async fn complete(
             &self,
             claimed: &ClaimedTask,
@@ -448,6 +474,7 @@ mod tests {
         EnqueueTask {
             id: TaskId::new(id).expect("valid id"),
             kind: "code".to_owned(),
+            trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             priority: 0,
