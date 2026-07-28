@@ -211,7 +211,10 @@ export default defineConfig(({ mode }) => {
         }
 
   return {
-    base: viteBase ?? '/',
+    // The standalone landing is deployed at the public root and mounted under
+    // /site/ in assembled previews. Relative assets keep both artifacts
+    // self-contained instead of coupling the site bundle to either mount path.
+    base: appKind === 'site' ? './' : (viteBase ?? '/'),
     define: {
       __NOOK_APP_KIND__: JSON.stringify(appKind),
       __NOOK_WASM_APPLICATION__: JSON.stringify('unified-development'),
