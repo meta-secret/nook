@@ -103,7 +103,7 @@ fn assert_remote_compose_contract() {
     let root_tasks = read("Taskfile.yml");
     assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
     let infra_root = read("infra/Taskfile.yml");
-    for domain in [
+    let expected_domains = [
         "manifests",
         "mesh",
         "host-services",
@@ -113,7 +113,8 @@ fn assert_remote_compose_contract() {
         "neo4j",
         "hive",
         "operations",
-    ] {
+    ];
+    for domain in expected_domains {
         let include = format!(
             "  {domain}:\n    taskfile: tasks/{domain}.yml\n    dir: ..\n    flatten: true"
         );
@@ -122,6 +123,26 @@ fn assert_remote_compose_contract() {
             "infra Taskfile must flatten the {domain} operational domain"
         );
     }
+    let mut actual_domain_taskfiles = fs::read_dir(repository_root().join("infra/tasks"))
+        .expect("infra/tasks must be readable")
+        .map(|entry| {
+            entry
+                .expect("infra/tasks entries must be readable")
+                .file_name()
+                .into_string()
+                .expect("infra taskfile names must be UTF-8")
+        })
+        .filter(|name| name.ends_with(".yml"))
+        .collect::<Vec<_>>();
+    actual_domain_taskfiles.sort();
+    let mut expected_domain_taskfiles = expected_domains
+        .map(|domain| format!("{domain}.yml"))
+        .to_vec();
+    expected_domain_taskfiles.sort();
+    assert_eq!(
+        actual_domain_taskfiles, expected_domain_taskfiles,
+        "every infra/tasks/*.yml domain must be reachable from the composition root"
+    );
 
     assert_no_shell_scripts(&repository_root().join("infra"));
 
