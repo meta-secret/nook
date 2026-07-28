@@ -133,17 +133,15 @@ const syncKeys = [
   "localFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 
-export interface VaultStateSlices
-  extends
-    VaultRuntimeState,
-    VaultUiState,
-    VaultProviderState,
-    VaultSessionState,
-    VaultSecretsState,
-    VaultSentinelState,
-    VaultSyncState {}
+type VaultStateSliceFields = VaultRuntimeState &
+  VaultUiState &
+  VaultProviderState &
+  VaultSessionState &
+  VaultSecretsState &
+  VaultSentinelState &
+  VaultSyncState;
 
-export class VaultStateSlices {
+class VaultStateSlicesBase {
   constructor() {
     delegateState(this, new VaultRuntimeState(), runtimeKeys);
     delegateState(this, new VaultUiState(), uiKeys);
@@ -154,3 +152,9 @@ export class VaultStateSlices {
     delegateState(this, new VaultSyncState(), syncKeys);
   }
 }
+
+type VaultStateSlicesConstructor = new () => VaultStateSlicesBase &
+  VaultStateSliceFields;
+
+export const VaultStateSlices =
+  VaultStateSlicesBase as VaultStateSlicesConstructor;
