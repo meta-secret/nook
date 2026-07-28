@@ -51,7 +51,53 @@ async function setSecurityConflict(page: Page, present: boolean) {
   }, present)
 }
 
+async function setContentSyncConflict(page: Page) {
+  await page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          pendingSyncConflict?: unknown
+        }
+      }
+    ).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is not exposed (dev build required).')
+    }
+    vault.pendingSyncConflict = {
+      kind: 0,
+      providerLabel: 'Remote provider',
+      remoteYaml: 'remote-vault',
+      contentLocalVersion: () => 1,
+      contentRemoteVersion: () => 2,
+    }
+  })
+}
+
 test.describe('sync conflict resolution', () => {
+  test('shows retired whole-vault resolution guidance in the selected locale', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem('nook_locale', 'ru'))
+    await page.goto('/app/')
+    await createLocalVaultOnLogin(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    await setContentSyncConflict(page)
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible()
+
+    await page.getByTestId('sync-conflict-keep-local-btn').click()
+    await expect(page.getByTestId('vault-error')).toContainText(
+      'Разрешение конфликтов всего сейфа больше не поддерживается.',
+    )
+
+    await page.getByTestId('sync-conflict-keep-remote-btn').click()
+    await expect(page.getByTestId('vault-error')).toContainText(
+      'Синхронизируйте журнал событий со всеми провайдерами и повторите попытку.',
+    )
+  })
+
   test('blocks secret edits while an event-log security conflict is present', async ({
     page,
   }) => {
