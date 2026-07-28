@@ -18,4 +18,17 @@ test('choose from the compact secret type picker', async ({ page }) => {
   expect(loginBox).toBeTruthy()
   expect(loginBox?.height).toBeLessThanOrEqual(84)
   await page.waitForTimeout(DEMO_BEAT_MS)
+
+  await page.getByTestId('item-type-login').click()
+  await expect(page.getByTestId('secret-label')).toBeVisible()
+  await expect(page.getByTestId('login-username')).toBeVisible()
+  await page.getByTestId('password-generator-toggle').click()
+  await page.getByTestId('generate-password-btn').click()
+  await expect(page.getByTestId('secret-value')).not.toHaveValue('')
+  await page.waitForTimeout(DEMO_BEAT_MS)
+
+  await page.getByTestId('change-secret-type-btn').click()
+  await expect(picker).toBeVisible()
+  await expect(picker.getByRole('button')).toHaveCount(8)
+  await page.waitForTimeout(DEMO_BEAT_MS)
 })
