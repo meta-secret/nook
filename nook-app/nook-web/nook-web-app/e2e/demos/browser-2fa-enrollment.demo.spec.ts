@@ -15,7 +15,7 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('guide authenticator enrollment through consented Pilot ceremony', async ({
+test('uses the paired demo vault for authenticator enrollment', async ({
   page,
 }) => {
   const messages = JSON.parse(
