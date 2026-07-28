@@ -307,7 +307,29 @@ unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
   raise "Neo4j Bolt listener must require TLS"
 end
 
-infra_taskfile = File.read(File.join(root, "infra/Taskfile.yml"))
+infra_root_path = File.join(root, "infra/Taskfile.yml")
+infra_root = File.read(infra_root_path)
+infra_taskfiles = infra_root
+  .scan(/^\s+taskfile:\s+(tasks\/[a-z0-9-]+\.yml)\s*$/)
+  .flatten
+  .map { |relative_path| File.join(root, "infra", relative_path) }
+available_taskfiles = Dir.glob(File.join(root, "infra/tasks/*.yml")).sort
+unless infra_taskfiles.sort == available_taskfiles
+  raise "Every infrastructure domain Taskfile must be reachable from infra/Taskfile.yml"
+end
+infra_taskfiles.unshift(infra_root_path)
+infra_taskfile = infra_taskfiles.map { |path| File.read(path) }.join("\n")
+kata_tasks = File.read(File.join(root, "infra/tasks/kata.yml"))
+hive_tasks = File.read(File.join(root, "infra/tasks/hive.yml"))
+hive_deploy_task = hive_tasks.match(
+  /^  hive:deploy:\n(?<body>.*?)(?=^  hive:seccomp:install:)/m
+)&.[](:body)
+hive_seccomp_task = hive_tasks.match(
+  /^  hive:seccomp:install:\n(?<body>.*?)(?=^  hive:diagnose:)/m
+)&.[](:body)
+kata_guest_seccomp_task = kata_tasks.match(
+  /^  kata:guest-seccomp:enable:\n(?<body>.*?)(?=^  kata:diagnose:)/m
+)&.[](:body)
 seccomp_profile = load_yaml.call("infra/k0s/seccomp/hive-bubblewrap.json")
 allowed_syscalls = seccomp_profile
   .fetch("syscalls")
@@ -319,12 +341,10 @@ unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
        end &&
        !allowed_syscalls.include?("bpf") &&
        !allowed_syscalls.include?("perf_event_open") &&
-       infra_taskfile.include?("kata:guest-seccomp:enable:") &&
-       infra_taskfile.include?("disable_guest_seccomp = false") &&
-       infra_taskfile.include?("task: kata:guest-seccomp:enable") &&
-       infra_taskfile.include?("hive:seccomp:install:") &&
-       infra_taskfile.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
-       infra_taskfile.include?('task: hive:seccomp:install')
+       kata_guest_seccomp_task&.include?("disable_guest_seccomp = false") &&
+       hive_deploy_task&.include?("task: kata:guest-seccomp:enable") &&
+       hive_deploy_task&.include?("task: hive:seccomp:install") &&
+       hive_seccomp_task&.include?("/var/lib/k0s/kubelet/seccomp/nook")
   raise "Hive deploy must install its deny-by-default Bubblewrap seccomp profile"
 end
 kubernetes_tools_task = infra_taskfile.match(

@@ -1,0 +1,171 @@
+version: '3'
+
+# host-services infrastructure operations.
+tasks:
+  services:repair-network:
+    desc: Recreate only the Nook Compose network after an external firewall reload.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        compose_file="$remote_dir/compose.yaml"
+        test -s "$compose_file"
+        docker compose --file "$compose_file" config --quiet
+        case "$(docker version --format '{{"{{.Server.Version}}"}}')" in
+          26.*) ;;
+          *)
+            echo "Refusing chain recovery for an unverified Docker version" >&2
+            exit 1
+            ;;
+        esac
+        if ! sudo -n iptables --table nat --list DOCKER >/dev/null 2>&1; then
+          sudo -n iptables --table nat --new-chain DOCKER
+        fi
+        for chain in \
+          DOCKER \
+          DOCKER-ISOLATION-STAGE-1 \
+          DOCKER-ISOLATION-STAGE-2; do
+          if ! sudo -n iptables --table filter --list "$chain" \
+            >/dev/null 2>&1; then
+            sudo -n iptables --table filter --new-chain "$chain"
+          fi
+        done
+        for chain in \
+          DOCKER-ISOLATION-STAGE-1 \
+          DOCKER-ISOLATION-STAGE-2; do
+          if ! sudo -n iptables --table filter \
+            --check "$chain" --jump RETURN 2>/dev/null; then
+            sudo -n iptables --table filter \
+              --append "$chain" --jump RETURN
+          fi
+        done
+        sudo -n iptables --table nat --list DOCKER >/dev/null
+        sudo -n iptables --table filter --list DOCKER >/dev/null
+        sudo -n iptables --table filter \
+          --list DOCKER-ISOLATION-STAGE-1 >/dev/null
+        sudo -n iptables --table filter \
+          --list DOCKER-ISOLATION-STAGE-2 >/dev/null
+        docker compose --file "$compose_file" down --remove-orphans
+        docker compose --file "$compose_file" up --detach --wait
+        docker compose --file "$compose_file" ps
+        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        REMOTE
+
+  services:diagnose:
+    desc: Show bounded Docker and Nook Compose network diagnostics.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        sudo -n systemctl status docker --no-pager --full || true
+        sudo -n systemctl cat docker || true
+        docker info --format '{{"{{json .}}"}}' |
+          jq '{ServerVersion, Driver, FirewallBackend, DockerRootDir}' || true
+        docker compose --file "$remote_dir/compose.yaml" ps --all || true
+        sudo -n iptables --version || true
+        sudo -n nft --handle list chain inet bynull_filter forward || true
+        sudo -n iptables --table filter --verbose --numeric --list FORWARD || true
+        sudo -n iptables-save |
+          grep -E '(^\\*|^:DOCKER|DOCKER)' || true
+        sudo -n nft list tables || true
+        REMOTE
+
+  deploy:
+    desc: Deploy Nook services and the complete k0s/Kata/Neo4j/Hive platform.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        compose_file="$repo_root/infra/compose.yaml"
+        traefik_file="$repo_root/infra/traefik-dynamic.yaml"
+        remote_next="$remote_dir/compose.yaml.next"
+        remote_compose="$remote_dir/compose.yaml"
+        remote_traefik_next="$remote_dir/traefik-dynamic.yaml.next"
+        remote_traefik="$remote_dir/traefik-dynamic.yaml"
+        remote_secrets="$remote_dir/secrets"
+
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra deploy: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+
+        docker compose -f "$compose_file" config --quiet
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           install -d -m 0750 '$remote_dir'; \
+           install -d -m 0700 '$remote_secrets'; \
+           if [ ! -s '$remote_secrets/redis-password' ]; then \
+             umask 077; \
+             openssl rand -hex 32 > '$remote_secrets/redis-password'; \
+           fi; \
+           chmod 0600 '$remote_secrets/redis-password'"
+        scp -q -o BatchMode=yes "$compose_file" "$ssh_target:$remote_next"
+        scp -q -o BatchMode=yes "$traefik_file" "$ssh_target:$remote_traefik_next"
+
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           docker compose -f '$remote_next' config --quiet; \
+           mv '$remote_traefik_next' '$remote_traefik'; \
+           mv '$remote_next' '$remote_compose'; \
+           docker compose -f '$remote_compose' pull; \
+           docker compose -f '$remote_compose' up -d --remove-orphans --wait"
+
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "set -eu; \
+           test \"\$(docker compose -f '$remote_compose' exec -T redis sh -ec 'export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; exec redis-cli ping')\" = PONG; \
+           docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx traefik; \
+           curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
+           docker compose -f '$remote_compose' ps"
+        BASH
+      - task: k0s:install
+      - task: kata:install
+      - task: kata:verify
+      - task: neo4j:deploy
+      - task: hive:deploy
+
+  k0s:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra k0s sync: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "install -d -m 0750 '$remote_dir'; \
+           if test -d '$remote_dir/agentic-ai/minds'; then \
+             find '$remote_dir/agentic-ai/minds' \
+               -type d -name target -prune -exec rm -rf -- {} +; \
+           fi"
+        tar -C "$repo_root" \
+          --exclude='agentic-ai/minds/target' \
+          --exclude='agentic-ai/minds/*/target' \
+          -cf - \
+          infra/k0s \
+          agentic-ai/minds \
+          nook-app/docker/sccache-wrapper.sh \
+          nook-app/docker/sccache-report.sh |
+          ssh -o BatchMode=yes "$ssh_target" \
+            "tar -xf - -C '$remote_dir'"
+        BASH

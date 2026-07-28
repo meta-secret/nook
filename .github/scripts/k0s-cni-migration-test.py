@@ -9,7 +9,7 @@ import textwrap
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TASKFILE = ROOT / "infra/Taskfile.yml"
+TASKFILE = ROOT / "infra/tasks/k0s.yml"
 START = '        cni_migrated="$cni_was_unmasqueraded"\n'
 END = (
     "        if sudo -n test -e "

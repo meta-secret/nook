@@ -9,7 +9,7 @@ import textwrap
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TASKFILE = ROOT / "infra/Taskfile.yml"
+TASKFILE = ROOT / "infra/tasks/host-services.yml"
 START = "  services:repair-network:\n"
 SCRIPT_START = "        set -euo pipefail\n"
 END = "        REMOTE\n"

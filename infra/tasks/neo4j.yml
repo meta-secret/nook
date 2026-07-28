@@ -1,0 +1,301 @@
+version: '3'
+
+# neo4j infrastructure operations.
+tasks:
+  neo4j:deploy:
+    desc: Deploy persistent, cluster-internal Neo4j with generated credentials.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        version="{{.NEO4J_VERSION}}"
+        chart="$remote_dir/downloads/neo4j-$version.tgz"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        sudo -n install -d -m 0750 /var/lib/hive/neo4j
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
+
+        secret_dir="$(mktemp -d)"
+        kubeconfig=""
+        network_policy=""
+        reaper_controller=""
+        hive_replicas=""
+        dispatcher_replicas=""
+        restore_hive() {
+          if test -n "$hive_replicas"; then
+            kubectl scale deployment/hive \
+              --namespace hive-system \
+              --replicas="$hive_replicas"
+            kubectl rollout status deployment/hive \
+              --namespace hive-system \
+              --timeout=15m
+            hive_replicas=""
+          fi
+          if test -n "$dispatcher_replicas"; then
+            kubectl scale deployment/hive-workbench-dispatcher \
+              --namespace hive-system \
+              --replicas="$dispatcher_replicas"
+            kubectl rollout status deployment/hive-workbench-dispatcher \
+              --namespace hive-system \
+              --timeout=15m
+            dispatcher_replicas=""
+          fi
+        }
+        cleanup() {
+          rm -rf "$secret_dir"
+          if test -n "$kubeconfig"; then
+            rm -f "$kubeconfig"
+          fi
+          if test -n "$network_policy"; then
+            rm -f "$network_policy"
+          fi
+          if test -n "$reaper_controller"; then
+            rm -f "$reaper_controller"
+          fi
+          restore_hive
+        }
+        trap cleanup EXIT
+        umask 077
+        reuse_tls=false
+        tls_changed=false
+        if kubectl get secret hive-neo4j-tls \
+          --namespace hive-data >/dev/null 2>&1 &&
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system >/dev/null 2>&1; then
+          kubectl get secret hive-neo4j-tls \
+            --namespace hive-data \
+            -o jsonpath='{.data.private\.key}' |
+            base64 --decode > "$secret_dir/private.key"
+          kubectl get secret hive-neo4j-tls \
+            --namespace hive-data \
+            -o jsonpath='{.data.public\.crt}' |
+            base64 --decode > "$secret_dir/public.crt"
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system \
+            -o jsonpath='{.data.ca\.crt}' |
+            base64 --decode > "$secret_dir/ca.crt"
+          if openssl pkey -check -noout \
+            -in "$secret_dir/private.key" >/dev/null 2>&1 &&
+            openssl x509 -checkend 2592000 -noout \
+              -in "$secret_dir/public.crt" &&
+            openssl verify -CAfile "$secret_dir/ca.crt" \
+              "$secret_dir/public.crt" >/dev/null; then
+            reuse_tls=true
+          fi
+        fi
+        if test "$reuse_tls" = false; then
+          tls_changed=true
+          openssl req -x509 -newkey rsa:3072 -nodes \
+            -days 3650 \
+            -subj "/CN=Nook Hive Neo4j CA" \
+            -keyout "$secret_dir/ca.key" \
+            -out "$secret_dir/ca.crt"
+          openssl req -newkey rsa:3072 -nodes \
+            -subj "/CN=hive-neo4j.hive-data.svc.cluster.local" \
+            -keyout "$secret_dir/private.key" \
+            -out "$secret_dir/server.csr"
+          cat > "$secret_dir/server.ext" <<'EOF'
+        basicConstraints=critical,CA:FALSE
+        keyUsage=critical,digitalSignature,keyEncipherment
+        extendedKeyUsage=serverAuth
+        subjectAltName=DNS:hive-neo4j,DNS:hive-neo4j.hive-data,DNS:hive-neo4j.hive-data.svc,DNS:hive-neo4j.hive-data.svc.cluster.local
+        EOF
+          openssl x509 -req \
+            -days 825 \
+            -in "$secret_dir/server.csr" \
+            -CA "$secret_dir/ca.crt" \
+            -CAkey "$secret_dir/ca.key" \
+            -CAcreateserial \
+            -extfile "$secret_dir/server.ext" \
+            -out "$secret_dir/public.crt"
+        fi
+        # Legacy prototypes persisted signing and server keys on the host.
+        # Kubernetes Secrets are encrypted at rest by the k0s AES-GCM provider,
+        # so remove those plaintext copies after the Secret-backed migration.
+        sudo -n rm -f \
+          /var/lib/hive/neo4j-tls/ca.key \
+          /var/lib/hive/neo4j-tls/private.key
+
+        if test "$tls_changed" = true &&
+          kubectl get deployment hive --namespace hive-system >/dev/null 2>&1; then
+          hive_replicas="$(
+            kubectl get deployment hive \
+              --namespace hive-system \
+              -o jsonpath='{.spec.replicas}'
+          )"
+          kubectl scale deployment/hive --namespace hive-system --replicas=0
+          kubectl rollout status deployment/hive \
+            --namespace hive-system \
+            --timeout=15m
+          if kubectl get pod \
+            --namespace hive-system \
+            --selector app.kubernetes.io/name=hive \
+            -o name | grep -q .; then
+            kubectl wait pod \
+              --namespace hive-system \
+              --selector app.kubernetes.io/name=hive \
+              --for=delete \
+              --timeout=5m
+          fi
+        fi
+        if test "$tls_changed" = true &&
+          kubectl get deployment hive-workbench-dispatcher \
+            --namespace hive-system >/dev/null 2>&1; then
+          dispatcher_replicas="$(
+            kubectl get deployment hive-workbench-dispatcher \
+              --namespace hive-system \
+              -o jsonpath='{.spec.replicas}'
+          )"
+          kubectl scale deployment/hive-workbench-dispatcher \
+            --namespace hive-system \
+            --replicas=0
+          kubectl rollout status deployment/hive-workbench-dispatcher \
+            --namespace hive-system \
+            --timeout=15m
+        fi
+
+        kubectl create secret generic hive-neo4j-tls \
+          --namespace hive-data \
+          --from-file=private.key="$secret_dir/private.key" \
+          --from-file=public.crt="$secret_dir/public.crt" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+        kubectl create secret generic hive-neo4j-ca \
+          --namespace hive-system \
+          --from-file=ca.crt="$secret_dir/ca.crt" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+
+        auth_exists=false
+        client_exists=false
+        if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
+          auth_exists=true
+        fi
+        if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
+          client_exists=true
+        fi
+
+        if test "$auth_exists" = false && test "$client_exists" = false; then
+          openssl rand -hex 32 > "$secret_dir/password"
+        elif test "$auth_exists" = true; then
+          kubectl get secret hive-neo4j-auth \
+            --namespace hive-data \
+            -o jsonpath='{.data.NEO4J_AUTH}' |
+            base64 --decode |
+            sed 's|^neo4j/||' > "$secret_dir/password"
+        else
+          kubectl get secret hive-neo4j-client \
+            --namespace hive-system \
+            -o jsonpath='{.data.NEO4J_PASSWORD}' |
+            base64 --decode > "$secret_dir/password"
+        fi
+
+        if test "$auth_exists" = false; then
+          {
+            printf 'neo4j/'
+            cat "$secret_dir/password"
+          } > "$secret_dir/NEO4J_AUTH"
+          kubectl create secret generic hive-neo4j-auth \
+            --namespace hive-data \
+            --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH"
+        fi
+        if test "$client_exists" = false; then
+          cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
+          kubectl create secret generic hive-neo4j-client \
+            --namespace hive-system \
+            --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD"
+        fi
+        rm -rf "$secret_dir"
+
+        curl -fsSL --retry 3 -o "$chart.next" \
+          "https://helm.neo4j.com/neo4j/neo4j-$version.tgz"
+        printf '%s  %s\n' "{{.NEO4J_CHART_SHA256}}" "$chart.next" | sha256sum -c -
+        mv "$chart.next" "$chart"
+        kubeconfig="$(mktemp)"
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        helm upgrade --install hive-neo4j "$chart" \
+          --namespace hive-data \
+          --values "$remote_dir/infra/k0s/manifests/neo4j/values.yaml" \
+          --wait \
+          --timeout 15m
+        if test "$tls_changed" = true; then
+          kubectl rollout restart statefulset/hive-neo4j \
+            --namespace hive-data
+        fi
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/network-policy.yaml"
+        kubectl rollout status statefulset/hive-neo4j \
+          --namespace hive-data \
+          --timeout=10m
+        neo4j_service_ip="$(
+          kubectl get service hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.spec.clusterIP}'
+        )"
+        neo4j_endpoint_ip="$(
+          kubectl get endpoints hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        k0s_api_ip="{{.K0S_API_ADDRESS}}"
+        for discovered_ip in \
+          "$neo4j_service_ip" \
+          "$neo4j_endpoint_ip" \
+          "$k0s_api_ip"; do
+          case "$discovered_ip" in
+            *[!0-9.]*|'')
+              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
+              exit 1
+              ;;
+          esac
+        done
+        network_policy="$(mktemp)"
+        sed \
+          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
+          -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
+          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
+          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" \
+          > "$network_policy"
+        if kubectl get deployment hive \
+          --namespace hive-system >/dev/null 2>&1; then
+          hive_image="$(
+            kubectl get deployment hive \
+              --namespace hive-system \
+              -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
+          )"
+          case "$hive_image" in
+            127.0.0.1:5000/nook-hive@sha256:*) ;;
+            *)
+              echo "Refusing unpinned existing Hive image: $hive_image" >&2
+              exit 1
+              ;;
+          esac
+          reaper_controller="$(mktemp)"
+          sed \
+            -e "s|HIVE_IMAGE|$hive_image|g" \
+            "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" \
+            > "$reaper_controller"
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml" \
+            -f "$reaper_controller"
+          rm -f "$reaper_controller"
+          reaper_controller=""
+          kubectl rollout status deployment/hive-reaper-controller \
+            --namespace hive-system \
+            --timeout=10m
+        fi
+        kubectl apply -f "$network_policy"
+        rm -f "$network_policy"
+        network_policy=""
+        restore_hive
+        test "$(kubectl get service hive-neo4j \
+          --namespace hive-data \
+          -o jsonpath='{.spec.type}')" = ClusterIP
+        kubectl get service,pod,pvc --namespace hive-data -o wide
+        REMOTE

@@ -1,0 +1,12 @@
+version: '3'
+
+# manifests infrastructure operations.
+tasks:
+  k0s:manifests:check:
+    desc: Validate Hive isolation and TLS invariants in repository manifests.
+    cmds:
+      - ruby .github/scripts/hive-manifest-contract.rb
+      - python3 .github/scripts/hive-reaper-controller-test.py
+      - python3 .github/scripts/k0s-firewall-rollback-test.py
+      - python3 .github/scripts/k0s-cni-migration-test.py
+      - python3 .github/scripts/services-network-repair-test.py

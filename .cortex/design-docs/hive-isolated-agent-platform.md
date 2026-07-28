@@ -84,9 +84,10 @@ dispatcher and every task worker use `kata-dragonball`. Dragonball is the
 Rust-based VMM built into Kata runtime-rs; it provides the full CRI and
 virtio-fs behavior required by Hive with lower startup and memory overhead than
 QEMU. The authoritative
-version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
-[`infra/Taskfile.yml`](../../infra/Taskfile.yml) and the manifests under
-[`infra/k0s/`](../../infra/k0s/).
+version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
+[`infra/Taskfile.yml`](../../infra/Taskfile.yml) composition root and its
+reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
+under [`infra/k0s/`](../../infra/k0s/).
 
 ## 3. Components and ownership
 
@@ -653,7 +654,8 @@ global ruleset.
 | Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
 | Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
 | Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
-| Infrastructure operations and pins | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
+| Infrastructure command composition | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
+| Infrastructure operations and pins | [`infra/tasks/`](../../infra/tasks/) |
 | k0s, Kata, Neo4j, and Hive manifests | [`infra/k0s/`](../../infra/k0s/) |
 | Main failure handoff | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) |
 | Hive verification workflow | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml) |

@@ -1,0 +1,295 @@
+version: '3'
+
+# kubernetes-tools infrastructure operations.
+tasks:
+  kubernetes:tools:install:
+    desc: Idempotently install pinned standalone kubectl, Helm, and k9s clients.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl_version="{{.KUBECTL_VERSION}}"
+        kubectl_sha="{{.KUBECTL_AMD64_SHA256}}"
+        helm_version="{{.HELM_VERSION}}"
+        helm_sha="{{.HELM_AMD64_SHA256}}"
+        k9s_version="{{.K9S_VERSION}}"
+        k9s_sha="{{.K9S_AMD64_SHA256}}"
+        download_dir="$remote_dir/downloads"
+        extract_dir="$(mktemp -d)"
+        trap 'rm -rf "$extract_dir"' EXIT
+
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "infra Kubernetes tools: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+        test "$(uname -m)" = x86_64
+        install -d -m 0750 "$download_dir"
+
+        kubectl_asset="kubectl-${kubectl_version}-linux-amd64"
+        if ! printf '%s  %s\n' "$kubectl_sha" "$download_dir/$kubectl_asset" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$kubectl_asset.next" \
+            "https://dl.k8s.io/release/$kubectl_version/bin/linux/amd64/kubectl"
+          printf '%s  %s\n' \
+            "$kubectl_sha" \
+            "$download_dir/$kubectl_asset.next" |
+            sha256sum --check
+          mv "$download_dir/$kubectl_asset.next" "$download_dir/$kubectl_asset"
+        fi
+        sudo -n install -m 0755 \
+          "$download_dir/$kubectl_asset" \
+          /usr/local/bin/kubectl
+
+        helm_asset="helm-${helm_version}-linux-amd64.tar.gz"
+        if ! printf '%s  %s\n' "$helm_sha" "$download_dir/$helm_asset" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$helm_asset.next" \
+            "https://get.helm.sh/$helm_asset"
+          printf '%s  %s\n' \
+            "$helm_sha" \
+            "$download_dir/$helm_asset.next" |
+            sha256sum --check
+          mv "$download_dir/$helm_asset.next" "$download_dir/$helm_asset"
+        fi
+        tar -xzf "$download_dir/$helm_asset" -C "$extract_dir"
+        sudo -n install -m 0755 \
+          "$extract_dir/linux-amd64/helm" \
+          /usr/local/bin/helm
+
+        k9s_asset="k9s_Linux_amd64.tar.gz"
+        k9s_archive="k9s-${k9s_version}-Linux-amd64.tar.gz"
+        if ! printf '%s  %s\n' "$k9s_sha" "$download_dir/$k9s_archive" |
+          sha256sum --check --status 2>/dev/null; then
+          curl -fsSL --retry 3 \
+            -o "$download_dir/$k9s_archive.next" \
+            "https://github.com/derailed/k9s/releases/download/$k9s_version/$k9s_asset"
+          printf '%s  %s\n' \
+            "$k9s_sha" \
+            "$download_dir/$k9s_archive.next" |
+            sha256sum --check
+          mv "$download_dir/$k9s_archive.next" "$download_dir/$k9s_archive"
+        fi
+        tar -xzf "$download_dir/$k9s_archive" -C "$extract_dir" k9s
+        sudo -n install -m 0755 \
+          "$extract_dir/k9s" \
+          /usr/local/bin/k9s
+
+        test "$(
+          kubectl version --client=true --output=yaml |
+            awk '/gitVersion:/ { print $2; exit }'
+        )" = "$kubectl_version"
+        test "$(
+          helm version --short |
+            cut -d+ -f1
+        )" = "$helm_version"
+        test "$(
+          k9s version --short |
+            awk '$1 == "Version" { sub(/^v/, "", $2); print $2; exit }'
+        )" = "${k9s_version#v}"
+        kubectl version --client=true
+        helm version --short
+        k9s version --short
+        REMOTE
+
+  kubernetes:access:configure:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        api_server="https://{{.K0S_API_ADDRESS}}:6443"
+        kubeconfig_dir="$HOME/.kube"
+        kubeconfig="$kubeconfig_dir/nook-k0s.yaml"
+        kubeconfig_next="$kubeconfig.next"
+        default_kubeconfig="$kubeconfig_dir/config"
+        credential_helper="/usr/local/libexec/nook-kubectl-credential"
+        install -d -m 0700 "$kubeconfig_dir"
+        trap 'rm -f "$kubeconfig_next"' EXIT
+
+        sudo -n k0s kubectl apply -f - <<'RBAC'
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: nook-operator
+          namespace: kube-system
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: nook-operator
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: cluster-admin
+        subjects:
+          - kind: ServiceAccount
+            name: nook-operator
+            namespace: kube-system
+        RBAC
+
+        sudo -n install -d -m 0755 /usr/local/libexec
+        sudo -n tee "$credential_helper" >/dev/null <<'HELPER'
+        #!/bin/sh
+        set -eu
+        token="$(
+          /usr/local/bin/kubectl \
+            --kubeconfig /var/lib/k0s/pki/admin.conf \
+            --namespace kube-system \
+            create token nook-operator \
+            --duration=15m
+        )"
+        expiration="$(date -u -d '+14 minutes' '+%Y-%m-%dT%H:%M:%SZ')"
+        printf '%s\n' \
+          "{\"apiVersion\":\"client.authentication.k8s.io/v1\",\"kind\":\"ExecCredential\",\"status\":{\"expirationTimestamp\":\"$expiration\",\"token\":\"$token\"}}"
+        HELPER
+        sudo -n chown root:root "$credential_helper"
+        sudo -n chmod 0755 "$credential_helper"
+
+        rm -f "$kubeconfig_next"
+        KUBECONFIG="$kubeconfig_next" kubectl config set-cluster nook-k0s \
+          --server="$api_server" \
+          --certificate-authority=/var/lib/k0s/pki/ca.crt \
+          --embed-certs=true >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config set-credentials nook-operator \
+          --exec-command=sudo \
+          --exec-api-version=client.authentication.k8s.io/v1 \
+          --exec-interactive-mode=Never \
+          --exec-arg=-n \
+          --exec-arg="$credential_helper" >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config set-context nook-k0s \
+          --cluster=nook-k0s \
+          --user=nook-operator >/dev/null
+        KUBECONFIG="$kubeconfig_next" kubectl config use-context nook-k0s >/dev/null
+        test -s "$kubeconfig_next"
+        ! grep -Eq 'client-(certificate|key)-data:' "$kubeconfig_next"
+        mv "$kubeconfig_next" "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+
+        if [ -f "$default_kubeconfig" ] && [ ! -L "$default_kubeconfig" ]; then
+          existing_context="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config current-context 2>/dev/null ||
+              true
+          )"
+          existing_server="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view --minify \
+              --output=jsonpath='{.clusters[0].cluster.server}' 2>/dev/null ||
+              true
+          )"
+          existing_clusters="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .clusters[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          existing_contexts="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .contexts[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          existing_users="$(
+            kubectl --kubeconfig="$default_kubeconfig" \
+              config view \
+              --output=jsonpath='{range .users[*]}{.name}{"\n"}{end}' 2>/dev/null ||
+              true
+          )"
+          if [ "$existing_context" = Default ] &&
+             [ "$existing_server" = "$api_server" ] &&
+             [ "$existing_clusters" = local ] &&
+             [ "$existing_contexts" = Default ] &&
+             [ "$existing_users" = user ] &&
+             grep -q 'client-certificate-data:' "$default_kubeconfig" &&
+             grep -q 'client-key-data:' "$default_kubeconfig"; then
+            rm -f "$default_kubeconfig"
+          else
+            echo "Refusing to replace existing $default_kubeconfig" >&2
+            exit 1
+          fi
+        fi
+        if [ ! -e "$default_kubeconfig" ]; then
+          ln -s "$(basename "$kubeconfig")" "$default_kubeconfig"
+        fi
+        test "$(readlink "$default_kubeconfig")" = "$(basename "$kubeconfig")"
+        kubectl get --raw=/readyz
+        REMOTE
+
+  kubernetes:console:install:
+    desc: Install the pinned Kubernetes console and configure direct SSH access.
+    cmds:
+      - task: kubernetes:tools:install
+      - task: kubernetes:access:configure
+      - task: kubernetes:tools:status
+
+  kubernetes:tools:status:
+    desc: Verify standalone kubectl, Helm, and k9s clients on the Hive host.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        k9s_version="{{.K9S_VERSION}}"
+        test "$(command -v kubectl)" = /usr/local/bin/kubectl
+        test "$(command -v helm)" = /usr/local/bin/helm
+        test "$(command -v k9s)" = /usr/local/bin/k9s
+        test -s "$HOME/.kube/nook-k0s.yaml"
+        test "$(stat -c '%a' "$HOME/.kube/nook-k0s.yaml")" = 600
+        test "$(readlink "$HOME/.kube/config")" = nook-k0s.yaml
+        ! grep -Eq 'client-(certificate|key)-data:' "$HOME/.kube/nook-k0s.yaml"
+        grep -q 'command: sudo' "$HOME/.kube/nook-k0s.yaml"
+        grep -q '/usr/local/libexec/nook-kubectl-credential' "$HOME/.kube/nook-k0s.yaml"
+        sudo -n test "$(stat -c '%U:%G:%a' /usr/local/libexec/nook-kubectl-credential)" = root:root:755
+        test "$(
+          kubectl version --client=true --output=yaml |
+            awk '/gitVersion:/ { print $2; exit }'
+        )" = "{{.KUBECTL_VERSION}}"
+        test "$(
+          helm version --short |
+            cut -d+ -f1
+        )" = "{{.HELM_VERSION}}"
+        test "$(
+          k9s version --short |
+            awk '$1 == "Version" { sub(/^v/, "", $2); print $2; exit }'
+        )" = "${k9s_version#v}"
+        kubectl get --raw=/readyz
+        kubectl version --client=true
+        helm version --short
+        k9s version --short
+        REMOTE
+
+  kvm:verify:
+    desc: Verify the Hive host, nested virtualization, KVM modules, and firewall.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        . /etc/os-release
+        test "$ID" = debian
+        test "$VERSION_ID" = 13
+        test "$(uname -m)" = x86_64
+        test -c /dev/kvm
+        grep -Eq "(vmx|svm)" /proc/cpuinfo
+        sudo -n modprobe vhost_vsock
+        sudo -n modprobe vhost_net
+        test -c /dev/vhost-vsock
+        sudo -n test -r /dev/kvm
+        sudo -n nft list chain inet bynull_filter input |
+          grep -E "policy drop" >/dev/null
+        sudo -n nft list chain inet bynull_filter forward |
+          grep -E "policy drop" >/dev/null
+        printf 'KVM available: '
+        ls -l /dev/kvm
+        printf 'Virtualization flags: '
+        grep -Eo "(vmx|svm)" /proc/cpuinfo | sort -u | tr "\n" " "
+        printf '\n'
+        REMOTE

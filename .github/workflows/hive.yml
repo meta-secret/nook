@@ -16,6 +16,7 @@ on:
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
+      - infra/tasks/**
       - infra/Taskfile.yml
   push:
     branches: [main]
@@ -29,6 +30,7 @@ on:
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/k0s/**
+      - infra/tasks/**
       - infra/Taskfile.yml
 
 permissions:

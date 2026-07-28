@@ -262,7 +262,11 @@ Prerequisites:
 - [Task](https://taskfile.dev/)
 
 The root `Taskfile.yml` is the repository entrypoint. Compile, test, and
-package installs run inside the project container.
+package installs run inside the project container. Infrastructure commands use
+[`infra/Taskfile.yml`](infra/Taskfile.yml) as their composition root and flatten
+domain-owned modules from [`infra/tasks/`](infra/tasks/) into the public
+`infra:*` command surface; standalone infrastructure shell scripts and orphan
+domain Taskfiles are prohibited.
 
 ```sh
 task web:dev

@@ -15,6 +15,20 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn infra_taskfile_graph() -> String {
+    let root = read("infra/Taskfile.yml");
+    let mut graph = root.clone();
+    for line in root.lines() {
+        let Some(relative_path) = line.trim().strip_prefix("taskfile: ") else {
+            continue;
+        };
+        if relative_path.starts_with("tasks/") {
+            graph.push_str(&read(&format!("infra/{relative_path}")));
+        }
+    }
+    graph
+}
+
 fn assert_no_shell_scripts(path: &Path) {
     for entry in fs::read_dir(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
@@ -34,7 +48,7 @@ fn assert_no_shell_scripts(path: &Path) {
                     .extension()
                     .and_then(|extension| extension.to_str()),
                 Some("sh"),
-                "infrastructure shell belongs inline in infra/Taskfile.yml, not {}",
+                "infrastructure shell belongs inline in its owning infra Taskfile domain, not {}",
                 entry_path.display()
             );
         }
@@ -88,6 +102,46 @@ fn assert_remote_compose_contract() {
 
     let root_tasks = read("Taskfile.yml");
     assert!(root_tasks.contains("taskfile: infra/Taskfile.yml"));
+    let infra_root = read("infra/Taskfile.yml");
+    let expected_domains = [
+        "manifests",
+        "mesh",
+        "host-services",
+        "kubernetes-tools",
+        "k0s",
+        "kata",
+        "neo4j",
+        "hive",
+        "operations",
+    ];
+    for domain in expected_domains {
+        let include = format!(
+            "  {domain}:\n    taskfile: tasks/{domain}.yml\n    dir: ..\n    flatten: true"
+        );
+        assert!(
+            infra_root.contains(&include),
+            "infra Taskfile must flatten the {domain} operational domain"
+        );
+    }
+    let mut actual_domain_taskfiles = fs::read_dir(repository_root().join("infra/tasks"))
+        .expect("infra/tasks must be readable")
+        .map(|entry| {
+            entry
+                .expect("infra/tasks entries must be readable")
+                .file_name()
+                .into_string()
+                .expect("infra taskfile names must be UTF-8")
+        })
+        .collect::<Vec<_>>();
+    actual_domain_taskfiles.sort();
+    let mut expected_domain_taskfiles = expected_domains
+        .map(|domain| format!("{domain}.yml"))
+        .to_vec();
+    expected_domain_taskfiles.sort();
+    assert_eq!(
+        actual_domain_taskfiles, expected_domain_taskfiles,
+        "every infra/tasks/*.yml domain must be reachable from the composition root"
+    );
 
     assert_no_shell_scripts(&repository_root().join("infra"));
 
@@ -125,18 +179,21 @@ fn assert_remote_compose_contract() {
 }
 
 fn assert_infrastructure_deploy_contract() {
-    let infra_tasks = read("infra/Taskfile.yml");
+    let infra_root = read("infra/Taskfile.yml");
+    let infra_tasks = infra_taskfile_graph();
+    let host_services = read("infra/tasks/host-services.yml");
+    let operations = read("infra/tasks/operations.yml");
     assert!(
-        infra_tasks.contains(
+        infra_root.contains(
             "INFRA_SSH_TARGET: '{{default \"debian@ssh-ovh-borg-1.bynull.link\" .INFRA_SSH_TARGET}}'"
         ),
         "infrastructure deployment must target the OVH borg-1 Debian account by default"
     );
-    let deploy = infra_tasks
+    let deploy = host_services
         .split("\n  deploy:\n")
         .nth(1)
-        .and_then(|tail| tail.split("\n  status:\n").next())
-        .expect("infra:deploy must be defined inline in infra/Taskfile.yml");
+        .and_then(|tail| tail.split("\n  k0s:sync:\n").next())
+        .expect("infra:deploy must be defined in the host-services Taskfile domain");
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
         "ssh -n -o BatchMode=yes",
@@ -161,7 +218,7 @@ fn assert_infrastructure_deploy_contract() {
     assert!(!infra_tasks.contains("--env REDISCLI_AUTH"));
     assert!(!deploy.contains("cloudflare"));
 
-    let sync = infra_tasks
+    let sync = operations
         .split("\n  redis:credential:sync:\n")
         .nth(1)
         .expect("infra must provide local Redis credential synchronization");
@@ -173,12 +230,12 @@ fn assert_infrastructure_deploy_contract() {
 }
 
 fn assert_mesh_node_contract() {
-    let infra_tasks = read("infra/Taskfile.yml");
-    let mesh_add = infra_tasks
+    let mesh_tasks = read("infra/tasks/mesh.yml");
+    let mesh_add = mesh_tasks
         .split("\n  mesh:node:add:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  mesh:status:\n").next())
-        .expect("infra:mesh:node:add must be defined inline in infra/Taskfile.yml");
+        .expect("infra:mesh:node:add must be defined in the mesh Taskfile domain");
     for required in [
         "silent: true",
         "ssh -n -o BatchMode=yes",
