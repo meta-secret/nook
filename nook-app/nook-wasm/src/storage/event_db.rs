@@ -9,7 +9,6 @@ const EVENT_LOG_ACTIVE: &str = "event_log";
 const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
-const STORE_PROVIDER_RECEIPTS: &str = "provider_receipts";
 const STORE_OUTBOX: &str = "outbox";
 
 fn event_key(store_id: &str, event_id: &str) -> String {

@@ -31,9 +31,9 @@ thread_local! {
 }
 
 pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> {
-    if let Some(connection) = NOOK_DATABASE_CONNECTIONS.with(|connections| {
-        connections.borrow().first().cloned()
-    }) {
+    if let Some(connection) =
+        NOOK_DATABASE_CONNECTIONS.with(|connections| connections.borrow().first().cloned())
+    {
         return Ok(connection);
     }
 
@@ -47,9 +47,7 @@ pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> 
             .add_object_store(rexie::ObjectStore::new("outbox"))
             .build()
             .await
-            .map_err(|error| {
-                NookError::IndexedDb(format!("IndexedDB build error: {error:?}"))
-            })?,
+            .map_err(|error| NookError::IndexedDb(format!("IndexedDB build error: {error:?}")))?,
     );
     let connection = NOOK_DATABASE_CONNECTIONS.with(|connections| {
         let mut connections = connections.borrow_mut();
