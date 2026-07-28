@@ -97,6 +97,7 @@ export type ObservedTask = {
   latest_attempt_status: string;
   latest_attempt_started_at: number;
   latest_attempt_completed_at: number;
+  latest_activity_at: number;
   latest_error: string;
   latest_summary: string;
   dependencies: ObservedDependency[];

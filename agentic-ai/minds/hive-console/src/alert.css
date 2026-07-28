@@ -43,7 +43,7 @@
 }
 
 .alert-copy span {
-  color: var(--attention);
+  color: var(--attention-foreground);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;

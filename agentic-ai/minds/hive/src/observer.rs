@@ -106,6 +106,7 @@ pub struct ObservedTask {
     pub latest_attempt_status: String,
     pub latest_attempt_started_at: i64,
     pub latest_attempt_completed_at: i64,
+    pub latest_activity_at: i64,
     pub latest_error: String,
     pub latest_summary: String,
     #[serde(skip)]
@@ -597,20 +598,31 @@ impl Neo4jTaskStore {
             .execute(
                 query(
                     "MATCH (task:Task)
-                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
-                        OR ($attention_only = true AND (
-                          task.status IN ['FAILED', 'BLOCKED']
-                          OR (
-                            task.status IN ['RUNNING', 'CANCELLING']
-                            AND coalesce(task.updated_at, task.created_at, 0)
-                              < timestamp() - $attention_age
-                          )
-                        ))
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                      WITH task, attempt, agent
                      ORDER BY attempt.started_at DESC
                      WITH task, collect({attempt: attempt, agent: agent})[0] AS latest
+                     OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
+                     WITH task, latest, max(activity.created_at) AS latest_activity_at
+                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
+                        OR ($attention_only = true AND (
+                          task.status IN ['FAILED', 'BLOCKED']
+                          OR (
+                            task.status = 'RUNNING'
+                            AND coalesce(
+                              latest_activity_at,
+                              latest.attempt.started_at,
+                              task.created_at,
+                              0
+                            ) < timestamp() - $attention_age
+                          )
+                          OR (
+                            task.status = 'CANCELLING'
+                            AND coalesce(task.updated_at, task.created_at, 0)
+                              < timestamp() - $attention_age
+                          )
+                        ))
                      RETURN task.id AS id,
                             coalesce(task.kind, '') AS kind,
                             coalesce(task.trigger_kind, 'legacy-unknown') AS trigger_kind,
@@ -627,6 +639,7 @@ impl Neo4jTaskStore {
                             coalesce(latest.attempt.status, '') AS latest_attempt_status,
                             coalesce(latest.attempt.started_at, 0) AS latest_attempt_started_at,
                             coalesce(latest.attempt.completed_at, 0) AS latest_attempt_completed_at,
+                            coalesce(latest_activity_at, 0) AS latest_activity_at,
                             substring(replace(coalesce(
                               latest.attempt.error,
                               task.failure_reason,
@@ -637,6 +650,7 @@ impl Neo4jTaskStore {
                             substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
                               AS latest_summary,
                             coalesce(task.blocked_reason, '') STARTS WITH 'dependency '
+                              OR coalesce(task.blocked_reason, '') STARTS WITH 'upstream dependency '
                               AS dependency_failure
                      ORDER BY
                        CASE WHEN $attention_only = true THEN
@@ -658,6 +672,16 @@ impl Neo4jTaskStore {
                        CASE WHEN task.status = 'READY' THEN task.priority ELSE 0 END DESC,
                        CASE WHEN task.status = 'READY' THEN task.created_at ELSE 0 END ASC,
                        CASE WHEN task.status = 'READY' THEN task.id ELSE '' END ASC,
+                       CASE
+                         WHEN $attention_only = true AND task.status = 'FAILED'
+                           THEN coalesce(latest.attempt.completed_at, task.updated_at, task.created_at, 0)
+                         WHEN $attention_only = true AND task.status = 'RUNNING'
+                           THEN coalesce(latest_activity_at, latest.attempt.started_at, task.created_at, 0)
+                             + $attention_age
+                         WHEN $attention_only = true
+                           THEN coalesce(task.updated_at, task.created_at, 0)
+                         ELSE 0
+                       END ASC,
                        updated_at DESC,
                        created_at DESC
                      LIMIT $limit",
@@ -689,6 +713,7 @@ impl Neo4jTaskStore {
                 latest_attempt_status: row.get("latest_attempt_status")?,
                 latest_attempt_started_at: row.get("latest_attempt_started_at")?,
                 latest_attempt_completed_at: row.get("latest_attempt_completed_at")?,
+                latest_activity_at: row.get("latest_activity_at")?,
                 latest_error: row.get("latest_error")?,
                 latest_summary: row.get("latest_summary")?,
                 dependency_failure: row.get("dependency_failure")?,
@@ -860,10 +885,20 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
                         "Task is waiting for a dependency"
                     },
                 ),
-                "RUNNING" if now - task.updated_at > STALE_ACTIVITY_MS => (
+                "RUNNING"
+                    if now
+                        - task
+                            .latest_activity_at
+                            .max(task.latest_attempt_started_at)
+                            .max(task.created_at)
+                        > STALE_ACTIVITY_MS =>
+                (
                     AlertKind::ActivityStale,
                     AlertSeverity::Warning,
-                    task.updated_at + STALE_ACTIVITY_MS,
+                    task.latest_activity_at
+                        .max(task.latest_attempt_started_at)
+                        .max(task.created_at)
+                        + STALE_ACTIVITY_MS,
                     if russian {
                         "Агент давно не записывал действий"
                     } else {
@@ -967,7 +1002,7 @@ fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
 mod tests {
     use super::{
         AlertKind, AlertSeverity, ObservedTask, ObserverCopy, ObserverRequest, derive_alerts,
-        localized_activity, localized_task_kind,
+        localized_activity, localized_task_kind, STALE_ACTIVITY_MS,
     };
 
     #[test]
@@ -1019,7 +1054,9 @@ mod tests {
         failed.latest_attempt_completed_at = now - 8_000;
         failed.latest_attempt_started_at = now - 12_000;
         let blocked = observed_task("blocked", "BLOCKED", now - 20_000);
-        let stale = observed_task("stale", "RUNNING", now - 6 * 60_000);
+        let mut stale = observed_task("stale", "RUNNING", now - 30_000);
+        stale.latest_attempt_started_at = now - 7 * 60_000;
+        stale.latest_activity_at = now - 6 * 60_000;
         let cancelling = observed_task("cancelling", "CANCELLING", now - 6 * 60_000);
         let healthy = observed_task("healthy", "RUNNING", now - 30_000);
 
@@ -1033,6 +1070,10 @@ mod tests {
         assert_eq!(alerts[0].severity, AlertSeverity::Critical);
         assert_eq!(alerts[1].task_id, "cancelling");
         assert_eq!(alerts[2].task_id, "stale");
+        assert_eq!(
+            alerts[2].first_observed_at,
+            now - 6 * 60_000 + STALE_ACTIVITY_MS
+        );
         assert_eq!(alerts[3].task_id, "blocked");
 
         failed.status = "COMPLETED".to_owned();
@@ -1089,6 +1130,7 @@ mod tests {
             latest_attempt_status: status.to_owned(),
             latest_attempt_started_at: 0,
             latest_attempt_completed_at: 0,
+            latest_activity_at: 0,
             latest_error: String::new(),
             latest_summary: String::new(),
             dependency_failure: false,

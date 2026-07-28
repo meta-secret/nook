@@ -556,11 +556,12 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   relativeTime: (timestamp: number) => string,
   onselect: () => void,
 )}
+  {@const observedAge = relativeTime(alert.first_observed_at)}
   <button
     class:active
     class:critical={alert.severity === 'critical'}
     class="alert-row"
-    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${task.id}`}
+    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${task.id} ${observedAge}`}
     onclick={onselect}
   >
     <span class="alert-mark" aria-hidden="true"
@@ -576,7 +577,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <p>{alert.reason}</p>
       <code title={task.id}>{compactId(task.id, 32)}</code>
     </div>
-    <time>{relativeTime(alert.first_observed_at)}</time>
+    <time>{observedAge}</time>
   </button>
 {/snippet}
 

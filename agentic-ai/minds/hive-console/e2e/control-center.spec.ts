@@ -105,6 +105,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'RUNNING',
       latest_attempt_started_at: now - 12 * 60_000,
       latest_attempt_completed_at: 0,
+      latest_activity_at: now - 18_000,
       latest_error: '',
       latest_summary: '',
       dependencies: [
@@ -161,6 +162,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'FAILED',
       latest_attempt_started_at: now - 20 * 60_000,
       latest_attempt_completed_at: now - 9 * 60_000,
+      latest_activity_at: now - 9 * 60_000,
       latest_error: 'Verification failed after the final permitted attempt.',
       latest_summary: '',
       dependencies: [],
@@ -194,6 +196,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'COMPLETED',
       latest_attempt_started_at: now - 3 * 60 * 60_000,
       latest_attempt_completed_at: now - 2 * 60 * 60_000,
+      latest_activity_at: 0,
       latest_error: '',
       latest_summary: 'Documentation synchronized and validated.',
       dependencies: [],
