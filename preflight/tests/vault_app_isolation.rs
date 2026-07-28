@@ -1291,6 +1291,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "name: Native Rust verification",
         "name: WASM verification and artifact",
         "name: Verify and preview",
+        "name: Rust coverage report",
         "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
@@ -1317,10 +1318,12 @@ fn assert_pr_workflow_contract(root: &Path) {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
-        "ARTIFACT_NAME: pr-rust-${{ github.run_id }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
-        "Native Rust verification completed with $native_conclusion",
         "attempt $attempt/900",
+        "needs: rust",
+        "name: pr-rust-${{ github.run_id }}",
+        "path: coverage/current",
+        ".github/scripts/base-coverage-artifact.cjs",
         "coverage/current/tools/nook-preflight coverage-inputs",
         "--repository \"$GITHUB_WORKSPACE\"",
         "--base \"$BASE_SHA\"",
@@ -1328,10 +1331,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "--github-output \"$GITHUB_OUTPUT\"",
         "coverage/current/tools/nook-preflight validate-coverage-artifact",
         "coverage/current/tools/nook-preflight coverage-report",
-        "if [ ! -f \"../nook-base-coverage/nook-app/nook-replication/Cargo.toml\" ]; then",
-        "cp -R nook-app/nook-replication",
-        "if [ ! -f \"../nook-base-coverage/nook-app/nook-event-log/Cargo.toml\" ]; then",
-        "cp -R nook-app/nook-event-log",
+        "Exact base coverage is unavailable; enforcing current absolute coverage floors",
     ] {
         assert!(
             pr.contains(required),
@@ -1424,7 +1424,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         1,
         "PR CI must not duplicate the verified WASM producer"
     );
-    let verify_job = section(&pr, "  verify:\n", "  full-e2e:\n");
+    let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
     assert!(
         verify_job.contains("if: github.event.action != 'closed'")
             && !verify_job.contains("needs: wasm")
@@ -1448,6 +1448,18 @@ fn assert_pr_workflow_contract(root: &Path) {
             "NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/",
         ),
         "PR preview must prepare in parallel, surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
+    );
+    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
+    assert!(
+        coverage_job.contains("needs: rust")
+            && coverage_job.contains("actions/download-artifact@v8")
+            && coverage_job.contains("name: pr-rust-${{ github.run_id }}")
+            && coverage_job.contains("path: coverage/current")
+            && coverage_job.contains("findBaseCoverageArtifact")
+            && coverage_job.contains("coverage/current/tools/nook-preflight coverage-report")
+            && !coverage_job.contains("task docker:coverage:export")
+            && !coverage_job.contains("Waiting for native coverage artifact"),
+        "coverage reporting must consume the completed native artifact directly without blocking preview or rebuilding the base revision"
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
     assert!(
@@ -1556,22 +1568,15 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
             && !e2e_only.contains("_ci:main:build"),
         "artifact-backed web e2e must not repeat verification or compete with extension e2e"
     );
-    let rust_handoff = section(
-        &pr,
-        "      - name: Download Rust coverage handoff\n",
-        "      - name: Deploy and verify Pages previews\n",
-    );
-    let artifact_lookup = rust_handoff
-        .find("actions/runs/$GITHUB_RUN_ID/artifacts")
-        .expect("PR verification must inspect the Rust handoff artifact");
-    let native_job_lookup = rust_handoff
-        .find("native_job=\"$(")
-        .expect("PR verification must inspect the current native job when no artifact exists");
+    let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
+    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
     assert!(
-        native_job_lookup < artifact_lookup
-            && rust_handoff.contains("[ -z \"$native_job_id\" ]")
-            && rust_handoff.contains("This failed-job rerun has no native producer"),
-        "PR verification must prefer a current producer and fall back only when a failed-job rerun omits it"
+        !verify_job.contains("Download Rust coverage handoff")
+            && !verify_job.contains("Waiting for native coverage artifact")
+            && coverage_job.contains("needs: rust")
+            && coverage_job.contains("actions/download-artifact@v8")
+            && coverage_job.contains("name: pr-rust-${{ github.run_id }}"),
+        "Rust coverage must use a native-dependent artifact consumer instead of occupying the preview runner"
     );
     let wasm_handoff = section(
         &pr,
