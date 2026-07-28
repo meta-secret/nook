@@ -426,8 +426,9 @@ under a run-stable artifact name, and then continues with required Node tests.
 `Verify and preview` can begin browser-free web validation from that built handoff
 while Node tests run, but it must observe a successful producer before deploying.
 Optional web and extension e2e consumers retain `needs: wasm` and therefore receive
-only a fully verified handoff. Preview then downloads native coverage after its web
-build for reporting instead of compiling Rust.
+only a fully verified handoff. A separate `Rust coverage report` job declares
+`needs: rust`, downloads the native handoff directly, and performs reporting
+without occupying or delaying the preview runner.
 On a rerun, each consumer first checks for its producer in the current attempt
 and waits when present. A failed-job rerun that omits an already-successful
 producer may reuse the existing exact-head run artifact, but a built artifact from
@@ -437,7 +438,9 @@ current producer and a matching successful attempt fails immediately instead of
 polling for a job GitHub did not reschedule. GitHub job and artifact polling uses
 a ten-second interval so a cold build remains below the `GITHUB_TOKEN` REST budget.
 Do not serialize the **PR** producers or move Rust coverage into preview: a cold
-Rust cache must not dominate the PR web critical path. Main deliberately
+Rust cache must not dominate the PR web critical path. Coverage reporting must
+depend on the native producer instead of polling it from an already-running
+preview job. Main deliberately
 serializes its native, WASM, and web publisher lanes because they write the
 shared default-branch scopes; each lane verifies read-only first and exports
 from the same warm builder afterward. `task docker:extract:coverage`
@@ -449,15 +452,17 @@ coverage artifact. `task setup` gets those files into the slim web image through
 the same temporary host artifact directory as generated WASM; it does not copy
 them directly from the multi-GB Rust builder snapshot.
 
-After a successful main gate, `main.yml` uploads those four files plus a manifest
-as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
-downloads and validates the artifact for its exact base SHA instead of rebuilding
-the base app image. If the artifact is missing or invalid, the PR runs
-`task docker:coverage:export` against the base source; that Bake target stops at
-`builder-debug` and exports only the coverage payload, never the WASM/web stages or
-the multi-GB app image. PRs without Rust/Cargo/source changes—including changes
-only to coverage build/export plumbing—reuse the floor-validated current coverage
-as the base comparison because the measured source is unchanged.
+After Main's native lane succeeds, `main.yml` uploads those four files plus a
+manifest as `nook-core-auth-coverage-<commit SHA>`. PR lookup trusts that
+commit-keyed artifact as soon as it exists, even while later Main jobs are still
+running or after an unrelated later job fails; it authenticates the workflow,
+push event, default branch, and exact SHA before use. A PR with changed Rust
+coverage inputs downloads and validates that artifact instead of rebuilding the
+base app image. If the artifact is missing or invalid, the report reuses the
+floor-validated current coverage as its comparison and emits a warning; it
+never launches a second cold Docker coverage build. PRs without
+Rust/Cargo/source changes—including changes only to coverage reporting
+plumbing—also reuse current coverage because the measured source is unchanged.
 Coverage input detection compares the merge-base diff between the pull request
 event's explicit base and head SHAs. It must not compare the base to the
 checked-out synthetic merge, because Main can advance after the event snapshot;
@@ -475,15 +480,17 @@ one runner and WASM to another. The small generated WASM package feeds parallel
 browser-free preview validation as soon as clippy/build finishes; required Node
 tests continue on the producer, and preview deployment is blocked until that
 producer succeeds. Optional browser-e2e consumers wait for the fully verified
-producer. Native Rust separately uploads the coverage handoff downloaded after
-the web build for reporting. The preview job runs without browser e2e, deploys the Cloudflare previews, and
+producer. Native Rust separately uploads the coverage handoff consumed by the
+small Rust-dependent reporting job. The preview job never waits for native
+coverage; it runs without browser e2e, deploys the Cloudflare previews, and
 records a successful `github-pages` deployment status for the PR head SHA. A
 `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs. The preview deploy reuses that prepared sealed image and
-must not declare another `setup` dependency. PR coverage always checks the current
-portable Rust artifact against the floor; changed Rust/Cargo/source
-inputs reuse the exact base commit's main artifact (with a coverage-only build
-fallback), while unchanged source reuses the current artifact as the base
-comparison. Use remote CI as the **sole PR product validation gate**.
+must not declare another `setup` dependency. PR coverage always checks the
+current portable Rust artifact against the floor; changed Rust/Cargo/source
+inputs reuse the exact base commit's trusted Main artifact when available,
+while missing or unchanged base coverage reuses the current artifact for
+comparison without another Docker solve. Use remote CI as the **sole PR product
+validation gate**.
 
 Agents wait only for the applicable repository-owned PR checks (`PR / Verify and
 preview`, plus `Web research / Build and deploy research catalog` when its paths

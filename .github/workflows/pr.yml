@@ -366,8 +366,6 @@ jobs:
           echo "::error::Current-attempt WASM artifact was not published within 30 minutes"
           exit 1
 
-      # Coverage reporting consumes the native job's small artifact later and never blocks the web
-      # build on Rust completion. Browser e2e consumes this same verified WASM package in parallel.
       - name: Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: |
           set -euo pipefail
@@ -462,57 +460,6 @@ jobs:
                 body,
               })
             }
-
-      - name: Download Rust coverage handoff
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: pr-rust-${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 900); do
-            native_job="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
-                --jq '[.jobs[] | select(.name == "Native Rust verification")] | first // {}'
-            )"
-            native_job_id="$(jq -r '.id // empty' <<< "$native_job")"
-            native_status="$(jq -r '.status // "queued"' <<< "$native_job")"
-            native_conclusion="$(jq -r '.conclusion // ""' <<< "$native_job")"
-            if [ -n "$native_job_id" ] \
-              && [ "$native_status" = "completed" ] \
-              && [ "$native_conclusion" != "success" ]; then
-              echo "::error::Native Rust verification completed with $native_conclusion"
-              exit 1
-            fi
-
-            # Preserve current-attempt ordering when the producer is scheduled. If GitHub omits it
-            # from a failed-job rerun, fall back to the prior successful exact-head artifact.
-            if [ -z "$native_job_id" ] \
-              || { [ "$native_status" = "completed" ] && [ "$native_conclusion" = "success" ]; }; then
-              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-                --paginate \
-                --jq '.artifacts[].name' \
-                | grep -Fxq "$ARTIFACT_NAME"; then
-                rm -rf coverage/current
-                mkdir -p coverage/current
-                gh run download "$GITHUB_RUN_ID" \
-                  --name "$ARTIFACT_NAME" \
-                  --dir coverage/current
-                test -s coverage/current/summary.json
-                chmod +x coverage/current/tools/nook-preflight
-                test -x coverage/current/tools/nook-preflight
-                exit 0
-              fi
-              if [ -z "$native_job_id" ]; then
-                echo "::error::This failed-job rerun has no native producer and the run-stable artifact is unavailable"
-                exit 1
-              fi
-            fi
-
-            echo "Waiting for native coverage artifact (attempt $attempt/900; native=$native_status${native_conclusion:+/$native_conclusion})"
-            sleep 2
-          done
-          echo "::error::Native Rust coverage artifact was not published within 30 minutes"
-          exit 1
 
       - name: Require WASM producer success before preview
         env:
@@ -830,6 +777,35 @@ jobs:
               auto_inactive: false,
             })
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  coverage:
+    name: Rust coverage report
+    if: github.event.action != 'closed'
+    needs: rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Test base coverage artifact resolver
+        run: node --test .github/scripts/base-coverage-artifact.test.cjs
+
+      - name: Download Rust coverage handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-rust-${{ github.run_id }}
+          path: coverage/current
+
+      - name: Validate Rust coverage handoff
+        run: |
+          set -euo pipefail
+          test -s coverage/current/summary.json
+          chmod +x coverage/current/tools/nook-preflight
+          test -x coverage/current/tools/nook-preflight
+
       - name: Detect nook-core/auth coverage input changes
         id: coverage-inputs
         env:
@@ -854,23 +830,21 @@ jobs:
         with:
           retries: 3
           script: |
-            const { data } = await github.rest.actions.listWorkflowRuns({
+            const {
+              findBaseCoverageArtifact,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/base-coverage-artifact.cjs`)
+            const artifact = await findBaseCoverageArtifact({
+              github,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'main.yml',
-              head_sha: process.env.BASE_SHA,
-              event: 'push',
-              status: 'success',
-              per_page: 100,
+              baseSha: process.env.BASE_SHA,
+              defaultBranch: context.payload.repository.default_branch,
             })
-            const run = data.workflow_runs.find((candidate) =>
-              candidate.head_sha === process.env.BASE_SHA && candidate.conclusion === 'success'
-            )
-            if (run) {
-              core.info(`Using base coverage from Main run ${run.id}`)
-              core.setOutput('run-id', String(run.id))
+            if (artifact) {
+              core.info(`Using base coverage artifact ${artifact.artifactId} from Main run ${artifact.runId}`)
+              core.setOutput('run-id', String(artifact.runId))
             } else {
-              core.warning(`No successful Main run found for base ${process.env.BASE_SHA}`)
+              core.warning(`No trusted base coverage artifact found for ${process.env.BASE_SHA}`)
               core.setOutput('run-id', '')
             }
 
@@ -900,62 +874,16 @@ jobs:
             --commit "$BASE_SHA" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Export base nook-core/auth coverage fallback
-        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      - name: Reuse current coverage when the exact base artifact is unavailable
+        if: >-
+          steps.coverage-inputs.outputs.base_coverage_required == 'true' &&
+          steps.base-coverage-artifact.outputs.valid != 'true'
         run: |
           set -euo pipefail
-          if [ "${{ steps.base-coverage-artifact.outputs.valid }}" = "true" ]; then
-            exit 0
-          fi
           rm -rf coverage/base
-          git worktree prune
-          rm -rf ../nook-base-coverage
-          git worktree add --detach ../nook-base-coverage "$BASE_SHA"
-          cleanup() {
-            git worktree remove --force ../nook-base-coverage >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-          # Use this branch's already-verified coverage export plumbing with the base source. Copy
-          # the Bake graph as one unit: package targets reference cache variables and split bases
-          # declared by the root files, so mixing new package HCL with the old combined graph fails
-          # before BuildKit can reach the coverage target. Rust source remains at BASE_SHA.
-          for file in \
-            nook-app/docker-bake.hcl \
-            nook-app/docker/base.docker-bake.hcl \
-            nook-app/docker/base.Dockerfile \
-            nook-app/docker/sccache-report.sh \
-            nook-app/nook-core/Dockerfile \
-            nook-app/nook-core/docker-bake.hcl \
-            nook-app/nook-wasm/docker-bake.hcl \
-            nook-app/docker/toolchain.docker-bake.hcl \
-            nook-app/nook-web/nook-web-app/docker-bake.hcl; do
-            cp "$file" "../nook-base-coverage/$file"
-          done
-          # When a PR introduces a new portable workspace crate, the current
-          # coverage Dockerfile cannot resolve against a base checkout that
-          # predates that crate. Hold the new crate and dependency-only
-          # manifests constant while leaving the base nook-core Rust source at
-          # BASE_SHA, so the fallback remains buildable without inventing a
-          # historical coverage artifact.
-          if [ ! -f "../nook-base-coverage/nook-app/nook-replication/Cargo.toml" ]; then
-            cp nook-app/Cargo.toml "../nook-base-coverage/nook-app/Cargo.toml"
-            cp nook-app/Cargo.lock "../nook-base-coverage/nook-app/Cargo.lock"
-            cp -R nook-app/nook-replication \
-              "../nook-base-coverage/nook-app/nook-replication"
-          fi
-          if [ ! -f "../nook-base-coverage/nook-app/nook-event-log/Cargo.toml" ]; then
-            cp nook-app/Cargo.toml "../nook-base-coverage/nook-app/Cargo.toml"
-            cp nook-app/Cargo.lock "../nook-base-coverage/nook-app/Cargo.lock"
-            cp -R nook-app/nook-event-log \
-              "../nook-base-coverage/nook-app/nook-event-log"
-          fi
-          base_coverage_out="$PWD/coverage/base"
-          task docker:coverage:export \
-            REPO_ROOT="$PWD/../nook-base-coverage" \
-            COVERAGE_OUT_DIR="$base_coverage_out" \
-            WASM_BUILD_MODE=dev
+          mkdir -p coverage/base
+          cp -a coverage/current/. coverage/base/
+          echo "::warning::Exact base coverage is unavailable; enforcing current absolute coverage floors without rebuilding the base revision."
 
       - name: Reuse current coverage as base
         if: steps.coverage-inputs.outputs.base_coverage_required == 'false'

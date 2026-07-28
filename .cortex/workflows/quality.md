@@ -66,15 +66,18 @@ Use this workflow for quality, CI, and deployment changes.
     Rust coverage artifacts locally (`summary.txt`, `summary.json`,
     `lcov.info`, and `coverage-floor.json`). PR CI uploads those files plus the
     stripped Linux `nook-preflight` reporter directly from the native Rust
-    runner. `Verify and preview` downloads them after its artifact-backed web
-    build, builds the base branch coverage target only when comparison fallback
-    is required, and asks `nook-preflight` to classify changed coverage inputs,
-    validate the commit-keyed base artifact, parse cargo-llvm-cov's structured
-    JSON, write typed GitHub outputs, and render the Markdown summary. The
-    workflow uploads both reports as `nook-core-coverage` and posts a sticky PR
-    comment. Human-readable coverage tables must not be scraped with shell. The
-    Docker build remains the enforcement point for the 90% floor and the only
-    place PR/base coverage tests run.
+    runner. The Rust-dependent `Rust coverage report` job downloads them
+    directly without occupying the independent preview runner. It asks
+    `nook-preflight` to classify changed coverage inputs, validates a trusted
+    commit-keyed Main artifact when available, parses cargo-llvm-cov's
+    structured JSON, writes typed GitHub outputs, and renders the Markdown
+    summary. A missing exact-base artifact reuses current coverage for the
+    comparison while preserving the absolute floor; PR CI must not cold-build
+    the base revision a second time. The workflow uploads both reports as
+    `nook-core-coverage` and posts a sticky PR comment. Human-readable coverage
+    tables must not be scraped with shell. The native Docker build remains the
+    enforcement point for the 90% floor and the only place PR coverage tests
+    run.
 20. **Coverage cache preservation:** Warm the `nook-auth2 +
     nook-replication + nook-event-log + nook-core` coverage dependency graph with one
     `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent
