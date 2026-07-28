@@ -91,7 +91,7 @@ mod tests {
     use super::TaskStore;
     use crate::model::{
         AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-        EnqueueTask, LeaseToken, TaskId,
+        EnqueueTask, LeaseToken, TaskActivity, TaskId,
     };
 
     #[derive(Debug, Clone)]
