@@ -6,7 +6,6 @@ import {
   isoTimestamp,
   VaultAccessStatus,
   type JoinRequest,
-  type NookSecretRecord,
   type NookVaultSyncResult,
   type VaultMember,
 } from "$lib/nook";
@@ -17,7 +16,6 @@ import {
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   readLocalVaultYaml,
-  RemoteVaultRecoveryState,
   UnauthenticatedSyncDecision,
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
   VaultSyncConflictKind,
@@ -30,6 +28,8 @@ import {
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import { intoWasmStringValue } from "$lib/wasm-string-value";
+
+export * from "$lib/vault/sync-resolution";
 
 const log = createLogger("vault-sync");
 
@@ -359,33 +359,6 @@ export async function updateProviderSyncMetadata(
   ).providers;
   await state.persistProviders();
   state.lastSyncedAt = new SvelteDate();
-}
-
-export async function resolveReplacementConflict(
-  state: SyncActionsContext,
-  oldSecretId: string,
-  chosenSecretId: string,
-): Promise<void> {
-  if (!state.manager || state.isSaving) return;
-  state.isSaving = true;
-  state.errorMsg = "";
-  try {
-    const raw = await state.enqueueStorage(() =>
-      state.manager!.resolveProjectionConflict(oldSecretId, chosenSecretId),
-    );
-    for (const record of raw as NookSecretRecord[]) record.free();
-    await state.refreshSecretsFromSession();
-    await state.refreshReplacementConflicts();
-    void runFanOutSyncAfterLocalSave(state);
-    state.showSuccess(state.t("toasts.secret_conflict_resolved"));
-  } catch (error: unknown) {
-    state.errorMsg =
-      error instanceof Error
-        ? error.message
-        : state.t("errors.conflict_resolution_failed");
-  } finally {
-    state.isSaving = false;
-  }
 }
 
 export function dismissLocalFolderMultipleVaultsIssue(
@@ -744,51 +717,6 @@ export async function fanOutSyncToProviders(
   return run;
 }
 
-export async function refreshReplacementConflicts(
-  state: SyncActionsContext,
-): Promise<void> {
-  if (!state.manager) {
-    state.replacementConflicts = [];
-    state.securityConflicts = [];
-    return;
-  }
-  // These borrow the wasm manager (`&mut self`); route them through the storage
-  // chain so they never alias an in-flight foreground op (e.g. a delete), which
-  // would trigger a wasm-bindgen recursive-borrow hang/panic.
-  const [conflicts, securityConflicts] = await state.enqueueStorage(() => {
-    if (!state.manager!.eventLogMode()) {
-      return [
-        [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>,
-        [] as Awaited<
-          ReturnType<typeof state.manager.listProjectionSecurityConflicts>
-        >,
-      ] as const;
-    }
-    return Promise.all([
-      state.manager!.listProjectionConflicts(),
-      state.manager!.listProjectionSecurityConflicts(),
-    ]);
-  });
-  state.replacementConflicts = conflicts.map((conflict) => {
-    const candidates = conflict.candidates.map((candidate) => {
-      const value = {
-        eventId: candidate.eventId,
-        secretId: candidate.secretId,
-      };
-      candidate.free();
-      return value;
-    });
-    const value = { oldSecretId: conflict.oldSecretId, candidates };
-    conflict.free();
-    return value;
-  });
-  state.securityConflicts = securityConflicts.map((conflict) => {
-    const value = { events: conflict.events, reasons: conflict.reasons };
-    conflict.free();
-    return value;
-  });
-}
-
 export function stageSyncConflict(
   state: SyncActionsContext,
   conflict: NookPendingSyncConflict,
@@ -931,91 +859,6 @@ export async function resolveSyncConflictImportRemote(
       providerId,
       conflict.isPendingProvider,
     );
-  }
-}
-
-export async function resolveSyncConflictKeepLocal(
-  state: SyncActionsContext,
-): Promise<void> {
-  const conflict = state.pendingSyncConflict;
-  if (!conflict || state.isVerifying) return;
-
-  state.isVerifying = true;
-  state.errorMsg = "";
-  log.info("sync conflict resolved (keep local)", {
-    provider: conflict.providerLabel,
-    kind: conflict.kind,
-  });
-  state.errorMsg =
-    "Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.";
-  state.isVerifying = false;
-}
-
-export async function resolveSyncConflictKeepRemote(
-  state: SyncActionsContext,
-): Promise<void> {
-  const conflict = state.pendingSyncConflict;
-  if (!conflict || state.isVerifying) return;
-
-  log.info("sync conflict resolved (keep remote)", {
-    provider: conflict.providerLabel,
-    kind: conflict.kind,
-  });
-  state.errorMsg =
-    "Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.";
-  state.isVerifying = false;
-}
-
-export async function confirmRecoverRemoteVault(
-  state: SyncActionsContext,
-): Promise<void> {
-  if (!state.manager) return;
-  state.errorMsg = "";
-  state.isVerifying = true;
-  try {
-    await state.enqueueStorage(() =>
-      state.manager!.prepareConnectFromLocalCache(),
-    );
-    state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFromCache;
-    if (state.loginSetupType) {
-      await state.loadDb();
-      return;
-    }
-    await state.refreshPasswordEntriesList();
-  } catch (e: unknown) {
-    state.errorMsg =
-      e instanceof Error ? e.message : "Could not load the local vault copy.";
-  } finally {
-    state.isVerifying = false;
-  }
-}
-
-export async function confirmCreateFreshRemoteVault(
-  state: SyncActionsContext,
-): Promise<void> {
-  if (!state.manager) return;
-  state.errorMsg = "";
-  state.remoteVaultRecoveryState = RemoteVaultRecoveryState.ConnectFresh;
-  if (state.loginSetupType) {
-    state.isVerifying = true;
-    try {
-      await state.loadDb();
-    } catch (e: unknown) {
-      state.errorMsg =
-        e instanceof Error ? e.message : "Could not create a new vault file.";
-    } finally {
-      state.isVerifying = false;
-    }
-    return;
-  }
-}
-
-export function clearRemoteVaultRecovery(state: SyncActionsContext) {
-  state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-  try {
-    state.manager?.clearConnectRecovery();
-  } catch {
-    // Engine not ready yet.
   }
 }
 
