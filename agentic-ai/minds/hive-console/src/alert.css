@@ -28,8 +28,8 @@
 }
 
 .alert-row.critical .alert-mark {
-  color: var(--destructive);
-  border-color: color-mix(in oklch, var(--destructive) 36%, transparent);
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 36%, transparent);
 }
 
 .alert-copy {
@@ -51,7 +51,7 @@
 }
 
 .alert-row.critical .alert-copy span {
-  color: var(--destructive);
+  color: var(--danger);
 }
 
 .alert-copy p {
@@ -65,6 +65,13 @@
 .alert-row time {
   color: var(--muted-foreground);
   font-size: 10px;
+}
+
+.alert-copy code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert-row time {

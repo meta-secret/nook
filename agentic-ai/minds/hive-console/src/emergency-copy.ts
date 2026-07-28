@@ -40,6 +40,8 @@ export function emergencyCopy(locale: string): ObserverCopy {
     ready: '',
     blocked: '',
     failed: '',
+    critical: '',
+    warning: '',
     cancelling: '',
     cancelled: '',
     completed: '',

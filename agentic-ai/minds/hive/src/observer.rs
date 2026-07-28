@@ -52,6 +52,7 @@ pub struct ObservedAlert {
 #[serde(rename_all = "kebab-case")]
 pub enum AlertKind {
     TaskFailed,
+    DependencyFailed,
     DependencyBlocked,
     ActivityStale,
     CancellationStuck,
@@ -61,6 +62,7 @@ impl AlertKind {
     fn as_str(self) -> &'static str {
         match self {
             Self::TaskFailed => "task-failed",
+            Self::DependencyFailed => "dependency-failed",
             Self::DependencyBlocked => "dependency-blocked",
             Self::ActivityStale => "activity-stale",
             Self::CancellationStuck => "cancellation-stuck",
@@ -162,6 +164,8 @@ pub struct ObserverCopy {
     pub ready: &'static str,
     pub blocked: &'static str,
     pub failed: &'static str,
+    pub critical: &'static str,
+    pub warning: &'static str,
     pub cancelling: &'static str,
     pub cancelled: &'static str,
     pub completed: &'static str,
@@ -208,6 +212,8 @@ impl ObserverCopy {
                 ready: "Готова",
                 blocked: "Заблокирована",
                 failed: "Ошибка",
+                critical: "Критично",
+                warning: "Предупреждение",
                 cancelling: "Отменяется",
                 cancelled: "Отменена",
                 completed: "Завершена",
@@ -251,6 +257,8 @@ impl ObserverCopy {
             ready: "Ready",
             blocked: "Blocked",
             failed: "Failed",
+            critical: "Critical",
+            warning: "Warning",
             cancelling: "Cancelling",
             cancelled: "Cancelled",
             completed: "Completed",
@@ -786,6 +794,21 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
         .iter()
         .filter_map(|task| {
             let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
+                "FAILED"
+                    if task.latest_attempt_started_at <= 0
+                        && task.latest_error.starts_with("dependency ") =>
+                {
+                    (
+                        AlertKind::DependencyFailed,
+                        AlertSeverity::Critical,
+                        task.updated_at,
+                        if russian {
+                            "Задача не запустилась из-за ошибки зависимости"
+                        } else {
+                            "Task could not start because a dependency failed"
+                        },
+                    )
+                }
                 "FAILED" => (
                     AlertKind::TaskFailed,
                     AlertSeverity::Critical,
@@ -963,6 +986,7 @@ mod tests {
         let now = 1_000_000;
         let mut failed = observed_task("failed", "FAILED", now - 10_000);
         failed.latest_attempt_completed_at = now - 8_000;
+        failed.latest_attempt_started_at = now - 12_000;
         let blocked = observed_task("blocked", "BLOCKED", now - 20_000);
         let stale = observed_task("stale", "RUNNING", now - 6 * 60_000);
         let cancelling = observed_task("cancelling", "CANCELLING", now - 6 * 60_000);
@@ -982,6 +1006,20 @@ mod tests {
 
         failed.status = "COMPLETED".to_owned();
         assert!(derive_alerts(&[failed], now, "en").is_empty());
+    }
+
+    #[test]
+    fn dependency_failure_does_not_claim_the_task_exhausted_attempts() {
+        let now = 1_000_000;
+        let mut failed = observed_task("dependent", "FAILED", now - 10_000);
+        failed.latest_error = "dependency upstream exhausted its retry budget".to_owned();
+
+        let alerts = derive_alerts(&[failed], now, "en");
+        assert_eq!(alerts[0].kind, AlertKind::DependencyFailed);
+        assert_eq!(
+            alerts[0].reason,
+            "Task could not start because a dependency failed"
+        );
     }
 
     #[test]

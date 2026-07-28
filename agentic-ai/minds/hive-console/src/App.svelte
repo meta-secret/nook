@@ -379,6 +379,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
                 entry.alert,
                 entry.task,
                 selectedId === entry.task.id,
+                copy,
                 relativeTime,
                 () => selectTask(entry.task.id),
               )}
@@ -551,6 +552,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   alert: ObservedAlert,
   task: ObservedTask,
   active: boolean,
+  copy: ObserverCopy,
   relativeTime: (timestamp: number) => string,
   onselect: () => void,
 )}
@@ -558,6 +560,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     class:active
     class:critical={alert.severity === 'critical'}
     class="alert-row"
+    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${task.id}`}
     onclick={onselect}
   >
     <span class="alert-mark" aria-hidden="true"
@@ -566,10 +569,12 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     <div class="alert-copy">
       <div>
         <strong>{task.kind_label}</strong>
-        <span>{alert.severity}</span>
+        <span
+          >{alert.severity === 'critical' ? copy.critical : copy.warning}</span
+        >
       </div>
       <p>{alert.reason}</p>
-      <code>{task.id}</code>
+      <code title={task.id}>{compactId(task.id, 32)}</code>
     </div>
     <time>{relativeTime(alert.first_observed_at)}</time>
   </button>

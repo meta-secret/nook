@@ -32,6 +32,8 @@ export type ObserverCopy = {
   ready: string;
   blocked: string;
   failed: string;
+  critical: string;
+  warning: string;
   cancelling: string;
   cancelled: string;
   completed: string;
@@ -55,7 +57,12 @@ export type ObservedDependency = {
 
 export type ObservedActivity = {
   id: string;
-  kind: string;
+  kind:
+    | 'task-failed'
+    | 'dependency-failed'
+    | 'dependency-blocked'
+    | 'activity-stale'
+    | 'cancellation-stuck';
   message: string;
   detail: string;
   created_at: number;

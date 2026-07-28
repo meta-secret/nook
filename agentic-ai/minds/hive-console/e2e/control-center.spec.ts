@@ -40,6 +40,8 @@ const snapshot: ObserverSnapshot = {
     ready: 'Ready',
     blocked: 'Blocked',
     failed: 'Failed',
+    critical: 'Critical',
+    warning: 'Warning',
     cancelling: 'Cancelling',
     cancelled: 'Cancelled',
     completed: 'Completed',
@@ -306,7 +308,7 @@ test('uses immediate task navigation with reduced motion', async ({ page }) => {
   await routeSnapshot(page);
   await page.goto('/');
 
-  await page.getByRole('button', { name: /Blocking task critical/ }).click();
+  await page.getByRole('button', { name: /Blocking task Critical/ }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-scroll-behavior',
     'auto',
