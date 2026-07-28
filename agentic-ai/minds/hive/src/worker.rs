@@ -10,12 +10,13 @@ use rand::RngExt;
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt as _;
 use tokio::process::Command;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{
-    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TerminalResult,
+    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TaskActivity,
+    TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -84,7 +85,11 @@ impl<S: TaskStore> Worker<S> {
                 .await?
             {
                 ClaimOutcome::Claimed(task) => break task,
-                ClaimOutcome::NoTask => {}
+                ClaimOutcome::NoTask => {
+                    self.store
+                        .register_agent(&self.config.agent_id, &self.config.pod_name)
+                        .await?;
+                }
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
@@ -159,6 +164,13 @@ impl<S: TaskStore> Worker<S> {
         let execution = tokio::time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
+                let (activity_tx, activity_rx) = mpsc::unbounded_channel();
+                let activity_persistence = tokio::spawn(persist_activity(
+                    self.store.clone(),
+                    self.config.agent_id.clone(),
+                    task.clone(),
+                    activity_rx,
+                ));
                 let repair_branch =
                     (task.kind == "main-repair").then(|| repair_branch_name(task.id.as_str()));
                 let preparation = prepare_workspace(
@@ -171,8 +183,9 @@ impl<S: TaskStore> Worker<S> {
                 .await?;
                 let repository = self.config.workspace.join("repository");
                 let baseline = if preparation.conflicted {
-                    let mut codex_options =
-                        CodexOptions::new(repository.clone()).with_workspace_write();
+                    let mut codex_options = CodexOptions::new(repository.clone())
+                        .with_workspace_write()
+                        .with_activity_sender(activity_tx.clone());
                     codex_options.model.clone_from(&self.config.model);
                     codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                     codex_options
@@ -202,7 +215,9 @@ impl<S: TaskStore> Worker<S> {
                     preparation.baseline
                 };
                 let prompt = task_prompt(task);
-                let mut codex_options = CodexOptions::new(repository).with_workspace_write();
+                let mut codex_options = CodexOptions::new(repository)
+                    .with_workspace_write()
+                    .with_activity_sender(activity_tx.clone());
                 codex_options.model.clone_from(&self.config.model);
                 codex_options.arg0_paths.clone_from(&self.config.arg0_paths);
                 codex_options
@@ -213,6 +228,10 @@ impl<S: TaskStore> Worker<S> {
                         .execute_task(task.id.as_str(), &prompt)
                         .await
                         .context("embedded Codex execution failed")?;
+                drop(activity_tx);
+                activity_persistence
+                    .await
+                    .context("task activity persistence panicked")??;
                 let result: TerminalResult = serde_json::from_str(&raw_result)
                     .context("Codex returned an invalid terminal result")?;
                 if let TerminalResult::Blocked {
@@ -312,6 +331,20 @@ impl<S: TaskStore> Worker<S> {
         }
         Ok(())
     }
+}
+
+async fn persist_activity<S: TaskStore>(
+    store: S,
+    agent_id: AgentId,
+    task: ClaimedTask,
+    mut receiver: mpsc::UnboundedReceiver<TaskActivity>,
+) -> anyhow::Result<()> {
+    while let Some(activity) = receiver.recv().await {
+        if !store.record_activity(&task, &agent_id, &activity).await? {
+            return Err(WorkerCancellationRequested.into());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]

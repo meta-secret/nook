@@ -1,6 +1,9 @@
 use std::env;
 
-use hive::model::{AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskId};
+use hive::model::{
+    ActivityKind, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskActivity,
+    TaskId,
+};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
@@ -141,6 +144,54 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         vec![artifact.clone()],
         "a dependent task must receive the completed dependency patch"
     );
+    for sequence in 0..205 {
+        assert!(
+            store
+                .record_activity(
+                    &stale_claim,
+                    stale_agent,
+                    &TaskActivity {
+                        kind: ActivityKind::Action,
+                        message: "activity.command_running".to_owned(),
+                        detail: format!("bounded command {sequence}"),
+                    },
+                )
+                .await
+                .expect("record durable activity")
+        );
+    }
+    let mut activity_count_rows = graph
+        .execute(
+            query(
+                "MATCH (:TaskActivity)-[:FOR_TASK]->(:Task {id: $task_id})
+                 RETURN count(*) AS count",
+            )
+            .param("task_id", stale_claim.id.as_str()),
+        )
+        .await
+        .expect("query bounded task activity");
+    let activity_count = activity_count_rows
+        .next()
+        .await
+        .expect("read activity count")
+        .expect("activity count row")
+        .get::<i64>("count")
+        .expect("activity count");
+    assert_eq!(activity_count, 200, "durable activity must remain bounded");
+    let snapshot = store.observer_snapshot("en").await?;
+    let observed = snapshot
+        .tasks
+        .iter()
+        .find(|task| task.id == stale_claim.id.as_str())
+        .expect("claimed task in observer projection");
+    assert_eq!(observed.trigger, "Manual dispatch · Hive CLI");
+    assert_eq!(observed.activity.len(), 100);
+    assert!(
+        observed
+            .activity
+            .iter()
+            .all(|activity| activity.message == "Running repository command")
+    );
 
     graph
         .run(
@@ -164,6 +215,20 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .heartbeat(&stale_claim.id, stale_agent, &stale_claim.lease_token, 300,)
             .await
             .expect("stale heartbeat")
+    );
+    assert!(
+        !store
+            .record_activity(
+                &stale_claim,
+                stale_agent,
+                &TaskActivity {
+                    kind: ActivityKind::Error,
+                    message: "activity.execution_stopped".to_owned(),
+                    detail: String::new(),
+                },
+            )
+            .await
+            .expect("stale activity")
     );
     assert!(
         !store

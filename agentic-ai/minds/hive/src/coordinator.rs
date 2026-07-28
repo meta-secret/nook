@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::model::{
     AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    LeaseToken, TaskId,
+    LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -32,6 +32,11 @@ enum Request {
         agent_id: AgentId,
         lease_token: LeaseToken,
         lease_seconds: i64,
+    },
+    RecordActivity {
+        task: ClaimedTask,
+        agent_id: AgentId,
+        activity: TaskActivity,
     },
     AcknowledgeCancellation {
         task: ClaimedTask,
@@ -224,6 +229,20 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
+    async fn record_activity(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+        activity: &TaskActivity,
+    ) -> anyhow::Result<bool> {
+        self.accepted(Request::RecordActivity {
+            task: task.clone(),
+            agent_id: agent_id.clone(),
+            activity: activity.clone(),
+        })
+        .await
+    }
+
     async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool> {
         self.accepted(Request::Release {
             task: task.clone(),
@@ -343,6 +362,13 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Re
             store
                 .heartbeat(&task_id, &agent_id, &lease_token, lease_seconds)
                 .await?,
+        )),
+        Request::RecordActivity {
+            task,
+            agent_id,
+            activity,
+        } => Ok(Response::Accepted(
+            store.record_activity(&task, &agent_id, &activity).await?,
         )),
         Request::AcknowledgeCancellation { task, agent_id } => Ok(Response::Accepted(
             store.acknowledge_cancellation(&task, &agent_id).await?,

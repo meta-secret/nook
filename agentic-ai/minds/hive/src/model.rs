@@ -70,6 +70,41 @@ string_id!(AgentId);
 string_id!(AttemptId);
 string_id!(LeaseToken);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityKind {
+    Started,
+    Action,
+    Result,
+    Edit,
+    Warning,
+    Retry,
+    Report,
+    Error,
+}
+
+impl ActivityKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Started => "started",
+            Self::Action => "action",
+            Self::Result => "result",
+            Self::Edit => "edit",
+            Self::Warning => "warning",
+            Self::Retry => "retry",
+            Self::Report => "report",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskActivity {
+    pub kind: ActivityKind,
+    pub message: String,
+    pub detail: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CancellationTarget {
     pub task_id: TaskId,

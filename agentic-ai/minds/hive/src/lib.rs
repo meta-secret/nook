@@ -6,6 +6,7 @@ pub mod coordinator;
 pub mod dispatcher;
 pub mod model;
 pub mod neo4j;
+pub mod observer;
 pub mod store;
 pub mod worker;
 

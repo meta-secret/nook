@@ -37,6 +37,9 @@ tasks:
         done
         docker cp "$container:/build/hive/tests" "$formatted/hive-tests"
         cp -R "$formatted/hive-tests/." "hive/tests/"
+        cd hive-console
+        bun install --frozen-lockfile
+        bun run format
         BASH
 
   check:

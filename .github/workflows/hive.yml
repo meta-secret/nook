@@ -66,6 +66,30 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v2
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install Hive Control Center dependencies
+        working-directory: agentic-ai/minds/hive-console
+        run: bun install --frozen-lockfile
+
+      - name: Verify Hive Control Center source
+        working-directory: agentic-ai/minds/hive-console
+        run: |
+          bun run format:check
+          bun run check
+          bun run build
+
+      - name: Install Hive Control Center browser
+        working-directory: agentic-ai/minds/hive-console
+        run: bunx playwright install --with-deps chromium
+
+      - name: Verify Hive Control Center journeys
+        working-directory: agentic-ai/minds/hive-console
+        run: bun run test:e2e
+
       - name: Configure persistent Rust compiler cache
         uses: ./.github/actions/nook-cache-connect
         with:

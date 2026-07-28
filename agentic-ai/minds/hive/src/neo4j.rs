@@ -8,7 +8,7 @@ use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
 use crate::install_rustls_crypto_provider;
 use crate::model::{
     AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
-    CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskId,
+    CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -19,12 +19,14 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_agent_id IF NOT EXISTS FOR (node:Agent) REQUIRE node.id IS UNIQUE",
     "CREATE CONSTRAINT hive_attempt_id IF NOT EXISTS FOR (node:Attempt) REQUIRE node.id IS UNIQUE",
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
+    "CREATE CONSTRAINT hive_activity_id IF NOT EXISTS FOR (node:TaskActivity) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
+    "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 5;
+const LATEST_SCHEMA_VERSION: i64 = 6;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
-    graph: Graph,
+    pub(crate) graph: Graph,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -776,6 +778,53 @@ impl TaskStore for Neo4jTaskStore {
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", lease_token.as_str())
                 .param("lease_seconds", lease_seconds),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
+    async fn record_activity(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+        activity: &TaskActivity,
+    ) -> anyhow::Result<bool> {
+        let id = Uuid::new_v4().to_string();
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                     WHERE task.status = 'RUNNING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND task.lease_until > timestamp()
+                       AND attempt.lease_token = $lease_token
+                     CREATE (activity:TaskActivity {
+                       id: $id,
+                       kind: $kind,
+                       message: $message,
+                       detail: $detail,
+                       created_at: timestamp()
+                     })
+                     MERGE (activity)-[:FOR_TASK]->(task)
+                     MERGE (activity)-[:FOR_ATTEMPT]->(attempt)
+                     WITH task, activity
+                     OPTIONAL MATCH (older:TaskActivity)-[:FOR_TASK]->(task)
+                     WITH activity, older
+                     ORDER BY older.created_at DESC, older.id DESC
+                     WITH activity, collect(older)[200..] AS expired
+                     FOREACH (entry IN expired | DETACH DELETE entry)
+                     RETURN activity.id AS id",
+                )
+                .param("task_id", task.id.as_str())
+                .param("attempt_id", task.attempt_id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str())
+                .param("id", id)
+                .param("kind", activity.kind.as_str())
+                .param("message", activity.message.as_str())
+                .param("detail", activity.detail.as_str()),
             )
             .await?;
         Ok(rows.next().await?.is_some())

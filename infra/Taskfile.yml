@@ -2255,6 +2255,11 @@ tasks:
         printf '%s\n' '---' >> "$rendered"
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          "$remote_dir/infra/k0s/manifests/hive/observer.yaml" >> "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
           "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
         printf '%s\n' '---' >> "$rendered"
         sed \
@@ -2268,6 +2273,9 @@ tasks:
           --namespace hive-system \
           --timeout=15m
         kubectl rollout status deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-observer \
           --namespace hive-system \
           --timeout=15m
         kubectl rollout status deployment/hive-reaper-controller \
@@ -2583,6 +2591,12 @@ tasks:
           --prefix \
           --since=3m \
           --tail=100 || true
+        kubectl logs deployment/hive-observer \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=10m \
+          --tail=200 || true
         unhealthy_pods="$(
           kubectl get pods \
             --namespace hive-system \
@@ -2756,6 +2770,29 @@ tasks:
           --container dispatcher \
           -- /usr/local/bin/hive queue status
         REMOTE
+
+  hive:dashboard:
+    desc: Open the read-only Hive Control Center through an SSH tunnel.
+    silent: true
+    cmds:
+      - |
+        local_port="{{default "18080" .HIVE_DASHBOARD_PORT}}"
+        case "$local_port" in
+          *[!0-9]*|'')
+            echo "HIVE_DASHBOARD_PORT must be numeric" >&2
+            exit 1
+            ;;
+        esac
+        url="http://127.0.0.1:$local_port"
+        if command -v open >/dev/null 2>&1; then
+          (sleep 2; open "$url") &
+        fi
+        echo "Hive Control Center: $url"
+        exec ssh \
+          -o BatchMode=yes \
+          -L "$local_port:127.0.0.1:$local_port" \
+          "{{.INFRA_SSH_TARGET}}" \
+          "sudo -n k0s kubectl port-forward --namespace hive-system --address 127.0.0.1 service/hive-observer $local_port:8080"
 
   hive:queue:retry:
     desc: Rearm one failed Main-repair chain once per deployed Hive release.

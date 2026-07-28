@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -8,6 +9,7 @@ use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
 use hive::dispatcher::run_workbench_dispatcher;
 use hive::model::{AgentId, EnqueueTask, TaskId};
+use hive::observer::run_observer;
 use hive::{
     CoordinatorTaskStore, Neo4jTaskStore, TaskStore, Worker, WorkerConfig,
     install_rustls_crypto_provider,
@@ -126,6 +128,16 @@ enum Command {
         #[command(subcommand)]
         action: QueueAction,
     },
+    Observer {
+        #[arg(long, env = "HIVE_OBSERVER_ADDRESS", default_value = "0.0.0.0:8080")]
+        address: SocketAddr,
+        #[arg(
+            long,
+            env = "HIVE_DASHBOARD_PATH",
+            default_value = "/usr/local/share/hive-console"
+        )]
+        dashboard: PathBuf,
+    },
     Migrate,
     Enqueue {
         #[arg(long)]
@@ -204,6 +216,16 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     Ok(())
                 }
             }
+        }
+        Command::Observer { address, dashboard } => {
+            let neo4j_password = cli
+                .neo4j_password
+                .as_deref()
+                .context("NEO4J_PASSWORD is required for the observer")?;
+            let store =
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
+                    .await?;
+            run_observer(store, address, dashboard).await
         }
         Command::Coordinator { socket } => {
             let neo4j_password = cli

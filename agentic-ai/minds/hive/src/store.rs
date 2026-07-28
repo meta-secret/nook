@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::model::{
     AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    LeaseToken, TaskId,
+    LeaseToken, TaskActivity, TaskId,
 };
 
 #[async_trait]
@@ -43,6 +43,15 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         lease_token: &LeaseToken,
         lease_seconds: i64,
     ) -> anyhow::Result<bool>;
+
+    async fn record_activity(
+        &self,
+        _task: &ClaimedTask,
+        _agent_id: &AgentId,
+        _activity: &TaskActivity,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
 
     async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool>;
 
@@ -335,6 +344,23 @@ mod tests {
                     Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
             }
             Ok(accepted)
+        }
+
+        async fn record_activity(
+            &self,
+            task: &ClaimedTask,
+            _agent_id: &AgentId,
+            _activity: &TaskActivity,
+        ) -> anyhow::Result<bool> {
+            Ok(self
+                .tasks
+                .lock()
+                .expect("store lock")
+                .get(task.id.as_str())
+                .is_some_and(|stored| {
+                    stored.status == "RUNNING"
+                        && stored.lease_token.as_ref() == Some(&task.lease_token)
+                }))
         }
 
         async fn complete(
