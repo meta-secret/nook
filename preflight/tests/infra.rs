@@ -132,7 +132,11 @@ fn assert_remote_compose_contract() {
                 .into_string()
                 .expect("infra taskfile names must be UTF-8")
         })
-        .filter(|name| name.ends_with(".yml"))
+        .filter(|name| {
+            Path::new(name)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("yml"))
+        })
         .collect::<Vec<_>>();
     actual_domain_taskfiles.sort();
     let mut expected_domain_taskfiles = expected_domains
