@@ -169,6 +169,11 @@ pub struct ObserverCopy {
     pub failed: &'static str,
     pub critical: &'static str,
     pub warning: &'static str,
+    pub alert_task_failed: &'static str,
+    pub alert_dependency_failed: &'static str,
+    pub alert_dependency_blocked: &'static str,
+    pub alert_activity_stale: &'static str,
+    pub alert_cancellation_stuck: &'static str,
     pub cancelling: &'static str,
     pub cancelled: &'static str,
     pub completed: &'static str,
@@ -217,6 +222,11 @@ impl ObserverCopy {
                 failed: "Ошибка",
                 critical: "Критично",
                 warning: "Предупреждение",
+                alert_task_failed: "Все разрешённые попытки завершились ошибкой",
+                alert_dependency_failed: "Задача не запустилась из-за ошибки зависимости",
+                alert_dependency_blocked: "Задача ожидает завершения зависимости",
+                alert_activity_stale: "Агент давно не записывал действий",
+                alert_cancellation_stuck: "Отмена не была подтверждена вовремя",
                 cancelling: "Отменяется",
                 cancelled: "Отменена",
                 completed: "Завершена",
@@ -262,6 +272,11 @@ impl ObserverCopy {
             failed: "Failed",
             critical: "Critical",
             warning: "Warning",
+            alert_task_failed: "All permitted attempts have failed",
+            alert_dependency_failed: "Task could not start because a dependency failed",
+            alert_dependency_blocked: "Task is waiting for a dependency",
+            alert_activity_stale: "Agent activity has gone stale",
+            alert_cancellation_stuck: "Cancellation was not acknowledged in time",
             cancelling: "Cancelling",
             cancelled: "Cancelled",
             completed: "Completed",
@@ -603,19 +618,19 @@ impl Neo4jTaskStore {
                      WITH task, attempt, agent
                      ORDER BY attempt.started_at DESC
                      WITH task, collect({attempt: attempt, agent: agent})[0] AS latest
-                     OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
-                     WITH task, latest, max(activity.created_at) AS latest_activity_at
+                     WITH task, latest,
+                       CASE
+                         WHEN coalesce(task.latest_activity_at, 0)
+                           >= coalesce(latest.attempt.started_at, 0)
+                         THEN coalesce(task.latest_activity_at, 0)
+                         ELSE coalesce(latest.attempt.started_at, task.created_at, 0)
+                       END AS latest_progress_at
                      WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
                         OR ($attention_only = true AND (
                           task.status IN ['FAILED', 'BLOCKED']
                           OR (
                             task.status = 'RUNNING'
-                            AND coalesce(
-                              latest_activity_at,
-                              latest.attempt.started_at,
-                              task.created_at,
-                              0
-                            ) < timestamp() - $attention_age
+                            AND latest_progress_at < timestamp() - $attention_age
                           )
                           OR (
                             task.status = 'CANCELLING'
@@ -639,7 +654,7 @@ impl Neo4jTaskStore {
                             coalesce(latest.attempt.status, '') AS latest_attempt_status,
                             coalesce(latest.attempt.started_at, 0) AS latest_attempt_started_at,
                             coalesce(latest.attempt.completed_at, 0) AS latest_attempt_completed_at,
-                            coalesce(latest_activity_at, 0) AS latest_activity_at,
+                            coalesce(task.latest_activity_at, 0) AS latest_activity_at,
                             substring(replace(coalesce(
                               latest.attempt.error,
                               task.failure_reason,
@@ -651,14 +666,16 @@ impl Neo4jTaskStore {
                               AS latest_summary,
                             coalesce(task.blocked_reason, '') STARTS WITH 'dependency '
                               OR coalesce(task.blocked_reason, '') STARTS WITH 'upstream dependency '
+                              OR coalesce(task.failure_reason, '') =
+                                'discovered blocker has already exhausted its retry budget'
+                              OR coalesce(task.failure_reason, '') =
+                                'upstream task reused an exhausted blocker'
                               AS dependency_failure
                      ORDER BY
                        CASE WHEN $attention_only = true THEN
                          CASE task.status
                            WHEN 'FAILED' THEN 0
-                           WHEN 'CANCELLING' THEN 1
-                           WHEN 'RUNNING' THEN 2
-                           ELSE 3
+                           ELSE 1
                          END
                        ELSE
                          CASE task.status
@@ -676,8 +693,9 @@ impl Neo4jTaskStore {
                          WHEN $attention_only = true AND task.status = 'FAILED'
                            THEN coalesce(latest.attempt.completed_at, task.updated_at, task.created_at, 0)
                          WHEN $attention_only = true AND task.status = 'RUNNING'
-                           THEN coalesce(latest_activity_at, latest.attempt.started_at, task.created_at, 0)
-                             + $attention_age
+                           THEN latest_progress_at + $attention_age
+                         WHEN $attention_only = true AND task.status = 'CANCELLING'
+                           THEN coalesce(task.updated_at, task.created_at, 0) + $attention_age
                          WHEN $attention_only = true
                            THEN coalesce(task.updated_at, task.created_at, 0)
                          ELSE 0
@@ -849,8 +867,7 @@ impl Neo4jTaskStore {
 }
 
 fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<ObservedAlert> {
-    let russian =
-        locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
+    let copy = ObserverCopy::for_locale(locale);
     let mut alerts = tasks
         .iter()
         .filter_map(|task| {
@@ -859,31 +876,19 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
                     AlertKind::DependencyFailed,
                     AlertSeverity::Critical,
                     task.updated_at,
-                    if russian {
-                        "Задача не запустилась из-за ошибки зависимости"
-                    } else {
-                        "Task could not start because a dependency failed"
-                    },
+                    copy.alert_dependency_failed,
                 ),
                 "FAILED" => (
                     AlertKind::TaskFailed,
                     AlertSeverity::Critical,
                     task.latest_attempt_completed_at.max(task.updated_at),
-                    if russian {
-                        "Все разрешённые попытки завершились ошибкой"
-                    } else {
-                        "All permitted attempts have failed"
-                    },
+                    copy.alert_task_failed,
                 ),
                 "BLOCKED" => (
                     AlertKind::DependencyBlocked,
                     AlertSeverity::Warning,
                     task.updated_at,
-                    if russian {
-                        "Задача ожидает завершения зависимости"
-                    } else {
-                        "Task is waiting for a dependency"
-                    },
+                    copy.alert_dependency_blocked,
                 ),
                 "RUNNING"
                     if now
@@ -900,22 +905,14 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
                             .max(task.latest_attempt_started_at)
                             .max(task.created_at)
                             + STALE_ACTIVITY_MS,
-                        if russian {
-                            "Агент давно не записывал действий"
-                        } else {
-                            "Agent activity has gone stale"
-                        },
+                        copy.alert_activity_stale,
                     )
                 }
                 "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
                     AlertKind::CancellationStuck,
                     AlertSeverity::Warning,
                     task.updated_at + STUCK_CANCELLATION_MS,
-                    if russian {
-                        "Отмена не была подтверждена вовремя"
-                    } else {
-                        "Cancellation was not acknowledged in time"
-                    },
+                    copy.alert_cancellation_stuck,
                 ),
                 _ => return None,
             };

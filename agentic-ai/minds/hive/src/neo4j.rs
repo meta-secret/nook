@@ -811,6 +811,7 @@ impl TaskStore for Neo4jTaskStore {
                      })
                      MERGE (activity)-[:FOR_TASK]->(task)
                      MERGE (activity)-[:FOR_ATTEMPT]->(attempt)
+                     SET task.latest_activity_at = activity.created_at
                      WITH task, activity
                      OPTIONAL MATCH (older:TaskActivity)-[:FOR_TASK]->(task)
                      WITH activity, older

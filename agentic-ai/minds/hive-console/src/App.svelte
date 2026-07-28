@@ -62,6 +62,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       );
     }),
   );
+  const normalizedSearch = $derived(search.trim());
   const attentionEntries = $derived(
     (snapshot?.alerts ?? []).flatMap((alert) => {
       const task = snapshot?.tasks.find(
@@ -368,7 +369,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           </label>
         </div>
 
-        {#if attentionEntries.length > 0 && search.length === 0}
+        {#if attentionEntries.length > 0 && normalizedSearch.length === 0}
           <div class="attention-lane">
             <div class="attention-heading">
               <AlertTriangle size={15} />
@@ -388,7 +389,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         {/if}
 
         <div class="task-list">
-          {#each filteredTasks.filter((task) => search.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
+          {#each filteredTasks.filter((task) => normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
             {@render TaskRow(
               task,
               selectedId === task.id,
@@ -398,19 +399,21 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
               () => selectTask(task.id),
             )}
           {:else}
-            <div class="empty-state">
-              <CircleDashed size={24} />
-              <strong>
-                {search.trim().length > 0
-                  ? copy.no_search_results
-                  : copy.no_tasks}
-              </strong>
-              <p>
-                {search.trim().length > 0
-                  ? copy.no_search_results_description
-                  : copy.no_tasks_description}
-              </p>
-            </div>
+            {#if attentionEntries.length === 0 || normalizedSearch.length > 0}
+              <div class="empty-state">
+                <CircleDashed size={24} />
+                <strong>
+                  {normalizedSearch.length > 0
+                    ? copy.no_search_results
+                    : copy.no_tasks}
+                </strong>
+                <p>
+                  {normalizedSearch.length > 0
+                    ? copy.no_search_results_description
+                    : copy.no_tasks_description}
+                </p>
+              </div>
+            {/if}
           {/each}
         </div>
       </section>
@@ -575,9 +578,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         >
       </div>
       <p>{alert.reason}</p>
-      <code title={task.id}>{compactId(task.id, 32)}</code>
+      <div class="alert-evidence">
+        <time>{observedAge}</time>
+        <code title={task.id}>{compactId(task.id, 32)}</code>
+      </div>
     </div>
-    <time>{observedAge}</time>
   </button>
 {/snippet}
 

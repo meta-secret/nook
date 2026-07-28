@@ -34,6 +34,11 @@ export type ObserverCopy = {
   failed: string;
   critical: string;
   warning: string;
+  alert_task_failed: string;
+  alert_dependency_failed: string;
+  alert_dependency_blocked: string;
+  alert_activity_stale: string;
+  alert_cancellation_stuck: string;
   cancelling: string;
   cancelled: string;
   completed: string;
