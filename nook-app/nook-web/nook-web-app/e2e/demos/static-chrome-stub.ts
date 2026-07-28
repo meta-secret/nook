@@ -50,6 +50,17 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   let loginOptionsCalls = 0
   let stagedOffer: StagedSaveOffer | undefined
   let enrollStaged = false
+  const demoExtensionSetup = {
+    status: 'ready' as const,
+    deviceLabel: 'Demo browser',
+    pairedVaults: ['Demo vault'],
+    selectedVaultStoreId: 'demo-vault',
+    selectedVaultName: 'Demo vault',
+    syncProviderCount: 1,
+    eventCount: 3,
+    eventLogHeads: ['demo-head'],
+    lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
+  }
   const runtimeListeners: Array<
     (
       message: unknown,
@@ -63,20 +74,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       return responsesByType[message.type]
     }
     if (message.type === 'nook:extension-pairing-state-query') {
-      return {
-        ok: true,
-        setup: {
-          status: 'ready',
-          deviceLabel: 'Demo browser',
-          pairedVaults: ['Demo vault'],
-          selectedVaultStoreId: 'demo-vault',
-          selectedVaultName: 'Demo vault',
-          syncProviderCount: 1,
-          eventCount: 3,
-          eventLogHeads: ['demo-head'],
-          lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
-        },
-      }
+      return { ok: true, setup: demoExtensionSetup }
     }
     if (
       authenticatorPickerFlow &&
@@ -438,15 +436,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           queueMicrotask(() =>
             callback({
               'nook:extension-setup': {
-                status: 'ready',
-                deviceLabel: 'Demo browser',
-                pairedVaults: ['Demo vault'],
-                selectedVaultStoreId: 'demo-vault',
-                selectedVaultName: 'Demo vault',
-                syncProviderCount: 1,
-                eventCount: 3,
-                eventLogHeads: ['demo-head'],
-                lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
+                ...demoExtensionSetup,
               },
             }),
           )

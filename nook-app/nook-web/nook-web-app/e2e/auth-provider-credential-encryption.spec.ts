@@ -50,9 +50,7 @@ test.describe('sync provider credential encryption', () => {
     expect(decrypted.providers[0]?.githubPat).toBe(pat)
   })
 
-  test('load upgrades legacy plaintext IndexedDB rows to sealed storage', async ({
-    page,
-  }) => {
+  test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
@@ -69,14 +67,6 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
-    await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
     await waitForAuthProvidersE2eHook(page)
     await waitForStorageChainIdle(page)
     await waitForVaultSyncIdle(page)
@@ -90,16 +80,14 @@ test.describe('sync provider credential encryption', () => {
       ),
     ).toBe(false)
 
-    const raw = await readRawAuthProvidersFromIdb(page)
-    expectSealedCredential(
-      raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
-      pat,
+    await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
+      'Provider credential is not age-encrypted.',
     )
 
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(
-      decrypted.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
-    ).toBe(pat)
+    const raw = await readRawAuthProvidersFromIdb(page)
+    expect(raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat).toBe(
+      pat,
+    )
   })
 
   test('OAuth access and refresh tokens are sealed at rest', async ({
