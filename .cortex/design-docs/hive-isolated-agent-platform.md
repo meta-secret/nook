@@ -412,7 +412,8 @@ by the auth broker. The reaper has no Kubernetes token: it calls a dedicated
 controller with an opaque credential. The controller has a distinct workload
 identity restricted to `get`/`delete` labeled Hive Pods, reading only the
 Neo4j Service and Endpoints, and patching only the worker and dispatcher egress
-NetworkPolicies.
+NetworkPolicies plus the observer egress NetworkPolicy used by the read-only
+Control Center.
 It continuously reconciles the post-DNAT Neo4j Pod address, so an automatic
 StatefulSet or kubelet replacement cannot leave workers or the dispatcher
 pinned to a stale endpoint. While Neo4j is unready, it removes the stale Pod
