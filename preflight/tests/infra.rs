@@ -17,13 +17,12 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() {
+fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> std::io::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")
         .arg(root.join("preflight/tests/neo4j_credentials.sh"))
         .arg(&root)
-        .output()
-        .expect("run Neo4j credential reconciliation harness");
+        .output()?;
     assert!(
         output.status.success(),
         "Neo4j credential reconciliation harness failed:\nstdout:\n{}\nstderr:\n{}",
@@ -42,6 +41,7 @@ fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() {
         credential_validation < tls_secret_apply,
         "credentials must be validated before replacement TLS Secrets are published"
     );
+    Ok(())
 }
 
 fn infra_taskfile_graph() -> String {
