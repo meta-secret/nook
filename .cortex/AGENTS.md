@@ -2,6 +2,28 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Follow the links below for deep context on Nook's architecture, design, and standards.
 
+## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
+
+Authored source files MUST stay at or below **1,000 lines**, except Rust source
+files, which MUST stay at or below **1,500 lines**. Crossing either hard limit
+is a failed repository invariant and a P1 architecture finding.
+
+For Rust, moving `#[cfg(test)]` code or unit tests into another file is **not**
+an acceptable fix. Separate Rust unit-test files under `src` are prohibited:
+unit tests MUST be colocated with the focused implementation module they test.
+Rust integration tests under a crate's `tests/` directory remain valid. An
+oversized production module proves that its production responsibilities need
+review. Split it along a real domain, capability, ownership, lifecycle, or
+dependency boundary; keep each resulting module cohesive, expose narrow
+interfaces, and colocate each abstraction's unit tests in that module.
+
+Mechanical line-count splitting is forbidden. Never cut a file in half or
+create meaningless `part1`, `part2`, `continued`, or similarly numbered
+modules. The refactor must improve the architecture, not merely satisfy the
+counter. Moving unit tests to a separate file to satisfy the counter is itself
+a failing invariant. Full critical contract:
+[dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
+
 ## ⛔ Non-negotiable: load both design skills for every UI task
 
 Before designing, implementing, or reviewing any user-visible website or browser

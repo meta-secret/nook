@@ -10,6 +10,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 
 | Skill card | Purpose | Executable skill |
 |---|---|---|
+| [source-file-size.md](source-file-size.md) | **P1 / most critical structure rule:** hard source limits require cohesive domain or architectural decomposition; test-only and arbitrary splits are forbidden | [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md) |
 | [code-review-comments.md](code-review-comments.md) | Handle every active comment without waiting for reviewers: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.agents/skills/code-review-comments/SKILL.md`](../../.agents/skills/code-review-comments/SKILL.md) |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional project skills | [`.agents/skills/dynamic-skill/SKILL.md`](../../.agents/skills/dynamic-skill/SKILL.md) |
 | [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with machine-readable preflight/readiness, format-then-push, and repository-only GitHub Actions watching | [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md) |

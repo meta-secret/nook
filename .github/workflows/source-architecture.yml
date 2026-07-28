@@ -1,0 +1,31 @@
+name: Source architecture
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-architecture-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    name: Enforce source architecture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Enforce source limits and Rust unit-test colocation
+        run: >-
+          cargo test
+          --locked
+          --manifest-path preflight/Cargo.toml
+          --test source_file_size
