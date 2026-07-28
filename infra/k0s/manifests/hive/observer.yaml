@@ -59,17 +59,8 @@ spec:
               value: 0.0.0.0:8080
             - name: HIVE_DASHBOARD_PATH
               value: /usr/local/share/hive-console
-            - name: NEO4J_URI
-              value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
-            - name: SSL_CERT_FILE
-              value: /trust/ca-certificates.crt
-            - name: NEO4J_USERNAME
-              value: neo4j
-            - name: NEO4J_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: hive-neo4j-client
-                  key: NEO4J_PASSWORD
+            - name: HIVE_COORDINATOR_SOCKET
+              value: /run/hive-coordinator/coordinator.sock
           ports:
             - name: http
               containerPort: 8080
@@ -93,6 +84,41 @@ spec:
               drop: ["ALL"]
             readOnlyRootFilesystem: true
           volumeMounts:
+            - name: coordinator-channel
+              mountPath: /run/hive-coordinator
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: coordinator
+          image: HIVE_IMAGE
+          imagePullPolicy: Always
+          args: ["observer-coordinator"]
+          env:
+            - name: HIVE_COORDINATOR_SOCKET
+              value: /run/hive-coordinator/coordinator.sock
+            - name: NEO4J_URI
+              value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+            - name: SSL_CERT_FILE
+              value: /trust/ca-certificates.crt
+            - name: NEO4J_USERNAME
+              value: neo4j
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hive-neo4j-client
+                  key: NEO4J_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: coordinator-channel
+              mountPath: /run/hive-coordinator
             - name: trust-bundle
               mountPath: /trust
               readOnly: true
@@ -101,9 +127,12 @@ spec:
               cpu: 10m
               memory: 32Mi
             limits:
-              cpu: 200m
+              cpu: 100m
               memory: 128Mi
       volumes:
+        - name: coordinator-channel
+          emptyDir:
+            sizeLimit: 1Mi
         - name: trust-bundle
           emptyDir:
             sizeLimit: 2Mi

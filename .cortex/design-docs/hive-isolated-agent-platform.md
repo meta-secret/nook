@@ -428,10 +428,12 @@ duration, outcome, and bounded command identity in the immutable Workbench
 statistics record.
 
 The same typed event stream feeds the bounded `TaskActivity` projection used by
-the Control Center. The observer reads only current workers, at most 200 tasks,
-and at most 100 recent activity entries for each task in a response. Task detail
-uses a direct task lookup, so completed work remains inspectable after it leaves
-the overview window.
+the Control Center. Its network-facing HTTP container has no graph credential;
+it can request only the overview or one task detail from a private Unix-socket
+coordinator sidecar. The credential-bearing sidecar reads only current workers,
+at most 200 tasks, and at most 100 recent activity entries for each task in a
+response. Task detail uses a direct task lookup, so completed work remains
+inspectable after it leaves the overview window.
 
 Completion, failure, release, blocker discovery, and heartbeat mutations are
 lease-token guarded. Blocker discovery additionally requires an unexpired

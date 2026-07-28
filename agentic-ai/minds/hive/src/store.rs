@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 
 use crate::model::{
-    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    LeaseToken, TaskActivity, TaskId,
+    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
+    EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 
 #[async_trait]
@@ -46,7 +46,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 
     async fn record_activity(
         &self,
-        _task: &ClaimedTask,
+        _lease: &ActivityLease,
         _agent_id: &AgentId,
         _activity: &TaskActivity,
     ) -> anyhow::Result<bool> {
@@ -90,8 +90,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-        EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
+        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
+        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId, TaskTrigger,
     };
 
     #[derive(Debug, Clone)]
@@ -348,7 +348,7 @@ mod tests {
 
         async fn record_activity(
             &self,
-            task: &ClaimedTask,
+            lease: &ActivityLease,
             _agent_id: &AgentId,
             _activity: &TaskActivity,
         ) -> anyhow::Result<bool> {
@@ -356,10 +356,10 @@ mod tests {
                 .tasks
                 .lock()
                 .expect("store lock")
-                .get(task.id.as_str())
+                .get(lease.task_id.as_str())
                 .is_some_and(|stored| {
                     stored.status == "RUNNING"
-                        && stored.lease_token.as_ref() == Some(&task.lease_token)
+                        && stored.lease_token.as_ref() == Some(&lease.lease_token)
                 }))
         }
 

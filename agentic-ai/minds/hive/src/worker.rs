@@ -15,8 +15,8 @@ use tokio::sync::{mpsc, watch};
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::model::{
-    AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, TaskActivity,
-    TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -250,14 +250,10 @@ impl<S: TaskStore> Worker<S> {
                             max_attempts: 3,
                             dependencies: Vec::new(),
                         };
-                        let accepted = self
-                            .store
-                            .block(task, &self.config.agent_id, &blocker, &bounded(summary))
-                            .await?;
-                        if !accepted {
-                            return Err(WorkerCancellationRequested.into());
-                        }
-                        return Err(WorkerBlocked.into());
+                        return Ok(TaskDisposition::Blocked {
+                            blocker,
+                            reason: bounded(summary),
+                        });
                     }
                     let summary = bounded(&format!(
                         "{}\n\nChanged files:\n{}\n\nTests:\n{}",
@@ -274,21 +270,39 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
-                    let accepted = self
-                        .store
-                        .complete(task, &self.config.agent_id, &summary, &artifact)
-                        .await?;
-                    if !accepted {
-                        return Err(WorkerCancellationRequested.into());
-                    }
-                    Ok::<(), anyhow::Error>(())
+                    Ok::<TaskDisposition, anyhow::Error>(TaskDisposition::Completed {
+                        summary,
+                        artifact,
+                    })
                 }
                 .await;
                 drop(activity_tx);
                 activity_persistence
                     .await
                     .context("task activity persistence panicked")??;
-                task_result
+                let terminal_result: anyhow::Result<()> = match task_result? {
+                    TaskDisposition::Completed { summary, artifact } => {
+                        if !self
+                            .store
+                            .complete(task, &self.config.agent_id, &summary, &artifact)
+                            .await?
+                        {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Ok(())
+                    }
+                    TaskDisposition::Blocked { blocker, reason } => {
+                        if !self
+                            .store
+                            .block(task, &self.config.agent_id, &blocker, &reason)
+                            .await?
+                        {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Err(WorkerBlocked.into())
+                    }
+                };
+                terminal_result
             },
         );
         let mut terminate =
@@ -351,8 +365,9 @@ async fn persist_activity<S: TaskStore>(
     task: ClaimedTask,
     mut receiver: mpsc::UnboundedReceiver<TaskActivity>,
 ) -> anyhow::Result<()> {
+    let lease = ActivityLease::from(&task);
     while let Some(activity) = receiver.recv().await {
-        if !store.record_activity(&task, &agent_id, &activity).await? {
+        if !store.record_activity(&lease, &agent_id, &activity).await? {
             return Err(WorkerCancellationRequested.into());
         }
     }
@@ -366,6 +381,17 @@ struct WorkerInterrupted;
 #[derive(Debug, thiserror::Error)]
 #[error("worker persisted a blocking dependency")]
 struct WorkerBlocked;
+
+enum TaskDisposition {
+    Completed {
+        summary: String,
+        artifact: CompletionArtifact,
+    },
+    Blocked {
+        blocker: EnqueueTask,
+        reason: String,
+    },
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("worker cancellation requested")]

@@ -106,8 +106,9 @@ recovery bundle. Only the coordinator gets the Neo4j credential and CA.
 
 The read-only Hive Control Center makes the durable task graph and live worker
 activity visible without exposing credentials, prompts, model reasoning, or raw
-command output. A token-free observer Deployment reads Neo4j over the existing
-private TLS boundary and serves:
+command output. A token-free HTTP container talks only to a narrowly typed
+Unix-socket coordinator sidecar; only that sidecar holds the Neo4j credential
+and reads over the existing private TLS boundary. The observer serves:
 
 - worker presence and lease state,
 - attention-worthy failed and blocked tasks,

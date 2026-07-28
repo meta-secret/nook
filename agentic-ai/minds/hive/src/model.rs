@@ -141,6 +141,23 @@ pub struct ClaimedTask {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivityLease {
+    pub task_id: TaskId,
+    pub attempt_id: AttemptId,
+    pub lease_token: LeaseToken,
+}
+
+impl From<&ClaimedTask> for ActivityLease {
+    fn from(task: &ClaimedTask) -> Self {
+        Self {
+            task_id: task.id.clone(),
+            attempt_id: task.attempt_id.clone(),
+            lease_token: task.lease_token.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", content = "task", rename_all = "snake_case")]
 pub enum ClaimOutcome {
     NoTask,

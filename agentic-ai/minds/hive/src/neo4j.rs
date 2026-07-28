@@ -7,7 +7,7 @@ use uuid::Uuid;
 use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
 use crate::install_rustls_crypto_provider;
 use crate::model::{
-    AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
+    ActivityLease, AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
     CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
@@ -787,7 +787,7 @@ impl TaskStore for Neo4jTaskStore {
 
     async fn record_activity(
         &self,
-        task: &ClaimedTask,
+        lease: &ActivityLease,
         agent_id: &AgentId,
         activity: &TaskActivity,
     ) -> anyhow::Result<bool> {
@@ -819,10 +819,10 @@ impl TaskStore for Neo4jTaskStore {
                      FOREACH (entry IN expired | DETACH DELETE entry)
                      RETURN activity.id AS id",
                 )
-                .param("task_id", task.id.as_str())
-                .param("attempt_id", task.attempt_id.as_str())
+                .param("task_id", lease.task_id.as_str())
+                .param("attempt_id", lease.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
-                .param("lease_token", task.lease_token.as_str())
+                .param("lease_token", lease.lease_token.as_str())
                 .param("id", id)
                 .param("kind", activity.kind.as_str())
                 .param("message", activity.message.as_str())

@@ -157,10 +157,17 @@ end
 observer = observer_pod.fetch("containers")
   .find { |container| container["name"] == "observer" }
 observer_environment = observer.fetch("env").map { |entry| entry.fetch("name") }
+observer_coordinator = observer_pod.fetch("containers")
+  .find { |container| container["name"] == "coordinator" }
+observer_coordinator_environment = observer_coordinator.fetch("env")
+  .map { |entry| entry.fetch("name") }
 unless observer.fetch("args") == ["observer"] &&
-       observer_environment.include?("NEO4J_PASSWORD") &&
+       observer_environment.include?("HIVE_COORDINATOR_SOCKET") &&
+       !observer_environment.include?("NEO4J_PASSWORD") &&
+       observer_coordinator.fetch("args") == ["observer-coordinator"] &&
+       observer_coordinator_environment.include?("NEO4J_PASSWORD") &&
        observer.dig("securityContext", "readOnlyRootFilesystem") == true
-  raise "Hive observer must expose only the typed read model with server-side Neo4j access"
+  raise "Hive observer must use the typed coordinator boundary without graph credentials"
 end
 observer_manifest_text = File.read(
   File.join(root, "infra/k0s/manifests/hive/observer.yaml")

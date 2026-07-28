@@ -326,3 +326,45 @@ test('distinguishes no search results and labels activity attempts', async ({
     page.getByText('Adjust the search to see other tasks.'),
   ).toBeVisible();
 });
+
+test('finds durable task history by exact ID outside the overview', async ({
+  page,
+}) => {
+  const archived = {
+    ...snapshot.tasks[2],
+    id: 'archived-task-outside-overview',
+  };
+  await routeSnapshot(page);
+  await page.route('**/api/tasks/archived-task-outside-overview?*', (route) =>
+    route.fulfill({ json: archived }),
+  );
+  await page.goto('/');
+
+  await page
+    .getByPlaceholder('Search tasks')
+    .fill('archived-task-outside-overview');
+  await expect(
+    page.getByRole('button', { name: /Documentation Completed/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('archived-task-outside-overview').last(),
+  ).toBeVisible();
+});
+
+test('ages cached running tasks with client time', async ({ page }) => {
+  await page.clock.install({ time: now });
+  await routeSnapshot(page, {
+    ...snapshot,
+    tasks: [
+      {
+        ...snapshot.tasks[0],
+        updated_at: now - 4 * 60_000,
+      },
+    ],
+  });
+  await page.goto('/');
+  await expect(page.locator('.attention-lane')).toHaveCount(0);
+
+  await page.clock.fastForward(2 * 60_000);
+  await expect(page.locator('.attention-lane')).toBeVisible();
+});

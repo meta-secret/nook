@@ -34,15 +34,24 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   let unavailable = $state(false);
   let detailPanel = $state<HTMLElement | undefined>(undefined);
   let detailsClosed = $state(false);
+  let durableMatch = $state<ObservedTask | undefined>(undefined);
+  let nowMs = $state(Date.now());
 
   const copy = $derived(
     snapshot?.copy ?? emergencyCopy(navigator.language || 'en'),
   );
   const selected = $derived(
-    snapshot?.tasks.find((task) => task.id === selectedId),
+    snapshot?.tasks.find((task) => task.id === selectedId) ??
+      (durableMatch?.id === selectedId ? durableMatch : undefined),
   );
   const filteredTasks = $derived(
-    (snapshot?.tasks ?? []).filter((task) => {
+    [
+      ...(durableMatch &&
+      !(snapshot?.tasks ?? []).some((task) => task.id === durableMatch?.id)
+        ? [durableMatch]
+        : []),
+      ...(snapshot?.tasks ?? []),
+    ].filter((task) => {
       const query = search.trim().toLocaleLowerCase();
       return (
         query.length === 0 ||
@@ -71,15 +80,58 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   $effect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    void loadSnapshot(controller.signal).then(() => {
-      timer = setInterval(() => void loadSnapshot(controller.signal), 15_000);
-    });
+    const poll = async () => {
+      await loadSnapshot(controller.signal);
+      if (!controller.signal.aborted) timer = setTimeout(poll, 15_000);
+    };
+    void poll();
 
     return () => {
       controller.abort();
-      if (timer !== undefined) clearInterval(timer);
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  });
+
+  $effect(() => {
+    const timer = setInterval(() => {
+      nowMs = Date.now();
+    }, 30_000);
+    return () => clearInterval(timer);
+  });
+
+  $effect(() => {
+    const taskId = search.trim();
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      if (taskId.length === 0) {
+        durableMatch = undefined;
+        return;
+      }
+      try {
+        const locale = navigator.language || 'en';
+        const response = await fetch(
+          `/api/tasks/${encodeURIComponent(taskId)}?locale=${encodeURIComponent(locale)}`,
+          { signal: controller.signal },
+        );
+        if (response.status === 404) {
+          durableMatch = undefined;
+          return;
+        }
+        if (!response.ok) return;
+        durableMatch = (await response.json()) as ObservedTask;
+        if (!detailsClosed) selectedId = durableMatch.id;
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          durableMatch = undefined;
+        }
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
     };
   });
 
@@ -111,7 +163,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       unavailable = false;
       if (
         (!detailsClosed && selectedId === undefined) ||
-        !next.tasks.some((task) => task.id === selectedId)
+        (!next.tasks.some((task) => task.id === selectedId) &&
+          durableMatch?.id !== selectedId)
       ) {
         if (!detailsClosed) selectedId = next.tasks[0]?.id;
       }
@@ -126,8 +179,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   function needsAttention(task: ObservedTask) {
     return (
       ['BLOCKED', 'FAILED', 'CANCELLING'].includes(task.status) ||
-      (task.status === 'RUNNING' &&
-        (snapshot?.generated_at ?? Date.now()) - task.updated_at > 5 * 60_000)
+      (task.status === 'RUNNING' && nowMs - task.updated_at > 5 * 60_000)
     );
   }
 
@@ -151,7 +203,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function relativeTime(timestamp: number) {
     if (timestamp <= 0) return '—';
-    const seconds = Math.round((timestamp - Date.now()) / 1000);
+    const seconds = Math.round((timestamp - nowMs) / 1000);
     const formatter = new Intl.RelativeTimeFormat(undefined, {
       numeric: 'auto',
     });

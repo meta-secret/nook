@@ -10,8 +10,8 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 
 use crate::model::{
-    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    LeaseToken, TaskActivity, TaskId,
+    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
+    EnqueueTask, LeaseToken, TaskActivity, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -34,7 +34,7 @@ enum Request {
         lease_seconds: i64,
     },
     RecordActivity {
-        task: ClaimedTask,
+        lease: ActivityLease,
         agent_id: AgentId,
         activity: TaskActivity,
     },
@@ -231,12 +231,12 @@ impl TaskStore for CoordinatorTaskStore {
 
     async fn record_activity(
         &self,
-        task: &ClaimedTask,
+        lease: &ActivityLease,
         agent_id: &AgentId,
         activity: &TaskActivity,
     ) -> anyhow::Result<bool> {
         self.accepted(Request::RecordActivity {
-            task: task.clone(),
+            lease: lease.clone(),
             agent_id: agent_id.clone(),
             activity: activity.clone(),
         })
@@ -364,11 +364,11 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Re
                 .await?,
         )),
         Request::RecordActivity {
-            task,
+            lease,
             agent_id,
             activity,
         } => Ok(Response::Accepted(
-            store.record_activity(&task, &agent_id, &activity).await?,
+            store.record_activity(&lease, &agent_id, &activity).await?,
         )),
         Request::AcknowledgeCancellation { task, agent_id } => Ok(Response::Accepted(
             store.acknowledge_cancellation(&task, &agent_id).await?,
@@ -415,6 +415,9 @@ async fn remove_socket_if_present(path: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::Request;
+    use crate::model::{
+        ActivityKind, ActivityLease, AgentId, AttemptId, LeaseToken, TaskActivity, TaskId,
+    };
 
     #[test]
     fn worker_protocol_has_no_enqueue_or_raw_query_operation() {
@@ -422,5 +425,26 @@ mod tests {
         assert!(!serialized.contains("enqueue"));
         assert!(!serialized.contains("query"));
         assert!(!serialized.contains("password"));
+    }
+
+    #[test]
+    fn activity_request_carries_only_lease_identity() {
+        let serialized = serde_json::to_string(&Request::RecordActivity {
+            lease: ActivityLease {
+                task_id: TaskId::new("task-1").expect("task id"),
+                attempt_id: AttemptId::new("attempt-1").expect("attempt id"),
+                lease_token: LeaseToken::new("lease-1").expect("lease token"),
+            },
+            agent_id: AgentId::new("agent-1").expect("agent id"),
+            activity: TaskActivity {
+                kind: ActivityKind::Action,
+                message: "activity.command_running".to_owned(),
+                detail: "task format".to_owned(),
+            },
+        })
+        .expect("serialize activity");
+        assert!(!serialized.contains("prompt"));
+        assert!(!serialized.contains("dependency"));
+        assert!(!serialized.contains("source_commit"));
     }
 }

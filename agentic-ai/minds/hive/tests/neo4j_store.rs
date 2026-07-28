@@ -1,8 +1,8 @@
 use std::env;
 
 use hive::model::{
-    ActivityKind, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskActivity,
-    TaskId, TaskTrigger,
+    ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskId, TaskTrigger,
 };
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
@@ -149,7 +149,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         assert!(
             store
                 .record_activity(
-                    &stale_claim,
+                    &ActivityLease::from(&stale_claim),
                     stale_agent,
                     &TaskActivity {
                         kind: ActivityKind::Action,
@@ -220,7 +220,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     assert!(
         !store
             .record_activity(
-                &stale_claim,
+                &ActivityLease::from(&stale_claim),
                 stale_agent,
                 &TaskActivity {
                     kind: ActivityKind::Error,

@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path as FilePath, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
+use async_trait::async_trait;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -10,7 +13,11 @@ use axum::routing::get;
 use axum::{Json, Router};
 use neo4rs::query;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use time::OffsetDateTime;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::Mutex;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::neo4j::Neo4jTaskStore;
@@ -224,17 +231,117 @@ fn default_locale() -> String {
     "en".to_owned()
 }
 
-#[derive(Clone)]
-struct ObserverState {
-    store: Neo4jTaskStore,
+#[async_trait]
+pub trait ObserverStore: Clone + Send + Sync + 'static {
+    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value>;
+    async fn observer_task_value(
+        &self,
+        task_id: &str,
+        locale: &str,
+    ) -> anyhow::Result<Option<Value>>;
 }
 
-pub async fn run_observer(
-    store: Neo4jTaskStore,
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "operation", rename_all = "snake_case")]
+enum ObserverRequest {
+    Snapshot { locale: String },
+    Task { task_id: String, locale: String },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "result", content = "value", rename_all = "snake_case")]
+enum ObserverResponse {
+    Snapshot(Value),
+    Task(Option<Value>),
+    Error(String),
+}
+
+#[derive(Clone)]
+pub struct ObserverCoordinatorStore {
+    channel: Arc<Mutex<BufReader<UnixStream>>>,
+}
+
+impl ObserverCoordinatorStore {
+    pub async fn connect(path: &FilePath) -> anyhow::Result<Self> {
+        let stream = loop {
+            match UnixStream::connect(path).await {
+                Ok(stream) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("connect to Hive observer coordinator {}", path.display())
+                    });
+                }
+            }
+        };
+        Ok(Self {
+            channel: Arc::new(Mutex::new(BufReader::new(stream))),
+        })
+    }
+
+    async fn request(&self, request: ObserverRequest) -> anyhow::Result<ObserverResponse> {
+        let mut channel = self.channel.lock().await;
+        channel
+            .get_mut()
+            .write_all(&serde_json::to_vec(&request)?)
+            .await?;
+        channel.get_mut().write_all(b"\n").await?;
+        channel.get_mut().flush().await?;
+        let mut response = String::new();
+        if channel.read_line(&mut response).await? == 0 {
+            anyhow::bail!("Hive observer coordinator closed its private channel");
+        }
+        match serde_json::from_str(&response)? {
+            ObserverResponse::Error(error) => Err(anyhow::anyhow!(error)),
+            response => Ok(response),
+        }
+    }
+}
+
+#[async_trait]
+impl ObserverStore for ObserverCoordinatorStore {
+    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value> {
+        match self
+            .request(ObserverRequest::Snapshot {
+                locale: locale.to_owned(),
+            })
+            .await?
+        {
+            ObserverResponse::Snapshot(snapshot) => Ok(snapshot),
+            response => anyhow::bail!("unexpected observer coordinator response: {response:?}"),
+        }
+    }
+
+    async fn observer_task_value(
+        &self,
+        task_id: &str,
+        locale: &str,
+    ) -> anyhow::Result<Option<Value>> {
+        match self
+            .request(ObserverRequest::Task {
+                task_id: task_id.to_owned(),
+                locale: locale.to_owned(),
+            })
+            .await?
+        {
+            ObserverResponse::Task(task) => Ok(task),
+            response => anyhow::bail!("unexpected observer coordinator response: {response:?}"),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ObserverState<S> {
+    store: S,
+}
+
+pub async fn run_observer<S: ObserverStore>(
+    store: S,
     address: SocketAddr,
     dashboard: PathBuf,
 ) -> anyhow::Result<()> {
-    store.migrate().await?;
     let index = dashboard.join("index.html");
     let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
     let app = Router::new()
@@ -251,25 +358,75 @@ pub async fn run_observer(
         .context("serve Hive observer")
 }
 
+pub async fn run_observer_coordinator(
+    socket: PathBuf,
+    store: Neo4jTaskStore,
+) -> anyhow::Result<()> {
+    store.migrate().await?;
+    if let Some(parent) = socket.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    remove_socket_if_present(&socket).await?;
+    let listener = UnixListener::bind(&socket)
+        .with_context(|| format!("bind Hive observer coordinator {}", socket.display()))?;
+    let (stream, _) = listener
+        .accept()
+        .await
+        .context("accept Hive observer channel")?;
+    drop(listener);
+    remove_socket_if_present(&socket).await?;
+
+    let (reader, mut writer) = stream.into_split();
+    let mut lines = BufReader::new(reader).lines();
+    while let Some(line) = lines.next_line().await? {
+        let response = match serde_json::from_str::<ObserverRequest>(&line) {
+            Ok(ObserverRequest::Snapshot { locale }) => store
+                .observer_snapshot_value(&locale)
+                .await
+                .map(ObserverResponse::Snapshot),
+            Ok(ObserverRequest::Task { task_id, locale }) => store
+                .observer_task_value(&task_id, &locale)
+                .await
+                .map(ObserverResponse::Task),
+            Err(error) => Err(anyhow::anyhow!("decode observer request: {error}")),
+        }
+        .unwrap_or_else(|error| ObserverResponse::Error(format!("{error:#}")));
+        writer.write_all(&serde_json::to_vec(&response)?).await?;
+        writer.write_all(b"\n").await?;
+        writer.flush().await?;
+    }
+    Ok(())
+}
+
+async fn remove_socket_if_present(path: &FilePath) -> anyhow::Result<()> {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("remove stale socket {}", path.display())),
+    }
+}
+
 async fn health() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-async fn overview(
-    State(state): State<ObserverState>,
+async fn overview<S: ObserverStore>(
+    State(state): State<ObserverState<S>>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<ObserverSnapshot>, ObserverError> {
-    Ok(Json(state.store.observer_snapshot(&locale.locale).await?))
+) -> Result<Json<Value>, ObserverError> {
+    Ok(Json(
+        state.store.observer_snapshot_value(&locale.locale).await?,
+    ))
 }
 
-async fn task_detail(
-    State(state): State<ObserverState>,
+async fn task_detail<S: ObserverStore>(
+    State(state): State<ObserverState<S>>,
     Path(task_id): Path<String>,
     Query(locale): Query<LocaleQuery>,
-) -> Result<Json<ObservedTask>, ObserverError> {
+) -> Result<Json<Value>, ObserverError> {
     state
         .store
-        .observer_task(&task_id, &locale.locale)
+        .observer_task_value(&task_id, &locale.locale)
         .await?
         .map(Json)
         .ok_or_else(|| ObserverError::not_found("task was not found"))
@@ -407,8 +564,8 @@ impl Neo4jTaskStore {
                               AS latest_summary
                      ORDER BY
                        CASE task.status
-                         WHEN 'READY' THEN 0
-                         WHEN 'RUNNING' THEN 1
+                         WHEN 'RUNNING' THEN 0
+                         WHEN 'READY' THEN 1
                          WHEN 'BLOCKED' THEN 2
                          WHEN 'CANCELLING' THEN 3
                          ELSE 4
@@ -578,6 +735,25 @@ impl Neo4jTaskStore {
     }
 }
 
+#[async_trait]
+impl ObserverStore for Neo4jTaskStore {
+    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value> {
+        Ok(serde_json::to_value(self.observer_snapshot(locale).await?)?)
+    }
+
+    async fn observer_task_value(
+        &self,
+        task_id: &str,
+        locale: &str,
+    ) -> anyhow::Result<Option<Value>> {
+        self.observer_task(task_id, locale)
+            .await?
+            .map(serde_json::to_value)
+            .transpose()
+            .map_err(Into::into)
+    }
+}
+
 fn localized_task_kind(kind: &str, locale: &str) -> String {
     let russian =
         locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
@@ -622,7 +798,7 @@ fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObserverCopy, localized_activity, localized_task_kind};
+    use super::{ObserverCopy, ObserverRequest, localized_activity, localized_task_kind};
 
     #[test]
     fn observer_copy_preserves_english_and_russian_operator_meaning() {
@@ -644,5 +820,25 @@ mod tests {
             localized_task_kind("main-repair", "ru"),
             "Восстановление main"
         );
+    }
+
+    #[test]
+    fn observer_protocol_exposes_only_bounded_read_operations() {
+        let snapshot = serde_json::to_string(&ObserverRequest::Snapshot {
+            locale: "en".to_owned(),
+        })
+        .expect("serialize observer snapshot");
+        let task = serde_json::to_string(&ObserverRequest::Task {
+            task_id: "task-1".to_owned(),
+            locale: "en".to_owned(),
+        })
+        .expect("serialize observer task");
+        for payload in [snapshot, task] {
+            assert!(!payload.contains("migrate"));
+            assert!(!payload.contains("claim"));
+            assert!(!payload.contains("complete"));
+            assert!(!payload.contains("enqueue"));
+            assert!(!payload.contains("activity"));
+        }
     }
 }
