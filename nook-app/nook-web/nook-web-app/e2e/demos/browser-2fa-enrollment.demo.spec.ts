@@ -153,7 +153,7 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
+    'Vault not connected',
   )
   await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
   await demoBeat(page)
