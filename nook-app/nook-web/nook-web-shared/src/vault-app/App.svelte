@@ -75,7 +75,7 @@
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
   } from "$lib/sentinel-genesis-link";
-  import * as deviceProtectionActions from "$lib/vault/device-protection";
+  import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
   import * as multiDeviceActions from "$lib/vault/multi-device";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";

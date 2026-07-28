@@ -5,7 +5,7 @@ import {
   NookRuntimeConfig,
   type NookPendingSyncConflict as PendingSyncConflict,
 } from '$app-wasm'
-import { syncConflictLabel } from '$lib/vault/sync'
+import { syncConflictLabel } from '$lib/vault/sync.svelte'
 import { intoWasmStringValue } from '$lib/wasm-string-value'
 
 function buildConflict(kind?: string): PendingSyncConflict {
