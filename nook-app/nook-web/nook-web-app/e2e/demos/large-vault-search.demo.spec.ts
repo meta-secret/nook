@@ -110,6 +110,7 @@ test('search a paginated vault through encrypted metadata', async ({
     .toBe(true)
 
   await page.getByTestId('search-secrets').fill('demo-user-59')
+  await expect(page.getByTestId('search-secrets')).toHaveValue('demo-user-59')
   await expect(
     page.getByTestId('secret-row').filter({ hasText: 'demo-user-59' }),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })

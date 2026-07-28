@@ -15,7 +15,7 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync'
+  import type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync.svelte'
 
   let {
     vault,

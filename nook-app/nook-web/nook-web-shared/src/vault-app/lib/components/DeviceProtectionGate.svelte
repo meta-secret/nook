@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
-  import * as deviceProtectionActions from '$lib/vault/device-protection'
+  import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'

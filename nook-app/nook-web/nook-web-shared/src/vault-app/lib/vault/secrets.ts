@@ -1,5 +1,6 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type {
+  AuthenticatorCodeView,
   NookImportResult,
   NookSecretRecord,
   VaultItemType,
@@ -10,8 +11,13 @@ import {
   VaultAccessStatus,
 } from "$lib/nook";
 import { createLogger } from "$lib/log";
-import { JoinEnrollmentState, RemoteVaultRecoveryState } from "$app-wasm";
-import { syncLocalFolderProvider } from "$lib/vault/sync";
+import {
+  JoinEnrollmentState,
+  RemoteVaultRecoveryState,
+  type NookSecretPage,
+} from "$app-wasm";
+import { syncLocalFolderProvider } from "$lib/vault/sync.svelte";
+import { intoWasmStringValue } from "$lib/wasm-string-value";
 import {
   isSentinelCeremonyRequiredError,
   refreshSentinelUnlockStatus,
@@ -20,7 +26,7 @@ import {
 
 const log = createLogger("connect");
 
-function freeSecretRecords(records: NookSecretRecord[]) {
+function freeSecretRecords(records: ReadonlyArray<{ free(): void }>) {
   for (const record of records) record.free();
 }
 
@@ -500,4 +506,121 @@ export function generatePassword(
   symbols: boolean,
 ): string {
   return coreGeneratePassword(length, lowercase, uppercase, numbers, symbols);
+}
+
+export async function refreshSecretsFromSession(
+  state: VaultState,
+): Promise<void> {
+  if (!state.manager) {
+    freeSecretRecords(state.secrets);
+    state.secrets = [];
+    state.secretTotal = 0;
+    state.secretPageOffset = 0;
+    return;
+  }
+  await loadSecretPage(state, state.secretQuery, state.secretPageOffset);
+}
+
+export async function loadSecretPage(
+  state: VaultState,
+  query: string,
+  requestedOffset = 0,
+): Promise<void> {
+  if (!state.manager) return;
+  const generation = state.secretPageGeneration;
+  const page = await state.enqueueStorage(() =>
+    state.manager!.queryPreparedSecretPage(
+      query,
+      intoWasmStringValue(state.secretTypeFilter),
+      requestedOffset,
+      state.secretPageSize,
+    ),
+  );
+  let records = page.takeItems();
+  let total = page.total;
+  let offset = page.offset;
+  page.free();
+  if (generation !== state.secretPageGeneration) {
+    freeSecretRecords(records);
+    return;
+  }
+
+  if (records.length === 0 && total > 0 && offset >= total) {
+    const lastOffset = state.clientPolicy.normalizedSecretPageOffset(
+      total,
+      offset,
+      state.secretPageSize,
+    );
+    const lastPage = await state.enqueueStorage(() =>
+      state.manager!.querySecretPage(
+        query,
+        intoWasmStringValue(state.secretTypeFilter),
+        lastOffset,
+        state.secretPageSize,
+      ),
+    );
+    records = lastPage.takeItems();
+    total = lastPage.total;
+    offset = lastPage.offset;
+    lastPage.free();
+    if (generation !== state.secretPageGeneration) {
+      freeSecretRecords(records);
+      return;
+    }
+  }
+
+  freeSecretRecords(state.secrets);
+  state.secrets = records;
+  state.secretTotal = total;
+  state.secretPageOffset = offset;
+  state.secretQuery = query;
+}
+
+export function applyConnectedSecretPage(
+  state: VaultState,
+  page: NookSecretPage,
+  query: string,
+): void {
+  const records = page.takeItems();
+  const total = page.total;
+  const offset = page.offset;
+  page.free();
+  freeSecretRecords(state.secrets);
+  state.secrets = records;
+  state.secretTotal = total;
+  state.secretPageOffset = offset;
+  state.secretQuery = query;
+}
+
+export async function decryptSecret(
+  state: VaultState,
+  id: string,
+): Promise<NookSecretRecord> {
+  if (!state.manager) {
+    throw new Error("Vault manager is not initialized.");
+  }
+  return state.enqueueStorage(() => state.manager!.decryptSecret(id));
+}
+
+export async function currentAuthenticatorCode(
+  state: VaultState,
+  id: string,
+): Promise<AuthenticatorCodeView> {
+  if (!state.manager) {
+    throw new Error("Vault manager is not initialized.");
+  }
+  const unixSeconds = Math.floor(Date.now() / 1000);
+  const result = await state.enqueueStorage(() =>
+    state.manager!.currentAuthenticatorCode(id, unixSeconds),
+  );
+  try {
+    return {
+      code: result.code,
+      secondsRemaining: result.secondsRemaining,
+      period: result.period,
+      expiresAtUnixSeconds: result.expiresAtUnixSeconds,
+    };
+  } finally {
+    result.free();
+  }
 }
