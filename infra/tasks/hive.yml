@@ -1,0 +1,724 @@
+version: '3'
+
+# hive infrastructure operations.
+tasks:
+  hive:image:
+    desc: Build and publish the exact Hive source to the target loopback registry.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        source_id="$(find \
+          "$remote_dir/agentic-ai/minds/hive" \
+          "$remote_dir/agentic-ai/minds/lace" \
+          -type f -print0 |
+          sort -z |
+          xargs -0 sha256sum |
+          sha256sum |
+          cut -c1-16)"
+        manifest_id="$(sha256sum \
+          "$remote_dir/agentic-ai/minds/Cargo.lock" \
+          "$remote_dir/agentic-ai/minds/Cargo.toml" |
+          sha256sum |
+          cut -c1-16)"
+        image="127.0.0.1:5000/nook-hive:$source_id-$manifest_id"
+        redis_password="$remote_dir/secrets/redis-password"
+        secret_args=()
+        if test -s "$redis_password"; then
+          secret_args+=(--secret "id=sccache_redis_password,src=$redis_password")
+        else
+          echo "Redis sccache credential is unavailable; compiling without remote cache"
+        fi
+        docker build \
+          --platform linux/amd64 \
+          --network host \
+          "${secret_args[@]}" \
+          --tag "$image" \
+          --build-context "nook-app=$remote_dir/nook-app" \
+          --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
+          "$remote_dir/agentic-ai/minds"
+        push_output="$(docker push "$image")"
+        digest="$(printf '%s\n' "$push_output" |
+          awk '{for (field = 1; field <= NF; field++) if ($field == "digest:") print $(field + 1)}' |
+          tail -1)"
+        case "$digest" in
+          sha256:????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Hive image push did not return a sha256 digest" >&2
+            exit 1
+            ;;
+        esac
+        printf '%s@%s\n' "${image%:*}" "$digest" > "$remote_dir/hive-image"
+        chmod 0640 "$remote_dir/hive-image"
+        cat "$remote_dir/hive-image"
+        REMOTE
+
+  hive:auth:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        auth_file="${HIVE_CODEX_AUTH_FILE:-}"
+        if test -n "$auth_file"; then
+          test -f "$auth_file"
+          jq -e '
+            type == "object" and
+            .auth_mode == "chatgpt" and
+            (.tokens.access_token | type == "string" and length > 0) and
+            (.tokens.refresh_token | type == "string" and length > 0) and
+            (.tokens.account_id | type == "string" and length > 0)
+          ' "$auth_file" >/dev/null
+          ssh -n -o BatchMode=yes "$ssh_target" \
+            "install -d -m 0700 '$remote_dir/secrets'"
+          remote_auth_file="$remote_dir/secrets/codex-auth.json.next"
+          cleanup_auth() {
+            ssh -n -o BatchMode=yes "$ssh_target" \
+              "rm -f '$remote_auth_file'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_auth EXIT
+          scp -q -o BatchMode=yes "$auth_file" \
+            "$ssh_target:$remote_auth_file"
+          ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
+        set -euo pipefail
+        remote_dir="$remote_dir"
+        auth_file="\$remote_dir/secrets/codex-auth.json.next"
+        trap 'rm -f "\$auth_file"' EXIT
+        chmod 0600 "\$auth_file"
+        sudo -n k0s kubectl create secret generic hive-codex-auth \
+          --namespace hive-system \
+          --from-file=auth.json="\$auth_file" \
+          --dry-run=client \
+          -o yaml |
+          sudo -n k0s kubectl apply -f -
+        REMOTE
+          trap - EXIT
+          cleanup_auth
+        else
+          ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null"
+        fi
+        BASH
+
+  hive:github:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        token_file="${HIVE_GITHUB_TOKEN_FILE:-}"
+        if test -n "$token_file"; then
+          test -s "$token_file"
+          test "$(wc -l < "$token_file" | tr -d ' ')" = 1
+          ssh -n -o BatchMode=yes "$ssh_target" \
+            "install -d -m 0700 '$remote_dir/secrets'"
+          remote_token_file="$remote_dir/secrets/github-token.next"
+          cleanup_token() {
+            ssh -n -o BatchMode=yes "$ssh_target" \
+              "rm -f '$remote_token_file'" >/dev/null 2>&1 || true
+          }
+          trap cleanup_token EXIT
+          scp -q -o BatchMode=yes "$token_file" \
+            "$ssh_target:$remote_token_file"
+          ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
+        set -euo pipefail
+        remote_dir="$remote_dir"
+        token_file="\$remote_dir/secrets/github-token.next"
+        trap 'rm -f "\$token_file"' EXIT
+        chmod 0600 "\$token_file"
+        sudo -n k0s kubectl create secret generic hive-github-publication \
+          --namespace hive-system \
+          --from-file=token="\$token_file" \
+          --dry-run=client \
+          -o yaml |
+          sudo -n k0s kubectl apply -f -
+        REMOTE
+          trap - EXIT
+          cleanup_token
+        else
+          ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret hive-github-publication --namespace hive-system >/dev/null"
+        fi
+        BASH
+
+  hive:deploy:
+    desc: Publish and deploy the four-replica Kata-backed Hive warm pool.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - task: kata:guest-seccomp:enable
+      - task: hive:seccomp:install
+      - task: hive:image
+      - task: hive:auth:sync
+      - task: hive:github:sync
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        if ! kubectl get secret hive-reaper-auth \
+          --namespace hive-system >/dev/null 2>&1; then
+          reaper_token="$(openssl rand -hex 32)"
+          kubectl create secret generic hive-reaper-auth \
+            --namespace hive-system \
+            --from-literal=token="$reaper_token"
+          unset reaper_token
+        fi
+        image="$(cat "$remote_dir/hive-image")"
+        auth_data="$(
+          kubectl get secret hive-codex-auth \
+            --namespace hive-system \
+            -o jsonpath='{.data.auth\.json}'
+        )"
+        test -n "$auth_data"
+        auth_checksum="$(
+          printf '%s' "$auth_data" |
+            base64 --decode |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        github_data="$(
+          kubectl get secret hive-github-publication \
+            --namespace hive-system \
+            -o jsonpath='{.data.token}'
+        )"
+        test -n "$github_data"
+        github_checksum="$(
+          printf '%s' "$github_data" |
+            base64 --decode |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        neo4j_ca_data="$(
+          kubectl get secret hive-neo4j-ca \
+            --namespace hive-system \
+            -o jsonpath='{.data.ca\.crt}'
+        )"
+        test -n "$neo4j_ca_data"
+        neo4j_ca_checksum="$(
+          printf '%s' "$neo4j_ca_data" |
+            base64 --decode |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        unset auth_data github_data neo4j_ca_data
+        case "$auth_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Codex authentication checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
+        case "$neo4j_ca_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Neo4j CA checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
+        case "$github_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "GitHub credential checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
+        case "$image" in
+          127.0.0.1:5000/nook-hive@sha256:*) ;;
+          *)
+            echo "Refusing unpinned Hive image: $image" >&2
+            exit 1
+            ;;
+        esac
+        neo4j_service_ip="$(
+          kubectl get service hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.spec.clusterIP}'
+        )"
+        neo4j_endpoint_ip="$(
+          kubectl get endpoints hive-neo4j \
+            --namespace hive-data \
+            -o jsonpath='{.subsets[0].addresses[0].ip}'
+        )"
+        k0s_api_ip="{{.K0S_API_ADDRESS}}"
+        for discovered_ip in \
+          "$neo4j_service_ip" \
+          "$neo4j_endpoint_ip" \
+          "$k0s_api_ip"; do
+          case "$discovered_ip" in
+            *[!0-9.]*|'')
+              echo "Refusing invalid discovered cluster endpoint: $discovered_ip" >&2
+              exit 1
+              ;;
+          esac
+        done
+        rendered="$(mktemp)"
+        trap 'rm -f "$rendered"' EXIT
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_AUTH_CHECKSUM|$auth_checksum|g" \
+          -e "s|HIVE_GITHUB_CHECKSUM|$github_checksum|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          "$remote_dir/infra/k0s/manifests/hive/dispatcher.yaml" >> "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          "$remote_dir/infra/k0s/manifests/hive/observer.yaml" >> "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_IMAGE|$image|g" \
+          "$remote_dir/infra/k0s/manifests/hive/reaper-controller.yaml" >> "$rendered"
+        printf '%s\n' '---' >> "$rendered"
+        sed \
+          -e "s|HIVE_NEO4J_SERVICE_CIDR|$neo4j_service_ip/32|g" \
+          -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
+          -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
+          "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" >> "$rendered"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
+        kubectl apply -f "$rendered"
+        kubectl rollout status deployment/hive \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-observer \
+          --namespace hive-system \
+          --timeout=15m
+        kubectl rollout status deployment/hive-reaper-controller \
+          --namespace hive-system \
+          --timeout=15m
+        for attempt in $(seq 1 60); do
+          current_neo4j_endpoint_ip="$(
+            kubectl get endpoints hive-neo4j \
+              --namespace hive-data \
+              -o jsonpath='{.subsets[0].addresses[0].ip}'
+          )"
+          case "$current_neo4j_endpoint_ip" in
+            *[!0-9.]*)
+              echo "Refusing invalid live Neo4j endpoint: $current_neo4j_endpoint_ip" >&2
+              exit 1
+              ;;
+          esac
+          expected_neo4j_cidrs="$(
+            {
+              printf '%s\n' "$neo4j_service_ip/32"
+              if test -n "$current_neo4j_endpoint_ip"; then
+                printf '%s\n' "$current_neo4j_endpoint_ip/32"
+              fi
+            } |
+              sort |
+              paste -sd, -
+          )"
+          live_neo4j_cidrs="$(
+            kubectl get networkpolicy hive-worker-egress \
+              --namespace hive-system \
+              -o json |
+              jq -r '
+                .spec.egress[]
+                | select(any(.ports[]?; .protocol == "TCP" and .port == 7687))
+                | select(any(.to[]?; has("ipBlock")))
+                | [.to[] | .ipBlock.cidr]
+                | sort
+                | join(",")
+              '
+          )"
+          if test "$live_neo4j_cidrs" = "$expected_neo4j_cidrs"; then
+            break
+          fi
+          if test "$attempt" -eq 60; then
+            echo "Hive NetworkPolicy controller did not reconcile Neo4j endpoints" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.status.readyReplicas}')" = 4
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-dragonball
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.spec.template.spec.automountServiceAccountToken}')" = false
+        deployment_json="$(kubectl get deployment hive --namespace hive-system -o json)"
+        if printf '%s' "$deployment_json" | jq -e \
+          '[
+             .spec.template.spec.containers[],
+             .spec.template.spec.initContainers[]
+             | select(.securityContext.privileged == true)
+           ] | length > 0' >/dev/null; then
+          echo "Hive deployment contains a privileged container" >&2
+          exit 1
+        fi
+        if printf '%s' "$deployment_json" | jq -e \
+          '.spec.template.spec.volumes // [] | any(has("hostPath"))' >/dev/null; then
+          echo "Hive deployment contains a hostPath volume" >&2
+          exit 1
+        fi
+        test "$(
+          printf '%s' "$deployment_json" |
+            jq -r '.spec.template.spec.containers[]
+              | select(.name == "coordinator")
+              | .env[]
+              | select(.name == "NEO4J_URI")
+              | .value'
+        )" = neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
+        test "$(
+          printf '%s' "$deployment_json" |
+            jq '[.spec.template.spec.containers[]
+              | select(.name == "hive")
+              | .env[]
+              | select(.name | startswith("NEO4J_"))] | length'
+        )" = 0
+
+        old_pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+            jq -r '
+              .items[]
+              | select(.metadata.deletionTimestamp == null)
+              | select(
+                  any(
+                    .status.containerStatuses[]?;
+                    .name == "hive" and .ready == true
+                  )
+                )
+              | .metadata.name
+            ' |
+            head -1
+        )"
+        test -n "$old_pod"
+        kubectl exec "$old_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /usr/bin/setpriv --no-new-privs \
+            /usr/bin/bwrap \
+              --unshare-user \
+              --unshare-pid \
+              --unshare-net \
+              --ro-bind / / \
+              --dev /dev \
+              --tmpfs /tmp \
+              --bind /workspace /workspace \
+              --chdir /workspace \
+              /bin/bash -ceu \
+                'touch .hive-sandbox-smoke && test ! -w /usr && rm .hive-sandbox-smoke'
+        test "$(
+          kubectl exec "$old_pod" \
+            --namespace hive-system \
+            --container hive \
+            -- awk '/^Seccomp:/ {print $2}' /proc/self/status
+        )" = 2
+        old_uid="$(kubectl get pod "$old_pod" \
+          --namespace hive-system \
+          -o jsonpath='{.metadata.uid}')"
+        kubectl exec "$old_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /usr/bin/touch /workspace/.hive-task-finished
+        kubectl wait "pod/$old_pod" \
+          --namespace hive-system \
+          --for=delete \
+          --timeout=5m
+        kubectl rollout status deployment/hive \
+          --namespace hive-system \
+          --timeout=10m
+        test "$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.status.readyReplicas}')" = 4
+        if kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
+          grep -Fx "$old_uid"; then
+          echo "Hive lifecycle verification reused the terminated Pod" >&2
+          exit 1
+        fi
+        kubectl get pods --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o wide
+        REMOTE
+
+  hive:seccomp:install:
+    desc: Install the Restricted-compatible Hive Bubblewrap profile on k0s.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        source_profile="$remote_dir/infra/k0s/seccomp/hive-bubblewrap.json"
+        profile_dir=/var/lib/k0s/kubelet/seccomp/nook
+        test "$(
+          jq -r '.defaultAction' "$source_profile"
+        )" = SCMP_ACT_ERRNO
+        sudo -n install -d -m 0755 "$profile_dir"
+        sudo -n install -m 0644 \
+          "$source_profile" \
+          "$profile_dir/hive-bubblewrap.json"
+        REMOTE
+
+  hive:diagnose:
+    desc: Show bounded Hive worker and controller diagnostics.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get deployment,pod \
+          --namespace hive-system \
+          -o wide || true
+        kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o json |
+          jq '[
+            .items[]
+            | {
+                pod: .metadata.name,
+                containers: [
+                  .status.containerStatuses[]?
+                  | {
+                      name,
+                      ready,
+                      restartCount,
+                      state,
+                      lastState
+                    }
+                ]
+              }
+          ]' || true
+        kubectl get service,endpoints kubernetes \
+          --namespace default \
+          -o wide || true
+        kubectl get service,endpoints kube-dns \
+          --namespace kube-system \
+          -o wide || true
+        kubectl get service,endpoints \
+          --namespace hive-data \
+          -o wide || true
+        kubectl logs statefulset/hive-neo4j \
+          --namespace hive-data \
+          --tail=100 || true
+        api_endpoint="$(
+          kubectl get endpoints kubernetes \
+            --namespace default \
+            -o jsonpath='{.subsets[0].addresses[0].ip}' \
+            2>/dev/null || true
+        )"
+        if test -n "$api_endpoint"; then
+          kubectl exec -i deployment/hive-reaper-controller \
+            --namespace hive-system \
+            -- python3 - "$api_endpoint" <<'PY' || true
+        import socket
+        import sys
+
+        for host, port in (
+            ("kubernetes.default.svc", 443),
+            (sys.argv[1], 6443),
+        ):
+            try:
+                with socket.create_connection((host, port), timeout=5):
+                    print(f"connected to {host}:{port}")
+            except OSError as error:
+                print(f"failed to connect to {host}:{port}: {error}")
+        PY
+        fi
+        probe_pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+          jq -r '
+            [.items[] | select(.metadata.deletionTimestamp == null)]
+            | sort_by(.metadata.creationTimestamp)
+            | last
+            | .metadata.name
+          '
+        )"
+        kubectl exec -i "$probe_pod" \
+          --namespace hive-system \
+          --container hive \
+          -- python3 - <<'PY' || true
+        import socket
+
+        host = "hive-neo4j.hive-data.svc.cluster.local"
+        port = 7687
+        try:
+            with socket.create_connection((host, port), timeout=5):
+                print(f"connected to {host}:{port}")
+        except OSError as error:
+            print(f"failed to connect to {host}:{port}: {error}")
+        PY
+        kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- cat /etc/resolv.conf || true
+        kubectl logs deployment/coredns \
+          --namespace kube-system \
+          --tail=100 || true
+        kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --max-time 15 \
+            --output /dev/null \
+            https://api.github.com/repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform?ref=main ||
+          true
+        kubectl get pods \
+          --namespace hive-system \
+          -l app.kubernetes.io/name=hive \
+          -o name |
+        sort |
+        while IFS= read -r pod; do
+          kubectl logs "$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --since=10m \
+            --tail=200 || true
+        done
+        kubectl logs deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=3m \
+          --tail=100 || true
+        kubectl logs deployment/hive-reaper-controller \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=3m \
+          --tail=100 || true
+        kubectl logs deployment/hive-observer \
+          --namespace hive-system \
+          --all-containers \
+          --prefix \
+          --since=10m \
+          --tail=200 || true
+        unhealthy_pods="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json 2>/dev/null |
+          jq -r '
+            .items[]
+            | select(
+                (.status.phase != "Running") or
+                ([.status.containerStatuses[]? | select(.ready != true)] | length > 0)
+              )
+            | .metadata.name
+          ' || true
+        )"
+        for pod in $unhealthy_pods; do
+          kubectl logs "pod/$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --tail=100 || true
+          kubectl logs "pod/$pod" \
+            --namespace hive-system \
+            --all-containers \
+            --prefix \
+            --previous \
+            --tail=100 || true
+          kubectl describe "pod/$pod" \
+            --namespace hive-system || true
+        done
+        kubectl get events \
+          --namespace hive-system \
+          --sort-by=.lastTimestamp |
+          tail -100 || true
+        REMOTE
+
+  hive:sandbox:diagnose:
+    desc: Probe the live Hive worker namespace and Bubblewrap prerequisites.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        config=/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/dragonball/configuration-dragonball.toml
+        sudo -n grep -H '^disable_guest_seccomp' "$config"
+        pod="$(
+          kubectl get pods \
+            --namespace hive-system \
+            -l app.kubernetes.io/name=hive \
+            -o json |
+            jq -r '
+              .items[]
+              | select(.metadata.deletionTimestamp == null)
+              | select(any(.status.containerStatuses[]?; .name == "hive" and .ready == true))
+              | .metadata.name
+            ' |
+            head -1
+        )"
+        test -n "$pod"
+        kubectl exec "$pod" \
+          --namespace hive-system \
+          --container hive \
+          -- /bin/bash -ceu '
+            probe() {
+              label="$1"
+              shift
+              printf "== %s ==\n" "$label"
+              output=""
+              if output="$("$@" 2>&1)"; then
+                test -z "$output" || printf "%s\n" "$output"
+                printf "%s\n" "result=ok"
+              else
+                status="$?"
+                test -z "$output" || printf "%s\n" "$output"
+                printf "result=failed exit=%s\n" "$status"
+              fi
+            }
+            id
+            uname -a
+            bwrap --version
+            grep -E "^(Cap|NoNewPrivs|Seccomp)" /proc/self/status
+            for setting in \
+              /proc/sys/kernel/unprivileged_userns_clone \
+              /proc/sys/user/max_user_namespaces; do
+              if test -r "$setting"; then
+                printf "%s=" "$setting"
+                cat "$setting"
+              fi
+            done
+            probe "Codex no-fresh-proc sandbox shape" bwrap \
+              --unshare-user \
+              --unshare-pid \
+              --unshare-net \
+              --ro-bind / / \
+              --dev /dev \
+              --tmpfs /tmp \
+              --bind /workspace /workspace \
+              --chdir /workspace \
+              /bin/bash -ceu "test ! -w /usr; touch .hive-sandbox-diagnostic; rm .hive-sandbox-diagnostic"
+          '
+        REMOTE

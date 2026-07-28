@@ -9,7 +9,7 @@ import textwrap
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TASKFILE = ROOT / "infra/Taskfile.yml"
+TASKFILE = ROOT / "infra/tasks/k0s.yml"
 FUNCTION_START = "        rollback_k0s_firewall() {\n"
 FUNCTION_END = "        trap rollback_k0s_firewall EXIT\n"
 REPLACE_START = "        replace_k0s_firewall_rules() {\n"

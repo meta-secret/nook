@@ -1,0 +1,132 @@
+version: '3'
+
+# operations infrastructure operations.
+tasks:
+  status:
+    desc: Show the remote infrastructure service state.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" ps
+
+  logs:
+    desc: Show recent remote infrastructure logs.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" logs --tail=100
+
+  redis:ping:
+    desc: Verify the remote Redis compiler-cache service.
+    silent: true
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        'docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis
+        sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli ping'\'''
+
+  redis:credential:sync:
+    desc: Copy the remote Redis password into the ignored local cache credential file.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        credential_dir="$repo_root/.nook/cache"
+        credential_file="$credential_dir/redis-password"
+        install -d -m 0700 "$credential_dir"
+        umask 077
+        ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "cat '{{.INFRA_REMOTE_DIR}}/secrets/redis-password'" > "$credential_file"
+        test -s "$credential_file"
+        chmod 0600 "$credential_file"
+        echo "Redis credential synchronized to .nook/cache/redis-password"
+        BASH
+
+  redis:stats:
+    desc: Show remote Redis cache size, memory, hits, misses, and evictions.
+    silent: true
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        'set -eu;
+        compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
+        docker compose -f "$compose" exec -T redis sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; redis-cli DBSIZE; redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):"; redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'\'''
+
+  registry:check:
+    desc: Verify the loopback-only Hive image registry API.
+    cmds:
+      - >-
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+        curl --fail --silent --show-error http://127.0.0.1:5000/v2/
+
+  hive:queue:status:
+    desc: Show bounded durable Hive task and latest-attempt state.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- /usr/local/bin/hive queue status
+        REMOTE
+
+  hive:dashboard:
+    desc: Open the read-only Hive Control Center through an SSH tunnel.
+    silent: true
+    cmds:
+      - |
+        local_port="{{default "18080" .HIVE_DASHBOARD_PORT}}"
+        case "$local_port" in
+          *[!0-9]*|'')
+            echo "HIVE_DASHBOARD_PORT must be numeric" >&2
+            exit 1
+            ;;
+        esac
+        url="http://127.0.0.1:$local_port"
+        if command -v open >/dev/null 2>&1; then
+          (sleep 2; open "$url") &
+        fi
+        echo "Hive Control Center: $url"
+        exec ssh \
+          -o BatchMode=yes \
+          -L "$local_port:127.0.0.1:$local_port" \
+          "{{.INFRA_SSH_TARGET}}" \
+          "sudo -n k0s kubectl port-forward --namespace hive-system --address 127.0.0.1 service/hive-observer $local_port:8080"
+
+  hive:queue:retry:
+    desc: Rearm one failed Main-repair chain once per deployed Hive release.
+    silent: true
+    cmds:
+      - |
+        task_id="{{.HIVE_TASK_ID}}"
+        if test -z "$task_id" || test "$task_id" = "<no value>"; then
+          echo "HIVE_TASK_ID is required" >&2
+          exit 1
+        fi
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' -- "$task_id" <<'REMOTE'
+        set -euo pipefail
+        task_id="$1"
+        image="$(
+          sudo -n k0s kubectl get deployment hive \
+            --namespace hive-system \
+            -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
+        )"
+        release_id="${image##*@}"
+        case "$release_id" in
+          sha256:????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Hive deployment is not pinned to a sha256 release" >&2
+            exit 1
+            ;;
+        esac
+        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
+          --namespace hive-system \
+          --container dispatcher \
+          -- /usr/local/bin/hive queue retry-failed-main \
+            --task-id "$task_id" \
+            --release-id "$release_id"
+        REMOTE
