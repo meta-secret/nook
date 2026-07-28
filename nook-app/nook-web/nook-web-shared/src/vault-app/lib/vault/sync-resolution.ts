@@ -89,8 +89,7 @@ export async function resolveSyncConflictKeepLocal(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   });
-  state.errorMsg =
-    "Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.";
+  state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
   state.isVerifying = false;
 }
 
@@ -104,8 +103,7 @@ export async function resolveSyncConflictKeepRemote(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   });
-  state.errorMsg =
-    "Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.";
+  state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
   state.isVerifying = false;
 }
 

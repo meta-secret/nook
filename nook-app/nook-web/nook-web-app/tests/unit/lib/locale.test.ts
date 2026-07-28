@@ -117,6 +117,7 @@ describe('locale', () => {
       'errors.vault_creation_failed',
       'errors.vault_rename_failed',
       'errors.conflict_resolution_failed',
+      'errors.whole_vault_conflict_resolution_retired',
       'toasts.google_drive_connected',
       'toasts.secret_conflict_resolved',
       'app.secret_sync_conflicts',
