@@ -40,6 +40,13 @@ const snapshot: ObserverSnapshot = {
     ready: 'Ready',
     blocked: 'Blocked',
     failed: 'Failed',
+    critical: 'Critical',
+    warning: 'Warning',
+    alert_task_failed: 'All permitted attempts have failed',
+    alert_dependency_failed: 'Task could not start because a dependency failed',
+    alert_dependency_blocked: 'Task is waiting for a dependency',
+    alert_activity_stale: 'Agent activity has gone stale',
+    alert_cancellation_stuck: 'Cancellation was not acknowledged in time',
     cancelling: 'Cancelling',
     cancelled: 'Cancelled',
     completed: 'Completed',
@@ -74,6 +81,18 @@ const snapshot: ObserverSnapshot = {
       last_seen_at: now - 11_000,
     },
   ],
+  active_task_count: 1,
+  alerts: [
+    {
+      id: 'task-failed:dependency-cache-repair',
+      kind: 'task-failed',
+      severity: 'critical',
+      task_id: 'dependency-cache-repair',
+      first_observed_at: now - 9 * 60_000,
+      reason: 'All permitted attempts have failed',
+    },
+  ],
+  alerts_truncated: false,
   tasks: [
     {
       id: 'main-repair-359c937a-run-302991001',
@@ -93,6 +112,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'RUNNING',
       latest_attempt_started_at: now - 12 * 60_000,
       latest_attempt_completed_at: 0,
+      latest_activity_at: now - 18_000,
       latest_error: '',
       latest_summary: '',
       dependencies: [
@@ -149,6 +169,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'FAILED',
       latest_attempt_started_at: now - 20 * 60_000,
       latest_attempt_completed_at: now - 9 * 60_000,
+      latest_activity_at: now - 9 * 60_000,
       latest_error: 'Verification failed after the final permitted attempt.',
       latest_summary: '',
       dependencies: [],
@@ -182,6 +203,7 @@ const snapshot: ObserverSnapshot = {
       latest_attempt_status: 'COMPLETED',
       latest_attempt_started_at: now - 3 * 60 * 60_000,
       latest_attempt_completed_at: now - 2 * 60 * 60_000,
+      latest_activity_at: 0,
       latest_error: '',
       latest_summary: 'Documentation synchronized and validated.',
       dependencies: [],
@@ -207,6 +229,9 @@ test('shows worker health, attention, task evidence, and durable activity', asyn
   ).toBeVisible();
   await expect(
     page.getByText('Needs attention', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('All permitted attempts have failed'),
   ).toBeVisible();
   await expect(
     page.getByText('Main repair', { exact: true }).first(),
@@ -293,7 +318,7 @@ test('uses immediate task navigation with reduced motion', async ({ page }) => {
   await routeSnapshot(page);
   await page.goto('/');
 
-  await page.getByRole('button', { name: /Blocking task Failed/ }).click();
+  await page.getByRole('button', { name: /Blocking task Critical/ }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-scroll-behavior',
     'auto',
@@ -351,20 +376,28 @@ test('finds durable task history by exact ID outside the overview', async ({
   ).toBeVisible();
 });
 
-test('ages cached running tasks with client time', async ({ page }) => {
-  await page.clock.install({ time: now });
+test('uses typed server alerts instead of inferring policy in the browser', async ({
+  page,
+}) => {
   await routeSnapshot(page, {
     ...snapshot,
+    alerts: [],
     tasks: [
       {
         ...snapshot.tasks[0],
-        updated_at: now - 4 * 60_000,
+        updated_at: now - 10 * 60_000,
       },
     ],
   });
   await page.goto('/');
   await expect(page.locator('.attention-lane')).toHaveCount(0);
+});
 
-  await page.clock.fastForward(2 * 60_000);
-  await expect(page.locator('.attention-lane')).toBeVisible();
+test('marks a bounded attention count as truncated', async ({ page }) => {
+  await routeSnapshot(page, {
+    ...snapshot,
+    alerts_truncated: true,
+  });
+  await page.goto('/');
+  await expect(page.locator('.attention-summary strong')).toHaveText('1+');
 });

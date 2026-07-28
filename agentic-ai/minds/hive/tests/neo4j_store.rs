@@ -4,6 +4,7 @@ use hive::model::{
     ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask,
     TaskActivity, TaskId, TaskTrigger,
 };
+use hive::observer::AlertKind;
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
@@ -102,6 +103,25 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .await
             .expect("complete dependency")
+    );
+    let mut promoted_rows = graph
+        .execute(
+            query(
+                "MATCH (task:Task {id: $task_id})
+                 RETURN task.status AS status,
+                        task.blocked_reason IS NULL AS cleared_blocked_reason",
+            )
+            .param("task_id", dependent.id.as_str()),
+        )
+        .await?;
+    let promoted = promoted_rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("promoted dependent row was missing"))?;
+    assert_eq!(promoted.get::<String>("status")?, "READY");
+    assert!(
+        promoted.get::<bool>("cleared_blocked_reason")?,
+        "promoted tasks must not retain dependency-failure classification"
     );
     let mut artifact_rows = graph
         .execute(
@@ -522,6 +542,22 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("persist completed blocker dependency")
     );
+    let mut reused_state_rows = graph
+        .execute(
+            query(
+                "MATCH (task:Task {id: $id})
+                 RETURN task.status AS status,
+                        task.blocked_reason IS NULL AS cleared_blocked_reason",
+            )
+            .param("id", reused.id.as_str()),
+        )
+        .await?;
+    let reused_state = reused_state_rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("completed-blocker reuse row was missing"))?;
+    assert_eq!(reused_state.get::<String>("status")?, "READY");
+    assert!(reused_state.get::<bool>("cleared_blocked_reason")?);
     let resumed_reused = store
         .claim(&agent_a, 300)
         .await
@@ -653,6 +689,27 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         failed_statuses.iter().all(|(_, status)| status == "FAILED"),
         "terminal dependency failure must propagate to every blocked descendant"
     );
+    let dependency_alert = store
+        .observer_snapshot("en")
+        .await?
+        .alerts
+        .into_iter()
+        .find(|alert| alert.task_id == stranded.id.as_str())
+        .ok_or_else(|| anyhow::anyhow!("propagated dependency alert was missing"))?;
+    assert_eq!(dependency_alert.kind, AlertKind::DependencyFailed);
+    let late_dependent = task(
+        format!("late-failed-dependent-{suffix}"),
+        vec![exhausted.id.clone()],
+    );
+    store.enqueue(&late_dependent).await?;
+    let late_dependency_alert = store
+        .observer_snapshot("en")
+        .await?
+        .alerts
+        .into_iter()
+        .find(|alert| alert.task_id == late_dependent.id.as_str())
+        .ok_or_else(|| anyhow::anyhow!("late dependency alert was missing"))?;
+    assert_eq!(late_dependency_alert.kind, AlertKind::DependencyFailed);
 
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();
@@ -1113,41 +1170,49 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                last_retry_release:
                  'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })",
+             })
+             CREATE (activity_task:Task {
+               id: 'schema-6-activity-task',
+               status: 'RUNNING',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (activity:TaskActivity {
+               id: 'schema-6-activity',
+               created_at: 123456
+             })
+             CREATE (activity)-[:FOR_TASK]->(activity_task)",
         ))
         .await
         .expect("create schema-3 fixture");
-    store.migrate().await.expect("migrate schema 3 to schema 6");
-    let mut schema_six_rows = graph
+    store.migrate().await?;
+    let mut schema_seven_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (migration:HiveSchemaMigration {version: 6})
+             MATCH (activity_task:Task {id: 'schema-6-activity-task'})
+             MATCH (migration:HiveSchemaMigration {version: 7})
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
+                    activity_task.latest_activity_at AS latest_activity_at,
                     migration.version AS version",
         ))
-        .await
-        .expect("read schema-6 migration state");
-    let schema_six = schema_six_rows
+        .await?;
+    let schema_seven = schema_seven_rows
         .next()
-        .await
-        .expect("read schema-6 row")
-        .expect("schema-6 migration row");
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("schema-7 migration row was missing"))?;
     assert_eq!(
-        schema_six
+        schema_seven
             .get::<String>("last_retry_release")
             .expect("initialized release marker"),
         ""
     );
     assert!(
-        schema_six
+        schema_seven
             .get::<bool>("removed_legacy_marker")
             .expect("removed legacy marker")
     );
-    assert_eq!(
-        schema_six.get::<i64>("version").expect("schema-6 version"),
-        6
-    );
+    assert_eq!(schema_seven.get::<i64>("latest_activity_at")?, 123456);
+    assert_eq!(schema_seven.get::<i64>("version")?, 7);
     let mut rollback_marker_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-4-rollback-task'})

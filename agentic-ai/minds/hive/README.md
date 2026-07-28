@@ -111,7 +111,8 @@ Unix-socket coordinator sidecar; only that sidecar holds the Neo4j credential
 and reads over the existing private TLS boundary. The observer serves:
 
 - worker presence and lease state,
-- attention-worthy failed and blocked tasks,
+- a bounded typed alert projection for failed, dependency-blocked,
+  stale-running, and stuck-cancellation tasks,
 - the bounded task queue and dependency graph,
 - sanitized semantic activity such as validation, changes, retries, and results.
 
@@ -129,7 +130,7 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `6` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `7` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
@@ -143,9 +144,12 @@ the original one-time retry marker. Version 4 replaces that marker with
 `last_retry_release`, allowing one explicit three-attempt recovery per deployed
 Hive image digest and atomically rearming failed blocker dependencies. Version
 5 adds the current task scheduling indexes. Version 6 adds bounded, sanitized
-`TaskActivity` events for the observer. To roll version 6 back, first stop every
-Hive worker and observer and back up the Neo4j data volume, then delete only the
-version-6 `HiveSchemaMigration` node and its `TaskActivity` nodes. Keep
+`TaskActivity` events for the observer. Version 7 backfills and maintains each
+task's newest activity timestamp so bounded overview polling does not aggregate
+the retained activity graph. To roll version 7 back, first stop every Hive
+worker and observer and back up the Neo4j data volume, then delete only the
+version-7 `HiveSchemaMigration` node and remove `latest_activity_at` from `Task`
+nodes. Keep
 `last_retry_release` so a later forward migration cannot repeat a recovery for
 the same deployed image.
 

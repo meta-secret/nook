@@ -32,6 +32,13 @@ export type ObserverCopy = {
   ready: string;
   blocked: string;
   failed: string;
+  critical: string;
+  warning: string;
+  alert_task_failed: string;
+  alert_dependency_failed: string;
+  alert_dependency_blocked: string;
+  alert_activity_stale: string;
+  alert_cancellation_stuck: string;
   cancelling: string;
   cancelled: string;
   completed: string;
@@ -63,6 +70,20 @@ export type ObservedActivity = {
   attempt_number: number;
 };
 
+export type ObservedAlert = {
+  id: string;
+  kind:
+    | 'task-failed'
+    | 'dependency-failed'
+    | 'dependency-blocked'
+    | 'activity-stale'
+    | 'cancellation-stuck';
+  severity: 'critical' | 'warning';
+  task_id: string;
+  first_observed_at: number;
+  reason: string;
+};
+
 export type ObservedTask = {
   id: string;
   kind: string;
@@ -81,6 +102,7 @@ export type ObservedTask = {
   latest_attempt_status: string;
   latest_attempt_started_at: number;
   latest_attempt_completed_at: number;
+  latest_activity_at: number;
   latest_error: string;
   latest_summary: string;
   dependencies: ObservedDependency[];
@@ -91,5 +113,8 @@ export type ObserverSnapshot = {
   generated_at: number;
   copy: ObserverCopy;
   agents: ObservedAgent[];
+  active_task_count: number;
   tasks: ObservedTask[];
+  alerts: ObservedAlert[];
+  alerts_truncated: boolean;
 };

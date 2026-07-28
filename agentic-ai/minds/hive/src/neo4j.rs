@@ -23,7 +23,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 7;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     pub(crate) graph: Graph,
@@ -281,6 +281,18 @@ impl TaskStore for Neo4jTaskStore {
                 .await
                 .context("failed to initialize schema-4 release-scoped retry state")?;
         }
+        if installed_version < 7 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
+                     WITH task, max(activity.created_at) AS latest_activity_at
+                     WHERE latest_activity_at IS NOT NULL
+                     SET task.latest_activity_at = latest_activity_at",
+                ))
+                .await
+                .context("failed to backfill schema-7 latest activity state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -385,10 +397,16 @@ impl TaskStore for Neo4jTaskStore {
                     "MATCH (task:Task {id: $id})
                      OPTIONAL MATCH (task)-[:DEPENDS_ON]->(dependency:Task)
                      WITH task, count(dependency) AS dependency_count,
-                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END) AS completed_count
+                          count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END) AS completed_count,
+                          count(CASE WHEN dependency.status = 'FAILED' THEN 1 END) AS failed_count
                      SET task.status = CASE
+                       WHEN failed_count > 0 THEN 'FAILED'
                        WHEN dependency_count = completed_count THEN 'READY'
                        ELSE 'BLOCKED'
+                     END,
+                     task.failure_reason = CASE
+                       WHEN failed_count > 0 THEN 'dependency failed before task enqueue'
+                       ELSE null
                      END",
                 )
                 .param("id", task.id.as_str()),
@@ -811,6 +829,7 @@ impl TaskStore for Neo4jTaskStore {
                      })
                      MERGE (activity)-[:FOR_TASK]->(task)
                      MERGE (activity)-[:FOR_ATTEMPT]->(attempt)
+                     SET task.latest_activity_at = activity.created_at
                      WITH task, activity
                      OPTIONAL MATCH (older:TaskActivity)-[:FOR_TASK]->(task)
                      WITH activity, older
@@ -942,6 +961,7 @@ impl TaskStore for Neo4jTaskStore {
                    WHERE dependency.status <> 'COMPLETED'
                  }
                  SET blocked.status = 'READY',
+                     blocked.blocked_reason = null,
                      blocked.updated_at = timestamp(),
                      blocked.version = blocked.version + 1",
             ))
@@ -1064,7 +1084,10 @@ impl TaskStore for Neo4jTaskStore {
                              ELSE 'BLOCKED'
                          END,
                          task.attempt_count = task.attempt_count - 1,
-                         task.blocked_reason = $reason,
+                         task.blocked_reason = CASE
+                           WHEN blocker.status = 'COMPLETED' THEN null
+                           ELSE $reason
+                         END,
                          task.failure_reason = CASE
                            WHEN blocker.status = 'FAILED'
                            THEN 'discovered blocker has already exhausted its retry budget'

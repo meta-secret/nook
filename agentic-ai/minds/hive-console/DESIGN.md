@@ -23,10 +23,14 @@ relationships carry the visual hierarchy.
 - The first viewport answers three questions in order: is Hive healthy, what is
   running, and what needs attention.
 - Task rows are the primary repeated object. Avoid card grids and metric tiles.
+- The attention lane is ordered by server-provided severity and age. Each entry
+  states the reason and first-observed time before the task identifier.
 
 ## Components and states
 
 - Status labels combine text with a restrained shape or icon.
+- Critical and warning alerts use text, iconography, and tone together; severity
+  is never communicated by color alone.
 - Loading preserves the final layout with skeleton rows.
 - Empty state teaches what will make data appear.
 - Unavailable state names the observer problem and offers one retry.
