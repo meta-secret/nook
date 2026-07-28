@@ -4,12 +4,16 @@ import {
   connectLocalVault,
   disableVaultIdleLock,
   expectSealedCredential,
+  flushNookLogPersistQueue,
+  fetchAppLogs,
   loadDecryptedAuthProvidersInBrowser,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
   waitForAuthProvidersE2eHook,
+  waitForStorageChainIdle,
+  waitForVaultSyncIdle,
 } from './helpers'
 
 test.describe('sync provider credential encryption', () => {
@@ -74,6 +78,17 @@ test.describe('sync provider credential encryption', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await waitForAuthProvidersE2eHook(page)
+    await waitForStorageChainIdle(page)
+    await waitForVaultSyncIdle(page)
+    await flushNookLogPersistQueue(page)
+    const logs = await fetchAppLogs(page, { minLevel: 'error', limit: 500 })
+    expect(
+      logs.entries.some((entry) =>
+        entry.message.includes(
+          'closure invoked recursively or after being dropped',
+        ),
+      ),
+    ).toBe(false)
 
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(
