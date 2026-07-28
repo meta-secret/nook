@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 fn repository_root() -> PathBuf {
@@ -13,6 +14,34 @@ fn repository_root() -> PathBuf {
 fn read(path: &str) -> String {
     fs::read_to_string(repository_root().join(path))
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+}
+
+#[test]
+fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() {
+    let root = repository_root();
+    let output = Command::new("bash")
+        .arg(root.join("preflight/tests/neo4j_credentials.sh"))
+        .arg(&root)
+        .output()
+        .expect("run Neo4j credential reconciliation harness");
+    assert!(
+        output.status.success(),
+        "Neo4j credential reconciliation harness failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let task = read("infra/tasks/neo4j.yml");
+    let credential_validation = task
+        .find("reconcile_neo4j_credentials")
+        .expect("credential validation");
+    let tls_secret_apply = task
+        .find("kubectl create secret generic hive-neo4j-tls")
+        .expect("TLS Secret apply");
+    assert!(
+        credential_validation < tls_secret_apply,
+        "credentials must be validated before replacement TLS Secrets are published"
+    );
 }
 
 fn infra_taskfile_graph() -> String {
@@ -66,7 +95,7 @@ fn remote_cache_is_public_over_tls_and_registry_remains_private() {
 fn neo4j_client_secret_normalization_is_upgrade_safe() {
     let tasks = read("infra/tasks/neo4j.yml");
     let start = tasks
-        .find("auth_exists=false")
+        .find("NEO4J_CREDENTIAL_RECONCILIATION_BEGIN")
         .expect("Neo4j credential reconciliation starts");
     let reconciliation = &tasks[start..];
 
@@ -78,16 +107,23 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         "test -s \"$secret_dir/password\"",
         "kubectl apply -f -",
         "Refusing divergent non-empty Neo4j credentials",
-        "hive.nook.sh/neo4j-client-sha256",
         "auth_secret_needs_reconcile=true",
+    ] {
+        assert!(
+            reconciliation.contains(required),
+            "Neo4j credential reconciliation is missing: {required}"
+        );
+    }
+    for required in [
+        "hive.nook.sh/neo4j-client-sha256",
         "hive-workbench-dispatcher",
         "hive-observer",
         "kubectl patch",
         "kubectl rollout status",
     ] {
         assert!(
-            reconciliation.contains(required),
-            "Neo4j credential reconciliation is missing: {required}"
+            tasks.contains(required),
+            "Neo4j client rollout is missing: {required}"
         );
     }
     let retained_probe = tasks
@@ -99,26 +135,6 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
     assert!(
         retained_probe < storage_apply,
         "retained storage must be detected before this invocation creates the PVC"
-    );
-
-    let generated = reconciliation
-        .split_once("openssl rand -hex 32")
-        .map(|(_, tail)| tail)
-        .expect("generated credential branch");
-    assert!(generated.starts_with(" |\n            tr -d '\\r\\n'"));
-
-    let recovered_auth = reconciliation
-        .split_once("-o jsonpath='{.data.NEO4J_AUTH}'")
-        .map(|(_, tail)| tail)
-        .expect("recovered auth credential branch");
-    assert!(recovered_auth.starts_with(" |\n            base64 --decode |\n            sed 's|^neo4j/||' |\n            tr -d '\\r\\n'"));
-
-    let recovered_client = reconciliation
-        .matches("tr -d '\\r\\n' > \"$secret_dir/password\"")
-        .count();
-    assert!(
-        recovered_client >= 3,
-        "generated, client fallback, and client-only recovery must normalize bytes"
     );
 
     let neo4j_ready = reconciliation

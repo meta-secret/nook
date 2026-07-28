@@ -64,6 +64,90 @@ tasks:
         }
         trap cleanup EXIT
         umask 077
+        # NEO4J_CREDENTIAL_RECONCILIATION_BEGIN
+        reconcile_neo4j_credentials() {
+          local secret_dir="$1"
+          local retained_storage="$2"
+          local auth_exists=false
+          local auth_secret_needs_reconcile=false
+          local client_exists=false
+          if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
+            auth_exists=true
+          else
+            auth_secret_needs_reconcile=true
+          fi
+          if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
+            client_exists=true
+          fi
+          if test "$auth_exists" = false && test "$client_exists" = false; then
+            if test "$retained_storage" = true; then
+              echo "Refusing to generate Neo4j credentials while retained data exists" >&2
+              return 1
+            fi
+            openssl rand -hex 32 | tr -d '\r\n' > "$secret_dir/password"
+          elif test "$auth_exists" = true; then
+            kubectl get secret hive-neo4j-auth \
+              --namespace hive-data \
+              -o jsonpath='{.data.NEO4J_AUTH}' |
+              base64 --decode |
+              sed 's|^neo4j/||' |
+              tr -d '\r\n' > "$secret_dir/password"
+            if ! test -s "$secret_dir/password" &&
+              test "$client_exists" = true; then
+              kubectl get secret hive-neo4j-client \
+                --namespace hive-system \
+                -o jsonpath='{.data.NEO4J_PASSWORD}' |
+                base64 --decode |
+                tr -d '\r\n' > "$secret_dir/password"
+              auth_secret_needs_reconcile=true
+            fi
+            if test "$client_exists" = true; then
+              kubectl get secret hive-neo4j-client \
+                --namespace hive-system \
+                -o jsonpath='{.data.NEO4J_PASSWORD}' |
+                base64 --decode |
+                tr -d '\r\n' > "$secret_dir/client-password"
+              if test -s "$secret_dir/client-password" &&
+                test "$(cat "$secret_dir/password")" != "$(cat "$secret_dir/client-password")"; then
+                echo "Refusing divergent non-empty Neo4j credentials" >&2
+                return 1
+              fi
+            fi
+          else
+            kubectl get secret hive-neo4j-client \
+              --namespace hive-system \
+              -o jsonpath='{.data.NEO4J_PASSWORD}' |
+              base64 --decode |
+              tr -d '\r\n' > "$secret_dir/password"
+          fi
+          test -s "$secret_dir/password"
+          if test "$auth_secret_needs_reconcile" = true; then
+            {
+              printf 'neo4j/'
+              cat "$secret_dir/password"
+            } > "$secret_dir/NEO4J_AUTH"
+            kubectl create secret generic hive-neo4j-auth \
+              --namespace hive-data \
+              --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH" \
+              --dry-run=client \
+              -o yaml |
+              kubectl apply -f -
+          fi
+          cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
+          kubectl create secret generic hive-neo4j-client \
+            --namespace hive-system \
+            --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD" \
+            --dry-run=client \
+            -o yaml |
+            kubectl apply -f -
+          client_secret_checksum="$(
+            sha256sum "$secret_dir/NEO4J_PASSWORD" |
+              cut -d' ' -f1
+          )"
+        }
+        # NEO4J_CREDENTIAL_RECONCILIATION_END
+        # Validate and reconcile credentials before any TLS or workload mutation.
+        reconcile_neo4j_credentials "$secret_dir" "$retained_storage"
         reuse_tls=false
         tls_changed=false
         if kubectl get secret hive-neo4j-tls \
@@ -176,88 +260,6 @@ tasks:
           -o yaml |
           kubectl apply -f -
 
-        auth_exists=false
-        auth_secret_needs_reconcile=false
-        client_exists=false
-        if kubectl get secret hive-neo4j-auth --namespace hive-data >/dev/null 2>&1; then
-          auth_exists=true
-        else
-          auth_secret_needs_reconcile=true
-        fi
-        if kubectl get secret hive-neo4j-client --namespace hive-system >/dev/null 2>&1; then
-          client_exists=true
-        fi
-
-        if test "$auth_exists" = false && test "$client_exists" = false; then
-          if test "$retained_storage" = true; then
-            echo \
-              "Refusing to generate Neo4j credentials while retained data exists" \
-              >&2
-            exit 1
-          fi
-          openssl rand -hex 32 |
-            tr -d '\r\n' > "$secret_dir/password"
-        elif test "$auth_exists" = true; then
-          kubectl get secret hive-neo4j-auth \
-            --namespace hive-data \
-            -o jsonpath='{.data.NEO4J_AUTH}' |
-            base64 --decode |
-            sed 's|^neo4j/||' |
-            tr -d '\r\n' > "$secret_dir/password"
-          if ! test -s "$secret_dir/password" &&
-            test "$client_exists" = true; then
-            kubectl get secret hive-neo4j-client \
-              --namespace hive-system \
-              -o jsonpath='{.data.NEO4J_PASSWORD}' |
-              base64 --decode |
-              tr -d '\r\n' > "$secret_dir/password"
-            auth_secret_needs_reconcile=true
-          fi
-          if test "$client_exists" = true; then
-            kubectl get secret hive-neo4j-client \
-              --namespace hive-system \
-              -o jsonpath='{.data.NEO4J_PASSWORD}' |
-              base64 --decode |
-              tr -d '\r\n' > "$secret_dir/client-password"
-            if test -s "$secret_dir/client-password" &&
-              test "$(cat "$secret_dir/password")" !=
-                "$(cat "$secret_dir/client-password")"; then
-              echo "Refusing divergent non-empty Neo4j credentials" >&2
-              exit 1
-            fi
-          fi
-        else
-          kubectl get secret hive-neo4j-client \
-            --namespace hive-system \
-            -o jsonpath='{.data.NEO4J_PASSWORD}' |
-            base64 --decode |
-            tr -d '\r\n' > "$secret_dir/password"
-        fi
-        test -s "$secret_dir/password"
-
-        if test "$auth_secret_needs_reconcile" = true; then
-          {
-            printf 'neo4j/'
-            cat "$secret_dir/password"
-          } > "$secret_dir/NEO4J_AUTH"
-          kubectl create secret generic hive-neo4j-auth \
-            --namespace hive-data \
-            --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH" \
-            --dry-run=client \
-            -o yaml |
-            kubectl apply -f -
-        fi
-        cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
-        kubectl create secret generic hive-neo4j-client \
-          --namespace hive-system \
-          --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD" \
-          --dry-run=client \
-          -o yaml |
-          kubectl apply -f -
-        client_secret_checksum="$(
-          sha256sum "$secret_dir/NEO4J_PASSWORD" |
-            cut -d' ' -f1
-        )"
         rm -rf "$secret_dir"
 
         curl -fsSL --retry 3 -o "$chart.next" \
