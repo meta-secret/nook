@@ -18,6 +18,13 @@ async function demoBeat(page: Page) {
 test('guide authenticator enrollment through consented Pilot ceremony', async ({
   page,
 }) => {
+  const bootstrapErrors: Error[] = []
+  page.on('pageerror', (error) => {
+    if (error.message.includes("reading 'appendChild'")) {
+      bootstrapErrors.push(error)
+    }
+  })
+
   const messages = JSON.parse(
     await readFile(
       path.join(extensionDist, '_locales/en/messages.json'),
@@ -78,7 +85,7 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
         </style>
       </head>
       <body>
-        <main id="setup">
+        <main id="app">
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -162,4 +169,5 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   ).toBeVisible({ timeout: 30_000 })
   await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
   await demoBeat(page)
+  expect(bootstrapErrors).toEqual([])
 })

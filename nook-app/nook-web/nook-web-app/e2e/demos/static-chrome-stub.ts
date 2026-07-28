@@ -128,6 +128,21 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     }
     if (enrollPilotFlow) {
       switch (message.type) {
+        case 'nook:extension-pairing-state-query':
+          return {
+            ok: true,
+            setup: {
+              status: 'ready',
+              deviceLabel: 'Demo browser',
+              pairedVaults: ['Demo vault'],
+              selectedVaultStoreId: 'demo-vault',
+              selectedVaultName: 'Demo vault',
+              syncProviderCount: 1,
+              eventCount: 3,
+              eventLogHeads: ['demo-head'],
+              lastLocalSyncAt: '2026-07-20T00:00:00.000Z',
+            },
+          }
         case 'nook:website-authenticator-enroll-preview':
           return {
             ok: true,
