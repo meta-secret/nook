@@ -48,7 +48,7 @@ test.describe('vault connect flow', () => {
       logs?.some(
         (entry) =>
           entry.scope === 'vault-sync' &&
-          entry.message.includes('Vault crypto not initialized'),
+          entry.data?.includes('Vault crypto not initialized'),
       ),
     ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()

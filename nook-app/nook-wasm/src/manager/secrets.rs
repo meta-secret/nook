@@ -341,6 +341,33 @@ mod import_tests {
     }
 }
 
+#[cfg(test)]
+mod prepared_page_tests {
+    use super::*;
+    use crate::manager::VaultCryptoState;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = "store_default_page".to_owned();
+        manager.vault.last_synced_content = manager.serialize_current_projection_yaml()?;
+        manager.vault.secrets_key.clear();
+        manager.vault.members_key.clear();
+        manager.vault.crypto = VaultCryptoState::Locked;
+
+        manager
+            .query_prepared_secret_page_js("", NookStringValue::unavailable(), 0, 25)
+            .await?;
+
+        assert!(manager.vault.crypto.is_unlocked());
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
