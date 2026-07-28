@@ -393,7 +393,7 @@ TypeScript PR audit without Docker.
 | Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
 | Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
 | Repository-scoped GitHub token | Main-repair worker | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential | Pod reaper and dedicated controller only | No |
+| Reaper controller credential | Pod reaper, Workbench dispatcher, and dedicated controller only | No |
 | Kubernetes auth-refresh token | Auth broker only | No |
 
 The Pod disables automatic service-account token mounting. Its service account
