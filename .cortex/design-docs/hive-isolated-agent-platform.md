@@ -92,7 +92,7 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in
 
 | Component | Runs where | Owns | Must not own |
 | --- | --- | --- | --- |
-| Main failure handoff | GitHub Actions | Converts an actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA; deferred E2E-only failures remain visible without queuing Hive and retire an existing incident for that SHA | Agent execution, raw failure logs, deployment |
+| Main failure handoff | GitHub Actions | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures | Agent execution, raw failure logs, deployment |
 | Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
 | Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
 | Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
@@ -118,7 +118,8 @@ The graph contains:
 Task definitions include a full 40-character `source_commit`. Every task in one
 dependency DAG must target the same source revision. Hive graph schema
 migrations are explicit and versioned; a binary refuses a graph newer than it
-supports.
+supports. Schema 5 introduces the persisted `CANCELLING` state and its
+Pod-termination acknowledgement contract.
 
 ### Stored readiness invariant
 
@@ -249,22 +250,28 @@ flowchart LR
   worklog --> complete["Neo4j task COMPLETED"]
 ```
 
-Failures confined to the explicitly deferred `Web e2e`, `UI demos`, and
-`Extension e2e` jobs remain visible in Main but create no Workbench incident.
-If an earlier attempt for the same SHA already created an incident, a
-deferred-only rerun records the attempt, marks that incident `done`, and makes
-the dispatcher cancel every active delivery generation plus discovered blockers
-exclusive to those roots. Shared blockers remain available to their other live
-dependents, and cancelling revokes active worker leases at their next heartbeat.
-A later actionable rerun removes the policy-retirement marker, restores the
-incident to `ready`, clears its prior completion evidence, and creates a new
-task generation keyed by workflow run and attempt. Publication branches, plans,
-and worklogs are generation-specific while the incident path remains keyed by
-source SHA. Completed or failed generations and their publication history
-remain immutable. An actionable rerun observed while a repair is still active
-reuses that logical delivery instead of creating a competing worker. Mixed or
-unknown failures, including a cancelled non-E2E job beside a deferred failure,
-remain actionable and follow the repair path above.
+Every failed browser E2E, UI-demo, native, WASM, build, deployment, mixed, or
+unknown Main attempt follows the repair path above. A later failed rerun
+restores the incident to `ready`, clears prior completion evidence, and creates
+a new task generation keyed by workflow run and attempt. If an earlier
+generation is still active, the dispatcher cancels it before enqueueing the new
+generation so the next worker receives the latest failed-job evidence without
+creating competing repairs. The dispatcher aborts that reconciliation cycle
+after requesting cancellation. The running worker then stops its Codex
+execution and atomically acknowledges termination in Neo4j. In parallel, the
+dispatcher asks the credential-gated lifecycle controller to delete the exact
+worker Pod recorded for every cancelling root or exclusive blocker. The
+controller validates the worker label and waits for Kubernetes to confirm
+deletion before the dispatcher finalizes cancellation. This provides durable recovery when a worker crashes
+before acknowledging. The old generation and its cancelling descendants remain
+active until that proof, so no replacement can become claimable merely because
+time elapsed. Reconciliation of the
+already-current run/attempt generation is idempotent and never cancels it.
+Cancellation also cancels blockers exclusive to the superseded delivery;
+shared blockers remain available to other live dependents. Publication
+branches, plans, and worklogs are generation-specific while the incident path
+remains keyed by source SHA. Completed or failed generations and their
+publication history remain immutable.
 
 The token-free dispatcher maintains a shallow public Git checkout of Workbench
 and reconciles only when its revision changes, rather than repeatedly spending
@@ -272,9 +279,14 @@ GitHub Contents API requests on unchanged incidents. It remembers already
 reconciled incident filenames for the life of the Pod. Before enqueueing, the
 dispatcher fetches the referenced workflow run once and requires repository
 `meta-secret/nook`, workflow `Main`, push event, branch
-`main`, and the incident's exact source SHA. A later successful rerun therefore
-turns a stale Workbench incident into a no-op instead of spending an isolated
-worker on an already-recovered revision.
+`main`, and the incident's exact source SHA. Run IDs and attempts are ordered
+across the complete incident history, so an older workflow run cannot
+supersede newer evidence. A later successful rerun marks an existing incident
+retired; the same Pod-termination barrier stops any active repair before the
+revision becomes a no-op. A success observed before any failure handoff writes
+a completed tombstone so delayed older failures remain stale. Retirement
+cancels only the current active generation; completed and failed generations
+remain immutable. Kubernetes Pod API calls use bounded request timeouts.
 
 One logical Hive task owns the entire repair. Opening a PR is intermediate
 state, not completion. The task must:

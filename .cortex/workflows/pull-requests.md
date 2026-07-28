@@ -323,16 +323,18 @@ monitor, or live-verify the resulting Main run unless the user explicitly
 requested deployment/live verification or assigned a Main failure.
 
 After merge, `main.yml` independently runs full local-provider and extension
-**e2e**. An actionable unsuccessful Main run creates one `automation: hive`
-Workbench incident keyed by failed SHA. A failure confined to the explicitly
-deferred `Web e2e`, `UI demos`, and `Extension e2e` jobs remains visible without
-queuing Hive; a deferred-only rerun retires an existing incident for that SHA
-and cancels matching task-store work. A later actionable rerun reopens both.
-The reopened incident creates a fresh run-and-attempt-keyed delivery generation;
-its prior completion block is cleared, its plan/worklog are generation-specific,
-and completed publication history is never reused. An actionable rerun while a
-repair remains active reuses that logical delivery instead of starting a
-competing worker.
+**e2e**. Every actionable unsuccessful Main run, including `Web e2e`, `UI
+demos`, and `Extension e2e`, creates one `automation: hive` Workbench incident
+keyed by failed SHA. Each run attempt creates a run-and-attempt-keyed delivery
+generation whose plan/worklog are generation-specific. A later failed rerun
+supersedes and cancels an active delivery before the new generation is
+enqueued. The dispatcher retries only after a poll interval longer than the
+worker heartbeat, while the durable barrier is the worker's Neo4j
+acknowledgement that the stale Codex execution stopped. The old generation
+remains `CANCELLING` until worker acknowledgement or confirmed deletion of its
+recorded Kubernetes Pod, including cancelling exclusive blockers;
+reconciliation of the current generation is idempotent. Successful reruns
+retire existing incidents and stop active delivery.
 The isolated Hive dispatcher enqueues actionable incidents once, and
 one logical task owns diagnosis, a normal exact-head PR, actionable review
 resolution, squash merge, and verification of the resulting Main run. The

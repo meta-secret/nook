@@ -16,7 +16,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
 | [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)               | Completed `Main` attempt                    | From trusted default-branch code, collect run/job/step timing and conclusions, then commit one `stats/main-build/**` record directly to Nook Workbench | Yes (`NOOK_GITHUB_PAT`)                   |
-| [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)       | Failed `Main` attempt                       | From trusted default-branch code, create or refresh one ready automated Workbench incident per failed Main revision using run metadata and failed job names only; deferred E2E-only failures create no incident and retire an existing incident for the same revision | Yes (`NOOK_GITHUB_PAT`)                   |
+| [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)       | Failed `Main` attempt                       | From trusted default-branch code, create or refresh one ready automated Workbench incident per failed Main revision using run metadata and failed job names only, including browser E2E and UI-demo failures | Yes (`NOOK_GITHUB_PAT`)                   |
 | [`hive.yml`](../../.github/workflows/hive.yml)                                      | Hive/infra PR changes and Main pushes       | Pinned Docker format/Clippy, behavior tests against Neo4j, and k0s manifest/Taskfile contracts; Main alone publishes the shared Hive dependency cache | No                                        |
 | [`release.yml`](../../.github/workflows/release.yml)                                 | Semver tag `v*.*.*` or manual version + ref | On `ubuntu-latest`: restore scoped BuildKit caches, pin an immutable tag, verify/e2e, deploy `nokey.sh` plus independent `simple.nokey.sh` and `sentinel.nokey.sh` artifacts, publish GitHub Release                                             | No                                        |
 | [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual            | Audits every direct dependency in `nook-app/` and `preflight/`; when an update exists, an AI agent updates all outdated Rust dependencies, runs the full deterministic suite, then opens a PR for explicit review                                | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -35,8 +35,7 @@ flowchart LR
   main_yml --> cf_dev[Cloudflare Pages isolated dev]
   main_yml --> main_stats[Persist completed run metrics]
   main_stats --> workbench_stats[Commit metrics to Nook Workbench]
-  main_yml -->|actionable failure| main_failure[Queue Workbench incident]
-  main_yml -->|deferred E2E only| deferred_e2e[Keep visible; do not queue Hive]
+  main_yml -->|any actionable failure| main_failure[Queue Workbench incident]
   main_failure --> hive_dispatcher[Isolated Hive dispatcher]
   hive_dispatcher --> hive_worker[One end-to-end repair task]
 
@@ -673,19 +672,21 @@ trusted default-branch code writes a deduplicated `status: ready`,
 k0s dispatcher reconciles it into Neo4j, and one isolated logical task owns
 diagnosis through exact-head checks, review resolution, squash merge, and
 replacement Main verification. The scheduled implementation worker does not
-claim Hive incidents. Manually requested E2E failures remain visible for
-explicit handling. While E2E repair is deferred, a failure confined to
-`Web e2e`, `UI demos`, and `Extension e2e` creates no Hive incident; a rerun
-with only those failures marks an existing incident for the same SHA `done`.
-The dispatcher cancels each active delivery generation and only the active
-blockers exclusive to those roots, revoking their leases at the next heartbeat.
-Shared blockers and completed or failed delivery history remain intact. A later
-actionable rerun removes the retirement marker, restores the incident to
-`ready`, clears the prior completion block, and creates a new task generation
-keyed by workflow run and attempt. Its publication branch, plan, and worklog are
-generation-specific while the Workbench issue remains keyed by source SHA.
-Actionable reruns observed during an active READY, RUNNING, or BLOCKED repair
-reuse that logical delivery instead of enqueuing a competing worker.
+claim Hive incidents. Browser E2E and UI-demo failures enter the same durable
+repair queue as native, WASM, build, deployment, mixed, and unknown failures.
+Each rerun is recorded on the Workbench issue keyed by source SHA, and its
+publication branch, plan, and worklog are generation-specific. A later failed
+rerun supersedes and cancels an active delivery before its new generation is
+enqueued. The failed reconciliation retries only after a poll interval longer
+than the worker heartbeat, but elapsed time is not the termination barrier:
+the old generation remains `CANCELLING` until its worker durably acknowledges
+that Codex execution stopped or Kubernetes confirms deletion of the exact
+recorded worker Pod. Cancelling exclusive blocker Pods participate in the same
+barrier. Only then can the replacement become claimable. A successful rerun
+retires an existing incident and terminates any active delivery; run IDs and
+attempts are ordered across the incident so older workflow runs are ignored.
+Reconciliation of the already-current generation is idempotent and never
+cancels it.
 Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job
 still queues Hive. The weekly Rust dependency workflow uses the same harness
 through **`task ci-agent:fix`** for its bounded update job.
@@ -773,7 +774,7 @@ merge, and final Workbench completion update. Agent secrets:
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e**. An actionable unsuccessful Main run is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification. Failures confined to the explicitly deferred E2E jobs remain visible in Main but do not consume Hive workers, and retire any existing incident for the same SHA. Credentialed **sync-live** checks are explicit manual runs.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e**. Every actionable unsuccessful Main run, including browser E2E and UI-demo failures, is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification. Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
