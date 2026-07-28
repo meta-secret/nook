@@ -1,4 +1,4 @@
-import type { VaultState } from "$lib/vault.svelte";
+import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";
 import {
@@ -11,7 +11,6 @@ import {
   VaultSyncConflictKind,
 } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
-import * as localLoginActions from "$lib/vault/local-login";
 import { intoWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-sync");
@@ -65,7 +64,7 @@ function localFolderMultipleVaultsIssueFromTypedIssue(
 }
 
 async function stageProviderStoreMismatchConflict(
-  state: VaultState,
+  state: SyncActionsContext,
   provider: StorageProvider,
   localStoreId: string,
   remoteStoreId: string,
@@ -99,7 +98,7 @@ async function stageProviderStoreMismatchConflict(
 
 /** Map a typed mismatch found during provider assessment into the global dialog. */
 export async function stageStagedProviderSyncIssue(
-  state: VaultState,
+  state: SyncActionsContext,
   args: [string, string, string],
 ): Promise<boolean> {
   const manager = state.manager;
@@ -146,7 +145,7 @@ export async function stageStagedProviderSyncIssue(
 }
 
 export async function syncLocalFolderProvider(
-  state: VaultState,
+  state: SyncActionsContext,
   provider: StorageProvider,
 ): Promise<void> {
   const manager = state.manager;
@@ -165,7 +164,7 @@ export async function syncLocalFolderProvider(
   }
 }
 
-export function startVaultSync(state: VaultState) {
+export function startVaultSync(state: SyncActionsContext) {
   state.stopVaultSync();
   if (state.isAuthenticated && !state.deviceProtectionReady) {
     log.debug("vault sync timer skipped (device identity locked)");
@@ -222,7 +221,7 @@ export function startVaultSync(state: VaultState) {
   }, intervalMs);
 }
 
-export function stopVaultSync(state: VaultState) {
+export function stopVaultSync(state: SyncActionsContext) {
   if (state.syncTimer !== undefined) {
     clearInterval(state.syncTimer);
     state.syncTimer = undefined;
@@ -231,7 +230,7 @@ export function stopVaultSync(state: VaultState) {
 }
 
 export async function syncFromStorage(
-  state: VaultState,
+  state: SyncActionsContext,
   options?: { force?: boolean },
 ) {
   if (!state.manager) return;
@@ -292,7 +291,7 @@ export async function syncFromStorage(
   }
 }
 
-export async function manualSync(state: VaultState) {
+export async function manualSync(state: SyncActionsContext) {
   if (!state.manager) return;
   if (state.syncBlocked) return;
   if (state.isSyncing) return;
@@ -327,7 +326,7 @@ export async function manualSync(state: VaultState) {
 }
 
 export async function fanOutSyncToProviders(
-  state: VaultState,
+  state: SyncActionsContext,
   options?: { quiet?: boolean },
 ): Promise<void> {
   if (!state.manager || !state.isAuthenticated) return;
@@ -343,7 +342,7 @@ export async function fanOutSyncToProviders(
 }
 
 export async function refreshReplacementConflicts(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   if (!state.manager) {
     state.replacementConflicts = [];
@@ -388,7 +387,7 @@ export async function refreshReplacementConflicts(
 }
 
 export function stageSyncConflict(
-  state: VaultState,
+  state: SyncActionsContext,
   conflict: NookPendingSyncConflict,
 ) {
   state.pendingSyncConflict = conflict;
@@ -400,7 +399,7 @@ export function stageSyncConflict(
 }
 
 function stageLocalFolderMultipleVaultsIssue(
-  state: VaultState,
+  state: SyncActionsContext,
   issue: LocalFolderMultipleVaultsIssue,
 ) {
   state.localFolderMultipleVaultsIssue = issue;
@@ -412,7 +411,7 @@ function stageLocalFolderMultipleVaultsIssue(
 
 /** Finish connect/sync that was paused when the conflict dialog opened. */
 async function resumeConnectAfterSyncConflict(
-  state: VaultState,
+  state: SyncActionsContext,
   providerId: string,
   pendingProvider: boolean,
 ): Promise<void> {
@@ -431,7 +430,7 @@ async function resumeConnectAfterSyncConflict(
 }
 
 export async function resolveSyncConflictImportRemote(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   const conflict = state.pendingSyncConflict;
   if (
@@ -486,7 +485,7 @@ export async function resolveSyncConflictImportRemote(
       await state.enqueueStorage(() => state.manager!.resetVaultSession());
     }
     state.localVaultPresent = true;
-    await localLoginActions.refreshLocalVaultCatalog(state);
+    await state.refreshLocalVaultCatalog();
     providerId = await state.ensureProviderSavedAfterConflict(conflict);
     if (conflict.remoteYaml.trim()) {
       await state.updateProviderSyncMetadata(
@@ -533,7 +532,7 @@ export async function resolveSyncConflictImportRemote(
 }
 
 export async function resolveSyncConflictKeepLocal(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   const conflict = state.pendingSyncConflict;
   if (!conflict || state.isVerifying) return;
@@ -550,7 +549,7 @@ export async function resolveSyncConflictKeepLocal(
 }
 
 export async function resolveSyncConflictKeepRemote(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   const conflict = state.pendingSyncConflict;
   if (!conflict || state.isVerifying) return;
@@ -565,7 +564,7 @@ export async function resolveSyncConflictKeepRemote(
 }
 
 export async function confirmRecoverRemoteVault(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   if (!state.manager) return;
   state.errorMsg = "";
@@ -589,7 +588,7 @@ export async function confirmRecoverRemoteVault(
 }
 
 export async function confirmCreateFreshRemoteVault(
-  state: VaultState,
+  state: SyncActionsContext,
 ): Promise<void> {
   if (!state.manager) return;
   state.errorMsg = "";
@@ -608,7 +607,7 @@ export async function confirmCreateFreshRemoteVault(
   }
 }
 
-export function clearRemoteVaultRecovery(state: VaultState) {
+export function clearRemoteVaultRecovery(state: SyncActionsContext) {
   state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
   try {
     state.manager?.clearConnectRecovery();
@@ -618,7 +617,7 @@ export function clearRemoteVaultRecovery(state: VaultState) {
 }
 
 export async function syncProviderById(
-  state: VaultState,
+  state: SyncActionsContext,
   providerId: string,
   options?: { quiet?: boolean; propagateError?: boolean },
 ): Promise<void> {

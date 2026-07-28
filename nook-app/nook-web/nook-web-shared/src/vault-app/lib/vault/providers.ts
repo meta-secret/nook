@@ -1,4 +1,4 @@
-import type { VaultState } from "$lib/vault.svelte";
+import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { generateId, isoTimestamp } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -27,7 +27,7 @@ const log = createLogger("vault-providers");
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(
-  state: VaultState,
+  state: ProviderActionsContext,
 ): Promise<string | undefined> {
   const fromManager = state.manager
     ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
@@ -42,14 +42,14 @@ async function vaultStoreIdForProviderSave(
   );
 }
 
-function resetICloudSignInState(state: VaultState) {
+function resetICloudSignInState(state: ProviderActionsContext) {
   state.icloudOAuthPreparing = false;
   state.icloudOAuthReady = false;
   state.icloudOAuthBusy = false;
 }
 
 export async function loadProviders(
-  state: VaultState,
+  state: ProviderActionsContext,
   options?: { ensureLocalRow?: boolean },
 ) {
   const snapshot = await state.enqueueStorage(() =>
@@ -71,7 +71,7 @@ export async function loadProviders(
 }
 
 export async function promoteSessionVaultToLocalIfNeeded(
-  state: VaultState,
+  state: ProviderActionsContext,
 ): Promise<void> {
   const snapshot = await state.manager!.ensureLocalAuthProviderSnapshot({
     providers: state.providers,
@@ -91,7 +91,7 @@ export async function promoteSessionVaultToLocalIfNeeded(
   }
 }
 
-export function applyActiveProviderCredentials(state: VaultState) {
+export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   if (state.localVaultPresent) {
     state.storageMode = "local";
     state.githubPat = "";
@@ -149,7 +149,7 @@ export function applyActiveProviderCredentials(state: VaultState) {
 }
 
 export async function persistProviders(
-  state: VaultState,
+  state: ProviderActionsContext,
   opts?: { replace?: boolean },
 ) {
   if (!opts?.replace && state.localVaultPresent) {
@@ -173,7 +173,7 @@ export async function persistProviders(
 }
 
 export function beginProviderSetup(
-  state: VaultState,
+  state: ProviderActionsContext,
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ) {
@@ -209,7 +209,7 @@ export function beginProviderSetup(
   log.debug("provider setup started", { type, oauthPreset });
 }
 
-export function beginAddProvider(state: VaultState) {
+export function beginAddProvider(state: ProviderActionsContext) {
   if (!state.isAuthenticated) {
     state.resetVaultSessionState();
   }
@@ -218,7 +218,7 @@ export function beginAddProvider(state: VaultState) {
   state.errorMsg = "";
 }
 
-export function cancelAddProvider(state: VaultState) {
+export function cancelAddProvider(state: ProviderActionsContext) {
   resetICloudSignInState(state);
   state.addProviderOpen = false;
   state.loginSetupType = undefined;
@@ -227,7 +227,7 @@ export function cancelAddProvider(state: VaultState) {
   state.errorMsg = "";
 }
 
-export function cancelProviderSetup(state: VaultState) {
+export function cancelProviderSetup(state: ProviderActionsContext) {
   resetICloudSignInState(state);
   if (state.addProviderOpen && state.loginSetupType !== undefined) {
     const setupType = state.loginSetupType;
@@ -250,7 +250,7 @@ export function cancelProviderSetup(state: VaultState) {
 }
 
 export async function removeProvider(
-  state: VaultState,
+  state: ProviderActionsContext,
   id: string,
 ): Promise<void> {
   const target = state.providers.find((p) => p.id === id);
@@ -270,7 +270,9 @@ export async function removeProvider(
   state.showSuccess(state.t("toasts.removed_device", { label: target.label }));
 }
 
-export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
+export async function ensureProviderSaved(
+  state: ProviderActionsContext,
+): Promise<boolean> {
   const pat = state.githubPat.trim();
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO;
   const sharedGoogleDrive =
@@ -435,7 +437,9 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   return true;
 }
 
-export async function connectStagedProvider(state: VaultState): Promise<void> {
+export async function connectStagedProvider(
+  state: ProviderActionsContext,
+): Promise<void> {
   if (state.loginSetupType) {
     state.storageMode = state.loginSetupType;
   }
@@ -447,7 +451,7 @@ export async function connectStagedProvider(state: VaultState): Promise<void> {
 }
 
 export async function discoverStagedVaultStoreId(
-  state: VaultState,
+  state: ProviderActionsContext,
 ): Promise<string> {
   if (!state.manager || !state.loginSetupType) return "";
   if (state.isVerifying) {
@@ -509,7 +513,7 @@ export async function discoverStagedVaultStoreId(
 }
 
 export async function connectAndSyncStagedProvider(
-  state: VaultState,
+  state: ProviderActionsContext,
 ): Promise<void> {
   if (!state.manager) return;
   if (state.isVerifying) return;
