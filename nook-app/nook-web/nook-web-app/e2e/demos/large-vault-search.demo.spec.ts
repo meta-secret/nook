@@ -162,5 +162,7 @@ test('search a paginated vault through encrypted metadata', async ({
   await expect(page.getByTestId('vault-empty-search')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await expect(page.getByTestId('vault-sync-refresh-btn')).toBeVisible()
+  await expect(page.getByTestId('vault-sync-refresh-btn')).toBeEnabled()
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

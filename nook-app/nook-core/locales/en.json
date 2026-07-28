@@ -879,6 +879,7 @@
     "vault_creation_failed": "Failed to create local vault.",
     "vault_rename_failed": "Failed to rename vault.",
     "conflict_resolution_failed": "Could not resolve conflict.",
+    "whole_vault_conflict_resolution_retired": "Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.",
     "device_protection": {
       "authorization_required": "Authorize before using this browser's device key."
     },

@@ -182,6 +182,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   refreshPasswordEntriesList(): Promise<boolean>;
   refreshReplacementConflicts(): Promise<void>;
   refreshSecretsFromSession(): Promise<void>;
+  runFanOutSyncAfterLocalSave(): Promise<void>;
   runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void>;
   flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
