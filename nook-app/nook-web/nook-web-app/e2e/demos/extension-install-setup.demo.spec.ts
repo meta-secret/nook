@@ -39,6 +39,18 @@ test('offer browser extension install on vault home and in Devices', async ({
             JSON.stringify(message),
           )
           const type = (message as { type?: string }).type
+          const routedTypes = JSON.parse(
+            document.documentElement.getAttribute(
+              'data-demo-extension-message-types',
+            ) ?? '[]',
+          ) as string[]
+          if (type) {
+            routedTypes.push(type)
+            document.documentElement.setAttribute(
+              'data-demo-extension-message-types',
+              JSON.stringify(routedTypes),
+            )
+          }
           callback(
             type === 'nook:open-companion-launcher'
               ? { ok: true }
@@ -78,6 +90,10 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-install-setup-connect')).toHaveText(
     'Switch extension vault',
   )
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-demo-extension-message-types',
+    /nook:extension-paired-vault-identity-discovery/,
+  )
   await page.getByTestId('extension-install-setup-connect').click()
   await expect(page.locator('html')).toHaveAttribute(
     'data-demo-extension-message',
@@ -86,6 +102,14 @@ test('offer browser extension install on vault home and in Devices', async ({
       payload: { intent: 'pair' },
     }),
   )
+  const routedTypes = JSON.parse(
+    (await page
+      .locator('html')
+      .getAttribute('data-demo-extension-message-types')) ?? '[]',
+  ) as string[]
+  expect(
+    routedTypes.indexOf('nook:extension-paired-vault-identity-discovery'),
+  ).toBeLessThan(routedTypes.indexOf('nook:open-companion-launcher'))
   // Launching the session-owned pairing operation must not optimistically
   // replace the verified extension identity before a new grant is accepted.
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
