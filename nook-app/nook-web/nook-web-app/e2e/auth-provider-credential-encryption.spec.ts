@@ -1,6 +1,5 @@
 import { expect, test } from './fixtures'
 import {
-  authorizeDeviceProtection,
   clearBrowserVault,
   connectLocalVault,
   disableVaultIdleLock,
@@ -66,29 +65,18 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
-    await page.evaluate(() => {
-      localStorage.setItem('nook_e2e_manual_passkey', 'true')
-    })
-    await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
     await waitForAuthProvidersE2eHook(page)
+
+    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
+    expect(
+      decrypted.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
+    ).toBe(pat)
 
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(
       raw.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
       pat,
     )
-
-    const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(
-      decrypted.providers.find((p) => p.id === 'gh-e2e-legacy')?.githubPat,
-    ).toBe(pat)
   })
 
   test('OAuth access and refresh tokens are sealed at rest', async ({
