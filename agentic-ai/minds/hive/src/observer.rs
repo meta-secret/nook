@@ -1057,6 +1057,7 @@ mod tests {
         failed.latest_attempt_started_at = now - 12_000;
         let blocked = observed_task("blocked", "BLOCKED", now - 20_000);
         let mut stale = observed_task("stale", "RUNNING", now - 30_000);
+        stale.created_at = now - 10 * 60_000;
         stale.latest_attempt_started_at = now - 7 * 60_000;
         stale.latest_activity_at = now - 6 * 60_000;
         let cancelling = observed_task("cancelling", "CANCELLING", now - 6 * 60_000);
