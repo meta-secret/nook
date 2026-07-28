@@ -84,10 +84,6 @@ spec:
                       "GET",
                       "/api/v1/namespaces/hive-data/endpoints/hive-neo4j",
                   )
-                  policy_path = (
-                      "/apis/networking.k8s.io/v1/namespaces/hive-system/"
-                      "networkpolicies/hive-worker-egress"
-                  )
                   service_ip = str(
                       ipaddress.ip_address(service["spec"]["clusterIP"])
                   )
@@ -103,10 +99,22 @@ spec:
                       destinations.append(
                           {"ipBlock": {"cidr": f"{endpoint_ips[0]}/32"}}
                       )
+                  for policy_name in (
+                      "hive-worker-egress",
+                      "hive-dispatcher-reaper",
+                  ):
+                      reconcile_neo4j_policy_path(policy_name, destinations)
+
+              def reconcile_neo4j_policy_path(policy_name, destinations):
+                  policy_path = (
+                      "/apis/networking.k8s.io/v1/namespaces/hive-system/"
+                      f"networkpolicies/{policy_name}"
+                  )
                   for _ in range(3):
                       policy = json_request("GET", policy_path)
                       egress = policy["spec"]["egress"]
                       matched = False
+                      conflict = False
                       for rule in egress:
                           if any(
                               port.get("protocol") == "TCP"
@@ -136,10 +144,15 @@ spec:
                               except urllib.error.HTTPError as error:
                                   if error.code != 409:
                                       raise
+                                  conflict = True
                                   break
                       if not matched:
                           raise RuntimeError("Neo4j endpoint egress rule is missing")
-                  raise RuntimeError("Neo4j NetworkPolicy changed during reconciliation")
+                      if conflict:
+                          continue
+                  raise RuntimeError(
+                      f"Neo4j NetworkPolicy {policy_name} changed during reconciliation"
+                  )
 
               def reconcile_loop():
                   while True:
