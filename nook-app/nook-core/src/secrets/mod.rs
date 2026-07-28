@@ -20,3 +20,6 @@ pub(crate) mod secret_fingerprint;
 pub(crate) mod secret_types;
 pub(crate) mod secret_view;
 pub(crate) mod session;
+mod validation;
+
+pub use validation::{filter_secrets, validate_secret_data};
