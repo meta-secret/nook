@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use crate::model::{
-    AgentId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken, TaskId,
+    AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+    LeaseToken, TaskId,
 };
 
 #[async_trait]
@@ -19,6 +20,19 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
     ) -> anyhow::Result<Option<TaskId>>;
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool>;
+
+    async fn cancellation_targets(
+        &self,
+        task_id: &TaskId,
+    ) -> anyhow::Result<Vec<CancellationTarget>>;
+
+    async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool>;
+
+    async fn acknowledge_cancellation(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+    ) -> anyhow::Result<bool>;
 
     async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome>;
 
@@ -67,8 +81,8 @@ mod tests {
 
     use super::TaskStore;
     use crate::model::{
-        AgentId, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask, LeaseToken,
-        TaskId,
+        AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
+        EnqueueTask, LeaseToken, TaskId,
     };
 
     #[derive(Debug, Clone)]
@@ -161,7 +175,7 @@ mod tests {
                 .find(|task| {
                     task.definition.source_commit == source_commit
                         && task.definition.kind == kind
-                        && matches!(task.status, "READY" | "RUNNING" | "BLOCKED")
+                        && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
                 .map(|task| task.definition.id.clone()))
         }
@@ -208,10 +222,55 @@ mod tests {
                 .collect::<Vec<_>>();
             for id in members {
                 let task = tasks.get_mut(&id).expect("cancelled task");
-                task.status = "CANCELLED";
-                task.lease_token = None;
-                task.lease_until = None;
+                if task.status == "RUNNING" {
+                    task.status = "CANCELLING";
+                } else {
+                    task.status = "CANCELLED";
+                    task.lease_token = None;
+                    task.lease_until = None;
+                }
             }
+            Ok(true)
+        }
+
+        async fn acknowledge_cancellation(
+            &self,
+            task: &ClaimedTask,
+            _agent_id: &AgentId,
+        ) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let Some(stored) = tasks.get_mut(task.id.as_str()) else {
+                return Ok(false);
+            };
+            if stored.status != "CANCELLING"
+                || stored.lease_token.as_ref() != Some(&task.lease_token)
+            {
+                return Ok(false);
+            }
+            stored.status = "CANCELLED";
+            stored.lease_token = None;
+            stored.lease_until = None;
+            Ok(true)
+        }
+
+        async fn cancellation_targets(
+            &self,
+            _task_id: &TaskId,
+        ) -> anyhow::Result<Vec<CancellationTarget>> {
+            Ok(Vec::new())
+        }
+
+        async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+            let mut tasks = self.tasks.lock().expect("store lock");
+            let Some(task) = tasks.get_mut(task_id.as_str()) else {
+                return Ok(false);
+            };
+            if task.status != "CANCELLING" {
+                return Ok(false);
+            }
+            task.status = "CANCELLED";
+            task.lease_token = None;
+            task.lease_until = None;
             Ok(true)
         }
 
@@ -268,7 +327,8 @@ mod tests {
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
             let task = tasks.get_mut(task_id.as_str()).expect("task");
-            let accepted = task.lease_token.as_ref() == Some(lease_token)
+            let accepted = task.status == "RUNNING"
+                && task.lease_token.as_ref() == Some(lease_token)
                 && task.lease_until.is_some_and(|lease| lease > Instant::now());
             if accepted {
                 task.lease_until =
@@ -509,7 +569,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancellation_revokes_a_running_lease() -> anyhow::Result<()> {
+    async fn cancellation_requires_worker_acknowledgement() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         let definition = task("main-failure-sha", Vec::new());
         store.enqueue(&definition).await?;
@@ -525,6 +585,19 @@ mod tests {
             !store
                 .heartbeat(&stale.id, &agent, &stale.lease_token, 300)
                 .await?
+        );
+        assert_eq!(
+            store
+                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .await?,
+            Some(definition.id.clone())
+        );
+        assert!(store.acknowledge_cancellation(&stale, &agent).await?);
+        assert_eq!(
+            store
+                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .await?,
+            None
         );
         assert!(store.claim(&agent, 300).await?.is_idle());
         Ok(())

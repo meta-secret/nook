@@ -22,7 +22,7 @@ jobs:
   record:
     name: Queue failed Main revision
     if: >-
-      contains(fromJSON('["action_required","failure","startup_failure","timed_out"]'),
+      contains(fromJSON('["action_required","failure","startup_failure","timed_out","success"]'),
         github.event.workflow_run.conclusion) &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
@@ -56,9 +56,8 @@ jobs:
               buildMainFailureIssue,
               failedJobNames,
               incidentPathForRun,
-              isDeferredE2eOnlyFailure,
               isStaleMainAttempt,
-              retireDeferredE2eIncident,
+              retireSuccessfulMainIssue,
             } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-failure-handoff.cjs`)
 
             const eventRun = context.payload.workflow_run
@@ -83,19 +82,17 @@ jobs:
             )
             const failedJobs = failedJobNames(jobs)
             let sourcePullRequests = []
-            if (!isDeferredE2eOnlyFailure(failedJobs)) {
-              try {
-                sourcePullRequests = await github.paginate(
-                  github.rest.repos.listPullRequestsAssociatedWithCommit,
-                  {
-                    ...context.repo,
-                    commit_sha: run.head_sha,
-                    per_page: 100,
-                  },
-                )
-              } catch (error) {
-                core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
-              }
+            try {
+              sourcePullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  ...context.repo,
+                  commit_sha: run.head_sha,
+                  per_page: 100,
+                },
+              )
+            } catch (error) {
+              core.warning(`Could not associate pull requests with ${run.head_sha}: ${error.message}`)
             }
 
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
@@ -129,51 +126,24 @@ jobs:
                 return
               }
 
-              if (isDeferredE2eOnlyFailure(failedJobs)) {
-                if (!existing) {
-                  core.info(
-                    `Main failed only in deferred E2E jobs; no Hive incident queued: ${failedJobs.join(', ')}`,
-                  )
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                }
-                const retiredBody = retireDeferredE2eIncident({
-                  body: existing.body,
-                  run,
-                  jobs,
-                  recordedAt,
-                })
-                if (existing.body === retiredBody) {
-                  core.info(`${incidentPath} is already retired`)
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                }
-                try {
-                  await github.rest.repos.createOrUpdateFileContents({
-                    owner,
-                    repo,
-                    path: incidentPath,
-                    branch: 'main',
-                    sha: existing.sha,
-                    message: `ci: retire deferred E2E-only Nook Main ${run.head_sha.slice(0, 12)}`,
-                    content: Buffer.from(retiredBody).toString('base64'),
-                  })
-                  core.info(`Retired ${incidentPath}: ${failedJobs.join(', ')}`)
-                  core.setOutput('deferred-e2e-only', 'true')
-                  return
-                } catch (error) {
-                  if (error.status === 409 && attempt < 3) continue
-                  throw error
-                }
-              }
-
-              const incident = buildMainFailureIssue({
-                run,
-                jobs,
-                sourcePullRequests,
-                recordedAt,
-                existingBody: existing?.body,
-              })
+              const incident =
+                run.conclusion === 'success'
+                  ? {
+                      path: incidentPath,
+                      body: retireSuccessfulMainIssue({
+                        body: existing?.body,
+                        run,
+                        recordedAt,
+                      }),
+                      failedJobs: [],
+                    }
+                  : buildMainFailureIssue({
+                      run,
+                      jobs,
+                      sourcePullRequests,
+                      recordedAt,
+                      existingBody: existing?.body,
+                    })
               if (existing?.body === incident.body) {
                 core.info(`${incident.path} already records this Main attempt`)
                 core.setOutput('path', incident.path)
@@ -187,10 +157,17 @@ jobs:
                   path: incident.path,
                   branch: 'main',
                   sha: existing?.sha,
-                  message: `ci: queue failed Nook Main ${run.head_sha.slice(0, 12)}`,
+                  message:
+                    run.conclusion === 'success'
+                      ? `ci: retire repaired Nook Main ${run.head_sha.slice(0, 12)}`
+                      : `ci: queue failed Nook Main ${run.head_sha.slice(0, 12)}`,
                   content: Buffer.from(incident.body).toString('base64'),
                 })
-                core.info(`Queued ${incident.path}: ${incident.failedJobs.join(', ') || 'workflow failure'}`)
+                core.info(
+                  run.conclusion === 'success'
+                    ? `Retired ${incident.path} after successful Main rerun`
+                    : `Queued ${incident.path}: ${incident.failedJobs.join(', ') || 'workflow failure'}`,
+                )
                 core.setOutput('path', incident.path)
                 core.setOutput(
                   'url',

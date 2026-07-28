@@ -170,6 +170,17 @@ spec:
                               self.send_error(403)
                               return
                           api_request("DELETE", pod_path)
+                          for _ in range(60):
+                              try:
+                                  api_request("GET", pod_path)
+                              except urllib.error.HTTPError as error:
+                                  if error.code == 404:
+                                      break
+                                  raise
+                              time.sleep(2)
+                          else:
+                              self.send_error(504)
+                              return
                       except urllib.error.HTTPError as error:
                           if error.code != 404:
                               self.send_error(502)

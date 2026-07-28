@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::Context;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use crate::model::{EnqueueTask, TaskId};
@@ -11,6 +13,8 @@ use crate::store::TaskStore;
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
 const MAIN_FAILURE_SUFFIX: &str = ".md";
 const DEFERRED_E2E_RETIREMENT_MARKER: &str = "<!-- hive-retired:deferred-e2e -->";
+const SUCCESSFUL_RERUN_RETIREMENT_MARKER: &str = "<!-- hive-retired:successful-rerun -->";
+const WORKER_HEARTBEAT_SECONDS: u64 = 60;
 
 pub async fn run_workbench_dispatcher<S: TaskStore>(
     store: S,
@@ -18,8 +22,8 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     checkout: &Path,
     poll_seconds: u64,
 ) -> anyhow::Result<()> {
-    if poll_seconds < 60 {
-        anyhow::bail!("Workbench polling must not run more often than once per minute");
+    if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
+        anyhow::bail!("Workbench polling must exceed the worker heartbeat interval");
     }
     store.migrate().await?;
     let mut reconciled_revision = None;
@@ -147,6 +151,21 @@ async fn dispatch_once<S: TaskStore>(
             continue;
         }
         let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
+        if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
+            if let Some(task_id) = store.active_delivery(&source_commit, "main-repair").await? {
+                let cancelled = store
+                    .cancel(&task_id, "Main rerun succeeded")
+                    .await
+                    .with_context(|| format!("cancel {}", task_id))?;
+                eprintln!(
+                    "Hive Workbench successful rerun task={} cancelled={cancelled}",
+                    task_id
+                );
+                terminate_cancelled_workers(store, &task_id).await?;
+            }
+            reconciled_incidents.insert(name, body);
+            continue;
+        }
         if body.contains(DEFERRED_E2E_RETIREMENT_MARKER) {
             for task_id in main_failure_task_ids(task_base, &body)? {
                 let cancelled = store
@@ -157,6 +176,7 @@ async fn dispatch_once<S: TaskStore>(
                     "Hive Workbench retirement task={} cancelled={cancelled}",
                     task_id
                 );
+                terminate_cancelled_workers(store, &task_id).await?;
             }
             reconciled_incidents.insert(name, body);
             continue;
@@ -178,29 +198,126 @@ async fn dispatch_once<S: TaskStore>(
             reconciled_incidents.insert(name, body);
             continue;
         }
-        if let Some(active_id) = store.active_delivery(&source_commit, "main-repair").await? {
-            eprintln!(
-                "Hive Workbench delivery already active task={} source_commit={source_commit}",
-                active_id
-            );
-            continue;
-        }
-        let task = EnqueueTask {
-            id: main_failure_task_id(task_base, run_id, run_attempt)?,
-            kind: "main-repair".to_owned(),
-            prompt: body.clone(),
-            source_commit,
-            priority: 100,
-            max_attempts: 3,
-            dependencies: Vec::new(),
-        };
-        if let Err(error) = store.enqueue(&task).await
-            && !format!("{error:#}").contains("already exists")
-        {
-            return Err(error).with_context(|| format!("enqueue {}", task.id));
-        }
+        reconcile_delivery(store, &source_commit, task_base, &body, run_id, run_attempt).await?;
         reconciled_incidents.insert(name, body);
     }
+    Ok(())
+}
+
+async fn reconcile_delivery<S: TaskStore>(
+    store: &S,
+    source_commit: &str,
+    task_base: &str,
+    body: &str,
+    run_id: u64,
+    run_attempt: u64,
+) -> anyhow::Result<()> {
+    let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
+    if let Some(active_id) = store.active_delivery(source_commit, "main-repair").await? {
+        if active_id == task_id {
+            eprintln!(
+                "Hive Workbench delivery already current task={} source_commit={source_commit}",
+                active_id,
+            );
+            return Ok(());
+        }
+        let cancelled = store
+            .cancel(&active_id, "Superseded by a newer failed Main attempt")
+            .await
+            .with_context(|| format!("cancel superseded delivery {}", active_id))?;
+        terminate_cancelled_workers(store, &active_id).await?;
+        anyhow::bail!(
+            "superseded Hive delivery {active_id} cancellation_requested={cancelled}; retry after the worker acknowledges termination"
+        );
+    }
+    let task = EnqueueTask {
+        id: task_id,
+        kind: "main-repair".to_owned(),
+        prompt: body.to_owned(),
+        source_commit: source_commit.to_owned(),
+        priority: 100,
+        max_attempts: 3,
+        dependencies: Vec::new(),
+    };
+    if let Err(error) = store.enqueue(&task).await
+        && !format!("{error:#}").contains("already exists")
+    {
+        return Err(error).with_context(|| format!("enqueue {}", task.id));
+    }
+    Ok(())
+}
+
+async fn terminate_cancelled_workers<S: TaskStore>(
+    store: &S,
+    root_task_id: &TaskId,
+) -> anyhow::Result<()> {
+    for target in store.cancellation_targets(root_task_id).await? {
+        delete_worker_pod(&target.pod_name).await?;
+        let finalized = store.finalize_cancellation(&target.task_id).await?;
+        anyhow::ensure!(
+            finalized,
+            "cancelled worker {} terminated but task {} could not be finalized",
+            target.pod_name,
+            target.task_id
+        );
+    }
+    Ok(())
+}
+
+async fn delete_worker_pod(pod_name: &str) -> anyhow::Result<()> {
+    if !pod_name.starts_with("hive-")
+        || !pod_name.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'.')
+        })
+    {
+        anyhow::bail!("refusing invalid Hive worker Pod name");
+    }
+    let token = tokio::fs::read_to_string("/run/reaper-auth/token").await?;
+    let url = format!("http://hive-reaper.hive-system.svc.cluster.local:8080/reap/{pod_name}");
+    let mut child = Command::new("curl")
+        .args([
+            "--silent",
+            "--show-error",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code}",
+            "--request",
+            "POST",
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "130",
+            "--config",
+            "-",
+            url.as_str(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("start Hive lifecycle-controller request")?;
+    child
+        .stdin
+        .take()
+        .context("open Kubernetes request configuration")?
+        .write_all(format!("header = \"Authorization: Bearer {}\"\n", token.trim()).as_bytes())
+        .await
+        .context("write Hive lifecycle-controller request configuration")?;
+    let output = child
+        .wait_with_output()
+        .await
+        .context("call Hive lifecycle controller")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "Hive lifecycle-controller request failed"
+    );
+    let status: u16 = String::from_utf8(output.stdout)?
+        .parse()
+        .context("decode Hive lifecycle-controller status")?;
+    anyhow::ensure!(
+        status == 204,
+        "Hive lifecycle controller returned status {status}"
+    );
     Ok(())
 }
 
@@ -299,16 +416,109 @@ async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
 mod tests {
     use std::collections::HashMap;
     use std::process::Command as StdCommand;
+    use std::sync::{Arc, Mutex};
 
+    use async_trait::async_trait;
     use serde_json::json;
 
-    use crate::model::TaskId;
+    use crate::model::{
+        AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
+        LeaseToken, TaskId,
+    };
+    use crate::store::TaskStore;
 
     use super::{
         DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
-        main_failure_commit, main_failure_run, main_failure_task_ids, main_run_requires_repair,
+        main_failure_commit, main_failure_run, main_failure_task_id, main_failure_task_ids,
+        main_run_requires_repair, reconcile_delivery, run_workbench_dispatcher,
         sync_workbench_checkout,
     };
+
+    #[derive(Clone, Default)]
+    struct RecordingStore {
+        active: Arc<Mutex<Option<TaskId>>>,
+        cancelled: Arc<Mutex<Vec<TaskId>>>,
+        enqueued: Arc<Mutex<Vec<TaskId>>>,
+    }
+
+    #[async_trait]
+    impl TaskStore for RecordingStore {
+        async fn migrate(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn register_agent(&self, _: &AgentId, _: &str) -> anyhow::Result<()> {
+            unreachable!()
+        }
+        async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
+            self.enqueued
+                .lock()
+                .expect("enqueued")
+                .push(task.id.clone());
+            Ok(())
+        }
+        async fn active_delivery(&self, _: &str, _: &str) -> anyhow::Result<Option<TaskId>> {
+            Ok(self.active.lock().expect("active").clone())
+        }
+        async fn cancel(&self, task_id: &TaskId, _: &str) -> anyhow::Result<bool> {
+            self.cancelled
+                .lock()
+                .expect("cancelled")
+                .push(task_id.clone());
+            Ok(true)
+        }
+        async fn acknowledge_cancellation(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn cancellation_targets(
+            &self,
+            _: &TaskId,
+        ) -> anyhow::Result<Vec<CancellationTarget>> {
+            Ok(Vec::new())
+        }
+        async fn finalize_cancellation(&self, _: &TaskId) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn claim(&self, _: &AgentId, _: i64) -> anyhow::Result<ClaimOutcome> {
+            unreachable!()
+        }
+        async fn heartbeat(
+            &self,
+            _: &TaskId,
+            _: &AgentId,
+            _: &LeaseToken,
+            _: i64,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn release(&self, _: &ClaimedTask, _: &AgentId) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn complete(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+            _: &str,
+            _: &CompletionArtifact,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn fail(&self, _: &ClaimedTask, _: &AgentId, _: &str) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+        async fn block(
+            &self,
+            _: &ClaimedTask,
+            _: &AgentId,
+            _: &EnqueueTask,
+            _: &str,
+        ) -> anyhow::Result<bool> {
+            unreachable!()
+        }
+    }
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() {
@@ -354,6 +564,12 @@ mod tests {
                 "main-failure-abcdef",
                 "main-failure-abcdef-run-123456-attempt-2"
             ]
+        );
+        assert_eq!(
+            main_failure_task_id("main-failure-abcdef", 123456, 2)
+                .expect("current task id")
+                .as_str(),
+            "main-failure-abcdef-run-123456-attempt-2"
         );
         assert!(main_run_requires_repair(&failed_main, source_commit));
         assert!(!main_run_requires_repair(
@@ -419,6 +635,69 @@ mod tests {
             "main-failure-deadbeef.md",
             "attempt: 2"
         ));
+    }
+
+    #[tokio::test]
+    async fn current_generation_is_idempotent() -> anyhow::Result<()> {
+        let store = RecordingStore::default();
+        let current = main_failure_task_id("main-failure-abcdef", 123, 2)?;
+        *store.active.lock().expect("active") = Some(current);
+
+        reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
+
+        assert!(store.cancelled.lock().expect("cancelled").is_empty());
+        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dispatcher_rejects_sub_heartbeat_polling() {
+        let checkout = tempfile::tempdir().expect("checkout");
+        let error = run_workbench_dispatcher(
+            RecordingStore::default(),
+            "https://example.invalid/workbench.git",
+            checkout.path(),
+            60,
+        )
+        .await
+        .expect_err("sub-heartbeat polling must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("must exceed the worker heartbeat")
+        );
+    }
+
+    #[tokio::test]
+    async fn replacement_waits_for_superseded_worker_acknowledgement() -> anyhow::Result<()> {
+        let store = RecordingStore::default();
+        let old = main_failure_task_id("main-failure-abcdef", 123, 1)?;
+        *store.active.lock().expect("active") = Some(old.clone());
+
+        assert!(
+            reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            store.cancelled.lock().expect("cancelled").as_slice(),
+            &[old]
+        );
+        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+
+        *store.active.lock().expect("active") = None;
+        reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
+        assert_eq!(
+            store
+                .enqueued
+                .lock()
+                .expect("enqueued")
+                .iter()
+                .map(TaskId::as_str)
+                .collect::<Vec<_>>(),
+            ["main-failure-abcdef-run-123-attempt-2"]
+        );
+        Ok(())
     }
 
     #[tokio::test]

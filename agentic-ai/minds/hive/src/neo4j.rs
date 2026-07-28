@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use crate::install_rustls_crypto_provider;
 use crate::model::{
-    AgentId, Artifact, AttemptId, ClaimOutcome, ClaimedTask, CompletionArtifact, DependencyResult,
-    EnqueueTask, LeaseToken, TaskId,
+    AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
+    CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskId,
 };
 use crate::store::TaskStore;
 
@@ -21,7 +21,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_artifact_id IF NOT EXISTS FOR (node:Artifact) REQUIRE node.id IS UNIQUE",
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 4;
+const LATEST_SCHEMA_VERSION: i64 = 5;
 const CLAIM_RETRY_LIMIT: usize = 5;
 
 fn is_transient_claim_error(error: &anyhow::Error) -> bool {
@@ -426,10 +426,14 @@ impl TaskStore for Neo4jTaskStore {
             .graph
             .execute(
                 query(
-                    "MATCH (task:Task {source_commit: $source_commit, kind: $kind})
-                     WHERE task.status IN ['READY', 'RUNNING', 'BLOCKED']
-                     RETURN task.id AS id
-                     ORDER BY task.created_at
+                    "MATCH (root:Task {source_commit: $source_commit, kind: $kind})
+                     WHERE root.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                        OR EXISTS {
+                          MATCH (root)-[:DEPENDS_ON*1..]->(descendant:Task)
+                          WHERE descendant.status = 'CANCELLING'
+                        }
+                     RETURN root.id AS id
+                     ORDER BY root.created_at
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
@@ -463,22 +467,129 @@ impl TaskStore for Neo4jTaskStore {
                      UNWIND members AS task
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
-                     SET task.status = 'CANCELLED',
+                     WITH task, attempt, agent, task.status = 'RUNNING' AS was_running
+                     SET task.status =
+                           CASE was_running
+                             WHEN true THEN 'CANCELLING'
+                             ELSE 'CANCELLED'
+                           END,
                          task.failure_reason = $reason,
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1,
+                         task.lease_owner =
+                           CASE was_running WHEN true THEN task.lease_owner ELSE null END,
+                         task.lease_token =
+                           CASE was_running WHEN true THEN task.lease_token ELSE null END,
+                         task.lease_until =
+                           CASE was_running WHEN true THEN task.lease_until ELSE null END,
+                         attempt.status =
+                           CASE was_running WHEN true THEN attempt.status ELSE 'CANCELLED' END,
+                         attempt.error =
+                           CASE was_running WHEN true THEN attempt.error ELSE $reason END,
+                         attempt.completed_at =
+                           CASE was_running WHEN true THEN attempt.completed_at ELSE timestamp() END,
+                         agent.status =
+                           CASE was_running WHEN true THEN agent.status ELSE 'IDLE' END,
+                         agent.last_seen_at = timestamp()
+                     RETURN DISTINCT task.id AS id",
+                )
+                .param("task_id", task_id.as_str())
+                .param("reason", reason),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
+    async fn acknowledge_cancellation(
+        &self,
+        task: &ClaimedTask,
+        agent_id: &AgentId,
+    ) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt)
+                     MATCH (agent:Agent {id: $agent_id})-[:EXECUTED]->(attempt)
+                     WHERE task.status = 'CANCELLING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND attempt.lease_token = $lease_token
+                     SET task.status = 'CANCELLED',
                          task.updated_at = timestamp(),
                          task.version = task.version + 1,
                          task.lease_owner = null,
                          task.lease_token = null,
                          task.lease_until = null,
                          attempt.status = 'CANCELLED',
-                         attempt.error = $reason,
+                         attempt.error = coalesce(task.failure_reason, 'cancelled'),
                          attempt.completed_at = timestamp(),
                          agent.status = 'IDLE',
                          agent.last_seen_at = timestamp()
-                     RETURN DISTINCT root.id AS id",
+                     RETURN task.id AS id",
                 )
-                .param("task_id", task_id.as_str())
-                .param("reason", reason),
+                .param("task_id", task.id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str()),
+            )
+            .await?;
+        Ok(rows.next().await?.is_some())
+    }
+
+    async fn cancellation_targets(
+        &self,
+        task_id: &TaskId,
+    ) -> anyhow::Result<Vec<CancellationTarget>> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $task_id})
+                     OPTIONAL MATCH (root)-[:DEPENDS_ON*0..]->(task:Task)
+                     WITH DISTINCT task
+                     WHERE task.status = 'CANCELLING'
+                     MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
+                     MATCH (agent:Agent)-[:EXECUTED]->(attempt)
+                     WHERE attempt.lease_token = task.lease_token
+                     RETURN task.id AS task_id, agent.pod_name AS pod_name",
+                )
+                .param("task_id", task_id.as_str()),
+            )
+            .await?;
+        let mut targets = Vec::new();
+        while let Some(row) = rows.next().await? {
+            targets.push(CancellationTarget {
+                task_id: TaskId::new(row.get::<String>("task_id")?).map_err(anyhow::Error::msg)?,
+                pod_name: row.get("pod_name")?,
+            });
+        }
+        Ok(targets)
+    }
+
+    async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+        let mut rows = self
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})
+                     WHERE task.status IN ['CANCELLING', 'CANCELLED']
+                     OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {status: 'RUNNING'})
+                     WHERE attempt.lease_token = task.lease_token
+                     OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
+                     SET task.status = 'CANCELLED',
+                         task.updated_at = timestamp(),
+                         task.version = task.version + 1,
+                         task.lease_owner = null,
+                         task.lease_token = null,
+                         task.lease_until = null,
+                         attempt.status = 'CANCELLED',
+                         attempt.error = coalesce(task.failure_reason, 'cancelled'),
+                         attempt.completed_at = timestamp(),
+                         agent.status = 'IDLE',
+                         agent.last_seen_at = timestamp()
+                     RETURN task.id AS id",
+                )
+                .param("task_id", task_id.as_str()),
             )
             .await?;
         Ok(rows.next().await?.is_some())
@@ -1951,6 +2062,66 @@ mod tests {
             "final lease failure must propagate to every descendant: {lease_failed_statuses:?}"
         );
 
+        let cancelling = task(format!("cancelling-{suffix}"), Vec::new());
+        store.enqueue(&cancelling).await?;
+        let cancelling_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert_eq!(cancelling_claim.id, cancelling.id);
+        assert!(store.cancel(&cancelling.id, "superseded").await?);
+        assert!(
+            !store
+                .heartbeat(
+                    &cancelling_claim.id,
+                    &agent_a,
+                    &cancelling_claim.lease_token,
+                    300,
+                )
+                .await?
+        );
+        let targets = store.cancellation_targets(&cancelling.id).await?;
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].task_id, cancelling.id);
+        assert_eq!(targets[0].pod_name, agent_a.as_str());
+        assert!(
+            store
+                .acknowledge_cancellation(&cancelling_claim, &agent_a)
+                .await?
+        );
+        assert!(store.cancellation_targets(&cancelling.id).await?.is_empty());
+
+        let forced = task(format!("forced-cancellation-{suffix}"), Vec::new());
+        store.enqueue(&forced).await?;
+        let prior_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert!(store.fail(&prior_claim, &agent_a, "prior failure").await?);
+        let current_claim = store.claim(&agent_b, 300).await?.into_claimed()?;
+        assert!(store.cancel(&forced.id, "superseded").await?);
+        assert!(store.finalize_cancellation(&forced.id).await?);
+        let mut forced_rows = store
+            .graph
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $id})<-[:FOR_TASK]-(attempt:Attempt)
+                     RETURN attempt.status AS status
+                     ORDER BY attempt.number",
+                )
+                .param("id", forced.id.as_str()),
+            )
+            .await?;
+        let mut forced_statuses = Vec::new();
+        while let Some(row) = forced_rows.next().await? {
+            forced_statuses.push(row.get::<String>("status")?);
+        }
+        assert_eq!(forced_statuses, ["FAILED", "CANCELLED"]);
+        assert!(
+            !store
+                .complete(
+                    &current_claim,
+                    &agent_b,
+                    "late",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+
         store
             .graph
             .run(query("MATCH (node) DETACH DELETE node"))
@@ -1998,37 +2169,37 @@ mod tests {
             ))
             .await
             .expect("create schema-3 fixture");
-        store.migrate().await.expect("migrate schema 3 to schema 4");
-        let mut schema_four_rows = store
+        store.migrate().await.expect("migrate schema 3 to schema 5");
+        let mut schema_five_rows = store
             .graph
             .execute(query(
                 "MATCH (task:Task {id: 'schema-3-task'})
-                 MATCH (migration:HiveSchemaMigration {version: 4})
+                 MATCH (migration:HiveSchemaMigration {version: 5})
                  RETURN task.last_retry_release AS last_retry_release,
                         task.manual_retry_used IS NULL AS removed_legacy_marker,
                         migration.version AS version",
             ))
             .await
-            .expect("read schema-4 migration state");
-        let schema_four = schema_four_rows
+            .expect("read schema-5 migration state");
+        let schema_five = schema_five_rows
             .next()
             .await
             .expect("read schema-4 row")
-            .expect("schema-4 migration row");
+            .expect("schema-5 migration row");
         assert_eq!(
-            schema_four
+            schema_five
                 .get::<String>("last_retry_release")
                 .expect("initialized release marker"),
             ""
         );
         assert!(
-            schema_four
+            schema_five
                 .get::<bool>("removed_legacy_marker")
                 .expect("removed legacy marker")
         );
         assert_eq!(
-            schema_four.get::<i64>("version").expect("schema-4 version"),
-            4
+            schema_five.get::<i64>("version").expect("schema-5 version"),
+            5
         );
         let mut rollback_marker_rows = store
             .graph
