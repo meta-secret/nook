@@ -213,6 +213,7 @@ export async function createExtensionPasskey(
   passkeyLabel: string,
   deviceMode: ExtensionDeviceMode,
 ): Promise<ExtensionDeviceProtectionResult> {
+  await ensureNookWasm()
   const { setup } = await sessionMessage<
     SessionResponse<{
       setup: {
@@ -272,6 +273,7 @@ export async function recoverExtensionPasskey(): Promise<ExtensionDeviceProtecti
 }
 
 export async function unlockExtensionPasskey(): Promise<ExtensionDeviceProtectionResult> {
+  await ensureNookWasm()
   const { material } = await sessionMessage<
     SessionResponse<{
       material: { credentialId: number[]; prfInput: number[] }
