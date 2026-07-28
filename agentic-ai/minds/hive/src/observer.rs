@@ -36,6 +36,7 @@ pub struct ObserverSnapshot {
     pub agents: Vec<ObservedAgent>,
     pub tasks: Vec<ObservedTask>,
     pub alerts: Vec<ObservedAlert>,
+    pub alerts_truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -535,9 +536,12 @@ impl IntoResponse for ObserverError {
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> anyhow::Result<ObserverSnapshot> {
         let overview_tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
-        let mut tasks = self
-            .observer_tasks("", ALERT_LIMIT as i64, locale, true)
+        let mut attention_tasks = self
+            .observer_tasks("", ALERT_LIMIT as i64 + 1, locale, true)
             .await?;
+        let alerts_truncated = attention_tasks.len() > ALERT_LIMIT;
+        attention_tasks.truncate(ALERT_LIMIT);
+        let mut tasks = attention_tasks;
         for task in overview_tasks {
             if tasks.len() >= TASK_LIMIT as usize {
                 break;
@@ -557,6 +561,7 @@ impl Neo4jTaskStore {
             agents: self.observer_agents().await?,
             tasks,
             alerts,
+            alerts_truncated,
         })
     }
 
@@ -613,6 +618,9 @@ impl Neo4jTaskStore {
             .execute(
                 query(
                     "MATCH (task:Task)
+                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
+                        OR ($attention_only = true
+                          AND task.status IN ['FAILED', 'BLOCKED', 'RUNNING', 'CANCELLING'])
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                      WITH task, attempt, agent
@@ -625,8 +633,8 @@ impl Neo4jTaskStore {
                          THEN coalesce(task.latest_activity_at, 0)
                          ELSE coalesce(latest.attempt.started_at, task.created_at, 0)
                        END AS latest_progress_at
-                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
-                        OR ($attention_only = true AND (
+                     WHERE $attention_only = false
+                        OR (
                           task.status IN ['FAILED', 'BLOCKED']
                           OR (
                             task.status = 'RUNNING'
@@ -637,7 +645,7 @@ impl Neo4jTaskStore {
                             AND coalesce(task.updated_at, task.created_at, 0)
                               < timestamp() - $attention_age
                           )
-                        ))
+                        )
                      RETURN task.id AS id,
                             coalesce(task.kind, '') AS kind,
                             coalesce(task.trigger_kind, 'legacy-unknown') AS trigger_kind,

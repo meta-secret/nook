@@ -91,6 +91,7 @@ const snapshot: ObserverSnapshot = {
       reason: 'All permitted attempts have failed',
     },
   ],
+  alerts_truncated: false,
   tasks: [
     {
       id: 'main-repair-359c937a-run-302991001',
@@ -389,4 +390,13 @@ test('uses typed server alerts instead of inferring policy in the browser', asyn
   });
   await page.goto('/');
   await expect(page.locator('.attention-lane')).toHaveCount(0);
+});
+
+test('marks a bounded attention count as truncated', async ({ page }) => {
+  await routeSnapshot(page, {
+    ...snapshot,
+    alerts_truncated: true,
+  });
+  await page.goto('/');
+  await expect(page.locator('.attention-summary strong')).toHaveText('1+');
 });

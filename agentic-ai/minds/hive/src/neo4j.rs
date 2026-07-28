@@ -955,6 +955,7 @@ impl TaskStore for Neo4jTaskStore {
                    WHERE dependency.status <> 'COMPLETED'
                  }
                  SET blocked.status = 'READY',
+                     blocked.blocked_reason = null,
                      blocked.updated_at = timestamp(),
                      blocked.version = blocked.version + 1",
             ))

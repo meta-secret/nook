@@ -115,4 +115,5 @@ export type ObserverSnapshot = {
   agents: ObservedAgent[];
   tasks: ObservedTask[];
   alerts: ObservedAlert[];
+  alerts_truncated: boolean;
 };

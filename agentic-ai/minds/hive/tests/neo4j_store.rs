@@ -103,6 +103,32 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("complete dependency")
     );
+    let mut promoted_rows = graph
+        .execute(
+            query(
+                "MATCH (task:Task {id: $task_id})
+                 RETURN task.status AS status,
+                        task.blocked_reason IS NULL AS cleared_blocked_reason",
+            )
+            .param("task_id", dependent.id.as_str()),
+        )
+        .await
+        .expect("query promoted dependent");
+    let promoted = promoted_rows
+        .next()
+        .await
+        .expect("read promoted dependent")
+        .expect("promoted dependent row");
+    assert_eq!(
+        promoted.get::<String>("status").expect("promoted status"),
+        "READY"
+    );
+    assert!(
+        promoted
+            .get::<bool>("cleared_blocked_reason")
+            .expect("cleared blocker reason"),
+        "promoted tasks must not retain dependency-failure classification"
+    );
     let mut artifact_rows = graph
         .execute(
             query(

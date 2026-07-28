@@ -308,7 +308,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         aria-live="polite"
       >
         <AlertTriangle size={16} />
-        <strong>{attentionEntries.length}</strong>
+        <strong
+          >{attentionEntries.length}{snapshot?.alerts_truncated
+            ? '+'
+            : ''}</strong
+        >
         <span>{copy.needs_attention.toLocaleLowerCase()}</span>
       </div>
     </section>
