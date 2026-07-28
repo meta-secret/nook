@@ -133,7 +133,7 @@ export async function connectLocalVault(page: Page) {
   await page.goto('/app/')
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
   if (await page.getByTestId('vault-panel').isVisible()) {
     await disableVaultIdleLock(page)

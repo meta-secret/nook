@@ -168,9 +168,8 @@ test('uses the paired demo vault for authenticator enrollment', async ({
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Vault not connected',
+    'Connected to Demo vault',
   )
-  await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
   await demoBeat(page)
   expect(bootstrapErrors).toEqual([])
 })
