@@ -53,6 +53,7 @@ def main():
     policies = {
         "hive-worker-egress": policy,
         "hive-dispatcher-reaper": copy.deepcopy(policy),
+        "hive-observer-egress": copy.deepcopy(policy),
     }
     patches = []
     policy_reads = 0
@@ -102,7 +103,7 @@ def main():
     namespace["api_request"] = api_request
     namespace["reconcile_neo4j_policy"]()
 
-    assert len(patches) == 3, patches
+    assert len(patches) == 4, patches
     method, path, payload = patches[1]
     assert method == "PATCH"
     assert path.endswith("/networkpolicies/hive-worker-egress")
@@ -129,16 +130,28 @@ def main():
         if "ipBlock" in destination
     ]
     assert dispatcher_cidrs == [service_cidr, new_endpoint], dispatcher_cidrs
+    assert patches[3][1].endswith(
+        "/networkpolicies/hive-observer-egress"
+    ), patches
+    observer_cidrs = [
+        destination["ipBlock"]["cidr"]
+        for rule in patches[3][2]["spec"]["egress"]
+        for destination in rule.get("to", [])
+        if "ipBlock" in destination
+    ]
+    assert observer_cidrs == [service_cidr, new_endpoint], observer_cidrs
 
     policies["hive-worker-egress"] = copy.deepcopy(payload)
     policies["hive-worker-egress"]["metadata"]["resourceVersion"] = "12"
     policies["hive-dispatcher-reaper"] = copy.deepcopy(patches[2][2])
     policies["hive-dispatcher-reaper"]["metadata"]["resourceVersion"] = "12"
+    policies["hive-observer-egress"] = copy.deepcopy(patches[3][2])
+    policies["hive-observer-egress"]["metadata"]["resourceVersion"] = "12"
     policy_reads = 2
     ready_endpoint = False
     patches.clear()
     namespace["reconcile_neo4j_policy"]()
-    assert len(patches) == 2, patches
+    assert len(patches) == 3, patches
     unready_payload = patches[0][2]
     unready_cidrs = [
         destination["ipBlock"]["cidr"]
