@@ -17,6 +17,7 @@ spec:
         hive.nook.sh/codex-auth-sha256: HIVE_AUTH_CHECKSUM
         hive.nook.sh/github-token-sha256: HIVE_GITHUB_CHECKSUM
         hive.nook.sh/neo4j-ca-sha256: HIVE_NEO4J_CA_CHECKSUM
+        hive.nook.sh/neo4j-client-sha256: HIVE_NEO4J_CLIENT_CHECKSUM
       labels:
         app.kubernetes.io/name: hive
     spec:
