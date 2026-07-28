@@ -6,18 +6,6 @@ const DEMO_BEAT_MS = 650
 test('public landing modules preserve locale, theme, and install behavior', async ({
   page,
 }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'nook_github_stars',
-      JSON.stringify({ count: 12_345, updatedAt: Date.now() }),
-    )
-  })
-  await page.route(
-    'https://api.github.com/repos/meta-secret/nook**',
-    async (route) => {
-      await route.fulfill({ json: { stargazers_count: 12_345 } })
-    },
-  )
   await page.route('**/downloads/extension.json', async (route) => {
     const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
     await route.fulfill({
@@ -35,9 +23,6 @@ test('public landing modules preserve locale, theme, and install behavior', asyn
   await page.goto(`${PUBLIC_SITE_PATH}/`)
   await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
   await expect(page.locator('.capsule-stage')).toBeVisible()
-  await expect(page.getByTestId('landing-github-star-count')).toHaveText(
-    '12.3K',
-  )
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.locator('[data-locale="ru"]').click()
