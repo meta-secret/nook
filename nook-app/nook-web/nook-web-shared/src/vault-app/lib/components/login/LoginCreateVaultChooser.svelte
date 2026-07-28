@@ -4,7 +4,6 @@
     ArrowRight,
     Check,
     Cloud,
-    Copy,
     KeyRound,
     Layers3,
     RefreshCw,
@@ -13,18 +12,19 @@
     Users,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import SentinelCardStackDashboard from '$lib/components/login/SentinelCardStackDashboard.svelte'
   import SentinelTerminalDashboard from '$lib/components/login/SentinelTerminalDashboard.svelte'
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
+  import SentinelGenesisJoinFlow from '$lib/components/login/SentinelGenesisJoinFlow.svelte'
+  import {
+    sentinelDashboardPortal,
+    type SentinelDashboard,
+  } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultType } from '$lib/vault-architecture'
   import type { AppKind } from '$lib/app-kind'
-  import {
-    buildSentinelGenesisParticipantResponseLink,
-    buildSentinelGenesisRequestLink,
-  } from '$lib/sentinel-genesis-link'
+  import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
   import {
     SentinelGenesisPhase,
     sentinelGenesisParticipantFingerprint,
@@ -42,7 +42,6 @@
     | 'join'
 
   type ChosenPath = 'undecided' | 'simple' | 'sentinel' | 'join'
-  type SentinelDashboard = 'card-stack' | 'terminal'
 
   let {
     vault,
@@ -117,15 +116,7 @@
   let sentinelDashboard = $state<SentinelDashboard>()
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
-  let copyingJoinResponse = $state(false)
   let sentinelActionBusy = $state(false)
-  let participantRequest = $state('')
-  let sessionParticipantRequest = $state('')
-  let generatedParticipantResponse = $state('')
-  let generatedParticipantFingerprint = $state('')
-  let participantShare = $state('')
-  let joinPublicKeysLoading = $state(false)
-  let joinPasskeyRequested = $state(false)
   let initiatorFingerprint = $state('')
   let initiatorKeyLoading = $state(false)
   let initiatorPasskeyRequested = $state(false)
@@ -141,9 +132,7 @@
   $effect(() => {
     const invitation = sentinelInvitationRequest.trim()
     if (!invitation || wizardStep !== 'choose') return
-    participantRequest = invitation
     chosenPath = 'join'
-    joinPasskeyRequested = false
     wizardStep = 'join'
   })
 
@@ -162,57 +151,6 @@
     void onAddSentinelGenesisParticipantResponse(response)
   })
 
-  $effect(() => {
-    const deviceProtectionReady = vault.deviceProtectionReady
-    const invitationPending = sentinelInvitationRequest.trim().length > 0
-    const shouldResumeInvitation =
-      invitationPending && joinPasskeyRequested && deviceProtectionReady
-    if (
-      wizardStep === 'join' &&
-      !sentinelOnboardingPackage.trim() &&
-      !generatedParticipantResponse &&
-      !joinPublicKeysLoading &&
-      !isBusy &&
-      shouldResumeInvitation &&
-      onCreateSentinelGenesisParticipantResponse
-    ) {
-      void loadJoinPublicKeys()
-    }
-  })
-
-  async function loadJoinPublicKeys() {
-    const requestPayload = participantRequest.trim()
-    if (
-      joinPublicKeysLoading ||
-      generatedParticipantResponse ||
-      !requestPayload ||
-      !onCreateSentinelGenesisParticipantResponse
-    ) {
-      return
-    }
-    joinPublicKeysLoading = true
-    try {
-      generatedParticipantResponse =
-        await onCreateSentinelGenesisParticipantResponse(requestPayload)
-      if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
-        joinPasskeyRequested = true
-        return
-      }
-      joinPasskeyRequested = false
-      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
-        generatedParticipantResponse,
-      )
-    } catch (error) {
-      generatedParticipantResponse = ''
-      generatedParticipantFingerprint = ''
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t('login.sentinel_genesis_response_failed')
-    } finally {
-      joinPublicKeysLoading = false
-    }
-  }
 
   $effect(() => {
     if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
@@ -243,9 +181,6 @@
   )
   const sentinelGenesisInvitationLink = $derived(
     buildSentinelGenesisRequestLink(sentinelGenesisRequest),
-  )
-  const generatedParticipantResponseLink = $derived(
-    buildSentinelGenesisParticipantResponseLink(generatedParticipantResponse),
   )
   const landingSupporting = $derived(
     appKind === 'simple'
@@ -280,7 +215,7 @@
     wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard' ||
       wizardStep === 'sentinel-policy' ||
-      wizardStep === 'join',
+      (wizardStep === 'join' && !sentinelInvitationRequest.trim()),
   )
 
   const stepIndex = $derived.by(() => {
@@ -310,127 +245,6 @@
     return [choose]
   })
 
-  function portal(node: HTMLElement, enabled: boolean) {
-    const anchor = document.createComment('sentinel-dashboard-home')
-    const focusableSelector = [
-      'a[href]',
-      'button:not([disabled])',
-      'input:not([disabled])',
-      'select:not([disabled])',
-      'textarea:not([disabled])',
-      '[tabindex]:not([tabindex="-1"])',
-    ].join(',')
-    const siblingInertState: Array<[HTMLElement, boolean]> = []
-    let active = false
-    let previousFocus: HTMLElement | undefined
-    let returnFocusTestId = 'sentinel-dashboard-card-stack'
-    node.before(anchor)
-
-    function focusableElements() {
-      return Array.from(
-        node.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => Boolean(element.offsetParent))
-    }
-
-    function trapFocus(event: KeyboardEvent) {
-      if (event.key !== 'Tab') return
-      const elements = focusableElements()
-      if (elements.length === 0) {
-        event.preventDefault()
-        return
-      }
-      const first = elements[0]
-      const last = elements[elements.length - 1]
-      const focused = document.activeElement
-      if (event.shiftKey && (focused === first || !node.contains(focused))) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && focused === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    function setBackgroundInert(inert: boolean) {
-      for (const sibling of Array.from(document.body.children)) {
-        if (!(sibling instanceof HTMLElement) || sibling === node) continue
-        if (inert) {
-          siblingInertState.push([sibling, sibling.inert])
-          sibling.inert = true
-        }
-      }
-      if (!inert) {
-        for (const [sibling, wasInert] of siblingInertState) {
-          sibling.inert = wasInert
-        }
-        siblingInertState.length = 0
-      }
-    }
-
-    function activate() {
-      returnFocusTestId =
-        sentinelDashboard === 'terminal'
-          ? 'sentinel-dashboard-terminal'
-          : 'sentinel-dashboard-card-stack'
-      previousFocus =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : undefined
-      document.body.appendChild(node)
-      setBackgroundInert(true)
-      node.addEventListener('keydown', trapFocus)
-      requestAnimationFrame(() => {
-        node
-          .querySelector<HTMLElement>('[data-sentinel-dashboard-focus]')
-          ?.focus()
-      })
-      active = true
-    }
-
-    function deactivate() {
-      node.removeEventListener('keydown', trapFocus)
-      setBackgroundInert(false)
-      anchor.parentNode?.insertBefore(node, anchor.nextSibling)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (previousFocus?.isConnected) {
-            previousFocus.focus()
-          } else {
-            node
-              .querySelector<HTMLElement>(
-                `[data-testid="${returnFocusTestId}"]`,
-              )
-              ?.focus()
-          }
-          previousFocus = undefined
-        })
-      })
-      active = false
-    }
-
-    function update(nextActive: boolean) {
-      if (nextActive === active) return
-      if (nextActive) {
-        activate()
-      } else {
-        deactivate()
-      }
-    }
-
-    update(enabled)
-    return {
-      update,
-      destroy() {
-        if (active) {
-          node.removeEventListener('keydown', trapFocus)
-          setBackgroundInert(false)
-          previousFocus?.focus()
-        }
-        node.remove()
-        anchor.remove()
-      },
-    }
-  }
 
   function chooseSimplePath() {
     vault.draftVaultType = VaultType.Simple
@@ -540,69 +354,6 @@
     }
   }
 
-  async function copyJoinResponse() {
-    if (!generatedParticipantResponseLink) return
-    try {
-      await navigator.clipboard.writeText(generatedParticipantResponseLink)
-      copyingJoinResponse = true
-      setTimeout(() => {
-        copyingJoinResponse = false
-      }, 1500)
-    } catch {
-      vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
-    }
-  }
-
-  async function createParticipantResponse() {
-    const requestPayload = sessionParticipantRequest.trim()
-    if (
-      !requestPayload ||
-      sentinelActionBusy ||
-      !onCreateSentinelGenesisParticipantResponse
-    ) {
-      return
-    }
-    sentinelActionBusy = true
-    try {
-      generatedParticipantResponse =
-        await onCreateSentinelGenesisParticipantResponse(requestPayload)
-      generatedParticipantFingerprint = sentinelGenesisParticipantFingerprint(
-        generatedParticipantResponse,
-      )
-    } catch (error) {
-      generatedParticipantResponse = ''
-      generatedParticipantFingerprint = ''
-      vault.errorMsg =
-        error instanceof Error
-          ? error.message
-          : vault.t('login.sentinel_genesis_response_failed')
-    } finally {
-      sentinelActionBusy = false
-    }
-  }
-
-  function refreshJoinPublicKeys() {
-    generatedParticipantResponse = ''
-    generatedParticipantFingerprint = ''
-    void loadJoinPublicKeys()
-  }
-
-  async function receiveParticipantShare() {
-    const sharePayload = participantShare.trim()
-    if (!sharePayload || sentinelActionBusy || !onReceiveSentinelGenesisShare)
-      return
-    sentinelActionBusy = true
-    try {
-      const requestPayload = participantRequest.trim()
-      if (requestPayload && onRememberSentinelGenesisRequest) {
-        await onRememberSentinelGenesisRequest(requestPayload)
-      }
-      await onReceiveSentinelGenesisShare(sharePayload)
-      participantShare = ''
-    } finally {
-      sentinelActionBusy = false
-    }
-  }
 </script>
 
 <div
@@ -622,7 +373,10 @@
   data-sentinel-dashboard={sentinelDashboardActive
     ? sentinelDashboard
     : undefined}
-  use:portal={sentinelDashboardActive}
+  use:sentinelDashboardPortal={{
+    active: sentinelDashboardActive,
+    dashboard: sentinelDashboard,
+  }}
 >
   {#if sentinelDashboardActive && sentinelDashboard === 'card-stack'}
     <SentinelCardStackDashboard
@@ -1039,229 +793,16 @@
           {/if}
 
           {#if wizardStep === 'join'}
-            <section
-              class="mt-6 space-y-4 border-t border-border pt-6"
-              data-testid="sentinel-genesis-participant-step"
-            >
-              <div class="space-y-1">
-                <h3 class="text-lg font-semibold text-foreground">
-                  {sentinelOnboardingPackage.trim()
-                    ? vault.t('login.sentinel_onboarding_member_title')
-                    : vault.t('login.sentinel_genesis_join_title')}
-                </h3>
-                <p class="text-sm text-pretty text-muted-foreground">
-                  {sentinelOnboardingPackage.trim()
-                    ? vault.t('login.sentinel_onboarding_member_description')
-                    : vault.t('login.sentinel_genesis_join_description')}
-                </p>
-              </div>
-
-              {#if sentinelOnboardingPackage.trim()}
-                <div
-                  class="rounded-lg border border-primary/25 bg-primary/5 p-4"
-                >
-                  <p class="text-xs leading-relaxed text-muted-foreground">
-                    {vault.t('login.sentinel_onboarding_member_security')}
-                  </p>
-                  <Button
-                    type="button"
-                    class="mt-4 w-full sm:w-auto"
-                    data-testid="sentinel-accept-onboarding"
-                    disabled={isBusy || sentinelActionBusy}
-                    onclick={() =>
-                      void onAcceptSentinelOnboardingPackage?.(
-                        sentinelOnboardingPackage,
-                      )}
-                  >
-                    <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_onboarding_member_action')}
-                  </Button>
-                </div>
-              {:else if generatedParticipantResponse}
-                <div
-                  class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                  data-testid="sentinel-genesis-join-response"
-                >
-                  <div class="space-y-1">
-                    <p class="text-sm font-semibold text-foreground">
-                      {vault.t('login.sentinel_genesis_generated_response')}
-                    </p>
-                    <p class="text-xs text-pretty text-muted-foreground">
-                      {vault.t('login.sentinel_genesis_join_qr_hint')}
-                    </p>
-                  </div>
-                  <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
-                    <EnrollmentQrCode
-                      enrollmentLink={generatedParticipantResponseLink}
-                      loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
-                      )}
-                    />
-                    <div class="space-y-2">
-                      <textarea
-                        id="sentinel-generated-response"
-                        class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                        readonly
-                        data-testid="sentinel-genesis-generated-response"
-                        value={generatedParticipantResponseLink}></textarea>
-                      {#if generatedParticipantFingerprint}
-                        <p
-                          class="text-xs text-muted-foreground"
-                          data-testid="sentinel-genesis-generated-fingerprint"
-                        >
-                          {vault.t('login.sentinel_genesis_fingerprint')}:
-                          <code class="text-foreground"
-                            >{generatedParticipantFingerprint}</code
-                          >
-                        </p>
-                      {/if}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        data-testid="sentinel-genesis-copy-join-response"
-                        onclick={() => void copyJoinResponse()}
-                      >
-                        <Copy class="size-4" />
-                        {copyingJoinResponse
-                          ? vault.t('common.copied')
-                          : vault.t('login.sentinel_genesis_copy_response_url')}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              {:else if joinPublicKeysLoading}
-                <p
-                  class="text-sm text-muted-foreground"
-                  data-testid="sentinel-genesis-join-loading"
-                >
-                  {vault.t('login.sentinel_genesis_join_loading')}
-                </p>
-              {:else if sentinelInvitationRequest.trim()}
-                <div
-                  class="rounded-lg border border-primary/25 bg-primary/5 p-4"
-                  data-testid="sentinel-genesis-connect-card"
-                >
-                  <p class="text-sm font-semibold text-foreground">
-                    {vault.t('login.sentinel_genesis_connect_title')}
-                  </p>
-                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_connect_description')}
-                  </p>
-                  <Button
-                    type="button"
-                    class="mt-4 w-full sm:w-auto"
-                    data-testid="sentinel-genesis-connect-device"
-                    disabled={isBusy || sentinelActionBusy}
-                    onclick={() => refreshJoinPublicKeys()}
-                  >
-                    <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_genesis_connect_action')}
-                  </Button>
-                </div>
-              {:else if !sentinelOnboardingPackage.trim()}
-                <div
-                  class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                  data-testid="sentinel-genesis-invitation-required"
-                >
-                  <p class="text-sm font-semibold text-foreground">
-                    {vault.t('login.sentinel_genesis_invitation_required_title')}
-                  </p>
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t(
-                      'login.sentinel_genesis_invitation_required_description',
-                    )}
-                  </p>
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-participant-request"
-                  >
-                    {vault.t('login.sentinel_genesis_join_request_label')}
-                  </label>
-                  <textarea
-                    id="sentinel-participant-request"
-                    class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    data-testid="sentinel-genesis-join-request-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_join_request_placeholder',
-                    )}
-                    bind:value={sessionParticipantRequest}
-                    disabled={isBusy || sentinelActionBusy}></textarea>
-                  <Button
-                    type="button"
-                    class="w-full sm:w-auto"
-                    data-testid="sentinel-genesis-create-response"
-                    disabled={isBusy ||
-                      sentinelActionBusy ||
-                      !sessionParticipantRequest.trim() ||
-                      !onCreateSentinelGenesisParticipantResponse}
-                    onclick={() => void createParticipantResponse()}
-                  >
-                    {#if sentinelActionBusy}
-                      <RefreshCw class="size-4 animate-spin" />
-                    {:else}
-                      <ShieldCheck class="size-4" />
-                    {/if}
-                    {vault.t('login.sentinel_genesis_create_session_response')}
-                  </Button>
-                </div>
-              {/if}
-
-              {#if !sentinelOnboardingPackage.trim()}
-                <div class="space-y-2 border-t border-border pt-4">
-                  <p class="text-xs font-medium text-foreground">
-                    {vault.t('login.sentinel_genesis_join_share_title')}
-                  </p>
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_join_share_description')}
-                  </p>
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-share-request"
-                  >
-                    {vault.t('login.sentinel_genesis_join_share_request_label')}
-                  </label>
-                  <textarea
-                    id="sentinel-share-request"
-                    class="min-h-16 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    data-testid="sentinel-genesis-share-request-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_join_share_request_placeholder',
-                    )}
-                    bind:value={participantRequest}
-                    disabled={isBusy || sentinelActionBusy}></textarea>
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-received-share"
-                  >
-                    {vault.t('login.sentinel_genesis_receive_share_label')}
-                  </label>
-                  <textarea
-                    id="sentinel-received-share"
-                    class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    data-testid="sentinel-genesis-receive-share-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_receive_share_placeholder',
-                    )}
-                    bind:value={participantShare}
-                    disabled={isBusy || sentinelActionBusy}></textarea>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    data-testid="sentinel-genesis-receive-share"
-                    disabled={isBusy ||
-                      sentinelActionBusy ||
-                      !participantShare.trim() ||
-                      !onReceiveSentinelGenesisShare}
-                    onclick={() => void receiveParticipantShare()}
-                  >
-                    <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_genesis_receive_share')}
-                  </Button>
-                </div>
-              {/if}
-            </section>
+            <SentinelGenesisJoinFlow
+              {vault}
+              {isBusy}
+              {sentinelInvitationRequest}
+              {sentinelOnboardingPackage}
+              onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
+              onRememberRequest={onRememberSentinelGenesisRequest}
+              onReceiveShare={onReceiveSentinelGenesisShare}
+              onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
+            />
           {/if}
 
           {#if canGoBack && !sentinelDashboardActive}
@@ -1320,10 +861,5 @@
       24px 24px 0 -1px #151c22,
       24px 24px 0 0 rgb(101 117 128 / 35%),
       0 35px 80px rgb(0 0 0 / 38%);
-  }
-
-  .sentinel-terminal textarea,
-  .sentinel-terminal input {
-    font-family: inherit;
   }
 </style>

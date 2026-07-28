@@ -9,6 +9,7 @@ async function demoBeat(page: Page) {
 }
 
 test('Sentinel creation invites participants instead of standalone join', async ({
+  browser,
   page,
 }) => {
   await page.addInitScript(() => {
@@ -61,4 +62,37 @@ test('Sentinel creation invites participants instead of standalone join', async 
     page.getByTestId('sentinel-genesis-authentication-instructions'),
   ).toContainText('Paste the signed response')
   await demoBeat(page)
+
+  const invitationLink = await page
+    .getByTestId('sentinel-genesis-request-output')
+    .inputValue()
+  expect(invitationLink).toContain('#sentinel-request=')
+  const invitation = new URL(invitationLink)
+  const participantUrl = new URL(
+    `${invitation.pathname}${invitation.search}${invitation.hash}`,
+    page.url(),
+  ).toString()
+
+  const participantContext = await browser.newContext()
+  try {
+    await participantContext.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    const participant = await participantContext.newPage()
+    await participant.goto(participantUrl)
+    await expect(
+      participant.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      participant.getByTestId('sentinel-genesis-connect-device'),
+    ).toBeVisible()
+    await expect(
+      participant.getByTestId('create-vault-wizard-back'),
+    ).not.toBeVisible()
+    await expect(
+      participant.getByTestId('sentinel-genesis-share-request-input'),
+    ).not.toHaveValue('')
+  } finally {
+    await participantContext.close()
+  }
 })
