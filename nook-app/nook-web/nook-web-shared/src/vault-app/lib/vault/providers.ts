@@ -1,10 +1,11 @@
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
-import { generateId, isoTimestamp } from "$lib/nook";
+import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   findDuplicateSyncProvider,
   LOCAL_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
   providerDefaultLabel,
   saveAuthProviders,
   type AuthProvidersSnapshot,
@@ -15,15 +16,254 @@ import {
   type StorageProviderType,
 } from "$lib/auth-providers";
 import {
+  activeVaultProviders,
+  chooseLocalFolderBackupDirectory,
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
   hasLocalVault,
+  hasRemoteCredentials,
+  isLocalFolderBackupSupported,
+  isVaultSessionLocked,
+  localProviderIdForActiveVault,
+  oauthRemoteStorageRef,
+  providerWasmArgs as providerWasmArgsCore,
   removeLocalFolderHandle,
+  RemoteVaultAssessDecision,
+  RemoteVaultRecoveryState,
+  stagedProviderLabel as stagedProviderLabelCore,
+  stagedRemoteStorageArgs as stagedRemoteStorageArgsCore,
+  syncProvidersForActiveVault,
+  updateOauthRemoteRef,
+  wasmStorageArgs as wasmStorageArgsCore,
+  type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
 
 export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
 
 const log = createLogger("vault-providers");
+
+function takeStorageArgsTuple(
+  args: NookStorageConnectArgs,
+): [string, string, string] {
+  try {
+    return [args.mode, args.pat, args.repo];
+  } finally {
+    args.free();
+  }
+}
+
+function providerSnapshot(state: ProviderActionsContext) {
+  return $state.snapshot({
+    providers: state.providers,
+    ...(state.activeVaultStoreId
+      ? { activeVaultStoreId: state.activeVaultStoreId }
+      : {}),
+  });
+}
+
+export function wasmStorageArgs(
+  state: ProviderActionsContext,
+): [string, string, string] {
+  const syncProvider = syncProviders(state)[0];
+  return takeStorageArgsTuple(
+    wasmStorageArgsCore(
+      state.localVaultPresent,
+      state.isAuthenticated,
+      syncProvider ? $state.snapshot(syncProvider) : undefined,
+      state.storageMode,
+      state.githubPat,
+      state.githubRepo,
+      state.oauthFile?.preset,
+      state.oauthFile?.accessToken,
+      state.oauthFile
+        ? oauthRemoteStorageRef($state.snapshot(state.oauthFile))
+        : undefined,
+      state.oauthFile?.fileName,
+    ),
+  );
+}
+
+export function providerWasmArgs(
+  provider: StorageProvider,
+): [string, string, string] {
+  return takeStorageArgsTuple(providerWasmArgsCore($state.snapshot(provider)));
+}
+
+export function connectStorageArgs(
+  state: ProviderActionsContext,
+): [string, string, string] {
+  if (shouldUseJoinProviderForConnect(state)) {
+    return providerWasmArgs(syncProviders(state)[0]!);
+  }
+  return wasmStorageArgs(state);
+}
+
+export function shouldUseJoinProviderForConnect(
+  state: ProviderActionsContext,
+): boolean {
+  return state.clientPolicy.shouldUseJoinProviderForConnect(
+    state.isAuthenticated,
+    syncProviders(state).length,
+    state.joinEnrollmentPrompt,
+  );
+}
+
+export function stagedRemoteStorageArgs(
+  state: ProviderActionsContext,
+): [string, string, string] | undefined {
+  const type = state.loginSetupType ?? state.storageMode;
+  const args = stagedRemoteStorageArgsCore(
+    type,
+    state.githubPat || undefined,
+    state.githubRepo || undefined,
+    state.oauthFile ? $state.snapshot(state.oauthFile) : undefined,
+  );
+  return args ? takeStorageArgsTuple(args) : undefined;
+}
+
+export function stagedProviderLabel(state: ProviderActionsContext): string {
+  return stagedProviderLabelCore(
+    state.loginSetupType ?? state.storageMode,
+    state.githubRepo,
+    state.oauthFile?.fileName,
+    state.oauthFile?.preset,
+    state.oauthSetupPreset,
+  );
+}
+
+export function hasRemoteProviderCredentials(
+  state: ProviderActionsContext,
+): boolean {
+  return hasRemoteCredentials(
+    state.storageMode,
+    state.githubPat,
+    state.oauthFile?.accessToken,
+    state.localFolder?.handleId,
+  );
+}
+
+export function syncOAuthRemoteRefFromManager(
+  state: ProviderActionsContext,
+): void {
+  if (
+    state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
+    !state.manager ||
+    !state.oauthFile
+  ) {
+    return;
+  }
+  const updated = updateOauthRemoteRef(
+    $state.snapshot(state.oauthFile),
+    state.manager.storage_remote_ref ?? "",
+  );
+  if (updated) state.oauthFile = updated;
+}
+
+export async function chooseLocalFolder(
+  state: ProviderActionsContext,
+): Promise<void> {
+  refreshLocalFolderBackupSupport(state);
+  if (!state.localFolderBackupSupported) {
+    throw new Error(state.t("provider_setup.local_folder_unsupported_browser"));
+  }
+  const folder = await chooseLocalFolderBackupDirectory();
+  state.localFolder = {
+    directoryName: folder.directoryName,
+    handleId: folder.handleId,
+  };
+}
+
+export function refreshLocalFolderBackupSupport(
+  state: ProviderActionsContext,
+): void {
+  state.localFolderBackupSupported =
+    typeof window !== "undefined" && isLocalFolderBackupSupported();
+}
+
+export function localProvider(
+  state: ProviderActionsContext,
+): StorageProvider | undefined {
+  const id = localProviderIdForActiveVault(
+    providerSnapshot(state),
+    state.activeVaultStoreId,
+  );
+  return id
+    ? state.providers.find((provider) => provider.id === id)
+    : undefined;
+}
+
+export function activeProviders(
+  state: ProviderActionsContext,
+): StorageProvider[] {
+  return activeVaultProviders(providerSnapshot(state), state.activeVaultStoreId)
+    .providers;
+}
+
+export function syncProviders(
+  state: ProviderActionsContext,
+): StorageProvider[] {
+  return syncProvidersForActiveVault(
+    providerSnapshot(state),
+    state.activeVaultStoreId,
+  ).providers;
+}
+
+export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
+  return state.clientPolicy.shouldShowLoginVaultPicker(
+    state.isAuthenticated,
+    state.localVaults.length,
+    state.selectedLoginVaultStoreId !== undefined,
+    state.loginSetupType !== undefined,
+    state.addProviderOpen,
+    isVaultSessionLocked(),
+  );
+}
+
+export async function assessVaultConnectStatus(
+  state: ProviderActionsContext,
+  args: [string, string, string],
+): Promise<VaultAccessStatus> {
+  return (await state.enqueueStorage(async () => {
+    const assessPromise = state.manager!.assess_vault_connect(...args);
+    const assessTimeout = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        const timeoutError = new Error(
+          "Connection timed out. Check your PAT, network, and try again.",
+        );
+        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+        reject(timeoutError);
+      }, 30_000);
+    });
+    return await Promise.race([assessPromise, assessTimeout]);
+  })) as VaultAccessStatus;
+}
+
+export async function handleRemoteVaultAssessStatus(
+  state: ProviderActionsContext,
+  accessStatus: VaultAccessStatus,
+): Promise<boolean> {
+  const decision = state.clientPolicy.remoteVaultAssessDecision(
+    accessStatus,
+    state.loginRequiresExistingVault,
+    state.loginSetupType !== undefined,
+  );
+  switch (decision) {
+    case RemoteVaultAssessDecision.PromptRecoveryFromCache:
+      state.remoteVaultRecoveryState = RemoteVaultRecoveryState.PromptWithCache;
+      await state.refreshPasswordEntriesList();
+      return true;
+    case RemoteVaultAssessDecision.RejectMissingExistingVault:
+      state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
+      state.errorMsg = state.t("auth_storage.existing_vault_not_found");
+      return true;
+    case RemoteVaultAssessDecision.PromptMissingRemote:
+      state.remoteVaultRecoveryState =
+        RemoteVaultRecoveryState.PromptMissingOnly;
+      return true;
+    default:
+      return false;
+  }
+}
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(

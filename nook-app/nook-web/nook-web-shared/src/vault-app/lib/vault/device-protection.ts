@@ -11,9 +11,40 @@ import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
 import type { DeviceMode } from "$lib/vault-architecture";
 import type { VaultState } from "$lib/vault.svelte";
-import { DeviceProtectionStatus } from "$app-wasm";
+import {
+  DeviceProtectionStatus,
+  providersVisibleWhileDeviceLocked,
+} from "$app-wasm";
 
 const log = createLogger("vault-device-protection");
+
+export function lockDeviceProtection(state: VaultState): Promise<void> {
+  state.deviceProtectionStatus = state.deviceProtectionLockedStatus;
+  state.deviceAuthorizationInProgress = false;
+  state.deviceId = "";
+  state.devicePublicKey = "";
+  state.providers = providersVisibleWhileDeviceLocked(
+    $state.snapshot({
+      providers: state.providers,
+      ...(state.activeVaultStoreId
+        ? { activeVaultStoreId: state.activeVaultStoreId }
+        : {}),
+    }),
+  ).providers;
+  state.providersLoaded = state.providers.length > 0;
+  state.githubPat = "";
+  state.oauthFile = undefined;
+  state.localFolder = undefined;
+  if (state.localVaultPresent) {
+    state.storageMode = LOCAL_PROVIDER_TYPE;
+  }
+  if (!state.manager) return Promise.resolve();
+  return state
+    .enqueueStorage(() => state.manager!.lockDeviceIdentity())
+    .catch(() => {
+      // Persisted identity remains wrapped even if the manager is tearing down.
+    });
+}
 
 async function finishAuthorizedInitialization(
   state: VaultState,

@@ -8,11 +8,77 @@ import {
   prepareNewLocalVaultSlot,
   setActiveVault,
   setLocalVaultLabel,
+  setVaultSessionLocked,
+  NookVaultSwitchState,
   type NookVaultManager,
 } from "$app-wasm";
 import { saveAuthProviders } from "$lib/auth-providers";
 
 const log = createLogger("vault-local");
+
+export async function reloadProvidersForActiveVault(
+  state: VaultState,
+): Promise<void> {
+  const snapshot = await state.enqueueStorage(() =>
+    state.manager!.loadAuthProviders(),
+  );
+  state.providers = snapshot.providers;
+  if (snapshot.activeVaultStoreId) {
+    state.activeVaultStoreId = snapshot.activeVaultStoreId;
+  }
+  state.applyActiveProviderCredentials();
+}
+
+export function beginLoginVaultPicker(state: VaultState): void {
+  state.selectedLoginVaultStoreId = undefined;
+  state.localLoginPrepared = false;
+  state.resetVaultSessionState();
+}
+
+export async function chooseLoginVault(
+  state: VaultState,
+  storeId: string,
+): Promise<void> {
+  await state.selectVaultForUnlock(storeId);
+  state.selectedLoginVaultStoreId = storeId;
+}
+
+export async function switchToVault(
+  state: VaultState,
+  storeId: string,
+): Promise<void> {
+  const switchDecision = state.clientPolicy.vaultSwitchTarget(
+    storeId,
+    state.activeVaultStoreId !== undefined,
+    state.activeVaultStoreId ?? "",
+    state.isVerifying,
+  );
+  if (switchDecision.state !== NookVaultSwitchState.Switch) {
+    switchDecision.free();
+    return;
+  }
+  const target = switchDecision.target();
+  switchDecision.free();
+  state.helpOpen = false;
+  state.cancelProviderSetup();
+  state.cancelAddProvider();
+  state.isVerifying = true;
+  try {
+    await state.waitForStorageChain();
+    setVaultSessionLocked(true);
+    state.clearUnlockedSession();
+    await state.waitForStorageChain();
+    await chooseLoginVault(state, target);
+    state.isVerifying = true;
+    await state.lockDeviceProtection();
+    log.info("vault switch completed", { storeId: target });
+  } catch (error) {
+    state.errorMsg =
+      error instanceof Error ? error.message : "Failed to switch vaults.";
+  } finally {
+    state.isVerifying = false;
+  }
+}
 
 /** Every connected vault must have a non-empty `store_id` in its YAML session. */
 export function requireManagerVaultStoreId(manager: NookVaultManager): string {

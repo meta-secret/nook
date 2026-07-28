@@ -4,7 +4,16 @@ import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type { StorageProvider } from "$lib/auth-providers";
 import type { VaultProviderState } from "$lib/vault/state/provider.svelte";
 import type { VaultRuntimeState } from "$lib/vault/state/runtime.svelte";
+import type { VaultSecretsState } from "$lib/vault/state/secrets.svelte";
+import type { VaultSentinelState } from "$lib/vault/state/sentinel.svelte";
 import type { VaultSessionState } from "$lib/vault/state/session.svelte";
+import type { VaultUiState } from "$lib/vault/state/ui.svelte";
+import type { VaultArchitecture } from "$lib/vault-architecture";
+import type {
+  AdminAccordionSection,
+  SettingsAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
 
 type ProviderStateFields = Pick<
   VaultProviderState,
@@ -17,6 +26,8 @@ type ProviderStateFields = Pick<
   | "icloudOAuthPreparing"
   | "icloudOAuthReady"
   | "localFolder"
+  | "localFolderBackupSupported"
+  | "localVaults"
   | "localVaultPresent"
   | "loginRequiresExistingVault"
   | "loginSetupType"
@@ -30,12 +41,15 @@ type ProviderStateFields = Pick<
 
 type ProviderRuntimeFields = Pick<
   VaultRuntimeState,
-  "errorMsg" | "isVerifying"
+  "clientPolicy" | "errorMsg" | "isVerifying"
 >;
 
 type ProviderSessionFields = Pick<
   VaultSessionState,
-  "isAuthenticated" | "manager"
+  | "isAuthenticated"
+  | "joinEnrollmentPrompt"
+  | "manager"
+  | "remoteVaultRecoveryState"
 >;
 
 interface SharedStorageActionsContext {
@@ -62,6 +76,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   loadDb(): Promise<unknown>;
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   resetVaultSessionState(resetManager?: boolean): void;
+  refreshPasswordEntriesList(): Promise<boolean>;
   showSuccess(message: string): void;
   stageStagedProviderSyncIssue(
     args: [string, string, string],
@@ -88,6 +103,7 @@ export type ProviderActionsContext = ProviderStateFields &
 type SyncProviderFields = Pick<
   VaultProviderState,
   | "activeVaultStoreId"
+  | "addProviderOpen"
   | "localVaultPresent"
   | "loginSetupType"
   | "providers"
@@ -96,7 +112,7 @@ type SyncProviderFields = Pick<
 
 type SyncRuntimeFields = Pick<
   VaultRuntimeState,
-  "errorMsg" | "isSaving" | "isVerifying"
+  "clientPolicy" | "errorMsg" | "isSaving" | "isVerifying"
 >;
 
 type SyncSessionFields = Pick<
@@ -105,14 +121,17 @@ type SyncSessionFields = Pick<
   | "isAuthenticated"
   | "isPasswordBusy"
   | "joinEnrollmentPrompt"
+  | "loginPasswordPrompt"
   | "manager"
   | "pendingJoins"
   | "remoteVaultRecoveryState"
+  | "sessionExpiredByIdle"
   | "vaultMembers"
 >;
 
 interface SyncStateFields {
   fanOutSyncChain: Promise<void>;
+  isFanOutSyncing: boolean;
   isSyncing: boolean;
   lastSyncedAt: SvelteDate | undefined;
   localFolderMultipleVaultsIssue:
@@ -141,6 +160,8 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   applyVaultSyncResult(result: NookVaultSyncResult): void;
   clearPendingSyncConflict(): void;
   clearUnlockedSession(resetManager?: boolean): void;
+  beginAddProvider(): void;
+  beginProviderSetup(type: "local-folder"): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
     conflict: NookPendingSyncConflict,
@@ -162,6 +183,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   refreshReplacementConflicts(): Promise<void>;
   refreshSecretsFromSession(): Promise<void>;
   runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void>;
+  flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void>;
+  removeProvider(providerId: string): Promise<void>;
+  ensureProviderSaved(): Promise<boolean>;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
   stagedRemoteStorageArgs(): [string, string, string] | undefined;
@@ -189,4 +213,107 @@ export type SyncActionsContext = SyncProviderFields &
   SyncRuntimeFields &
   SyncSessionFields &
   SyncStateFields &
-  SyncActionPorts;
+  SyncActionPorts &
+  Pick<
+    VaultUiState,
+    "adminAccordionSection" | "settingsOpen" | "settingsSection"
+  >;
+
+export type ArchitectureActionsContext = Pick<
+  VaultProviderState,
+  | "draftDeviceMode"
+  | "draftReplicationType"
+  | "draftVaultType"
+  | "vaultArchitecture"
+> &
+  Pick<VaultSessionState, "manager"> & {
+    architectureSecretCreationAllowed: boolean;
+    enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
+    replaceVaultArchitecture(architecture: VaultArchitecture): void;
+  };
+
+export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
+  Pick<VaultUiState, "settingsOpen"> &
+  Pick<VaultProviderState, "vaultArchitecture"> &
+  Pick<
+    VaultSessionState,
+    | "awaitingJoinApproval"
+    | "enrollmentCode"
+    | "enrollMembersKey"
+    | "enrollSecretsKey"
+    | "isAuthenticated"
+    | "joinEnrollmentPrompt"
+    | "loginPasswordPrompt"
+    | "manager"
+    | "passwordEntries"
+    | "pendingJoins"
+    | "selectedPasswordEntryId"
+    | "sessionExpiredByIdle"
+    | "sharedGrantInstructions"
+    | "sharedJoinerIdentity"
+    | "vaultMembers"
+  > &
+  Pick<
+    VaultSecretsState,
+    | "secretPageOffset"
+    | "secretQuery"
+    | "secretTotal"
+    | "secretTypeFilter"
+    | "secrets"
+  > &
+  Pick<
+    VaultSentinelState,
+    | "sentinelCeremonyPrompt"
+    | "sentinelGenesisDeliveries"
+    | "sentinelGenesisParticipantCount"
+    | "sentinelGenesisParticipants"
+    | "sentinelGenesisPhase"
+    | "sentinelGenesisRequest"
+    | "sentinelGenesisStoreId"
+    | "sentinelStoredDeliveries"
+    | "sentinelUnlockRequest"
+    | "sentinelUnlockSession"
+    | "sentinelUnlockStatus"
+  > & {
+    secretPageGeneration: number;
+    enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
+    publishExtensionEventLogUpdate(): Promise<void>;
+    refreshVaultArchitectureFromManager(): void;
+    resetVaultSessionState(resetManager?: boolean): void;
+    stopIdleSessionTracking(): void;
+    stopVaultSync(): void;
+  };
+
+export type UiActionsContext = Pick<
+  VaultRuntimeState,
+  "errorMsg" | "isSaving"
+> &
+  Pick<VaultSessionState, "manager"> &
+  Pick<
+    VaultUiState,
+    | "adminAccordionSection"
+    | "helpOpen"
+    | "settingsAccordionSection"
+    | "settingsOpen"
+    | "settingsSection"
+  > & {
+    localDataDeletionStarted: boolean;
+    cancelAddProvider(): void;
+    cancelProviderSetup(): void;
+    clearUnlockedSession(resetManager?: boolean): void;
+    dismissSuccess(): void;
+    enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
+    refreshDeviceState(): Promise<unknown>;
+    refreshLocalVaultCatalog(): Promise<void>;
+    stopIdleSessionTracking(): void;
+    stopVaultSync(): void;
+    t(key: string, values?: Record<string, string>): string;
+    waitForStorageChain(): Promise<void>;
+  };
+
+export type OpenSettingsArgs = {
+  section?: SettingsSection;
+  accordion?: SettingsAccordionSection;
+};
+
+export type OpenAdminAccordion = AdminAccordionSection;
