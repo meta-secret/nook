@@ -181,19 +181,31 @@ tasks:
         fi
 
         if test "$auth_exists" = false && test "$client_exists" = false; then
-          openssl rand -hex 32 > "$secret_dir/password"
+          openssl rand -hex 32 |
+            tr -d '\r\n' > "$secret_dir/password"
         elif test "$auth_exists" = true; then
           kubectl get secret hive-neo4j-auth \
             --namespace hive-data \
             -o jsonpath='{.data.NEO4J_AUTH}' |
             base64 --decode |
-            sed 's|^neo4j/||' > "$secret_dir/password"
+            sed 's|^neo4j/||' |
+            tr -d '\r\n' > "$secret_dir/password"
+          if ! test -s "$secret_dir/password" &&
+            test "$client_exists" = true; then
+            kubectl get secret hive-neo4j-client \
+              --namespace hive-system \
+              -o jsonpath='{.data.NEO4J_PASSWORD}' |
+              base64 --decode |
+              tr -d '\r\n' > "$secret_dir/password"
+          fi
         else
           kubectl get secret hive-neo4j-client \
             --namespace hive-system \
             -o jsonpath='{.data.NEO4J_PASSWORD}' |
-            base64 --decode > "$secret_dir/password"
+            base64 --decode |
+            tr -d '\r\n' > "$secret_dir/password"
         fi
+        test -s "$secret_dir/password"
 
         if test "$auth_exists" = false; then
           {
@@ -204,12 +216,40 @@ tasks:
             --namespace hive-data \
             --from-file=NEO4J_AUTH="$secret_dir/NEO4J_AUTH"
         fi
-        if test "$client_exists" = false; then
-          cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
-          kubectl create secret generic hive-neo4j-client \
+        client_secret_before="$(
+          kubectl get secret hive-neo4j-client \
             --namespace hive-system \
-            --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD"
+            -o jsonpath='{.data.NEO4J_PASSWORD}' 2>/dev/null ||
+            true
+        )"
+        cp "$secret_dir/password" "$secret_dir/NEO4J_PASSWORD"
+        kubectl create secret generic hive-neo4j-client \
+          --namespace hive-system \
+          --from-file=NEO4J_PASSWORD="$secret_dir/NEO4J_PASSWORD" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+        client_secret_after="$(
+          kubectl get secret hive-neo4j-client \
+            --namespace hive-system \
+            -o jsonpath='{.data.NEO4J_PASSWORD}'
+        )"
+        if test "$client_secret_before" != "$client_secret_after"; then
+          for deployment in \
+            hive \
+            hive-workbench-dispatcher \
+            hive-observer; do
+            if kubectl get deployment "$deployment" \
+              --namespace hive-system >/dev/null 2>&1; then
+              kubectl rollout restart "deployment/$deployment" \
+                --namespace hive-system
+              kubectl rollout status "deployment/$deployment" \
+                --namespace hive-system \
+                --timeout=15m
+            fi
+          done
         fi
+        unset client_secret_before client_secret_after
         rm -rf "$secret_dir"
 
         curl -fsSL --retry 3 -o "$chart.next" \

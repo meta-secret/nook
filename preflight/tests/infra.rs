@@ -62,6 +62,48 @@ fn remote_cache_is_public_over_tls_and_registry_remains_private() {
     assert_mesh_node_contract();
 }
 
+#[test]
+fn neo4j_client_secret_normalization_is_upgrade_safe() {
+    let tasks = read("infra/tasks/neo4j.yml");
+    let start = tasks
+        .find("auth_exists=false")
+        .expect("Neo4j credential reconciliation starts");
+    let end = tasks[start..]
+        .find("rm -rf \"$secret_dir\"")
+        .map(|offset| start + offset)
+        .expect("Neo4j credential reconciliation ends");
+    let reconciliation = &tasks[start..end];
+
+    for required in [
+        "tr -d '\\r\\n' > \"$secret_dir/password\"",
+        "if ! test -s \"$secret_dir/password\"",
+        "test \"$client_exists\" = true",
+        "test -s \"$secret_dir/password\"",
+        "kubectl apply -f -",
+        "if test \"$client_secret_before\" != \"$client_secret_after\"",
+        "hive-workbench-dispatcher",
+        "hive-observer",
+        "kubectl rollout restart",
+        "kubectl rollout status",
+    ] {
+        assert!(
+            reconciliation.contains(required),
+            "Neo4j credential reconciliation is missing: {required}"
+        );
+    }
+
+    let normalize = |bytes: &[u8]| {
+        bytes
+            .iter()
+            .copied()
+            .filter(|byte| !matches!(byte, b'\r' | b'\n'))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(normalize(b"generated\r\n"), b"generated");
+    assert_eq!(normalize(b"recovered-auth\n"), b"recovered-auth");
+    assert_eq!(normalize(b"recovered-client\n"), b"recovered-client");
+}
+
 fn assert_remote_compose_contract() {
     let compose = read("infra/compose.yaml");
     for required in [
