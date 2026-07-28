@@ -913,7 +913,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     for config in [
         "nook-app/nook-web/nook-web-app/playwright.config.ts",
         "nook-app/nook-web/nook-web-app/playwright.isolation.config.ts",
-        "nook-app/nook-web/nook-web-extension/e2e/extension-smoke.spec.ts",
+        "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
     ] {
         assert!(
             read(&root, config).contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
