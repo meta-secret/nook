@@ -43,7 +43,7 @@ export async function refreshReplacementConflicts(
   // These borrow the wasm manager (`&mut self`); route them through the storage
   // chain so they never alias an in-flight foreground op (e.g. a delete), which
   // would trigger a wasm-bindgen recursive-borrow hang/panic.
-  const [conflicts, securityConflicts] = await state.enqueueStorage(() => {
+  const [conflicts, securityConflicts] = await state.enqueueStorage(async () => {
     if (!state.manager!.eventLogMode()) {
       return [
         [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>,
@@ -52,10 +52,13 @@ export async function refreshReplacementConflicts(
         >,
       ] as const;
     }
-    return Promise.all([
-      state.manager!.listProjectionConflicts(),
-      state.manager!.listProjectionSecurityConflicts(),
-    ]);
+    // Both wasm methods take `&mut self`; starting them together causes their
+    // IndexedDB callbacks to re-enter a dropped wasm-bindgen closure. Keep
+    // this pair serial even though the outer storage operation is queued.
+    const conflicts = await state.manager!.listProjectionConflicts();
+    const securityConflicts =
+      await state.manager!.listProjectionSecurityConflicts();
+    return [conflicts, securityConflicts] as const;
   });
   state.replacementConflicts = conflicts.map((conflict) => {
     const candidates = conflict.candidates.map((candidate) => {
