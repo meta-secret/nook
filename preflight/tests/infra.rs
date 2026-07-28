@@ -68,19 +68,17 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
     let start = tasks
         .find("auth_exists=false")
         .expect("Neo4j credential reconciliation starts");
-    let end = tasks[start..]
-        .find("rm -rf \"$secret_dir\"")
-        .map(|offset| start + offset)
-        .expect("Neo4j credential reconciliation ends");
-    let reconciliation = &tasks[start..end];
+    let reconciliation = &tasks[start..];
 
     for required in [
         "tr -d '\\r\\n' > \"$secret_dir/password\"",
+        "Refusing to generate Neo4j credentials while retained data exists",
         "if ! test -s \"$secret_dir/password\"",
         "test \"$client_exists\" = true",
         "test -s \"$secret_dir/password\"",
         "kubectl apply -f -",
         "if test \"$client_secret_before\" != \"$client_secret_after\"",
+        "client_secret_changed=true",
         "hive-workbench-dispatcher",
         "hive-observer",
         "kubectl rollout restart",
@@ -92,16 +90,36 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         );
     }
 
-    let normalize = |bytes: &[u8]| {
-        bytes
-            .iter()
-            .copied()
-            .filter(|byte| !matches!(byte, b'\r' | b'\n'))
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(normalize(b"generated\r\n"), b"generated");
-    assert_eq!(normalize(b"recovered-auth\n"), b"recovered-auth");
-    assert_eq!(normalize(b"recovered-client\n"), b"recovered-client");
+    let generated = reconciliation
+        .split_once("openssl rand -hex 32")
+        .map(|(_, tail)| tail)
+        .expect("generated credential branch");
+    assert!(generated.starts_with(" |\n            tr -d '\\r\\n'"));
+
+    let recovered_auth = reconciliation
+        .split_once("-o jsonpath='{.data.NEO4J_AUTH}'")
+        .map(|(_, tail)| tail)
+        .expect("recovered auth credential branch");
+    assert!(recovered_auth.starts_with(" |\n            base64 --decode |\n            sed 's|^neo4j/||' |\n            tr -d '\\r\\n'"));
+
+    let recovered_client = reconciliation
+        .matches("tr -d '\\r\\n' > \"$secret_dir/password\"")
+        .count();
+    assert!(
+        recovered_client >= 3,
+        "generated, client fallback, and client-only recovery must normalize bytes"
+    );
+
+    let neo4j_ready = reconciliation
+        .find("kubectl rollout status statefulset/hive-neo4j")
+        .expect("Neo4j availability wait");
+    let client_restart = reconciliation
+        .find("if test \"$client_secret_changed\" = true")
+        .expect("client restart gate");
+    assert!(
+        client_restart > neo4j_ready,
+        "clients restart only after Neo4j is available"
+    );
 }
 
 fn assert_remote_compose_contract() {

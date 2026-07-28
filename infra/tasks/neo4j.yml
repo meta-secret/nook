@@ -181,6 +181,12 @@ tasks:
         fi
 
         if test "$auth_exists" = false && test "$client_exists" = false; then
+          if kubectl get pvc --namespace hive-data -o name | grep -q .; then
+            echo \
+              "Refusing to generate Neo4j credentials while retained data exists" \
+              >&2
+            exit 1
+          fi
           openssl rand -hex 32 |
             tr -d '\r\n' > "$secret_dir/password"
         elif test "$auth_exists" = true; then
@@ -234,20 +240,9 @@ tasks:
             --namespace hive-system \
             -o jsonpath='{.data.NEO4J_PASSWORD}'
         )"
+        client_secret_changed=false
         if test "$client_secret_before" != "$client_secret_after"; then
-          for deployment in \
-            hive \
-            hive-workbench-dispatcher \
-            hive-observer; do
-            if kubectl get deployment "$deployment" \
-              --namespace hive-system >/dev/null 2>&1; then
-              kubectl rollout restart "deployment/$deployment" \
-                --namespace hive-system
-              kubectl rollout status "deployment/$deployment" \
-                --namespace hive-system \
-                --timeout=15m
-            fi
-          done
+          client_secret_changed=true
         fi
         unset client_secret_before client_secret_after
         rm -rf "$secret_dir"
@@ -273,6 +268,22 @@ tasks:
         kubectl rollout status statefulset/hive-neo4j \
           --namespace hive-data \
           --timeout=10m
+        if test "$client_secret_changed" = true; then
+          for deployment in \
+            hive \
+            hive-workbench-dispatcher \
+            hive-observer; do
+            if kubectl get deployment "$deployment" \
+              --namespace hive-system >/dev/null 2>&1; then
+              kubectl rollout restart "deployment/$deployment" \
+                --namespace hive-system
+              kubectl rollout status "deployment/$deployment" \
+                --namespace hive-system \
+                --timeout=15m
+            fi
+          done
+        fi
+        unset client_secret_changed
         neo4j_service_ip="$(
           kubectl get service hive-neo4j \
             --namespace hive-data \
