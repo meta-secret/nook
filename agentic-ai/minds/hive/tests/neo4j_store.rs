@@ -1113,40 +1113,60 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                last_retry_release:
                  'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })",
+             })
+             CREATE (activity_task:Task {
+               id: 'schema-6-activity-task',
+               status: 'RUNNING',
+               source_commit: '0123456789abcdef0123456789abcdef01234567'
+             })
+             CREATE (activity:TaskActivity {
+               id: 'schema-6-activity',
+               created_at: 123456
+             })
+             CREATE (activity)-[:FOR_TASK]->(activity_task)",
         ))
         .await
         .expect("create schema-3 fixture");
-    store.migrate().await.expect("migrate schema 3 to schema 6");
-    let mut schema_six_rows = graph
+    store.migrate().await.expect("migrate schema 3 to schema 7");
+    let mut schema_seven_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (migration:HiveSchemaMigration {version: 6})
+             MATCH (activity_task:Task {id: 'schema-6-activity-task'})
+             MATCH (migration:HiveSchemaMigration {version: 7})
              RETURN task.last_retry_release AS last_retry_release,
                     task.manual_retry_used IS NULL AS removed_legacy_marker,
+                    activity_task.latest_activity_at AS latest_activity_at,
                     migration.version AS version",
         ))
         .await
-        .expect("read schema-6 migration state");
-    let schema_six = schema_six_rows
+        .expect("read schema-7 migration state");
+    let schema_seven = schema_seven_rows
         .next()
         .await
-        .expect("read schema-6 row")
-        .expect("schema-6 migration row");
+        .expect("read schema-7 row")
+        .expect("schema-7 migration row");
     assert_eq!(
-        schema_six
+        schema_seven
             .get::<String>("last_retry_release")
             .expect("initialized release marker"),
         ""
     );
     assert!(
-        schema_six
+        schema_seven
             .get::<bool>("removed_legacy_marker")
             .expect("removed legacy marker")
     );
     assert_eq!(
-        schema_six.get::<i64>("version").expect("schema-6 version"),
-        6
+        schema_seven
+            .get::<i64>("latest_activity_at")
+            .expect("backfilled latest activity"),
+        123456
+    );
+    assert_eq!(
+        schema_seven
+            .get::<i64>("version")
+            .expect("schema-7 version"),
+        7
     );
     let mut rollback_marker_rows = graph
         .execute(query(

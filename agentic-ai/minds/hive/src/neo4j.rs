@@ -23,7 +23,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 6;
+const LATEST_SCHEMA_VERSION: i64 = 7;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     pub(crate) graph: Graph,
@@ -280,6 +280,18 @@ impl TaskStore for Neo4jTaskStore {
                 ))
                 .await
                 .context("failed to initialize schema-4 release-scoped retry state")?;
+        }
+        if installed_version < 7 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     OPTIONAL MATCH (activity:TaskActivity)-[:FOR_TASK]->(task)
+                     WITH task, max(activity.created_at) AS latest_activity_at
+                     WHERE latest_activity_at IS NOT NULL
+                     SET task.latest_activity_at = latest_activity_at",
+                ))
+                .await
+                .context("failed to backfill schema-7 latest activity state")?;
         }
         for statement in CONSTRAINTS {
             self.graph

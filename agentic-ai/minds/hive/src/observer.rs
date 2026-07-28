@@ -690,6 +690,10 @@ impl Neo4jTaskStore {
                        CASE WHEN task.status = 'READY' THEN task.created_at ELSE 0 END ASC,
                        CASE WHEN task.status = 'READY' THEN task.id ELSE '' END ASC,
                        CASE
+                         WHEN $attention_only = true
+                           AND task.status = 'FAILED'
+                           AND dependency_failure
+                           THEN coalesce(task.updated_at, task.created_at, 0)
                          WHEN $attention_only = true AND task.status = 'FAILED'
                            THEN coalesce(latest.attempt.completed_at, task.updated_at, task.created_at, 0)
                          WHEN $attention_only = true AND task.status = 'RUNNING'
