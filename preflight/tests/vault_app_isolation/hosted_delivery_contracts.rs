@@ -342,6 +342,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "name: WASM verification and artifact",
         "name: Verify and preview",
         "name: Rust coverage report",
+        "uses: ./.github/workflows/pr-coverage.yml",
         "types: [opened, synchronize, reopened, labeled, unlabeled, closed]",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
@@ -367,10 +368,21 @@ fn assert_pr_workflow_contract(root: &Path) {
         "'nook-app/nook-wasm/**'",
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
-        "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs",
         "attempt $attempt/900",
         "needs: rust",
+    ] {
+        assert!(
+            pr.contains(required),
+            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
+        );
+    }
+
+    let coverage = read(root, ".github/workflows/pr-coverage.yml");
+    for required in [
+        "workflow_call:",
+        "name: Rust coverage report",
+        "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "name: pr-rust-${{ github.run_id }}",
         "path: coverage/current",
         ".github/scripts/base-coverage-artifact.cjs",
@@ -384,12 +396,12 @@ fn assert_pr_workflow_contract(root: &Path) {
         "Exact base coverage is unavailable; enforcing current absolute coverage floors",
     ] {
         assert!(
-            pr.contains(required),
-            "PR CI must keep its normal split gate and label-selected Main-fix e2e contract: {required}"
+            coverage.contains(required),
+            "reusable PR coverage workflow is missing: {required}"
         );
     }
     assert!(
-        !pr.contains("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --"),
+        !coverage.contains("git diff --name-only \"$BASE_SHA...$HEAD_SHA\" --"),
         "coverage input detection belongs in the typed Rust reporter, not workflow shell"
     );
     let native_job = section(&pr, "  rust:\n", "  wasm:\n");
@@ -500,15 +512,17 @@ fn assert_pr_workflow_contract(root: &Path) {
         "PR preview must prepare in parallel, surface failed WASM verification, consume its artifact on success, and target the isolated Simple Vault alias"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
+    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
         coverage_job.contains("needs: rust")
-            && coverage_job.contains("actions/download-artifact@v8")
-            && coverage_job.contains("name: pr-rust-${{ github.run_id }}")
-            && coverage_job.contains("path: coverage/current")
-            && coverage_job.contains("findBaseCoverageArtifact")
-            && coverage_job.contains("coverage/current/tools/nook-preflight coverage-report")
-            && !coverage_job.contains("task docker:coverage:export")
-            && !coverage_job.contains("Waiting for native coverage artifact"),
+            && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
+            && coverage_workflow.contains("actions/download-artifact@v8")
+            && coverage_workflow.contains("name: pr-rust-${{ github.run_id }}")
+            && coverage_workflow.contains("path: coverage/current")
+            && coverage_workflow.contains("findBaseCoverageArtifact")
+            && coverage_workflow.contains("coverage/current/tools/nook-preflight coverage-report")
+            && !coverage_workflow.contains("task docker:coverage:export")
+            && !coverage_workflow.contains("Waiting for native coverage artifact"),
         "coverage reporting must consume the completed native artifact directly without blocking preview or rebuilding the base revision"
     );
     let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
@@ -620,12 +634,14 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
     );
     let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
+    let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
         !verify_job.contains("Download Rust coverage handoff")
             && !verify_job.contains("Waiting for native coverage artifact")
             && coverage_job.contains("needs: rust")
-            && coverage_job.contains("actions/download-artifact@v8")
-            && coverage_job.contains("name: pr-rust-${{ github.run_id }}"),
+            && coverage_job.contains("uses: ./.github/workflows/pr-coverage.yml")
+            && coverage_workflow.contains("actions/download-artifact@v8")
+            && coverage_workflow.contains("name: pr-rust-${{ github.run_id }}"),
         "Rust coverage must use a native-dependent artifact consumer instead of occupying the preview runner"
     );
     let wasm_handoff = section(
