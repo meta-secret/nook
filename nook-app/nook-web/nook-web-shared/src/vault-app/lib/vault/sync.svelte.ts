@@ -689,6 +689,10 @@ export async function manualSync(state: SyncActionsContext) {
     if (state.syncProviders.length === 0) {
       if (state.hasRemoteCredentials()) {
         await state.syncFromStorage({ force: true });
+      } else {
+        state.pendingJoins = [];
+        state.vaultMembers = [];
+      }
       return;
     }
     for (const provider of state.syncProviders) {
