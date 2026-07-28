@@ -80,7 +80,9 @@ test.describe('sync provider credential encryption', () => {
     const logs = await fetchAppLogs(page, { minLevel: 'error', limit: 500 })
     expect(
       logs.entries.some((entry) =>
-        entry.message.includes('closure invoked recursively or after being dropped'),
+        entry.message.includes(
+          'closure invoked recursively or after being dropped',
+        ),
       ),
     ).toBe(false)
 
