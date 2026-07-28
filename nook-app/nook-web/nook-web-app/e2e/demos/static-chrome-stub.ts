@@ -16,6 +16,8 @@ export type DemoChromeStubArgs = {
   enrollPilotFlow?: boolean
   /** Extension-owned 2FA picker selection returned to the page HUD. */
   authenticatorPickerFlow?: boolean
+  /** Record runtime message types so demos can assert cross-domain sequencing. */
+  recordRuntimeMessageTypes?: boolean
   barcodeRawValue?: string
 }
 
@@ -42,6 +44,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     passkeyPilotFlow = false,
     enrollPilotFlow = false,
     authenticatorPickerFlow = false,
+    recordRuntimeMessageTypes = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
@@ -400,6 +403,13 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         return resource === 'icons/nook.png' ? '/favicon.png' : resource
       },
       sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
+        if (recordRuntimeMessageTypes && message.type) {
+          const demoWindow = globalThis as unknown as {
+            __nookDemoRuntimeMessageTypes?: string[]
+          }
+          demoWindow.__nookDemoRuntimeMessageTypes ??= []
+          demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
+        }
         const response = responseFor(message)
         if (callback) queueMicrotask(() => callback(response))
       },

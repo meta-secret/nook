@@ -1,0 +1,430 @@
+import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  fillGeneratedPassword,
+  fillLoginCredentials,
+  findPasskeyControl,
+  submitLoginForm,
+} from '../../../../nook-web-shared/src/extension/password-forms'
+import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
+import { pickerState, widgetState } from './state'
+import type {
+  LoginFillResponse,
+  LoginOptionsResponse,
+  LoginPickerOpenResponse,
+} from './workflow-ui'
+import { setFlightProgress, translatedMessage } from './workflow-ui'
+
+export function sendRuntimeMessage<T>(
+  message: unknown,
+): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+      if (chrome.runtime.lastError) {
+        resolve(undefined)
+        return
+      }
+      resolve(response)
+    })
+  })
+}
+
+export function setStatus(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  text: string,
+  enableContinue: boolean,
+): void {
+  description.textContent = text
+  continueButton.disabled = !enableContinue || widgetState.busy
+}
+
+export async function fillAndSubmitAccount(
+  account: Pick<WebsiteLoginAccountOption, 'vaultStoreId' | 'secretId'>,
+  workflow: PasswordFormObservation,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<boolean> {
+  const response = await sendRuntimeMessage<LoginFillResponse>({
+    type: 'nook:website-login-fill',
+    payload: {
+      origin: location.origin,
+      vaultStoreId: account.vaultStoreId,
+      secretId: account.secretId,
+    },
+  })
+  if (!response?.ok || !response.username || response.password === undefined) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return false
+  }
+
+  const credentials = {
+    username: response.username,
+    password: response.password,
+  }
+  response.password = ''
+  const filled = fillLoginCredentials(
+    credentials,
+    workflow.root,
+    workflow.formScope,
+  )
+  credentials.password = ''
+  credentials.username = ''
+  if (!filled) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return false
+  }
+  if (!submitLoginForm(workflow.root, workflow.formScope)) {
+    setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+    description.textContent = translatedMessage('widgetFilledManual')
+    continueButton.hidden = true
+    return true
+  }
+  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
+  description.textContent = translatedMessage('widgetSubmitted')
+  continueButton.hidden = true
+  return true
+}
+
+async function openLoginPicker(
+  workflow: PasswordFormObservation,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  if (pickerState.pendingLogin) return
+  const response = await sendRuntimeMessage<LoginPickerOpenResponse>({
+    type: 'nook:website-login-picker-open',
+    payload: { origin: location.origin },
+  })
+  if (!response?.ok) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  if (response.status === 'locked') {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetUnlockThenContinue'),
+      true,
+    )
+    return
+  }
+  if (response.status === 'unavailable') {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetConnectVault'),
+      true,
+    )
+    return
+  }
+  if (
+    !response.requestId ||
+    typeof response.expiresAt !== 'number' ||
+    response.expiresAt <= Date.now()
+  ) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return
+  }
+  const requestId = response.requestId
+  if (widgetState.dismissed || !continueButton.isConnected) {
+    cancelLoginPickerRequest(requestId)
+    return
+  }
+  const timeoutId = window.setTimeout(
+    () => {
+      if (pickerState.pendingLogin?.requestId !== requestId) return
+      const pending = pickerState.pendingLogin
+      pickerState.pendingLogin = undefined
+      setStatus(
+        pending.description,
+        pending.continueButton,
+        translatedMessage('widgetFillFailed'),
+        true,
+      )
+      if (
+        pending.continueButton.isConnected &&
+        !pending.continueButton.hidden
+      ) {
+        pending.continueButton.disabled = false
+      }
+    },
+    Math.max(0, response.expiresAt - Date.now()),
+  )
+  pickerState.pendingLogin = {
+    requestId,
+    workflow,
+    step,
+    title,
+    description,
+    continueButton,
+    timeoutId,
+  }
+  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetLoginPickerOpened'),
+    true,
+  )
+}
+
+function cancelLoginPickerRequest(requestId: string): void {
+  void sendRuntimeMessage({
+    type: 'nook:login-picker-cancel',
+    payload: { requestId },
+  })
+}
+
+export function cancelPendingLoginPickerRequest(): void {
+  const pending = pickerState.pendingLogin
+  if (!pending) return
+  pickerState.pendingLogin = undefined
+  window.clearTimeout(pending.timeoutId)
+  cancelLoginPickerRequest(pending.requestId)
+}
+
+export async function generatePasswordWithNook(
+  workflow: PasswordFormObservation,
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+): Promise<void> {
+  if (widgetState.busy) return
+  widgetState.busy = true
+  continueButton.disabled = true
+  const totalSteps = workflow.summary.currentPasswordFieldCount > 0 ? 4 : 5
+  setFlightProgress(step, title, 2, totalSteps, copyTitleForWorkflow(workflow))
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetGeneratePasswordWorking'),
+    false,
+  )
+  try {
+    const response = await sendRuntimeMessage<{
+      ok?: boolean
+      password?: string
+      reason?: string
+    }>({
+      type: 'nook:website-generate-password',
+      payload: { origin: location.origin },
+    })
+    if (!response?.ok || typeof response.password !== 'string') {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetGeneratePasswordFailed'),
+        true,
+      )
+      return
+    }
+    const password = response.password
+    const filled = fillGeneratedPassword(
+      password,
+      workflow.root,
+      workflow.formScope,
+    )
+    if (!filled) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetGeneratePasswordFailed'),
+        true,
+      )
+      return
+    }
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetGeneratedPasswordFilled'),
+      false,
+    )
+    continueButton.hidden = true
+  } finally {
+    widgetState.busy = false
+    continueButton.disabled = false
+  }
+}
+
+export async function proposePasskeyWithNook(
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  action: 'use-passkey' | 'create-passkey',
+): Promise<void> {
+  if (widgetState.busy) return
+  widgetState.busy = true
+  continueButton.disabled = true
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage(
+      action === 'use-passkey'
+        ? 'widgetUsePasskeyWorking'
+        : 'widgetCreatePasskeyWorking',
+    ),
+    false,
+  )
+  try {
+    const control = findPasskeyControl(document)
+    if (!control) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetPasskeyControlMissing'),
+        true,
+      )
+      return
+    }
+    control.click()
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetPasskeyCeremonyStarted'),
+      false,
+    )
+    continueButton.hidden = true
+  } finally {
+    widgetState.busy = false
+    continueButton.disabled = false
+  }
+}
+
+function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
+  if (
+    workflow.summary.currentPasswordFieldCount > 0 &&
+    workflow.summary.newPasswordFieldCount > 0
+  ) {
+    return 'widgetPasswordChangeTitle'
+  }
+  if (workflow.summary.newPasswordFieldCount > 0) {
+    return 'widgetSignupTitle'
+  }
+  return 'widgetLoginTitle'
+}
+
+export async function continueWithNook(
+  step: HTMLParagraphElement,
+  title: HTMLHeadingElement,
+  description: HTMLParagraphElement,
+  continueButton: HTMLButtonElement,
+  _openVaultButton: HTMLButtonElement,
+  _panel: HTMLElement,
+  workflow: PasswordFormObservation,
+): Promise<void> {
+  if (widgetState.busy || pickerState.pendingLogin) return
+  widgetState.busy = true
+  continueButton.disabled = true
+  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setStatus(
+    description,
+    continueButton,
+    translatedMessage('widgetWorking'),
+    false,
+  )
+
+  try {
+    const response = await sendRuntimeMessage<LoginOptionsResponse>({
+      type: 'nook:website-login-options',
+      payload: { origin: location.origin },
+    })
+
+    if (!response?.ok) {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetFillFailed'),
+        true,
+      )
+      return
+    }
+
+    if (response.status === 'locked') {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetUnlockThenContinue'),
+        true,
+      )
+      return
+    }
+
+    if (response.status === 'unavailable') {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetConnectVault'),
+        true,
+      )
+      return
+    }
+
+    const accounts = response.accounts ?? []
+    if (accounts.length === 0) {
+      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetNoMatch'),
+        true,
+      )
+      return
+    }
+
+    if (accounts.length === 1) {
+      await fillAndSubmitAccount(
+        accounts[0],
+        workflow,
+        step,
+        title,
+        description,
+        continueButton,
+      )
+      return
+    }
+
+    await openLoginPicker(workflow, step, title, description, continueButton)
+  } finally {
+    widgetState.busy = false
+    if (
+      !pickerState.pendingLogin &&
+      continueButton.isConnected &&
+      !continueButton.hidden
+    ) {
+      continueButton.disabled = false
+    }
+  }
+}
