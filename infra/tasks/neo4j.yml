@@ -17,11 +17,17 @@ tasks:
         sudo -n install -d -m 0750 /var/lib/hive/neo4j
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         retained_storage=false
-        if sudo -n find /var/lib/hive/neo4j \
-          -mindepth 1 \
-          -print \
-          -quit |
-          grep -q .; then
+        retained_path=""
+        if ! retained_path="$(
+          sudo -n find /var/lib/hive/neo4j \
+            -mindepth 1 \
+            -print \
+            -quit
+        )"; then
+          echo "Failed to inspect retained Neo4j storage" >&2
+          exit 1
+        fi
+        if test -n "$retained_path"; then
           retained_storage=true
         fi
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"

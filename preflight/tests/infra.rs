@@ -141,6 +141,11 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
         "retained host files must fail closed"
     );
     assert!(
+        tasks.contains("if ! retained_path=\"$(")
+            && tasks.contains("Failed to inspect retained Neo4j storage"),
+        "a failed retained-storage probe must abort credential reconciliation"
+    );
+    assert!(
         !tasks[retained_probe..storage_apply].contains("kubectl get pvc"),
         "an empty PVC from interrupted bootstrap is not retained Neo4j data"
     );
