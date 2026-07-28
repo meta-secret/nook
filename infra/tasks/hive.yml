@@ -282,7 +282,19 @@ tasks:
             sha256sum |
             cut -d' ' -f1
         )"
-        unset auth_data github_data neo4j_ca_data
+        neo4j_client_data="$(
+          kubectl get secret hive-neo4j-client \
+            --namespace hive-system \
+            -o jsonpath='{.data.NEO4J_PASSWORD}'
+        )"
+        test -n "$neo4j_client_data"
+        neo4j_client_checksum="$(
+          printf '%s' "$neo4j_client_data" |
+            base64 --decode |
+            sha256sum |
+            cut -d' ' -f1
+        )"
+        unset auth_data github_data neo4j_ca_data neo4j_client_data
         case "$auth_checksum" in
           ????????????????????????????????????????????????????????????????) ;;
           *)
@@ -294,6 +306,13 @@ tasks:
           ????????????????????????????????????????????????????????????????) ;;
           *)
             echo "Neo4j CA checksum is invalid" >&2
+            exit 1
+            ;;
+        esac
+        case "$neo4j_client_checksum" in
+          ????????????????????????????????????????????????????????????????) ;;
+          *)
+            echo "Neo4j client checksum is invalid" >&2
             exit 1
             ;;
         esac
@@ -340,16 +359,19 @@ tasks:
           -e "s|HIVE_AUTH_CHECKSUM|$auth_checksum|g" \
           -e "s|HIVE_GITHUB_CHECKSUM|$github_checksum|g" \
           -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          -e "s|HIVE_NEO4J_CLIENT_CHECKSUM|$neo4j_client_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/deployment.yaml" > "$rendered"
         printf '%s\n' '---' >> "$rendered"
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          -e "s|HIVE_NEO4J_CLIENT_CHECKSUM|$neo4j_client_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/dispatcher.yaml" >> "$rendered"
         printf '%s\n' '---' >> "$rendered"
         sed \
           -e "s|HIVE_IMAGE|$image|g" \
           -e "s|HIVE_NEO4J_CA_CHECKSUM|$neo4j_ca_checksum|g" \
+          -e "s|HIVE_NEO4J_CLIENT_CHECKSUM|$neo4j_client_checksum|g" \
           "$remote_dir/infra/k0s/manifests/hive/observer.yaml" >> "$rendered"
         printf '%s\n' '---' >> "$rendered"
         sed \
