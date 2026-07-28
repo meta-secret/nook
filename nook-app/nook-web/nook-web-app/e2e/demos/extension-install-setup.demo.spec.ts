@@ -86,6 +86,12 @@ test('offer browser extension install on vault home and in Devices', async ({
       payload: { intent: 'pair' },
     }),
   )
+  // Launching the session-owned pairing operation must not optimistically
+  // replace the verified extension identity before a new grant is accepted.
+  await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
+  await expect(page.getByTestId('extension-connected-vault')).toContainText(
+    'Previous vault',
+  )
   // Companion pair intent is the entry into Simple Vault /extension-connect
   // consent; grant acceptance after Approve is covered by extension e2e.
   await expect(
