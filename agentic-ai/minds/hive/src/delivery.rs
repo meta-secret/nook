@@ -13,6 +13,7 @@ struct DeliveryPullRequest {
     state: String,
     head_ref_name: String,
     head_ref_oid: String,
+    is_cross_repository: bool,
     labels: Vec<DeliveryLabel>,
     merge_commit: Option<DeliveryCommit>,
     status_check_rollup: Vec<DeliveryCheck>,
@@ -43,6 +44,7 @@ struct DeliveryRun {
     head_sha: String,
     status: String,
     conclusion: String,
+    created_at: String,
 }
 
 pub(crate) async fn verify_main_repair_delivery(
@@ -60,7 +62,7 @@ pub(crate) async fn verify_main_repair_delivery(
                 "--limit",
                 "1000",
                 "--json",
-                "number,title,state,headRefName,headRefOid,labels,mergeCommit,statusCheckRollup",
+                "number,title,state,headRefName,headRefOid,isCrossRepository,labels,mergeCommit,statusCheckRollup",
             ],
         )
         .await?,
@@ -69,9 +71,11 @@ pub(crate) async fn verify_main_repair_delivery(
     let pull_request = latest_delivery_generation(&pull_requests, branch)?
         .context("Hive repair delivery is incomplete: no pull request generation exists")?;
 
-    ensure_hive_marker(repository, pull_request).await?;
+    validate_hive_marker(pull_request)?;
     validate_merged_hive_pull_request(pull_request)?;
+    validate_required_pr_checks(pull_request)?;
     validate_full_e2e_checks(pull_request)?;
+    validate_review_and_deployment_readiness(repository, pull_request).await?;
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
@@ -79,7 +83,7 @@ pub(crate) async fn verify_main_repair_delivery(
 
     run_git_status(
         repository,
-        &["fetch", "--depth=100", "origin", "main"],
+        &["fetch", "--depth=2147483647", "origin", "main"],
         "fetch Main delivery state",
     )
     .await?;
@@ -96,7 +100,7 @@ pub(crate) async fn verify_main_repair_delivery(
     .await?;
     validate_squash_merge(repository, pull_request).await?;
 
-    let runs: Vec<DeliveryRun> = serde_json::from_str(
+    let mut runs: Vec<DeliveryRun> = serde_json::from_str(
         &gh_output(
             repository,
             &[
@@ -106,31 +110,18 @@ pub(crate) async fn verify_main_repair_delivery(
                 "Main",
                 "--branch",
                 "main",
-                "--status",
-                "success",
                 "--limit",
-                "20",
+                "100",
                 "--json",
-                "headSha,status,conclusion",
+                "headSha,status,conclusion,createdAt",
             ],
         )
         .await?,
     )
     .context("GitHub returned invalid Main workflow state")?;
+    runs.sort_by(|left, right| left.created_at.cmp(&right.created_at));
     for run in runs {
-        if run.status != "completed" || run.conclusion != "success" {
-            continue;
-        }
-        let fetched = Command::new("git")
-            .args(["fetch", "--depth=100", "origin", run.head_sha.as_str()])
-            .current_dir(repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .context("failed to fetch successful Main workflow revision")?;
-        if !fetched.success() {
+        if run.status != "completed" {
             continue;
         }
         let contains_merge = Command::new("git")
@@ -138,7 +129,7 @@ pub(crate) async fn verify_main_repair_delivery(
                 "merge-base",
                 "--is-ancestor",
                 merge_commit.oid.as_str(),
-                "FETCH_HEAD",
+                run.head_sha.as_str(),
             ])
             .current_dir(repository)
             .stdin(Stdio::null())
@@ -146,10 +137,21 @@ pub(crate) async fn verify_main_repair_delivery(
             .stderr(Stdio::null())
             .status()
             .await
-            .context("failed to inspect successful Main workflow ancestry")?;
-        if contains_merge.success() {
+            .context("failed to inspect Main workflow ancestry")?;
+        if !contains_merge.success() {
+            continue;
+        }
+        if run.conclusion == "success" {
             return Ok(());
         }
+        if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
+            continue;
+        }
+        anyhow::bail!(
+            "Hive repair delivery failed on Main: run at {} concluded {}",
+            run.head_sha,
+            run.conclusion
+        );
     }
     anyhow::bail!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
@@ -163,6 +165,7 @@ fn latest_delivery_generation<'a>(
 ) -> anyhow::Result<Option<&'a DeliveryPullRequest>> {
     let mut generations = pull_requests
         .iter()
+        .filter(|pull_request| !pull_request.is_cross_repository)
         .filter_map(|pull_request| {
             delivery_generation(branch, &pull_request.head_ref_name)
                 .map(|generation| (generation, pull_request))
@@ -195,27 +198,18 @@ fn delivery_generation(base: &str, candidate: &str) -> Option<u64> {
         .filter(|generation| *generation >= 2)
 }
 
-async fn ensure_hive_marker(
-    repository: &Path,
-    pull_request: &DeliveryPullRequest,
-) -> anyhow::Result<()> {
-    let number = pull_request.number.to_string();
+fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
     if !pull_request.title.starts_with("[Hive] ") {
-        let title = format!("[Hive] {}", pull_request.title);
-        run_gh_status(
-            repository,
-            &["pr", "edit", &number, "--title", &title],
-            "mark the Hive pull request title",
-        )
-        .await?;
+        anyhow::bail!(
+            "Hive repair delivery is incomplete: PR #{} lacks the `[Hive]` title marker",
+            pull_request.number
+        );
     }
     if !pull_request.labels.iter().any(|label| label.name == "hive") {
-        run_gh_status(
-            repository,
-            &["pr", "edit", &number, "--add-label", "hive"],
-            "mark the Hive pull request label",
-        )
-        .await?;
+        anyhow::bail!(
+            "Hive repair delivery is incomplete: PR #{} lacks the `hive` label",
+            pull_request.number
+        );
     }
     Ok(())
 }
@@ -306,6 +300,131 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
     Ok(())
 }
 
+fn validate_required_pr_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+    let latest = pull_request
+        .status_check_rollup
+        .iter()
+        .filter(|check| check.name == "Verify and preview")
+        .max_by(|left, right| left.started_at.cmp(&right.started_at));
+    if !latest.is_some_and(|check| check.status == "COMPLETED" && check.conclusion == "SUCCESS") {
+        anyhow::bail!(
+            "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
+            pull_request.number,
+            pull_request.head_ref_oid
+        );
+    }
+    Ok(())
+}
+
+async fn validate_review_and_deployment_readiness(
+    repository: &Path,
+    pull_request: &DeliveryPullRequest,
+) -> anyhow::Result<()> {
+    let number = pull_request.number.to_string();
+    let repository_state: serde_json::Value = serde_json::from_str(
+        &gh_output(repository, &["repo", "view", "--json", "nameWithOwner"]).await?,
+    )
+    .context("GitHub returned invalid repository identity")?;
+    let name_with_owner = repository_state
+        .get("nameWithOwner")
+        .and_then(serde_json::Value::as_str)
+        .context("GitHub repository identity omitted nameWithOwner")?;
+    let (owner, name) = name_with_owner
+        .split_once('/')
+        .context("GitHub repository identity is malformed")?;
+    let review_query = format!(
+        "query($number:Int!){{repository(owner:\"{owner}\",name:\"{name}\"){{pullRequest(number:$number){{reviewThreads(first:100){{nodes{{isResolved}}}}}}}}}}"
+    );
+    let review: serde_json::Value = serde_json::from_str(
+        &gh_output(
+            repository,
+            &[
+                "api",
+                "graphql",
+                "-F",
+                &format!("number={number}"),
+                "-f",
+                &format!("query={review_query}"),
+            ],
+        )
+        .await?,
+    )
+    .context("GitHub returned invalid Hive review state")?;
+    let unresolved = review
+        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
+        .and_then(serde_json::Value::as_array)
+        .context("GitHub review response omitted review threads")?
+        .iter()
+        .filter(|thread| {
+            thread
+                .get("isResolved")
+                .and_then(serde_json::Value::as_bool)
+                == Some(false)
+        })
+        .count();
+    if unresolved > 0 {
+        anyhow::bail!(
+            "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
+            pull_request.number,
+            unresolved
+        );
+    }
+
+    let deployments: serde_json::Value = serde_json::from_str(
+        &gh_output(
+            repository,
+            &[
+                "api",
+                "-X",
+                "GET",
+                "repos/{owner}/{repo}/deployments",
+                "-f",
+                "environment=github-pages",
+                "-f",
+                &format!("sha={}", pull_request.head_ref_oid),
+                "-f",
+                "per_page=20",
+            ],
+        )
+        .await?,
+    )
+    .context("GitHub returned invalid deployment state")?;
+    let deployment_id = deployments
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(|deployment| deployment.get("id"))
+        .and_then(serde_json::Value::as_u64)
+        .context("Hive repair delivery lacks an exact-head github-pages deployment")?;
+    let statuses: serde_json::Value = serde_json::from_str(
+        &gh_output(
+            repository,
+            &[
+                "api",
+                "-X",
+                "GET",
+                &format!("repos/{{owner}}/{{repo}}/deployments/{deployment_id}/statuses"),
+                "-f",
+                "per_page=1",
+            ],
+        )
+        .await?,
+    )
+    .context("GitHub returned invalid deployment status")?;
+    let state = statuses
+        .as_array()
+        .and_then(|items| items.first())
+        .and_then(|status| status.get("state"))
+        .and_then(serde_json::Value::as_str);
+    if state != Some("success") {
+        anyhow::bail!(
+            "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
+            pull_request.number,
+            state
+        );
+    }
+    Ok(())
+}
+
 async fn gh_output(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
     let output = Command::new("gh")
         .args(arguments)
@@ -358,26 +477,6 @@ async fn run_git_status(
     Ok(())
 }
 
-async fn run_gh_status(
-    repository: &Path,
-    arguments: &[&str],
-    operation: &str,
-) -> anyhow::Result<()> {
-    let status = Command::new("gh")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .with_context(|| format!("failed to {operation}"))?;
-    if !status.success() {
-        anyhow::bail!("{operation} failed with status {status}");
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -397,6 +496,7 @@ mod tests {
             state: state.to_owned(),
             head_ref_name: branch.to_owned(),
             head_ref_oid: format!("head-{number}"),
+            is_cross_repository: false,
             labels: vec![
                 DeliveryLabel {
                     name: "hive".to_owned(),
@@ -478,6 +578,22 @@ mod tests {
             .expect_err("duplicate generations cannot identify one delivery");
 
         assert!(error.to_string().contains("multiple PRs use generation 2"));
+    }
+
+    #[test]
+    fn cross_repository_generation_is_ignored() {
+        let mut fork = pull_request(99, "codex/hive-task-g99", "OPEN", None);
+        fork.is_cross_repository = true;
+        let pull_requests = vec![
+            pull_request(42, "codex/hive-task-g2", "MERGED", Some("abc123")),
+            fork,
+        ];
+
+        let latest = latest_delivery_generation(&pull_requests, "codex/hive-task")
+            .expect("same-repository generations should be unambiguous")
+            .expect("the legitimate generation should be found");
+
+        assert_eq!(latest.number, 42);
     }
 
     #[test]
