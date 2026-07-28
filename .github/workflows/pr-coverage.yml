@@ -1,0 +1,231 @@
+# Rust coverage reporting for pull requests.
+# Kept as a reusable workflow because coverage artifact validation, comparison,
+# and PR reporting form one independent CI domain.
+
+name: PR Rust coverage
+
+on:
+  workflow_call:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  coverage:
+    name: Rust coverage report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Test base coverage artifact resolver
+        run: node --test .github/scripts/base-coverage-artifact.test.cjs
+
+      - name: Download Rust coverage handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-rust-${{ github.run_id }}
+          path: coverage/current
+
+      - name: Validate Rust coverage handoff
+        run: |
+          set -euo pipefail
+          test -s coverage/current/summary.json
+          chmod +x coverage/current/tools/nook-preflight
+          test -x coverage/current/tools/nook-preflight
+
+      - name: Detect nook-core/auth coverage input changes
+        id: coverage-inputs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_SHA" "$HEAD_SHA" --no-tags --prune --depth=1000
+          coverage/current/tools/nook-preflight coverage-inputs \
+            --repository "$GITHUB_WORKSPACE" \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Resolve base coverage artifact
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
+        id: base-coverage-run
+        continue-on-error: true
+        uses: actions/github-script@v9
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        with:
+          retries: 3
+          script: |
+            const {
+              findBaseCoverageArtifact,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/base-coverage-artifact.cjs`)
+            const artifact = await findBaseCoverageArtifact({
+              github,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              baseSha: process.env.BASE_SHA,
+              defaultBranch: context.payload.repository.default_branch,
+            })
+            if (artifact) {
+              core.info(`Using base coverage artifact ${artifact.artifactId} from Main run ${artifact.runId}`)
+              core.setOutput('run-id', String(artifact.runId))
+            } else {
+              core.warning(`No trusted base coverage artifact found for ${process.env.BASE_SHA}`)
+              core.setOutput('run-id', '')
+            }
+
+      - name: Download base coverage artifact
+        if: >-
+          steps.coverage-inputs.outputs.base_coverage_required == 'true' &&
+          steps.base-coverage-run.outputs.run-id != ''
+        id: download-base-coverage
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: nook-core-auth-coverage-${{ github.event.pull_request.base.sha }}
+          path: coverage/base
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.base-coverage-run.outputs.run-id }}
+
+      - name: Validate base coverage artifact
+        if: always() && steps.coverage-inputs.outputs.base_coverage_required == 'true'
+        id: base-coverage-artifact
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          coverage/current/tools/nook-preflight validate-coverage-artifact \
+            --directory coverage/base \
+            --commit "$BASE_SHA" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Reuse current coverage when the exact base artifact is unavailable
+        if: >-
+          steps.coverage-inputs.outputs.base_coverage_required == 'true' &&
+          steps.base-coverage-artifact.outputs.valid != 'true'
+        run: |
+          set -euo pipefail
+          rm -rf coverage/base
+          mkdir -p coverage/base
+          cp -a coverage/current/. coverage/base/
+          echo "::warning::Exact base coverage is unavailable; enforcing current absolute coverage floors without rebuilding the base revision."
+
+      - name: Reuse current coverage as base
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'false'
+        run: |
+          set -euo pipefail
+          rm -rf coverage/base
+          mkdir -p coverage/base
+          cp -a coverage/current/. coverage/base/
+
+      - name: Summarize nook-core/auth coverage
+        id: coverage
+        run: |
+          set -euo pipefail
+          coverage/current/tools/nook-preflight coverage-report \
+            --current coverage/current \
+            --base coverage/base \
+            --github-output "$GITHUB_OUTPUT" \
+            --github-summary "$GITHUB_STEP_SUMMARY" \
+            --markdown coverage/nook-core-summary.md
+
+      - name: Upload nook-core/auth coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nook-core-coverage
+          path: |
+            coverage/current
+            coverage/base
+            coverage/nook-core-summary.md
+
+      - name: Comment nook-core/auth coverage on PR
+        uses: actions/github-script@v9
+        env:
+          CURRENT: ${{ steps.coverage.outputs.current }}
+          BASE: ${{ steps.coverage.outputs.base }}
+          DELTA: ${{ steps.coverage.outputs.delta }}
+          FLOOR: ${{ steps.coverage.outputs.floor }}
+          STATUS: ${{ steps.coverage.outputs.status }}
+        with:
+          retries: 3
+          script: |
+            const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+            const withBackoff = async (label, request) => {
+              let lastError
+              for (let attempt = 1; attempt <= 5; attempt += 1) {
+                try {
+                  return await request()
+                } catch (error) {
+                  lastError = error
+                  if (attempt === 5) break
+                  const delaySeconds = attempt * 15
+                  core.warning(`${label} failed on attempt ${attempt}; retrying in ${delaySeconds}s`)
+                  await sleep(delaySeconds * 1000)
+                }
+              }
+              throw lastError
+            }
+            const marker = '<!-- nook-core-coverage -->'
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const verdict = process.env.STATUS === 'passed' ? 'PASS' : 'FAIL'
+            const body = [
+              marker,
+              '### portable Rust crate coverage',
+              '',
+              `${verdict}: line coverage ${process.env.STATUS}: ${process.env.CURRENT}% (floor ${process.env.FLOOR}%)`,
+              '',
+              '| Metric | Lines |',
+              '| --- | ---: |',
+              `| PR branch | ${process.env.CURRENT}% |`,
+              `| Base branch | ${process.env.BASE}% |`,
+              `| Delta | ${process.env.DELTA}% |`,
+              `| Required floor | ${process.env.FLOOR}% |`,
+              '',
+              `Artifact: [nook-core-coverage](${runUrl})`,
+            ].join('\n')
+
+            const commentQuery = await withBackoff('Listing coverage comments', () => github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    id
+                    comments(last: 100) {
+                      nodes { id body }
+                    }
+                  }
+                }
+              }
+            `, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.payload.pull_request.number,
+            }))
+            const pullRequest = commentQuery.repository.pullRequest
+            const existing = pullRequest.comments.nodes.find((comment) => comment.body?.includes(marker))
+            if (existing) {
+              await withBackoff('Updating the coverage comment', () => github.graphql(`
+                mutation($id: ID!, $body: String!) {
+                  updateIssueComment(input: { id: $id, body: $body }) {
+                    issueComment { id }
+                  }
+                }
+              `, { id: existing.id, body }))
+            } else {
+              await withBackoff('Creating the coverage comment', () => github.graphql(`
+                mutation($subjectId: ID!, $body: String!) {
+                  addComment(input: { subjectId: $subjectId, body: $body }) {
+                    commentEdge { node { id } }
+                  }
+                }
+              `, { subjectId: pullRequest.id, body }))
+            }
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
