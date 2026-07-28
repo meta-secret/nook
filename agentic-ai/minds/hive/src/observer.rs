@@ -518,11 +518,14 @@ impl IntoResponse for ObserverError {
 
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> anyhow::Result<ObserverSnapshot> {
-        let mut tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
-        let attention_tasks = self
+        let overview_tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
+        let mut tasks = self
             .observer_tasks("", ALERT_LIMIT as i64, locale, true)
             .await?;
-        for task in attention_tasks {
+        for task in overview_tasks {
+            if tasks.len() >= TASK_LIMIT as usize {
+                break;
+            }
             if !tasks.iter().any(|candidate| candidate.id == task.id) {
                 tasks.push(task);
             }
