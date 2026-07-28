@@ -82,7 +82,7 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
         </style>
       </head>
       <body>
-        <main id="setup">
+        <main id="app">
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -160,6 +160,6 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
   await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
-  expect(bootstrapErrors).toEqual([])
   await demoBeat(page)
+  expect(bootstrapErrors).toEqual([])
 })
