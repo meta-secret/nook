@@ -892,19 +892,21 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
                             .max(task.latest_attempt_started_at)
                             .max(task.created_at)
                         > STALE_ACTIVITY_MS =>
-                (
-                    AlertKind::ActivityStale,
-                    AlertSeverity::Warning,
-                    task.latest_activity_at
-                        .max(task.latest_attempt_started_at)
-                        .max(task.created_at)
-                        + STALE_ACTIVITY_MS,
-                    if russian {
-                        "Агент давно не записывал действий"
-                    } else {
-                        "Agent activity has gone stale"
-                    },
-                ),
+                {
+                    (
+                        AlertKind::ActivityStale,
+                        AlertSeverity::Warning,
+                        task.latest_activity_at
+                            .max(task.latest_attempt_started_at)
+                            .max(task.created_at)
+                            + STALE_ACTIVITY_MS,
+                        if russian {
+                            "Агент давно не записывал действий"
+                        } else {
+                            "Agent activity has gone stale"
+                        },
+                    )
+                }
                 "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
                     AlertKind::CancellationStuck,
                     AlertSeverity::Warning,
@@ -1001,8 +1003,8 @@ fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlertKind, AlertSeverity, ObservedTask, ObserverCopy, ObserverRequest, derive_alerts,
-        localized_activity, localized_task_kind, STALE_ACTIVITY_MS,
+        AlertKind, AlertSeverity, ObservedTask, ObserverCopy, ObserverRequest, STALE_ACTIVITY_MS,
+        derive_alerts, localized_activity, localized_task_kind,
     };
 
     #[test]
