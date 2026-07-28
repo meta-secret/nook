@@ -21,6 +21,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   import type {
     ObservedActivity,
     ObservedAgent,
+    ObservedAlert,
     ObservedTask,
     ObserverCopy,
     ObserverSnapshot,
@@ -61,8 +62,16 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       );
     }),
   );
-  const attentionTasks = $derived(
-    (snapshot?.tasks ?? []).filter((task) => needsAttention(task)),
+  const attentionEntries = $derived(
+    (snapshot?.alerts ?? []).flatMap((alert) => {
+      const task = snapshot?.tasks.find(
+        (candidate) => candidate.id === alert.task_id,
+      );
+      return task === undefined ? [] : [{ alert, task }];
+    }),
+  );
+  const attentionTaskIds = $derived(
+    new Set(attentionEntries.map(({ task }) => task.id)),
   );
   const activeTasks = $derived(
     (snapshot?.tasks ?? []).filter((task) =>
@@ -174,13 +183,6 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     } finally {
       loading = false;
     }
-  }
-
-  function needsAttention(task: ObservedTask) {
-    return (
-      ['BLOCKED', 'FAILED', 'CANCELLING'].includes(task.status) ||
-      (task.status === 'RUNNING' && nowMs - task.updated_at > 5 * 60_000)
-    );
   }
 
   function isAgentHealthy(agent: ObservedAgent) {
@@ -300,11 +302,12 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         {/each}
       </div>
       <div
-        class:has-attention={attentionTasks.length > 0}
+        class:has-attention={attentionEntries.length > 0}
         class="attention-summary"
+        aria-live="polite"
       >
         <AlertTriangle size={16} />
-        <strong>{attentionTasks.length}</strong>
+        <strong>{attentionEntries.length}</strong>
         <span>{copy.needs_attention.toLocaleLowerCase()}</span>
       </div>
     </section>
@@ -365,27 +368,26 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           </label>
         </div>
 
-        {#if attentionTasks.length > 0 && search.length === 0}
+        {#if attentionEntries.length > 0 && search.length === 0}
           <div class="attention-lane">
             <div class="attention-heading">
               <AlertTriangle size={15} />
               <span>{copy.needs_attention}</span>
             </div>
-            {#each attentionTasks as task (task.id)}
-              {@render TaskRow(
-                task,
-                selectedId === task.id,
-                copy,
-                statusLabel,
+            {#each attentionEntries as entry (entry.alert.id)}
+              {@render AlertRow(
+                entry.alert,
+                entry.task,
+                selectedId === entry.task.id,
                 relativeTime,
-                () => selectTask(task.id),
+                () => selectTask(entry.task.id),
               )}
             {/each}
           </div>
         {/if}
 
         <div class="task-list">
-          {#each filteredTasks.filter((task) => search.length > 0 || !needsAttention(task)) as task (task.id)}
+          {#each filteredTasks.filter((task) => search.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
             {@render TaskRow(
               task,
               selectedId === task.id,
@@ -542,6 +544,34 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <span>{copy.attempt} {task.attempt_count}/{task.max_attempts}</span>
       <time>{relativeTime(task.updated_at)}</time>
     </div>
+  </button>
+{/snippet}
+
+{#snippet AlertRow(
+  alert: ObservedAlert,
+  task: ObservedTask,
+  active: boolean,
+  relativeTime: (timestamp: number) => string,
+  onselect: () => void,
+)}
+  <button
+    class:active
+    class:critical={alert.severity === 'critical'}
+    class="alert-row"
+    onclick={onselect}
+  >
+    <span class="alert-mark" aria-hidden="true"
+      ><AlertTriangle size={15} /></span
+    >
+    <div class="alert-copy">
+      <div>
+        <strong>{task.kind_label}</strong>
+        <span>{alert.severity}</span>
+      </div>
+      <p>{alert.reason}</p>
+      <code>{task.id}</code>
+    </div>
+    <time>{relativeTime(alert.first_observed_at)}</time>
   </button>
 {/snippet}
 

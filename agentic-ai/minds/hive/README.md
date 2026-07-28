@@ -111,7 +111,8 @@ Unix-socket coordinator sidecar; only that sidecar holds the Neo4j credential
 and reads over the existing private TLS boundary. The observer serves:
 
 - worker presence and lease state,
-- attention-worthy failed and blocked tasks,
+- a bounded typed alert projection for failed, dependency-blocked,
+  stale-running, and stuck-cancellation tasks,
 - the bounded task queue and dependency graph,
 - sanitized semantic activity such as validation, changes, retries, and results.
 

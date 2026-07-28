@@ -24,7 +24,10 @@ use crate::neo4j::Neo4jTaskStore;
 use crate::store::TaskStore;
 
 const TASK_LIMIT: i64 = 200;
+const ALERT_LIMIT: usize = 100;
 const AGENT_PRESENCE_WINDOW_MS: i64 = 120_000;
+const STALE_ACTIVITY_MS: i64 = 5 * 60_000;
+const STUCK_CANCELLATION_MS: i64 = 5 * 60_000;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ObserverSnapshot {
@@ -32,6 +35,44 @@ pub struct ObserverSnapshot {
     pub copy: ObserverCopy,
     pub agents: Vec<ObservedAgent>,
     pub tasks: Vec<ObservedTask>,
+    pub alerts: Vec<ObservedAlert>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ObservedAlert {
+    pub id: String,
+    pub kind: AlertKind,
+    pub severity: AlertSeverity,
+    pub task_id: String,
+    pub first_observed_at: i64,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AlertKind {
+    TaskFailed,
+    DependencyBlocked,
+    ActivityStale,
+    CancellationStuck,
+}
+
+impl AlertKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::TaskFailed => "task-failed",
+            Self::DependencyBlocked => "dependency-blocked",
+            Self::ActivityStale => "activity-stale",
+            Self::CancellationStuck => "cancellation-stuck",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum AlertSeverity {
+    Critical,
+    Warning,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -471,11 +512,14 @@ impl Neo4jTaskStore {
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
+        let generated_at = OffsetDateTime::now_utc().unix_timestamp() * 1000;
+        let alerts = derive_alerts(&tasks, generated_at, locale);
         Ok(ObserverSnapshot {
-            generated_at: OffsetDateTime::now_utc().unix_timestamp() * 1000,
+            generated_at,
             copy: ObserverCopy::for_locale(locale),
             agents: self.observer_agents().await?,
             tasks,
+            alerts,
         })
     }
 
@@ -735,6 +779,75 @@ impl Neo4jTaskStore {
     }
 }
 
+fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<ObservedAlert> {
+    let russian =
+        locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
+    let mut alerts = tasks
+        .iter()
+        .filter_map(|task| {
+            let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
+                "FAILED" => (
+                    AlertKind::TaskFailed,
+                    AlertSeverity::Critical,
+                    task.latest_attempt_completed_at.max(task.updated_at),
+                    if russian {
+                        "Все разрешённые попытки завершились ошибкой"
+                    } else {
+                        "All permitted attempts have failed"
+                    },
+                ),
+                "BLOCKED" => (
+                    AlertKind::DependencyBlocked,
+                    AlertSeverity::Warning,
+                    task.updated_at,
+                    if russian {
+                        "Задача ожидает завершения зависимости"
+                    } else {
+                        "Task is waiting for a dependency"
+                    },
+                ),
+                "RUNNING" if now - task.updated_at > STALE_ACTIVITY_MS => (
+                    AlertKind::ActivityStale,
+                    AlertSeverity::Warning,
+                    task.updated_at + STALE_ACTIVITY_MS,
+                    if russian {
+                        "Агент давно не записывал действий"
+                    } else {
+                        "Agent activity has gone stale"
+                    },
+                ),
+                "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
+                    AlertKind::CancellationStuck,
+                    AlertSeverity::Warning,
+                    task.updated_at + STUCK_CANCELLATION_MS,
+                    if russian {
+                        "Отмена не была подтверждена вовремя"
+                    } else {
+                        "Cancellation was not acknowledged in time"
+                    },
+                ),
+                _ => return None,
+            };
+            Some(ObservedAlert {
+                id: format!("{}:{}", kind.as_str(), task.id),
+                kind,
+                severity,
+                task_id: task.id.clone(),
+                first_observed_at,
+                reason: reason.to_owned(),
+            })
+        })
+        .collect::<Vec<_>>();
+    alerts.sort_by(|left, right| {
+        left.severity
+            .cmp(&right.severity)
+            .then_with(|| left.first_observed_at.cmp(&right.first_observed_at))
+            .then_with(|| left.task_id.cmp(&right.task_id))
+    });
+    alerts.truncate(ALERT_LIMIT);
+    alerts
+}
+
 #[async_trait]
 impl ObserverStore for Neo4jTaskStore {
     async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value> {
@@ -798,7 +911,10 @@ fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObserverCopy, ObserverRequest, localized_activity, localized_task_kind};
+    use super::{
+        AlertKind, AlertSeverity, ObservedTask, ObserverCopy, ObserverRequest, derive_alerts,
+        localized_activity, localized_task_kind,
+    };
 
     #[test]
     fn observer_copy_preserves_english_and_russian_operator_meaning() {
@@ -839,6 +955,73 @@ mod tests {
             assert!(!payload.contains("complete"));
             assert!(!payload.contains("enqueue"));
             assert!(!payload.contains("activity"));
+        }
+    }
+
+    #[test]
+    fn alerts_are_typed_ordered_and_clear_with_task_state() {
+        let now = 1_000_000;
+        let mut failed = observed_task("failed", "FAILED", now - 10_000);
+        failed.latest_attempt_completed_at = now - 8_000;
+        let blocked = observed_task("blocked", "BLOCKED", now - 20_000);
+        let stale = observed_task("stale", "RUNNING", now - 6 * 60_000);
+        let cancelling = observed_task("cancelling", "CANCELLING", now - 6 * 60_000);
+        let healthy = observed_task("healthy", "RUNNING", now - 30_000);
+
+        let alerts = derive_alerts(
+            &[blocked, stale, cancelling, healthy, failed.clone()],
+            now,
+            "en",
+        );
+        assert_eq!(alerts.len(), 4);
+        assert_eq!(alerts[0].kind, AlertKind::TaskFailed);
+        assert_eq!(alerts[0].severity, AlertSeverity::Critical);
+        assert_eq!(alerts[1].task_id, "cancelling");
+        assert_eq!(alerts[2].task_id, "stale");
+        assert_eq!(alerts[3].task_id, "blocked");
+
+        failed.status = "COMPLETED".to_owned();
+        assert!(derive_alerts(&[failed], now, "en").is_empty());
+    }
+
+    #[test]
+    fn alerts_are_bounded_and_localized() {
+        let now = 1_000_000;
+        let tasks = (0..140)
+            .map(|index| observed_task(&format!("failed-{index:03}"), "FAILED", now - index))
+            .collect::<Vec<_>>();
+        let alerts = derive_alerts(&tasks, now, "ru");
+        assert_eq!(alerts.len(), 100);
+        assert_eq!(
+            alerts[0].reason,
+            "Все разрешённые попытки завершились ошибкой"
+        );
+    }
+
+    fn observed_task(id: &str, status: &str, updated_at: i64) -> ObservedTask {
+        ObservedTask {
+            id: id.to_owned(),
+            kind: "main-repair".to_owned(),
+            kind_label: "Main repair".to_owned(),
+            trigger_kind: "manual-cli".to_owned(),
+            trigger: "Manual dispatch".to_owned(),
+            status: status.to_owned(),
+            source_commit: String::new(),
+            priority: 0,
+            attempt_count: 1,
+            max_attempts: 3,
+            created_at: updated_at - 1_000,
+            updated_at,
+            lease_until: 0,
+            agent_id: String::new(),
+            pod_name: String::new(),
+            latest_attempt_status: status.to_owned(),
+            latest_attempt_started_at: 0,
+            latest_attempt_completed_at: 0,
+            latest_error: String::new(),
+            latest_summary: String::new(),
+            dependencies: Vec::new(),
+            activity: Vec::new(),
         }
     }
 }

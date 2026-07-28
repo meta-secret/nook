@@ -35,6 +35,10 @@ revisions remain delivery evidence.
 ## Capabilities and Constraints
 
 - The first release is read-only.
+- Hive derives a bounded, typed attention projection for failed,
+  dependency-blocked, stale-running, and stuck-cancellation tasks; the browser
+  does not duplicate operational policy.
+- Alerts clear automatically when the underlying durable task state recovers.
 - Neo4j credentials and arbitrary graph queries never reach the browser.
 - Activity is bounded, sanitized, and excludes secrets, raw command output, and
   model chain-of-thought.

@@ -63,6 +63,15 @@ export type ObservedActivity = {
   attempt_number: number;
 };
 
+export type ObservedAlert = {
+  id: string;
+  kind: string;
+  severity: 'critical' | 'warning';
+  task_id: string;
+  first_observed_at: number;
+  reason: string;
+};
+
 export type ObservedTask = {
   id: string;
   kind: string;
@@ -92,4 +101,5 @@ export type ObserverSnapshot = {
   copy: ObserverCopy;
   agents: ObservedAgent[];
   tasks: ObservedTask[];
+  alerts: ObservedAlert[];
 };

@@ -446,6 +446,80 @@ code {
   border-color: color-mix(in oklch, var(--attention) 23%, transparent);
 }
 
+.alert-row {
+  width: 100%;
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid color-mix(in oklch, var(--attention) 23%, transparent);
+}
+
+.alert-row:hover,
+.alert-row.active {
+  background: color-mix(in oklch, var(--attention) 8%, transparent);
+}
+
+.alert-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--attention);
+  border: 1px solid color-mix(in oklch, var(--attention) 36%, transparent);
+  border-radius: var(--radius);
+}
+
+.alert-row.critical .alert-mark {
+  color: var(--destructive);
+  border-color: color-mix(in oklch, var(--destructive) 36%, transparent);
+}
+
+.alert-copy {
+  min-width: 0;
+}
+
+.alert-copy > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.alert-copy span {
+  color: var(--attention);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.alert-row.critical .alert-copy span {
+  color: var(--destructive);
+}
+
+.alert-copy p {
+  margin: 3px 0;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.alert-copy code,
+.alert-row time {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.alert-row time {
+  padding-top: 2px;
+  white-space: nowrap;
+}
+
 .task-row:hover {
   background: color-mix(in oklch, var(--muted) 62%, transparent);
 }

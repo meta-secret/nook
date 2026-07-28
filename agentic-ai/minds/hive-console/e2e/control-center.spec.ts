@@ -74,6 +74,16 @@ const snapshot: ObserverSnapshot = {
       last_seen_at: now - 11_000,
     },
   ],
+  alerts: [
+    {
+      id: 'task-failed:dependency-cache-repair',
+      kind: 'task-failed',
+      severity: 'critical',
+      task_id: 'dependency-cache-repair',
+      first_observed_at: now - 9 * 60_000,
+      reason: 'All permitted attempts have failed',
+    },
+  ],
   tasks: [
     {
       id: 'main-repair-359c937a-run-302991001',
@@ -209,6 +219,9 @@ test('shows worker health, attention, task evidence, and durable activity', asyn
     page.getByText('Needs attention', { exact: true }),
   ).toBeVisible();
   await expect(
+    page.getByText('All permitted attempts have failed'),
+  ).toBeVisible();
+  await expect(
     page.getByText('Main repair', { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByText('Source revision')).toBeVisible();
@@ -293,7 +306,7 @@ test('uses immediate task navigation with reduced motion', async ({ page }) => {
   await routeSnapshot(page);
   await page.goto('/');
 
-  await page.getByRole('button', { name: /Blocking task Failed/ }).click();
+  await page.getByRole('button', { name: /Blocking task critical/ }).click();
   await expect(page.locator('html')).toHaveAttribute(
     'data-scroll-behavior',
     'auto',
@@ -351,20 +364,19 @@ test('finds durable task history by exact ID outside the overview', async ({
   ).toBeVisible();
 });
 
-test('ages cached running tasks with client time', async ({ page }) => {
-  await page.clock.install({ time: now });
+test('uses typed server alerts instead of inferring policy in the browser', async ({
+  page,
+}) => {
   await routeSnapshot(page, {
     ...snapshot,
+    alerts: [],
     tasks: [
       {
         ...snapshot.tasks[0],
-        updated_at: now - 4 * 60_000,
+        updated_at: now - 10 * 60_000,
       },
     ],
   });
   await page.goto('/');
   await expect(page.locator('.attention-lane')).toHaveCount(0);
-
-  await page.clock.fastForward(2 * 60_000);
-  await expect(page.locator('.attention-lane')).toBeVisible();
 });
