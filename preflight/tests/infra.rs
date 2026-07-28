@@ -32,7 +32,7 @@ fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> std::io::Res
 
     let task = read("infra/tasks/neo4j.yml");
     let credential_validation = task
-        .find("reconcile_neo4j_credentials")
+        .find("reconcile_neo4j_credentials \"$secret_dir\" \"$retained_storage\"")
         .expect("credential validation");
     let tls_secret_apply = task
         .find("kubectl create secret generic hive-neo4j-tls")
@@ -135,6 +135,10 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
     assert!(
         retained_probe < storage_apply,
         "retained storage must be detected before this invocation creates the PVC"
+    );
+    assert!(
+        tasks.contains("sudo -n find /var/lib/hive/neo4j"),
+        "retained host files must fail closed even when the PVC object is absent"
     );
 
     let neo4j_ready = reconciliation

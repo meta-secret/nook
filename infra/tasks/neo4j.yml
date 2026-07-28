@@ -18,7 +18,12 @@ tasks:
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         retained_storage=false
         if kubectl get pvc hive-neo4j-data \
-          --namespace hive-data >/dev/null 2>&1; then
+          --namespace hive-data >/dev/null 2>&1 ||
+          sudo -n find /var/lib/hive/neo4j \
+            -mindepth 1 \
+            -print \
+            -quit |
+            grep -q .; then
           retained_storage=true
         fi
         kubectl apply -f "$remote_dir/infra/k0s/manifests/neo4j/storage.yaml"
