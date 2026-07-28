@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from "@lucide/svelte";
   import { VaultState } from "$lib/vault.svelte";
   import {
     DeviceProtectionStatus,
@@ -14,29 +13,17 @@
     type OAuthFileConfig,
     type StorageProviderType,
   } from "$lib/auth-providers";
-  import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
-  import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
   import HelpPage from "$lib/components/HelpPage.svelte";
   import LegalDocumentPage from "$lib/components/LegalDocumentPage.svelte";
   import LogsPage from "$lib/components/LogsPage.svelte";
   import AppLogsApiPage from "$lib/components/AppLogsApiPage.svelte";
   import SiteFooter from "$lib/components/SiteFooter.svelte";
-  import LoginGate from "$lib/components/LoginGate.svelte";
-  import PasskeyAuthOverlay from "$lib/components/PasskeyAuthOverlay.svelte";
   import ExtensionConnectConsent from "$lib/components/ExtensionConnectConsent.svelte";
-  import JoinEnrollmentDialog from "$lib/components/JoinEnrollmentDialog.svelte";
-  import LocalFolderMultipleVaultsDialog from "$lib/components/LocalFolderMultipleVaultsDialog.svelte";
-  import VaultSyncConflictDialog from "$lib/components/VaultSyncConflictDialog.svelte";
-  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
-  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
-  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
-  import SecretVault from "$lib/components/SecretVault.svelte";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
-  import VaultAdmin from "$lib/components/VaultAdmin.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
-  import NookLogo from "$lib/components/NookLogo.svelte";
-  import HeaderLanguageSelect from "$lib/components/HeaderLanguageSelect.svelte";
-  import VaultSwitcher from "$lib/components/VaultSwitcher.svelte";
+  import AppHeader from "$lib/components/app/AppHeader.svelte";
+  import AuthenticatedVaultWorkspace from "$lib/components/app/AuthenticatedVaultWorkspace.svelte";
+  import VaultAccessGate from "$lib/components/app/VaultAccessGate.svelte";
+  import VaultDialogs from "$lib/components/app/VaultDialogs.svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     appPath,
@@ -62,21 +49,18 @@
     shouldOfferExtensionSetup,
     type ExtensionSetupState,
   } from "$lib/extension-install";
-  import type { VaultItemType } from "$lib/nook";
   import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
   import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
   import {
     APP_KIND,
     IS_SENTINEL_APP,
     SUPPORTS_EXTENSION,
-    siblingAppUrl,
   } from "$lib/app-kind";
   import {
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
   } from "$lib/sentinel-genesis-link";
   import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
-  import * as multiDeviceActions from "$lib/vault/multi-device";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
 
@@ -178,14 +162,6 @@
     }
   }
 
-  function shortId(id: string): string {
-    return id.length > 18 ? `${id.slice(0, 18)}...` : id;
-  }
-
-  function conflictReasons(reasons: string[]): string {
-    return reasons.length > 0 ? reasons.join(", ") : "key epoch rotation";
-  }
-
   function navigateHome() {
     vault.closeHelp();
     history.pushState(undefined, "", appPath("/"));
@@ -207,14 +183,6 @@
     appLogsPage = false;
     extensionConnectRoute = false;
     extensionConnectRequest = undefined;
-  }
-
-  function navigateToSiblingApp(event: MouseEvent) {
-    event.preventDefault();
-    const destination = siblingAppUrl();
-    if (!destination) return;
-    vault.lockVault();
-    window.location.assign(destination);
   }
 
   onMount(() => {
@@ -425,16 +393,11 @@
 
   const compactShellWidth = "max-w-5xl";
   const authenticatedShellWidth = "max-w-5xl";
+  const appVersion = "0.1.0";
   const shellWidth = $derived(
     vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,
   );
-  const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<VaultItemType>();
-  let secretsEditorResetKey = $state(0);
-  const secretsNoteEditorOpen = $derived(
-    secretsAddOpen && secretsAddFormType === "secure-note",
-  );
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? "py-4 sm:py-8" : "pb-28 pt-4 sm:py-8",
   );
@@ -446,11 +409,6 @@
         : "py-5 sm:py-6",
   );
 
-  function leaveSecretsEditor() {
-    secretsAddOpen = false;
-    secretsAddFormType = undefined;
-    secretsEditorResetKey += 1;
-  }
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending);
   const requiresPasskeyFirst = $derived(
@@ -849,142 +807,21 @@
     class="min-h-svh min-w-0 max-w-full overflow-x-clip bg-background text-foreground"
     class:dark={colorMode === "dark"}
   >
-    <header
-      class="app-header border-b border-border/50 bg-card/80 backdrop-blur-md"
+    <AppHeader
+      {vault}
+      {colorMode}
+      {shellWidth}
+      legalPageOpen={legalPage !== undefined}
+      {logsPage}
+      {extensionConnectRoute}
+      onNavigateHome={navigateHome}
+      onToggleColorMode={toggleColorMode}
+    />
+
+    <div
+      class="mx-auto px-4 sm:px-6 {shellWidth} {shellSpacing}"
+      data-testid="app-shell-content"
     >
-      <div
-        class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
-      >
-        <div class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
-          <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
-          {#if vault.isAuthenticated && !legalPage && !logsPage && !vault.helpOpen}
-            <VaultSwitcher {vault} />
-          {/if}
-        </div>
-
-        <div class="flex shrink-0 items-center gap-2">
-          {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-              data-testid="header-lock-vault-btn"
-              title={vault.t("session.lock_desc")}
-              disabled={vault.isVerifying || vault.isInitializing}
-              onclick={() => vault.lockVault()}
-            >
-              <Lock class="size-4" />
-              <span class="hidden sm:inline"
-                >{vault.t("common.lock_vault")}</span
-              >
-            </Button>
-            <div
-              class="mx-0.5 h-6 w-px shrink-0 bg-border/60"
-              aria-hidden="true"
-            ></div>
-          {/if}
-
-          <HeaderLanguageSelect {vault} />
-
-          {#if IS_SENTINEL_APP}
-            <a
-              href={siblingAppUrl()}
-              class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
-              data-testid="sibling-vault-app-link"
-              onclick={navigateToSiblingApp}
-            >
-              {vault.t("app.open_simple_app")}
-            </a>
-          {/if}
-
-          <button
-            type="button"
-            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
-            aria-label={colorMode === "dark"
-              ? vault.t("app.switch_light")
-              : vault.t("app.switch_dark")}
-            title={colorMode === "dark"
-              ? vault.t("app.switch_light")
-              : vault.t("app.switch_dark")}
-            data-testid="theme-toggle-btn"
-            onclick={toggleColorMode}
-          >
-            {#if colorMode === "dark"}
-              <Sun class="size-4" />
-            {:else}
-              <Moon class="size-4" />
-            {/if}
-          </button>
-
-          <a
-            href="https://github.com/meta-secret/nook"
-            target="_blank"
-            rel="noreferrer"
-            class="h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
-              ? 'hidden w-10 sm:inline-flex'
-              : 'inline-flex px-3.5'}"
-            aria-label={vault.t("app.github_aria")}
-            title={vault.t("app.github_title")}
-            data-testid="github-source-link"
-          >
-            <svg
-              class="size-4"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.86 8.36 6.84 9.72.5.09.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.93.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.32 9.32 0 0 1 12 6.98c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.13 10.13 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
-              />
-            </svg>
-            <span class={vault.isAuthenticated ? "sr-only" : "hidden sm:inline"}
-              >GitHub</span
-            >
-          </a>
-
-          {#if legalPage || logsPage || extensionConnectRoute}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-              data-testid="legal-header-back"
-              onclick={navigateHome}
-            >
-              <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">{vault.t("app.back")}</span>
-            </Button>
-          {:else if vault.helpOpen}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-              data-testid="help-header-close"
-              onclick={() => vault.closeHelp()}
-            >
-              <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">{vault.t("app.back")}</span>
-            </Button>
-          {:else}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-              data-testid="help-open-btn"
-              onclick={() => vault.openHelp()}
-            >
-              <BookOpen class="size-4" />
-              <span class="hidden sm:inline">{vault.t("app.help")}</span>
-            </Button>
-          {/if}
-        </div>
-      </div>
-    </header>
-
-    <div class="mx-auto px-4 sm:px-6 {shellWidth} {shellSpacing}">
       {#if logsPage}
         <LogsPage onClose={navigateHome} />
       {:else if legalPage}
@@ -1030,87 +867,47 @@
           </Button>
         </section>
       {:else if !vault.isAuthenticated}
-        <div class="space-y-6">
-          {#if vault.deviceProtectionReady || showLoginWithoutPasskey || existingVaultNeedsDeviceUnlock}
-            {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
-              <LoginGate
-                {vault}
-                appKind={APP_KIND}
-                providers={vault.providers}
-                bind:setupType={vault.loginSetupType}
-                bind:githubPat={vault.githubPat}
-                bind:githubRepo={vault.githubRepo}
-                addProviderOpen={vault.addProviderOpen}
-                isVerifying={vault.isVerifying}
-                isInitializing={vault.isInitializing}
-                deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
-                usesExtensionDeviceIdentity={extensionIdentityRequest !==
-                  undefined &&
-                  (extensionIdentityRequest.source === "paired-vault" ||
-                    !requiresPasskeyFirst ||
-                    extensionBackedVaultSession ||
-                    vault.deviceProtectionStatus ===
-                      DeviceProtectionStatus.Missing)}
-                onUnlock={handleUnlock}
-                onBeginAddProvider={() => vault.beginAddProvider()}
-                onCancelAddProvider={() => vault.cancelAddProvider()}
-                onBeginSetup={(type, preset) =>
-                  vault.beginProviderSetup(type, preset)}
-                onCancelSetup={() => vault.cancelProviderSetup()}
-                onOpenHelp={() => vault.openHelp()}
-                onUseEnrollmentCode={handleUseEnrollmentCode}
-                prefillEnrollmentCode={vault.prefillEnrollmentCode}
-                enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
-                {sentinelInvitationRequest}
-                {sentinelParticipantResponse}
-                {sentinelOnboardingPackage}
-                onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
-                onUnlockWithPassword={handlePasswordUnlock}
-                onSwitchVault={leaveExistingVaultImport}
-                onSentinelUnlocked={finishExistingVaultImport}
-                onCreateDeviceVault={handleCreateDeviceVault}
-                onStartSentinelGenesis={handleStartSentinelGenesis}
-                onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
-                onCreateSentinelGenesisParticipantResponse={handleCreateSentinelParticipantResponse}
-                onRemoveProvider={(id) => vault.removeProvider(id)}
-              />
-              <VaultStatusBar
-                {vault}
-                storageMode={vault.storageMode}
-                githubRepo={vault.githubRepo}
-                lastSyncedAt={vault.lastSyncedAt}
-                isSyncing={vault.isSyncActivityVisible}
-                successMsg={vault.successMsg}
-                errorMsg={vault.errorMsg}
-                {appVersion}
-                label="Nook"
-                showSyncStatus={false}
-                showStorageIcon={false}
-                variant="quiet"
-                onDismissSuccess={() => vault.dismissSuccess()}
-                onDismissError={() => vault.dismissError()}
-              />
-            {/if}
-            {#if showPasskeyOverlay || showExistingVaultPasskeyOverlay || showEnrollmentPasskeyOverlay}
-              <PasskeyAuthOverlay
-                {vault}
-                onDismiss={() => {
-                  if (showExistingVaultPasskeyOverlay) {
-                    pendingExistingVaultUnlock = false;
-                    pendingExistingVaultImport = undefined;
-                    vault.existingVaultRecoverySummary = undefined;
-                    return;
-                  }
-                  if (showEnrollmentPasskeyOverlay) {
-                    pendingEnrollmentDeviceUnlock = false;
-                    return;
-                  }
-                  pendingVaultCreation = undefined;
-                }}
-              />
-            {/if}
-          {/if}
-        </div>
+        <VaultAccessGate
+          {vault}
+          showAccessGate={vault.deviceProtectionReady ||
+            showLoginWithoutPasskey ||
+            existingVaultNeedsDeviceUnlock}
+          {existingVaultNeedsDeviceUnlock}
+          usesExtensionDeviceIdentity={extensionIdentityRequest !== undefined &&
+            (extensionIdentityRequest.source === "paired-vault" ||
+              !requiresPasskeyFirst ||
+              extensionBackedVaultSession ||
+              vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)}
+          showPasskeyOverlay={showPasskeyOverlay ||
+            showExistingVaultPasskeyOverlay ||
+            showEnrollmentPasskeyOverlay}
+          {sentinelInvitationRequest}
+          {sentinelParticipantResponse}
+          {sentinelOnboardingPackage}
+          onUnlock={handleUnlock}
+          onUseEnrollmentCode={handleUseEnrollmentCode}
+          onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
+          onUnlockWithPassword={handlePasswordUnlock}
+          onSwitchVault={leaveExistingVaultImport}
+          onSentinelUnlocked={finishExistingVaultImport}
+          onCreateDeviceVault={handleCreateDeviceVault}
+          onStartSentinelGenesis={handleStartSentinelGenesis}
+          onCreateSentinelParticipantKey={handleCreateSentinelParticipantKey}
+          onCreateSentinelParticipantResponse={handleCreateSentinelParticipantResponse}
+          onDismissPasskey={() => {
+            if (showExistingVaultPasskeyOverlay) {
+              pendingExistingVaultUnlock = false;
+              pendingExistingVaultImport = undefined;
+              vault.existingVaultRecoverySummary = undefined;
+              return;
+            }
+            if (showEnrollmentPasskeyOverlay) {
+              pendingEnrollmentDeviceUnlock = false;
+              return;
+            }
+            pendingVaultCreation = undefined;
+          }}
+        />
       {:else if extensionConnectRequest}
         <div class="mx-auto w-full max-w-2xl space-y-4">
           <ExtensionConnectConsent
@@ -1133,216 +930,21 @@
           />
         </div>
       {:else if vault.isAuthenticated}
-        <div
-          class:authenticated-shell-editor={secretsAddOpen}
-          class="authenticated-shell flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm [touch-action:pan-y_pinch-zoom] sm:border sm:border-border/60"
-          data-testid="authenticated-shell"
-        >
-          <div
-            class="shell-scroll min-h-0 min-w-0 flex-1 flex flex-col {secretsNoteEditorOpen
-              ? 'overflow-hidden'
-              : 'overflow-y-auto'}"
-          >
-            <div
-              class="p-4 sm:p-5 {vault.settingsOpen
-                ? 'space-y-4'
-                : 'flex min-h-0 flex-1 flex-col gap-4'}"
-            >
-              {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState && extensionSetupState.status !== "paired"}
-                <ExtensionInstallSetupCard
-                  {vault}
-                  state={extensionSetupState}
-                  installBusy={extensionInstallBusy}
-                  onInstall={() => void handleExtensionInstall()}
-                  onConnect={() => void handleExtensionConnect()}
-                  connectError={extensionConnectError}
-                />
-              {/if}
-              {#if !vault.settingsOpen && !secretsAddOpen && vaultSecurityRecommendations.hasRecommendations}
-                <VaultSecurityGuideBanner
-                  {vault}
-                  needsSyncProvider={vaultSecurityRecommendations.needsSyncProvider}
-                  needsAnotherDevice={vaultSecurityRecommendations.needsAnotherDevice}
-                  onAddSyncProvider={() => vault.openAdmin("storage")}
-                  onAddDevice={() => vault.openSettings("onboard")}
-                />
-              {/if}
-              {#if vault.settingsOpen && vault.settingsSection === "admin"}
-                <VaultAdmin
-                  {vault}
-                  bind:activeSection={vault.adminAccordionSection}
-                  syncProviders={vault.syncProviders}
-                  syncingProviderId={vault.syncingProviderId}
-                  isAuthenticated={vault.isAuthenticated}
-                  isSaving={vault.isSaving}
-                  isVerifying={vault.isVerifying}
-                  isInitializing={vault.isInitializing}
-                  addProviderOpen={vault.addProviderOpen}
-                  bind:setupType={vault.loginSetupType}
-                  bind:githubPat={vault.githubPat}
-                  bind:githubRepo={vault.githubRepo}
-                  passwordEntries={vault.passwordEntries}
-                  isPasswordBusy={vault.isPasswordBusy}
-                  passwordError={vault.passwordError}
-                  enrollmentCode={vault.enrollmentCode}
-                  onReconnect={handleSettingsReconnect}
-                  onSyncProvider={(id) => vault.syncProviderById(id)}
-                  onBeginAddProvider={() => vault.beginAddProvider()}
-                  onCancelAddProvider={() => vault.cancelAddProvider()}
-                  onBeginSetup={(type, preset) =>
-                    vault.beginProviderSetup(type, preset)}
-                  onCancelSetup={() => vault.cancelProviderSetup()}
-                  onRemoveProvider={(id) => vault.removeProvider(id)}
-                  onAddPassword={(label, pw) =>
-                    vault.addVaultPassword(label, pw)}
-                  onUpdatePassword={(id, pw) =>
-                    vault.updateVaultPasswordEntry(id, pw)}
-                  onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-                  onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
-                  onClearCode={() => vault.clearEnrollmentCode()}
-                  onImportBitwarden={(json, password) =>
-                    vault.handleBitwardenImport(json, password)}
-                  onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
-                  onImportOnePassword={(archive) =>
-                    vault.handleOnePasswordImport(archive)}
-                  onImportApplePasswords={(csv) =>
-                    vault.handleApplePasswordsImport(csv)}
-                  onImportChromePasswords={(csv) =>
-                    vault.handleChromePasswordsImport(csv)}
-                  onImportGoogleAuthenticator={(migrationUris) =>
-                    vault.handleGoogleAuthenticatorImport(migrationUris)}
-                  onImportProtonPass={(exportBytes) =>
-                    vault.handleProtonPassImport(exportBytes)}
-                />
-              {:else if vault.settingsOpen && vault.settingsSection === "onboard"}
-                <OnboardDevice
-                  {vault}
-                  syncProviders={vault.syncProviders}
-                  passwordEntries={vault.passwordEntries}
-                  enrollmentCode={vault.enrollmentCode}
-                  isBusy={vault.isPasswordBusy}
-                  passwordError={vault.passwordError}
-                  isVerifying={vault.isVerifying}
-                  isInitializing={vault.isInitializing}
-                  addProviderOpen={vault.addProviderOpen}
-                  bind:setupType={vault.loginSetupType}
-                  bind:githubPat={vault.githubPat}
-                  bind:githubRepo={vault.githubRepo}
-                  onIssueCode={(entryId, pw, providerId) =>
-                    vault.issueEnrollmentCode(entryId, pw, providerId)}
-                  onClearCode={() => vault.clearEnrollmentCode()}
-                  onAddPassword={(label, pw) =>
-                    vault.addVaultPassword(label, pw)}
-                  onBeginAddProvider={() => vault.beginAddProvider()}
-                  onCancelAddProvider={() => vault.cancelAddProvider()}
-                  onBeginSetup={(type, preset) =>
-                    vault.beginProviderSetup(type, preset)}
-                  onCancelSetup={() => vault.cancelProviderSetup()}
-                  onConnectProvider={handleSettingsReconnect}
-                />
-              {:else if vault.settingsOpen}
-                <VaultSettingsAccordion
-                  {vault}
-                  bind:accordionSection={vault.settingsAccordionSection}
-                  isVerifying={vault.isVerifying}
-                  isSaving={vault.isSaving}
-                  deviceId={vault.deviceId}
-                  devicePublicKey={vault.devicePublicKey}
-                  pendingJoins={vault.pendingJoins}
-                  vaultMembers={vault.vaultMembers}
-                  hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                  onApproveJoin={(id) => vault.approveJoin(id)}
-                  onDenyJoin={(id) => vault.denyJoin(id)}
-                  onRenameDevice={(id, label) => vault.renameDevice(id, label)}
-                  onRevokeDevice={(id) => vault.revokeDevice(id)}
-                />
-              {:else}
-                {#if !secretsNoteEditorOpen}
-                  <PendingJoinsBanner
-                    {vault}
-                    pendingJoins={vault.pendingJoins}
-                    isBusy={vault.isSaving || vault.isVerifying}
-                    onApproveJoin={(id) => vault.approveJoin(id)}
-                    onRefresh={() => vault.manualSync()}
-                    onOpenDevicesSettings={() =>
-                      vault.openSettings("storage", "devices")}
-                  />
-                {/if}
-                <div class="flex min-h-0 flex-1 flex-col">
-                  {#key secretsEditorResetKey}
-                    <SecretVault
-                      {vault}
-                      isSaving={vault.isSaving}
-                      editsBlocked={vault.editsBlocked}
-                      editBlockMessage={vault.editBlockMessage}
-                      secrets={vault.secrets}
-                      onAddModeChange={(open, type = undefined) => {
-                        secretsAddOpen = open;
-                        secretsAddFormType = type;
-                      }}
-                      onAddSecret={(id, type, data) =>
-                        vault.handleAddSecret(id, type, data)}
-                      onReplaceSecret={(oldId, type, data) =>
-                        vault.handleReplaceSecret(oldId, type, data)}
-                      onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-                      onGeneratePassword={(
-                        length,
-                        lowercase,
-                        uppercase,
-                        numbers,
-                        symbols,
-                      ) =>
-                        vault.generatePassword(
-                          length,
-                          lowercase,
-                          uppercase,
-                          numbers,
-                          symbols,
-                        )}
-                    />
-                  {/key}
-                </div>
-              {/if}
-            </div>
-          </div>
-          <div class="shrink-0">
-            <VaultStatusBar
-              {vault}
-              storageMode={vault.storageMode}
-              githubRepo={vault.githubRepo}
-              lastSyncedAt={vault.lastSyncedAt}
-              isSyncing={vault.isSyncActivityVisible}
-              successMsg={vault.successMsg}
-              errorMsg={vault.errorMsg}
-              syncConflictLabel={vault.syncConflictLabel}
-              {appVersion}
-              onRefresh={() => vault.manualSync()}
-              onDismissSuccess={() => vault.dismissSuccess()}
-              onDismissError={() => vault.dismissError()}
-            />
-            <VaultBottomNav
-              {vault}
-              settingsOpen={vault.settingsOpen}
-              settingsSection={vault.settingsSection}
-              onSelectSecrets={() => {
-                leaveSecretsEditor();
-                vault.closeSettings();
-              }}
-              onSelectOnboard={() => {
-                leaveSecretsEditor();
-                vault.openSettings("onboard");
-              }}
-              onSelectAdmin={() => {
-                leaveSecretsEditor();
-                vault.openAdmin();
-              }}
-              onSelectSettings={() => {
-                leaveSecretsEditor();
-                vault.openSettings();
-              }}
-            />
-          </div>
-        </div>
+        <AuthenticatedVaultWorkspace
+          {vault}
+          {extensionSetupState}
+          {extensionInstallBusy}
+          {extensionConnectError}
+          hasSecurityRecommendations={vaultSecurityRecommendations.hasRecommendations}
+          needsSyncProvider={vaultSecurityRecommendations.needsSyncProvider}
+          needsAnotherDevice={vaultSecurityRecommendations.needsAnotherDevice}
+          onExtensionInstall={() => void handleExtensionInstall()}
+          onExtensionConnect={() => void handleExtensionConnect()}
+          onSettingsReconnect={handleSettingsReconnect}
+          onEditorOpenChange={(open) => {
+            secretsAddOpen = open;
+          }}
+        />
       {/if}
     </div>
 
@@ -1350,94 +952,6 @@
       <SiteFooter />
     {/if}
 
-    <JoinEnrollmentDialog
-      {vault}
-      open={vault.joinEnrollmentPrompt !== JoinEnrollmentState.None}
-      variant={vault.joinEnrollmentPrompt === JoinEnrollmentState.Pending
-        ? "pending"
-        : "needs_request"}
-      deviceId={vault.deviceId}
-      isBusy={vault.isVerifying}
-      bind:enrollSecretsKey={vault.enrollSecretsKey}
-      bind:enrollMembersKey={vault.enrollMembersKey}
-      onConfirm={() => multiDeviceActions.confirmJoinRequest(vault)}
-      onEnrollWithKeys={() => vault.enrollAndConnect()}
-      onCreateFreshVault={() => vault.createFreshVault()}
-      onCancel={() => multiDeviceActions.dismissJoinEnrollment(vault)}
-    />
-
-    {#if vault.pendingSyncConflict}
-      <VaultSyncConflictDialog
-        {vault}
-        conflict={vault.pendingSyncConflict}
-        isBusy={vault.isVerifying}
-        onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
-        onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
-        onImportAsNewVault={() => vault.resolveSyncConflictImportRemote()}
-        onCancel={() => vault.clearPendingSyncConflict()}
-      />
-    {/if}
-
-    {#if vault.localFolderMultipleVaultsIssue}
-      <LocalFolderMultipleVaultsDialog
-        {vault}
-        issue={vault.localFolderMultipleVaultsIssue}
-        onChooseFolder={() => vault.chooseReplacementLocalFolderForIssue()}
-        onDisconnect={() => vault.disconnectLocalFolderMultipleVaultsProvider()}
-        onDismiss={() => vault.dismissLocalFolderMultipleVaultsIssue()}
-      />
-    {/if}
-
-    {#if vault.replacementConflicts.length > 0}
-      <div
-        class={`fixed left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-amber-500/40 bg-amber-950/95 p-4 text-sm text-amber-50 shadow-lg ${
-          vault.securityConflicts.length > 0 ? "bottom-32" : "bottom-4"
-        }`}
-      >
-        <p class="font-medium">{vault.t("app.secret_sync_conflicts")}</p>
-        <div class="mt-3 space-y-3">
-          {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
-            <div class="rounded border border-amber-400/30 p-3">
-              <p class="text-amber-100">
-                {vault.t("app.conflict_original", {
-                  id: shortId(conflict.oldSecretId),
-                })}
-              </p>
-              <div class="mt-2 flex flex-wrap gap-2">
-                {#each conflict.candidates as candidate (candidate.secretId)}
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={vault.isSaving}
-                    onclick={() =>
-                      vault.resolveReplacementConflict(
-                        conflict.oldSecretId,
-                        candidate.secretId,
-                      )}
-                  >
-                    {vault.t("app.conflict_keep", {
-                      id: shortId(candidate.secretId),
-                    })}
-                  </Button>
-                {/each}
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
-
-    {#if vault.securityConflicts.length > 0}
-      <div
-        class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
-      >
-        <p class="font-medium">{vault.t("app.security_conflict")}</p>
-        <div class="mt-2 space-y-2 text-red-100">
-          {#each vault.securityConflicts as conflict (conflict.events.join(":"))}
-            <p>{conflictReasons(conflict.reasons)}</p>
-          {/each}
-        </div>
-      </div>
-    {/if}
+    <VaultDialogs {vault} />
   </main>
 {/if}
