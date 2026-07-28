@@ -12,7 +12,8 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
 ├── infra/
-│   ├── Taskfile.yml      (inline Redis, registry, k0s, Kata, Neo4j, and Hive operations)
+│   ├── Taskfile.yml      (composition root for the infrastructure command surface)
+│   ├── tasks/            (flattened domain-owned Redis, registry, k0s, Kata, Neo4j, and Hive operations)
 │   ├── compose.yaml      (private persistent infrastructure services)
 │   └── k0s/              (pinned single-node cluster and Hive manifests)
 ├── agentic-ai/
@@ -399,7 +400,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. Server infrastructure operations and their shell bodies live inline in `infra/Taskfile.yml`; standalone shell scripts under `infra/` are prohibited and rejected by preflight. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
+All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. `infra/Taskfile.yml` is the infrastructure composition root; it flattens domain-owned command modules under `infra/tasks/` into one public command surface. Every infrastructure Taskfile must be reachable from that root, and operation shell bodies stay inside their owning domain Taskfile. Orphan Taskfiles and standalone shell scripts under `infra/` are prohibited and rejected by preflight. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload over trusted `https://localhost:<port>` using ignored TLS material in `.nook/https/`) and `task wasm:build:fast` (mounted no-opt WASM regeneration). `task web:https:setup` builds and runs the pinned repository `mkcert` container; only the final CA trust operation runs on the host because the browser consumes the host trust store. Playwright and CI keep their isolated loopback-HTTP transport when real passkey/OAuth/provider ceremonies are not under test.
 
 PR delivery helpers live in `agentic-ai/ci-agent` and are exposed as `task
 pr:preflight`, `task pr:review`, and `task pr:ready`. The optional review command
@@ -491,8 +492,9 @@ Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`*
 
 ## 8. Hive isolated agent platform
 
-Hive lives in `agentic-ai/minds/hive` and is deployed only through the inline
-`infra/Taskfile.yml` command surface to the dedicated k0s host. It is a
+Hive lives in `agentic-ai/minds/hive` and is deployed only through the
+domain-owned Hive commands flattened into the `infra/Taskfile.yml` command
+surface for the dedicated k0s host. It is a
 stateful platform built from persistent Neo4j coordination and disposable
 Kata-backed execution Pods:
 
