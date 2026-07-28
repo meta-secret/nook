@@ -66,6 +66,9 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
     await page.reload()
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
