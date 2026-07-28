@@ -108,6 +108,8 @@ pub struct ObservedTask {
     pub latest_attempt_completed_at: i64,
     pub latest_error: String,
     pub latest_summary: String,
+    #[serde(skip)]
+    pub dependency_failure: bool,
     pub dependencies: Vec<ObservedDependency>,
     pub activity: Vec<ObservedActivity>,
 }
@@ -516,7 +518,15 @@ impl IntoResponse for ObserverError {
 
 impl Neo4jTaskStore {
     pub async fn observer_snapshot(&self, locale: &str) -> anyhow::Result<ObserverSnapshot> {
-        let mut tasks = self.observer_tasks("", TASK_LIMIT, locale).await?;
+        let mut tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
+        let attention_tasks = self
+            .observer_tasks("", ALERT_LIMIT as i64, locale, true)
+            .await?;
+        for task in attention_tasks {
+            if !tasks.iter().any(|candidate| candidate.id == task.id) {
+                tasks.push(task);
+            }
+        }
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
@@ -536,7 +546,7 @@ impl Neo4jTaskStore {
         task_id: &str,
         locale: &str,
     ) -> anyhow::Result<Option<ObservedTask>> {
-        let mut tasks = self.observer_tasks(task_id, 1, locale).await?;
+        let mut tasks = self.observer_tasks(task_id, 1, locale, false).await?;
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
         self.attach_activity(&mut tasks, locale).await?;
@@ -577,13 +587,22 @@ impl Neo4jTaskStore {
         task_id: &str,
         limit: i64,
         locale: &str,
+        attention_only: bool,
     ) -> anyhow::Result<Vec<ObservedTask>> {
         let mut rows = self
             .graph
             .execute(
                 query(
                     "MATCH (task:Task)
-                     WHERE $task_id = '' OR task.id = $task_id
+                     WHERE ($attention_only = false AND ($task_id = '' OR task.id = $task_id))
+                        OR ($attention_only = true AND (
+                          task.status IN ['FAILED', 'BLOCKED']
+                          OR (
+                            task.status IN ['RUNNING', 'CANCELLING']
+                            AND coalesce(task.updated_at, task.created_at, 0)
+                              < timestamp() - $attention_age
+                          )
+                        ))
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(attempt:Attempt)
                      OPTIONAL MATCH (agent:Agent)-[:EXECUTED]->(attempt)
                      WITH task, attempt, agent
@@ -613,14 +632,25 @@ impl Neo4jTaskStore {
                             ), '\n', ' '), 0, 600)
                               AS latest_error,
                             substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
-                              AS latest_summary
+                              AS latest_summary,
+                            coalesce(task.blocked_reason, '') STARTS WITH 'dependency '
+                              AS dependency_failure
                      ORDER BY
-                       CASE task.status
-                         WHEN 'RUNNING' THEN 0
-                         WHEN 'READY' THEN 1
-                         WHEN 'BLOCKED' THEN 2
-                         WHEN 'CANCELLING' THEN 3
-                         ELSE 4
+                       CASE WHEN $attention_only = true THEN
+                         CASE task.status
+                           WHEN 'FAILED' THEN 0
+                           WHEN 'CANCELLING' THEN 1
+                           WHEN 'RUNNING' THEN 2
+                           ELSE 3
+                         END
+                       ELSE
+                         CASE task.status
+                           WHEN 'RUNNING' THEN 0
+                           WHEN 'READY' THEN 1
+                           WHEN 'BLOCKED' THEN 2
+                           WHEN 'CANCELLING' THEN 3
+                           ELSE 4
+                         END
                        END,
                        CASE WHEN task.status = 'READY' THEN task.priority ELSE 0 END DESC,
                        CASE WHEN task.status = 'READY' THEN task.created_at ELSE 0 END ASC,
@@ -630,7 +660,9 @@ impl Neo4jTaskStore {
                      LIMIT $limit",
                 )
                 .param("task_id", task_id)
-                .param("limit", limit),
+                .param("limit", limit)
+                .param("attention_only", attention_only)
+                .param("attention_age", STALE_ACTIVITY_MS),
             )
             .await?;
         let mut tasks = Vec::new();
@@ -656,6 +688,7 @@ impl Neo4jTaskStore {
                 latest_attempt_completed_at: row.get("latest_attempt_completed_at")?,
                 latest_error: row.get("latest_error")?,
                 latest_summary: row.get("latest_summary")?,
+                dependency_failure: row.get("dependency_failure")?,
                 dependencies: Vec::new(),
                 activity: Vec::new(),
             });
@@ -794,21 +827,16 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
         .iter()
         .filter_map(|task| {
             let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
-                "FAILED"
-                    if task.latest_attempt_started_at <= 0
-                        && task.latest_error.starts_with("dependency ") =>
-                {
-                    (
-                        AlertKind::DependencyFailed,
-                        AlertSeverity::Critical,
-                        task.updated_at,
-                        if russian {
-                            "Задача не запустилась из-за ошибки зависимости"
-                        } else {
-                            "Task could not start because a dependency failed"
-                        },
-                    )
-                }
+                "FAILED" if task.dependency_failure => (
+                    AlertKind::DependencyFailed,
+                    AlertSeverity::Critical,
+                    task.updated_at,
+                    if russian {
+                        "Задача не запустилась из-за ошибки зависимости"
+                    } else {
+                        "Task could not start because a dependency failed"
+                    },
+                ),
                 "FAILED" => (
                     AlertKind::TaskFailed,
                     AlertSeverity::Critical,
@@ -1013,6 +1041,8 @@ mod tests {
         let now = 1_000_000;
         let mut failed = observed_task("dependent", "FAILED", now - 10_000);
         failed.latest_error = "dependency upstream exhausted its retry budget".to_owned();
+        failed.latest_attempt_started_at = now - 20_000;
+        failed.dependency_failure = true;
 
         let alerts = derive_alerts(&[failed], now, "en");
         assert_eq!(alerts[0].kind, AlertKind::DependencyFailed);
@@ -1058,6 +1088,7 @@ mod tests {
             latest_attempt_completed_at: 0,
             latest_error: String::new(),
             latest_summary: String::new(),
+            dependency_failure: false,
             dependencies: Vec::new(),
             activity: Vec::new(),
         }

@@ -57,12 +57,7 @@ export type ObservedDependency = {
 
 export type ObservedActivity = {
   id: string;
-  kind:
-    | 'task-failed'
-    | 'dependency-failed'
-    | 'dependency-blocked'
-    | 'activity-stale'
-    | 'cancellation-stuck';
+  kind: string;
   message: string;
   detail: string;
   created_at: number;
@@ -72,7 +67,12 @@ export type ObservedActivity = {
 
 export type ObservedAlert = {
   id: string;
-  kind: string;
+  kind:
+    | 'task-failed'
+    | 'dependency-failed'
+    | 'dependency-blocked'
+    | 'activity-stale'
+    | 'cancellation-stuck';
   severity: 'critical' | 'warning';
   task_id: string;
   first_observed_at: number;
