@@ -115,7 +115,8 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 FROM clippy-dependencies AS check-source
 COPY lace/src lace/src
 COPY hive/src hive/src
-RUN find lace/src hive/src -type f -exec touch {} +
+COPY hive/tests hive/tests
+RUN find lace/src hive/src hive/tests -type f -exec touch {} +
 
 FROM check-source AS check
 RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
@@ -130,12 +131,14 @@ COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 COPY lace/src lace/src
 COPY hive/src hive/src
+COPY hive/tests hive/tests
 RUN cargo fmt --all
 
 FROM test-dependencies AS test-source
 COPY lace/src lace/src
 COPY hive/src hive/src
-RUN find lace/src hive/src -type f -exec touch {} +
+COPY hive/tests hive/tests
+RUN find lace/src hive/src hive/tests -type f -exec touch {} +
 
 FROM test-source AS test-compile
 

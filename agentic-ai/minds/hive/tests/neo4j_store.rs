@@ -1,13 +1,9 @@
 use std::env;
 
-use neo4rs::{Error as Neo4jDriverError, query};
+use hive::model::{AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskId};
+use hive::{Neo4jTaskStore, TaskStore};
+use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
-
-use super::{
-    CLAIM_RETRY_LIMIT, Neo4jTaskStore, is_transient_claim_error, transient_claim_retry_delay,
-};
-use crate::model::{AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask, TaskId};
-use crate::store::TaskStore;
 
 fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     EnqueueTask {
@@ -21,23 +17,6 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     }
 }
 
-#[test]
-fn retries_transient_pull_failures_from_the_neo4j_driver() {
-    let transient = anyhow::Error::new(Neo4jDriverError::UnexpectedMessage(
-        "unexpected response for PULL: Neo.TransientError.Transaction.DeadlockDetected".to_owned(),
-    ));
-    let permanent = anyhow::Error::new(Neo4jDriverError::UnexpectedMessage(
-        "unexpected response for PULL: Neo.ClientError.Statement.SyntaxError".to_owned(),
-    ));
-
-    assert!(is_transient_claim_error(&transient));
-    assert!(!is_transient_claim_error(&permanent));
-    assert!(transient_claim_retry_delay(0, &transient).is_some());
-    assert!(transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 2, &transient).is_some());
-    assert!(transient_claim_retry_delay(CLAIM_RETRY_LIMIT - 1, &transient).is_none());
-    assert!(transient_claim_retry_delay(0, &permanent).is_none());
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn production_store_enforces_claims_dependencies_and_stale_leases() -> anyhow::Result<()> {
     let Ok(uri) = env::var("HIVE_NEO4J_TEST_URI") else {
@@ -47,10 +26,16 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let password = env::var("HIVE_NEO4J_TEST_PASSWORD")?;
     let store = Neo4jTaskStore::connect(&uri, &username, &password).await?;
     store.migrate().await?;
-    store
-        .graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await?;
+    let graph = Graph::connect(
+        ConfigBuilder::default()
+            .uri(&uri)
+            .user(&username)
+            .password(&password)
+            .db("neo4j")
+            .build()?,
+    )
+    .await?;
+    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
 
     let suffix = Uuid::new_v4().simple().to_string();
     let dependency = task(format!("dependency-{suffix}"), Vec::new());
@@ -114,8 +99,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("complete dependency")
     );
-    let mut artifact_rows = store
-        .graph
+    let mut artifact_rows = graph
         .execute(
             query(
                 "MATCH (:Attempt {id: $attempt_id})-[:PRODUCED]->(artifact:Artifact)
@@ -158,8 +142,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "a dependent task must receive the completed dependency patch"
     );
 
-    store
-        .graph
+    graph
         .run(
             query(
                 "MATCH (task:Task {id: $id})
@@ -305,8 +288,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .expect("complete diamond")
     );
 
-    let mut rows = store
-        .graph
+    let mut rows = graph
         .execute(
             query(
                 "MATCH (attempt:Attempt)-[:FOR_TASK]->(task:Task {id: $id})
@@ -355,8 +337,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("complete released task")
     );
-    let mut rollout_rows = store
-        .graph
+    let mut rollout_rows = graph
         .execute(
             query(
                 "MATCH (attempt:Attempt)-[:FOR_TASK]->(task:Task {id: $id})
@@ -582,8 +563,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("fail exhausted task")
     );
-    let mut failed_rows = store
-        .graph
+    let mut failed_rows = graph
         .execute(
             query(
                 "MATCH (task:Task)
@@ -786,8 +766,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("bind exhausted blocker")
     );
-    let mut reused_failed_rows = store
-        .graph
+    let mut reused_failed_rows = graph
         .execute(
             query(
                 "MATCH (task:Task {id: $id})
@@ -866,8 +845,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .expect("claim expired blocker parent")
         .into_claimed()
         .expect("expired blocker parent available");
-    store
-        .graph
+    graph
         .run(
             query(
                 "MATCH (task:Task {id: $id})
@@ -888,8 +866,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("reject blocker after lease expiry")
     );
-    store
-        .graph
+    graph
         .run(
             query(
                 "MATCH (task:Task {id: $id})
@@ -924,8 +901,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .into_claimed()
         .expect("final-lease task available");
     assert_eq!(lease_claim.id, lease_exhausted.id);
-    store
-        .graph
+    graph
         .run(
             query(
                 "MATCH (task:Task {id: $id})
@@ -942,8 +918,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .expect("final lease expiry transition")
             .is_idle()
     );
-    let mut lease_failed_rows = store
-        .graph
+    let mut lease_failed_rows = graph
         .execute(
             query(
                 "MATCH (task:Task)
@@ -1007,8 +982,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let current_claim = store.claim(&agent_b, 300).await?.into_claimed()?;
     assert!(store.cancel(&forced.id, "superseded").await?);
     assert!(store.finalize_cancellation(&forced.id).await?);
-    let mut forced_rows = store
-        .graph
+    let mut forced_rows = graph
         .execute(
             query(
                 "MATCH (task:Task {id: $id})<-[:FOR_TASK]-(attempt:Attempt)
@@ -1034,13 +1008,11 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await?
     );
 
-    store
-        .graph
+    graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
         .expect("clean isolated integration database");
-    store
-        .graph
+    graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 1})
              CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
@@ -1055,13 +1027,11 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .to_string()
             .contains("without source_commit")
     );
-    store
-        .graph
+    graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
         .expect("clean schema migration fixture");
-    store
-        .graph
+    graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 3})
              CREATE (:Task {
@@ -1082,8 +1052,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .await
         .expect("create schema-3 fixture");
     store.migrate().await.expect("migrate schema 3 to schema 5");
-    let mut schema_five_rows = store
-        .graph
+    let mut schema_five_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-3-task'})
              MATCH (migration:HiveSchemaMigration {version: 5})
@@ -1113,8 +1082,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         schema_five.get::<i64>("version").expect("schema-5 version"),
         5
     );
-    let mut rollback_marker_rows = store
-        .graph
+    let mut rollback_marker_rows = graph
         .execute(query(
             "MATCH (task:Task {id: 'schema-4-rollback-task'})
              RETURN task.last_retry_release AS last_retry_release",
@@ -1131,8 +1099,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .expect("retained schema-4 rollback marker"),
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     );
-    store
-        .graph
+    graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
         .expect("clean schema-4 migration fixture");

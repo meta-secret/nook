@@ -1,18 +1,18 @@
-use std::time::Duration;
-
 use anyhow::Context;
 use async_trait::async_trait;
-use neo4rs::{ConfigBuilder, Error as Neo4jDriverError, Graph, Neo4jErrorKind, Row, query};
-use rand::RngExt;
+use neo4rs::{ConfigBuilder, Graph, Row, query};
 use serde::Serialize;
 use uuid::Uuid;
 
+use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
 use crate::install_rustls_crypto_provider;
 use crate::model::{
     AgentId, Artifact, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
     CompletionArtifact, DependencyResult, EnqueueTask, LeaseToken, TaskId,
 };
 use crate::store::TaskStore;
+
+mod claim_retry;
 
 const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_task_id IF NOT EXISTS FOR (node:Task) REQUIRE node.id IS UNIQUE",
@@ -22,29 +22,6 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
 ];
 const LATEST_SCHEMA_VERSION: i64 = 5;
-const CLAIM_RETRY_LIMIT: usize = 5;
-
-fn is_transient_claim_error(error: &anyhow::Error) -> bool {
-    error.chain().any(|cause| {
-        cause
-            .downcast_ref::<Neo4jDriverError>()
-            .is_some_and(|driver_error| match driver_error {
-                Neo4jDriverError::Neo4j(neo4j_error) => {
-                    neo4j_error.kind() == Neo4jErrorKind::Transient
-                }
-                Neo4jDriverError::UnexpectedMessage(message) => {
-                    message.contains("Neo.TransientError.")
-                }
-                _ => false,
-            })
-    })
-}
-
-fn transient_claim_retry_delay(retry: usize, error: &anyhow::Error) -> Option<Duration> {
-    (retry + 1 < CLAIM_RETRY_LIMIT && is_transient_claim_error(error))
-        .then(|| Duration::from_millis(rand::rng().random_range(20..=80)))
-}
-
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     graph: Graph,
@@ -1081,7 +1058,3 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 }
-
-#[cfg(test)]
-#[path = "neo4j_tests.rs"]
-mod tests;
