@@ -15,11 +15,12 @@ import {
   safeSavedOptionNumber,
 } from '../lib/auth-widget-policy'
 import type { WebsiteAuthenticatorOption } from '../lib/login-fill-messages'
-import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
-import type {
-  AuthenticationOutcomeObservationView,
-  AuthenticationOutcomeVerdictView,
-} from '../lib/outcome-evidence-messages'
+import {
+  beginEnrollmentEvidenceWatch,
+  enrollmentEvidenceWatchActive,
+  fillStagedEnrollmentCode,
+  stopPendingEnrollmentWatch,
+} from './enrollment-outcome'
 
 export type EnrollmentPageHints = {
   qr: boolean
@@ -72,12 +73,6 @@ type EnrollStageResponse = {
   reason?: string
 }
 
-type EnrollCodeResponse = {
-  ok?: boolean
-  code?: string
-  reason?: string
-}
-
 type EnrollConfirmResponse = {
   ok?: boolean
   secretId?: string
@@ -89,131 +84,8 @@ type BackupAttachResponse = {
   reason?: string
 }
 
-// Multi-step QR → verify → success under CI load regularly exceeds 12s.
-const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 30_000
-const ENROLLMENT_EVIDENCE_POLL_MS = 250
-
-let pendingEnrollmentWatch:
-  | {
-      stageId: string
-      vaultStoreId: string
-      startedAt: number
-      authPath: string
-      sawMutation: boolean
-      timer?: number
-      observer?: MutationObserver
-      host: EnrollmentFlowHost
-      section: HTMLElement
-    }
-  | undefined
-
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
 let holdEnrollmentWidgetAfterSave = false
-
-function stopPendingEnrollmentWatch(): void {
-  if (!pendingEnrollmentWatch) return
-  if (pendingEnrollmentWatch.timer !== undefined) {
-    window.clearInterval(pendingEnrollmentWatch.timer)
-  }
-  pendingEnrollmentWatch.observer?.disconnect()
-  pendingEnrollmentWatch = undefined
-}
-
-function pageLooksLikeAuthPath(pathname: string): boolean {
-  return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify|enroll)(?:\/|$)/i.test(
-    pathname,
-  )
-}
-
-function isDisplayedOutcomeMarker(element: Element): boolean {
-  if (!(element instanceof HTMLElement)) return false
-  if (element.hidden || element.getAttribute('aria-hidden') === 'true') {
-    return false
-  }
-  const style = window.getComputedStyle(element)
-  if (
-    style.display === 'none' ||
-    style.visibility === 'hidden' ||
-    style.opacity === '0'
-  ) {
-    return false
-  }
-  const rect = element.getBoundingClientRect()
-  return rect.width > 0 && rect.height > 0
-}
-
-function queryDisplayedOutcomeMarker(selector: string): Element | undefined {
-  return Array.from(document.querySelectorAll(selector)).find(
-    isDisplayedOutcomeMarker,
-  )
-}
-
-function collectEnrollmentOutcomeObservation(
-  startedAt: number,
-  authPath: string,
-  sawMutation: boolean,
-): AuthenticationOutcomeObservationView {
-  // Only count markers that are actually shown. Soft SPA demos keep a hidden
-  // success node in the document; treating that as present commits too early
-  // and the ceremony UI then overwrites the saved confirmation.
-  const successMarkerPresent = Boolean(
-    queryDisplayedOutcomeMarker(
-      '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-    ),
-  )
-  // Prefer explicit auth-error markers. Bare [role="alert"] is too broad during
-  // SPA route swaps and unrelated live regions, and can false-conflict with success.
-  const errorMarkerPresent = Boolean(
-    queryDisplayedOutcomeMarker(
-      '[data-nook-auth-outcome="error"], .error[role="alert"]',
-    ),
-  )
-  return {
-    navigatedAwayFromAuthPath:
-      location.pathname !== authPath ||
-      !pageLooksLikeAuthPath(location.pathname),
-    authFieldsPresent: Boolean(
-      document.querySelector(
-        'input[autocomplete~="one-time-code" i], input[type="password"], input[type="email"]',
-      ),
-    ),
-    successMarkerPresent,
-    errorMarkerPresent,
-    sameDocumentMutation: sawMutation,
-    inIframe: window !== window.top,
-    elapsedMs: Math.max(0, Date.now() - startedAt),
-  }
-}
-
-async function classifyEnrollmentOutcome(
-  host: EnrollmentFlowHost,
-  observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeVerdictView | undefined> {
-  const response = await host.sendRuntimeMessage<{
-    ok?: boolean
-    verdict?: AuthenticationOutcomeVerdictView
-  }>({
-    type: 'nook:authentication-outcome-classify',
-    payload: {
-      observation,
-      timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
-    },
-  })
-  if (!response?.ok || !response.verdict) return undefined
-  return response.verdict
-}
-
-async function fillStagedEnrollmentCode(
-  host: EnrollmentFlowHost,
-  stageId: string,
-): Promise<boolean> {
-  const response = await host.sendRuntimeMessage<EnrollCodeResponse>({
-    type: 'nook:website-authenticator-enroll-code',
-    payload: { origin: location.origin, stageId },
-  })
-  if (!response?.ok || typeof response.code !== 'string') return false
-  return fillOneTimeCode(response.code)
-}
 
 async function commitStagedEnrollment(
   host: EnrollmentFlowHost,
@@ -248,116 +120,31 @@ async function commitStagedEnrollment(
   section.replaceChildren()
 }
 
-async function evaluatePendingEnrollmentEvidence(): Promise<void> {
-  const watch = pendingEnrollmentWatch
-  if (!watch || watch.stageId === 'pending') return
-  const observation = collectEnrollmentOutcomeObservation(
-    watch.startedAt,
-    watch.authPath,
-    watch.sawMutation,
-  )
-
-  // Happy path: commit on clear success without a service-worker roundtrip.
-  // Under CI load, classify messaging can briefly fail while the success DOM
-  // is already stable; also avoids SPA flashes where an old alert conflicts.
-  if (observation.successMarkerPresent && !observation.errorMarkerPresent) {
-    if (pendingEnrollmentWatch?.stageId !== watch.stageId) return
-    stopPendingEnrollmentWatch()
-    await commitStagedEnrollment(
-      watch.host,
-      watch.section,
-      watch.stageId,
-      watch.vaultStoreId,
-    )
-    return
-  }
-
-  // Both markers can coexist for one frame during soft SPA navigation. Keep
-  // watching until the DOM settles instead of dismissing the staged secret.
-  if (observation.successMarkerPresent && observation.errorMarkerPresent) {
-    return
-  }
-
-  const verdict = await classifyEnrollmentOutcome(watch.host, observation)
-  if (!verdict || pendingEnrollmentWatch?.stageId !== watch.stageId) return
-
-  if (verdict.allowsCredentialCommit) {
-    stopPendingEnrollmentWatch()
-    await commitStagedEnrollment(
-      watch.host,
-      watch.section,
-      watch.stageId,
-      watch.vaultStoreId,
-    )
-    return
-  }
-
-  if (
-    verdict.name === 'conflicting' ||
-    (verdict.name === 'insufficient' && observation.errorMarkerPresent)
-  ) {
-    stopPendingEnrollmentWatch()
-    void watch.host.sendRuntimeMessage({
-      type: 'nook:website-authenticator-enroll-dismiss',
-      payload: { origin: location.origin, stageId: watch.stageId },
-    })
-    setHostDescription(
-      watch.host,
-      watch.host.translatedMessage('widgetEnrollFailed'),
-    )
-    watch.host.setBusy(false)
-    renderEnrollmentActions(watch.host, detectEnrollmentHints())
-    return
-  }
-
-  if (verdict.name === 'timeout') {
-    // Keep the staged secret; ask the user to finish verification or cancel.
-    setHostDescription(
-      watch.host,
-      watch.host.translatedMessage('widgetEnrollVerifyPending'),
-    )
-  }
-}
-
-function beginEnrollmentEvidenceWatch(
+function enrollmentEvidenceCallbacks(
   host: EnrollmentFlowHost,
   section: HTMLElement,
   stageId: string,
   vaultStoreId: string,
-): void {
-  stopPendingEnrollmentWatch()
-  const startedAt = Date.now()
-  const authPath = location.pathname
-  const watch: NonNullable<typeof pendingEnrollmentWatch> = {
-    stageId,
-    vaultStoreId,
-    startedAt,
-    authPath,
-    sawMutation: false,
-    host,
-    section,
+) {
+  return {
+    commit: () => commitStagedEnrollment(host, section, stageId, vaultStoreId),
+    reject: () => {
+      void host.sendRuntimeMessage({
+        type: 'nook:website-authenticator-enroll-dismiss',
+        payload: { origin: location.origin, stageId },
+      })
+      setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+      host.setBusy(false)
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+    timeout: () => {
+      // Keep the staged secret; ask the user to finish verification or cancel.
+      setHostDescription(
+        host,
+        host.translatedMessage('widgetEnrollVerifyPending'),
+      )
+    },
   }
-  watch.observer = new MutationObserver(() => {
-    if (!pendingEnrollmentWatch) return
-    pendingEnrollmentWatch.sawMutation = true
-    if (stageId !== 'pending') {
-      void fillStagedEnrollmentCode(host, stageId)
-    }
-    void evaluatePendingEnrollmentEvidence()
-  })
-  watch.observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-  })
-  watch.timer = window.setInterval(() => {
-    if (stageId !== 'pending') {
-      void fillStagedEnrollmentCode(host, stageId)
-    }
-    void evaluatePendingEnrollmentEvidence()
-  }, ENROLLMENT_EVIDENCE_POLL_MS)
-  pendingEnrollmentWatch = watch
-  void evaluatePendingEnrollmentEvidence()
 }
 
 async function beginEnrollmentCeremony(
@@ -370,7 +157,11 @@ async function beginEnrollmentCeremony(
   holdEnrollmentWidgetAfterSave = false
   setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
   // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
-  beginEnrollmentEvidenceWatch(host, section, 'pending', vaultStoreId)
+  beginEnrollmentEvidenceWatch(
+    host,
+    'pending',
+    enrollmentEvidenceCallbacks(host, section, 'pending', vaultStoreId),
+  )
   const stageResponse = await host.sendRuntimeMessage<EnrollStageResponse>({
     type: 'nook:website-authenticator-enroll-stage',
     payload: {
@@ -391,9 +182,13 @@ async function beginEnrollmentCeremony(
   // Replace the temporary pending watch with the real stage id.
   beginEnrollmentEvidenceWatch(
     host,
-    section,
     stageResponse.stageId,
-    vaultStoreId,
+    enrollmentEvidenceCallbacks(
+      host,
+      section,
+      stageResponse.stageId,
+      vaultStoreId,
+    ),
   )
 
   const filled = await fillStagedEnrollmentCode(host, stageResponse.stageId)
@@ -1018,7 +813,7 @@ async function startBackupEnrollment(
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return pendingEnrollmentWatch !== undefined || holdEnrollmentWidgetAfterSave
+  return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
 }
 
 export function releaseEnrollmentWidgetHold(): void {
@@ -1029,7 +824,7 @@ export function renderEnrollmentActions(
   host: EnrollmentFlowHost,
   hints: EnrollmentPageHints,
 ): void {
-  if (pendingEnrollmentWatch !== undefined) return
+  if (enrollmentEvidenceWatchActive()) return
   if (!hints.qr && !hints.backupCodes) {
     clearEnrollmentSection(host.panel)
     return

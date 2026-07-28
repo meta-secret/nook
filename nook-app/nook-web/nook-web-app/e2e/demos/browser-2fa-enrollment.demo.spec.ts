@@ -31,7 +31,10 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  await page.goto('/')
+  // Keep the demo page independent from the Nook app lifecycle while retaining
+  // a real web origin for the enrollment binding. Loading `/` starts the
+  // Svelte application, whose async bootstrap can race with `setContent()`.
+  await page.goto('/terms.html')
   await page.setContent(`<!doctype html>
     <html>
       <head>
@@ -143,6 +146,11 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   await expect(page.locator('input[name="Code"]')).toHaveValue('482913', {
     timeout: 15_000,
   })
+  await expect(
+    widget.getByText(
+      'Verification code filled. Submit on the site — Nook saves only after verified success.',
+    ),
+  ).toBeVisible()
   await demoBeat(page)
 
   await page.getByRole('button', { name: 'Verify' }).click()
