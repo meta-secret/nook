@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
+};
 
 fn restore_secret_search_catalog(
     buckets: Vec<(u8, String)>,
