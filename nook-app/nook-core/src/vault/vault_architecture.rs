@@ -9,7 +9,6 @@ use crate::errors::{ValidationError, ValidationResult};
 use crate::{StoredSecretRecord, is_sentinel_share_stored_record};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use std::collections::BTreeSet;
-use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod provider_replication;
