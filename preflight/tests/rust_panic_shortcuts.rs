@@ -7,12 +7,17 @@ use syn::visit::Visit;
 use syn::{Attribute, ExprMethodCall, ItemFn, ItemMod, ItemUse, Macro, UseTree};
 
 fn repository_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map_or_else(
-            || PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-            Path::to_path_buf,
-        )
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .map_or_else(
+                    || PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+                    Path::to_path_buf,
+                )
+        },
+        PathBuf::from,
+    )
 }
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
