@@ -102,7 +102,7 @@
       entryId: PasswordEntryId,
       password: string,
       providerId: string,
-    ) => Promise<string | void>
+    ) => Promise<string>
     onClearCode: () => void
     onAddPassword: (label: string, password: string) => void | Promise<void>
     onBeginAddProvider?: () => void

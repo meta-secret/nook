@@ -99,7 +99,7 @@ async function chooseFirstOnboardPassword(page: Page) {
 async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
   await flushNookLogPersistQueue(page)
   const entries = await readPersistedAppLogs(page, 1000)
-  const serialized = JSON.stringify(entries ?? [])
+  const serialized = JSON.stringify(entries)
   for (const value of sensitiveValues) {
     expect(serialized).not.toContain(value)
   }

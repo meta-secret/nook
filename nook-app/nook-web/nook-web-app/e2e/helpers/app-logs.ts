@@ -47,7 +47,7 @@ export /** Read persisted app log entries when the runtime hook is available. */
 async function readNookLogEntries(
   page: Page,
   limit: number,
-): Promise<NookLogEntry[] | void> {
+): Promise<NookLogEntry[]> {
   return page.evaluate(async (lim) => {
     const log = (
       window as Window & {
@@ -64,7 +64,7 @@ async function readNookLogEntries(
         }
       }
     ).__nookLog
-    if (!log) return
+    if (!log) throw new Error('__nookLog is not available on the page')
     return log.dump({ limit: lim })
   }, limit)
 }
@@ -72,7 +72,7 @@ async function readNookLogEntries(
 export async function readNookLogSnapshot(
   page: Page,
   options?: { minLevel?: string; limit?: number; offset?: number },
-): Promise<AppLogsResponse | void> {
+): Promise<AppLogsResponse> {
   const query = {
     schema: APP_LOGS_SCHEMA,
     minLevel: options?.minLevel ?? 'trace',
@@ -102,7 +102,7 @@ export async function readNookLogSnapshot(
         }
       }
     ).__nookLog
-    if (!log) return
+    if (!log) throw new Error('__nookLog is not available on the page')
     await log.flush()
     const [total, entries] = await Promise.all([
       log.count(),
@@ -171,7 +171,7 @@ export async function fetchAppLogs(
 export async function readPersistedAppLogs(
   page: Page,
   limit = 500,
-): Promise<NookLogEntry[] | void> {
+): Promise<NookLogEntry[]> {
   return readNookLogEntries(page, limit)
 }
 
@@ -208,10 +208,11 @@ export async function waitForPersistedAppLog(
       async () => {
         await flushNookLogPersistQueue(page)
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
-        const found = findAppLogEntry(entries ?? [], filter)
-        searchState = !found
-          ? { kind: LogSearchStateKind.Searching }
-          : { kind: LogSearchStateKind.Matched, entry: found }
+        const found = findAppLogEntry(entries, filter)
+        searchState =
+          found.kind === AppLogEntryLookupKind.Missing
+            ? { kind: LogSearchStateKind.Searching }
+            : { kind: LogSearchStateKind.Matched, entry: found.entry }
         return searchState.kind === LogSearchStateKind.Matched
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
@@ -238,8 +239,7 @@ export async function expectAppLogMilestones(
     .poll(
       async () => {
         await flushNookLogPersistQueue(page)
-        lastEntries =
-          (await readNookLogEntries(page, options?.limit ?? 500)) ?? []
+        lastEntries = await readNookLogEntries(page, options?.limit ?? 500)
         return appLogMilestonesAreInOrder(lastEntries, milestones)
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
@@ -252,6 +252,15 @@ export async function expectAppLogMilestones(
   ).toBe(true)
 }
 
+export enum AppLogEntryLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type AppLogEntryLookup =
+  | { kind: AppLogEntryLookupKind.Missing }
+  | { kind: AppLogEntryLookupKind.Found; entry: NookLogEntry }
+
 export function findAppLogEntry(
   entries: NookLogEntry[],
   filter: {
@@ -259,8 +268,8 @@ export function findAppLogEntry(
     level?: string
     messageIncludes?: string
   },
-): NookLogEntry | void {
-  return entries.find((entry) => {
+): AppLogEntryLookup {
+  const entry = entries.find((entry) => {
     if (filter.scope && entry.scope !== filter.scope) return false
     if (filter.level && entry.level !== filter.level) return false
     if (
@@ -271,6 +280,9 @@ export function findAppLogEntry(
     }
     return true
   })
+  return entry
+    ? { kind: AppLogEntryLookupKind.Found, entry }
+    : { kind: AppLogEntryLookupKind.Missing }
 }
 
 export function appLogEntryMatches(
@@ -320,15 +332,15 @@ export function expectAppLogEntry(
     messageIncludes?: string
   },
 ): NookLogEntry {
-  const entry = findAppLogEntry(entries, filter)
-  if (!entry) {
+  const lookup = findAppLogEntry(entries, filter)
+  if (lookup.kind === AppLogEntryLookupKind.Missing) {
     throw new Error(
       `expected app log matching ${JSON.stringify(filter)}; got scopes: ${[
         ...new Set(entries.map((e) => e.scope)),
       ].join(', ')}`,
     )
   }
-  return entry
+  return lookup.entry
 }
 
 export function parseLogsPageStoredCount(text: unknown): number {
@@ -380,10 +392,6 @@ export async function dumpNookLogs(
 ) {
   try {
     const entries = await readNookLogEntries(page, options?.limit ?? 200)
-    if (!entries) {
-      console.warn(`[${label}] __nookLog is not available on the page`)
-      return
-    }
     printNookLogEntries(label, entries)
   } catch (error) {
     console.warn(
@@ -410,7 +418,6 @@ export async function attachNookLogsForTest(
       limit: APP_LOGS_ATTACHMENT_LIMIT,
       offset: 0,
     })
-    if (!payload) return
     if (options?.print && payload.entries.length > 0) {
       printNookLogEntries(
         `nook-logs] [${testInfo.title}`,

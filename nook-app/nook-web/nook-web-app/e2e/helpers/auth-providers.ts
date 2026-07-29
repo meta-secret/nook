@@ -41,10 +41,14 @@ export async function appendAuthProviders(
           getRequest.onerror = () =>
             reject(getRequest.error ?? new Error('idb read failed'))
           getRequest.onsuccess = () => {
-            const snapshot = (getRequest.result as {
-              providers: SeededAuthProvider[]
-              activeVaultStoreId?: string
-            } | void) ?? { providers: [] }
+            const rawSnapshot = getRequest.result as unknown
+            const snapshot =
+              rawSnapshot && typeof rawSnapshot === 'object'
+                ? (rawSnapshot as {
+                    providers: SeededAuthProvider[]
+                    activeVaultStoreId?: string
+                  })
+                : { providers: [] }
             const activeStoreId =
               snapshot.activeVaultStoreId?.trim() || fallbackStoreId
             snapshot.providers.push(
@@ -126,11 +130,15 @@ export async function waitForAuthProviderIds(
           const getRequest = tx.objectStore('auth').get('providers')
           getRequest.onerror = () => resolve(false)
           getRequest.onsuccess = () => {
-            const snapshot = getRequest.result as {
-              providers?: Array<{ id: string }>
-            } | void
+            const rawSnapshot = getRequest.result as unknown
+            const snapshot =
+              rawSnapshot && typeof rawSnapshot === 'object'
+                ? (rawSnapshot as {
+                    providers?: Array<{ id: string }>
+                  })
+                : { providers: [] }
             const storedIds = new Set(
-              snapshot?.providers?.map((provider) => provider.id) ?? [],
+              snapshot.providers?.map((provider) => provider.id) ?? [],
             )
             resolve(ids.every((id) => storedIds.has(id)))
           }
@@ -236,10 +244,11 @@ export async function readRawAuthProvidersFromIdb(
         getReq.onerror = () =>
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
+          const rawSnapshot = getReq.result as unknown
           resolve(
-            (getReq.result as RawAuthProvidersSnapshot | void) ?? {
-              providers: [],
-            },
+            rawSnapshot && typeof rawSnapshot === 'object'
+              ? (rawSnapshot as RawAuthProvidersSnapshot)
+              : { providers: [] },
           )
         }
         tx.oncomplete = () => db.close()
@@ -309,10 +318,7 @@ export async function saveAuthProvidersInBrowser(
   }, snapshot)
 }
 
-export function expectSealedCredential(
-  stored: string | void,
-  plaintext: string,
-) {
+export function expectSealedCredential(stored: unknown, plaintext: string) {
   expect(stored).toBeTypeOf('string')
   if (typeof stored !== 'string') {
     throw new Error('expected a persisted sealed credential')

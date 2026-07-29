@@ -5,6 +5,18 @@ export type DynamicMockAuthAccount = {
   password: string
 }
 
+export enum DynamicMockAuthAccountLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type DynamicMockAuthAccountLookup =
+  | { kind: DynamicMockAuthAccountLookupKind.Missing }
+  | {
+      kind: DynamicMockAuthAccountLookupKind.Found
+      account: DynamicMockAuthAccount
+    }
+
 const STORAGE_KEY = 'nook-mock-auth-dynamic-accounts'
 
 function readAccounts(): DynamicMockAuthAccount[] {
@@ -42,8 +54,11 @@ export function registerDynamicMockAuthAccount(
 export function findDynamicMockAuthAccount(
   username: string,
   password: string,
-): DynamicMockAuthAccount | void {
-  return readAccounts().find(
+): DynamicMockAuthAccountLookup {
+  const account = readAccounts().find(
     (account) => account.username === username && account.password === password,
   )
+  return account
+    ? { kind: DynamicMockAuthAccountLookupKind.Found, account }
+    : { kind: DynamicMockAuthAccountLookupKind.Missing }
 }

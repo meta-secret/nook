@@ -7,6 +7,7 @@
   import {
     getSiteFixture,
     getTemplateFixture,
+    SiteFixtureLookupKind,
     type SiteFixtureField,
   } from '../lib/site-fixtures'
 
@@ -26,17 +27,17 @@
       ? getTemplateFixture(templateId)
       : siteId
         ? getSiteFixture(siteId)
-        : false
-    if (!selectedFixture) {
+        : { kind: SiteFixtureLookupKind.Missing }
+    if (selectedFixture.kind === SiteFixtureLookupKind.Missing) {
       return { kind: DetectionFixtureRenderKind.Missing }
     }
-    const selectedStep = selectedFixture.steps.find(
+    const selectedStep = selectedFixture.fixture.steps.find(
       (_candidate, index) => index === stepIndex,
     )
     return selectedStep
       ? {
           kind: DetectionFixtureRenderKind.Ready,
-          fixture: selectedFixture,
+          fixture: selectedFixture.fixture,
           step: selectedStep,
         }
       : { kind: DetectionFixtureRenderKind.Missing }

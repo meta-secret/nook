@@ -186,14 +186,24 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   }
 }
 
-function eventSecretToStored(
-  secret?: EventSecretRecord,
-): StoredSecretRecord | void {
-  if (!secret?.id) return
+enum EventSecretParseKind {
+  Invalid = 'invalid',
+  Valid = 'valid',
+}
+
+type EventSecretParse =
+  | { kind: EventSecretParseKind.Invalid }
+  | { kind: EventSecretParseKind.Valid; secret: StoredSecretRecord }
+
+function eventSecretToStored(secret?: EventSecretRecord): EventSecretParse {
+  if (!secret?.id) return { kind: EventSecretParseKind.Invalid }
   return {
-    id: secret.id,
-    type: secret.type ?? StoredSecretRecordType.ApiKey,
-    data: secret.ciphertext ?? '',
+    kind: EventSecretParseKind.Valid,
+    secret: {
+      id: secret.id,
+      type: secret.type ?? StoredSecretRecordType.ApiKey,
+      data: secret.ciphertext ?? '',
+    },
   }
 }
 
@@ -231,7 +241,9 @@ export function parseVaultEventLogSnapshot(
         case 'vault-imported':
           for (const secret of operation.secrets ?? []) {
             const stored = eventSecretToStored(secret)
-            if (stored) secrets.set(stored.id, stored)
+            if (stored.kind === EventSecretParseKind.Valid) {
+              secrets.set(stored.secret.id, stored.secret)
+            }
           }
           passwordEntries.clear()
           for (const entry of operation.password_entries ?? []) {
@@ -241,12 +253,16 @@ export function parseVaultEventLogSnapshot(
         case 'epoch-checkpoint':
           for (const secret of operation.secrets ?? []) {
             const stored = eventSecretToStored(secret)
-            if (stored) secrets.set(stored.id, stored)
+            if (stored.kind === EventSecretParseKind.Valid) {
+              secrets.set(stored.secret.id, stored.secret)
+            }
           }
           break
         case 'secret-created': {
           const stored = eventSecretToStored(operation.secret)
-          if (stored) secrets.set(stored.id, stored)
+          if (stored.kind === EventSecretParseKind.Valid) {
+            secrets.set(stored.secret.id, stored.secret)
+          }
           break
         }
         case 'secret-deleted':

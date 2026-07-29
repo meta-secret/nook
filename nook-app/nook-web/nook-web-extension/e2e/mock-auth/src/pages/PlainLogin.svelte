@@ -4,6 +4,7 @@
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
   import {
     credentialsFromLoginSubmit,
+    LoginSubmissionKind,
     resetLoginSubmission,
   } from '../lib/login-form'
   import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
@@ -19,7 +20,7 @@
   function onsubmit(event: SubmitEvent) {
     const credentials = credentialsFromLoginSubmit(event)
     if (
-      credentials &&
+      credentials.kind === LoginSubmissionKind.Credentials &&
       completePlainLogin(credentials.username, credentials.password) ===
         PlainLoginResult.Invalid
     ) {

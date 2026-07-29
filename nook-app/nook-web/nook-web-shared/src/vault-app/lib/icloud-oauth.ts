@@ -38,6 +38,7 @@ import {
   sanitizedURLDiagnostics,
   storeCloudKitWebAuthToken,
   tokenDiagnostics,
+  WebAuthTokenLookupKind,
   webAuthTokenListeners,
   webAuthTokenStorageDiagnostics,
   type CloudKitAuthChallenge,
@@ -45,6 +46,7 @@ import {
   type CloudKitRecordInfo,
   type CloudKitRecordInfosResponse,
   type CloudKitUserIdentity,
+  type WebAuthTokenLookup,
 } from '$lib/icloud-cloudkit-runtime'
 import {
   cloudKitAuthErrorDetails,
@@ -123,7 +125,7 @@ export function isICloudOAuthConfigured(): boolean {
   )
 }
 
-function readWebAuthTokenFromCookie(): string | void {
+function readWebAuthTokenFromCookie(): WebAuthTokenLookup {
   for (const part of document.cookie.split(';')) {
     const trimmed = part.trim()
     if (!trimmed.startsWith('ckWebAuthToken')) {
@@ -138,22 +140,25 @@ function readWebAuthTokenFromCookie(): string | void {
       const token = decodeURIComponent(value)
       log.info('CloudKit web auth token found in cookie', {
         cookieName: trimmed.slice(0, eq),
-        token: tokenDiagnostics(token),
+        token: tokenDiagnostics({
+          kind: WebAuthTokenLookupKind.Available,
+          token,
+        }),
       })
-      return token
+      return { kind: WebAuthTokenLookupKind.Available, token }
     }
   }
-  return
+  return { kind: WebAuthTokenLookupKind.Unavailable }
 }
 
-function readStoredWebAuthToken(): string | void {
+function readStoredWebAuthToken(): WebAuthTokenLookup {
   const fromCookie = readWebAuthTokenFromCookie()
-  if (fromCookie) {
+  if (fromCookie.kind === WebAuthTokenLookupKind.Available) {
     return fromCookie
   }
   const stored = cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID)
   const token = normalizeWebAuthToken(stored)
-  if (token) {
+  if (token.kind === WebAuthTokenLookupKind.Available) {
     log.info('CloudKit web auth token found in session storage', {
       storedType: typeof stored,
       token: tokenDiagnostics(token),
@@ -166,12 +171,12 @@ function waitForStoredWebAuthToken(
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
 ): Promise<string> {
   const existing = readStoredWebAuthToken()
-  if (existing) {
+  if (existing.kind === WebAuthTokenLookupKind.Available) {
     log.info('CloudKit web auth token already available before wait', {
       token: tokenDiagnostics(existing),
       timeoutMs,
     })
-    return Promise.resolve(existing)
+    return Promise.resolve(existing.token)
   }
   log.info('CloudKit web auth token wait started', { timeoutMs })
 
@@ -193,7 +198,10 @@ function waitForStoredWebAuthToken(
       }
       cleanup()
       log.info('CloudKit web auth token wait resolved by token store', {
-        token: tokenDiagnostics(token),
+        token: tokenDiagnostics({
+          kind: WebAuthTokenLookupKind.Available,
+          token,
+        }),
       })
       resolve(token)
     }
@@ -204,12 +212,12 @@ function waitForStoredWebAuthToken(
     // cookie or a direct sessionStorage write after a SDK update).
     pollId = setInterval(() => {
       const token = readStoredWebAuthToken()
-      if (token) {
+      if (token.kind === WebAuthTokenLookupKind.Available) {
         cleanup()
         log.info('CloudKit web auth token wait resolved by polling', {
           token: tokenDiagnostics(token),
         })
-        resolve(token)
+        resolve(token.token)
       }
     }, 500)
 
@@ -373,7 +381,7 @@ export async function prepareICloudSignInControl(): Promise<void> {
   if (
     authSetup.kind === CloudKitAuthSetupKind.Initializing &&
     identity.kind === CloudKitIdentityKind.SignedOut &&
-    !readStoredWebAuthToken() &&
+    readStoredWebAuthToken().kind === WebAuthTokenLookupKind.Unavailable &&
     !existingControl
   ) {
     cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted }
@@ -444,12 +452,12 @@ function requireStoredWebAuthToken(
   identity = currentCloudKitIdentity(),
 ): ICloudOAuthTokens {
   const token = readStoredWebAuthToken()
-  if (!token) {
+  if (token.kind === WebAuthTokenLookupKind.Unavailable) {
     throw new Error('iCloud sign-in did not return a web auth token.')
   }
   const accountName = accountNameFromIdentity(identity)
   return {
-    accessToken: token,
+    accessToken: token.token,
     ...(accountName.kind === ICloudAccountNameKind.Available
       ? { accountName: accountName.value }
       : {}),
@@ -512,14 +520,32 @@ function requireCloudKitRecordInfo(
   return { zoneID, rootRecordName }
 }
 
+enum CloudKitRecordPreviewKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+type CloudKitRecordPreview =
+  | { kind: CloudKitRecordPreviewKind.Unavailable }
+  | {
+      kind: CloudKitRecordPreviewKind.Available
+      response: CloudKitRecordInfosResponse
+    }
+
 async function previewCloudKitRecord(
   container: CloudKitContainer,
   shortGuid: string,
-): Promise<CloudKitRecordInfosResponse | void> {
+): Promise<CloudKitRecordPreview> {
   try {
-    return await container.fetchRecordInfos?.([shortGuid])
+    if (!container.fetchRecordInfos) {
+      return { kind: CloudKitRecordPreviewKind.Unavailable }
+    }
+    return {
+      kind: CloudKitRecordPreviewKind.Available,
+      response: await container.fetchRecordInfos([shortGuid]),
+    }
   } catch {
-    return
+    return { kind: CloudKitRecordPreviewKind.Unavailable }
   }
 }
 
@@ -639,9 +665,10 @@ export async function acceptICloudSharedVault(
   }
   const current = await previewCloudKitRecord(container, shortGuid)
   const response =
-    current?.results[0]?.participantStatus ===
-    CloudKitParticipantStatus.Accepted
-      ? current
+    current.kind === CloudKitRecordPreviewKind.Available &&
+    current.response.results[0]?.participantStatus ===
+      CloudKitParticipantStatus.Accepted
+      ? current.response
       : await container.acceptShares([shortGuid])
   const { zoneID, rootRecordName } = requireCloudKitRecordInfo(response)
   const ownerRecordName = zoneID.ownerRecordName!
@@ -699,25 +726,28 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
   )
 }
 
-function webAuthTokenFromMessageData(data: unknown): string | void {
+function webAuthTokenFromMessageData(data: unknown): WebAuthTokenLookup {
   if (typeof data === 'string') {
     try {
       return webAuthTokenFromMessageData(JSON.parse(data))
     } catch {
-      return
+      return { kind: WebAuthTokenLookupKind.Unavailable }
     }
   }
   if (!data || typeof data !== 'object') {
-    return
+    return { kind: WebAuthTokenLookupKind.Unavailable }
   }
   const record = data as Record<string, unknown>
   for (const key of ['ckWebAuthToken', 'webAuthToken', 'authToken', 'token']) {
     const candidate = record[key]
     if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim()
+      return {
+        kind: WebAuthTokenLookupKind.Available,
+        token: candidate.trim(),
+      }
     }
   }
-  return
+  return { kind: WebAuthTokenLookupKind.Unavailable }
 }
 
 async function requestDirectCloudKitWebAuthToken(
@@ -755,17 +785,17 @@ async function requestDirectCloudKitWebAuthToken(
         origin: event.origin,
         token: tokenDiagnostics(token),
       })
-      if (!token || settled) {
+      if (token.kind === WebAuthTokenLookupKind.Unavailable || settled) {
         return
       }
       cleanup()
-      storeCloudKitWebAuthToken(ICLOUD_CONTAINER_ID, token)
+      storeCloudKitWebAuthToken(ICLOUD_CONTAINER_ID, token.token)
       try {
         authWindow.close()
       } catch {
         // Ignore browser-specific popup close failures.
       }
-      resolve(token)
+      resolve(token.token)
     }
     window.addEventListener('message', handleMessage)
     timeoutId = setTimeout(() => {
@@ -845,7 +875,7 @@ async function waitForCloudKitSignIn(
     // the custom authTokenStore).  Check directly before blocking on
     // tokenPromise so we don't wait for the full timeout.
     const immediateToken = readStoredWebAuthToken()
-    if (immediateToken) {
+    if (immediateToken.kind === WebAuthTokenLookupKind.Available) {
       log.info('CloudKit sign-in succeeded with immediate token', {
         signedIn:
           currentCloudKitIdentity().kind === CloudKitIdentityKind.SignedIn,
@@ -916,19 +946,22 @@ export async function requestICloudWebAuthToken(
   log.info('CloudKit direct token request started')
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
-  const userIdentity = await setUpCloudKitAuth(container).catch(
+  const identity = await setUpCloudKitAuth(container).catch(
     (error: unknown) => {
       logCloudKitAuthFailure('CloudKit auth setup failed', error)
       throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
     },
   )
 
-  if (!userIdentity && readStoredWebAuthToken()) {
+  if (
+    identity.kind === CloudKitIdentityKind.SignedOut &&
+    readStoredWebAuthToken().kind === WebAuthTokenLookupKind.Available
+  ) {
     log.info('CloudKit direct token request reused stored token')
     return requireStoredWebAuthToken()
   }
 
-  if (!userIdentity) {
+  if (identity.kind === CloudKitIdentityKind.SignedOut) {
     await waitForCloudKitSignIn(container, options.signInTimeoutMs, options)
   }
 

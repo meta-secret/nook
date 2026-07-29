@@ -1,5 +1,11 @@
-import { findPlainMockAuthAccount } from '../../accounts'
-import { findDynamicMockAuthAccount } from './dynamic-accounts'
+import {
+  findPlainMockAuthAccount,
+  MockAuthAccountLookupKind,
+} from '../../accounts'
+import {
+  DynamicMockAuthAccountLookupKind,
+  findDynamicMockAuthAccount,
+} from './dynamic-accounts'
 import { navigate, recordLoginSubmission } from './navigation'
 
 export enum PlainLoginResult {
@@ -16,10 +22,14 @@ export function completePlainLogin(
   password: string,
 ): PlainLoginResult {
   recordLoginSubmission(username, password)
-  const account =
-    findPlainMockAuthAccount(username, password) ??
-    findDynamicMockAuthAccount(username, password)
-  if (!account) return PlainLoginResult.Invalid
+  const fixtureAccount = findPlainMockAuthAccount(username, password)
+  const dynamicAccount = findDynamicMockAuthAccount(username, password)
+  if (
+    fixtureAccount.kind === MockAuthAccountLookupKind.Missing &&
+    dynamicAccount.kind === DynamicMockAuthAccountLookupKind.Missing
+  ) {
+    return PlainLoginResult.Invalid
+  }
   navigate('/plain/success')
   return PlainLoginResult.Success
 }

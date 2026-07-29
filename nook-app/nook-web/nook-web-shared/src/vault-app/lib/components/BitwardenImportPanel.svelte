@@ -1,5 +1,4 @@
 <script lang="ts">
-
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
@@ -22,15 +21,14 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (
-      json: string,
-      password: string,
-    ) => Promise<NookImportResult>
-    onClose?: (() => void) | void
+    onImport: (json: string, password: string) => Promise<NookImportResult>
+    onClose?: () => void
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<ImportFileSelection>({ kind: ImportFileSelectionKind.NotSelected })
+  let selectedFile = $state<ImportFileSelection>({
+    kind: ImportFileSelectionKind.NotSelected,
+  })
   let result = $state<ImportOutcome>({ kind: ImportOutcomeKind.NotRun })
   let error = $state('')
   let password = $state('')
@@ -47,7 +45,8 @@
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
     const file = selectedFile.file
     error = ''
     result = { kind: ImportOutcomeKind.NotRun }
@@ -149,11 +148,14 @@
       </Button>
 
       {#if isImporting}
-        <ImportProgress vault={vault} testId="bitwarden-import-progress" />
+        <ImportProgress {vault} testId="bitwarden-import-progress" />
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid="bitwarden-import-error">
+        <p
+          class="text-sm text-destructive"
+          data-testid="bitwarden-import-error"
+        >
           {error}
         </p>
       {/if}

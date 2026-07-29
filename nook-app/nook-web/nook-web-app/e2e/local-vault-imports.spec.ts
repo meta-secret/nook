@@ -919,11 +919,9 @@ test.describe('local vault', () => {
 
     const decryptLogCount = async () => {
       await flushNookLogPersistQueue(page)
-      return (
-        (await readPersistedAppLogs(page, 1000))?.filter((entry) =>
-          entry.message.includes('secret plaintext exposed on demand'),
-        ).length ?? 0
-      )
+      return (await readPersistedAppLogs(page, 1000)).filter((entry) =>
+        entry.message.includes('secret plaintext exposed on demand'),
+      ).length
     }
 
     const beforeNavigation = await decryptLogCount()

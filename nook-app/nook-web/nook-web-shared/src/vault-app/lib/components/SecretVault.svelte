@@ -196,7 +196,8 @@
     onAddModeChange?.(addSecretOpen, formSelectedType)
   }
 
-  function selectTypeFilter(value: string | void) {
+  function selectTypeFilter(value: unknown) {
+    if (typeof value !== 'string') return
     if (value === 'all') {
       vault.secretTypeFilter = NookSecretTypeFilter.All
       void vault.loadSecretPage(searchPattern.trim(), 0)

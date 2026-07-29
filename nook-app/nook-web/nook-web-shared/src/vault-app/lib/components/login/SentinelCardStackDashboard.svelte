@@ -59,9 +59,7 @@
     initiatorKeyLoading: boolean
     onPrepareInitiator: () => void | Promise<void>
     onBack: () => void
-    onStart: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddParticipant: (
       payload: string,
       participantLabel: string,
@@ -144,13 +142,13 @@
     }
   })
 
-  function changeParticipantCount(value: string | void) {
-    if (!value) return
+  function changeParticipantCount(value: unknown) {
+    if (typeof value !== 'string' || !value) return
     participantCount = Number(value)
   }
 
-  function changeThreshold(value: string | void) {
-    if (!value) return
+  function changeThreshold(value: unknown) {
+    if (typeof value !== 'string' || !value) return
     threshold = Number(value)
   }
 

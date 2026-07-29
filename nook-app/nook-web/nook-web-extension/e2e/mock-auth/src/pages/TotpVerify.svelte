@@ -3,18 +3,21 @@
   import { navigate } from '../lib/navigation'
   import {
     clearPendingTotpSession,
+    PendingTotpSessionLookupKind,
     readPendingTotpSession,
-    type PendingTotpSession,
+    type PendingTotpSessionLookup,
   } from '../lib/session'
   import { verifyTotpCode } from '../lib/totp'
 
-  let session = $state<PendingTotpSession>()
+  let session = $state<PendingTotpSessionLookup>({
+    kind: PendingTotpSessionLookupKind.Missing,
+  })
   let error = $state('')
   let busy = $state(false)
 
   onMount(() => {
     const pending = readPendingTotpSession()
-    if (!pending) {
+    if (pending.kind === PendingTotpSessionLookupKind.Missing) {
       navigate('/totp/login')
       return
     }
@@ -23,7 +26,7 @@
 
   async function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    if (!session || busy) return
+    if (session.kind === PendingTotpSessionLookupKind.Missing || busy) return
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
     const otp = new FormData(form).get('Code')
@@ -31,7 +34,7 @@
     busy = true
     error = ''
     try {
-      const ok = await verifyTotpCode(session.totpSecret, otp)
+      const ok = await verifyTotpCode(session.session.totpSecret, otp)
       if (!ok) {
         error = 'Invalid authentication code.'
         return

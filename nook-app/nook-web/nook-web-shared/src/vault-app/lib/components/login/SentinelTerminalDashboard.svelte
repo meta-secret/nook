@@ -54,9 +54,7 @@
     deliveries: NookSentinelGenesisDelivery[]
     isBusy: boolean
     onBack: () => void
-    onStart: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddParticipant: (payload: string) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>

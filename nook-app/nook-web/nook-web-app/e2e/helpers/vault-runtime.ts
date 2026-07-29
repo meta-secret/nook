@@ -48,19 +48,16 @@ export async function clearBrowserVault(page: Page) {
           pending -= 1
           if (pending === 0) resolve()
         }
-        const onError = (err: DOMException | void) =>
-          reject(err ?? new Error('IndexedDB delete failed'))
-
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
         vaultDb.onerror = () =>
-          onError(vaultDb.error ?? new Error('Vault database failed to open'))
+          reject(vaultDb.error ?? new Error('Vault database failed to open'))
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
         authDb.onerror = () =>
-          onError(authDb.error ?? new Error('Auth database failed to open'))
+          reject(authDb.error ?? new Error('Auth database failed to open'))
         authDb.onblocked = done
       }),
     clearedThroughManager,
@@ -115,7 +112,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
           stopVaultSync?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | void
+          clearSyncingProvider: () => void
           isPasswordBusy?: boolean
         }
       }
@@ -139,7 +136,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
           stopIdleSessionTracking?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | void
+          clearSyncingProvider: () => void
           isPasswordBusy?: boolean
         }
       }

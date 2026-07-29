@@ -101,10 +101,13 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
 }
 
-async function readVaultValue<T>(page: Page, key: string): Promise<T | void> {
+async function readRequiredVaultString(
+  page: Page,
+  key: string,
+): Promise<string> {
   return page.evaluate(
     (valueKey) =>
-      new Promise<T | void>((resolve, reject) => {
+      new Promise<string>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () => reject(request.error)
         request.onsuccess = () => {
@@ -115,7 +118,11 @@ async function readVaultValue<T>(page: Page, key: string): Promise<T | void> {
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
-            resolve(valueRequest.result as T | void)
+            if (typeof valueRequest.result !== 'string') {
+              reject(new Error(`Required vault value is missing: ${valueKey}`))
+              return
+            }
+            resolve(valueRequest.result)
           }
         }
       }),
@@ -123,12 +130,12 @@ async function readVaultValue<T>(page: Page, key: string): Promise<T | void> {
   )
 }
 
-async function readPersistedDeviceIdentity(page: Page): Promise<string | void> {
-  return readVaultValue<string>(page, 'device_identity_wrapped')
+async function readPersistedDeviceIdentity(page: Page): Promise<string> {
+  return readRequiredVaultString(page, 'device_identity_wrapped')
 }
 
-async function readDeviceId(page: Page): Promise<string | void> {
-  return readVaultValue<string>(page, 'device_id')
+async function readDeviceId(page: Page): Promise<string> {
+  return readRequiredVaultString(page, 'device_id')
 }
 
 async function clearDeviceMetadata(page: Page): Promise<void> {
@@ -341,8 +348,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     const deviceId = await readDeviceId(page)
-    expect(deviceId).toBeTruthy()
-    const shortDeviceId = `${deviceId!.slice(0, 6)}...${deviceId!.slice(-4)}`
+    const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
     await expect
       .poll(() =>
         page.evaluate(() => localStorage.getItem('nook_e2e_passkey_label')),
@@ -351,10 +357,6 @@ test.describe('passkey device-key protection', () => {
 
     const wrapped = await readPersistedDeviceIdentity(page)
 
-    expect(wrapped).toBeTypeOf('string')
-    if (typeof wrapped !== 'string') {
-      throw new Error('expected persisted passkey-protected device identity')
-    }
     expect(wrapped).toContain('"protection":"passkey-derived"')
     expect(wrapped).not.toContain('"ciphertext"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
@@ -451,10 +453,6 @@ test.describe('passkey device-key protection', () => {
     })
 
     const wrapped = await readPersistedDeviceIdentity(page)
-    expect(wrapped).toBeTypeOf('string')
-    if (typeof wrapped !== 'string') {
-      throw new Error('expected persisted PIN-protected device identity')
-    }
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 

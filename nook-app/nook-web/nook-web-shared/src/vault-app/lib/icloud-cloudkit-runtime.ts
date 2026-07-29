@@ -115,7 +115,7 @@ export type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean
     persist?: boolean
-  }) => Promise<CloudKitUserIdentity | void>
+  }) => Promise<unknown>
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>
   fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>
@@ -160,22 +160,32 @@ const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = 'nook.icloud.webAuthToken.'
 
 export const webAuthTokenListeners = new Set<(token: string) => void>()
 
-export function tokenDiagnostics(token: string | void): {
+export enum WebAuthTokenLookupKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+export type WebAuthTokenLookup =
+  | { kind: WebAuthTokenLookupKind.Unavailable }
+  | { kind: WebAuthTokenLookupKind.Available; token: string }
+
+export function tokenDiagnostics(token: WebAuthTokenLookup): {
   present: boolean
   length: number
 } {
   return {
-    present: Boolean(token),
-    length: token?.length ?? 0,
+    present: token.kind === WebAuthTokenLookupKind.Available,
+    length:
+      token.kind === WebAuthTokenLookupKind.Available ? token.token.length : 0,
   }
 }
 
-export function sanitizedURLDiagnostics(url: string | void): {
+export function sanitizedURLDiagnostics(url: unknown): {
   present: boolean
   origin?: string
   pathname?: string
 } {
-  if (!url) {
+  if (typeof url !== 'string' || !url) {
     return { present: false }
   }
   try {
@@ -318,9 +328,12 @@ export function cloudKitSignInControlDiagnostics(): {
   }
 }
 
-export function normalizeWebAuthToken(stored: unknown): string | void {
+export function normalizeWebAuthToken(stored: unknown): WebAuthTokenLookup {
   if (typeof stored === 'string' && stored.trim()) {
-    return stored.trim()
+    return {
+      kind: WebAuthTokenLookupKind.Available,
+      token: stored.trim(),
+    }
   }
   if (stored && typeof stored === 'object') {
     const record = stored as Record<string, unknown>
@@ -333,17 +346,20 @@ export function normalizeWebAuthToken(stored: unknown): string | void {
     ]) {
       const candidate = record[key]
       if (typeof candidate === 'string' && candidate.trim()) {
-        return candidate.trim()
+        return {
+          kind: WebAuthTokenLookupKind.Available,
+          token: candidate.trim(),
+        }
       }
     }
   }
-  return
+  return { kind: WebAuthTokenLookupKind.Unavailable }
 }
 
 export function storeCloudKitWebAuthToken(
   containerIdentifier: string,
   authToken: unknown,
-): string | void {
+): WebAuthTokenLookup {
   const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`
   if (!authToken) {
     sessionStorage.removeItem(key)
@@ -351,7 +367,7 @@ export function storeCloudKitWebAuthToken(
       container: containerIdentifier,
       expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
     })
-    return
+    return { kind: WebAuthTokenLookupKind.Unavailable }
   }
   sessionStorage.setItem(key, JSON.stringify(authToken))
   const token = normalizeWebAuthToken(authToken)
@@ -361,9 +377,12 @@ export function storeCloudKitWebAuthToken(
     tokenType: typeof authToken,
     normalized: tokenDiagnostics(token),
   })
-  if (containerIdentifier === ICLOUD_CONTAINER_ID && token) {
+  if (
+    containerIdentifier === ICLOUD_CONTAINER_ID &&
+    token.kind === WebAuthTokenLookupKind.Available
+  ) {
     for (const listener of webAuthTokenListeners) {
-      listener(token)
+      listener(token.token)
     }
   }
   return token

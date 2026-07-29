@@ -119,9 +119,7 @@
     onSwitchVault: () => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>
     onCreateDeviceVault: (label: string) => void | Promise<void>
-    onStartSentinelGenesis?: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
       | string
       | Promise<string>
@@ -307,8 +305,7 @@
       {isInitializing}
       {usesExtensionDeviceIdentity}
       {onCreateDeviceVault}
-      onStartSentinelGenesis={onStartSentinelGenesis ??
-        ((args) => vault.startSentinelGenesis(args))}
+      {onStartSentinelGenesis}
       onAddSentinelGenesisParticipantResponse={(payload, participantLabel) =>
         sentinelGenesisActions.addParticipantResponse(
           vault,

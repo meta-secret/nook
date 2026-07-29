@@ -108,10 +108,19 @@ export async function githubRepoContext(
   return context
 }
 
+export enum GithubVaultYamlFetchKind {
+  Missing = 'missing',
+  Available = 'available',
+}
+
+export type GithubVaultYamlFetch =
+  | { kind: GithubVaultYamlFetchKind.Missing }
+  | { kind: GithubVaultYamlFetchKind.Available; yaml: string }
+
 export async function fetchGithubVaultYaml(
   pat: string,
   repoName: string,
-): Promise<string | void> {
+): Promise<GithubVaultYamlFetch> {
   const { headers, repo } = await githubRepoContext(pat, repoName)
   const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_VAULT_PATH}`
   const etagKey = `${pat}:${repoName}`
@@ -121,12 +130,15 @@ export async function fetchGithubVaultYaml(
   })
 
   if (res.status === 304) {
-    return vaultContentCache.get(etagKey)
+    const cached = vaultContentCache.get(etagKey)
+    return cached
+      ? { kind: GithubVaultYamlFetchKind.Available, yaml: cached }
+      : { kind: GithubVaultYamlFetchKind.Missing }
   }
   if (res.status === 404) {
     vaultEtagCache.delete(etagKey)
     vaultContentCache.delete(etagKey)
-    return
+    return { kind: GithubVaultYamlFetchKind.Missing }
   }
 
   const nextEtag = res.headers.get('etag')
@@ -139,7 +151,7 @@ export async function fetchGithubVaultYaml(
     'utf-8',
   )
   vaultContentCache.set(etagKey, yaml)
-  return yaml
+  return { kind: GithubVaultYamlFetchKind.Available, yaml }
 }
 
 export { GITHUB_VAULT_PATH }

@@ -28,7 +28,6 @@ test('open a new local vault without an empty-device sync error', async ({
 
   await flushNookLogPersistQueue(page)
   const logs = await readPersistedAppLogs(page)
-  if (!logs) throw new Error('expected persisted app logs after vault setup')
   expect(
     logs.some(
       (entry) =>

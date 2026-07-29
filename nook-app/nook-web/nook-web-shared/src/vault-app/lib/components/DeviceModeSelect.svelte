@@ -24,7 +24,8 @@
     return `device_protection.mode_${modeKey}_${suffix}`
   }
 
-  function selectMode(value: string | void) {
+  function selectMode(value: unknown) {
+    if (typeof value !== 'string') return
     const selectedMode = Number(value)
     if (selectedMode === DeviceMode.Standard)
       vault.draftDeviceMode = DeviceMode.Standard

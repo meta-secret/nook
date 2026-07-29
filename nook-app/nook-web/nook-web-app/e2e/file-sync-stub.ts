@@ -6,6 +6,7 @@ import {
   EVENT_DIGEST_PATTERN,
   fulfillEventMetadata,
   parseEventMultipart,
+  EventMultipartParseKind,
 } from './event-log-stub'
 
 const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
@@ -302,7 +303,7 @@ export function createLocalE2eFileSyncVaultStub(
           method === 'POST'
         ) {
           const event = parseEventMultipart(request.postData() ?? '')
-          if (event) {
+          if (event.kind === EventMultipartParseKind.Valid) {
             if (!writeEvent(event.digest, event.content)) {
               await route.fulfill({ status: 409, body: '{}' })
               return

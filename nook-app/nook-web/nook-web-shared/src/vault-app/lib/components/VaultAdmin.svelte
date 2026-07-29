@@ -118,10 +118,7 @@
       password: string,
     ) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (
-      entryId: PasswordEntryId,
-      password: string,
-    ) => Promise<string | void>
+    onIssueCode: (entryId: PasswordEntryId, password: string) => Promise<string>
     onClearCode: () => void
     onImportBitwarden: (
       json: string,

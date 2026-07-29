@@ -3,6 +3,7 @@ import {
   EVENT_DIGEST_PATTERN,
   fulfillEventMetadata,
   parseEventMultipart as parseMultipartEvent,
+  EventMultipartParseKind,
 } from './event-log-stub'
 
 const DEFAULT_FILE_NAME = 'nook-events'
@@ -104,7 +105,7 @@ export function createLocalE2eGoogleDriveVaultStub(
 
   function parseEventMultipart(body: string): DriveEventUploadParse {
     const event = parseMultipartEvent(body)
-    return event
+    return event.kind === EventMultipartParseKind.Valid
       ? {
           kind: DriveEventUploadParseKind.Valid,
           ...event,

@@ -71,9 +71,7 @@
     usesExtensionDeviceIdentity?: boolean
     onCreateDeviceVault: (label: string) => void | Promise<void>
     onConnectStorage: () => void
-    onStartSentinelGenesis?: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddSentinelGenesisParticipantResponse?: (
       payload: string,
       participantLabel?: string,
@@ -356,8 +354,7 @@
       !sentinelNameReady ||
       !sentinelPolicyValid ||
       isBusy ||
-      sentinelActionBusy ||
-      !onStartSentinelGenesis
+      sentinelActionBusy
     ) {
       return false
     }
