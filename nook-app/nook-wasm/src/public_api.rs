@@ -1,8 +1,8 @@
 use super::{
-    NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
-    NookGoogleDriveFolder, NookLocalFolderConfig, NookProviderReplicationCapability,
-    NookStorageConnectArgs, NookStringValue, NookStringValueRef, NookVaultArchitecture,
-    passkey_browser, storage, wasm_bindgen,
+    passkey_browser, storage, wasm_bindgen, NookDecryptedEnrollmentPayload,
+    NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookLocalFolderConfig,
+    NookProviderReplicationCapability, NookStorageConnectArgs, NookStringValue, NookStringValueRef,
+    NookVaultArchitecture,
 };
 
 mod localization;
@@ -30,8 +30,8 @@ pub fn is_local_folder_backup_supported() -> bool {
 }
 
 #[wasm_bindgen(js_name = chooseLocalFolderBackupDirectory)]
-pub async fn choose_local_folder_backup_directory()
--> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
+pub async fn choose_local_folder_backup_directory(
+) -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
     storage::local_folder::choose_local_folder_backup_directory()
         .await
         .map_err(Into::into)
@@ -297,7 +297,7 @@ pub fn local_provider_id_for_active_vault(
 pub fn provider_label_by_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
-) -> Result<Option<String>, wasm_bindgen::JsError> {
+) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::provider_label_by_id(
         &snapshot.providers,
         provider_id,

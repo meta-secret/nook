@@ -1,5 +1,5 @@
-use crate::StorageProviderType;
 use crate::errors::ValidationResult;
+use crate::StorageProviderType;
 
 use super::{AuthProvidersSnapshotData, StorageProviderData};
 
@@ -90,14 +90,11 @@ pub fn local_provider_for_active_vault(
 }
 
 #[must_use]
-pub fn provider_label_by_id(
-    providers: &[StorageProviderData],
-    provider_id: &str,
-) -> Option<String> {
+pub fn provider_label_by_id(providers: &[StorageProviderData], provider_id: &str) -> String {
     providers
         .iter()
         .find(|provider| provider.id == provider_id)
-        .map(|provider| provider.label.clone())
+        .map_or_else(|| provider_id.to_owned(), |provider| provider.label.clone())
 }
 
 /// Keep only non-secret local rows while the device identity is locked.
@@ -163,10 +160,8 @@ mod tests {
             local_provider_for_active_vault(&providers, Some("store-a"))?,
             Some(local_a.clone())
         );
-        assert_eq!(
-            provider_label_by_id(&providers, "github-b"),
-            Some("GitHub".to_owned())
-        );
+        assert_eq!(provider_label_by_id(&providers, "github-b"), "GitHub");
+        assert_eq!(provider_label_by_id(&providers, "removed"), "removed");
         assert_eq!(
             providers_visible_while_device_locked(&providers),
             vec![local_a]
@@ -203,12 +198,10 @@ mod tests {
                 .and_then(|provider| provider.store_id.as_deref()),
             Some("store-a")
         );
-        assert!(
-            replaced
-                .providers
-                .iter()
-                .all(|provider| provider.id != "removed-a")
-        );
+        assert!(replaced
+            .providers
+            .iter()
+            .all(|provider| provider.id != "removed-a"));
     }
 
     #[test]
