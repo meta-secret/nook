@@ -114,7 +114,7 @@ export function createLocalE2eFileSyncVaultStub(
     getEventFileContents: () =>
       eventDigests()
         .map((digest) => readEvent(digest))
-        .filter((content): content is string => typeof content !== 'undefined'),
+        .filter((content): content is string => Boolean(content)),
     clearEventFiles: () => {
       if (!fs.existsSync(eventsDir())) return
       for (const name of fs.readdirSync(eventsDir())) {
@@ -137,7 +137,7 @@ export function createLocalE2eFileSyncVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
-      if (typeof opts?.vaultYaml !== 'undefined') {
+      if (opts && 'vaultYaml' in opts) {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -221,7 +221,7 @@ export function createLocalE2eFileSyncVaultStub(
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             const content = readEvent(eventDigest)
-            if (typeof content === 'undefined') {
+            if (!content) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
@@ -248,7 +248,7 @@ export function createLocalE2eFileSyncVaultStub(
         if (driveFileId && method === 'GET') {
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
-            if (typeof readEvent(eventDigest) === 'undefined') {
+            if (!readEvent(eventDigest)) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }

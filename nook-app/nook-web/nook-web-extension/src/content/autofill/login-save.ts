@@ -41,7 +41,7 @@ type LoginSaveActionResponse = {
 
 function stopPendingSaveWatch(): void {
   if (!saveOfferState.pendingWatch) return
-  if (typeof saveOfferState.pendingWatch.timer !== 'undefined') {
+  if ('timer' in saveOfferState.pendingWatch) {
     window.clearInterval(saveOfferState.pendingWatch.timer)
   }
   saveOfferState.pendingWatch.observer?.disconnect()

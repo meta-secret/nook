@@ -56,7 +56,7 @@ export function isAuthenticationOutcomeClassifyMessage(
     typeof view.elapsedMs === 'number' &&
     Number.isFinite(view.elapsedMs) &&
     view.elapsedMs >= 0 &&
-    (typeof payload.timeoutMs === 'undefined' ||
+    (!('timeoutMs' in payload) ||
       (typeof payload.timeoutMs === 'number' &&
         Number.isFinite(payload.timeoutMs) &&
         payload.timeoutMs > 0))

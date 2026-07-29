@@ -109,12 +109,9 @@
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
-  function openPanel(target: Panel, entryId: string | void = omittedValue()) {
+  function openPanel(target: Panel, selection: ActivePasswordEntry) {
     panel = target
-    activeEntryId =
-      typeof entryId === "undefined"
-        ? { kind: 'none' }
-        : { kind: 'selected', entryId }
+    activeEntryId = selection
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -291,7 +288,8 @@
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'rotate-vault-password-btn'
                   : omittedValue()}
-                onclick={() => openPanel('rotate', entry.id)}
+                onclick={() =>
+                  openPanel('rotate', { kind: 'selected', entryId: entry.id })}
               >
                 <RefreshCw class="size-4" />
               </Button>
@@ -305,7 +303,11 @@
                   data-testid={entry.id === passwordEntries[0]?.id
                     ? 'issue-enrollment-code-btn'
                     : omittedValue()}
-                  onclick={() => openPanel('issue', entry.id)}
+                  onclick={() =>
+                    openPanel('issue', {
+                      kind: 'selected',
+                      entryId: entry.id,
+                    })}
                 >
                   <QrCode class="size-4" />
                   <span class="hidden sm:inline"
@@ -322,7 +324,8 @@
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'remove-vault-password-btn'
                   : omittedValue()}
-                onclick={() => openPanel('remove', entry.id)}
+                onclick={() =>
+                  openPanel('remove', { kind: 'selected', entryId: entry.id })}
               >
                 <Trash2 class="size-4" />
               </Button>
@@ -337,7 +340,7 @@
       size="sm"
       disabled={isBusy}
       data-testid="set-vault-password-btn"
-      onclick={() => openPanel('add')}
+      onclick={() => openPanel('add', { kind: 'none' })}
     >
       <Plus class="size-4" />
       {hasPasswords

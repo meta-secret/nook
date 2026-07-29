@@ -190,7 +190,7 @@
       sentinelThreshold <= sentinelParticipantCount,
   )
   const sentinelDashboardActive = $derived(
-    typeof sentinelDashboard !== "undefined" &&
+    Boolean(sentinelDashboard) &&
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
   )
   const sentinelGenesisInvitationLink = $derived(

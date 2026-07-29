@@ -33,7 +33,7 @@ export async function openWebsiteLoginPicker(
     'login-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (typeof sender.tab?.id === 'undefined') {
+  if (!sender.tab || !('id' in sender.tab)) {
     return { ok: false, reason: 'login-picker-tab-missing' }
   }
 

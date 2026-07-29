@@ -412,10 +412,10 @@ function validateMainBuildStats(record, expected = {}) {
   timestampMilliseconds(source.started_at, 'source_run.started_at')
   timestampMilliseconds(source.completed_at, 'source_run.completed_at')
 
-  if (typeof expected.runId !== "undefined" && source.run_id !== expected.runId) {
+  if ("runId" in expected && source.run_id !== expected.runId) {
     throw new Error(`source run ${source.run_id} does not match expected run ${expected.runId}`)
   }
-  if (typeof expected.runAttempt !== "undefined" && source.run_attempt !== expected.runAttempt) {
+  if ("runAttempt" in expected && source.run_attempt !== expected.runAttempt) {
     throw new Error(
       `source attempt ${source.run_attempt} does not match expected attempt ${expected.runAttempt}`,
     )
@@ -577,8 +577,8 @@ function normalizeLegacyMainBuildStats(record) {
   const totals = normalized.cache_telemetry.totals
   if (
     totals &&
-    typeof totals.direct_compile_job_count === "undefined" &&
-    typeof totals.local_fallback_job_count !== "undefined"
+    !("direct_compile_job_count" in totals) &&
+    "local_fallback_job_count" in totals
   ) {
     totals.direct_compile_job_count = totals.local_fallback_job_count
     delete totals.local_fallback_job_count

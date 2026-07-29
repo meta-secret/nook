@@ -23,6 +23,7 @@
   import {
     extensionConnectIntent,
     legalRoute,
+    manualColorMode,
     systemColorMode,
   } from "$lib/app-lifecycle-state";
   import HelpPage from "$lib/components/HelpPage.svelte";
@@ -83,7 +84,7 @@
   let followsSystemColorMode = $state(true);
   let legalPageState = $state<LegalRoute>(
     legalRoute(
-      typeof window !== "undefined"
+      "window" in globalThis
         ? getLegalPageFromPath(window.location.pathname)
         : omittedValue(),
     ),
@@ -92,21 +93,17 @@
     legalPageState.kind === "legal" ? legalPageState.page : omittedValue(),
   );
   let logsPage = $state<boolean>(
-    typeof window !== "undefined"
-      ? isLogsPath(window.location.pathname)
-      : false,
+    "window" in globalThis && isLogsPath(window.location.pathname),
   );
   let appLogsPage = $state<boolean>(
-    typeof window !== "undefined"
-      ? isAppLogsPath(window.location.pathname)
-      : false,
+    "window" in globalThis && isAppLogsPath(window.location.pathname),
   );
   const initialExtensionConnectRequest =
-    typeof window !== "undefined" && SUPPORTS_EXTENSION
+    "window" in globalThis && SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : omittedValue();
   let extensionConnectRoute = $state<boolean>(
-    typeof window !== "undefined"
+    "window" in globalThis
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   );
@@ -144,17 +141,17 @@
   let extensionConnectError = $state(false);
   const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
-    typeof window !== "undefined" && APP_KIND !== "simple"
+    "window" in globalThis && APP_KIND !== "simple"
       ? consumeSentinelGenesisRequestFromLocation()
       : "",
   );
   let sentinelParticipantResponse = $state(
-    typeof window !== "undefined" && APP_KIND !== "simple"
+    "window" in globalThis && APP_KIND !== "simple"
       ? consumeSentinelGenesisParticipantResponseFromLocation()
       : "",
   );
   let sentinelOnboardingPackage = $state(
-    typeof window !== "undefined" && APP_KIND !== "simple"
+    "window" in globalThis && APP_KIND !== "simple"
       ? consumeSentinelOnboardingFromLocation()
       : "",
   );
@@ -294,11 +291,11 @@
 
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
-      vault.loginRequiresExistingVault && typeof vault.loginSetupType !== "undefined";
+      vault.loginRequiresExistingVault && vault.loginSetupActive;
     const existingVaultImportNeedsIdentity =
       vault.clientPolicy.existingVaultIdentityRecoveryRequired(
         vault.loginRequiresExistingVault,
-        typeof vault.loginSetupType !== "undefined",
+        vault.loginSetupActive,
         vault.deviceProtectionReady,
       );
     if (
@@ -413,8 +410,7 @@
 
   function toggleColorMode() {
     followsSystemColorMode = false;
-    colorMode = colorMode === "dark" ? "light" : "dark";
-    localStorage.setItem(THEME_STORAGE_KEY, colorMode);
+    colorMode = manualColorMode(colorMode, THEME_STORAGE_KEY);
   }
 
   const compactShellWidth = "max-w-5xl";
@@ -474,7 +470,8 @@
       : omittedValue(),
   );
   const showPasskeyOverlay = $derived(
-    typeof pendingVaultCreation !== "undefined" && !vault.deviceProtectionReady,
+    pendingVaultCreationState.kind === "waiting-for-device" &&
+      !vault.deviceProtectionReady,
   );
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
@@ -591,7 +588,7 @@
     storeId: string,
   ): Promise<"unavailable" | "locked" | "unlocked"> {
     const discoveringStagedImport =
-      vault.loginRequiresExistingVault && typeof vault.loginSetupType !== "undefined";
+      vault.loginRequiresExistingVault && vault.loginSetupActive;
     extensionDiscoveryStoreId = storeId;
     const discovery = await discoverPairedExtensionIdentity(storeId);
     if (
@@ -815,7 +812,8 @@
       return;
     }
     pendingExistingVaultUnlock = false;
-    const importPending = typeof pendingExistingVaultImport !== "undefined";
+    const importPending =
+      pendingExistingVaultImportState.kind === "waiting-for-device";
     void (importPending ? resumeExistingVaultImport() : vault.loadDb());
   });
 

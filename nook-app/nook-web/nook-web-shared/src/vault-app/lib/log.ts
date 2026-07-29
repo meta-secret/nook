@@ -85,7 +85,7 @@ const originalConsole: Record<
   "error" | "warn" | "info" | "debug" | "log",
   ConsoleMethod
 > =
-  typeof console !== "undefined"
+  "console" in globalThis
     ? {
         error: console.error.bind(console),
         warn: console.warn.bind(console),
@@ -109,21 +109,23 @@ function parseLevel(raw: string | void): LogLevel | void {
 }
 
 function initialLevel(): LogLevel {
-  if (typeof localStorage !== "undefined") {
+  if ("localStorage" in globalThis) {
     const stored = parseLevel(
       localStorage.getItem("nook_log_level") ?? omittedValue(),
     );
     if (stored) return stored;
   }
-  const env =
-    typeof import.meta !== "undefined"
-      ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | void)
-      : omittedValue();
+  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | void);
   return env ?? "info";
 }
 
-function serializeData(data: unknown): string | void {
-  if (typeof data === "undefined") return;
+type LogPayload =
+  | { kind: "message-only" }
+  | { kind: "structured"; data: unknown };
+
+function serializeData(payload: LogPayload): string | void {
+  if (payload.kind === "message-only") return;
+  const { data } = payload;
   try {
     return typeof data === "string" ? data : JSON.stringify(data);
   } catch {
@@ -218,10 +220,10 @@ function record(
   level: LogLevel,
   scope: string,
   message: string,
-  data?: unknown,
+  payload: LogPayload,
 ) {
   if (!isEnabled(level)) return;
-  const serialized = serializeData(data);
+  const serialized = serializeData(payload);
   const text = serialized
     ? `[${scope}] ${message} ${serialized}`
     : `[${scope}] ${message}`;
@@ -245,7 +247,7 @@ export function sanitizeLogUrl(url: string): string {
   try {
     const parsed = new URL(
       url,
-      typeof location !== "undefined" ? location.href : omittedValue(),
+      "location" in globalThis ? location.href : omittedValue(),
     );
     parsed.search = "";
     parsed.hash = "";
@@ -267,13 +269,13 @@ function captureDiagnostic(
   level: LogLevel,
   scope: string,
   message: string,
-  data?: unknown,
+  data: unknown,
 ) {
-  record(level, scope, message, data);
+  record(level, scope, message, { kind: "structured", data });
 }
 
 function installGlobalErrorHandlers() {
-  if (typeof window === "undefined") return;
+  if (!("window" in globalThis)) return;
 
   window.addEventListener("error", (event) => {
     if (isIgnoredErrorSource(event.filename)) return;
@@ -346,20 +348,34 @@ function installDiagnosticsCapture() {
 }
 
 export type ScopedLogger = {
-  error: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
-  info: (message: string, data?: unknown) => void;
-  debug: (message: string, data?: unknown) => void;
-  trace: (message: string, data?: unknown) => void;
+  error: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
+  warn: (...args: [message: string] | [message: string, data: unknown]) => void;
+  info: (...args: [message: string] | [message: string, data: unknown]) => void;
+  debug: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
+  trace: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
 };
+
+function logPayload(
+  args: [message: string] | [message: string, data: unknown],
+): LogPayload {
+  return args.length === 1
+    ? { kind: "message-only" }
+    : { kind: "structured", data: args[1] };
+}
 
 export function createLogger(scope: string): ScopedLogger {
   return {
-    error: (message, data) => record("error", scope, message, data),
-    warn: (message, data) => record("warn", scope, message, data),
-    info: (message, data) => record("info", scope, message, data),
-    debug: (message, data) => record("debug", scope, message, data),
-    trace: (message, data) => record("trace", scope, message, data),
+    error: (...args) => record("error", scope, args[0], logPayload(args)),
+    warn: (...args) => record("warn", scope, args[0], logPayload(args)),
+    info: (...args) => record("info", scope, args[0], logPayload(args)),
+    debug: (...args) => record("debug", scope, args[0], logPayload(args)),
+    trace: (...args) => record("trace", scope, args[0], logPayload(args)),
   };
 }
 
@@ -436,7 +452,7 @@ export async function suspendWasmLogging(): Promise<void> {
  * level-gated (console output is never suppressed).
  */
 function patchConsole() {
-  if (consolePatched || typeof console === "undefined") return;
+  if (consolePatched || !("console" in globalThis)) return;
   consolePatched = true;
 
   const wrap = (
@@ -465,7 +481,7 @@ function patchConsole() {
  * Idempotent — safe to call on every `getVaultManager()`.
  */
 export function initWasmLogging() {
-  if (typeof window !== "undefined") {
+  if ("window" in globalThis) {
     window.__nookConsole = { echo };
   }
   installDiagnosticsCapture();
@@ -526,7 +542,7 @@ declare global {
   }
 }
 
-if (typeof window !== "undefined") {
+if ("window" in globalThis) {
   installDiagnosticsCapture();
   window.__nookLog = {
     setLevel: setLogLevel,

@@ -12,8 +12,7 @@ import {
   siteUrlFromEnv,
 } from '../nook-web-shared/src/vault-app/lib/sitemap'
 
-const viteBase =
-  typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
+const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
 const sentinelAppUrl =
@@ -148,25 +147,28 @@ function seoStaticFiles(outputDirectory: string): Plugin {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split(/[?#]/, 1)[0]
       const siteUrl = siteUrlFromEnv(process.env)
-      const body =
+      const staticFile =
         pathname === '/robots.txt'
-          ? buildRobotsTxt(siteUrl)
+          ? {
+              kind: 'served' as const,
+              body: buildRobotsTxt(siteUrl),
+              contentType: 'text/plain; charset=utf-8',
+            }
           : pathname === '/sitemap.xml'
-            ? buildSitemapXml(siteUrl)
-            : omittedValue()
-      if (typeof body === 'undefined') {
+            ? {
+                kind: 'served' as const,
+                body: buildSitemapXml(siteUrl),
+                contentType: 'application/xml; charset=utf-8',
+              }
+            : { kind: 'pass-through' as const }
+      if (staticFile.kind === 'pass-through') {
         next()
         return
       }
 
       response.statusCode = 200
-      response.setHeader(
-        'Content-Type',
-        pathname === '/robots.txt'
-          ? 'text/plain; charset=utf-8'
-          : 'application/xml; charset=utf-8',
-      )
-      response.end(body)
+      response.setHeader('Content-Type', staticFile.contentType)
+      response.end(staticFile.body)
     })
   }
 

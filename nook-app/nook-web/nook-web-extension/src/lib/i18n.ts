@@ -31,7 +31,7 @@ function chromeUiLanguage(): string | void {
 }
 
 function navigatorLanguages(): string[] {
-  if (typeof navigator === 'undefined') {
+  if (!('navigator' in globalThis)) {
     return []
   }
 
@@ -59,7 +59,7 @@ export async function initializeExtensionI18n(): Promise<ExtensionI18n> {
   const locale = await resolveExtensionLocale()
   const catalog = await getResolvedTranslationCatalog(locale)
 
-  if (typeof document !== 'undefined') {
+  if ('document' in globalThis) {
     document.documentElement.lang = locale
   }
 

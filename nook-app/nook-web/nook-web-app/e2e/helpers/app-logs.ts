@@ -22,9 +22,8 @@ function buildAppLogsUrl(options?: {
 }): string {
   const params = new URLSearchParams()
   if (options?.minLevel) params.set('minLevel', options.minLevel)
-  if (typeof options?.limit !== 'undefined')
-    params.set('limit', String(options.limit))
-  if (typeof options?.offset !== 'undefined') {
+  if (options && 'limit' in options) params.set('limit', String(options.limit))
+  if (options && 'offset' in options) {
     params.set('offset', String(options.offset))
   }
   const query = params.toString()
@@ -206,10 +205,9 @@ export async function waitForPersistedAppLog(
         await flushNookLogPersistQueue(page)
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
         const found = findAppLogEntry(entries ?? [], filter)
-        searchState =
-          typeof found === 'undefined'
-            ? { kind: 'searching' }
-            : { kind: 'matched', entry: found }
+        searchState = !found
+          ? { kind: 'searching' }
+          : { kind: 'matched', entry: found }
         return found
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },

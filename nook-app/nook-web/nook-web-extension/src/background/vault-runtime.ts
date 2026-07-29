@@ -175,7 +175,7 @@ export async function classifyAuthenticationOutcome(
   try {
     const verdict = wasmClassifyAuthenticationOutcome(
       input,
-      typeof timeoutMs === 'undefined'
+      !Number.isFinite(timeoutMs)
         ? omittedValue()
         : Math.max(1, Math.floor(timeoutMs)),
     )

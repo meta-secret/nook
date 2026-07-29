@@ -51,11 +51,11 @@ export class VaultProviderState {
       return this.activeVaultStoreState.storeId;
     return;
   }
-  set activeVaultStoreId(value: StoreId | void) {
-    this.activeVaultStoreState =
-      typeof value === "undefined"
-        ? { kind: "closed" }
-        : { kind: "open", storeId: value };
+  get hasActiveVaultStore(): boolean {
+    return this.activeVaultStoreState.kind === "open";
+  }
+  set activeVaultStoreId(value: StoreId) {
+    this.activeVaultStoreState = { kind: "open", storeId: value };
   }
   clearActiveVaultStore(): void {
     this.activeVaultStoreState = { kind: "closed" };
@@ -69,11 +69,11 @@ export class VaultProviderState {
       return this.selectedLoginVaultStoreState.storeId;
     return;
   }
-  set selectedLoginVaultStoreId(value: StoreId | void) {
-    this.selectedLoginVaultStoreState =
-      typeof value === "undefined"
-        ? { kind: "not-selected" }
-        : { kind: "selected", storeId: value };
+  get hasSelectedLoginVaultStore(): boolean {
+    return this.selectedLoginVaultStoreState.kind === "selected";
+  }
+  set selectedLoginVaultStoreId(value: StoreId) {
+    this.selectedLoginVaultStoreState = { kind: "selected", storeId: value };
   }
   clearSelectedLoginVaultStore(): void {
     this.selectedLoginVaultStoreState = { kind: "not-selected" };
@@ -87,11 +87,11 @@ export class VaultProviderState {
       return this.loginSetupState.providerType;
     return;
   }
-  set loginSetupType(value: StorageProviderType | void) {
-    this.loginSetupState =
-      typeof value === "undefined"
-        ? { kind: "inactive" }
-        : { kind: "active", providerType: value };
+  get loginSetupActive(): boolean {
+    return this.loginSetupState.kind === "active";
+  }
+  set loginSetupType(value: StorageProviderType) {
+    this.loginSetupState = { kind: "active", providerType: value };
   }
   clearLoginSetup(): void {
     this.loginSetupState = { kind: "inactive" };
@@ -105,11 +105,8 @@ export class VaultProviderState {
       return this.recoverySummaryState.summary;
     return;
   }
-  set existingVaultRecoverySummary(value: VaultRecoverySummary | void) {
-    this.recoverySummaryState =
-      typeof value === "undefined"
-        ? { kind: "not-found" }
-        : { kind: "found", summary: value };
+  set existingVaultRecoverySummary(value: VaultRecoverySummary) {
+    this.recoverySummaryState = { kind: "found", summary: value };
   }
   clearExistingVaultRecoverySummary(): void {
     this.recoverySummaryState = { kind: "not-found" };
@@ -127,11 +124,8 @@ export class VaultProviderState {
       return this.oauthFileState.config;
     return;
   }
-  set oauthFile(value: OAuthFileConfig | void) {
-    this.oauthFileState =
-      typeof value === "undefined"
-        ? { kind: "not-configured" }
-        : { kind: "configured", config: value };
+  set oauthFile(value: OAuthFileConfig) {
+    this.oauthFileState = { kind: "configured", config: value };
   }
   clearOauthFile(): void {
     this.oauthFileState = { kind: "not-configured" };
@@ -144,17 +138,14 @@ export class VaultProviderState {
       return this.localFolderState.config;
     return;
   }
-  set localFolder(value: LocalFolderConfig | void) {
-    this.localFolderState =
-      typeof value === "undefined"
-        ? { kind: "not-configured" }
-        : { kind: "configured", config: value };
+  set localFolder(value: LocalFolderConfig) {
+    this.localFolderState = { kind: "configured", config: value };
   }
   clearLocalFolder(): void {
     this.localFolderState = { kind: "not-configured" };
   }
   localFolderBackupSupported = $state(
-    typeof window !== "undefined" && isLocalFolderBackupSupported(),
+    "window" in globalThis && isLocalFolderBackupSupported(),
   );
   vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
   draftDeviceMode = $state<DeviceMode>("standard");
@@ -168,11 +159,8 @@ export class VaultProviderState {
       return this.oauthSetupPresetState.preset;
     return;
   }
-  set oauthSetupPreset(value: OAuthFilePreset | void) {
-    this.oauthSetupPresetState =
-      typeof value === "undefined"
-        ? { kind: "not-selected" }
-        : { kind: "selected", preset: value };
+  set oauthSetupPreset(value: OAuthFilePreset) {
+    this.oauthSetupPresetState = { kind: "selected", preset: value };
   }
   clearOauthSetupPreset(): void {
     this.oauthSetupPresetState = { kind: "not-selected" };

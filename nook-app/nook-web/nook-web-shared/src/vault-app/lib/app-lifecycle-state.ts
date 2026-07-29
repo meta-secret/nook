@@ -11,10 +11,19 @@ import type { LegalPageId } from "$lib/legal-content";
 export type ColorMode = "light" | "dark";
 
 export function systemColorMode(): ColorMode {
-  return typeof window !== "undefined" &&
+  return "window" in globalThis &&
     window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+}
+
+export function manualColorMode(
+  current: ColorMode,
+  storageKey: string,
+): ColorMode {
+  const selected = current === "dark" ? "light" : "dark";
+  localStorage.setItem(storageKey, selected);
+  return selected;
 }
 
 export type LegalRoute =
@@ -22,9 +31,7 @@ export type LegalRoute =
   | { kind: "legal"; page: LegalPageId };
 
 export function legalRoute(page: LegalPageId | void): LegalRoute {
-  return typeof page === "undefined"
-    ? { kind: "application" }
-    : { kind: "legal", page };
+  return page ? { kind: "legal", page } : { kind: "application" };
 }
 
 export type ExtensionConnectIntent =
@@ -34,9 +41,7 @@ export type ExtensionConnectIntent =
 export function extensionConnectIntent(
   request: ExtensionConnectRequest | void,
 ): ExtensionConnectIntent {
-  return typeof request === "undefined"
-    ? { kind: "absent" }
-    : { kind: "requested", request };
+  return request ? { kind: "requested", request } : { kind: "absent" };
 }
 
 export type ExtensionSetupOffer =

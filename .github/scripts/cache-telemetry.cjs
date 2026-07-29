@@ -232,7 +232,7 @@ function validateTelemetryRecord(record, expected = {}) {
     throw new Error('telemetry github.job must be a non-empty string')
   }
   if (
-    typeof expected.runId !== "undefined" &&
+    "runId" in expected &&
     record.github.run_id !== String(expected.runId)
   ) {
     throw new Error(
@@ -240,7 +240,7 @@ function validateTelemetryRecord(record, expected = {}) {
     )
   }
   if (
-    typeof expected.runAttempt !== "undefined" &&
+    "runAttempt" in expected &&
     record.github.run_attempt !== Number(expected.runAttempt)
   ) {
     throw new Error(

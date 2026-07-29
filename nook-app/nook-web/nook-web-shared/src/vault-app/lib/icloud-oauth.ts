@@ -88,10 +88,9 @@ function currentCloudKitIdentity(): CloudKitUserIdentity | void {
 }
 
 function rememberCloudKitIdentity(identity: CloudKitUserIdentity | void): void {
-  cloudKitIdentity =
-    typeof identity === "undefined"
-      ? { kind: "signed-out" }
-      : { kind: "signed-in", identity };
+  cloudKitIdentity = !identity
+    ? { kind: "signed-out" }
+    : { kind: "signed-in", identity };
 }
 
 /** @internal Clears module singletons between unit tests. */
@@ -250,7 +249,7 @@ function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
       message: stringValue(error.message),
     };
   }
-  if (typeof error != "undefined" && typeof error === "object") {
+  if (error && typeof error === "object") {
     const authError = error as CloudKitAuthError;
     const redirectURL = stringValue(authError.redirectURL);
     const redirect = cloudKitRedirectDetails(redirectURL);
@@ -300,7 +299,7 @@ function isAuthRequiredCloudKitError(
 
 function hasCloudKitSignInControl(): boolean {
   return (
-    typeof document !== "undefined" &&
+    "document" in globalThis &&
     Boolean(document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID))
   );
 }
@@ -746,7 +745,7 @@ function webAuthTokenFromMessageData(data: unknown): string | void {
       return;
     }
   }
-  if (typeof data == "undefined" || typeof data !== "object") {
+  if (!data || typeof data !== "object") {
     return;
   }
   const record = data as Record<string, unknown>;

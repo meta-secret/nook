@@ -55,7 +55,7 @@ export class VaultState extends VaultLifecycleState {
   architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
-    return typeof this.pendingSyncConflict !== "undefined";
+    return this.syncConflictRequiresDecision;
   }
 
   get syncConflictLabel(): string {
@@ -108,7 +108,7 @@ export class VaultState extends VaultLifecycleState {
   get isSyncActivityVisible(): boolean {
     return this.clientPolicy.isSyncActivityVisible(
       this.isFanOutSyncing,
-      typeof this.syncingProviderId !== "undefined",
+      this.manualProviderSyncRunning,
       this.isSyncing,
       this.isSaving,
     );
@@ -204,7 +204,7 @@ export class VaultState extends VaultLifecycleState {
   }
 
   dismissSuccess() {
-    if (typeof this.successDismissTimer !== "undefined") {
+    if (this.successDismissScheduled) {
       clearTimeout(this.successDismissTimer);
       this.clearSuccessDismissTimer();
     }
@@ -324,7 +324,7 @@ export class VaultState extends VaultLifecycleState {
       this.localVaultPresent,
       this.passwordEntries.length,
       this.syncProviders.length,
-      typeof this.loginSetupType !== "undefined",
+      this.loginSetupActive,
       this.addProviderOpen,
     );
   }
@@ -607,10 +607,6 @@ export class VaultState extends VaultLifecycleState {
       oldSecretId,
       chosenSecretId,
     );
-  }
-
-  clearPendingSyncConflict() {
-    this.clearPendingSyncConflict();
   }
 
   dismissLocalFolderMultipleVaultsIssue() {

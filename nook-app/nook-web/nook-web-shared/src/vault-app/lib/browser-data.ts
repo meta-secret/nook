@@ -74,7 +74,7 @@ async function clearBrowserManagedStorage(): Promise<void> {
     () => sessionStorage.clear(),
     () => clearAccessibleCookies(),
     async () => {
-      if (typeof caches === "undefined") return;
+      if (!("caches" in globalThis)) return;
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map((name) => caches.delete(name)));
     },
@@ -94,7 +94,7 @@ async function clearBrowserManagedStorage(): Promise<void> {
 export function subscribeToLocalBrowserDataDeletion(
   handler: () => Promise<void>,
 ): () => void {
-  if (typeof BroadcastChannel === "undefined") return () => {};
+  if (!("BroadcastChannel" in globalThis)) return () => {};
   const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
   const handledRequests = new Set<string>();
 
@@ -141,7 +141,7 @@ export function subscribeToLocalBrowserDataDeletion(
 }
 
 async function quiesceOtherTabs(): Promise<void> {
-  if (typeof BroadcastChannel === "undefined") {
+  if (!("BroadcastChannel" in globalThis)) {
     throw new Error("Safe cross-tab local data deletion is unavailable");
   }
   const request: LocalDataResetMessage = {
@@ -178,8 +178,8 @@ async function quiesceOtherTabs(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   channel.close();
-  const errors = [...ready.values()].filter(
-    (error): error is string => typeof error !== "undefined",
+  const errors = [...ready.values()].filter((error): error is string =>
+    Boolean(error),
   );
   if (errors.length > 0) {
     throw new Error(errors.join("; "));

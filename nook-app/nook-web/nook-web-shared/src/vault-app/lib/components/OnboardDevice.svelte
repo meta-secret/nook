@@ -114,7 +114,7 @@
   const hasCompatibleSyncProviders = $derived(
     compatibleSyncProviders.length > 0,
   )
-  const showSetup = $derived(typeof setupType !== "undefined")
+  const showSetup = $derived(Boolean(setupType))
   const addingProvider = $derived(addProviderOpen || showSetup)
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -185,7 +185,7 @@
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
       omittedValue(),
   )
-  const hasPasswordSelection = $derived(typeof selectedPassword !== "undefined")
+  const hasPasswordSelection = $derived(Boolean(selectedPassword))
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )

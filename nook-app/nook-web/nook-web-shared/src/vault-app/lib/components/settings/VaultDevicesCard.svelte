@@ -162,7 +162,7 @@
   )
 
   function currentDeviceName(): string {
-    if (typeof navigator === 'undefined')
+    if (!("navigator" in globalThis))
       return vault.t('devices_card.this_browser_os')
     const ua = navigator.userAgent
     let os = vault.t('devices_card.unknown_os')

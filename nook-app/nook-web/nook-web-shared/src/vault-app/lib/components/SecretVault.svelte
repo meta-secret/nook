@@ -245,7 +245,7 @@
   }
 
   async function toggleReveal(id: string) {
-    const revealing = typeof decryptedSecrets[id] === "undefined"
+    const revealing = !(id in decryptedSecrets)
     decryptedSecrets = await toggleSecretExposure(
       decryptedSecrets,
       id,
@@ -276,7 +276,7 @@
 
   async function refreshAuthenticatorCode(id: string) {
     const code = await vault.currentAuthenticatorCode(id)
-    if (typeof decryptedSecrets[id] === "undefined") return
+    if (!(id in decryptedSecrets)) return
     authenticatorCodes = { ...authenticatorCodes, [id]: code }
   }
 

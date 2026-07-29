@@ -49,6 +49,9 @@ mutable flags create the same problem.
   `not-selected/selected`, `locked/active`, or more precise domain language.
 - Do not create sentinel strings, fake default objects, non-null assertions,
   casts, or decorative one-variant wrappers to satisfy the check.
+- Never hide the sentinel behind a string comparison such as
+  `typeof value === "undefined"`. Use a structural property/capability check
+  for external shape, or normalize immediately into a semantic union.
 
 ## Scope
 
@@ -109,8 +112,8 @@ type ImportState =
 ## Validation
 
 The AST-backed preflight rejects every executable or type-level `undefined`
-token and every generic optional-state escape hatch in authored JavaScript,
-TypeScript, and Svelte while ignoring comments and string literals. Add
-positive and negative fixtures whenever the rule is sharpened. Run
-`task format` before pushing and use GitHub Actions as the product validation
-gate.
+token, every `typeof` comparison against the string `"undefined"`, and every
+generic optional-state escape hatch in authored JavaScript, TypeScript, and
+Svelte while ignoring comments and unrelated prose strings. Add positive and
+negative fixtures whenever the rule is sharpened. Run `task format` before
+pushing and use GitHub Actions as the product validation gate.

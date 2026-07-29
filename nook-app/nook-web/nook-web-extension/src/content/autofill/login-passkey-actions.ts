@@ -52,11 +52,7 @@ export async function fillAndSubmitAccount(
       secretId: account.secretId,
     },
   })
-  if (
-    !response?.ok ||
-    !response.username ||
-    typeof response.password === 'undefined'
-  ) {
+  if (!response?.ok || !response.username || !('password' in response)) {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,

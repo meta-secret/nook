@@ -9,7 +9,7 @@ export function publishExtensionEventLogUpdate(
   vaultStoreId: string,
   eventLogRecords: ExtensionEventLogRecord[],
 ): void {
-  if (typeof window === 'undefined' || eventLogRecords.length === 0) return
+  if (!("window" in globalThis) || eventLogRecords.length === 0) return
   const message: ExtensionLocalEventLogUpdatedMessage = {
     type: 'nook:extension-local-event-log-updated',
     payload: { vaultStoreId, eventLogRecords },

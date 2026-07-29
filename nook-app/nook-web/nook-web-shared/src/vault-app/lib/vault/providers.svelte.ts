@@ -182,7 +182,7 @@ export function refreshLocalFolderBackupSupport(
   state: ProviderActionsContext,
 ): void {
   state.localFolderBackupSupported =
-    typeof window !== "undefined" && isLocalFolderBackupSupported();
+    "window" in globalThis && isLocalFolderBackupSupported();
 }
 
 export function localProvider(
@@ -217,8 +217,8 @@ export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
   return state.clientPolicy.shouldShowLoginVaultPicker(
     state.isAuthenticated,
     state.localVaults.length,
-    typeof state.selectedLoginVaultStoreId !== "undefined",
-    typeof state.loginSetupType !== "undefined",
+    state.hasSelectedLoginVaultStore,
+    state.loginSetupActive,
     state.addProviderOpen,
     isVaultSessionLocked(),
   );
@@ -250,7 +250,7 @@ export async function handleRemoteVaultAssessStatus(
   const decision = state.clientPolicy.remoteVaultAssessDecision(
     accessStatus,
     state.loginRequiresExistingVault,
-    typeof state.loginSetupType !== "undefined",
+    state.loginSetupActive,
   );
   switch (decision) {
     case RemoteVaultAssessDecision.PromptRecoveryFromCache:
@@ -474,7 +474,7 @@ export function cancelAddProvider(state: ProviderActionsContext) {
 
 export function cancelProviderSetup(state: ProviderActionsContext) {
   resetICloudSignInState(state);
-  if (state.addProviderOpen && typeof state.loginSetupType !== "undefined") {
+  if (state.addProviderOpen && state.loginSetupActive) {
     const setupType = state.loginSetupType;
     state.clearLoginSetup();
     state.githubPat = "";
@@ -528,7 +528,7 @@ export async function ensureProviderSaved(
     ? state.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
-  const isNewSetup = typeof state.loginSetupType !== "undefined";
+  const isNewSetup = state.loginSetupActive;
   let oauthProviderToUpdate: OAuthProviderUpdate = { kind: "not-required" };
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
@@ -558,8 +558,7 @@ export async function ensureProviderSaved(
       : omittedValue();
 
   const isExplicitAdd =
-    state.addProviderOpen ||
-    (state.isAuthenticated && typeof state.loginSetupType !== "undefined");
+    state.addProviderOpen || (state.isAuthenticated && state.loginSetupActive);
 
   if (isNewSetup && type !== "local") {
     if (type === "local-folder" && !localFolderSnapshot?.handleId) {

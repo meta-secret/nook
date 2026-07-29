@@ -49,7 +49,7 @@ export async function switchToVault(
 ): Promise<void> {
   const switchDecision = state.clientPolicy.vaultSwitchTarget(
     storeId,
-    typeof state.activeVaultStoreId !== "undefined",
+    state.hasActiveVaultStore,
     state.activeVaultStoreId ?? "",
     state.isVerifying,
   );

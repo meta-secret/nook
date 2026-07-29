@@ -459,7 +459,7 @@ function isCleanCodexReviewComment(
     return false;
   }
   const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
-  return typeof reviewedCommit !== "undefined" && headSha.startsWith(reviewedCommit);
+  return Boolean(reviewedCommit) && headSha.startsWith(reviewedCommit);
 }
 
 function isCodexCleanReviewStatusComment(body: string, login: string | void): boolean {

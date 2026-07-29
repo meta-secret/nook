@@ -146,7 +146,7 @@ function findFields(
   return Array.from(
     queryRoot.querySelectorAll<HTMLInputElement>(selector),
   ).filter((field) =>
-    typeof formScope === "undefined"
+    !formScope
       ? true
       : formScope.kind === "unowned"
         ? !field.form

@@ -116,7 +116,7 @@ export async function buildPrAudit(
     reasons.push(`head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`);
   }
   for (const workflow of requiredWorkflows) {
-    if (typeof workflow.runId === "undefined") {
+    if (!("runId" in workflow)) {
       reasons.push(`${workflow.workflowName} run is not indexed for the current head`);
     } else if (workflow.status !== "completed") {
       reasons.push(`${workflow.workflowName} run is ${workflow.status}`);

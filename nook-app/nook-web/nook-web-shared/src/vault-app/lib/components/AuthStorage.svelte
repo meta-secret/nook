@@ -94,7 +94,7 @@
     })
   }
 
-  const showSetup = $derived(typeof setupType !== "undefined")
+  const showSetup = $derived(Boolean(setupType))
   const addingProvider = $derived(addProviderOpen || showSetup)
   const setupCanConnect = $derived(
     setupType === 'local' ||

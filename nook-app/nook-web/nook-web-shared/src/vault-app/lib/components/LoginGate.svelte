@@ -132,7 +132,7 @@
   let showProviderSetupLink = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
-  const showSetup = $derived(typeof setupType !== "undefined")
+  const showSetup = $derived(Boolean(setupType))
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )

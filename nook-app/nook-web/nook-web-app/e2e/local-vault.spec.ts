@@ -257,7 +257,7 @@ test.describe('local vault', () => {
           if (!vault || vault.isAuthenticated) return false
           const cleanupProbe =
             sessionStorage.getItem('nook_cleanup_probe') ?? omittedValue()
-          if (typeof cleanupProbe !== 'undefined') {
+          if (cleanupProbe) {
             return false
           }
           try {

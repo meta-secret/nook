@@ -113,7 +113,7 @@ export async function loadAuthenticatorPicker(
       !isPendingAuthenticatorPicker(stored) ||
       stored.requestId !== requestId
     ) {
-      if (typeof stored !== 'undefined') await removeSessionStorage(key)
+      if (stored) await removeSessionStorage(key)
       return
     }
     request = stored
@@ -309,7 +309,7 @@ export async function loadLoginPicker(
     const key = loginPickerStorageKey(requestId)
     const stored = (await getSessionStorage(key))[key]
     if (!isPendingLoginPicker(stored) || stored.requestId !== requestId) {
-      if (typeof stored !== 'undefined') await removeSessionStorage(key)
+      if (stored) await removeSessionStorage(key)
       return
     }
     request = stored

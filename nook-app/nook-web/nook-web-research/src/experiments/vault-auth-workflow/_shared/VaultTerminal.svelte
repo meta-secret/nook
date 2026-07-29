@@ -187,7 +187,7 @@
 
   async function confirmChoice() {
     const value = choices[choiceIndex]
-    if (typeof value === 'undefined') return
+    if (!value) return
     if (step === 'total') {
       total = value
       write(`◆ Total participants  ${total}`, 'answer')

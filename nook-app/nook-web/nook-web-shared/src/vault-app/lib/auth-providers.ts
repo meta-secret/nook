@@ -102,7 +102,7 @@ export function maskGithubPat(
   t?: (key: string) => string,
 ): string {
   const hint = maskGithubPatHintCore(pat ?? omittedValue());
-  if (typeof hint == "undefined") {
+  if (!hint) {
     return t ? t("auth_storage.no_token_saved") : "No token saved";
   }
   return hint;

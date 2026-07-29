@@ -23,7 +23,7 @@ export function readLiveDriveSharedGrantCredentials(): LiveDriveCredentials | vo
 }
 
 export function hasLiveDriveSharedGrantCredentials(): boolean {
-  return typeof readLiveDriveSharedGrantCredentials() !== 'undefined'
+  return Boolean(readLiveDriveSharedGrantCredentials())
 }
 
 async function driveJson<T>(

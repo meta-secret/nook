@@ -208,7 +208,7 @@ export async function requestGoogleAccessToken(options?: {
       },
     };
     slot.client.requestAccessToken(
-      typeof options?.prompt !== "undefined"
+      options && "prompt" in options
         ? { prompt: options.prompt }
         : omittedValue(),
     );

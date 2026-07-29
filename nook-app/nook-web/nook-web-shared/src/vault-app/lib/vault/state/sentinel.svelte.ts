@@ -31,11 +31,8 @@ export class VaultSentinelState {
       return this.sentinelGenesisStoreState.storeId;
     return;
   }
-  set sentinelGenesisStoreId(value: StoreId | void) {
-    this.sentinelGenesisStoreState =
-      typeof value === "undefined"
-        ? { kind: "not-selected" }
-        : { kind: "selected", storeId: value };
+  set sentinelGenesisStoreId(value: StoreId) {
+    this.sentinelGenesisStoreState = { kind: "selected", storeId: value };
   }
   clearSentinelGenesisStore(): void {
     this.sentinelGenesisStoreState = { kind: "not-selected" };

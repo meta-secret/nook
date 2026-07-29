@@ -49,7 +49,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     expiresAt: state.oauthFile.expiresAt,
   });
   const providerToRefresh =
-    typeof state.loginSetupType === "undefined" && !state.addProviderOpen
+    !state.loginSetupActive && !state.addProviderOpen
       ? findDuplicateSyncProvider(state.syncProviders, {
           id: "oauth-refresh-target",
           type: "oauth-file",

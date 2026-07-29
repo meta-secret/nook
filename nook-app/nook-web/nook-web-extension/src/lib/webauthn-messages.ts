@@ -74,7 +74,7 @@ export function isWebsitePasskeyPerformMessage(
     typeof message.payload.vaultStoreId === 'string' &&
     message.payload.vaultStoreId.length > 0 &&
     (!('credentialId' in message.payload) ||
-      typeof message.payload.credentialId === 'undefined' ||
+      !('credentialId' in message.payload) ||
       typeof message.payload.credentialId === 'string')
   )
 }

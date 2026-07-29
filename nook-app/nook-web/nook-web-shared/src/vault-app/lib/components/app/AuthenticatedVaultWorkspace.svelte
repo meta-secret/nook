@@ -56,9 +56,9 @@
   function setAddMode(open: boolean, type: VaultItemType | void) {
     secretsAddOpen = open;
     secretsAddFormType =
-      typeof type === "undefined"
-        ? { kind: "closed" }
-        : { kind: "adding", itemType: type };
+      open && type
+        ? { kind: "adding", itemType: type }
+        : { kind: "closed" };
     onEditorOpenChange(open);
   }
 

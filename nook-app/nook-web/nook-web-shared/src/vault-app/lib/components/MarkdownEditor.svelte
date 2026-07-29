@@ -43,7 +43,7 @@
   }
 
   $effect(() => {
-    if (!fill && tab === 'write' && typeof value !== "undefined") {
+    if (!fill && tab === 'write') {
       setTimeout(adjustHeight, 0)
     }
   })

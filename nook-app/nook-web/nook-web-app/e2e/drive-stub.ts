@@ -114,7 +114,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         sharedPermissionStatus?: number
       },
     ) {
-      if (typeof opts?.vaultYaml !== 'undefined') {
+      if (opts && 'vaultYaml' in opts) {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -263,7 +263,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             const content = allEventFiles().get(eventDigest)
-            if (typeof content === 'undefined') {
+            if (!content) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }

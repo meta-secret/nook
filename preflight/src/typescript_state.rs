@@ -4,11 +4,14 @@ use std::path::{Path, PathBuf};
 
 use crate::Violation;
 
-/// Finds every authored JavaScript, TypeScript, and Svelte `undefined` token.
+/// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`.
 ///
 /// Authored code must model absence explicitly. Optional object shape may use
 /// `?`, callbacks with no value return `void`, and external/browser absence is
 /// normalized by a narrow boundary adapter before it enters application code.
+/// Quoting the sentinel in a `typeof value === "undefined"` comparison is also
+/// forbidden: structural boundaries use property/capability checks, while
+/// application state uses a named tagged union.
 /// Generated declarations, dependencies, build output, and generated WASM
 /// bindings are excluded because they mirror contracts Nook does not author.
 ///
@@ -105,10 +108,14 @@ fn collect_authored_source_files(directory: &Path, files: &mut Vec<PathBuf>) -> 
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
             .is_some_and(|name| name.ends_with(".d.ts"));
+        let is_generated_bundle = path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|name| name.ends_with(".min.js") || name.ends_with(".umd.js"));
         let is_generated_wasm = path
             .components()
             .any(|component| component.as_os_str() == "nook-wasm");
-        if is_source && !is_declaration && !is_generated_wasm {
+        if is_source && !is_declaration && !is_generated_bundle && !is_generated_wasm {
             files.push(path);
         }
     }
@@ -150,7 +157,7 @@ fn typescript_code_undefined_token_lines(source: &str, first_line: usize) -> Vec
         return Vec::new();
     };
     let mut lines = Vec::new();
-    collect_undefined_nodes(tree.root_node(), first_line, &mut lines);
+    collect_undefined_nodes(tree.root_node(), source, first_line, &mut lines);
     lines.sort_unstable();
     lines.dedup();
     lines
@@ -281,15 +288,58 @@ fn direct_union_contains_void(node: tree_sitter::Node<'_>, source: &str) -> bool
     })
 }
 
-fn collect_undefined_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
+fn collect_undefined_nodes(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    first_line: usize,
+    lines: &mut Vec<usize>,
+) {
     if node.kind() == "undefined" || node.kind() == "undefined_type" {
+        lines.push(first_line + node.start_position().row);
+        return;
+    }
+    if node.kind() == "binary_expression" && is_typeof_undefined_comparison(node, source) {
         lines.push(first_line + node.start_position().row);
         return;
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_undefined_nodes(child, first_line, lines);
+        collect_undefined_nodes(child, source, first_line, lines);
     }
+}
+
+fn is_typeof_undefined_comparison(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    let mut child_cursor = node.walk();
+    let compares_equality = node
+        .children(&mut child_cursor)
+        .any(|child| matches!(child.kind(), "===" | "!==" | "==" | "!="));
+    if !compares_equality {
+        return false;
+    }
+
+    let mut cursor = node.walk();
+    let operands: Vec<_> = node.named_children(&mut cursor).collect();
+    if operands.len() != 2 {
+        return false;
+    }
+    (is_typeof_expression(operands[0]) && is_undefined_string(operands[1], source))
+        || (is_undefined_string(operands[0], source) && is_typeof_expression(operands[1]))
+}
+
+fn is_typeof_expression(node: tree_sitter::Node<'_>) -> bool {
+    if node.kind() != "unary_expression" {
+        return false;
+    }
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .any(|child| child.kind() == "typeof")
+}
+
+fn is_undefined_string(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    matches!(node.kind(), "string" | "template_string")
+        && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
+            matches!(text.trim(), "'undefined'" | "\"undefined\"" | "`undefined`")
+        })
 }
 
 fn svelte_undefined_token_lines(source: &str) -> Vec<usize> {
@@ -429,16 +479,22 @@ mod tests {
 
     #[test]
     fn reports_every_code_and_type_token_but_not_prose() {
-        let source = r"
+        let source = r#"
 // undefined is discussed here
 type State = { kind: 'empty' } | { kind: 'ready'; value: string }
 const config: { optional?: string } = {}
 let timer: ReturnType<typeof setTimeout> | undefined
 const missing = value === undefined
 const word = 'undefined'
-";
+const hidden = typeof value === 'undefined'
+const reversed = "undefined" != typeof another
+const parenthesized = typeof(value)===`undefined`
+"#;
 
-        assert_eq!(typescript_code_undefined_token_lines(source, 1), vec![5, 6]);
+        assert_eq!(
+            typescript_code_undefined_token_lines(source, 1),
+            vec![5, 6, 8, 9, 10]
+        );
     }
 
     #[test]

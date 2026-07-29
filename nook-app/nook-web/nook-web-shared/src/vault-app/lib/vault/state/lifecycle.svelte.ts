@@ -17,7 +17,7 @@ type VaultInitialization =
 type EnrollmentLink = { kind: "absent" } | { kind: "pending"; payload: string };
 
 function initialEnrollmentLink(): EnrollmentLink {
-  if (typeof window === "undefined") return { kind: "absent" };
+  if (!("window" in globalThis)) return { kind: "absent" };
   const payload = consumeEnrollmentFromLocation();
   return payload ? { kind: "pending", payload } : { kind: "absent" };
 }
@@ -30,12 +30,12 @@ export class VaultLifecycleState extends VaultStateSlices {
       return this.successDismissSchedule.timer;
     return;
   }
+  get successDismissScheduled(): boolean {
+    return this.successDismissSchedule.kind === "scheduled";
+  }
 
-  set successDismissTimer(value: ReturnType<typeof setTimeout> | void) {
-    this.successDismissSchedule =
-      typeof value === "undefined"
-        ? { kind: "stopped" }
-        : { kind: "scheduled", timer: value };
+  set successDismissTimer(value: ReturnType<typeof setTimeout>) {
+    this.successDismissSchedule = { kind: "scheduled", timer: value };
   }
 
   clearSuccessDismissTimer(): void {
@@ -50,11 +50,8 @@ export class VaultLifecycleState extends VaultStateSlices {
     return;
   }
 
-  set idleSessionTracker(value: VaultIdleSessionTracker | void) {
-    this.idleSessionTracking =
-      typeof value === "undefined"
-        ? { kind: "inactive" }
-        : { kind: "active", tracker: value };
+  set idleSessionTracker(value: VaultIdleSessionTracker) {
+    this.idleSessionTracking = { kind: "active", tracker: value };
   }
 
   clearIdleSessionTracker(): void {
@@ -67,12 +64,12 @@ export class VaultLifecycleState extends VaultStateSlices {
     if (this.syncSchedule.kind === "scheduled") return this.syncSchedule.timer;
     return;
   }
+  get syncScheduled(): boolean {
+    return this.syncSchedule.kind === "scheduled";
+  }
 
-  set syncTimer(value: ReturnType<typeof setInterval> | void) {
-    this.syncSchedule =
-      typeof value === "undefined"
-        ? { kind: "stopped" }
-        : { kind: "scheduled", timer: value };
+  set syncTimer(value: ReturnType<typeof setInterval>) {
+    this.syncSchedule = { kind: "scheduled", timer: value };
   }
 
   clearSyncTimer(): void {
@@ -87,11 +84,8 @@ export class VaultLifecycleState extends VaultStateSlices {
     return;
   }
 
-  set initPromise(value: Promise<void> | void) {
-    this.initialization =
-      typeof value === "undefined"
-        ? { kind: "not-started" }
-        : { kind: "initializing", completion: value };
+  set initPromise(value: Promise<void>) {
+    this.initialization = { kind: "initializing", completion: value };
   }
 
   clearInitPromise(): void {
@@ -106,11 +100,8 @@ export class VaultLifecycleState extends VaultStateSlices {
     return;
   }
 
-  set pendingEnrollmentFromUrl(value: string | void) {
-    this.enrollmentLink =
-      typeof value === "undefined"
-        ? { kind: "absent" }
-        : { kind: "pending", payload: value };
+  set pendingEnrollmentFromUrl(value: string) {
+    this.enrollmentLink = { kind: "pending", payload: value };
   }
 
   clearPendingEnrollmentFromUrl(): void {

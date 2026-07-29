@@ -22,7 +22,7 @@ const githubStarsCount = document.querySelector('.github-stars-count')
 const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
 let extensionMetadata = null
 let extensionMetadataUnavailable = false
-let githubStarCount
+let githubStarsState = { kind: 'not-loaded' }
 let followsSystemTheme = true
 
 function selectCryptoTerm(term) {
@@ -132,7 +132,7 @@ async function loadExtensionMetadata() {
 
 function updateGitHubStars(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (typeof githubStarCount === 'undefined') {
+  if (githubStarsState.kind === 'not-loaded') {
     githubStarsCount.textContent = '—'
     githubStarsLink.setAttribute('aria-label', messages['github.link_label'])
     return
@@ -141,10 +141,10 @@ function updateGitHubStars(locale = document.documentElement.lang) {
   githubStarsCount.textContent = new Intl.NumberFormat(locale, {
     notation: 'compact',
     maximumFractionDigits: 1,
-  }).format(githubStarCount)
+  }).format(githubStarsState.count)
   githubStarsLink.setAttribute(
     'aria-label',
-    `${messages['github.link_label']} · ${messages['github.stars_label']}: ${new Intl.NumberFormat(locale).format(githubStarCount)}`,
+    `${messages['github.link_label']} · ${messages['github.stars_label']}: ${new Intl.NumberFormat(locale).format(githubStarsState.count)}`,
   )
 }
 
@@ -167,7 +167,7 @@ function readCachedGitHubStarCount() {
 async function loadGitHubStars() {
   const cached = readCachedGitHubStarCount()
   if (cached) {
-    githubStarCount = cached.count
+    githubStarsState = { kind: 'loaded', count: cached.count }
     updateGitHubStars()
   }
 
@@ -189,12 +189,12 @@ async function loadGitHubStars() {
     ) {
       throw new Error('Invalid GitHub repository metadata.')
     }
-    githubStarCount = repository.stargazers_count
+    githubStarsState = { kind: 'loaded', count: repository.stargazers_count }
     try {
       localStorage.setItem(
         'nook_github_stars',
         JSON.stringify({
-          count: githubStarCount,
+          count: githubStarsState.count,
           updatedAt: Date.now(),
         }),
       )
@@ -234,7 +234,7 @@ function applyLandingLocale(locale, persist = false) {
     )
   }
   for (const label of document.querySelectorAll('.system-label')) {
-    if (typeof label.dataset.termIndex === 'undefined') continue
+    if (!('termIndex' in label.dataset)) continue
     const term = cryptoTerms[Number(label.dataset.termIndex)]
     label.dataset.detail = term.dataset.detail
     label.setAttribute(

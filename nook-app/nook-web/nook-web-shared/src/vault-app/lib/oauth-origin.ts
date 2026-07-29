@@ -31,7 +31,7 @@ const CLOUDFLARE_PR_PREVIEW_HOST =
   /^pr-\d+\.(?:nook-1n8|nokey-(?:sh|simple|sentinel))\.pages\.dev$/i;
 
 function currentLocation(): BrowserLocation | void {
-  return typeof window === "undefined" ? omittedValue() : window.location;
+  return !("window" in globalThis) ? omittedValue() : window.location;
 }
 
 function isAuthorizedOrigin(

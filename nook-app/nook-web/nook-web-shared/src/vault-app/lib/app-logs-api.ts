@@ -82,10 +82,8 @@ export function buildAppLogsUrl(
 ): string {
   const params = new URLSearchParams();
   if (query.minLevel) params.set("minLevel", query.minLevel);
-  if (typeof query.limit !== "undefined")
-    params.set("limit", String(query.limit));
-  if (typeof query.offset !== "undefined")
-    params.set("offset", String(query.offset));
+  if ("limit" in query) params.set("limit", String(query.limit));
+  if ("offset" in query) params.set("offset", String(query.offset));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }

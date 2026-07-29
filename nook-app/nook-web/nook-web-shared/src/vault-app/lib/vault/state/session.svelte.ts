@@ -22,11 +22,8 @@ export class VaultSessionState {
     if (this.managerState.kind === "unlocked") return this.managerState.manager;
     return;
   }
-  set manager(value: NookVaultManager | void) {
-    this.managerState =
-      typeof value === "undefined"
-        ? { kind: "locked" }
-        : { kind: "unlocked", manager: value };
+  set manager(value: NookVaultManager) {
+    this.managerState = { kind: "unlocked", manager: value };
   }
   clearManager(): void {
     this.managerState = { kind: "locked" };
@@ -76,11 +73,8 @@ export class VaultSessionState {
       return this.selectedPasswordEntryState.entryId;
     return;
   }
-  set selectedPasswordEntryId(value: PasswordEntryId | void) {
-    this.selectedPasswordEntryState =
-      typeof value === "undefined"
-        ? { kind: "not-selected" }
-        : { kind: "selected", entryId: value };
+  set selectedPasswordEntryId(value: PasswordEntryId) {
+    this.selectedPasswordEntryState = { kind: "selected", entryId: value };
   }
   clearSelectedPasswordEntry(): void {
     this.selectedPasswordEntryState = { kind: "not-selected" };
@@ -94,11 +88,8 @@ export class VaultSessionState {
       return this.activeEnrollmentEntryState.entryId;
     return;
   }
-  set activeEnrollmentEntryId(value: PasswordEntryId | void) {
-    this.activeEnrollmentEntryState =
-      typeof value === "undefined"
-        ? { kind: "inactive" }
-        : { kind: "active", entryId: value };
+  set activeEnrollmentEntryId(value: PasswordEntryId) {
+    this.activeEnrollmentEntryState = { kind: "active", entryId: value };
   }
   clearActiveEnrollmentEntry(): void {
     this.activeEnrollmentEntryState = { kind: "inactive" };

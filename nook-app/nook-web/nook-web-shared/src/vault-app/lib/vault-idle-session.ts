@@ -83,7 +83,7 @@ export function createVaultIdleSessionTracker(options: {
   };
 
   const start = () => {
-    if (state.kind === "tracking" || typeof document === "undefined") return;
+    if (state.kind === "tracking" || !("document" in globalThis)) return;
     for (const event of ACTIVITY_EVENTS) {
       document.addEventListener(event, onActivity, { passive: true });
     }
@@ -94,7 +94,7 @@ export function createVaultIdleSessionTracker(options: {
     if (state.kind === "stopped") return;
     clearTimers(state.timers);
     state = { kind: "stopped" };
-    if (typeof document === "undefined") return;
+    if (!("document" in globalThis)) return;
     for (const event of ACTIVITY_EVENTS) {
       document.removeEventListener(event, onActivity);
     }

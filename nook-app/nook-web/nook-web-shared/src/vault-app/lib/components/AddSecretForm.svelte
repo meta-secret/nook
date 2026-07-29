@@ -58,7 +58,7 @@
       ? selectedTypeState.itemType
       : omittedValue(),
   );
-  const isEditMode = $derived(typeof initialItem !== "undefined");
+  const isEditMode = $derived(Boolean(initialItem));
 
   const typeTitle = $derived(
     isEditMode

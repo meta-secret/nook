@@ -19,6 +19,11 @@ type ProviderStateFields = Pick<
   VaultProviderState,
   | "activeVaultStoreId"
   | "addProviderOpen"
+  | "clearExistingVaultRecoverySummary"
+  | "clearLocalFolder"
+  | "clearLoginSetup"
+  | "clearOauthFile"
+  | "clearOauthSetupPreset"
   | "existingVaultRecoverySummary"
   | "githubPat"
   | "githubRepo"
@@ -29,12 +34,14 @@ type ProviderStateFields = Pick<
   | "localFolderBackupSupported"
   | "localVaults"
   | "localVaultPresent"
+  | "loginSetupActive"
   | "loginRequiresExistingVault"
   | "loginSetupType"
   | "oauthFile"
   | "oauthSetupPreset"
   | "providers"
   | "providersLoaded"
+  | "hasSelectedLoginVaultStore"
   | "selectedLoginVaultStoreId"
   | "storageMode"
 >;
@@ -102,7 +109,9 @@ type SyncProviderFields = Pick<
   VaultProviderState,
   | "activeVaultStoreId"
   | "addProviderOpen"
+  | "clearLoginSetup"
   | "localVaultPresent"
+  | "loginSetupActive"
   | "loginSetupType"
   | "providers"
   | "selectedLoginVaultStoreId"
@@ -146,6 +155,7 @@ interface SyncStateFields {
   securityConflicts: Array<{ events: string[]; reasons: string[] }>;
   syncingProviderId: string | void;
   syncTimer: ReturnType<typeof setInterval> | void;
+  syncScheduled: boolean;
 }
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -155,6 +165,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   readonly syncProviders: StorageProvider[];
   applyVaultSyncResult(result: NookVaultSyncResult): void;
   clearPendingSyncConflict(): void;
+  clearLocalFolderMultipleVaultsIssue(): void;
+  clearSyncingProvider(): void;
+  clearSyncTimer(): void;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
   beginProviderSetup(type: "local-folder"): void;

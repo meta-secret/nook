@@ -467,8 +467,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isExtensionSessionLockMessage(message)) {
     const extensionSender =
       sender.id === chrome.runtime.id &&
-      (typeof sender.url === 'undefined' ||
-        sender.url.startsWith(chrome.runtime.getURL('')))
+      (!('url' in sender) || sender.url.startsWith(chrome.runtime.getURL('')))
     if (!extensionSender) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false

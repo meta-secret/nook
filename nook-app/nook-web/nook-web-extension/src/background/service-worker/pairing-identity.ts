@@ -539,7 +539,7 @@ export async function getPairingStorage(
 ): Promise<Record<string, unknown>> {
   await ensureLegacyPairingMigration()
   const stored = await readExtensionPairingState()
-  if (typeof key === 'undefined') return stored
+  if (!key) return stored
   return key in stored ? { [key]: stored[key] } : {}
 }
 
@@ -569,7 +569,8 @@ export function isAuthorizedWebsiteSender(
 ): boolean {
   if (
     sender.id !== chrome.runtime.id ||
-    typeof sender.tab?.id === 'undefined' ||
+    !sender.tab ||
+    !('id' in sender.tab) ||
     !sender.url
   ) {
     return false

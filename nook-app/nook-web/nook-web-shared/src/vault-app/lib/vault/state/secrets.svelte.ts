@@ -16,11 +16,8 @@ export class VaultSecretsState {
       return this.secretTypeFilterState.itemType;
     return;
   }
-  set secretTypeFilter(value: VaultItemType | void) {
-    this.secretTypeFilterState =
-      typeof value === "undefined"
-        ? { kind: "all-types" }
-        : { kind: "filtered", itemType: value };
+  set secretTypeFilter(value: VaultItemType) {
+    this.secretTypeFilterState = { kind: "filtered", itemType: value };
   }
   clearSecretTypeFilter(): void {
     this.secretTypeFilterState = { kind: "all-types" };

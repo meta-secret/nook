@@ -17,11 +17,8 @@ export class VaultSyncState {
     if (this.lastSyncedState.kind === "synced") return this.lastSyncedState.at;
     return;
   }
-  set lastSyncedAt(value: SvelteDate | void) {
-    this.lastSyncedState =
-      typeof value === "undefined"
-        ? { kind: "never-synced" }
-        : { kind: "synced", at: value };
+  set lastSyncedAt(value: SvelteDate) {
+    this.lastSyncedState = { kind: "synced", at: value };
   }
   isSyncing = $state(false);
   /** Provider id currently running a manual sync (Settings UI). */
@@ -31,11 +28,11 @@ export class VaultSyncState {
       return this.syncingProviderState.providerId;
     return;
   }
-  set syncingProviderId(value: string | void) {
-    this.syncingProviderState =
-      typeof value === "undefined"
-        ? { kind: "idle" }
-        : { kind: "running", providerId: value };
+  get manualProviderSyncRunning(): boolean {
+    return this.syncingProviderState.kind === "running";
+  }
+  set syncingProviderId(value: string) {
+    this.syncingProviderState = { kind: "running", providerId: value };
   }
   clearSyncingProvider(): void {
     this.syncingProviderState = { kind: "idle" };
@@ -60,11 +57,11 @@ export class VaultSyncState {
       return this.syncConflictState.conflict;
     return;
   }
-  set pendingSyncConflict(value: NookPendingSyncConflict | void) {
-    this.syncConflictState =
-      typeof value === "undefined"
-        ? { kind: "clear" }
-        : { kind: "requires-decision", conflict: value };
+  get syncConflictRequiresDecision(): boolean {
+    return this.syncConflictState.kind === "requires-decision";
+  }
+  set pendingSyncConflict(value: NookPendingSyncConflict) {
+    this.syncConflictState = { kind: "requires-decision", conflict: value };
   }
   clearPendingSyncConflict(): void {
     this.syncConflictState = { kind: "clear" };
@@ -78,13 +75,8 @@ export class VaultSyncState {
       return this.localFolderIssueState.issue;
     return;
   }
-  set localFolderMultipleVaultsIssue(
-    value: LocalFolderMultipleVaultsIssue | void,
-  ) {
-    this.localFolderIssueState =
-      typeof value === "undefined"
-        ? { kind: "healthy" }
-        : { kind: "multiple-vaults", issue: value };
+  set localFolderMultipleVaultsIssue(value: LocalFolderMultipleVaultsIssue) {
+    this.localFolderIssueState = { kind: "multiple-vaults", issue: value };
   }
   clearLocalFolderMultipleVaultsIssue(): void {
     this.localFolderIssueState = { kind: "healthy" };

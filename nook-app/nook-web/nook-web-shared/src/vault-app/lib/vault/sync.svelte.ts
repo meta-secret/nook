@@ -94,7 +94,7 @@ export function applyVaultSyncResult(
     joinEnrollmentPrompt: state.joinEnrollmentPrompt,
   });
 
-  if (typeof result.accessStatus !== "undefined") {
+  if ("accessStatus" in result) {
     log.info("sync state changed (login gate)", {
       accessStatus: result.accessStatus,
       pendingJoins: result.pendingJoins.length,
@@ -103,7 +103,7 @@ export function applyVaultSyncResult(
 
   const decision = state.clientPolicy.unauthenticatedSyncDecision(
     result.changed,
-    typeof result.accessStatus !== "undefined",
+    "accessStatus" in result,
     result.accessStatus ?? VaultAccessStatus.NewVault,
     state.joinEnrollmentPrompt,
     state.awaitingJoinApproval,
@@ -596,7 +596,7 @@ export function startVaultSync(state: SyncActionsContext) {
 }
 
 export function stopVaultSync(state: SyncActionsContext) {
-  if (typeof state.syncTimer !== "undefined") {
+  if (state.syncScheduled) {
     clearInterval(state.syncTimer);
     state.clearSyncTimer();
     log.debug("vault sync timer stopped");

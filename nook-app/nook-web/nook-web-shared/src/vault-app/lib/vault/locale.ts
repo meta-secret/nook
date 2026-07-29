@@ -25,7 +25,7 @@ export async function updateLocale(
 ): Promise<void> {
   state.locale = newLocale;
   localStorage.setItem("nook_locale", newLocale);
-  if (typeof document !== "undefined") {
+  if ("document" in globalThis) {
     document.documentElement.lang = newLocale;
   }
 

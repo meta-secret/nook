@@ -66,7 +66,7 @@
           props.onImport,
         )
         result =
-          typeof imported.result === "undefined"
+          !("result" in imported)
             ? { kind: 'not-run' }
             : { kind: 'completed', result: imported.result }
         error = imported.error
@@ -78,7 +78,7 @@
         props.onImport,
       )
       result =
-        typeof imported.result === "undefined"
+        !("result" in imported)
           ? { kind: 'not-run' }
           : { kind: 'completed', result: imported.result }
       error = imported.error

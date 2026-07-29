@@ -20,7 +20,7 @@ export function enrollmentAppRootUrl(
 
 /** Vault app root used in QR links (`/app/` below the public site root). */
 export function getEnrollmentLinkBase(): string {
-  if (typeof window === "undefined") {
+  if (!("window" in globalThis)) {
     return "";
   }
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
@@ -44,7 +44,7 @@ export function buildEnrollmentLink(
  * strip it from the address bar so secrets do not linger in history.
  */
 export function consumeEnrollmentFromLocation(): string | void {
-  if (typeof window === "undefined") {
+  if (!("window" in globalThis)) {
     return;
   }
 

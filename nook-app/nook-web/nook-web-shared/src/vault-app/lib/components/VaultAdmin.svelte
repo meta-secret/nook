@@ -165,9 +165,7 @@
     },
     set value(value: string | void) {
       activeImportProvider =
-        typeof value === "undefined"
-          ? { kind: "closed" }
-          : { kind: "open", providerId: value };
+        value ? { kind: "open", providerId: value } : { kind: "closed" };
     },
   };
 

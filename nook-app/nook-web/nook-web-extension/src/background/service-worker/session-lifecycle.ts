@@ -127,7 +127,7 @@ function queryActiveTab(): Promise<chrome.tabs.Tab | void> {
 export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
   const tab = await queryActiveTab()
   const tabId = tab?.id
-  if (typeof tabId === 'undefined') {
+  if (!Number.isInteger(tabId)) {
     return { ok: true, status: 'unavailable' }
   }
   try {

@@ -46,13 +46,12 @@ describeLive('live Google Drive shared-folder grant', () => {
     }
     ownerToken = credentials.ownerAccessToken
     joinerEmail = credentials.joinerEmail
-    joinerCredentials =
-      typeof credentials.joinerAccessToken === 'undefined'
-        ? { kind: 'owner-only' }
-        : {
-            kind: 'owner-and-joiner',
-            accessToken: credentials.joinerAccessToken,
-          }
+    joinerCredentials = !('joinerAccessToken' in credentials)
+      ? { kind: 'owner-only' }
+      : {
+          kind: 'owner-and-joiner',
+          accessToken: credentials.joinerAccessToken,
+        }
   })
 
   test.afterAll(async () => {
