@@ -4,7 +4,6 @@ import {
   configuredOAuthFile,
   defaultOAuthFileConfig,
   DEFAULT_DRIVE_BACKUP_NAME,
-  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   missingOAuthAccessToken,
   oauthAccessToken,
@@ -23,7 +22,10 @@ import {
   type ICloudMode,
   type OAuthFileConfig,
 } from "$lib/auth-providers";
-import { verifySharedGoogleDriveFolder } from "$app-wasm";
+import {
+  NookDuplicateSyncProviderState,
+  verifySharedGoogleDriveFolder,
+} from "$app-wasm";
 import {
   ensureValidOAuthFileConfig,
   fetchGoogleAccountEmail,
@@ -93,7 +95,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
           oauthFile: configuredOAuthFile(oauthFile),
           createdAt: "",
         })
-      : { kind: DuplicateSyncProviderKind.Unique };
+      : { state: NookDuplicateSyncProviderState.Unique };
   const refreshed =
     oauthFile.preset === "icloud"
       ? await ensureValidICloudOAuthFileConfig(oauthFile)
@@ -110,7 +112,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     return;
   }
   state.configureOauthFile(refreshed);
-  if (providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate) {
+  if (providerToRefresh.state === NookDuplicateSyncProviderState.Duplicate) {
     state.providers = state.providers.map((provider) =>
       provider.id === providerToRefresh.provider.id
         ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
@@ -121,7 +123,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   log.info("oauth token freshness check refreshed provider", {
     preset: refreshed.preset,
     expiresAt: refreshed.expiresAt,
-    ...(providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate
+    ...(providerToRefresh.state === NookDuplicateSyncProviderState.Duplicate
       ? { providerId: providerToRefresh.provider.id }
       : {}),
   });

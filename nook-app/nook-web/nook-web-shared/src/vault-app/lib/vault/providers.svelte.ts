@@ -9,7 +9,6 @@ import {
   configuredOAuthFile,
   defaultOAuthFileConfig,
   defaultGithubRepository,
-  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   GITHUB_PROVIDER_TYPE,
   githubPatValue,
@@ -57,6 +56,7 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth-providers";
+import { NookDuplicateSyncProviderState } from "$app-wasm";
 import {
   activeVaultProviders,
   authenticatedVaultStorageArgs,
@@ -833,7 +833,7 @@ export async function ensureProviderSaved(
       state.activeVaultProviders,
       provider,
     );
-    if (duplicateProvider.kind === DuplicateSyncProviderKind.Duplicate) {
+    if (duplicateProvider.state === NookDuplicateSyncProviderState.Duplicate) {
       if (isExplicitAdd) {
         state.errorMsg = state.t("auth_storage.duplicate_sync_provider");
         return false;
@@ -898,7 +898,7 @@ export async function ensureProviderSaved(
         oauthFile: configuredOAuthFile(activeOauthFile),
         createdAt: "",
       });
-      if (duplicate.kind === DuplicateSyncProviderKind.Duplicate) {
+      if (duplicate.state === NookDuplicateSyncProviderState.Duplicate) {
         oauthProviderToUpdate = {
           kind: OAuthProviderUpdateKind.Required,
           providerId: duplicate.provider.id,

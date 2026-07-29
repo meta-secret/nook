@@ -1,21 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  ExtensionSessionMessageType,
   ExtensionSessionMessageDispatcher,
-  SessionMessageTypeParseKind,
-  type SessionMessageTypeParse,
 } from '../src/offscreen/session-message-dispatch'
-
-function messageType(message: unknown): SessionMessageTypeParse {
-  if (!message || typeof message !== 'object' || !('type' in message)) {
-    return { kind: SessionMessageTypeParseKind.Invalid }
-  }
-  return typeof message.type === 'string'
-    ? {
-        kind: SessionMessageTypeParseKind.Parsed,
-        messageType: message.type,
-      }
-    : { kind: SessionMessageTypeParseKind.Invalid }
-}
 
 function messagePayload(message: unknown): Record<string, unknown> {
   if (!message || typeof message !== 'object' || !('payload' in message)) {
@@ -31,7 +18,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
   test('stages sensitive fields and clears the caller-owned payload', async () => {
     const payload: Record<string, unknown> = { pin: '123456' }
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messageType,
       messagePayload,
       handleMessage: async (message) => ({
         pin: messagePayload(message).pin,
@@ -39,7 +25,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     const response = dispatcher.enqueue({
-      type: 'nook:extension-session-create-pin',
+      type: ExtensionSessionMessageType.CreatePin,
       payload,
     })
 
@@ -79,7 +65,6 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
-      messageType,
       messagePayload,
       handleMessage: async () => ({ ok: true }),
     })
@@ -90,7 +75,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     expect(
       registration.listener(
-        { type: 'nook:extension-session-status' },
+        { type: ExtensionSessionMessageType.Status },
         { id: 'other-extension' },
         () => {},
       ),

@@ -25,7 +25,39 @@ type SensitivePayloadResidency =
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
   messagePayload: (message: unknown) => Record<string, unknown>
-  messageType: (message: unknown) => SessionMessageTypeParse
+}
+
+export enum ExtensionSessionMessageType {
+  Reset = 'nook:extension-session-reset',
+  MigrateAuthProviders = 'nook:extension-session-migrate-auth-providers',
+  Status = 'nook:extension-session-status',
+  BeginPasskeySetup = 'nook:extension-session-begin-passkey-setup',
+  FinishPasskeySetup = 'nook:extension-session-finish-passkey-setup',
+  RecoverPasskey = 'nook:extension-session-recover-passkey',
+  UnlockOptions = 'nook:extension-session-unlock-options',
+  UnlockPasskey = 'nook:extension-session-unlock-passkey',
+  CreatePin = 'nook:extension-session-create-pin',
+  UnlockPin = 'nook:extension-session-unlock-pin',
+  SealIdentityHandoff = 'nook:extension-session-seal-identity-handoff',
+  ImportVault = 'nook:extension-session-import-vault',
+  UpdateVault = 'nook:extension-session-update-vault',
+  ListPasskeys = 'nook:extension-session-list-passkeys',
+  ListLogins = 'nook:extension-session-list-logins',
+  RevealLogin = 'nook:extension-session-reveal-login',
+  ListAuthenticators = 'nook:extension-session-list-authenticators',
+  AuthenticatorCode = 'nook:extension-session-authenticator-code',
+  AuthenticatorEnrollPreview = 'nook:extension-session-authenticator-enroll-preview',
+  AuthenticatorEnrollCode = 'nook:extension-session-authenticator-enroll-code',
+  AuthenticatorEnrollConfirm = 'nook:extension-session-authenticator-enroll-confirm',
+  AuthenticatorBackupAttach = 'nook:extension-session-authenticator-backup-attach',
+  PlanLoginSave = 'nook:extension-session-plan-login-save',
+  PendingLoginSave = 'nook:extension-session-pending-login-save',
+  CommitLoginSave = 'nook:extension-session-commit-login-save',
+  DismissLoginSave = 'nook:extension-session-dismiss-login-save',
+  CancelPasskey = 'nook:extension-session-cancel-passkey',
+  RegisterPasskey = 'nook:extension-session-register-passkey',
+  AssertPasskey = 'nook:extension-session-assert-passkey',
+  Lock = 'nook:extension-session-lock',
 }
 
 export enum SessionMessageTypeParseKind {
@@ -35,28 +67,55 @@ export enum SessionMessageTypeParseKind {
 
 export type SessionMessageTypeParse =
   | { kind: SessionMessageTypeParseKind.Invalid }
-  | { kind: SessionMessageTypeParseKind.Parsed; messageType: string }
+  | {
+      kind: SessionMessageTypeParseKind.Parsed
+      messageType: ExtensionSessionMessageType
+    }
 
-function sessionMessagePriority(type: string): SessionOperationPriority {
+const extensionSessionMessageTypes = new Set<string>(
+  Object.values(ExtensionSessionMessageType),
+)
+
+export function parseExtensionSessionMessageType(
+  message: unknown,
+): SessionMessageTypeParse {
+  if (!message || typeof message !== 'object' || !('type' in message)) {
+    return { kind: SessionMessageTypeParseKind.Invalid }
+  }
+  if (
+    typeof message.type !== 'string' ||
+    !extensionSessionMessageTypes.has(message.type)
+  ) {
+    return { kind: SessionMessageTypeParseKind.Invalid }
+  }
+  return {
+    kind: SessionMessageTypeParseKind.Parsed,
+    messageType: message.type as ExtensionSessionMessageType,
+  }
+}
+
+function sessionMessagePriority(
+  type: ExtensionSessionMessageType,
+): SessionOperationPriority {
   switch (type) {
-    case 'nook:extension-session-reset':
+    case ExtensionSessionMessageType.Reset:
       return SessionOperationPriority.Expiry
-    case 'nook:extension-session-migrate-auth-providers':
-    case 'nook:extension-session-seal-identity-handoff':
-    case 'nook:extension-session-plan-login-save':
-    case 'nook:extension-session-commit-login-save':
-    case 'nook:extension-session-reveal-login':
-    case 'nook:extension-session-authenticator-code':
-    case 'nook:extension-session-authenticator-enroll-confirm':
-    case 'nook:extension-session-authenticator-backup-attach':
-    case 'nook:extension-session-list-logins':
-    case 'nook:extension-session-list-authenticators':
-    case 'nook:extension-session-register-passkey':
-    case 'nook:extension-session-assert-passkey':
-    case 'nook:extension-session-begin-passkey-setup':
-    case 'nook:extension-session-unlock-options':
-    case 'nook:extension-session-unlock-passkey':
-    case 'nook:extension-session-unlock-pin':
+    case ExtensionSessionMessageType.MigrateAuthProviders:
+    case ExtensionSessionMessageType.SealIdentityHandoff:
+    case ExtensionSessionMessageType.PlanLoginSave:
+    case ExtensionSessionMessageType.CommitLoginSave:
+    case ExtensionSessionMessageType.RevealLogin:
+    case ExtensionSessionMessageType.AuthenticatorCode:
+    case ExtensionSessionMessageType.AuthenticatorEnrollConfirm:
+    case ExtensionSessionMessageType.AuthenticatorBackupAttach:
+    case ExtensionSessionMessageType.ListLogins:
+    case ExtensionSessionMessageType.ListAuthenticators:
+    case ExtensionSessionMessageType.RegisterPasskey:
+    case ExtensionSessionMessageType.AssertPasskey:
+    case ExtensionSessionMessageType.BeginPasskeySetup:
+    case ExtensionSessionMessageType.UnlockOptions:
+    case ExtensionSessionMessageType.UnlockPasskey:
+    case ExtensionSessionMessageType.UnlockPin:
       return SessionOperationPriority.Interactive
     default:
       return SessionOperationPriority.Normal
@@ -85,26 +144,28 @@ function requestedQueueExpiry(
   }
 }
 
-const sensitiveSessionFields: Readonly<Record<string, readonly string[]>> = {
-  'nook:extension-session-finish-passkey-setup': [
+const sensitiveSessionFields: Readonly<
+  Partial<Record<ExtensionSessionMessageType, readonly string[]>>
+> = {
+  [ExtensionSessionMessageType.FinishPasskeySetup]: [
     'credentialId',
     'userHandle',
     'prfInput',
     'prfOutput',
   ],
-  'nook:extension-session-recover-passkey': [
+  [ExtensionSessionMessageType.RecoverPasskey]: [
     'credentialId',
     'userHandle',
     'prfOutput',
   ],
-  'nook:extension-session-unlock-passkey': ['prfOutput'],
-  'nook:extension-session-create-pin': ['pin'],
-  'nook:extension-session-unlock-pin': ['pin'],
-  'nook:extension-session-plan-login-save': ['password'],
-  'nook:extension-session-authenticator-enroll-preview': ['otpauthUri'],
-  'nook:extension-session-authenticator-enroll-code': ['otpauthUri'],
-  'nook:extension-session-authenticator-enroll-confirm': ['otpauthUri'],
-  'nook:extension-session-authenticator-backup-attach': ['codes'],
+  [ExtensionSessionMessageType.UnlockPasskey]: ['prfOutput'],
+  [ExtensionSessionMessageType.CreatePin]: ['pin'],
+  [ExtensionSessionMessageType.UnlockPin]: ['pin'],
+  [ExtensionSessionMessageType.PlanLoginSave]: ['password'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollPreview]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollCode]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorEnrollConfirm]: ['otpauthUri'],
+  [ExtensionSessionMessageType.AuthenticatorBackupAttach]: ['codes'],
 }
 
 function copySensitiveValue(value: unknown): unknown {
@@ -249,13 +310,13 @@ export class ExtensionSessionMessageDispatcher {
   }
 
   enqueue(message: unknown): Promise<unknown> {
-    const parsedType = this.context.messageType(message)
+    const parsedType = parseExtensionSessionMessageType(message)
     if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
       return Promise.resolve()
     }
     const type = parsedType.messageType
     const payload = this.context.messagePayload(message)
-    if (type === 'nook:extension-session-import-vault') {
+    if (type === ExtensionSessionMessageType.ImportVault) {
       return this.enqueueVaultImport(
         message as Record<string, unknown>,
         payload,
@@ -289,13 +350,13 @@ export class ExtensionSessionMessageDispatcher {
 
   registerRuntimeListener(): void {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const parsedType = this.context.messageType(message)
+      const parsedType = parseExtensionSessionMessageType(message)
       if (parsedType.kind === SessionMessageTypeParseKind.Invalid) return false
       const type = parsedType.messageType
-      if (type === 'nook:extension-session-lock') return false
+      if (type === ExtensionSessionMessageType.Lock) return false
       const serviceWorkerOnly =
-        type === 'nook:extension-session-seal-identity-handoff' ||
-        type === 'nook:extension-session-cancel-passkey'
+        type === ExtensionSessionMessageType.SealIdentityHandoff ||
+        type === ExtensionSessionMessageType.CancelPasskey
       const serviceWorkerSender =
         !sender.tab &&
         (!sender.url ||
@@ -308,8 +369,8 @@ export class ExtensionSessionMessageDispatcher {
         return false
       }
       const direct =
-        type === 'nook:extension-session-dismiss-login-save' ||
-        type === 'nook:extension-session-cancel-passkey'
+        type === ExtensionSessionMessageType.DismissLoginSave ||
+        type === ExtensionSessionMessageType.CancelPasskey
       const response = direct
         ? this.context.handleMessage(message)
         : this.enqueue(message)

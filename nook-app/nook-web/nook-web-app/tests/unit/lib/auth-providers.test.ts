@@ -2,7 +2,6 @@ import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DriveFileIdentityKind,
-  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   findDuplicateSyncProviderExcluding,
   formatDriveStorageRef,
@@ -12,6 +11,7 @@ import {
   providerStorageDetail,
   type StorageProvider,
 } from '$lib/auth-providers'
+import { NookDuplicateSyncProviderState } from '$app-wasm'
 
 function githubProvider(
   overrides: Partial<StorageProvider> = {},
@@ -204,7 +204,7 @@ describe('findDuplicateSyncProvider', () => {
       githubPat: 'github_pat_11AAAAAAAAAA',
     })
     expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
-      kind: DuplicateSyncProviderKind.Duplicate,
+      state: NookDuplicateSyncProviderState.Duplicate,
       provider: existing,
     })
   })
@@ -213,7 +213,7 @@ describe('findDuplicateSyncProvider', () => {
     const existing = githubProvider({ id: 'gh-self' })
     expect(
       findDuplicateSyncProviderExcluding([existing], existing, 'gh-self'),
-    ).toEqual({ kind: DuplicateSyncProviderKind.Unique })
+    ).toEqual({ state: NookDuplicateSyncProviderState.Unique })
   })
 
   test('returns the unique state when no duplicate exists', () => {
@@ -226,7 +226,7 @@ describe('findDuplicateSyncProvider', () => {
       githubPat: 'github_pat_11AAAA',
     })
     expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
-      kind: DuplicateSyncProviderKind.Unique,
+      state: NookDuplicateSyncProviderState.Unique,
     })
   })
 })

@@ -431,14 +431,12 @@ export function localFolderProviderConfiguration(
     : { kind: LocalFolderProviderConfigurationKind.Missing };
 }
 
-export enum DuplicateSyncProviderKind {
-  Duplicate = "duplicate",
-  Unique = "unique",
-}
-
 export type DuplicateSyncProvider =
-  | { kind: DuplicateSyncProviderKind.Duplicate; provider: StorageProvider }
-  | { kind: DuplicateSyncProviderKind.Unique };
+  | {
+      state: NookDuplicateSyncProviderState.Duplicate;
+      provider: StorageProvider;
+    }
+  | { state: NookDuplicateSyncProviderState.Unique };
 
 export function findDuplicateSyncProvider(
   providers: StorageProvider[],
@@ -452,11 +450,11 @@ export function findDuplicateSyncProvider(
     if (result.state === NookDuplicateSyncProviderState.Duplicate) {
       const provider = result.provider;
       return {
-        kind: DuplicateSyncProviderKind.Duplicate,
+        state: NookDuplicateSyncProviderState.Duplicate,
         provider,
       };
     }
-    return { kind: DuplicateSyncProviderKind.Unique };
+    return { state: NookDuplicateSyncProviderState.Unique };
   } finally {
     result.free();
   }
@@ -476,11 +474,11 @@ export function findDuplicateSyncProviderExcluding(
     if (result.state === NookDuplicateSyncProviderState.Duplicate) {
       const provider = result.provider;
       return {
-        kind: DuplicateSyncProviderKind.Duplicate,
+        state: NookDuplicateSyncProviderState.Duplicate,
         provider,
       };
     }
-    return { kind: DuplicateSyncProviderKind.Unique };
+    return { state: NookDuplicateSyncProviderState.Unique };
   } finally {
     result.free();
   }

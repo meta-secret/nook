@@ -577,3 +577,364 @@ impl SecretListItem {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
+mod tests {
+    use super::*;
+    use crate::{
+        LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
+        PasskeyPublicKeyCose, PasskeySecret, SecretId,
+    };
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+
+    fn login_record() -> SecretRecord {
+        SecretRecord {
+            id: SecretId::from_vault_record("secret_test"),
+            secret_type: SecretType::Login,
+            data: SecretValue::Login(LoginSecret {
+                website_url: "https://www.github.com/login".to_owned(),
+                username: "alice".to_owned(),
+                password: "secret".to_owned(),
+                notes: String::new(),
+            }),
+        }
+    }
+
+    #[test]
+    fn group_key_strips_www_from_login_url() {
+        assert_eq!(login_record().group_key(), "github.com");
+    }
+
+    #[test]
+    fn website_host_strips_url_credentials_query_and_fragment() -> anyhow::Result<()> {
+        for (url, expected) in [
+            ("https://example.com?next=/vault", "example.com"),
+            ("https://user@example.com/", "example.com"),
+            ("https://example.com/#vault", "example.com"),
+            ("example.com/login", "example.com"),
+        ] {
+            let mut item = login_record().list_item();
+            let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+                return Err(std::io::Error::other("expected login item").into());
+            };
+            *website_url = url.to_owned();
+            assert_eq!(item.website_host(), expected, "{url}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn login_host_matches_origin_uses_normalized_host_equality() {
+        assert!(login_host_matches_origin(
+            "https://www.example.com/login",
+            "https://example.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "example.com",
+            "http://127.0.0.1:4173/login",
+        ));
+        assert!(login_host_matches_origin(
+            "http://127.0.0.1:4173/account",
+            "http://127.0.0.1:4199/login",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://example.com",
+            "https://evil-example.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://notexample.com",
+            "https://example.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://",
+            "https://example.com"
+        ));
+        assert!(login_host_matches_origin(
+            "https://microsoft.com/account",
+            "https://login.microsoftonline.com",
+        ));
+        assert!(login_host_matches_origin(
+            "https://slack.com",
+            "https://app.slack.com",
+        ));
+        assert!(!login_host_matches_origin(
+            "https://microsoft.com",
+            "https://evil-microsoft.com",
+        ));
+    }
+
+    #[test]
+    fn matches_search_uses_metadata_not_secrets() {
+        let record = login_record();
+        assert!(record.matches_search("alice"));
+        assert!(!record.matches_search("correct"));
+    }
+
+    #[test]
+    fn list_item_keeps_login_metadata_and_drops_sensitive_fields() {
+        let item = login_record().list_item();
+        assert_eq!(item.secret_type(), SecretType::Login);
+        assert_eq!(item.website_host(), "github.com");
+        assert_eq!(item.group_key(), "github.com");
+        assert_eq!(item.summary(), "alice");
+        assert_eq!(
+            item.data,
+            SecretListItemData::Login {
+                website_url: "https://www.github.com/login".to_owned(),
+                username: "alice".to_owned(),
+            }
+        );
+        assert!(!format!("{item:?}").contains("correct horse battery staple"));
+    }
+
+    #[test]
+    fn list_item_reports_no_host_for_malformed_login_url() -> anyhow::Result<()> {
+        let mut item = login_record().list_item();
+        let SecretListItemData::Login { website_url, .. } = &mut item.data else {
+            return Err(std::io::Error::other("expected login item").into());
+        };
+        *website_url = "https://".to_owned();
+        assert!(item.website_host().is_empty());
+        assert_eq!(item.group_key(), "No Website");
+        Ok(())
+    }
+
+    #[test]
+    fn list_item_exposes_only_derived_seed_word_count() {
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_seed"),
+            secret_type: SecretType::SeedPhrase,
+            data: SecretValue::SeedPhrase(crate::SeedPhraseSecret {
+                name: "wallet".to_owned(),
+                seed: "abandon ability able about above absent absorb abstract absurd abuse access accident".to_owned(),
+            }),
+        };
+        let item = record.list_item();
+        assert_eq!(
+            item.data,
+            SecretListItemData::SeedPhrase {
+                name: "wallet".to_owned(),
+                word_count: 12,
+            }
+        );
+        assert!(!format!("{item:?}").contains("abandon"));
+    }
+
+    #[test]
+    fn credit_card_list_item_exposes_last4_without_pan_or_cvv() -> anyhow::Result<()> {
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_card"),
+            secret_type: SecretType::CreditCard,
+            data: SecretValue::CreditCard(crate::CreditCardSecret::from_fields(
+                "Personal Visa",
+                "Ada Lovelace",
+                "4111 1111 1111 1111",
+                "12",
+                "2030",
+                "123",
+                "work",
+            )?),
+        };
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::CreditCard);
+        assert_eq!(item.group_key(), "Personal Visa");
+        assert_eq!(item.summary(), "•••• 1111");
+        assert_eq!(
+            item.data,
+            SecretListItemData::CreditCard {
+                title: "Personal Visa".to_owned(),
+                cardholder_name: "Ada Lovelace".to_owned(),
+                last4: "1111".to_owned(),
+                expiration_month: "12".to_owned(),
+                expiration_year: "2030".to_owned(),
+            }
+        );
+        let debug = format!("{item:?}");
+        assert!(!debug.contains("4111111111111111"));
+        assert!(!debug.contains("123"));
+        assert_eq!(record.primary_credential(), "4111111111111111");
+        assert!(record.matches_search("1111"));
+        assert!(!record.matches_search("4111111111111111"));
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_list_item_exposes_account_metadata_without_key_material() -> anyhow::Result<()> {
+        let private_key = URL_SAFE_NO_PAD.encode([7_u8; 96]);
+        let credential_id = URL_SAFE_NO_PAD.encode([8_u8; 32]);
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_passkey"),
+            secret_type: SecretType::Passkey,
+            data: SecretValue::Passkey(PasskeySecret {
+                version: PASSKEY_SECRET_VERSION,
+                rp_id: "login.example.com".to_owned(),
+                rp_name: "Example".to_owned(),
+                credential_id: credential_id.clone(),
+                user_handle: URL_SAFE_NO_PAD.encode([9_u8; 32]),
+                user_name: "alice@example.com".to_owned(),
+                user_display_name: "Alice".to_owned(),
+                key: PasskeyCredentialKey::Es256 {
+                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse(private_key.clone())?,
+                    public_key_cose: PasskeyPublicKeyCose::parse(
+                        URL_SAFE_NO_PAD.encode([10_u8; 77]),
+                    )?,
+                },
+                signature_count: 0,
+                discoverable: true,
+                backup_eligible: true,
+                backup_state: false,
+            }),
+        };
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::Passkey);
+        assert_eq!(item.group_key(), "login.example.com");
+        assert_eq!(item.summary(), "Alice");
+        assert!(item.display_title().contains("example.com"));
+        assert!(!format!("{item:?}").contains(&private_key));
+        assert!(!format!("{item:?}").contains(&credential_id));
+        Ok(())
+    }
+
+    #[test]
+    fn authenticator_list_item_hides_shared_secret_and_backup_codes() -> anyhow::Result<()> {
+        let value = crate::AuthenticatorSecret::from_form_fields(
+            "Example",
+            "alice@example.com",
+            "JBSWY3DPEHPK3PXP",
+            "SHA1",
+            "6",
+            "30",
+            "backup-one\nbackup-two",
+            "",
+        )?;
+        let record = SecretRecord {
+            id: SecretId::from_vault_record("secret_authenticator"),
+            secret_type: SecretType::Authenticator,
+            data: SecretValue::Authenticator(value),
+        };
+        let item = record.list_item();
+        assert_eq!(item.secret_type(), SecretType::Authenticator);
+        assert_eq!(item.group_key(), "Example");
+        assert_eq!(item.summary(), "alice@example.com");
+        assert_eq!(
+            item.data,
+            SecretListItemData::Authenticator {
+                issuer: "Example".to_owned(),
+                account: "alice@example.com".to_owned(),
+                website_url: String::new(),
+                backup_code_count: 2,
+            }
+        );
+        let debug = format!("{item:?}");
+        assert!(!debug.contains("JBSWY"));
+        assert!(!debug.contains("backup-one"));
+        assert!(record.matches_search("example"));
+        assert!(record.matches_search("ALICE@EXAMPLE.COM"));
+        assert!(!record.matches_search("JBSWY3DPEHPK3PXP"));
+        assert!(!record.matches_search("backup-one"));
+        Ok(())
+    }
+
+    #[test]
+    fn authenticator_group_key_uses_url_issuer_host_and_popular_map() {
+        assert_eq!(
+            authenticator_group_key("https://www.custom.example/login", "OpenAI"),
+            "custom.example"
+        );
+        assert_eq!(
+            authenticator_group_key("", "https://www.namecheap.com"),
+            "namecheap.com"
+        );
+        assert_eq!(
+            authenticator_group_key("", "namecheap.com"),
+            "namecheap.com"
+        );
+        assert_eq!(authenticator_group_key("", "OpenAI"), "openai.com");
+        assert_eq!(authenticator_group_key("", "Namecheap"), "namecheap.com");
+        assert_eq!(
+            authenticator_group_key("", "Totally Unknown Service"),
+            "Totally Unknown Service"
+        );
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_clusters_brand_authenticator_with_site_host() {
+        let items = vec![
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login"),
+                data: SecretListItemData::Login {
+                    website_url: "https://www.namecheap.com/".to_owned(),
+                    username: "bynull".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_totp"),
+                data: SecretListItemData::Authenticator {
+                    issuer: "Namecheap".to_owned(),
+                    account: "bynull".to_owned(),
+                    website_url: String::new(),
+                    backup_code_count: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec!["namecheap.com".to_owned(), "namecheap.com".to_owned()]
+        );
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_prefers_account_matched_host() {
+        let items = vec![
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login_a"),
+                data: SecretListItemData::Login {
+                    website_url: "https://accounts.google.com".to_owned(),
+                    username: "other@example.com".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_login_b"),
+                data: SecretListItemData::Login {
+                    website_url: "https://google.com".to_owned(),
+                    username: "alice@example.com".to_owned(),
+                },
+            },
+            SecretListItem {
+                id: SecretId::from_vault_record("secret_totp"),
+                data: SecretListItemData::Authenticator {
+                    issuer: "Google".to_owned(),
+                    account: "alice@example.com".to_owned(),
+                    website_url: String::new(),
+                    backup_code_count: 0,
+                },
+            },
+        ];
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec![
+                "accounts.google.com".to_owned(),
+                "google.com".to_owned(),
+                "google.com".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_entity_group_keys_leaves_unmatched_brand_authenticator() {
+        let items = vec![SecretListItem {
+            id: SecretId::from_vault_record("secret_totp"),
+            data: SecretListItemData::Authenticator {
+                issuer: "Totally Unknown Service".to_owned(),
+                account: "bynull".to_owned(),
+                website_url: String::new(),
+                backup_code_count: 0,
+            },
+        }];
+        assert_eq!(
+            resolve_entity_group_keys(&items),
+            vec!["Totally Unknown Service".to_owned()]
+        );
+    }
+}

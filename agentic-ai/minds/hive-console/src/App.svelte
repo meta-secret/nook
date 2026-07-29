@@ -90,13 +90,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       snapshotState.kind === ObserverFeedKind.Loaded
         ? snapshotState.snapshot.tasks
         : [];
-    const durableTask =
-      durableMatchState.kind === DurableTaskLookupKind.Found
-        ? durableMatchState.task
-        : false;
     const durableTasks =
-      durableTask && !snapshotTasks.some((task) => task.id === durableTask.id)
-        ? [durableTask]
+      durableMatchState.kind === DurableTaskLookupKind.Found &&
+      !snapshotTasks.some((task) => task.id === durableMatchState.task.id)
+        ? [durableMatchState.task]
         : [];
     return [...durableTasks, ...snapshotTasks].filter((task) => {
       const query = search.trim().toLocaleLowerCase();
@@ -245,15 +242,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       const next = (await response.json()) as ObserverSnapshot;
       snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
       unavailable = false;
-      const selectedTaskId =
-        selectedIdState.kind === TaskSelectionKind.Selected
-          ? selectedIdState.taskId
-          : false;
-      const selectedTaskStillAvailable =
-        selectedTaskId !== false &&
-        (next.tasks.some((task) => task.id === selectedTaskId) ||
+      let selectedTaskStillAvailable = false;
+      if (selectedIdState.kind === TaskSelectionKind.Selected) {
+        const selectedTaskId = selectedIdState.taskId;
+        selectedTaskStillAvailable =
+          next.tasks.some((task) => task.id === selectedTaskId) ||
           (durableMatchState.kind === DurableTaskLookupKind.Found &&
-            durableMatchState.task.id === selectedTaskId));
+            durableMatchState.task.id === selectedTaskId);
+      }
       if (
         (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
         !selectedTaskStillAvailable

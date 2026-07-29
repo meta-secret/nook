@@ -311,21 +311,25 @@ export function cloudKitSignInControlDiagnostics(): {
   signOutMount: ReturnType<typeof elementDiagnostics>;
 } {
   const mount = cloudKitElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
-  const controlElement =
+  const control: CloudKitElementLookup =
     mount.kind === CloudKitElementLookupKind.Found
-      ? mount.element.querySelector<HTMLElement>(
-          'button, [role="button"], iframe, a, .apple-auth-button',
-        )
-      : false;
-  const control: CloudKitElementLookup = controlElement
-    ? { kind: CloudKitElementLookupKind.Found, element: controlElement }
-    : { kind: CloudKitElementLookupKind.Missing };
+      ? cloudKitSignInControl(mount.element)
+      : { kind: CloudKitElementLookupKind.Missing };
   const signOutMount = cloudKitElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID);
   return {
     mount: elementDiagnostics(mount),
     control: elementDiagnostics(control),
     signOutMount: elementDiagnostics(signOutMount),
   };
+}
+
+function cloudKitSignInControl(mount: HTMLElement): CloudKitElementLookup {
+  const control = mount.querySelector<HTMLElement>(
+    'button, [role="button"], iframe, a, .apple-auth-button',
+  );
+  return control
+    ? { kind: CloudKitElementLookupKind.Found, element: control }
+    : { kind: CloudKitElementLookupKind.Missing };
 }
 
 export function normalizeWebAuthToken(stored: unknown): WebAuthTokenLookup {
