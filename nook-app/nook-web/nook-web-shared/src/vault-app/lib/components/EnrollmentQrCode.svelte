@@ -1,45 +1,58 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { RefreshCw } from '@lucide/svelte'
-  import QRCodeStyling from 'qr-code-styling'
-  import { createEnrollmentQrOptions } from '$lib/enrollment-qr'
+  import { onMount } from "svelte";
+  import { RefreshCw } from "@lucide/svelte";
+  import QRCodeStyling from "qr-code-styling";
+  import { createEnrollmentQrOptions } from "$lib/enrollment-qr";
   import {
+    QrCodeContainerMountKind,
     QrCodeMountKind,
+    type QrCodeContainerMount,
     type QrCodeMount,
-  } from './enrollment-qr-code-state'
+  } from "./enrollment-qr-code-state";
 
   let {
     enrollmentLink,
     loadingLabel,
     dense = false,
   }: {
-    enrollmentLink: string
-    loadingLabel: string
-    dense?: boolean
-  } = $props()
+    enrollmentLink: string;
+    loadingLabel: string;
+    dense?: boolean;
+  } = $props();
 
-  let container!: HTMLDivElement
-  let qrCode = $state.raw<QrCodeMount>({ kind: QrCodeMountKind.Unmounted })
-  let isReady = $state(false)
-  const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense))
+  let container = $state<QrCodeContainerMount>({
+    kind: QrCodeContainerMountKind.Unmounted,
+  });
+  let qrCode = $state.raw<QrCodeMount>({ kind: QrCodeMountKind.Unmounted });
+  let isReady = $state(false);
+  const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense));
 
   onMount(() => {
-    if (!container) return
+    if (container.kind === QrCodeContainerMountKind.Unmounted) return;
 
-    const instance = new QRCodeStyling(options)
-    qrCode = { kind: QrCodeMountKind.Mounted, instance }
-    instance.append(container)
-    isReady = true
+    const instance = new QRCodeStyling(options);
+    qrCode = { kind: QrCodeMountKind.Mounted, instance };
+    instance.append(container.element);
+    isReady = true;
 
     return () => {
-      qrCode = { kind: QrCodeMountKind.Unmounted }
-    }
-  })
+      qrCode = { kind: QrCodeMountKind.Unmounted };
+    };
+  });
+
+  function captureContainer(element: HTMLDivElement) {
+    container = { kind: QrCodeContainerMountKind.Mounted, element };
+    return {
+      destroy() {
+        container = { kind: QrCodeContainerMountKind.Unmounted };
+      },
+    };
+  }
 
   $effect(() => {
-    if (qrCode.kind === QrCodeMountKind.Unmounted) return
-    qrCode.instance.update(options)
-  })
+    if (qrCode.kind === QrCodeMountKind.Unmounted) return;
+    qrCode.instance.update(options);
+  });
 </script>
 
 <div
@@ -48,7 +61,7 @@
   aria-label="Onboarding QR"
 >
   <div
-    bind:this={container}
+    use:captureContainer
     class="h-full w-full overflow-hidden rounded-lg bg-white [&_svg]:block [&_svg]:h-full [&_svg]:w-full [&_svg]:origin-center [&_svg]:scale-[1.1]"
     aria-hidden="true"
   ></div>

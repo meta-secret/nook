@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { KeyRound, QrCode, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
-  import ICloudEnrollmentAuth from '$lib/components/login/ICloudEnrollmentAuth.svelte'
+  import { KeyRound, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
+  import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from '$lib/components/ui/card'
+  } from "$lib/components/ui/card";
 
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
@@ -20,22 +20,44 @@
     isVerifying,
     onSubmit,
   }: {
-    vault: VaultState
-    code: string
-    passwordEntryId: string
-    passwordEntryLabel: string
-    isVerifying: boolean
-    onSubmit: (password: string) => void | Promise<void>
-  } = $props()
+    vault: VaultState;
+    code: string;
+    passwordEntryId: string;
+    passwordEntryLabel: string;
+    isVerifying: boolean;
+    onSubmit: (password: string) => void | Promise<void>;
+  } = $props();
 
-  let passwordInput = $state('')
-  let passwordField!: HTMLInputElement
+  let passwordInput = $state("");
+  enum PasswordFieldMountKind {
+    Unmounted = "unmounted",
+    Mounted = "mounted",
+  }
+  type PasswordFieldMount =
+    | { kind: PasswordFieldMountKind.Unmounted }
+    | { kind: PasswordFieldMountKind.Mounted; element: HTMLInputElement };
+  let passwordField = $state<PasswordFieldMount>({
+    kind: PasswordFieldMountKind.Unmounted,
+  });
+
+  function capturePasswordField(element: HTMLInputElement) {
+    passwordField = { kind: PasswordFieldMountKind.Mounted, element };
+    return {
+      destroy() {
+        passwordField = { kind: PasswordFieldMountKind.Unmounted };
+      },
+    };
+  }
 
   $effect(() => {
-    void code
-    passwordInput = ''
-    queueMicrotask(() => passwordField?.focus())
-  })
+    void code;
+    passwordInput = "";
+    queueMicrotask(() => {
+      if (passwordField.kind === PasswordFieldMountKind.Mounted) {
+        passwordField.element.focus();
+      }
+    });
+  });
 </script>
 
 <Card
@@ -47,10 +69,10 @@
       class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
     >
       <QrCode class="size-5 shrink-0 text-primary" />
-      {vault.t('login.finish_device_onboarding')}
+      {vault.t("login.finish_device_onboarding")}
     </CardTitle>
     <CardDescription class="text-pretty">
-      {vault.t('login.onboarding_card_desc')}
+      {vault.t("login.onboarding_card_desc")}
     </CardDescription>
   </CardHeader>
 
@@ -58,9 +80,9 @@
     <form
       class="space-y-4"
       onsubmit={(event) => {
-        event.preventDefault()
-        if (!passwordInput.trim()) return
-        void onSubmit(passwordInput)
+        event.preventDefault();
+        if (!passwordInput.trim()) return;
+        void onSubmit(passwordInput);
       }}
     >
       {#if passwordEntryLabel || passwordEntryId}
@@ -68,7 +90,7 @@
           class="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
           data-testid="enrollment-password-entry-hint"
         >
-          {vault.t('onboard_device.vault_password')}
+          {vault.t("onboard_device.vault_password")}
           {#if passwordEntryLabel}
             <span class="font-medium text-foreground">{passwordEntryLabel}</span
             >
@@ -84,20 +106,20 @@
           class="text-sm font-medium text-muted-foreground inline-flex items-center gap-1.5"
         >
           <KeyRound class="size-3.5" />
-          {vault.t('onboard_device.vault_password')}
+          {vault.t("onboard_device.vault_password")}
         </label>
         <input
           id="enrollment-scan-password"
-          bind:this={passwordField}
+          use:capturePasswordField
           type="password"
           class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder={vault.t('login.password_entry_placeholder')}
+          placeholder={vault.t("login.password_entry_placeholder")}
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="enrollment-password-input"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('login.password_help_text')}
+          {vault.t("login.password_help_text")}
         </p>
       </div>
 
@@ -112,10 +134,10 @@
         >
           {#if isVerifying}
             <RefreshCw class="size-4 animate-spin" />
-            {vault.t('login.onboarding_progress')}
+            {vault.t("login.onboarding_progress")}
           {:else}
             <ShieldCheck class="size-4" />
-            {vault.t('login.finish_onboarding')}
+            {vault.t("login.finish_onboarding")}
           {/if}
         </Button>
       </div>

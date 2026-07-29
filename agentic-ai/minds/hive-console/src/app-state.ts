@@ -56,3 +56,12 @@ export enum SnapshotLoadRequestKind {
 export type SnapshotLoadRequest =
   | { kind: SnapshotLoadRequestKind.ScheduledRefresh; signal: AbortSignal }
   | { kind: SnapshotLoadRequestKind.ManualRetry };
+
+export enum DetailPanelMountKind {
+  Unmounted = 'unmounted',
+  Mounted = 'mounted',
+}
+
+export type DetailPanelMount =
+  | { kind: DetailPanelMountKind.Unmounted }
+  | { kind: DetailPanelMountKind.Mounted; element: HTMLElement };

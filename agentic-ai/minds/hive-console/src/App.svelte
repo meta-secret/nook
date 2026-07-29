@@ -30,12 +30,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   import { emergencyCopy } from './emergency-copy';
   import {
     DurableTaskLookupKind,
+    DetailPanelMountKind,
     ObserverFeedKind,
     PollScheduleKind,
     SelectedTaskKind,
     SnapshotLoadRequestKind,
     TaskSelectionKind,
     type DurableTaskLookup,
+    type DetailPanelMount,
     type ObserverFeed,
     type PollSchedule,
     type SelectedTask,
@@ -50,7 +52,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   let search = $state('');
   let loading = $state(true);
   let unavailable = $state(false);
-  let detailPanel!: HTMLElement;
+  let detailPanel = $state<DetailPanelMount>({
+    kind: DetailPanelMountKind.Unmounted,
+  });
   let detailsClosed = $state(false);
   let durableMatchState = $state<DurableTaskLookup>({
     kind: DurableTaskLookupKind.NotFound,
@@ -322,13 +326,23 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     selectedIdState = { kind: TaskSelectionKind.Selected, taskId };
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
+      if (detailPanel.kind === DetailPanelMountKind.Unmounted) return;
       const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
         .matches
         ? 'auto'
         : 'smooth';
-      detailPanel?.scrollIntoView({ behavior, block: 'start' });
-      detailPanel?.focus({ preventScroll: true });
+      detailPanel.element.scrollIntoView({ behavior, block: 'start' });
+      detailPanel.element.focus({ preventScroll: true });
     });
+  }
+
+  function captureDetailPanel(element: HTMLElement) {
+    detailPanel = { kind: DetailPanelMountKind.Mounted, element };
+    return {
+      destroy() {
+        detailPanel = { kind: DetailPanelMountKind.Unmounted };
+      },
+    };
   }
 
   function closeDetails() {
@@ -531,7 +545,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       </section>
 
       <aside
-        bind:this={detailPanel}
+        use:captureDetailPanel
         class:detail-open={selectedState.kind === SelectedTaskKind.Open}
         class="detail-panel"
         aria-live="polite"

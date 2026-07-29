@@ -52,6 +52,7 @@ const providerKeys = [
   "activeVault",
   "openActiveVault",
   "hasActiveVaultStore",
+  "requireActiveVaultStoreId",
   "clearActiveVaultStore",
   "selectedLoginVault",
   "selectLoginVault",
