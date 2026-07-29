@@ -8,6 +8,7 @@ import {
   connectedSetupState,
   extensionDir,
   getServiceWorker,
+  installMockPasskeyRuntime,
   launchExtensionContext,
   matchingSentinelVaultBaseUrl,
   openSimpleVaultConnection,
@@ -352,9 +353,11 @@ test('keeps the extension vault independent and switches after valid re-pairing'
 
   const userDataDir = testInfo.outputPath('chromium-profile-unpair')
   const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installMockPasskeyRuntime)
 
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
+    const extensionId = new URL(popupPage.url()).host
     const simplePage = await openSimpleVaultConnection(context, popupPage)
 
     await advanceCreateVaultWizardToFinalStep(simplePage)
@@ -378,12 +381,15 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       simplePage.getByTestId('extension-connect-approved'),
     ).toBeVisible()
+    await simplePage.getByRole('button', { name: 'Done' }).click()
 
-    await simplePage.getByTestId('nav-settings-tab').click()
+    await simplePage.getByTestId('vault-settings-tab').click()
+    const dangerSection = simplePage.getByTestId('vault-danger-section')
+    await dangerSection.getByRole('button').first().click()
     await simplePage.getByTestId('delete-local-vault-button').click()
     await simplePage.getByTestId('delete-local-vault-confirm').click()
 
-    await expect(simplePage.getByTestId('landing-welcome')).toBeVisible({
+    await expect(simplePage).toHaveURL((url) => url.pathname === '/', {
       timeout: 15_000,
     })
 
@@ -398,17 +404,28 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       ),
     ).toHaveLength(1)
 
-    await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage
+    const replacementPopupPage = await context.newPage()
+    await replacementPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
+    )
+    await expect(
+      replacementPopupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
+    const replacementPage = await openSimpleVaultConnection(
+      context,
+      replacementPopupPage,
+    )
+    await advanceCreateVaultWizardToFinalStep(replacementPage)
+    await replacementPage
       .getByTestId('login-vault-name-input')
       .fill('Replacement vault')
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
+    await replacementPage.getByTestId('login-create-device-vault-btn').click()
     await expect(
-      simplePage.getByTestId('extension-connect-consent'),
+      replacementPage.getByTestId('extension-connect-consent'),
     ).toBeVisible()
-    await simplePage.getByTestId('approve-extension-device-btn').click()
+    await replacementPage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(
-      simplePage,
+      replacementPage,
       async () => {
         const repairedStorage = await readExtensionStorage(context)
         return repairedStorage[setupStorageKey]
