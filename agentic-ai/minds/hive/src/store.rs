@@ -318,16 +318,17 @@ mod tests {
                 })
                 .map(|(_, owner)| owner)
                 .collect::<Vec<_>>();
-            let owning_repairs = active_owners
+            let owning_repairs = if active_owners
                 .iter()
                 .all(|owner| owner.definition.kind == "main-repair")
-                .then(|| {
-                    active_owners
-                        .iter()
-                        .map(|owner| owner.definition.id.clone())
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+            {
+                active_owners
+                    .iter()
+                    .map(|owner| owner.definition.id.clone())
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
             let task = tasks.get_mut(&task_id).expect("claimable task");
             task.status = "RUNNING";
             task.attempt_count += 1;
