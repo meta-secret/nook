@@ -447,10 +447,10 @@ mod tests {
     }
 
     #[test]
-    fn normalization_preserves_active_vault_and_handles_missing_values() {
+    fn normalization_migrates_missing_values_and_preserves_active_vault() {
         let missing = normalize_auth_snapshot(&serde_json::Value::Null);
         assert_eq!(missing.snapshot, AuthProvidersSnapshotData::default());
-        assert!(!missing.changed);
+        assert!(missing.changed);
 
         let raw = json!({ "providers": [], "activeVaultStoreId": "vault-1" });
         let normalized = normalize_auth_snapshot(&raw);
@@ -458,7 +458,7 @@ mod tests {
             normalized.snapshot.active_vault_store_id.as_deref(),
             Some("vault-1")
         );
-        assert!(!normalized.changed);
+        assert!(normalized.changed);
     }
 
     #[test]
