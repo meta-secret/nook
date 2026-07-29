@@ -33,11 +33,11 @@ import type { VaultState } from '$lib/vault.svelte'
 describe('renameLocalVaultLabel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    wasmMocks.setLocalVaultLabel.mockResolvedValue(undefined)
+    wasmMocks.setLocalVaultLabel.mockImplementation(async () => {})
   })
 
   test('keeps a committed manager rename when catalog refresh fails', async () => {
-    const setVaultName = vi.fn().mockResolvedValue(undefined)
+    const setVaultName = vi.fn().mockImplementation(async () => {})
     wasmMocks.listLocalVaults.mockRejectedValue(
       new Error('catalog refresh failed'),
     )
