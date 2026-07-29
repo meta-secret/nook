@@ -1,6 +1,5 @@
 <script lang="ts">
   import { ReplicationType } from '$app-wasm'
-  import { omittedValue } from '../../../explicit-state'
 
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import type {
@@ -29,27 +28,33 @@
     type: StorageProviderType,
     oauthPreset?: OAuthFilePreset,
   ): StorageProvider {
-    return {
+    const base = {
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
       type,
       label: type,
-      githubPat: type === 'github' ? 'github_pat_draft' : omittedValue(),
-      githubRepo: type === 'github' ? 'nook' : omittedValue(),
-      oauthFile:
-        type === 'oauth-file'
-          ? {
-              preset: oauthPreset ?? 'google-drive',
-              accessToken: 'draft-token',
-              fileName: 'nook-events',
-              driveMode: 'private',
-              iCloudMode: 'private',
-            }
-          : omittedValue(),
-      localFolder: omittedValue(),
-      storeId: omittedValue(),
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
     }
+    if (type === 'github') {
+      return {
+        ...base,
+        githubPat: 'github_pat_draft',
+        githubRepo: 'nook',
+      }
+    }
+    if (type === 'oauth-file') {
+      return {
+        ...base,
+        oauthFile: {
+          preset: oauthPreset ?? 'google-drive',
+          accessToken: 'draft-token',
+          fileName: 'nook-events',
+          driveMode: 'private',
+          iCloudMode: 'private',
+        },
+      }
+    }
+    return base
   }
 
   function blocked(

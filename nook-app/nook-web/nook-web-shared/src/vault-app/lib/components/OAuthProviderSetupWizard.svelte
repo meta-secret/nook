@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     FolderOpen,
     FolderPlus,
@@ -17,7 +15,9 @@
   import { createLogger } from '$lib/log'
   import {
     BrowserOAuthProvider,
-    resolveOAuthOriginSupport,
+    OAuthOriginSupportKind,
+    OAuthOriginUnsupportedReason,
+    resolveCurrentOAuthOriginSupport,
   } from '$lib/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
@@ -75,19 +75,21 @@
     isICloud && vault.icloudOAuthPreparing && !vault.icloudOAuthReady,
   )
   const oauthOriginSupport = $derived(
-    resolveOAuthOriginSupport(
+    resolveCurrentOAuthOriginSupport(
       isICloud ? BrowserOAuthProvider.ICloud : BrowserOAuthProvider.GoogleDrive,
     ),
   )
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
-  const oauthOriginUnsupportedMessage = $derived(
-    vault.t(
-      oauthOriginSupport.reason === 'cloudflare-pr-preview'
+  const oauthOriginUnsupportedMessage = $derived.by(() => {
+    if (oauthOriginSupport.kind === OAuthOriginSupportKind.Supported) return ''
+    return vault.t(
+      oauthOriginSupport.reason ===
+        OAuthOriginUnsupportedReason.CloudflarePreview
         ? 'provider_setup.oauth_preview_origin_unsupported'
         : 'provider_setup.oauth_origin_unsupported',
       { origin: oauthOriginSupport.origin },
-    ),
-  )
+    )
+  })
 
   let connectionStepOpen = $state(true)
   let sharedFolderStepOpen = $state(false)
@@ -178,14 +180,12 @@
       }
       log.info('CloudKit native sign-in click observed', {
         eventPhase: event.eventPhase,
-        targetTag:
-          event.target instanceof Element
-            ? event.target.tagName
-            : omittedValue(),
-        currentTargetTag:
-          event.currentTarget instanceof Element
-            ? event.currentTarget.tagName
-            : omittedValue(),
+        ...(event.target instanceof Element
+          ? { targetTag: event.target.tagName }
+          : {}),
+        ...(event.currentTarget instanceof Element
+          ? { currentTargetTag: event.currentTarget.tagName }
+          : {}),
         isTrusted: event.isTrusted,
         defaultPrevented: event.defaultPrevented,
       })

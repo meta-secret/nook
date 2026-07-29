@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest'
 import {
   BrowserOAuthProvider,
   isCloudflarePrPreviewHost,
+  OAuthOriginSupportKind,
+  OAuthOriginUnsupportedReason,
   resolveOAuthOriginSupport,
 } from '$lib/oauth-origin'
 
@@ -78,13 +80,19 @@ describe('oauth origin support', () => {
           BrowserOAuthProvider.GoogleDrive,
           loc(origin, hostname),
         ),
-      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+      ).toMatchObject({
+        supported: false,
+        reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
+      })
       expect(
         resolveOAuthOriginSupport(
           BrowserOAuthProvider.ICloud,
           loc(origin, hostname),
         ),
-      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+      ).toMatchObject({
+        supported: false,
+        reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
+      })
     }
   })
 
@@ -95,9 +103,10 @@ describe('oauth origin support', () => {
     )
 
     expect(support).toEqual({
+      kind: OAuthOriginSupportKind.Unsupported,
       supported: false,
       origin: 'https://pr-191.nook-1n8.pages.dev',
-      reason: 'cloudflare-pr-preview',
+      reason: OAuthOriginUnsupportedReason.CloudflarePreview,
     })
   })
 
@@ -108,9 +117,10 @@ describe('oauth origin support', () => {
         loc('http://localhost:5173', 'localhost'),
       ),
     ).toEqual({
+      kind: OAuthOriginSupportKind.Unsupported,
       supported: false,
       origin: 'http://localhost:5173',
-      reason: 'unregistered-origin',
+      reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
     })
   })
 

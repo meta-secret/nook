@@ -1,20 +1,27 @@
-import { omittedValue } from "../../../explicit-state";
-import type { VaultState } from "$lib/vault.svelte";
-import type { NookAppLocale } from "$app-wasm";
+import type { VaultState } from '$lib/vault.svelte'
+import type { NookAppLocale } from '$app-wasm'
 import {
   get_translation_catalog as getTranslationCatalog,
   resolveTranslationCatalog,
-} from "$app-wasm";
+} from '$app-wasm'
 
-type TranslationCatalog = string;
+enum TranslationCatalogLookupKind {
+  Unavailable = 'unavailable',
+  Loaded = 'loaded',
+}
 
 function wasmTranslationCatalog(
   locale: NookAppLocale,
-): TranslationCatalog | void {
+):
+  | { kind: TranslationCatalogLookupKind.Unavailable }
+  | { kind: TranslationCatalogLookupKind.Loaded; catalog: string } {
   try {
-    return getTranslationCatalog(locale);
+    return {
+      kind: TranslationCatalogLookupKind.Loaded,
+      catalog: getTranslationCatalog(locale),
+    }
   } catch {
-    return;
+    return { kind: TranslationCatalogLookupKind.Unavailable }
   }
 }
 
@@ -23,15 +30,20 @@ export async function updateLocale(
   newLocale: NookAppLocale,
   options?: { preferWasm?: boolean },
 ): Promise<void> {
-  state.locale = newLocale;
-  localStorage.setItem("nook_locale", newLocale);
-  if ("document" in globalThis) {
-    document.documentElement.lang = newLocale;
+  state.locale = newLocale
+  localStorage.setItem('nook_locale', newLocale)
+  if ('document' in globalThis) {
+    document.documentElement.lang = newLocale
   }
 
-  const preferWasm = options?.preferWasm ?? Boolean(state.manager);
-  const wasmCatalog = preferWasm
-    ? wasmTranslationCatalog(newLocale)
-    : omittedValue();
-  state.translations = resolveTranslationCatalog(newLocale, wasmCatalog);
+  const preferWasm = options?.preferWasm ?? Boolean(state.manager)
+  if (!preferWasm) {
+    state.translations = resolveTranslationCatalog(newLocale)
+    return
+  }
+  const wasmCatalog = wasmTranslationCatalog(newLocale)
+  state.translations =
+    wasmCatalog.kind === TranslationCatalogLookupKind.Loaded
+      ? resolveTranslationCatalog(newLocale, wasmCatalog.catalog)
+      : resolveTranslationCatalog(newLocale)
 }

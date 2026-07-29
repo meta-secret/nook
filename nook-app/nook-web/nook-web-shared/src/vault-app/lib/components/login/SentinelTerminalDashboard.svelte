@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
   import {
     ArrowLeft,
     Check,
@@ -155,7 +154,6 @@
       actionBusy = false
     }
   }
-
 </script>
 
 <div
@@ -176,10 +174,10 @@
   {/if}
 
   <section
+    {...status === SentinelGenesisPhase.Inactive
+      ? { 'data-testid': 'sentinel-genesis-policy-step' }
+      : {}}
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"
-    data-testid={status === SentinelGenesisPhase.Inactive
-      ? 'sentinel-genesis-policy-step'
-      : omittedValue()}
   >
     <header
       class="flex items-center justify-between border-b border-[#2d4229] bg-[#101510] px-5 py-3 text-xs"
@@ -299,11 +297,13 @@
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each participantChoices as choice (choice)}
                   <button
+                    {...choice === participantCount
+                      ? {
+                          'data-testid': 'sentinel-genesis-participant-count',
+                        }
+                      : {}}
                     class={`border px-4 py-2 text-xs ${choice === participantCount ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
                     data-participant-count={choice}
-                    data-testid={choice === participantCount
-                      ? 'sentinel-genesis-participant-count'
-                      : omittedValue()}
                     onclick={() => chooseTotal(choice)}
                     >❯ {choice}
                     {vault.t('login.sentinel_terminal_devices')}</button
@@ -318,10 +318,10 @@
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as choice (choice)}
                   <button
+                    {...choice === threshold
+                      ? { 'data-testid': 'sentinel-genesis-threshold' }
+                      : {}}
                     class={`border px-4 py-2 text-xs ${choice === threshold ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
-                    data-testid={choice === threshold
-                      ? 'sentinel-genesis-threshold'
-                      : omittedValue()}
                     onclick={() => chooseThreshold(choice)}
                     >❯ {choice} of {participantCount}</button
                   >

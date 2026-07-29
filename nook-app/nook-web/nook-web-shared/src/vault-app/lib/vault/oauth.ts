@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../explicit-state'
 import type { VaultState } from '$lib/vault.svelte'
 import {
   bindGoogleDriveSharedFolder,
@@ -9,6 +8,7 @@ import {
   setICloudProviderMode,
   type GoogleDriveMode,
   type ICloudMode,
+  type OAuthFileConfig,
 } from '$lib/auth-providers'
 import { verifySharedGoogleDriveFolder } from '$app-wasm'
 import {
@@ -33,7 +33,7 @@ import {
 } from '$lib/icloud-oauth'
 import {
   BrowserOAuthProvider,
-  resolveOAuthOriginSupport,
+  resolveCurrentOAuthOriginSupport,
 } from '$lib/oauth-origin'
 import { createLogger } from '$lib/log'
 import {
@@ -89,11 +89,23 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   log.info('oauth token freshness check refreshed provider', {
     preset: refreshed.preset,
     expiresAt: refreshed.expiresAt,
-    providerId:
-      providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate
-        ? providerToRefresh.provider.id
-        : omittedValue(),
+    ...(providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate
+      ? { providerId: providerToRefresh.provider.id }
+      : {}),
   })
+}
+
+function bindSharedICloudTarget(
+  config: OAuthFileConfig,
+  storageTargetId: string,
+): OAuthFileConfig {
+  const sharedConfig: OAuthFileConfig = {
+    ...config,
+    iCloudMode: 'shared',
+    iCloudShareTarget: storageTargetId,
+  }
+  delete sharedConfig.fileId
+  return sharedConfig
 }
 
 export async function signInWithGoogle(state: VaultState): Promise<void> {
@@ -170,12 +182,10 @@ export async function createICloudSharedProvider(
       { cause: error },
     )
   }
-  state.oauthFile = {
-    ...state.oauthFile,
-    iCloudMode: 'shared',
-    iCloudShareTarget: target.storageTargetId,
-    fileId: omittedValue(),
-  }
+  state.oauthFile = bindSharedICloudTarget(
+    state.oauthFile,
+    target.storageTargetId,
+  )
   state.sharedGrantInstructions = state.t(
     'provider_setup.icloud_shared_created',
   )
@@ -200,12 +210,10 @@ export async function useICloudSharedProvider(
       { cause: error },
     )
   }
-  state.oauthFile = {
-    ...state.oauthFile,
-    iCloudMode: 'shared',
-    iCloudShareTarget: target.storageTargetId,
-    fileId: omittedValue(),
-  }
+  state.oauthFile = bindSharedICloudTarget(
+    state.oauthFile,
+    target.storageTargetId,
+  )
   state.sharedGrantInstructions = state.t(
     'provider_setup.icloud_shared_connected',
   )
@@ -375,7 +383,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
     })
     return
   }
-  const support = resolveOAuthOriginSupport(BrowserOAuthProvider.ICloud)
+  const support = resolveCurrentOAuthOriginSupport(BrowserOAuthProvider.ICloud)
   if (!support.supported) {
     log.warn('iCloud sign-in prepare blocked by origin', support)
     return
@@ -440,7 +448,7 @@ function ensureSupportedOAuthOrigin(
   state: VaultState,
   provider: BrowserOAuthProvider,
 ): boolean {
-  const support = resolveOAuthOriginSupport(provider)
+  const support = resolveCurrentOAuthOriginSupport(provider)
   if (support.supported) {
     log.info('oauth origin supported', {
       provider,

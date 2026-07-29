@@ -1,4 +1,3 @@
-import { omittedValue } from "../../explicit-state";
 /**
  * Google Identity Services (GIS) token client for Drive access.
  *
@@ -12,37 +11,37 @@ import { omittedValue } from "../../explicit-state";
  *   collaborator can read the owner-created folder and immutable event files.
  */
 
-import type { OAuthFileConfig } from "$lib/auth-providers";
-import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
-import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
+import type { OAuthFileConfig } from '$lib/auth-providers'
+import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from '$app-wasm'
+import { GOOGLE_OAUTH_CLIENT_ID } from '$lib/google-oauth-config'
 
-const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
+const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
 export const DRIVE_APPDATA_SCOPE =
-  "https://www.googleapis.com/auth/drive.appdata";
-export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  'https://www.googleapis.com/auth/drive.appdata'
+export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 export const DRIVE_READONLY_SCOPE =
-  "https://www.googleapis.com/auth/drive.readonly";
+  'https://www.googleapis.com/auth/drive.readonly'
 
 export enum GoogleDriveOAuthScope {
-  AppData = "appdata",
-  Shared = "shared",
+  AppData = 'appdata',
+  Shared = 'shared',
 }
 
 export type GoogleOAuthTokens = {
-  accessToken: string;
-  expiresAt: string;
-};
+  accessToken: string
+  expiresAt: string
+}
 
 type GoogleTokenResponse = {
-  access_token: string;
-  expires_in: number;
-  error?: string;
-  error_description?: string;
-};
+  access_token: string
+  expires_in: number
+  error?: string
+  error_description?: string
+}
 
 type TokenClient = {
-  requestAccessToken: (opts?: { prompt?: string }) => void;
-};
+  requestAccessToken: (opts?: { prompt?: string }) => void
+}
 
 declare global {
   interface Window {
@@ -50,197 +49,197 @@ declare global {
       accounts: {
         oauth2: {
           initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (response: GoogleTokenResponse) => void;
-          }) => TokenClient;
-        };
-      };
-    };
+            client_id: string
+            scope: string
+            callback: (response: GoogleTokenResponse) => void
+          }) => TokenClient
+        }
+      }
+    }
   }
 }
 
 enum TokenRequestKind {
-  Idle = "idle",
-  AwaitingResponse = "awaiting-response",
+  Idle = 'idle',
+  AwaitingResponse = 'awaiting-response',
 }
 
 type TokenRequest =
   | { kind: TokenRequestKind.Idle }
   | {
-      kind: TokenRequestKind.AwaitingResponse;
-      resolve: (response: GoogleTokenResponse) => void;
-    };
+      kind: TokenRequestKind.AwaitingResponse
+      resolve: (response: GoogleTokenResponse) => void
+    }
 enum GoogleIdentityServicesKind {
-  NotLoaded = "not-loaded",
-  Loading = "loading",
+  NotLoaded = 'not-loaded',
+  Loading = 'loading',
 }
 
 type GoogleIdentityServices =
   | { kind: GoogleIdentityServicesKind.NotLoaded }
-  | { kind: GoogleIdentityServicesKind.Loading; completion: Promise<void> };
+  | { kind: GoogleIdentityServicesKind.Loading; completion: Promise<void> }
 
 type TokenClientSlot = {
-  scopeKey: string;
-  client: TokenClient;
-  request: TokenRequest;
-};
+  scopeKey: string
+  client: TokenClient
+  request: TokenRequest
+}
 
-const tokenClients = new Map<string, TokenClientSlot>();
+const tokenClients = new Map<string, TokenClientSlot>()
 let googleIdentityServices: GoogleIdentityServices = {
   kind: GoogleIdentityServicesKind.NotLoaded,
-};
+}
 
 export function isGoogleOAuthConfigured(): boolean {
-  return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
+  return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim())
 }
 
 function googleClientId(): string {
-  const clientId = GOOGLE_OAUTH_CLIENT_ID.trim();
+  const clientId = GOOGLE_OAUTH_CLIENT_ID.trim()
   if (!clientId) {
-    throw new Error("Google OAuth client id is not configured.");
+    throw new Error('Google OAuth client id is not configured.')
   }
-  return clientId;
+  return clientId
 }
 
 function scopeString(scope: GoogleDriveOAuthScope): string {
   switch (scope) {
     case GoogleDriveOAuthScope.Shared:
-      return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
+      return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
     case GoogleDriveOAuthScope.AppData:
     default:
-      return DRIVE_APPDATA_SCOPE;
+      return DRIVE_APPDATA_SCOPE
   }
 }
 
 function loadGisScript(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.google?.accounts?.oauth2) {
-      resolve();
-      return;
+      resolve()
+      return
     }
-    const existing = document.querySelector(`script[src="${GIS_SCRIPT_URL}"]`);
+    const existing = document.querySelector(`script[src="${GIS_SCRIPT_URL}"]`)
     if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener('load', () => resolve(), { once: true })
       existing.addEventListener(
-        "error",
-        () => reject(new Error("Failed to load Google Identity Services.")),
+        'error',
+        () => reject(new Error('Failed to load Google Identity Services.')),
         { once: true },
-      );
-      return;
+      )
+      return
     }
-    const script = document.createElement("script");
-    script.src = GIS_SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
+    const script = document.createElement('script')
+    script.src = GIS_SCRIPT_URL
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
     script.onerror = () =>
-      reject(new Error("Failed to load Google Identity Services."));
-    document.head.appendChild(script);
-  });
+      reject(new Error('Failed to load Google Identity Services.'))
+    document.head.appendChild(script)
+  })
 }
 
 async function ensureGisReady(): Promise<void> {
   if (googleIdentityServices.kind === GoogleIdentityServicesKind.Loading) {
-    return googleIdentityServices.completion;
+    return googleIdentityServices.completion
   }
-  const promise = loadGisScript();
+  const promise = loadGisScript()
   googleIdentityServices = {
     kind: GoogleIdentityServicesKind.Loading,
     completion: promise,
-  };
-  return promise;
+  }
+  return promise
 }
 
 async function tokenClientForScope(
   scope: GoogleDriveOAuthScope,
 ): Promise<TokenClientSlot> {
-  await ensureGisReady();
-  const key = scopeString(scope);
-  const existing = tokenClients.get(key);
+  await ensureGisReady()
+  const key = scopeString(scope)
+  const existing = tokenClients.get(key)
   if (existing) {
-    return existing;
+    return existing
   }
   const client = window.google!.accounts.oauth2.initTokenClient({
     client_id: googleClientId(),
     scope: key,
     callback: (response) => {
-      const current = tokenClients.get(key);
+      const current = tokenClients.get(key)
       if (current?.request.kind === TokenRequestKind.AwaitingResponse) {
-        current.request.resolve(response);
-        current.request = { kind: TokenRequestKind.Idle };
+        current.request.resolve(response)
+        current.request = { kind: TokenRequestKind.Idle }
       }
     },
-  });
+  })
   const slot: TokenClientSlot = {
     scopeKey: key,
     client,
     request: { kind: TokenRequestKind.Idle },
-  };
-  tokenClients.set(key, slot);
-  return slot;
+  }
+  tokenClients.set(key, slot)
+  return slot
 }
 
 /** Private mode: initialize the default `drive.appdata` token client. */
 export async function initGoogleAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.AppData);
+  await tokenClientForScope(GoogleDriveOAuthScope.AppData)
 }
 
 /** Shared mode: initialize the per-file write + Drive read token client. */
 export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.Shared);
+  await tokenClientForScope(GoogleDriveOAuthScope.Shared)
 }
 
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
   if (response.error) {
     throw new Error(
-      response.error_description ?? response.error ?? "Google sign-in failed.",
-    );
+      response.error_description ?? response.error ?? 'Google sign-in failed.',
+    )
   }
   if (!response.access_token) {
-    throw new Error("Google did not return an access token.");
+    throw new Error('Google did not return an access token.')
   }
-  const expiresIn = response.expires_in ?? 3600;
+  const expiresIn = response.expires_in ?? 3600
   return {
     accessToken: response.access_token,
     expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-  };
+  }
 }
 
 export async function requestGoogleAccessToken(options?: {
-  prompt?: "" | "none" | "consent" | "select_account";
-  scope?: GoogleDriveOAuthScope;
+  prompt?: '' | 'none' | 'consent' | 'select_account'
+  scope?: GoogleDriveOAuthScope
 }): Promise<GoogleOAuthTokens> {
-  const scope = options?.scope ?? GoogleDriveOAuthScope.AppData;
-  const slot = await tokenClientForScope(scope);
+  const scope = options?.scope ?? GoogleDriveOAuthScope.AppData
+  const slot = await tokenClientForScope(scope)
 
   return new Promise((resolve, reject) => {
     slot.request = {
       kind: TokenRequestKind.AwaitingResponse,
       resolve: (response) => {
         try {
-          resolve(tokensFromResponse(response));
+          resolve(tokensFromResponse(response))
         } catch (error) {
-          reject(error);
+          reject(error)
         }
       },
-    };
-    slot.client.requestAccessToken(
-      options && "prompt" in options
-        ? { prompt: options.prompt }
-        : omittedValue(),
-    );
-  });
+    }
+    if (options && 'prompt' in options) {
+      slot.client.requestAccessToken({ prompt: options.prompt })
+      return
+    }
+    slot.client.requestAccessToken()
+  })
 }
 
 /** Request the scopes required for cross-account shared-folder replication. */
 export async function requestGoogleDriveSharedAccess(options?: {
-  prompt?: "" | "none" | "consent" | "select_account";
+  prompt?: '' | 'none' | 'consent' | 'select_account'
 }): Promise<GoogleOAuthTokens> {
   return requestGoogleAccessToken({
-    prompt: options?.prompt ?? "consent",
+    prompt: options?.prompt ?? 'consent',
     scope: GoogleDriveOAuthScope.Shared,
-  });
+  })
 }
 
 export function oauthTokensToConfig(
@@ -251,48 +250,48 @@ export function oauthTokensToConfig(
     tokens.accessToken,
     tokens.expiresAt,
     existing,
-  );
+  )
 }
 
 export function isOAuthAccessTokenExpired(
   config: OAuthFileConfig,
   skewMs = 60_000,
 ): boolean {
-  if (!config.expiresAt) return false;
-  const expiresAt = Date.parse(config.expiresAt);
-  if (Number.isNaN(expiresAt)) return false;
-  return Date.now() + skewMs >= expiresAt;
+  if (!config.expiresAt) return false
+  const expiresAt = Date.parse(config.expiresAt)
+  if (Number.isNaN(expiresAt)) return false
+  return Date.now() + skewMs >= expiresAt
 }
 
 export async function ensureValidOAuthFileConfig(
   config: OAuthFileConfig,
 ): Promise<OAuthFileConfig> {
   if (!isOAuthAccessTokenExpired(config)) {
-    return config;
+    return config
   }
   const shared =
-    config.driveMode === "shared" || Boolean(config.folderId?.trim());
+    config.driveMode === 'shared' || Boolean(config.folderId?.trim())
   const scope = shared
     ? GoogleDriveOAuthScope.Shared
-    : GoogleDriveOAuthScope.AppData;
-  const refreshed = await requestGoogleAccessToken({ prompt: "", scope });
-  return oauthTokensToConfig(refreshed, config);
+    : GoogleDriveOAuthScope.AppData
+  const refreshed = await requestGoogleAccessToken({ prompt: '', scope })
+  return oauthTokensToConfig(refreshed, config)
 }
 
 export async function fetchGoogleAccountEmail(
   accessToken: string,
 ): Promise<string | void> {
   const response = await fetch(
-    "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
+    'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)',
     {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
-  );
+  )
   if (!response.ok) {
-    return;
+    return
   }
   const payload = (await response.json()) as {
-    user?: { emailAddress?: string; displayName?: string };
-  };
-  return payload.user?.emailAddress ?? payload.user?.displayName;
+    user?: { emailAddress?: string; displayName?: string }
+  }
+  return payload.user?.emailAddress ?? payload.user?.displayName
 }

@@ -14,7 +14,10 @@ function delegateState(
   for (const key of keys) {
     Object.defineProperty(target, key, {
       enumerable: true,
-      get: () => Reflect.get(state, key),
+      get: () => {
+        const value = Reflect.get(state, key)
+        return typeof value === 'function' ? value.bind(state) : value
+      },
       set: (value: unknown) => Reflect.set(state, key, value),
     })
   }
@@ -46,25 +49,34 @@ const providerKeys = [
   'providersLoaded',
   'localVaults',
   'activeVaultStoreId',
+  'hasActiveVaultStore',
+  'clearActiveVaultStore',
   'selectedLoginVaultStoreId',
+  'hasSelectedLoginVaultStore',
+  'clearSelectedLoginVaultStore',
   'localVaultPresent',
   'localLoginPrepared',
   'loginSetup',
   'activateLoginSetup',
+  'clearLoginSetup',
   'loginRequiresExistingVault',
   'existingVaultRecoverySummary',
+  'clearExistingVaultRecoverySummary',
   'addProviderOpen',
   'storageMode',
   'githubPat',
   'githubRepo',
   'oauthFile',
+  'clearOauthFile',
   'localFolder',
+  'clearLocalFolder',
   'localFolderBackupSupported',
   'vaultArchitecture',
   'draftDeviceMode',
   'draftVaultType',
   'draftReplicationType',
   'oauthSetupPreset',
+  'clearOauthSetupPreset',
   'googleOAuthBusy',
   'icloudOAuthPreparing',
   'icloudOAuthReady',
@@ -97,7 +109,10 @@ const sessionKeys = [
   'loginEnrollmentCode',
   'passwordEntries',
   'selectedPasswordEntryId',
+  'clearSelectedPasswordEntry',
   'activeEnrollmentEntryId',
+  'clearActiveEnrollmentEntry',
+  'clearManager',
 ] as const satisfies readonly (keyof VaultSessionState)[]
 
 const secretsKeys = [
@@ -107,6 +122,7 @@ const secretsKeys = [
   'secretPageSize',
   'secretQuery',
   'secretTypeFilter',
+  'clearSecretTypeFilter',
 ] as const satisfies readonly (keyof VaultSecretsState)[]
 
 const sentinelKeys = [
@@ -116,6 +132,7 @@ const sentinelKeys = [
   'sentinelGenesisParticipants',
   'sentinelGenesisDeliveries',
   'sentinelGenesisStoreId',
+  'clearSentinelGenesisStore',
   'sentinelCeremonyPrompt',
   'sentinelUnlockStatus',
   'sentinelUnlockRequest',
@@ -127,11 +144,16 @@ const syncKeys = [
   'lastSyncedAt',
   'isSyncing',
   'syncingProviderId',
+  'manualProviderSyncRunning',
+  'clearSyncingProvider',
   'isFanOutSyncing',
   'replacementConflicts',
   'securityConflicts',
   'pendingSyncConflict',
+  'syncConflictRequiresDecision',
+  'clearPendingSyncConflict',
   'localFolderMultipleVaultsIssue',
+  'clearLocalFolderMultipleVaultsIssue',
 ] as const satisfies readonly (keyof VaultSyncState)[]
 
 type VaultStateSliceFields = VaultRuntimeState &

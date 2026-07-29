@@ -1,10 +1,9 @@
-import { omittedValue } from "../../explicit-state";
-import type { Options } from "qr-code-styling";
+import type { Options } from 'qr-code-styling'
 
-export const enrollmentQrSize = 360;
+export const enrollmentQrSize = 360
 
-const ink = "#090b10";
-const nookQrBadgeImage = "/nook-qr-badge.png";
+const ink = '#090b10'
+const nookQrBadgeImage = '/nook-qr-badge.png'
 
 export function createEnrollmentQrOptions(
   enrollmentLink: string,
@@ -13,16 +12,16 @@ export function createEnrollmentQrOptions(
   return {
     width: enrollmentQrSize,
     height: enrollmentQrSize,
-    type: "svg",
-    shape: "square",
+    type: 'svg',
+    shape: 'square',
     data: enrollmentLink,
     margin: 4,
     qrOptions: {
       typeNumber: 0,
-      mode: "Byte",
-      errorCorrectionLevel: dense ? "L" : "Q",
+      mode: 'Byte',
+      errorCorrectionLevel: dense ? 'L' : 'Q',
     },
-    image: dense ? omittedValue() : nookQrBadgeImage,
+    ...(dense ? {} : { image: nookQrBadgeImage }),
     imageOptions: {
       hideBackgroundDots: true,
       imageSize: dense ? 0 : 0.13,
@@ -31,19 +30,19 @@ export function createEnrollmentQrOptions(
     },
     dotsOptions: {
       color: ink,
-      type: "dots",
+      type: 'dots',
     },
     cornersSquareOptions: {
       color: ink,
-      type: "extra-rounded",
+      type: 'extra-rounded',
     },
     cornersDotOptions: {
       color: ink,
-      type: "dot",
+      type: 'dot',
     },
     backgroundOptions: {
-      color: "#ffffff",
+      color: '#ffffff',
       round: 0.08,
     },
-  } satisfies Partial<Options>;
+  } satisfies Partial<Options>
 }

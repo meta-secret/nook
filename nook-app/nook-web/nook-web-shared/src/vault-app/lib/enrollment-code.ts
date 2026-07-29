@@ -1,38 +1,41 @@
-import { omittedValue } from "../../explicit-state";
 import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
   VaultApplication,
-} from "$app-wasm";
-import { APP_KIND } from "$lib/app-kind";
+} from '$app-wasm'
+import { APP_KIND } from '$lib/app-kind'
 
-const ENROLLMENT_HASH_PREFIX = "#enroll=";
+const ENROLLMENT_HASH_PREFIX = '#enroll='
+
+enum EnrollmentHistoryState {
+  EnrollmentConsumed = 'enrollment-consumed',
+}
 
 export function enrollmentAppRootUrl(
   siteRoot: string,
   appKind: VaultApplication = APP_KIND,
 ): string {
-  const normalized = siteRoot.replace(/\/$/, "");
+  const normalized = siteRoot.replace(/\/$/, '')
   if (
     appKind === VaultApplication.Simple ||
     appKind === VaultApplication.Sentinel
   ) {
-    return `${normalized}/`;
+    return `${normalized}/`
   }
-  return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;
+  return normalized.endsWith('/app') ? `${normalized}/` : `${normalized}/app/`
 }
 
 /** Vault app root used in QR links (`/app/` below the public site root). */
 export function getEnrollmentLinkBase(): string {
-  if (!("window" in globalThis)) {
-    return "";
+  if (!('window' in globalThis)) {
+    return ''
   }
-  const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
+  const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim()
   if (configured) {
-    return enrollmentAppRootUrl(configured);
+    return enrollmentAppRootUrl(configured)
   }
-  const basePath = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
-  return enrollmentAppRootUrl(`${window.location.origin}${basePath}`);
+  const basePath = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
+  return enrollmentAppRootUrl(`${window.location.origin}${basePath}`)
 }
 
 /** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */
@@ -40,7 +43,7 @@ export function buildEnrollmentLink(
   code: string,
   baseUrl = getEnrollmentLinkBase(),
 ): string {
-  return buildEnrollmentLinkCore(code, baseUrl);
+  return buildEnrollmentLinkCore(code, baseUrl)
 }
 
 /**
@@ -48,36 +51,36 @@ export function buildEnrollmentLink(
  * strip it from the address bar so secrets do not linger in history.
  */
 export function consumeEnrollmentFromLocation(): string | void {
-  if (!("window" in globalThis)) {
-    return;
+  if (!('window' in globalThis)) {
+    return
   }
 
-  const url = new URL(window.location.href);
-  const raw = enrollmentCodeFromUrl(url);
+  const url = new URL(window.location.href)
+  const raw = enrollmentCodeFromUrl(url)
 
   if (!raw) {
-    return;
+    return
   }
 
   history.replaceState(
-    omittedValue(),
-    "",
+    { state: EnrollmentHistoryState.EnrollmentConsumed },
+    '',
     `${url.pathname}${url.search}${url.hash}`,
-  );
-  return normalizeEnrollmentCode(raw);
+  )
+  return normalizeEnrollmentCode(raw)
 }
 
 function enrollmentCodeFromUrl(url: URL): string | void {
   if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
     const code = decodeURIComponent(
       url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
-    );
-    url.hash = "";
-    return code;
+    )
+    url.hash = ''
+    return code
   }
-  const code = url.searchParams.get("enroll")?.valueOf();
+  const code = url.searchParams.get('enroll')?.valueOf()
   if (code) {
-    url.searchParams.delete("enroll");
+    url.searchParams.delete('enroll')
   }
-  return code;
+  return code
 }
