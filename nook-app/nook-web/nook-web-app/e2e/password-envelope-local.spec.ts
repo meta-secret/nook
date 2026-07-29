@@ -218,7 +218,7 @@ test.describe('vault password envelope (local)', () => {
     ) as {
       issued_at: string
       entry_id?: string
-      entry_label?: { label: string; state: string }
+      entry_label?: unknown
       ct?: string
       password?: string
       provider?: unknown

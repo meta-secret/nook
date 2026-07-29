@@ -557,3 +557,29 @@ test('accepts the pairing grant after the extension session was locked', async (
     await context.close()
   }
 })
+
+test('reuses the offscreen session after the service worker restarts', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+  test.skip(isHostedSmoke, 'Hosted smoke keeps a warm unlocked session')
+  testInfo.setTimeout(120_000)
+
+  const userDataDir = testInfo.outputPath('chromium-profile-worker-restart')
+  const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installMockPasskeyRuntime)
+
+  try {
+    const popupPage = await setupPasskeyExtensionPopup(context)
+    const worker = await getServiceWorker(context)
+    await worker.evaluate(() => self.close())
+    await context.waitForEvent('serviceworker', { timeout: 15_000 })
+
+    await popupPage.reload()
+    await expect(
+      popupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible({ timeout: 15_000 })
+  } finally {
+    await context.close()
+  }
+})
