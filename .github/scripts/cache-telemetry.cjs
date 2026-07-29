@@ -469,7 +469,6 @@ module.exports = {
   normalizeBuildRecord,
   parseJsonObjects,
   parseRawJsonProgress,
-  percentage,
   summarizeBuildkit,
   summarizeSccache,
   validateTelemetryRecord,

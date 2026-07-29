@@ -647,6 +647,12 @@ fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::Lang
         return Ok(Vec::new());
     };
     let mut lines = Vec::new();
+    collect_svelte_script_fragments_with(
+        tree.root_node(),
+        source,
+        &mut lines,
+        typescript_code_null_token_lines,
+    )?;
     collect_svelte_null_fragments(tree.root_node(), source, &mut lines)?;
     lines.sort_unstable();
     lines.dedup();
