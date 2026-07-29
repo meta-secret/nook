@@ -17,13 +17,34 @@ repository = "https://github.com/meta-secret/nook"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = [
+    "cfg(kani)",
+    "cfg(loom)",
+    "cfg(dylint_lib, values(any()))",
+] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"
 
+[workspace.metadata.kani.flags]
+default-unwind = "8"
+
+[workspace.metadata.dylint]
+libraries = [
+    { git = "https://github.com/trailofbits/dylint", tag = "v6.0.1", pattern = [
+        "examples/restriction/non_local_effect_before_error_return",
+    ] },
+]
+
 # Compile all dependencies with optimizations even in dev/test mode.
 # This makes cryptographic algorithms (like scrypt) run at native speed during cargo nextest / cargo test.
 [profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
 opt-level = 3

@@ -29,6 +29,29 @@ Use this workflow for quality, CI, and deployment changes.
    - `vitest run`
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
+   - `Rust ecosystem checks / Dependency policy and RustSec` —
+     [`cargo-deny`](https://embarkstudios.github.io/cargo-deny/) checks
+     advisories, licenses, duplicate/forbidden crates, and trusted sources for
+     the complete Cargo graph; [`rustsec/audit-check`](https://github.com/rustsec/audit-check)
+     independently audits the lockfile against the RustSec advisory database
+   - `Rust ecosystem checks / Proptest, Insta, and Loom` —
+     [`proptest`](https://proptest-rs.github.io/proptest/) generates and shrinks
+     domain inputs so invariants cover more than hand-picked examples;
+     [`insta`](https://insta.rs/) stores reviewable snapshots for stable,
+     non-secret structured output; and [`loom`](https://github.com/tokio-rs/loom)
+     explores permitted thread interleavings for bounded concurrency models
+   - `Rust ecosystem checks / Cargo fuzz smoke` —
+     [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html) drives
+     libFuzzer targets and retains minimized crash inputs for parser and
+     boundary hardening
+   - `Rust ecosystem checks / Kani bounded proofs` —
+     [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
+     bounded proof harnesses, including panics, overflow, unsafe behavior, and
+     authored assertions, and produces counterexamples when a property fails
+   - `Rust ecosystem checks / Dylint repository lints` —
+     [`Dylint`](https://trailofbits.github.io/dylint/) runs pinned,
+     repository-selected Rust lints when Clippy cannot express a Nook-specific
+     source rule
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -83,6 +106,23 @@ Use this workflow for quality, CI, and deployment changes.
     `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent
     source-level coverage commands must use `--no-clean` so they reuse and
     extend that instrumented target.
+21. **Ecosystem tools before bespoke preflight:** use a maintained Rust
+    ecosystem tool when it directly expresses the invariant. Dependency
+    advisories, licenses, crate bans/duplicates, and sources belong in
+    `deny.toml`; lockfile vulnerability auditing belongs to RustSec; randomized
+    domain invariants belong in Proptest; stable structured renderings belong
+    in Insta; concurrent state machines belong in Loom; hostile byte inputs
+    belong in cargo-fuzz; bounded exhaustive properties belong in Kani; and
+    reusable AST/type-aware Rust source rules belong in Clippy or Dylint.
+    Keep `preflight` for Nook-specific cross-language architecture, repository
+    topology, delivery, and security contracts that those tools cannot
+    represent. Do not duplicate an ecosystem tool in a custom scanner.
+22. **Cost tiers:** cargo-deny, RustSec, Proptest, and committed Insta snapshots
+    are normal merge checks. Loom models must remain bounded. Cargo-fuzz uses a
+    short merge smoke and longer scheduled/manual campaigns. Kani proofs must
+    declare practical unwind bounds. Dylint libraries and versions are pinned
+    in workspace metadata so compiler-coupled lint behavior changes
+    intentionally.
 
 ## Fix check findings — not silence them
 

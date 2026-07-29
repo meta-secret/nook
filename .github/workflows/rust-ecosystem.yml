@@ -1,0 +1,120 @@
+name: Rust ecosystem checks
+
+on:
+  pull_request:
+    types: [labeled]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rust-ecosystem.yml
+      - deny.toml
+      - nook-app/insta.yaml
+      - fuzz/**
+      - nook-app/**/*.rs
+      - nook-app/**/Cargo.toml
+      - nook-app/Cargo.lock
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-ecosystem-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-policy:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Dependency policy and RustSec
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: nook-app/Cargo.toml
+          command: check
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: nook-app
+
+  deterministic-tests:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Proptest, Insta, and Loom
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nook-app
+      - name: Property and snapshot tests
+        working-directory: nook-app
+        env:
+          INSTA_UPDATE: no
+        run: cargo test --locked -p nook-replication
+      - name: Concurrency permutation model
+        working-directory: nook-app
+        env:
+          RUSTFLAGS: --cfg loom
+        run: cargo test --locked -p nook-replication loom_tests --release
+
+  fuzz-smoke:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Cargo fuzz smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@cargo-fuzz
+      - name: Exercise wire parsers
+        run: cargo fuzz run wire-parsers --manifest-path fuzz/Cargo.toml -- -max_total_time=20
+
+  kani:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Kani bounded proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: model-checking/kani-github-action@v0.67
+        with:
+          working-directory: nook-app
+          args: --package nook-replication
+
+  dylint:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Dylint repository lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview,rustc-dev
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dylint@6.0.1,dylint-link@6.0.1
+      - name: Run configured lint libraries
+        working-directory: nook-app
+        run: cargo dylint --all -- --all-targets

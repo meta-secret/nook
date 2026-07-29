@@ -144,6 +144,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn outbox_is_idempotent_per_provider_and_event() {
@@ -197,5 +198,102 @@ mod tests {
             ReplicaInsertStatus::Conflict
         );
         assert_eq!(store.get_bytes(&1), Some([1_u8].as_slice()));
+    }
+
+    proptest! {
+        #[test]
+        fn missing_event_ids_are_sorted_set_difference(
+            local in proptest::collection::btree_set(any::<u8>(), 0..64),
+            remote in proptest::collection::btree_set(any::<u8>(), 0..64),
+        ) {
+            let mut store = ReplicaStore::new();
+            for event_id in &local {
+                let _ = store.put_event(*event_id, vec![*event_id]);
+            }
+
+            let expected = local.difference(&remote).copied().collect::<Vec<_>>();
+            prop_assert_eq!(store.missing_event_ids(&remote), expected);
+        }
+    }
+
+    #[test]
+    fn remote_classification_shape_is_stable() {
+        insta::assert_debug_snapshot!(
+            RemoteEventLogClassification::MultipleStores {
+                store_ids: vec!["store-a".to_owned(), "store-b".to_owned()],
+            },
+            @r#"
+        MultipleStores {
+            store_ids: [
+                "store-a",
+                "store-b",
+            ],
+        }
+        "#
+        );
+    }
+}
+
+#[cfg(all(test, loom))]
+mod loom_tests {
+    use loom::sync::{Arc, Mutex};
+    use loom::thread;
+
+    #[test]
+    fn serialized_replica_inserts_preserve_immutable_first_writer() {
+        loom::model(|| {
+            let store = Arc::new(Mutex::new(super::ReplicaStore::new()));
+            let first = Arc::clone(&store);
+            let second = Arc::clone(&store);
+
+            let first_writer = thread::spawn(move || {
+                let mut guard = first.lock().expect("loom mutex must remain available");
+                guard.put_event(1_u8, vec![1])
+            });
+            let second_writer = thread::spawn(move || {
+                let mut guard = second.lock().expect("loom mutex must remain available");
+                guard.put_event(1_u8, vec![2])
+            });
+
+            let first_status = first_writer.join().expect("loom writer must finish");
+            let second_status = second_writer.join().expect("loom writer must finish");
+            let guard = store.lock().expect("loom mutex must remain available");
+
+            assert_ne!(first_status, second_status);
+            assert!(
+                matches!(
+                    (first_status, second_status),
+                    (
+                        super::ReplicaInsertStatus::Inserted,
+                        super::ReplicaInsertStatus::Conflict
+                    ) | (
+                        super::ReplicaInsertStatus::Conflict,
+                        super::ReplicaInsertStatus::Inserted
+                    )
+                ),
+                "one serialized writer inserts and the other observes a conflict"
+            );
+            assert!(matches!(guard.get_bytes(&1), Some([1]) | Some([2])));
+        });
+    }
+}
+
+#[cfg(kani)]
+mod kani_proofs {
+    #[kani::proof]
+    fn duplicate_insert_never_replaces_immutable_bytes() {
+        let event_id = kani::any::<u8>();
+        let byte = kani::any::<u8>();
+        let mut store = super::ReplicaStore::new();
+
+        assert_eq!(
+            store.put_event(event_id, vec![byte]),
+            super::ReplicaInsertStatus::Inserted
+        );
+        assert_eq!(
+            store.put_event(event_id, vec![byte]),
+            super::ReplicaInsertStatus::Duplicate
+        );
+        assert_eq!(store.get_bytes(&event_id), Some([byte].as_slice()));
     }
 }
