@@ -7,13 +7,12 @@ import {
   SessionOperationQueue,
   type SessionOperationPriority,
 } from '../lib/session-operation-queue'
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
 
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
+
+type SensitivePayloadResidency =
+  | { kind: 'resident'; payload: Record<string, unknown> }
+  | { kind: 'cleared' }
 
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
@@ -109,31 +108,32 @@ export class ExtensionSessionMessageDispatcher {
     payload: Record<string, unknown>,
     fields: readonly string[],
   ): Promise<unknown> {
-    let pendingPayload: ValueState<Record<string, unknown>> = presentValue({
-      ...payload,
-    })
+    let payloadResidency: SensitivePayloadResidency = {
+      kind: 'resident',
+      payload: { ...payload },
+    }
     for (const field of fields) {
-      if (pendingPayload.kind === 'present') {
-        pendingPayload.value[field] = copySensitiveValue(payload[field])
+      if (payloadResidency.kind === 'resident') {
+        payloadResidency.payload[field] = copySensitiveValue(payload[field])
       }
       clearSensitiveValue(payload[field])
       payload[field] = typeof payload[field] === 'string' ? '' : []
     }
     const clearPending = () => {
-      if (pendingPayload.kind === 'empty') return
+      if (payloadResidency.kind === 'cleared') return
       for (const field of fields) {
-        clearSensitiveValue(pendingPayload.value[field])
-        delete pendingPayload.value[field]
+        clearSensitiveValue(payloadResidency.payload[field])
+        delete payloadResidency.payload[field]
       }
-      pendingPayload = EMPTY_VALUE
+      payloadResidency = { kind: 'cleared' }
     }
     return this.operations.enqueue(
       async () => {
-        if (pendingPayload.kind === 'empty') {
+        if (payloadResidency.kind === 'cleared') {
           throw new Error('Extension session request expired.')
         }
-        const operationPayload = pendingPayload.value
-        pendingPayload = EMPTY_VALUE
+        const operationPayload = payloadResidency.payload
+        payloadResidency = { kind: 'cleared' }
         try {
           return await this.context.handleMessage({
             ...message,
@@ -175,22 +175,22 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
     payload.providers = []
-    let pendingPayload: ValueState<Record<string, unknown>> = presentValue({
-      ...payload,
-      providers: stagedProviders,
-    })
+    let payloadResidency: SensitivePayloadResidency = {
+      kind: 'resident',
+      payload: { ...payload, providers: stagedProviders },
+    }
     const clearPending = () => {
-      if (pendingPayload.kind === 'empty') return
-      scrubProviderCredentials(pendingPayload.value.providers)
-      pendingPayload = EMPTY_VALUE
+      if (payloadResidency.kind === 'cleared') return
+      scrubProviderCredentials(payloadResidency.payload.providers)
+      payloadResidency = { kind: 'cleared' }
     }
     return this.operations.enqueue(
       async () => {
-        if (pendingPayload.kind === 'empty') {
+        if (payloadResidency.kind === 'cleared') {
           throw new Error('Extension session request expired.')
         }
-        const operationPayload = pendingPayload.value
-        pendingPayload = EMPTY_VALUE
+        const operationPayload = payloadResidency.payload
+        payloadResidency = { kind: 'cleared' }
         try {
           return await this.context.handleMessage({
             ...message,

@@ -7,11 +7,12 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  type ImportFileSelection =
+    | { kind: 'not-selected' }
+    | { kind: 'selected'; file: File }
+  type ImportOutcome =
+    | { kind: 'not-run' }
+    | { kind: 'completed'; result: NookImportResult }
 
   let {
     vault,
@@ -30,8 +31,8 @@
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<ValueState<File>>(EMPTY_VALUE)
-  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE)
+  let selectedFile = $state<ImportFileSelection>({ kind: 'not-selected' })
+  let result = $state<ImportOutcome>({ kind: 'not-run' })
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)
@@ -39,19 +40,24 @@
 
   function selectFile(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0]
-    selectedFile = file ? presentValue(file) : EMPTY_VALUE
-    result = EMPTY_VALUE
+    selectedFile = file
+      ? { kind: 'selected', file }
+      : { kind: 'not-selected' }
+    result = { kind: 'not-run' }
     error = ''
   }
 
   async function importFile() {
-    if (selectedFile.kind === 'empty' || busy) return
-    const file = selectedFile.value
+    if (selectedFile.kind === 'not-selected' || busy) return
+    const file = selectedFile.file
     error = ''
-    result = EMPTY_VALUE
+    result = { kind: 'not-run' }
     isImporting = true
     try {
-      result = presentValue(await onImport(await file.text(), password))
+      result = {
+        kind: 'completed',
+        result: await onImport(await file.text(), password),
+      }
       password = ''
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause)
@@ -133,7 +139,7 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={selectedFile.kind === 'empty' || busy}
+        disabled={selectedFile.kind === 'not-selected' || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -152,20 +158,20 @@
         </p>
       {/if}
 
-      {#if result.kind === 'present'}
+      {#if result.kind === 'completed'}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
             {vault.t('bitwarden_import.result_imported', {
-              count: String(result.value.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t('bitwarden_import.result_skipped', {
-              unsupported: String(result.value.skippedUnsupported),
-              duplicates: String(result.value.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

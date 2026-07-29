@@ -3,11 +3,6 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
 import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
@@ -43,17 +38,25 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  let signalWasmBootstrapStarted: ValueState<() => void> = EMPTY_VALUE
+  type BootstrapStartSignal =
+    | { kind: 'waiting-for-handler' }
+    | { kind: 'ready'; signal: () => void }
+  let bootstrapStartSignal: BootstrapStartSignal = {
+    kind: 'waiting-for-handler',
+  }
   const wasmBootstrapStarted = new Promise<void>((resolve) => {
-    signalWasmBootstrapStarted = presentValue(resolve)
+    bootstrapStartSignal = { kind: 'ready', signal: resolve }
   })
-  let releaseWasmBootstrap: ValueState<() => void> = EMPTY_VALUE
+  type BootstrapReleaseSignal =
+    | { kind: 'blocked' }
+    | { kind: 'releasable'; release: () => void }
+  let bootstrapReleaseSignal: BootstrapReleaseSignal = { kind: 'blocked' }
   const wasmBootstrapReleased = new Promise<void>((resolve) => {
-    releaseWasmBootstrap = presentValue(resolve)
+    bootstrapReleaseSignal = { kind: 'releasable', release: resolve }
   })
   await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
-    if (signalWasmBootstrapStarted.kind === 'present') {
-      signalWasmBootstrapStarted.value()
+    if (bootstrapStartSignal.kind === 'ready') {
+      bootstrapStartSignal.signal()
     }
     await wasmBootstrapReleased
     await route.continue().catch(() => {})
@@ -127,8 +130,8 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
-  if (releaseWasmBootstrap.kind === 'present') {
-    releaseWasmBootstrap.value()
+  if (bootstrapReleaseSignal.kind === 'releasable') {
+    bootstrapReleaseSignal.release()
   }
   const replacementChildCount = await page
     .locator('[data-bootstrap-sentinel="replacement-root"]')

@@ -1,10 +1,8 @@
 <script lang="ts">
   import { renderMarkdown } from '$lib/markdown'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  type TextareaMount =
+    | { kind: 'unmounted' }
+    | { kind: 'mounted'; element: HTMLTextAreaElement }
   import MarkdownBody from './MarkdownBody.svelte'
 
   let {
@@ -26,20 +24,20 @@
 
   const previewHtml = $derived(renderMarkdown(value))
 
-  let textareaState: ValueState<HTMLTextAreaElement> = EMPTY_VALUE
+  let textareaState: TextareaMount = { kind: 'unmounted' }
 
   function registerTextarea(node: HTMLTextAreaElement) {
-    textareaState = presentValue(node)
+    textareaState = { kind: 'mounted', element: node }
     return {
       destroy() {
-        textareaState = EMPTY_VALUE
+        textareaState = { kind: 'unmounted' }
       },
     }
   }
 
   function adjustHeight() {
-    if (fill || textareaState.kind === 'empty') return
-    const textareaEl = textareaState.value
+    if (fill || textareaState.kind === 'unmounted') return
+    const textareaEl = textareaState.element
     textareaEl.style.height = 'auto'
     textareaEl.style.height = `${textareaEl.scrollHeight}px`
   }

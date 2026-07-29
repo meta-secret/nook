@@ -15,11 +15,6 @@ import { omittedValue } from "../../explicit-state";
 import type { OAuthFileConfig } from "$lib/auth-providers";
 import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../explicit-state";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 export const DRIVE_APPDATA_SCOPE =
@@ -62,14 +57,24 @@ declare global {
   }
 }
 
+type TokenRequest =
+  | { kind: "idle" }
+  | {
+      kind: "awaiting-response";
+      resolve: (response: GoogleTokenResponse) => void;
+    };
+type GoogleIdentityServices =
+  | { kind: "not-loaded" }
+  | { kind: "loading"; completion: Promise<void> };
+
 type TokenClientSlot = {
   scopeKey: string;
   client: TokenClient;
-  pendingResolve: ValueState<(response: GoogleTokenResponse) => void>;
+  request: TokenRequest;
 };
 
 const tokenClients = new Map<string, TokenClientSlot>();
-let gisReady: ValueState<Promise<void>> = EMPTY_VALUE;
+let googleIdentityServices: GoogleIdentityServices = { kind: "not-loaded" };
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
@@ -121,11 +126,11 @@ function loadGisScript(): Promise<void> {
 }
 
 async function ensureGisReady(): Promise<void> {
-  if (gisReady.kind === "present") {
-    return gisReady.value;
+  if (googleIdentityServices.kind === "loading") {
+    return googleIdentityServices.completion;
   }
   const promise = loadGisScript();
-  gisReady = presentValue(promise);
+  googleIdentityServices = { kind: "loading", completion: promise };
   return promise;
 }
 
@@ -143,16 +148,16 @@ async function tokenClientForScope(
     scope: key,
     callback: (response) => {
       const current = tokenClients.get(key);
-      if (current?.pendingResolve.kind === "present") {
-        current.pendingResolve.value(response);
-        current.pendingResolve = EMPTY_VALUE;
+      if (current?.request.kind === "awaiting-response") {
+        current.request.resolve(response);
+        current.request = { kind: "idle" };
       }
     },
   });
   const slot: TokenClientSlot = {
     scopeKey: key,
     client,
-    pendingResolve: EMPTY_VALUE,
+    request: { kind: "idle" },
   };
   tokenClients.set(key, slot);
   return slot;
@@ -192,13 +197,16 @@ export async function requestGoogleAccessToken(options?: {
   const slot = await tokenClientForScope(scope);
 
   return new Promise((resolve, reject) => {
-    slot.pendingResolve = presentValue((response) => {
-      try {
-        resolve(tokensFromResponse(response));
-      } catch (error) {
-        reject(error);
-      }
-    });
+    slot.request = {
+      kind: "awaiting-response",
+      resolve: (response) => {
+        try {
+          resolve(tokensFromResponse(response));
+        } catch (error) {
+          reject(error);
+        }
+      },
+    };
     slot.client.requestAccessToken(
       typeof options?.prompt !== "undefined"
         ? { prompt: options.prompt }

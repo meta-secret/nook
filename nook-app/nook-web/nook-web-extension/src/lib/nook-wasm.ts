@@ -5,11 +5,6 @@ import {
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
 import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
-import {
   intoWasmStringValue,
   takeWasmStringValue,
 } from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
@@ -28,7 +23,11 @@ import {
   type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
+type ExtensionWasmStartup =
+  | { kind: 'not-started' }
+  | { kind: 'initializing'; operation: Promise<unknown> }
+
+let extensionWasmStartup: ExtensionWasmStartup = { kind: 'not-started' }
 
 export type {
   NookAppLocale,
@@ -36,14 +35,14 @@ export type {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export function ensureNookWasm() {
-  if (wasmInitialization.kind === 'present') {
-    return wasmInitialization.value
+  if (extensionWasmStartup.kind === 'initializing') {
+    return extensionWasmStartup.operation
   }
   const operation = initNookWasm().then((value) => {
     configureVaultApplication('extension')
     return value
   })
-  wasmInitialization = presentValue(operation)
+  extensionWasmStartup = { kind: 'initializing', operation }
   return operation
 }
 

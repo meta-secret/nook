@@ -43,11 +43,12 @@
     providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  type ProviderSelection =
+    | { kind: 'automatic' }
+    | { kind: 'selected'; providerId: string }
+  type PasswordEntrySelection =
+    | { kind: 'not-selected' }
+    | { kind: 'selected'; entryId: PasswordEntryId }
 
   let {
     vault,
@@ -125,8 +126,12 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  let selectedProviderIdState = $state<ValueState<string>>(EMPTY_VALUE)
-  let passwordEntry = $state<ValueState<PasswordEntryId>>(EMPTY_VALUE)
+  let selectedProviderIdState = $state<ProviderSelection>({
+    kind: 'automatic',
+  })
+  let passwordEntry = $state<PasswordEntrySelection>({
+    kind: 'not-selected',
+  })
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
@@ -145,18 +150,18 @@
       firstCompatibleProvider(
         syncProviders,
         vault.vaultArchitecture.replication_type,
-        selectedProviderIdState.kind === 'present'
-          ? selectedProviderIdState.value
+        selectedProviderIdState.kind === 'selected'
+          ? selectedProviderIdState.providerId
           : omittedValue(),
       )?.id ?? ''
     )
   })
   const effectivePasswordEntryId = $derived.by(() => {
     if (
-      passwordEntry.kind === 'present' &&
-      passwordEntries.some((entry) => entry.id === passwordEntry.value)
+      passwordEntry.kind === 'selected' &&
+      passwordEntries.some((entry) => entry.id === passwordEntry.entryId)
     ) {
-      return passwordEntry.value
+      return passwordEntry.entryId
     }
     return ''
   })
@@ -459,7 +464,7 @@
                   data-testid="onboard-password-entry-{entry.id}"
                   disabled={isBusy || isGenerating}
                   onclick={() => {
-                    passwordEntry = presentValue(entry.id)
+                    passwordEntry = { kind: 'selected', entryId: entry.id }
                     passwordInput = ''
                   }}
                 >
@@ -686,7 +691,10 @@
                 disabled={isBusy || isGenerating || !compatible}
                 onclick={() => {
                   if (compatible) {
-                    selectedProviderIdState = presentValue(provider.id)
+                    selectedProviderIdState = {
+                      kind: 'selected',
+                      providerId: provider.id,
+                    }
                   }
                 }}
               >

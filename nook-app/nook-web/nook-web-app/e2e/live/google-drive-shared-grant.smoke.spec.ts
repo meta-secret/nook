@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test'
 import {
-  EMPTY_VALUE,
-  valueState,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
-import {
   createSharedVaultFolder,
   getFileMetadata,
   hasLiveDriveSharedGrantCredentials,
@@ -37,7 +32,10 @@ describeLive('live Google Drive shared-folder grant', () => {
 
   let ownerToken = ''
   let joinerEmail = ''
-  let joinerTokenState: ValueState<string> = EMPTY_VALUE
+  type JoinerCredentials =
+    | { kind: 'owner-only' }
+    | { kind: 'owner-and-joiner'; accessToken: string }
+  let joinerCredentials: JoinerCredentials = { kind: 'owner-only' }
   let folderId = ''
   let markerFileId = ''
 
@@ -48,7 +46,13 @@ describeLive('live Google Drive shared-folder grant', () => {
     }
     ownerToken = credentials.ownerAccessToken
     joinerEmail = credentials.joinerEmail
-    joinerTokenState = valueState(credentials.joinerAccessToken)
+    joinerCredentials =
+      typeof credentials.joinerAccessToken === 'undefined'
+        ? { kind: 'owner-only' }
+        : {
+            kind: 'owner-and-joiner',
+            accessToken: credentials.joinerAccessToken,
+          }
   })
 
   test.afterAll(async () => {
@@ -89,8 +93,8 @@ describeLive('live Google Drive shared-folder grant', () => {
     )
     expect(markerFileId.length).toBeGreaterThan(0)
 
-    if (joinerTokenState.kind === 'present') {
-      const joinerToken = joinerTokenState.value
+    if (joinerCredentials.kind === 'owner-and-joiner') {
+      const joinerToken = joinerCredentials.accessToken
       const joinerFolder = await verifySharedVaultFolder(joinerToken, folderId)
       expect(joinerFolder.canAddChildren).toBe(true)
       expect(joinerFolder.id).toBe(folderId)

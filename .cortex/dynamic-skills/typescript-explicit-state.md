@@ -38,8 +38,15 @@ mutable flags create the same problem.
   and normalize the value into an explicit union immediately.
 - Use `void` for callbacks and commands that intentionally return no value.
 - Normalize missing browser, lookup, parser, cache, and DOM results directly
-  into a `none`/`some` or domain-specific union at the narrow boundary.
+  into a domain-specific union at the narrow boundary.
 - Normalize `null` from external APIs directly into the same explicit union.
+- Never introduce a generic TypeScript `Option` clone. Names such as
+  `ValueState`, `EMPTY_VALUE`, `presentValue`, `valueState`, and
+  `valueFromState` merely rename `undefined`; they do not explain why a value
+  is absent or what transition makes it available.
+- Name both the union and its variants for the lifecycle being modeled:
+  `not-loaded/loaded`, `unmounted/mounted`, `idle/scheduled`,
+  `not-selected/selected`, `locked/active`, or more precise domain language.
 - Do not create sentinel strings, fake default objects, non-null assertions,
   casts, or decorative one-variant wrappers to satisfy the check.
 
@@ -92,6 +99,8 @@ type ImportState =
       absence separately from named application state.
 - [ ] Replace modeled `undefined`, optional state fields, zero-argument runes,
       and coupled booleans with discriminated unions.
+- [ ] Reject generic optional-value wrappers and require semantic type and
+      variant names at every application-state site.
 - [ ] Move portable policy and domain variants to Rust/WASM.
 - [ ] Keep boundary conversion narrow and documented by the surrounding type.
 - [ ] Add transition-focused tests and syntax-aware preflight fixtures.
@@ -100,7 +109,8 @@ type ImportState =
 ## Validation
 
 The AST-backed preflight rejects every executable or type-level `undefined`
-token in authored JavaScript, TypeScript, and Svelte while ignoring comments
-and string literals. Add positive and negative fixtures whenever the rule is
-sharpened. Run `task format` before pushing and use GitHub Actions as the
-product validation gate.
+token and every generic optional-state escape hatch in authored JavaScript,
+TypeScript, and Svelte while ignoring comments and string literals. Add
+positive and negative fixtures whenever the rule is sharpened. Run
+`task format` before pushing and use GitHub Actions as the product validation
+gate.

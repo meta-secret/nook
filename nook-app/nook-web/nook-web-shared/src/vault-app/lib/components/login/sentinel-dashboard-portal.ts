@@ -1,4 +1,5 @@
 export type SentinelDashboard = "card-stack" | "terminal";
+type FocusReturn = { kind: "body" } | { kind: "element"; element: HTMLElement };
 
 type SentinelDashboardPortalParameters = {
   active: boolean;
@@ -20,7 +21,7 @@ export function sentinelDashboardPortal(
   ].join(",");
   const siblingInertState: Array<[HTMLElement, boolean]> = [];
   let active = false;
-  let previousFocus: ValueState<HTMLElement> = EMPTY_VALUE;
+  let previousFocus: FocusReturn = { kind: "body" };
   let returnFocusTestId = "sentinel-dashboard-card-stack";
   node.before(anchor);
 
@@ -72,8 +73,8 @@ export function sentinelDashboardPortal(
         : "sentinel-dashboard-card-stack";
     previousFocus =
       document.activeElement instanceof HTMLElement
-        ? presentValue(document.activeElement)
-        : EMPTY_VALUE;
+        ? { kind: "element", element: document.activeElement }
+        : { kind: "body" };
     document.body.appendChild(node);
     setBackgroundInert(true);
     node.addEventListener("keydown", trapFocus);
@@ -92,16 +93,16 @@ export function sentinelDashboardPortal(
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (
-          previousFocus.kind === "present" &&
-          previousFocus.value.isConnected
+          previousFocus.kind === "element" &&
+          previousFocus.element.isConnected
         ) {
-          previousFocus.value.focus();
+          previousFocus.element.focus();
         } else {
           node
             .querySelector<HTMLElement>(`[data-testid="${returnFocusTestId}"]`)
             ?.focus();
         }
-        previousFocus = EMPTY_VALUE;
+        previousFocus = { kind: "body" };
       });
     });
     active = false;
@@ -123,15 +124,10 @@ export function sentinelDashboardPortal(
       if (active) {
         node.removeEventListener("keydown", trapFocus);
         setBackgroundInert(false);
-        if (previousFocus.kind === "present") previousFocus.value.focus();
+        if (previousFocus.kind === "element") previousFocus.element.focus();
       }
       node.remove();
       anchor.remove();
     },
   };
 }
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../../../explicit-state";

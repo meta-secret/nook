@@ -39,11 +39,9 @@ import {
   type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../../explicit-state";
+type OAuthProviderUpdate =
+  | { kind: "not-required" }
+  | { kind: "required"; providerId: string };
 
 export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
 
@@ -531,7 +529,7 @@ export async function ensureProviderSaved(
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
   const isNewSetup = typeof state.loginSetupType !== "undefined";
-  let oauthProviderToUpdate: ValueState<string> = EMPTY_VALUE;
+  let oauthProviderToUpdate: OAuthProviderUpdate = { kind: "not-required" };
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
@@ -597,7 +595,7 @@ export async function ensureProviderSaved(
     } else {
       state.providers = [...state.providers, provider];
       if (provider.type === "oauth-file") {
-        oauthProviderToUpdate = presentValue(provider.id);
+        oauthProviderToUpdate = { kind: "required", providerId: provider.id };
       }
     }
   } else if (isNewSetup && type === "local" && !state.localProvider) {
@@ -631,7 +629,7 @@ export async function ensureProviderSaved(
 
   if (state.storageMode === "oauth-file" && state.oauthFile?.fileId) {
     const activePreset = state.oauthFile.preset;
-    if (oauthProviderToUpdate.kind === "empty") {
+    if (oauthProviderToUpdate.kind === "not-required") {
       const duplicate = findDuplicateSyncProvider(state.syncProviders, {
         id: "oauth-provider-update-target",
         type: "oauth-file",
@@ -640,12 +638,12 @@ export async function ensureProviderSaved(
         createdAt: "",
       });
       if (duplicate) {
-        oauthProviderToUpdate = presentValue(duplicate.id);
+        oauthProviderToUpdate = { kind: "required", providerId: duplicate.id };
       }
     }
     const oauthProviderToUpdateId =
-      oauthProviderToUpdate.kind === "present"
-        ? oauthProviderToUpdate.value
+      oauthProviderToUpdate.kind === "required"
+        ? oauthProviderToUpdate.providerId
         : omittedValue();
     state.providers = state.providers.map((provider) => {
       if (

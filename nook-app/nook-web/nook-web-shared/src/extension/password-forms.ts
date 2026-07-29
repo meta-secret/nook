@@ -1,4 +1,4 @@
-import { omittedValue, valueState } from '../explicit-state'
+import { omittedValue } from '../explicit-state'
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -241,10 +241,15 @@ function hasLoginContext(field: HTMLInputElement): boolean {
       return true;
     }
   }
-  let containerState = valueState(field.parentElement ?? omittedValue());
+  type AncestorTraversal =
+    | { kind: "finished" }
+    | { kind: "visiting"; element: HTMLElement };
+  let containerState: AncestorTraversal = field.parentElement
+    ? { kind: "visiting", element: field.parentElement }
+    : { kind: "finished" };
   let depth = 0;
-  while (containerState.kind === "present" && depth < 6) {
-    const container = containerState.value;
+  while (containerState.kind === "visiting" && depth < 6) {
+    const container = containerState.element;
     const identity = expandIdentityText(
       [container.id, container.className, container.getAttribute("role") ?? ""].join(
         " ",
@@ -253,7 +258,9 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(identity)) {
       return true;
     }
-    containerState = valueState(container.parentElement ?? omittedValue());
+    containerState = container.parentElement
+      ? { kind: "visiting", element: container.parentElement }
+      : { kind: "finished" };
     depth += 1;
   }
   const doc = field.ownerDocument;

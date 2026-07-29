@@ -13,11 +13,9 @@
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import type { VaultItemType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from "../../../../explicit-state";
+  type SecretEditorMode =
+    | { kind: "closed" }
+    | { kind: "adding"; itemType: VaultItemType };
 
   let {
     vault,
@@ -47,24 +45,26 @@
 
   const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<ValueState<VaultItemType>>(EMPTY_VALUE);
+  let secretsAddFormType = $state<SecretEditorMode>({ kind: "closed" });
   let secretsEditorResetKey = $state(0);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
-      secretsAddFormType.kind === "present" &&
-      secretsAddFormType.value === "secure-note",
+      secretsAddFormType.kind === "adding" &&
+      secretsAddFormType.itemType === "secure-note",
   );
 
   function setAddMode(open: boolean, type: VaultItemType | void) {
     secretsAddOpen = open;
     secretsAddFormType =
-      typeof type === "undefined" ? EMPTY_VALUE : presentValue(type);
+      typeof type === "undefined"
+        ? { kind: "closed" }
+        : { kind: "adding", itemType: type };
     onEditorOpenChange(open);
   }
 
   function leaveSecretsEditor() {
     secretsAddOpen = false;
-    secretsAddFormType = EMPTY_VALUE;
+    secretsAddFormType = { kind: "closed" };
     secretsEditorResetKey += 1;
     onEditorOpenChange(false);
   }

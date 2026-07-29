@@ -10,11 +10,6 @@ import initNookWasm, {
   providerWasmArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
 import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
@@ -43,9 +38,19 @@ type ExtensionVaultGrant = {
   deviceSigningPublicKey: string
 }
 
-let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
-let managerState: ValueState<NookVaultManager> = EMPTY_VALUE
-let sessionTimerState: ValueState<ReturnType<typeof setTimeout>> = EMPTY_VALUE
+type WasmStartup =
+  | { kind: 'not-started' }
+  | { kind: 'initializing'; operation: Promise<unknown> }
+type VaultManagerAvailability =
+  | { kind: 'locked' }
+  | { kind: 'active'; manager: NookVaultManager }
+type SessionExpirySchedule =
+  | { kind: 'stopped' }
+  | { kind: 'scheduled'; timer: ReturnType<typeof setTimeout> }
+
+let wasmStartup: WasmStartup = { kind: 'not-started' }
+let managerAvailability: VaultManagerAvailability = { kind: 'locked' }
+let sessionExpirySchedule: SessionExpirySchedule = { kind: 'stopped' }
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
@@ -93,8 +98,8 @@ function findPendingLoginSaveOffer(
 }
 
 function ensureWasm(): Promise<unknown> {
-  if (wasmInitialization.kind === 'present') {
-    return wasmInitialization.value
+  if (wasmStartup.kind === 'initializing') {
+    return wasmStartup.operation
   }
   const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
@@ -102,15 +107,17 @@ function ensureWasm(): Promise<unknown> {
     configureVaultApplication('extension')
     return value
   })
-  wasmInitialization = presentValue(operation)
+  wasmStartup = { kind: 'initializing', operation }
   return operation
 }
 
 async function getManager(): Promise<NookVaultManager> {
   await ensureWasm()
-  if (managerState.kind === 'present') return managerState.value
+  if (managerAvailability.kind === 'active') {
+    return managerAvailability.manager
+  }
   const manager = new NookVaultManager()
-  managerState = presentValue(manager)
+  managerAvailability = { kind: 'active', manager }
   return manager
 }
 
@@ -136,22 +143,23 @@ async function deviceResult(
 }
 
 function scheduleSessionExpiry(generation: number): void {
-  if (sessionTimerState.kind === 'present') {
-    clearTimeout(sessionTimerState.value)
+  if (sessionExpirySchedule.kind === 'scheduled') {
+    clearTimeout(sessionExpirySchedule.timer)
   }
   sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
-  sessionTimerState = presentValue(
-    setTimeout(() => {
+  sessionExpirySchedule = {
+    kind: 'scheduled',
+    timer: setTimeout(() => {
       if (generation !== sessionGeneration) return
-      sessionTimerState = EMPTY_VALUE
+      sessionExpirySchedule = { kind: 'stopped' }
       sessionDeadlineAt = 0
       sessionGeneration += 1
-      const expiredManager = managerState
-      managerState = EMPTY_VALUE
-      if (expiredManager.kind === 'present') {
+      const expiredManager = managerAvailability
+      managerAvailability = { kind: 'locked' }
+      if (expiredManager.kind === 'active') {
         try {
-          expiredManager.value.lockDeviceIdentity()
-          expiredManager.value.free()
+          expiredManager.manager.lockDeviceIdentity()
+          expiredManager.manager.free()
         } catch {
           // The service worker closes this document immediately if a WASM call
           // still owns the manager when the session expires.
@@ -162,7 +170,7 @@ function scheduleSessionExpiry(generation: number): void {
       )
       chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
     }, SESSION_DURATION_MS),
-  )
+  }
 }
 
 async function activateSession(): Promise<DeviceResult> {

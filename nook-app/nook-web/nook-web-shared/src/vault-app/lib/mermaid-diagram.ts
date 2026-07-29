@@ -1,21 +1,19 @@
 /** Lazy-loaded Mermaid rendering for in-app help diagrams. */
 
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../explicit-state";
-
 export type MermaidTheme = "light" | "dark";
 
-let mermaidModule: ValueState<typeof import("mermaid")> = EMPTY_VALUE;
+type MermaidModuleCache =
+  | { kind: "not-loaded" }
+  | { kind: "loaded"; module: typeof import("mermaid") };
+
+let mermaidModuleCache: MermaidModuleCache = { kind: "not-loaded" };
 
 async function loadMermaid() {
-  if (mermaidModule.kind === "present") {
-    return mermaidModule.value.default;
+  if (mermaidModuleCache.kind === "loaded") {
+    return mermaidModuleCache.module.default;
   }
   const loaded = await import("mermaid");
-  mermaidModule = presentValue(loaded);
+  mermaidModuleCache = { kind: "loaded", module: loaded };
   return loaded.default;
 }
 

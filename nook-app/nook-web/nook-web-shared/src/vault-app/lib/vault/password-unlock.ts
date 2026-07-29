@@ -2,11 +2,9 @@ import { omittedValue } from "../../../explicit-state";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../../explicit-state";
+type SharedStorageTarget =
+  | { kind: "not-bound" }
+  | { kind: "bound"; storageTargetId: string };
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
@@ -644,7 +642,7 @@ export async function issueEnrollmentCode(
       );
     }
     state.sharedGrantInstructions = "";
-    let sharedStorageTarget: ValueState<string> = EMPTY_VALUE;
+    let sharedStorageTarget: SharedStorageTarget = { kind: "not-bound" };
     let enrollmentProviderRow = selectedProvider;
     if (usesSharedProviderGrant) {
       if (usesSharedICloud) {
@@ -654,7 +652,7 @@ export async function issueEnrollmentCode(
             state.t("provider_setup.icloud_shared_target_required"),
           );
         }
-        sharedStorageTarget = presentValue(targetId);
+        sharedStorageTarget = { kind: "bound", storageTargetId: targetId };
       } else {
         const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
         log.info("shared enrollment grant started", { providerId });
@@ -678,14 +676,20 @@ export async function issueEnrollmentCode(
           throw new Error(state.t(grant.reasonKey));
         }
         if (grant.kind === "granted") {
-          sharedStorageTarget = presentValue(grant.storageTargetId);
+          sharedStorageTarget = {
+            kind: "bound",
+            storageTargetId: grant.storageTargetId,
+          };
           state.sharedGrantInstructions = state.t(grant.note, {
             email: sharedJoinerIdentity,
             folder: grant.storageTargetName ?? grant.storageTargetId,
           });
         } else if (grant.kind === "manual-grant-required") {
           if (grant.storageTargetId) {
-            sharedStorageTarget = presentValue(grant.storageTargetId);
+            sharedStorageTarget = {
+              kind: "bound",
+              storageTargetId: grant.storageTargetId,
+            };
           }
           state.sharedGrantInstructions = state.t(grant.instructionsKey, {
             email: grant.joinerIdentity,
@@ -696,12 +700,12 @@ export async function issueEnrollmentCode(
           });
         }
         if (
-          sharedStorageTarget.kind === "present" &&
+          sharedStorageTarget.kind === "bound" &&
           selectedProvider.oauthFile
         ) {
           const updatedOauth = bindGoogleDriveSharedFolder(
             selectedProvider.oauthFile,
-            sharedStorageTarget.value,
+            sharedStorageTarget.storageTargetId,
           );
           enrollmentProviderRow = {
             ...selectedProvider,
@@ -732,8 +736,8 @@ export async function issueEnrollmentCode(
       }
     }
     const sharedStorageTargetId =
-      sharedStorageTarget.kind === "present"
-        ? sharedStorageTarget.value
+      sharedStorageTarget.kind === "bound"
+        ? sharedStorageTarget.storageTargetId
         : omittedValue();
     const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
       enrollmentProviderRow,

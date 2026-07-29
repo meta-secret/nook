@@ -10,11 +10,7 @@
     type VaultItemType,
   } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from "../../../explicit-state";
+  import type { SecretTypeSelection } from "$lib/components/secret-form-state";
   import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
   import SecretFields from "./add-secret/SecretFields.svelte";
   import { SecretFormState } from "./add-secret/secret-form-state.svelte";
@@ -28,7 +24,9 @@
     onGeneratePassword,
     onCancel,
     initialItem = omittedValue(),
-    selectedTypeState = $bindable<ValueState<VaultItemType>>(EMPTY_VALUE),
+    selectedTypeState = $bindable<SecretTypeSelection>({
+      kind: "choosing-type",
+    }),
   }: {
     vault: VaultState;
     isSaving: boolean;
@@ -51,13 +49,13 @@
     ) => string;
     onCancel: () => void;
     initialItem?: NookSecretRecord | void;
-    selectedTypeState?: ValueState<VaultItemType>;
+    selectedTypeState?: SecretTypeSelection;
   } = $props();
 
   const state = new SecretFormState();
   const selectedType = $derived(
-    selectedTypeState.kind === "present"
-      ? selectedTypeState.value
+    selectedTypeState.kind === "editing-fields"
+      ? selectedTypeState.itemType
       : omittedValue(),
   );
   const isEditMode = $derived(typeof initialItem !== "undefined");
@@ -99,12 +97,15 @@
   $effect(() => {
     const item = initialItem;
     if (!item) return;
-    selectedTypeState = presentValue(item.type as VaultItemType);
+    selectedTypeState = {
+      kind: "editing-fields",
+      itemType: item.type as VaultItemType,
+    };
     state.load(item);
   });
 
   function resetForm() {
-    selectedTypeState = EMPTY_VALUE;
+    selectedTypeState = { kind: "choosing-type" };
     state.reset();
   }
 
@@ -155,12 +156,13 @@
 {#if selectedType === omittedValue() && !isEditMode}
   <SecretTypePicker
     {vault}
-    onSelect={(type) => (selectedTypeState = presentValue(type))}
+    onSelect={(type) =>
+      (selectedTypeState = { kind: "editing-fields", itemType: type })}
   />
 {:else if selectedType === "passkey" && !isEditMode}
   <PasskeyCreationGuidance
     {vault}
-    onBack={() => (selectedTypeState = EMPTY_VALUE)}
+    onBack={() => (selectedTypeState = { kind: "choosing-type" })}
     onDone={handleCancel}
   />
 {:else if selectedType}
@@ -180,7 +182,7 @@
             type="button"
             class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             data-testid="change-secret-type-btn"
-            onclick={() => (selectedTypeState = EMPTY_VALUE)}
+            onclick={() => (selectedTypeState = { kind: "choosing-type" })}
           >
             <ArrowLeft class="size-3.5" />
             {vault.t("add_secret.change_type")}

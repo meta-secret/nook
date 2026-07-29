@@ -1,9 +1,4 @@
-import {
-  EMPTY_VALUE,
-  omittedValue,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
 import { UI_TIMEOUT_MS } from './environment'
@@ -201,24 +196,29 @@ export async function waitForPersistedAppLog(
   },
   options?: { limit?: number; timeoutMs?: number },
 ): Promise<NookLogEntry> {
-  let foundState: ValueState<NookLogEntry> = EMPTY_VALUE
+  type LogSearchState =
+    | { kind: 'searching' }
+    | { kind: 'matched'; entry: NookLogEntry }
+  let searchState: LogSearchState = { kind: 'searching' }
   await expect
     .poll(
       async () => {
         await flushNookLogPersistQueue(page)
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
         const found = findAppLogEntry(entries ?? [], filter)
-        foundState =
-          typeof found === 'undefined' ? EMPTY_VALUE : presentValue(found)
+        searchState =
+          typeof found === 'undefined'
+            ? { kind: 'searching' }
+            : { kind: 'matched', entry: found }
         return found
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
     .not.toBeUndefined()
-  if (foundState.kind === 'empty') {
+  if (searchState.kind === 'searching') {
     throw new Error('persisted app log poll completed without a matching entry')
   }
-  return foundState.value
+  return searchState.entry
 }
 
 /** Wait for each persisted log milestone in order (see `.cortex/references/logging.md`). */

@@ -34,12 +34,6 @@ import {
   nookLogInit,
   nookLogSetLevel,
 } from "$app-wasm";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../explicit-state";
-
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 
 export type LogEntry = {
@@ -71,7 +65,11 @@ type PendingRecord = {
 };
 
 let wasmReady = false;
-let flushTimer: ValueState<ReturnType<typeof setInterval>> = EMPTY_VALUE;
+type LogFlushSchedule =
+  | { kind: "stopped" }
+  | { kind: "scheduled"; timer: ReturnType<typeof setInterval> };
+
+let logFlushSchedule: LogFlushSchedule = { kind: "stopped" };
 let flushing = false;
 let consolePatched = false;
 let diagnosticsInstalled = false;
@@ -421,9 +419,9 @@ export async function flushLogs(): Promise<void> {
 
 /** Stop all persistence before the destructive local-browser cleanup runs. */
 export async function suspendWasmLogging(): Promise<void> {
-  if (flushTimer.kind === "present") {
-    clearInterval(flushTimer.value);
-    flushTimer = EMPTY_VALUE;
+  if (logFlushSchedule.kind === "scheduled") {
+    clearInterval(logFlushSchedule.timer);
+    logFlushSchedule = { kind: "stopped" };
   }
   while (flushing) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -493,9 +491,10 @@ export function initWasmLogging() {
     }
   }
 
-  if (flushTimer.kind === "empty") {
-    flushTimer = presentValue(
-      setInterval(() => {
+  if (logFlushSchedule.kind === "stopped") {
+    logFlushSchedule = {
+      kind: "scheduled",
+      timer: setInterval(() => {
         if (flushing) return;
         flushing = true;
         void nookLogFlush()
@@ -506,7 +505,7 @@ export function initWasmLogging() {
             flushing = false;
           });
       }, FLUSH_INTERVAL_MS),
-    );
+    };
   }
 }
 

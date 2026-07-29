@@ -6,7 +6,6 @@ import {
   type AuthenticatorCodeView,
   type VaultItemType,
 } from "$lib/nook";
-import { consumeEnrollmentFromLocation } from "$lib/enrollment-code";
 import {
   isVaultSessionLocked,
   DeviceProtectionStatus,
@@ -30,7 +29,6 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from "$lib/auth-providers";
-import type { VaultIdleSessionTracker } from "$lib/vault-idle-session";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
@@ -49,15 +47,9 @@ import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { SerialOperationQueue } from "$lib/serial-operation-queue";
-import { VaultStateSlices } from "$lib/vault/state/index.svelte";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  valueState,
-  type ValueState,
-} from "../../explicit-state";
+import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 
-export class VaultState extends VaultStateSlices {
+export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
@@ -126,84 +118,10 @@ export class VaultState extends VaultStateSlices {
     return this.passwordEntries.length > 0;
   }
 
-  private successDismissTimerState: ValueState<ReturnType<typeof setTimeout>> =
-    EMPTY_VALUE;
-  get successDismissTimer(): ReturnType<typeof setTimeout> | void {
-    if (this.successDismissTimerState.kind === "present")
-      return this.successDismissTimerState.value;
-    return;
-  }
-  set successDismissTimer(value: ReturnType<typeof setTimeout> | void) {
-    this.successDismissTimerState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
-  }
-  clearSuccessDismissTimer(): void {
-    this.successDismissTimerState = EMPTY_VALUE;
-  }
-
-  private idleSessionTrackerState: ValueState<VaultIdleSessionTracker> =
-    EMPTY_VALUE;
-  get idleSessionTracker(): VaultIdleSessionTracker | void {
-    if (this.idleSessionTrackerState.kind === "present")
-      return this.idleSessionTrackerState.value;
-    return;
-  }
-  set idleSessionTracker(value: VaultIdleSessionTracker | void) {
-    this.idleSessionTrackerState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
-  }
-  clearIdleSessionTracker(): void {
-    this.idleSessionTrackerState = EMPTY_VALUE;
-  }
-
-  private syncTimerState: ValueState<ReturnType<typeof setInterval>> =
-    EMPTY_VALUE;
-  get syncTimer(): ReturnType<typeof setInterval> | void {
-    if (this.syncTimerState.kind === "present")
-      return this.syncTimerState.value;
-    return;
-  }
-  set syncTimer(value: ReturnType<typeof setInterval> | void) {
-    this.syncTimerState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
-  }
-  clearSyncTimer(): void {
-    this.syncTimerState = EMPTY_VALUE;
-  }
-
-  private initState: ValueState<Promise<void>> = EMPTY_VALUE;
-  get initPromise(): Promise<void> | void {
-    if (this.initState.kind === "present") return this.initState.value;
-    return;
-  }
-  set initPromise(value: Promise<void> | void) {
-    this.initState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
-  }
-  clearInitPromise(): void {
-    this.initState = EMPTY_VALUE;
-  }
   private storageQueue = new SerialOperationQueue();
   localDataDeletionStarted = false;
   /** Internal browser-orchestration flag shared with the device-protection actions. */
   deviceAuthorizationInProgress = false;
-  private pendingEnrollmentState: ValueState<string> =
-    typeof window !== "undefined"
-      ? valueState(consumeEnrollmentFromLocation())
-      : EMPTY_VALUE;
-  get pendingEnrollmentFromUrl(): string | void {
-    if (this.pendingEnrollmentState.kind === "present") {
-      return this.pendingEnrollmentState.value;
-    }
-    return;
-  }
-  set pendingEnrollmentFromUrl(value: string | void) {
-    this.pendingEnrollmentState = valueState(value);
-  }
-  clearPendingEnrollmentFromUrl(): void {
-    this.pendingEnrollmentState = EMPTY_VALUE;
-  }
-
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));

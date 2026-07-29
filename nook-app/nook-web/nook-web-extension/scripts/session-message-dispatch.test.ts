@@ -1,9 +1,4 @@
-import {
-  EMPTY_VALUE,
-  omittedValue,
-  presentValue,
-  type ValueState,
-} from '../../nook-web-shared/src/explicit-state'
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'bun:test'
 import { ExtensionSessionMessageDispatcher } from '../src/offscreen/session-message-dispatch'
 
@@ -50,14 +45,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
       sender: chrome.runtime.MessageSender,
       sendResponse: (response?: unknown) => void,
     ) => boolean
-    let listenerState: ValueState<RuntimeListener> = EMPTY_VALUE
+    type ListenerRegistration =
+      | { kind: 'not-registered' }
+      | { kind: 'registered'; listener: RuntimeListener }
+    let registration: ListenerRegistration = { kind: 'not-registered' }
     globalThis.chrome = {
       runtime: {
         id: 'nook-extension',
         getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
         onMessage: {
           addListener: (registered: RuntimeListener) => {
-            listenerState = presentValue(registered)
+            registration = { kind: 'registered', listener: registered }
           },
         },
       },
@@ -69,11 +67,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     dispatcher.registerRuntimeListener()
 
-    if (listenerState.kind === 'empty') {
+    if (registration.kind === 'not-registered') {
       throw new Error('runtime listener was not registered')
     }
     expect(
-      listenerState.value(
+      registration.listener(
         { type: 'nook:extension-session-status' },
         { id: 'other-extension' },
         () => {},

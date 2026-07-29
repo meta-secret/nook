@@ -1,21 +1,20 @@
 import initNookWasm, { configureVaultApplication } from "$app-wasm";
 import { WASM_APPLICATION } from "$lib/wasm-application";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../explicit-state";
 
-let initialization: ValueState<Promise<void>> = EMPTY_VALUE;
+type AppWasmStartup =
+  | { kind: "not-started" }
+  | { kind: "initializing"; completion: Promise<void> };
+
+let appWasmStartup: AppWasmStartup = { kind: "not-started" };
 
 /** Initialize the shared engine and bind it to this web app before app code loads. */
 export function ensureAppWasm(): Promise<void> {
-  if (initialization.kind === "present") {
-    return initialization.value;
+  if (appWasmStartup.kind === "initializing") {
+    return appWasmStartup.completion;
   }
   const promise = initNookWasm().then(() => {
     configureVaultApplication(WASM_APPLICATION);
   });
-  initialization = presentValue(promise);
+  appWasmStartup = { kind: "initializing", completion: promise };
   return promise;
 }

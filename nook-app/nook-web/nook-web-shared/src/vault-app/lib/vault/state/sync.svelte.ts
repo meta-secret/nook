@@ -1,36 +1,44 @@
 import { SvelteDate } from "svelte/reactivity";
 import type { NookPendingSyncConflict } from "$app-wasm";
 import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync.svelte";
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from "../../../../explicit-state";
+type LastSync = { kind: "never-synced" } | { kind: "synced"; at: SvelteDate };
+type ManualProviderSync =
+  | { kind: "idle" }
+  | { kind: "running"; providerId: string };
+type SyncConflictReview =
+  | { kind: "clear" }
+  | { kind: "requires-decision"; conflict: NookPendingSyncConflict };
+type LocalFolderHealth =
+  | { kind: "healthy" }
+  | { kind: "multiple-vaults"; issue: LocalFolderMultipleVaultsIssue };
 export class VaultSyncState {
-  private lastSyncedState = $state<ValueState<SvelteDate>>(EMPTY_VALUE);
+  private lastSyncedState = $state<LastSync>({ kind: "never-synced" });
   get lastSyncedAt(): SvelteDate | void {
-    if (this.lastSyncedState.kind === "present")
-      return this.lastSyncedState.value;
+    if (this.lastSyncedState.kind === "synced") return this.lastSyncedState.at;
     return;
   }
   set lastSyncedAt(value: SvelteDate | void) {
     this.lastSyncedState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined"
+        ? { kind: "never-synced" }
+        : { kind: "synced", at: value };
   }
   isSyncing = $state(false);
   /** Provider id currently running a manual sync (Settings UI). */
-  private syncingProviderState = $state<ValueState<string>>(EMPTY_VALUE);
+  private syncingProviderState = $state<ManualProviderSync>({ kind: "idle" });
   get syncingProviderId(): string | void {
-    if (this.syncingProviderState.kind === "present")
-      return this.syncingProviderState.value;
+    if (this.syncingProviderState.kind === "running")
+      return this.syncingProviderState.providerId;
     return;
   }
   set syncingProviderId(value: string | void) {
     this.syncingProviderState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined"
+        ? { kind: "idle" }
+        : { kind: "running", providerId: value };
   }
   clearSyncingProvider(): void {
-    this.syncingProviderState = EMPTY_VALUE;
+    this.syncingProviderState = { kind: "idle" };
   }
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false);
@@ -46,35 +54,39 @@ export class VaultSyncState {
     [],
   );
   /** User must pick local vs remote before editing when versions match but content differs. */
-  private syncConflictState =
-    $state<ValueState<NookPendingSyncConflict>>(EMPTY_VALUE);
+  private syncConflictState = $state<SyncConflictReview>({ kind: "clear" });
   get pendingSyncConflict(): NookPendingSyncConflict | void {
-    if (this.syncConflictState.kind === "present")
-      return this.syncConflictState.value;
+    if (this.syncConflictState.kind === "requires-decision")
+      return this.syncConflictState.conflict;
     return;
   }
   set pendingSyncConflict(value: NookPendingSyncConflict | void) {
     this.syncConflictState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined"
+        ? { kind: "clear" }
+        : { kind: "requires-decision", conflict: value };
   }
   clearPendingSyncConflict(): void {
-    this.syncConflictState = EMPTY_VALUE;
+    this.syncConflictState = { kind: "clear" };
   }
   /** Local-folder provider points at a folder that contains several vault event logs. */
-  private localFolderIssueState =
-    $state<ValueState<LocalFolderMultipleVaultsIssue>>(EMPTY_VALUE);
+  private localFolderIssueState = $state<LocalFolderHealth>({
+    kind: "healthy",
+  });
   get localFolderMultipleVaultsIssue(): LocalFolderMultipleVaultsIssue | void {
-    if (this.localFolderIssueState.kind === "present")
-      return this.localFolderIssueState.value;
+    if (this.localFolderIssueState.kind === "multiple-vaults")
+      return this.localFolderIssueState.issue;
     return;
   }
   set localFolderMultipleVaultsIssue(
     value: LocalFolderMultipleVaultsIssue | void,
   ) {
     this.localFolderIssueState =
-      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined"
+        ? { kind: "healthy" }
+        : { kind: "multiple-vaults", issue: value };
   }
   clearLocalFolderMultipleVaultsIssue(): void {
-    this.localFolderIssueState = EMPTY_VALUE;
+    this.localFolderIssueState = { kind: "healthy" };
   }
 }

@@ -3,11 +3,10 @@
   import { RefreshCw } from '@lucide/svelte'
   import QRCodeStyling from 'qr-code-styling'
   import { createEnrollmentQrOptions } from '$lib/enrollment-qr'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+
+  type QrCodeMount =
+    | { kind: 'unmounted' }
+    | { kind: 'mounted'; instance: QRCodeStyling }
 
   let {
     enrollmentLink,
@@ -20,7 +19,7 @@
   } = $props()
 
   let container!: HTMLDivElement
-  let qrCode = $state.raw<ValueState<QRCodeStyling>>(EMPTY_VALUE)
+  let qrCode = $state.raw<QrCodeMount>({ kind: 'unmounted' })
   let isReady = $state(false)
   const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense))
 
@@ -28,18 +27,18 @@
     if (!container) return
 
     const instance = new QRCodeStyling(options)
-    qrCode = presentValue(instance)
+    qrCode = { kind: 'mounted', instance }
     instance.append(container)
     isReady = true
 
     return () => {
-      qrCode = EMPTY_VALUE
+      qrCode = { kind: 'unmounted' }
     }
   })
 
   $effect(() => {
-    if (qrCode.kind === 'empty') return
-    qrCode.value.update(options)
+    if (qrCode.kind === 'unmounted') return
+    qrCode.instance.update(options)
   })
 </script>
 

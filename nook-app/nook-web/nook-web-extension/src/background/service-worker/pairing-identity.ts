@@ -8,11 +8,6 @@ import type {
   ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../../nook-web-shared/src/explicit-state'
-import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
 } from '../../lib/simple-vault-runtime'
@@ -453,7 +448,11 @@ export async function setPairingStorage(
   await writeExtensionPairingState(items)
 }
 
-let legacyPairingMigration: ValueState<Promise<void>> = EMPTY_VALUE
+type LegacyPairingMigration =
+  | { kind: 'not-started' }
+  | { kind: 'running'; operation: Promise<void> }
+
+let legacyPairingMigration: LegacyPairingMigration = { kind: 'not-started' }
 
 function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
   return Object.keys(stored).filter(
@@ -498,8 +497,8 @@ function removeLegacyPairingStorage(keys: string[]): Promise<void> {
 }
 
 export function ensureLegacyPairingMigration(): Promise<void> {
-  if (legacyPairingMigration.kind === 'present') {
-    return legacyPairingMigration.value
+  if (legacyPairingMigration.kind === 'running') {
+    return legacyPairingMigration.operation
   }
   const operation = (async () => {
     // Browser storage is a read-once upgrade source only. Rexie remains the
@@ -531,7 +530,7 @@ export function ensureLegacyPairingMigration(): Promise<void> {
       )
     }
   })()
-  legacyPairingMigration = presentValue(operation)
+  legacyPairingMigration = { kind: 'running', operation }
   return operation
 }
 

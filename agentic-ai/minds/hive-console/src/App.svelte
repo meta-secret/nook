@@ -28,44 +28,55 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   } from './types';
   import { emergencyCopy } from './emergency-copy';
 
-  type ValueState<T> = { kind: 'empty' } | { kind: 'present'; value: T };
-  const EMPTY_VALUE: ValueState<never> = { kind: 'empty' };
-  const presentValue = <T,>(value: T): ValueState<T> => ({
-    kind: 'present',
-    value,
-  });
-  const valueState = <T,>(value: T | void): ValueState<T> =>
-    typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value);
-  const stateValue = <T,>(state: ValueState<T>): T | void => {
-    if (state.kind === 'present') return state.value;
-    return;
-  };
+  type ObserverFeed =
+    | { kind: 'not-loaded' }
+    | { kind: 'loaded'; snapshot: ObserverSnapshot };
+  type TaskSelection = { kind: 'none' } | { kind: 'selected'; taskId: string };
+  type DurableTaskLookup =
+    | { kind: 'not-found' }
+    | { kind: 'found'; task: ObservedTask };
+  type SelectedTask = { kind: 'closed' } | { kind: 'open'; task: ObservedTask };
+  type PollSchedule =
+    | { kind: 'stopped' }
+    | { kind: 'scheduled'; timer: ReturnType<typeof setTimeout> };
 
-  let snapshotState = $state<ValueState<ObserverSnapshot>>(EMPTY_VALUE);
-  let selectedIdState = $state<ValueState<string>>(EMPTY_VALUE);
+  function omittedValue(): void {}
+
+  let snapshotState = $state<ObserverFeed>({ kind: 'not-loaded' });
+  let selectedIdState = $state<TaskSelection>({ kind: 'none' });
   let search = $state('');
   let loading = $state(true);
   let unavailable = $state(false);
   let detailPanel!: HTMLElement;
   let detailsClosed = $state(false);
-  let durableMatchState = $state<ValueState<ObservedTask>>(EMPTY_VALUE);
+  let durableMatchState = $state<DurableTaskLookup>({ kind: 'not-found' });
   let nowMs = $state(Date.now());
 
-  const snapshot = $derived(stateValue(snapshotState));
-  const selectedId = $derived(stateValue(selectedIdState));
-  const durableMatch = $derived(stateValue(durableMatchState));
+  const snapshot = $derived(
+    snapshotState.kind === 'loaded' ? snapshotState.snapshot : omittedValue(),
+  );
+  const selectedId = $derived(
+    selectedIdState.kind === 'selected'
+      ? selectedIdState.taskId
+      : omittedValue(),
+  );
+  const durableMatch = $derived(
+    durableMatchState.kind === 'found'
+      ? durableMatchState.task
+      : omittedValue(),
+  );
   const copy = $derived(
     snapshot?.copy ?? emergencyCopy(navigator.language || 'en'),
   );
-  const selectedState = $derived(
-    valueState(
-      snapshot?.tasks.find((task) => task.id === selectedId) ??
-        (durableMatch?.id === selectedId
-          ? durableMatch
-          : stateValue(EMPTY_VALUE)),
-    ),
+  const selectedState = $derived.by<SelectedTask>(() => {
+    const task =
+      snapshot?.tasks.find((candidate) => candidate.id === selectedId) ??
+      (durableMatch?.id === selectedId ? durableMatch : omittedValue());
+    return task ? { kind: 'open', task } : { kind: 'closed' };
+  });
+  const selected = $derived(
+    selectedState.kind === 'open' ? selectedState.task : omittedValue(),
   );
-  const selected = $derived(stateValue(selectedState));
   const filteredTasks = $derived(
     [
       ...(durableMatch &&
@@ -106,19 +117,19 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   $effect(() => {
     const controller = new AbortController();
-    let timerState: ValueState<ReturnType<typeof setTimeout>> = EMPTY_VALUE;
+    let pollSchedule: PollSchedule = { kind: 'stopped' };
 
     const poll = async () => {
       await loadSnapshot(controller.signal);
       if (!controller.signal.aborted) {
-        timerState = presentValue(setTimeout(poll, 15_000));
+        pollSchedule = { kind: 'scheduled', timer: setTimeout(poll, 15_000) };
       }
     };
     void poll();
 
     return () => {
       controller.abort();
-      if (timerState.kind === 'present') clearTimeout(timerState.value);
+      if (pollSchedule.kind === 'scheduled') clearTimeout(pollSchedule.timer);
     };
   });
 
@@ -134,7 +145,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       if (taskId.length === 0) {
-        durableMatchState = EMPTY_VALUE;
+        durableMatchState = { kind: 'not-found' };
         return;
       }
       try {
@@ -144,16 +155,17 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           { signal: controller.signal },
         );
         if (response.status === 404) {
-          durableMatchState = EMPTY_VALUE;
+          durableMatchState = { kind: 'not-found' };
           return;
         }
         if (!response.ok) return;
         const match = (await response.json()) as ObservedTask;
-        durableMatchState = presentValue(match);
-        if (!detailsClosed) selectedIdState = presentValue(match.id);
+        durableMatchState = { kind: 'found', task: match };
+        if (!detailsClosed)
+          selectedIdState = { kind: 'selected', taskId: match.id };
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          durableMatchState = EMPTY_VALUE;
+          durableMatchState = { kind: 'not-found' };
         }
       }
     }, 250);
@@ -170,7 +182,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       !detailsClosed &&
       !filteredTasks.some((task) => task.id === selectedId)
     ) {
-      selectedIdState = valueState(filteredTasks[0]?.id);
+      const firstTask = filteredTasks[0];
+      selectedIdState = firstTask
+        ? { kind: 'selected', taskId: firstTask.id }
+        : { kind: 'none' };
     }
   });
 
@@ -188,14 +203,19 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       );
       if (!response.ok) throw new Error(`observer returned ${response.status}`);
       const next = (await response.json()) as ObserverSnapshot;
-      snapshotState = presentValue(next);
+      snapshotState = { kind: 'loaded', snapshot: next };
       unavailable = false;
       if (
         (!detailsClosed && typeof selectedId === 'undefined') ||
         (!next.tasks.some((task) => task.id === selectedId) &&
           durableMatch?.id !== selectedId)
       ) {
-        if (!detailsClosed) selectedIdState = valueState(next.tasks[0]?.id);
+        if (!detailsClosed) {
+          const firstTask = next.tasks[0];
+          selectedIdState = firstTask
+            ? { kind: 'selected', taskId: firstTask.id }
+            : { kind: 'none' };
+        }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -245,7 +265,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function selectTask(taskId: string) {
     detailsClosed = false;
-    selectedIdState = presentValue(taskId);
+    selectedIdState = { kind: 'selected', taskId };
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
       const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -259,7 +279,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function closeDetails() {
     detailsClosed = true;
-    selectedIdState = EMPTY_VALUE;
+    selectedIdState = { kind: 'none' };
   }
 </script>
 

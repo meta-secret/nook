@@ -37,11 +37,14 @@
     type DecryptedSecrets,
   } from '$lib/vault/secret-exposure'
   import { onDestroy, untrack } from 'svelte'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  import type { SecretTypeSelection } from '$lib/components/secret-form-state'
+
+  type ClipboardNotice =
+    | { kind: 'hidden' }
+    | { kind: 'visible'; fieldKey: string }
+  type SecretEditor =
+    | { kind: 'creating' }
+    | { kind: 'editing'; record: NookSecretRecord }
 
   let {
     vault,
@@ -84,10 +87,12 @@
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<ValueState<string>>(EMPTY_VALUE)
+  let copiedKey = $state<ClipboardNotice>({ kind: 'hidden' })
   let addSecretOpen = $state(false)
-  let formSelectedType = $state<ValueState<VaultItemType>>(EMPTY_VALUE)
-  let editingItem = $state<ValueState<NookSecretRecord>>(EMPTY_VALUE)
+  let formSelectedType = $state<SecretTypeSelection>({
+    kind: 'choosing-type',
+  })
+  let editingItem = $state<SecretEditor>({ kind: 'creating' })
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
@@ -154,8 +159,8 @@
   function notifyAddMode() {
     onAddModeChange?.(
       addSecretOpen,
-      formSelectedType.kind === 'present'
-        ? formSelectedType.value
+      formSelectedType.kind === 'editing-fields'
+        ? formSelectedType.itemType
         : omittedValue(),
     )
   }
@@ -169,7 +174,7 @@
   function openAddSecret() {
     editLoadSequence += 1
     releaseEditingItem()
-    formSelectedType = EMPTY_VALUE
+    formSelectedType = { kind: 'choosing-type' }
     addSecretOpen = true
     notifyAddMode()
   }
@@ -178,13 +183,13 @@
     editLoadSequence += 1
     releaseEditingItem()
     addSecretOpen = false
-    formSelectedType = EMPTY_VALUE
+    formSelectedType = { kind: 'choosing-type' }
     notifyAddMode()
   }
 
   function releaseEditingItem() {
-    if (editingItem.kind === 'present') editingItem.value.free()
-    editingItem = EMPTY_VALUE
+    if (editingItem.kind === 'editing') editingItem.record.free()
+    editingItem = { kind: 'creating' }
   }
 
   async function openEditItem(item: NookSecretListItem) {
@@ -196,8 +201,11 @@
       return
     }
     releaseEditingItem()
-    editingItem = presentValue(record)
-    formSelectedType = presentValue(item.type as VaultItemType)
+    editingItem = { kind: 'editing', record }
+    formSelectedType = {
+      kind: 'editing-fields',
+      itemType: item.type as VaultItemType,
+    }
     addSecretOpen = true
     notifyAddMode()
   }
@@ -220,19 +228,19 @@
 
   const isSecureNoteEditor = $derived(
     addSecretOpen &&
-      formSelectedType.kind === 'present' &&
-      formSelectedType.value === 'secure-note',
+      formSelectedType.kind === 'editing-fields' &&
+      formSelectedType.itemType === 'secure-note',
   )
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
-    copiedKey = presentValue(`${id}-${field}`)
+    copiedKey = { kind: 'visible', fieldKey: `${id}-${field}` }
     setTimeout(() => {
       if (
-        copiedKey.kind === 'present' &&
-        copiedKey.value === `${id}-${field}`
+        copiedKey.kind === 'visible' &&
+        copiedKey.fieldKey === `${id}-${field}`
       )
-        copiedKey = EMPTY_VALUE
+        copiedKey = { kind: 'hidden' }
     }, 2000)
   }
 
@@ -332,7 +340,7 @@
         : ''}"
       data-testid="add-secret-panel"
     >
-      {#if formSelectedType.kind === 'empty'}
+      {#if formSelectedType.kind === 'choosing-type'}
         <div class="mb-3">
           <button
             type="button"
@@ -354,8 +362,8 @@
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
-        initialItem={editingItem.kind === 'present'
-          ? editingItem.value
+        initialItem={editingItem.kind === 'editing'
+          ? editingItem.record
           : omittedValue()}
       />
     </div>
@@ -515,8 +523,8 @@
                     expanded={Boolean(expandedSecrets[item.id])}
                     decrypted={decryptedSecrets[item.id]}
                     authenticatorCode={authenticatorCodes[item.id]}
-                    copiedKey={copiedKey.kind === 'present'
-                      ? copiedKey.value
+                    copiedKey={copiedKey.kind === 'visible'
+                      ? copiedKey.fieldKey
                       : omittedValue()}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}

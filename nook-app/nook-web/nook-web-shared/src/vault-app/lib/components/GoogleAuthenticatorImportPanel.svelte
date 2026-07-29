@@ -6,11 +6,12 @@
   import type { NookImportResult } from "$lib/nook";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from "../../../explicit-state";
+  type ScannerLifecycle =
+    | { kind: "not-created" }
+    | { kind: "created"; scanner: QrScanner };
+  type AuthenticatorImportOutcome =
+    | { kind: "not-run" }
+    | { kind: "completed"; result: NookImportResult };
 
   let {
     vault,
@@ -25,14 +26,14 @@
   } = $props();
 
   let videoElement: HTMLVideoElement;
-  let scannerState: ValueState<QrScanner> = EMPTY_VALUE;
+  let scannerState: ScannerLifecycle = { kind: "not-created" };
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE);
+  let result = $state<AuthenticatorImportOutcome>({ kind: "not-run" });
   let error = $state("");
 
   function stopCamera() {
-    if (scannerState.kind === "present") scannerState.value.stop();
+    if (scannerState.kind === "created") scannerState.scanner.stop();
     scanning = false;
   }
 
@@ -48,7 +49,7 @@
       return;
     }
     migrationUris = [...migrationUris, uri];
-    result = EMPTY_VALUE;
+    result = { kind: "not-run" };
     error = "";
     stopCamera();
   }
@@ -59,10 +60,11 @@
       return;
     }
     error = "";
-    result = EMPTY_VALUE;
-    if (scannerState.kind === "empty") {
-      scannerState = presentValue(
-        new QrScanner(
+    result = { kind: "not-run" };
+    if (scannerState.kind === "not-created") {
+      scannerState = {
+        kind: "created",
+        scanner: new QrScanner(
           videoElement,
           (scanResult) => addMigrationUri(scanResult.data),
           {
@@ -72,11 +74,11 @@
             returnDetailedScanResult: true,
           },
         ),
-      );
+      };
     }
     scanning = true;
     try {
-      await scannerState.value.start();
+      await scannerState.scanner.start();
     } catch {
       scanning = false;
       error = vault.t("google_authenticator_import.camera_failed");
@@ -89,7 +91,7 @@
     input.value = "";
     if (!file) return;
     error = "";
-    result = EMPTY_VALUE;
+    result = { kind: "not-run" };
     try {
       const scanResult = await QrScanner.scanImage(file, {
         returnDetailedScanResult: true,
@@ -102,7 +104,7 @@
 
   function clearScans() {
     migrationUris = [];
-    result = EMPTY_VALUE;
+    result = { kind: "not-run" };
     error = "";
     stopCamera();
   }
@@ -110,9 +112,9 @@
   async function importScans() {
     if (migrationUris.length === 0 || isSaving) return;
     error = "";
-    result = EMPTY_VALUE;
+    result = { kind: "not-run" };
     try {
-      result = presentValue(await onImport(migrationUris));
+      result = { kind: "completed", result: await onImport(migrationUris) };
       migrationUris = [];
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause);
@@ -120,8 +122,8 @@
   }
 
   onDestroy(() => {
-    if (scannerState.kind === "present") scannerState.value.destroy();
-    scannerState = EMPTY_VALUE;
+    if (scannerState.kind === "created") scannerState.scanner.destroy();
+    scannerState = { kind: "not-created" };
     migrationUris = [];
   });
 </script>
@@ -242,20 +244,20 @@
         </p>
       {/if}
 
-      {#if result.kind === "present"}
+      {#if result.kind === "completed"}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
             {vault.t("google_authenticator_import.result_imported", {
-              count: String(result.value.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t("google_authenticator_import.result_skipped", {
-              unsupported: String(result.value.skippedUnsupported),
-              duplicates: String(result.value.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

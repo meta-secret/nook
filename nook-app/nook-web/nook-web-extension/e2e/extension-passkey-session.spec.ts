@@ -1,9 +1,4 @@
-import {
-  EMPTY_VALUE,
-  omittedValue,
-  presentValue,
-  type ValueState,
-} from '../../nook-web-shared/src/explicit-state'
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { chromium, expect, test } from '@playwright/test'
 import {
   assertWebsitePasskey,
@@ -205,10 +200,16 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reconnectPage.close()
     await pairingLauncher.close()
 
-    let websiteCredentialState: ValueState<string> = EMPTY_VALUE
+    type WebsitePasskeyState =
+      | { kind: 'not-created' }
+      | { kind: 'created'; credentialId: string }
+    let websitePasskeyState: WebsitePasskeyState = { kind: 'not-created' }
     if (website) {
       const websiteCredentialId = await registerWebsitePasskey(website)
-      websiteCredentialState = presentValue(websiteCredentialId)
+      websitePasskeyState = {
+        kind: 'created',
+        credentialId: websiteCredentialId,
+      }
       expect(websiteCredentialId).toBeTruthy()
       await assertWebsitePasskey(website, websiteCredentialId)
       await website.close()
@@ -452,10 +453,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    if (websiteAfterUnlock && websiteCredentialState.kind === 'present') {
+    if (websiteAfterUnlock && websitePasskeyState.kind === 'created') {
       await assertWebsitePasskey(
         websiteAfterUnlock,
-        websiteCredentialState.value,
+        websitePasskeyState.credentialId,
       )
       await websiteAfterUnlock.close()
     }

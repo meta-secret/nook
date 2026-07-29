@@ -36,11 +36,18 @@
     StorageProvider,
     StorageProviderType,
   } from "$lib/auth-providers";
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from "../../../explicit-state";
+  type VaultLabelEditor =
+    | { kind: "closed" }
+    | { kind: "editing"; storeId: StoreId };
+  type VaultRenameOperation =
+    | { kind: "idle" }
+    | { kind: "renaming"; storeId: StoreId };
+  type VaultSwitchOperation =
+    | { kind: "idle" }
+    | { kind: "switching"; storeId: StoreId };
+  type ImportProviderSection =
+    | { kind: "closed" }
+    | { kind: "open"; providerId: string };
 
   let {
     vault,
@@ -146,19 +153,21 @@
   let drafts = $state<Record<string, string>>({});
   let draftSeed = $state("");
   let creating = $state(false);
-  let editingStoreId = $state<ValueState<StoreId>>(EMPTY_VALUE);
-  let renamingStoreId = $state<ValueState<StoreId>>(EMPTY_VALUE);
-  let switchingTo = $state<ValueState<StoreId>>(EMPTY_VALUE);
-  let activeImportProvider = $state<ValueState<string>>(EMPTY_VALUE);
+  let editingStoreId = $state<VaultLabelEditor>({ kind: "closed" });
+  let renamingStoreId = $state<VaultRenameOperation>({ kind: "idle" });
+  let switchingTo = $state<VaultSwitchOperation>({ kind: "idle" });
+  let activeImportProvider = $state<ImportProviderSection>({ kind: "closed" });
   const activeImportProviderBinding = {
     get value(): string | void {
-      return activeImportProvider.kind === "present"
-        ? activeImportProvider.value
+      return activeImportProvider.kind === "open"
+        ? activeImportProvider.providerId
         : omittedValue();
     },
     set value(value: string | void) {
       activeImportProvider =
-        typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+        typeof value === "undefined"
+          ? { kind: "closed" }
+          : { kind: "open", providerId: value };
     },
   };
 
@@ -170,8 +179,8 @@
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId.kind === "present" ||
-      switchingTo.kind === "present",
+      renamingStoreId.kind === "renaming" ||
+      switchingTo.kind === "switching",
   );
 
   function buildDrafts() {
@@ -217,16 +226,16 @@
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return;
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    editingStoreId = presentValue(entry.storeId);
+    editingStoreId = { kind: "editing", storeId: entry.storeId };
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
     if (
-      editingStoreId.kind === "present" &&
-      editingStoreId.value === entry.storeId
+      editingStoreId.kind === "editing" &&
+      editingStoreId.storeId === entry.storeId
     ) {
-      editingStoreId = EMPTY_VALUE;
+      editingStoreId = { kind: "closed" };
     }
   }
 
@@ -246,24 +255,24 @@
 
   async function renameVault(entry: NookLocalVaultEntry) {
     if (!canSave(entry)) return;
-    renamingStoreId = presentValue(entry.storeId);
+    renamingStoreId = { kind: "renaming", storeId: entry.storeId };
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry));
       if (!vault.errorMsg) {
-        editingStoreId = EMPTY_VALUE;
+        editingStoreId = { kind: "closed" };
       }
     } finally {
-      renamingStoreId = EMPTY_VALUE;
+      renamingStoreId = { kind: "idle" };
     }
   }
 
   async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return;
-    switchingTo = presentValue(entry.storeId);
+    switchingTo = { kind: "switching", storeId: entry.storeId };
     try {
       await vault.switchToVault(entry.storeId);
     } finally {
-      switchingTo = EMPTY_VALUE;
+      switchingTo = { kind: "idle" };
     }
   }
 </script>
@@ -336,8 +345,8 @@
       >
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
-          {@const isEditing = editingStoreId.kind === "present" &&
-            editingStoreId.value === entry.storeId}
+          {@const isEditing = editingStoreId.kind === "editing" &&
+            editingStoreId.storeId === entry.storeId}
           <li
             class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
             data-testid="vault-admin-entry"
@@ -407,8 +416,8 @@
                   class="h-10 w-full"
                   data-testid="vault-admin-cancel-rename-btn"
                   data-store-id={entry.storeId}
-                  disabled={renamingStoreId.kind === "present" &&
-                    renamingStoreId.value === entry.storeId}
+                  disabled={renamingStoreId.kind === "renaming" &&
+                    renamingStoreId.storeId === entry.storeId}
                   onclick={() => cancelRename(entry)}
                 >
                   <X class="size-4" />
@@ -425,8 +434,8 @@
                   disabled={isBusy}
                   onclick={() => void switchTo(entry)}
                 >
-                  {#if switchingTo.kind === "present" &&
-                  switchingTo.value === entry.storeId}
+                  {#if switchingTo.kind === "switching" &&
+                  switchingTo.storeId === entry.storeId}
                     <RefreshCw class="size-4 animate-spin" />
                   {/if}
                   {vault.t("common.switch")}
@@ -452,8 +461,8 @@
                   isEditing ? void renameVault(entry) : beginRename(entry)}
               >
                 {#if isEditing &&
-                renamingStoreId.kind === "present" &&
-                renamingStoreId.value === entry.storeId}
+                renamingStoreId.kind === "renaming" &&
+                renamingStoreId.storeId === entry.storeId}
                   <RefreshCw class="size-4 animate-spin" />
                 {:else if !isEditing}
                   <PencilLine class="size-4" />

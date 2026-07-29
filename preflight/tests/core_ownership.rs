@@ -3,9 +3,10 @@ use std::path::PathBuf;
 
 use nook_preflight::{
     portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
-    typescript_domain_boundary_boilerplate, typescript_implicit_application_state,
-    typescript_json_round_trip_clones, typescript_mutable_void_state,
-    typescript_null_absence_sentinels, typescript_svelte_state_modeling_violations,
+    typescript_domain_boundary_boilerplate, typescript_generic_optional_state,
+    typescript_implicit_application_state, typescript_json_round_trip_clones,
+    typescript_mutable_void_state, typescript_null_absence_sentinels,
+    typescript_svelte_state_modeling_violations,
 };
 
 fn repository_root() -> PathBuf {
@@ -105,6 +106,16 @@ fn mutable_typescript_state_never_hides_absence_behind_void() {
     assert!(
         violations.is_empty(),
         "mutable TypeScript and Svelte storage must use an explicit state union, never T | void or $state<T | void>: {violations:#?}"
+    );
+}
+
+#[test]
+fn typescript_state_names_explain_the_domain_transition() {
+    let violations = typescript_generic_optional_state(&repository_root())
+        .expect("scan generic TypeScript optional state");
+    assert!(
+        violations.is_empty(),
+        "generic Option-style wrappers are forbidden; use domain-specific union names and variants: {violations:#?}"
     );
 }
 

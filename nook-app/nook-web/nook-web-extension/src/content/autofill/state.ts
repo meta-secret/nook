@@ -1,8 +1,3 @@
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../../nook-web-shared/src/explicit-state'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
 
@@ -19,6 +14,31 @@ type PendingAuthenticatorPicker = {
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
+type ScanSchedule = { kind: 'idle' } | { kind: 'scheduled'; timer: number }
+type WidgetHost =
+  | { kind: 'detached' }
+  | { kind: 'attached'; element: HTMLElement }
+type WidgetWorkflowKey =
+  | { kind: 'unassigned' }
+  | { kind: 'assigned'; key: string }
+type WidgetWorkflowRoot =
+  | { kind: 'unassigned' }
+  | { kind: 'assigned'; observation: PasswordFormObservation }
+type WidgetPlacement =
+  | { kind: 'unpositioned' }
+  | { kind: 'positioned'; position: WidgetPosition }
+type SaveOfferDisplay =
+  | { kind: 'hidden' }
+  | { kind: 'visible'; offer: WebsiteLoginSaveOfferView }
+type SavePageWatch =
+  | { kind: 'idle' }
+  | { kind: 'watching'; watch: PendingSaveWatch }
+type AuthenticatorPicker =
+  | { kind: 'closed' }
+  | { kind: 'open'; request: PendingAuthenticatorPicker }
+type LoginPicker =
+  | { kind: 'closed' }
+  | { kind: 'open'; request: PendingLoginPicker }
 type PendingSaveWatch = {
   offer: WebsiteLoginSaveOfferView
   startedAt: number
@@ -29,122 +49,150 @@ type PendingSaveWatch = {
 }
 
 class ScanState {
-  private timer: ValueState<number> = EMPTY_VALUE
+  private scheduleState: ScanSchedule = { kind: 'idle' }
   sequence = 0
   schedule: () => void = () => {}
   get pendingTimer(): number | void {
-    if (this.timer.kind === 'present') return this.timer.value
+    if (this.scheduleState.kind === 'scheduled') {
+      return this.scheduleState.timer
+    }
     return
   }
   set pendingTimer(value: number | void) {
-    this.timer =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.scheduleState =
+      typeof value === 'undefined'
+        ? { kind: 'idle' }
+        : { kind: 'scheduled', timer: value }
   }
   clearPendingTimer(): void {
-    this.timer = EMPTY_VALUE
+    this.scheduleState = { kind: 'idle' }
   }
 }
 
 class WidgetState {
-  private hostValue: ValueState<HTMLElement> = EMPTY_VALUE
-  private workflowKey: ValueState<string> = EMPTY_VALUE
-  private workflowRoot: ValueState<PasswordFormObservation> = EMPTY_VALUE
-  private positionValue: ValueState<WidgetPosition> = EMPTY_VALUE
+  private hostState: WidgetHost = { kind: 'detached' }
+  private workflowKeyState: WidgetWorkflowKey = { kind: 'unassigned' }
+  private workflowRootState: WidgetWorkflowRoot = { kind: 'unassigned' }
+  private placementState: WidgetPlacement = { kind: 'unpositioned' }
   dismissed = false
   busy = false
   collapsed = false
   get host(): HTMLElement | void {
-    if (this.hostValue.kind === 'present') return this.hostValue.value
+    if (this.hostState.kind === 'attached') return this.hostState.element
     return
   }
   set host(value: HTMLElement | void) {
-    this.hostValue =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.hostState =
+      typeof value === 'undefined'
+        ? { kind: 'detached' }
+        : { kind: 'attached', element: value }
   }
   get renderedWorkflowKey(): string | void {
-    if (this.workflowKey.kind === 'present') return this.workflowKey.value
+    if (this.workflowKeyState.kind === 'assigned') {
+      return this.workflowKeyState.key
+    }
     return
   }
   set renderedWorkflowKey(value: string | void) {
-    this.workflowKey =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.workflowKeyState =
+      typeof value === 'undefined'
+        ? { kind: 'unassigned' }
+        : { kind: 'assigned', key: value }
   }
   get renderedWorkflowRoot(): PasswordFormObservation | void {
-    if (this.workflowRoot.kind === 'present') return this.workflowRoot.value
+    if (this.workflowRootState.kind === 'assigned') {
+      return this.workflowRootState.observation
+    }
     return
   }
   set renderedWorkflowRoot(value: PasswordFormObservation | void) {
-    this.workflowRoot =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.workflowRootState =
+      typeof value === 'undefined'
+        ? { kind: 'unassigned' }
+        : { kind: 'assigned', observation: value }
   }
   get position(): WidgetPosition | void {
-    if (this.positionValue.kind === 'present') return this.positionValue.value
+    if (this.placementState.kind === 'positioned') {
+      return this.placementState.position
+    }
     return
   }
   set position(value: WidgetPosition | void) {
-    this.positionValue =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.placementState =
+      typeof value === 'undefined'
+        ? { kind: 'unpositioned' }
+        : { kind: 'positioned', position: value }
   }
   clearRenderedWidget(): void {
-    this.hostValue = EMPTY_VALUE
-    this.workflowKey = EMPTY_VALUE
-    this.workflowRoot = EMPTY_VALUE
+    this.hostState = { kind: 'detached' }
+    this.workflowKeyState = { kind: 'unassigned' }
+    this.workflowRootState = { kind: 'unassigned' }
   }
 }
 
 class SaveOfferState {
-  private offer: ValueState<WebsiteLoginSaveOfferView> = EMPTY_VALUE
-  private watch: ValueState<PendingSaveWatch> = EMPTY_VALUE
+  private offerState: SaveOfferDisplay = { kind: 'hidden' }
+  private watchState: SavePageWatch = { kind: 'idle' }
   confirmationActive = false
   dismissedOfferIds = new Set<string>()
   get activeOffer(): WebsiteLoginSaveOfferView | void {
-    if (this.offer.kind === 'present') return this.offer.value
+    if (this.offerState.kind === 'visible') return this.offerState.offer
     return
   }
   set activeOffer(value: WebsiteLoginSaveOfferView | void) {
-    this.offer =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.offerState =
+      typeof value === 'undefined'
+        ? { kind: 'hidden' }
+        : { kind: 'visible', offer: value }
   }
   get pendingWatch(): PendingSaveWatch | void {
-    if (this.watch.kind === 'present') return this.watch.value
+    if (this.watchState.kind === 'watching') return this.watchState.watch
     return
   }
   set pendingWatch(value: PendingSaveWatch | void) {
-    this.watch =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.watchState =
+      typeof value === 'undefined'
+        ? { kind: 'idle' }
+        : { kind: 'watching', watch: value }
   }
   clearActiveOffer(): void {
-    this.offer = EMPTY_VALUE
+    this.offerState = { kind: 'hidden' }
   }
   clearPendingWatch(): void {
-    this.watch = EMPTY_VALUE
+    this.watchState = { kind: 'idle' }
   }
 }
 
 class PickerState {
-  private authenticator: ValueState<PendingAuthenticatorPicker> = EMPTY_VALUE
-  private login: ValueState<PendingLoginPicker> = EMPTY_VALUE
+  private authenticatorState: AuthenticatorPicker = { kind: 'closed' }
+  private loginState: LoginPicker = { kind: 'closed' }
   get pendingAuthenticator(): PendingAuthenticatorPicker | void {
-    if (this.authenticator.kind === 'present') return this.authenticator.value
+    if (this.authenticatorState.kind === 'open') {
+      return this.authenticatorState.request
+    }
     return
   }
   set pendingAuthenticator(value: PendingAuthenticatorPicker | void) {
-    this.authenticator =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.authenticatorState =
+      typeof value === 'undefined'
+        ? { kind: 'closed' }
+        : { kind: 'open', request: value }
   }
   get pendingLogin(): PendingLoginPicker | void {
-    if (this.login.kind === 'present') return this.login.value
+    if (this.loginState.kind === 'open') return this.loginState.request
     return
   }
   set pendingLogin(value: PendingLoginPicker | void) {
-    this.login =
-      typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value)
+    this.loginState =
+      typeof value === 'undefined'
+        ? { kind: 'closed' }
+        : { kind: 'open', request: value }
   }
   clearPendingAuthenticator(): void {
-    this.authenticator = EMPTY_VALUE
+    this.authenticatorState = { kind: 'closed' }
   }
   clearPendingLogin(): void {
-    this.login = EMPTY_VALUE
+    this.loginState = { kind: 'closed' }
   }
 }
 

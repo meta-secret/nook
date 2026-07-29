@@ -1,20 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { SessionOperationQueue } from '../src/lib/session-operation-queue'
-import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../nook-web-shared/src/explicit-state'
+
+type ReleaseGate =
+  | { kind: 'waiting' }
+  | { kind: 'releasable'; release: () => void }
+type PasswordResidency =
+  | { kind: 'resident'; password: string }
+  | { kind: 'cleared' }
+type SecretResidency =
+  | { kind: 'resident'; secret: string }
+  | { kind: 'cleared' }
 
 function deferred() {
-  let release: ValueState<() => void> = EMPTY_VALUE
+  let gate: ReleaseGate = { kind: 'waiting' }
   const promise = new Promise<void>((resolve) => {
-    release = presentValue(resolve)
+    gate = { kind: 'releasable', release: resolve }
   })
   return {
     promise,
     release: () => {
-      if (release.kind === 'present') release.value()
+      if (gate.kind === 'releasable') gate.release()
     },
   }
 }
@@ -48,12 +53,17 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let password: ValueState<string> = presentValue('temporary-password')
+    let passwordResidency: PasswordResidency = {
+      kind: 'resident',
+      password: 'temporary-password',
+    }
     const queued = queue.enqueue(
       async () => {
         throw new Error(
           `Unexpected password use: ${
-            password.kind === 'present' ? password.value : 'cleared'
+            passwordResidency.kind === 'resident'
+              ? passwordResidency.password
+              : 'cleared'
           }`,
         )
       },
@@ -61,13 +71,13 @@ describe('SessionOperationQueue', () => {
         priority: 'interactive',
         expiresAt: Date.now() + 10,
         onExpire: () => {
-          password = EMPTY_VALUE
+          passwordResidency = { kind: 'cleared' }
         },
       },
     )
 
     await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
-    expect(password.kind).toBe('empty')
+    expect(passwordResidency.kind).toBe('cleared')
     blocker.release()
     await first
   })
@@ -85,17 +95,20 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let pendingSecret: ValueState<string> = presentValue('temporary-secret')
+    let secretResidency: SecretResidency = {
+      kind: 'resident',
+      secret: 'temporary-secret',
+    }
     const queued = queue.enqueue(async () => {}, {
       onExpire: () => {
-        pendingSecret = EMPTY_VALUE
+        secretResidency = { kind: 'cleared' }
       },
     })
 
     queue.close(new Error('session expired'))
 
     await expect(queued).rejects.toThrow('session expired')
-    expect(pendingSecret.kind).toBe('empty')
+    expect(secretResidency.kind).toBe('cleared')
     await expect(queue.enqueue(async () => {})).rejects.toThrow(
       'session expired',
     )

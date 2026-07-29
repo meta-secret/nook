@@ -10,11 +10,12 @@
     selectedImportFile,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  type ImportFileSelection =
+    | { kind: 'not-selected' }
+    | { kind: 'selected'; file: File }
+  type PasswordImportOutcome =
+    | { kind: 'not-run' }
+    | { kind: 'completed'; result: NookImportResult }
 
   type CommonProps = {
     translationPrefix: string
@@ -33,8 +34,8 @@
     )
 
   let props: Props = $props()
-  let selectedFile = $state<ValueState<File>>(EMPTY_VALUE)
-  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE)
+  let selectedFile = $state<ImportFileSelection>({ kind: 'not-selected' })
+  let result = $state<PasswordImportOutcome>({ kind: 'not-run' })
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
@@ -44,15 +45,17 @@
 
   function selectFile(event: Event) {
     const file = selectedImportFile(event)
-    selectedFile = file ? presentValue(file) : EMPTY_VALUE
-    result = EMPTY_VALUE
+    selectedFile = file
+      ? { kind: 'selected', file }
+      : { kind: 'not-selected' }
+    result = { kind: 'not-run' }
     error = ''
   }
 
   async function importFile() {
-    if (selectedFile.kind === 'empty' || busy) return
-    const file = selectedFile.value
-    result = EMPTY_VALUE
+    if (selectedFile.kind === 'not-selected' || busy) return
+    const file = selectedFile.file
+    result = { kind: 'not-run' }
     error = ''
     isImporting = true
     try {
@@ -64,8 +67,8 @@
         )
         result =
           typeof imported.result === "undefined"
-            ? EMPTY_VALUE
-            : presentValue(imported.result)
+            ? { kind: 'not-run' }
+            : { kind: 'completed', result: imported.result }
         error = imported.error
         return
       }
@@ -76,8 +79,8 @@
       )
       result =
         typeof imported.result === "undefined"
-          ? EMPTY_VALUE
-          : presentValue(imported.result)
+          ? { kind: 'not-run' }
+          : { kind: 'completed', result: imported.result }
       error = imported.error
     } finally {
       isImporting = false
@@ -133,7 +136,7 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={selectedFile.kind === 'empty' || busy}
+        disabled={selectedFile.kind === 'not-selected' || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -155,20 +158,20 @@
         </p>
       {/if}
 
-      {#if result.kind === 'present'}
+      {#if result.kind === 'completed'}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
             {props.vault.t(messageKey('result_imported'), {
-              count: String(result.value.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {props.vault.t(messageKey('result_skipped'), {
-              unsupported: String(result.value.skippedUnsupported),
-              duplicates: String(result.value.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

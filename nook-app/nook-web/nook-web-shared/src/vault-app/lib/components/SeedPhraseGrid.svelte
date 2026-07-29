@@ -2,11 +2,12 @@
   import { omittedValue } from '../../../explicit-state'
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../explicit-state'
+  type FocusedWord =
+    | { kind: 'none' }
+    | { kind: 'focused'; index: number }
+  type ChecksumStatus =
+    | { kind: 'not-checked' }
+    | { kind: 'checked'; valid: boolean }
   import {
     inferBip39MnemonicLength,
     isBip39WordSequenceValid,
@@ -37,10 +38,10 @@
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
   let syncingFromCells = $state(false)
-  let focusedIndex = $state<ValueState<number>>(EMPTY_VALUE)
+  let focusedIndex = $state<FocusedWord>({ kind: 'none' })
   let suggestionIndex = $state(0)
   let inputRefs = $state<HTMLInputElement[]>([])
-  let checksumValid = $state<ValueState<boolean>>(EMPTY_VALUE)
+  let checksumValid = $state<ChecksumStatus>({ kind: 'not-checked' })
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -54,8 +55,8 @@
   )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex.kind !== 'present') return []
-    const prefix = cells[focusedIndex.value]?.trim().toLowerCase() ?? ''
+    if (readonly || focusedIndex.kind !== 'focused') return []
+    const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? ''
     if (!prefix || prefix.includes(' ')) return []
     if (isKnownBip39Word(prefix)) return []
     return suggestBip39Words(prefix, 8)
@@ -101,7 +102,7 @@
     }
     cells = next
     syncValueFromCells()
-    focusedIndex = EMPTY_VALUE
+    focusedIndex = { kind: 'none' }
     focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
@@ -116,8 +117,8 @@
     cells = Array.from({ length: 24 }, () => '')
     wordCount = 12
     value = ''
-    checksumValid = EMPTY_VALUE
-    focusedIndex = EMPTY_VALUE
+    checksumValid = { kind: 'not-checked' }
+    focusedIndex = { kind: 'none' }
     suggestionIndex = 0
     focusCell(0)
   }
@@ -149,7 +150,7 @@
 
   function selectSuggestion(word: string, index: number) {
     setCellValue(index, word)
-    focusedIndex = EMPTY_VALUE
+    focusedIndex = { kind: 'none' }
     suggestionIndex = 0
     focusCell(index + 1)
   }
@@ -164,8 +165,8 @@
   function onCellKeyDown(index: number, event: KeyboardEvent) {
     if (
       suggestions.length > 0 &&
-      focusedIndex.kind === 'present' &&
-      focusedIndex.value === index
+      focusedIndex.kind === 'focused' &&
+      focusedIndex.index === index
     ) {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -190,7 +191,7 @@
     }
 
     if (event.key === 'Escape') {
-      focusedIndex = EMPTY_VALUE
+      focusedIndex = { kind: 'none' }
       suggestionIndex = 0
     }
   }
@@ -208,14 +209,14 @@
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = EMPTY_VALUE
+      checksumValid = { kind: 'not-checked' }
       valid = false
       return
     }
 
     const mnemonic = value
     const ok = validateBip39Mnemonic(mnemonic)
-    checksumValid = presentValue(ok)
+    checksumValid = { kind: 'checked', valid: ok }
     valid = ok
   })
 </script>
@@ -289,11 +290,11 @@
             inputmode="text"
             role="combobox"
             aria-autocomplete="list"
-            aria-expanded={focusedIndex.kind === 'present' &&
-              focusedIndex.value === index &&
+            aria-expanded={focusedIndex.kind === 'focused' &&
+              focusedIndex.index === index &&
               suggestions.length > 0}
-            aria-controls={focusedIndex.kind === 'present' &&
-            focusedIndex.value === index &&
+            aria-controls={focusedIndex.kind === 'focused' &&
+            focusedIndex.index === index &&
             suggestions.length > 0
               ? `seed-word-suggestions-${index + 1}`
               : omittedValue()}
@@ -310,7 +311,7 @@
             oninput={(event) => onCellInput(index, event.currentTarget.value)}
             onpaste={(event) => onCellPaste(index, event)}
             onfocus={() => {
-              focusedIndex = presentValue(index)
+              focusedIndex = { kind: 'focused', index }
               suggestionIndex = 0
             }}
             onblur={() => {
@@ -323,16 +324,16 @@
                   return
                 }
                 if (
-                  focusedIndex.kind === 'present' &&
-                  focusedIndex.value === index
+                  focusedIndex.kind === 'focused' &&
+                  focusedIndex.index === index
                 )
-                  focusedIndex = EMPTY_VALUE
+                  focusedIndex = { kind: 'none' }
               })
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}
           />
-          {#if focusedIndex.kind === 'present' &&
-          focusedIndex.value === index &&
+          {#if focusedIndex.kind === 'focused' &&
+          focusedIndex.index === index &&
           suggestions.length > 0}
             <ul
               id="seed-word-suggestions-{index + 1}"
@@ -376,8 +377,8 @@
   {#if !readonly &&
   perWordValid &&
   allWordsFilled &&
-  checksumValid.kind === 'present' &&
-  checksumValid.value}
+  checksumValid.kind === 'checked' &&
+  checksumValid.valid}
     <p
       class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"
       data-testid="seed-phrase-valid"
@@ -388,8 +389,8 @@
   {:else if !readonly &&
   perWordValid &&
   allWordsFilled &&
-  checksumValid.kind === 'present' &&
-  !checksumValid.value}
+  checksumValid.kind === 'checked' &&
+  !checksumValid.valid}
     <p
       class="text-xs text-destructive"
       data-testid="seed-phrase-checksum-error"

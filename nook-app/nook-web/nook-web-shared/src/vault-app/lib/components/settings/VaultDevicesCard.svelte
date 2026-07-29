@@ -25,11 +25,18 @@
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultType } from '$lib/vault-architecture'
-  import {
-    EMPTY_VALUE,
-    presentValue,
-    type ValueState,
-  } from '../../../../explicit-state'
+  type MemberDetails =
+    | { kind: 'collapsed' }
+    | { kind: 'expanded'; authId: string }
+  type MemberRename =
+    | { kind: 'idle' }
+    | { kind: 'editing'; authId: string }
+  type MemberRevocation =
+    | { kind: 'idle' }
+    | { kind: 'confirming'; authId: string }
+  type ExtensionSetupOffer =
+    | { kind: 'hidden' }
+    | { kind: 'visible'; setup: ExtensionSetupState }
 
   let {
     vault,
@@ -57,11 +64,11 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<ValueState<string>>(EMPTY_VALUE)
-  let renameAuthId = $state<ValueState<string>>(EMPTY_VALUE)
+  let detailsAuthId = $state<MemberDetails>({ kind: 'collapsed' })
+  let renameAuthId = $state<MemberRename>({ kind: 'idle' })
   let renameLabel = $state('')
-  let revokeAuthId = $state<ValueState<string>>(EMPTY_VALUE)
-  let extensionSetupState = $state<ValueState<ExtensionSetupState>>(EMPTY_VALUE)
+  let revokeAuthId = $state<MemberRevocation>({ kind: 'idle' })
+  let extensionSetupState = $state<ExtensionSetupOffer>({ kind: 'hidden' })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
@@ -74,8 +81,8 @@
       vault.activeVaultStoreId,
     )
     extensionSetupState = shouldOfferExtensionSetup(state.status)
-      ? presentValue(state)
-      : EMPTY_VALUE
+      ? { kind: 'visible', setup: state }
+      : { kind: 'hidden' }
   }
 
   async function handleExtensionInstall() {
@@ -99,8 +106,8 @@
   }
 
   async function handleExtensionSetupAction() {
-    if (extensionSetupState.kind !== 'present') return
-    const state = extensionSetupState.value
+    if (extensionSetupState.kind !== 'visible') return
+    const state = extensionSetupState.setup
     if (state.status === 'not_installed') {
       await handleExtensionInstall()
       return
@@ -200,14 +207,14 @@
   }
 
   function beginRename(member: VaultMember) {
-    renameAuthId = presentValue(member.authId)
+    renameAuthId = { kind: 'editing', authId: member.authId }
     renameLabel = member.label.trim()
-    revokeAuthId = EMPTY_VALUE
+    revokeAuthId = { kind: 'idle' }
   }
 
   async function saveRename(member: VaultMember) {
     await onRenameDevice(member.authId, renameLabel)
-    renameAuthId = EMPTY_VALUE
+    renameAuthId = { kind: 'idle' }
     renameLabel = ''
   }
 
@@ -218,8 +225,8 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === 'present'}
-    {@const extensionSetup = extensionSetupState.value}
+  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === 'visible'}
+    {@const extensionSetup = extensionSetupState.setup}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
       data-testid="extension-setup-settings"
@@ -422,10 +429,10 @@
       <ul class="space-y-2" data-testid="vault-members-list">
         {#each sortedMembers as member (member.authId)}
           {@const isCurrent = member.deviceId === deviceId}
-          {@const isRenaming = renameAuthId.kind === 'present' &&
-            renameAuthId.value === member.authId}
-          {@const isConfirmingRevoke = revokeAuthId.kind === 'present' &&
-            revokeAuthId.value === member.authId}
+          {@const isRenaming = renameAuthId.kind === 'editing' &&
+            renameAuthId.authId === member.authId}
+          {@const isConfirmingRevoke = revokeAuthId.kind === 'confirming' &&
+            revokeAuthId.authId === member.authId}
           {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
           <li
             class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
@@ -510,7 +517,7 @@
                     disabled={isBusy}
                     aria-label={vault.t('devices_card.cancel_rename')}
                     onclick={() => {
-                      renameAuthId = EMPTY_VALUE
+                      renameAuthId = { kind: 'idle' }
                       renameLabel = ''
                     }}
                   >
@@ -538,8 +545,11 @@
                     data-testid="device-revoke-btn"
                     aria-label={vault.t('devices_card.revoke_device')}
                     onclick={() => {
-                      revokeAuthId = presentValue(member.authId)
-                      renameAuthId = EMPTY_VALUE
+                      revokeAuthId = {
+                        kind: 'confirming',
+                        authId: member.authId,
+                      }
+                      renameAuthId = { kind: 'idle' }
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -551,19 +561,19 @@
                   variant="ghost"
                   class="px-2 text-muted-foreground"
                   aria-label={vault.t('devices_card.toggle_details')}
-                  aria-expanded={detailsAuthId.kind === 'present' &&
-                    detailsAuthId.value === member.authId}
+                  aria-expanded={detailsAuthId.kind === 'expanded' &&
+                    detailsAuthId.authId === member.authId}
                   data-testid="device-details-toggle"
                   onclick={() =>
                     (detailsAuthId =
-                      detailsAuthId.kind === 'present' &&
-                      detailsAuthId.value === member.authId
-                        ? EMPTY_VALUE
-                        : presentValue(member.authId))}
+                      detailsAuthId.kind === 'expanded' &&
+                      detailsAuthId.authId === member.authId
+                        ? { kind: 'collapsed' }
+                        : { kind: 'expanded', authId: member.authId })}
                 >
                   <ChevronDown
                     class="size-3.5 transition-transform {detailsAuthId.kind ===
-                      'present' && detailsAuthId.value === member.authId
+                      'expanded' && detailsAuthId.authId === member.authId
                       ? 'rotate-180'
                       : ''}"
                   />
@@ -592,7 +602,7 @@
                       class="h-8 border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
                       disabled={isBusy}
                       data-testid="device-revoke-cancel"
-                      onclick={() => (revokeAuthId = EMPTY_VALUE)}
+                      onclick={() => (revokeAuthId = { kind: 'idle' })}
                     >
                       {vault.t('devices_card.cancel')}
                     </Button>
@@ -612,8 +622,8 @@
               </div>
             {/if}
 
-            {#if detailsAuthId.kind === 'present' &&
-            detailsAuthId.value === member.authId}
+            {#if detailsAuthId.kind === 'expanded' &&
+            detailsAuthId.authId === member.authId}
               <dl
                 class="mt-3 space-y-2 border-t border-border/30 pt-3 text-xs"
                 data-testid="device-technical-details"

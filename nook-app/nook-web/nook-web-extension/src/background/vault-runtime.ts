@@ -1,11 +1,6 @@
 import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
-  EMPTY_VALUE,
-  presentValue,
-  type ValueState,
-} from '../../../nook-web-shared/src/explicit-state'
-import {
   defaultPasswordGenerationOptions,
   generatePasswordWithOptions,
 } from '../../../nook-web-shared/src/password/generator'
@@ -37,11 +32,15 @@ import type {
 import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
-let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
+type BackgroundWasmStartup =
+  | { kind: 'not-started' }
+  | { kind: 'initializing'; operation: Promise<unknown> }
+
+let backgroundWasmStartup: BackgroundWasmStartup = { kind: 'not-started' }
 
 function ensureExtensionWasm(): Promise<unknown> {
-  if (wasmInitialization.kind === 'present') {
-    return wasmInitialization.value
+  if (backgroundWasmStartup.kind === 'initializing') {
+    return backgroundWasmStartup.operation
   }
   const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
@@ -49,7 +48,7 @@ function ensureExtensionWasm(): Promise<unknown> {
     configureVaultApplication('extension')
     return value
   })
-  wasmInitialization = presentValue(operation)
+  backgroundWasmStartup = { kind: 'initializing', operation }
   return operation
 }
 
