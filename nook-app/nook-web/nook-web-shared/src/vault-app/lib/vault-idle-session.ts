@@ -52,13 +52,23 @@ export function createVaultIdleSessionTracker(options: {
     }
   };
 
+  const detachActivityListeners = () => {
+    if (!("document" in globalThis)) return;
+    for (const event of ACTIVITY_EVENTS) {
+      document.removeEventListener(event, onActivity);
+    }
+  };
+
   const scheduleTimers = () => {
     if (state.kind === SessionStateKind.Tracking) {
       clearTimers(state.timers);
     }
 
     const expire = setTimeout(() => {
+      if (state.kind !== SessionStateKind.Tracking) return;
+      clearTimers(state.timers);
       state = { kind: SessionStateKind.Stopped };
+      detachActivityListeners();
       options.onExpire();
     }, options.timeoutMs);
 
@@ -104,13 +114,11 @@ export function createVaultIdleSessionTracker(options: {
   };
 
   const stop = () => {
-    if (state.kind === SessionStateKind.Stopped) return;
-    clearTimers(state.timers);
-    state = { kind: SessionStateKind.Stopped };
-    if (!("document" in globalThis)) return;
-    for (const event of ACTIVITY_EVENTS) {
-      document.removeEventListener(event, onActivity);
+    if (state.kind === SessionStateKind.Tracking) {
+      clearTimers(state.timers);
     }
+    state = { kind: SessionStateKind.Stopped };
+    detachActivityListeners();
   };
 
   return {

@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { NookSecretTypeFilter, VaultEditDecision } from '$app-wasm'
+  import {
+    NookSecretTypeFilter,
+    secretTypeName,
+    VaultEditDecision,
+  } from '$app-wasm'
 
   import {
     ArrowLeft,
@@ -98,46 +102,55 @@
   const typeFilters: Array<{
     value: SecretType
     filter: NookSecretTypeFilter
+    testId: string
     labelKey: string
   }> = [
     {
       value: SecretType.Login,
       filter: NookSecretTypeFilter.Login,
+      testId: secretTypeName(SecretType.Login),
       labelKey: 'vault.types.login',
     },
     {
       value: SecretType.Authenticator,
       filter: NookSecretTypeFilter.Authenticator,
+      testId: secretTypeName(SecretType.Authenticator),
       labelKey: 'vault.types.authenticator',
     },
     {
       value: SecretType.ApiKey,
       filter: NookSecretTypeFilter.ApiKey,
+      testId: secretTypeName(SecretType.ApiKey),
       labelKey: 'vault.types.api_key',
     },
     {
       value: SecretType.SeedPhrase,
       filter: NookSecretTypeFilter.SeedPhrase,
+      testId: secretTypeName(SecretType.SeedPhrase),
       labelKey: 'vault.types.seed_phrase',
     },
     {
       value: SecretType.SecureNote,
       filter: NookSecretTypeFilter.SecureNote,
+      testId: secretTypeName(SecretType.SecureNote),
       labelKey: 'vault.types.secure_note',
     },
     {
       value: SecretType.CreditCard,
       filter: NookSecretTypeFilter.CreditCard,
+      testId: secretTypeName(SecretType.CreditCard),
       labelKey: 'vault.types.credit_card',
     },
     {
       value: SecretType.FileAttachment,
       filter: NookSecretTypeFilter.FileAttachment,
+      testId: secretTypeName(SecretType.FileAttachment),
       labelKey: 'vault.types.file_attachment',
     },
     {
       value: SecretType.Passkey,
       filter: NookSecretTypeFilter.Passkey,
+      testId: secretTypeName(SecretType.Passkey),
       labelKey: 'vault.types.passkey',
     },
   ]
@@ -514,7 +527,7 @@
               {#each typeFilters as filter (filter.filter)}
                 <Select.Item
                   value={String(filter.filter)}
-                  data-testid={`secret-type-filter-${filter.filter}`}
+                  data-testid={`secret-type-filter-${filter.testId}`}
                 >
                   {vault.t(filter.labelKey)}
                 </Select.Item>

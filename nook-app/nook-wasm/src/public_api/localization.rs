@@ -50,12 +50,22 @@ pub fn authentication_workflow_snapshot(
 #[must_use]
 pub fn classify_authentication_outcome(
     observation: &NookAuthenticationOutcomeObservation,
-    timeout_ms: Option<u32>,
+    timeout_ms: u32,
 ) -> NookAuthenticationOutcomeVerdict {
-    let timeout = timeout_ms.unwrap_or(nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS);
     NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
         observation.to_core(),
-        timeout,
+        timeout_ms,
+    ))
+}
+
+#[wasm_bindgen(js_name = classifyAuthenticationOutcomeWithDefaultTimeout)]
+#[must_use]
+pub fn classify_authentication_outcome_with_default_timeout(
+    observation: &NookAuthenticationOutcomeObservation,
+) -> NookAuthenticationOutcomeVerdict {
+    NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
+        observation.to_core(),
+        nook_core::DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
     ))
 }
 
@@ -100,8 +110,9 @@ pub fn get_translation_catalog(locale: &str) -> String {
 
 #[wasm_bindgen(js_name = lookupTranslation)]
 #[must_use]
-pub fn lookup_translation(catalog_json: &str, key: &str) -> Option<String> {
+pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
     nook_core::lookup_translation(catalog_json, key)
+        .ok_or_else(|| wasm_bindgen::JsError::new(&format!("missing translation key: {key}")))
 }
 
 #[wasm_bindgen(js_name = translateFromCatalog)]
@@ -142,9 +153,12 @@ pub fn merge_translation_catalogs(
 
 #[wasm_bindgen(js_name = resolveTranslationCatalog)]
 #[must_use]
-pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: Option<String>) -> String {
-    match wasm_catalog_json {
-        Some(wasm_catalog) => nook_core::resolve_translation_catalog(locale, Some(&wasm_catalog)),
-        None => nook_core::resolve_translation_catalog(locale, None),
-    }
+pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> String {
+    nook_core::resolve_translation_catalog(locale, Some(wasm_catalog_json))
+}
+
+#[wasm_bindgen(js_name = defaultTranslationCatalog)]
+#[must_use]
+pub fn default_translation_catalog(locale: &str) -> String {
+    nook_core::resolve_translation_catalog(locale, None)
 }

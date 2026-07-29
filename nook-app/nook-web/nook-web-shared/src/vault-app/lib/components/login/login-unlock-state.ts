@@ -1,33 +1,33 @@
-import type { NookLocalVaultEntry } from '$app-wasm'
+import type { NookLocalVaultEntry } from "$app-wasm";
 
 export enum UnlockMethod {
-  Keys = 'keys',
-  Password = 'password',
+  Keys = "keys",
+  Password = "password",
 }
 
 export enum LoginVaultWorkflow {
-  Open = 'open',
-  Create = 'create',
-  Import = 'import',
+  Open = "open",
+  Create = "create",
+  Import = "import",
 }
 
 export enum LoginVaultEntryKind {
-  Unavailable = 'unavailable',
-  Available = 'available',
+  Unavailable = "unavailable",
+  Available = "available",
 }
 
 export type LoginVaultEntry =
   | { kind: LoginVaultEntryKind.Unavailable }
-  | { kind: LoginVaultEntryKind.Available; entry: NookLocalVaultEntry }
+  | { kind: LoginVaultEntryKind.Available; entry: NookLocalVaultEntry };
 
 export enum PasswordUnlockCapabilityKind {
-  Unavailable = 'unavailable',
-  Available = 'available',
+  Unavailable = "unavailable",
+  Available = "available",
 }
 
 export type PasswordUnlockCapability =
   | { kind: PasswordUnlockCapabilityKind.Unavailable }
   | {
-      kind: PasswordUnlockCapabilityKind.Available
-      unlock(entryId: string, password: string): void | Promise<void>
-    }
+      kind: PasswordUnlockCapabilityKind.Available;
+      unlock(entryId: string, password: string): void | Promise<void>;
+    };

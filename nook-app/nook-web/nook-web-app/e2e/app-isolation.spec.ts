@@ -7,7 +7,7 @@ const SIMPLE_APP_URL = (
 ).replace(/\/+$/, '')
 
 type DebugVault = {
-  manager?: {
+  requireManager(): {
     vaultArchitecture: {
       constructor: {
         simple(
@@ -90,9 +90,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
   }
 
   const error = await page.evaluate((simpleApp) => {
-    const manager = (window as Window & { __nookVault?: DebugVault })
-      .__nookVault?.manager
-    if (!manager) return 'manager unavailable'
+    const manager = (
+      window as Window & { __nookVault: DebugVault }
+    ).__nookVault.requireManager()
     const current = manager.vaultArchitecture
     const Architecture = current.constructor
     const oppositeArchitecture = simpleApp
@@ -143,9 +143,9 @@ test('keeps extension routing and local session behavior app-specific', async ({
     extensionPage.getByTestId('login-create-vault-chooser'),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const manager = (window as Window & { __nookVault?: DebugVault })
-      .__nookVault?.manager
-    if (!manager) throw new Error('Extension device manager unavailable')
+    const manager = (
+      window as Window & { __nookVault: DebugVault }
+    ).__nookVault.requireManager()
     let lastError = 'Extension device identity unavailable'
     for (let attempt = 0; attempt < 50; attempt += 1) {
       try {

@@ -126,15 +126,15 @@ pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> Hi
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use async_trait::async_trait;
     use tokio::sync::Notify;
 
     use super::{
-        claim_once, establish_worker_lifecycle, finish_claim_during_shutdown, ClaimStep,
-        ClaimWindow,
+        ClaimStep, ClaimWindow, claim_once, establish_worker_lifecycle,
+        finish_claim_during_shutdown,
     };
     use crate::model::{
         ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
@@ -220,9 +220,11 @@ mod tests {
             .err()
             .ok_or_else(|| anyhow::anyhow!("the second worker process must be rejected"))?;
 
-        assert!(error
-            .to_string()
-            .contains("refusing to restart a Hive worker"));
+        assert!(
+            error
+                .to_string()
+                .contains("refusing to restart a Hive worker")
+        );
         assert!(workspace.path().join(".hive-task-finished").is_file());
         Ok(())
     }

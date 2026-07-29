@@ -584,17 +584,7 @@ mod tests {
         assert!(encoded.get("vault_type").is_some());
         assert!(encoded.get("sentinel").is_some());
 
-        let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
-            "vault_type": "sentinel",
-            "sentinel": {
-                "state": "enabled",
-                "policy": {
-                    "threshold": 2,
-                    "required_participants": 3,
-                    "ready_participants": 0
-                }
-            }
-        }))?;
+        let decoded: VaultArchitecture = serde_json::from_value(encoded)?;
         assert_eq!(decoded, architecture);
         Ok(())
     }

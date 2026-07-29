@@ -10,6 +10,7 @@ import {
   buildPasskeyPrfRequestOptions,
   buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
+  defaultTranslationCatalog as wasmDefaultTranslationCatalog,
   DeviceMode,
   DeviceProtectionStatus,
   generatePassword as wasmGeneratePassword,
@@ -418,7 +419,7 @@ export async function getResolvedTranslationCatalog(
   const catalog = readWasmCatalog(locale)
   return catalog.kind === WasmCatalogReadKind.Available
     ? wasmResolveTranslationCatalog(locale, catalog.catalog)
-    : wasmResolveTranslationCatalog(locale)
+    : wasmDefaultTranslationCatalog(locale)
 }
 
 enum WasmCatalogReadKind {

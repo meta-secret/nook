@@ -198,7 +198,7 @@
   }
 </script>
 
-<div data-testid="vault-group-{item.type}">
+<div data-testid="vault-group-{item.typeName}">
   <div
     class="first:pt-0"
     class:pt-3={!titleAsHeader}

@@ -212,7 +212,9 @@ async function handleRequest(request: PageRequest): Promise<void> {
       requestJson,
       expiresAt: request.expiresAt,
       vaultStoreId: selected.vaultStoreId,
-      credentialId: selected.account?.credentialId,
+      ...(selected.account
+        ? { credentialId: selected.account.credentialId }
+        : {}),
     },
   } satisfies WebsitePasskeyPerformMessage)
   if (result?.ok === true) {

@@ -1,40 +1,40 @@
 export enum CloudKitParticipantStatus {
   /** @public CloudKit JS contract value. */
-  Invited = 'INVITED',
+  Invited = "INVITED",
   /** @public CloudKit JS contract value. */
-  Accepted = 'ACCEPTED',
+  Accepted = "ACCEPTED",
   /** @public CloudKit JS contract value. */
-  Removed = 'REMOVED',
+  Removed = "REMOVED",
   /** @public CloudKit JS contract value. */
-  Unknown = 'UNKNOWN',
+  Unknown = "UNKNOWN",
 }
 
 export enum CloudKitEnvironment {
   /** @public CloudKit JS contract value. */
-  Development = 'development',
+  Development = "development",
   /** @public CloudKit JS contract value. */
-  Production = 'production',
+  Production = "production",
 }
 
 export enum CloudKitButtonTheme {
   /** @public CloudKit JS contract value. */
-  Black = 'black',
+  Black = "black",
   /** @public CloudKit JS contract value. */
-  White = 'white',
+  White = "white",
   /** @public CloudKit JS contract value. */
-  WhiteWithOutline = 'white-with-outline',
+  WhiteWithOutline = "white-with-outline",
 }
 
 export enum CloudKitShareAccess {
   /** @public CloudKit JS contract value. */
-  Private = 'PRIVATE',
+  Private = "PRIVATE",
   /** @public CloudKit JS contract value. */
-  Public = 'PUBLIC',
+  Public = "PUBLIC",
 }
 
 export enum CloudKitSharePermission {
   /** @public CloudKit JS contract value. */
-  ReadWrite = 'READ_WRITE',
+  ReadWrite = "READ_WRITE",
   /** @public CloudKit JS contract value. */
-  ReadOnly = 'READ_ONLY',
+  ReadOnly = "READ_ONLY",
 }

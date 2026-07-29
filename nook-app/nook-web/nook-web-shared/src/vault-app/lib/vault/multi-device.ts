@@ -1,68 +1,68 @@
-import type { VaultState } from '$lib/vault.svelte'
-import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
-import { createLogger } from '$lib/log'
-import { JoinEnrollmentState } from '$app-wasm'
-import { EventOutboxTargetKind } from '$lib/vault/sync-operation-state'
+import type { VaultState } from "$lib/vault.svelte";
+import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
+import { createLogger } from "$lib/log";
+import { JoinEnrollmentState } from "$app-wasm";
+import { EventOutboxTargetKind } from "$lib/vault/sync-operation-state";
 
-const log = createLogger('vault-devices')
+const log = createLogger("vault-devices");
 
 export async function refreshDeviceState(state: VaultState) {
-  await state.manualSync()
+  await state.manualSync();
 }
 
 export async function refreshPendingJoinsFromProviders(state: VaultState) {
-  await state.hydrateMultiDeviceState()
+  await state.hydrateMultiDeviceState();
 }
 
 export async function approveJoin(state: VaultState, joinDeviceId: string) {
-  if (!state.hasManager) return
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isSaving = true
+  if (!state.hasManager) return;
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
       state.requireManager().approve_join_request(joinDeviceId),
-    )) as NookSecretRecord[]
-    for (const record of rawRecords) record.free()
-    await state.refreshSecretsFromSession()
-    await state.flushRemoteEventOutboxNow()
-    await state.hydrateMultiDeviceState()
+    )) as NookSecretRecord[];
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
+    await state.flushRemoteEventOutboxNow();
+    await state.hydrateMultiDeviceState();
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
-    )
-    await state.fanOutSyncToProviders({ quiet: true })
+    );
+    await state.fanOutSyncToProviders({ quiet: true });
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
-    )
-    state.showSuccess(state.t('toasts.device_approved_success'))
-    log.info('join request approved', { joinDeviceId })
+    );
+    state.showSuccess(state.t("toasts.device_approved_success"));
+    log.info("join request approved", { joinDeviceId });
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to approve join request.'
+      e instanceof Error ? e.message : "Failed to approve join request.";
   } finally {
-    state.isSaving = false
+    state.isSaving = false;
   }
 }
 
 export async function denyJoin(state: VaultState, joinDeviceId: string) {
-  if (!state.hasManager) return
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isSaving = true
+  if (!state.hasManager) return;
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
       state.requireManager().deny_join_request(joinDeviceId),
-    )) as NookSecretRecord[]
-    for (const record of rawRecords) record.free()
-    await state.refreshSecretsFromSession()
-    await state.hydrateMultiDeviceState()
-    state.scheduleFanOutSyncAfterLocalSave()
-    state.showSuccess(state.t('toasts.join_denied'))
+    )) as NookSecretRecord[];
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
+    await state.hydrateMultiDeviceState();
+    state.scheduleFanOutSyncAfterLocalSave();
+    state.showSuccess(state.t("toasts.join_denied"));
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to deny join request.'
+      e instanceof Error ? e.message : "Failed to deny join request.";
   } finally {
-    state.isSaving = false
+    state.isSaving = false;
   }
 }
 
@@ -71,126 +71,127 @@ export async function renameDevice(
   authId: string,
   label: string,
 ) {
-  if (!state.hasManager) return
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isSaving = true
+  if (!state.hasManager) return;
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
   try {
     await state.enqueueStorage(() =>
       state.requireManager().rename_vault_member(authId, label),
-    )
-    await state.hydrateMultiDeviceState()
-    state.scheduleFanOutSyncAfterLocalSave()
+    );
+    await state.hydrateMultiDeviceState();
+    state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(
       label.trim()
-        ? state.t('toasts.device_renamed')
-        : state.t('toasts.device_name_reset'),
-    )
+        ? state.t("toasts.device_renamed")
+        : state.t("toasts.device_name_reset"),
+    );
   } catch (e: unknown) {
-    state.errorMsg = e instanceof Error ? e.message : 'Failed to rename device.'
-    throw e
+    state.errorMsg =
+      e instanceof Error ? e.message : "Failed to rename device.";
+    throw e;
   } finally {
-    state.isSaving = false
+    state.isSaving = false;
   }
 }
 
 export async function revokeDevice(state: VaultState, authId: string) {
-  if (!state.hasManager) return
+  if (!state.hasManager) return;
   const isSelf = state.vaultMembers.some(
     (member) => member.authId === authId && member.deviceId === state.deviceId,
-  )
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isSaving = true
+  );
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isSaving = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
       state.requireManager().revoke_vault_member(authId),
-    )) as NookSecretRecord[]
+    )) as NookSecretRecord[];
     if (isSelf) {
-      state.clearUnlockedSession()
-      state.showSuccess(state.t('toasts.device_removed'))
-      return
+      state.clearUnlockedSession();
+      state.showSuccess(state.t("toasts.device_removed"));
+      return;
     }
-    for (const record of rawRecords) record.free()
-    await state.refreshSecretsFromSession()
-    await state.hydrateMultiDeviceState()
-    state.scheduleFanOutSyncAfterLocalSave()
-    state.showSuccess(state.t('toasts.device_revoked'))
+    for (const record of rawRecords) record.free();
+    await state.refreshSecretsFromSession();
+    await state.hydrateMultiDeviceState();
+    state.scheduleFanOutSyncAfterLocalSave();
+    state.showSuccess(state.t("toasts.device_revoked"));
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to revoke device access.'
-    throw e
+      e instanceof Error ? e.message : "Failed to revoke device access.";
+    throw e;
   } finally {
-    state.isSaving = false
+    state.isSaving = false;
   }
 }
 
 export async function confirmJoinRequest(state: VaultState) {
-  if (!state.hasManager) return
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isVerifying = true
+  if (!state.hasManager) return;
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isVerifying = true;
   try {
-    const target = state.eventOutboxTarget()
+    const target = state.eventOutboxTarget();
     const storageArgs =
       target.kind === EventOutboxTargetKind.Remote
         ? target.args
-        : state.wasmStorageArgs()
+        : state.wasmStorageArgs();
     await state.enqueueStorage(() =>
       state
         .requireManager()
         .request_vault_access(...storageArgs, isoTimestamp()),
-    )
-    await state.ensureProviderSaved()
-    state.joinEnrollmentPrompt = JoinEnrollmentState.Pending
-    state.awaitingJoinApproval = true
+    );
+    await state.ensureProviderSaved();
+    state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
+    state.awaitingJoinApproval = true;
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to request vault access.'
+      e instanceof Error ? e.message : "Failed to request vault access.";
   } finally {
-    state.isVerifying = false
+    state.isVerifying = false;
   }
 }
 
 export function dismissJoinEnrollment(state: VaultState) {
-  state.joinEnrollmentPrompt = JoinEnrollmentState.None
+  state.joinEnrollmentPrompt = JoinEnrollmentState.None;
 }
 
 export async function enrollAndConnect(state: VaultState) {
-  if (!state.hasManager) return
-  const secretsKey = state.enrollSecretsKey.trim()
-  const membersKey = state.enrollMembersKey.trim()
-  if (!secretsKey || !membersKey) return
+  if (!state.hasManager) return;
+  const secretsKey = state.enrollSecretsKey.trim();
+  const membersKey = state.enrollMembersKey.trim();
+  if (!secretsKey || !membersKey) return;
 
-  state.errorMsg = ''
-  state.dismissSuccess()
-  state.isVerifying = true
+  state.errorMsg = "";
+  state.dismissSuccess();
+  state.isVerifying = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
       state
         .requireManager()
         .enroll_and_connect(...state.wasmStorageArgs(), secretsKey, membersKey),
-    )) as NookSecretRecord[]
-    for (const record of rawRecords) record.free()
-    await state.loadSecretPage('', 0)
-    state.markVaultUnlocked()
-    state.enrollSecretsKey = ''
-    state.enrollMembersKey = ''
-    await state.ensureProviderSaved()
-    void state.hydrateMultiDeviceState()
-    await state.syncFromStorage()
-    state.showSuccess(state.t('toasts.enrolled_connected'))
-    log.info('enrolled and connected', {
+    )) as NookSecretRecord[];
+    for (const record of rawRecords) record.free();
+    await state.loadSecretPage("", 0);
+    state.markVaultUnlocked();
+    state.enrollSecretsKey = "";
+    state.enrollMembersKey = "";
+    await state.ensureProviderSaved();
+    void state.hydrateMultiDeviceState();
+    await state.syncFromStorage();
+    state.showSuccess(state.t("toasts.enrolled_connected"));
+    log.info("enrolled and connected", {
       secrets: rawRecords.length,
       mode: state.storageMode,
-    })
-    state.joinEnrollmentPrompt = JoinEnrollmentState.None
-    state.closeSettings()
-    state.startIdleSessionTracking()
+    });
+    state.joinEnrollmentPrompt = JoinEnrollmentState.None;
+    state.closeSettings();
+    state.startIdleSessionTracking();
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to enroll with vault keys.'
+      e instanceof Error ? e.message : "Failed to enroll with vault keys.";
   } finally {
-    state.isVerifying = false
+    state.isVerifying = false;
   }
 }

@@ -1,4 +1,4 @@
 export enum VaultStatusBarVariant {
-  Panel = 'panel',
-  Quiet = 'quiet',
+  Panel = "panel",
+  Quiet = "quiet",
 }

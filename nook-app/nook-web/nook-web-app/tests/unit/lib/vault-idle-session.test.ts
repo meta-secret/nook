@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
@@ -99,5 +99,33 @@ describe('createVaultIdleSessionTracker', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(expired).toBe(false)
     tracker.stop()
+  })
+
+  test('expiration detaches every activity listener before locking', async () => {
+    const removeListener = vi.spyOn(document, 'removeEventListener')
+    const tracker = createVaultIdleSessionTracker({
+      timeoutMs: 30,
+      warningMs: 0,
+      onExpire: () => {
+        tracker.stop()
+      },
+    })
+
+    try {
+      tracker.start()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      for (const event of [
+        'pointerdown',
+        'keydown',
+        'touchstart',
+        'scroll',
+        'click',
+      ]) {
+        expect(removeListener).toHaveBeenCalledWith(event, expect.any(Function))
+      }
+    } finally {
+      tracker.stop()
+      removeListener.mockRestore()
+    }
   })
 })

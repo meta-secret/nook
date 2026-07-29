@@ -3,6 +3,7 @@ import {
   type LoginDetectionResponse,
 } from '../../lib/login-detection-messages'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
+import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -161,7 +162,7 @@ export function isUnlockedSessionStatus(status: unknown): boolean {
     status &&
     typeof status === 'object' &&
     'status' in status &&
-    status.status === 'unlocked',
+    status.status === DeviceProtectionStatus.Unlocked,
   )
 }
 

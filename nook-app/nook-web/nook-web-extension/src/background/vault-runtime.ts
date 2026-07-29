@@ -6,6 +6,7 @@ import {
 import initNookWasm, {
   authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
+  classifyAuthenticationOutcomeWithDefaultTimeout as wasmClassifyAuthenticationOutcomeWithDefaultTimeout,
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
   readExtensionPairingState as wasmReadExtensionPairingState,
@@ -187,7 +188,7 @@ export async function generateSuggestedPassword(): Promise<string> {
 
 export async function classifyAuthenticationOutcome(
   observation: AuthenticationOutcomeObservationView,
-  timeoutMs?: number,
+  timeoutMs: number,
 ): Promise<AuthenticationOutcomeVerdictView> {
   await ensureExtensionWasm()
   const input = new NookAuthenticationOutcomeObservation(
@@ -200,13 +201,38 @@ export async function classifyAuthenticationOutcome(
     Math.max(0, Math.floor(observation.elapsedMs)),
   )
   try {
-    const verdict =
-      typeof timeoutMs === 'number' && Number.isFinite(timeoutMs)
-        ? wasmClassifyAuthenticationOutcome(
-            input,
-            Math.max(1, Math.floor(timeoutMs)),
-          )
-        : wasmClassifyAuthenticationOutcome(input)
+    const verdict = wasmClassifyAuthenticationOutcome(
+      input,
+      Math.max(1, Math.floor(timeoutMs)),
+    )
+    try {
+      return {
+        verdict: verdict.verdict,
+        allowsCredentialCommit: verdict.allowsCredentialCommit === true,
+      }
+    } finally {
+      verdict.free()
+    }
+  } finally {
+    input.free()
+  }
+}
+
+export async function classifyAuthenticationOutcomeWithDefaultTimeout(
+  observation: AuthenticationOutcomeObservationView,
+): Promise<AuthenticationOutcomeVerdictView> {
+  await ensureExtensionWasm()
+  const input = new NookAuthenticationOutcomeObservation(
+    observation.navigatedAwayFromAuthPath,
+    observation.authFieldsPresent,
+    observation.successMarkerPresent,
+    observation.errorMarkerPresent,
+    observation.sameDocumentMutation,
+    observation.inIframe,
+    Math.max(0, Math.floor(observation.elapsedMs)),
+  )
+  try {
+    const verdict = wasmClassifyAuthenticationOutcomeWithDefaultTimeout(input)
     try {
       return {
         verdict: verdict.verdict,

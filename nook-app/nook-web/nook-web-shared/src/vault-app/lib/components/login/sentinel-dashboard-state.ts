@@ -1,32 +1,32 @@
 export enum SentinelCardOnboardingStage {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Identity = 'identity',
+  Identity = "identity",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Name = 'name',
+  Name = "name",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Policy = 'policy',
+  Policy = "policy",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Roster = 'roster',
+  Roster = "roster",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Build = 'build',
+  Build = "build",
 }
 
 export enum SentinelTerminalPolicyStep {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Total = 'total',
+  Total = "total",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Threshold = 'threshold',
+  Threshold = "threshold",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Confirm = 'confirm',
+  Confirm = "confirm",
 }
 
 export enum SentinelTerminalLineTone {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Muted = 'muted',
+  Muted = "muted",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Success = 'success',
+  Success = "success",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Answer = 'answer',
+  Answer = "answer",
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Accent = 'accent',
+  Accent = "accent",
 }

@@ -14,25 +14,22 @@ export async function clearBrowserVault(page: Page) {
   const clearedThroughManager = await page.evaluate(async () => {
     const vault = (
       window as Window & {
-        __nookVault?: {
-          initPromise?: Promise<void>
-          stopVaultSync?: () => void
-          waitForStorageChain?: () => Promise<void>
-          enqueueStorage?: <T>(operation: () => Promise<T>) => Promise<T>
-          manager?: { deleteLocalBrowserData?: () => Promise<void> }
+        __nookVault: {
+          init(): Promise<void>
+          stopVaultSync(): void
+          waitForStorageChain(): Promise<void>
+          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
+          hasManager: boolean
+          requireManager(): { deleteLocalBrowserData(): Promise<void> }
         }
       }
     ).__nookVault
-    await vault?.initPromise
-    vault?.stopVaultSync?.()
-    await vault?.waitForStorageChain?.()
-    const manager = vault?.manager
-    if (!manager?.deleteLocalBrowserData) return false
-    if (vault.enqueueStorage) {
-      await vault.enqueueStorage(() => manager.deleteLocalBrowserData!())
-    } else {
-      await manager.deleteLocalBrowserData()
-    }
+    await vault.init()
+    vault.stopVaultSync()
+    await vault.waitForStorageChain()
+    if (!vault.hasManager) return false
+    const manager = vault.requireManager()
+    await vault.enqueueStorage(() => manager.deleteLocalBrowserData())
     return true
   })
   await page.evaluate(

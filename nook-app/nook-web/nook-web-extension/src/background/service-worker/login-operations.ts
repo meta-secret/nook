@@ -3,7 +3,7 @@ import {
   WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
 } from '../../lib/login-save-messages'
-import { classifyAuthenticationOutcome } from '../vault-runtime'
+import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
 import {
   LoginPickerLoadKind,
   authorizedWebsiteGrant,
@@ -24,6 +24,7 @@ import { LOGIN_PICKER_TTL_MS } from './account-pickers'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
+  isUnlockedSessionStatus,
   openCompanionLauncher,
 } from './session-lifecycle'
 
@@ -216,8 +217,7 @@ export async function websiteLoginSaveOffer(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     pendingPassword.value = ''
     openCompanionLauncher()
@@ -347,7 +347,9 @@ export async function websiteLoginSaveCommit(
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
-  const verdict = await classifyAuthenticationOutcome(message.payload.evidence)
+  const verdict = await classifyAuthenticationOutcomeWithDefaultTimeout(
+    message.payload.evidence,
+  )
   if (!verdict.allowsCredentialCommit) {
     return {
       ok: false,
@@ -388,8 +390,7 @@ export async function websiteLoginSaveCommit(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     openCompanionLauncher()
     return { ok: false, reason: 'login-save-locked' }

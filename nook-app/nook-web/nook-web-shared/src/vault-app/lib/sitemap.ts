@@ -1,64 +1,64 @@
 /** Canonical production host for nokey.sh (override with VITE_SITE_URL at build time). */
-export const DEFAULT_SITE_URL = 'https://nokey.sh'
+export const DEFAULT_SITE_URL = "https://nokey.sh";
 
 const SitemapChangeFrequency = {
-  Weekly: 'weekly',
-  Monthly: 'monthly',
-} as const
+  Weekly: "weekly",
+  Monthly: "monthly",
+} as const;
 
 type SitemapChangeFrequency =
-  (typeof SitemapChangeFrequency)[keyof typeof SitemapChangeFrequency]
+  (typeof SitemapChangeFrequency)[keyof typeof SitemapChangeFrequency];
 
 export type SitemapEntry = {
-  path: string
-  changefreq: SitemapChangeFrequency
-  priority: string
-}
+  path: string;
+  changefreq: SitemapChangeFrequency;
+  priority: string;
+};
 
 /** Public routes suitable for search indexing (keep in sync with LEGAL_PAGES paths). */
 export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
-  { path: '/', changefreq: SitemapChangeFrequency.Weekly, priority: '1.0' },
+  { path: "/", changefreq: SitemapChangeFrequency.Weekly, priority: "1.0" },
   {
-    path: '/privacy.html',
+    path: "/privacy.html",
     changefreq: SitemapChangeFrequency.Monthly,
-    priority: '0.6',
+    priority: "0.6",
   },
   {
-    path: '/terms.html',
+    path: "/terms.html",
     changefreq: SitemapChangeFrequency.Monthly,
-    priority: '0.6',
+    priority: "0.6",
   },
-]
+];
 
 export function siteUrlFromEnv(env: typeof process.env = process.env): string {
-  const trimmed = env.VITE_SITE_URL?.trim()
+  const trimmed = env.VITE_SITE_URL?.trim();
   if (trimmed) {
-    return trimmed.replace(/\/$/, '')
+    return trimmed.replace(/\/$/, "");
   }
-  return DEFAULT_SITE_URL
+  return DEFAULT_SITE_URL;
 }
 
 export function absoluteSiteUrl(siteUrl: string, path: string): string {
-  const base = siteUrl.replace(/\/$/, '')
-  if (path === '/') {
-    return `${base}/`
+  const base = siteUrl.replace(/\/$/, "");
+  if (path === "/") {
+    return `${base}/`;
   }
-  return `${base}${path.startsWith('/') ? path : `/${path}`}`
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function escapeXml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 export function buildSitemapXml(
   siteUrl: string,
   lastmod: Date = new Date(),
 ): string {
-  const isoDate = lastmod.toISOString().slice(0, 10)
+  const isoDate = lastmod.toISOString().slice(0, 10);
   const body = PUBLIC_SITEMAP_ENTRIES.map(
     (entry) => `  <url>
     <loc>${escapeXml(absoluteSiteUrl(siteUrl, entry.path))}</loc>
@@ -66,17 +66,17 @@ export function buildSitemapXml(
     <changefreq>${entry.changefreq}</changefreq>
     <priority>${entry.priority}</priority>
   </url>`,
-  ).join('\n')
+  ).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${body}
 </urlset>
-`
+`;
 }
 
 export function buildRobotsTxt(siteUrl: string): string {
-  const base = siteUrl.replace(/\/$/, '')
+  const base = siteUrl.replace(/\/$/, "");
   return `User-agent: *
 Allow: /$
 Allow: /about.html
@@ -97,5 +97,5 @@ Disallow: /privacy
 Disallow: /terms
 
 Sitemap: ${base}/sitemap.xml
-`
+`;
 }

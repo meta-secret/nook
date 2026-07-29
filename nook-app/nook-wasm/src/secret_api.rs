@@ -40,6 +40,12 @@ impl NookSecretTypeFilter {
     }
 }
 
+#[wasm_bindgen(js_name = secretTypeName)]
+#[must_use]
+pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
+    secret_type.as_str().to_owned()
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookSecretListItem {
@@ -62,6 +68,11 @@ impl NookSecretListItem {
     #[wasm_bindgen(getter, js_name = "type")]
     pub fn secret_type(&self) -> nook_core::SecretType {
         self.item.secret_type()
+    }
+
+    #[wasm_bindgen(getter, js_name = typeName)]
+    pub fn secret_type_name(&self) -> String {
+        self.item.secret_type().as_str().to_owned()
     }
 
     #[wasm_bindgen(getter, js_name = displayTitle)]

@@ -1,19 +1,19 @@
 import {
   ExistingVaultProviderSnapshotKind,
   type ExistingVaultProviderSnapshot,
-} from '$lib/app-lifecycle-state'
-import type { ProviderActionsContext } from '$lib/vault/action-contexts'
+} from "$lib/app-lifecycle-state";
+import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
   LocalFolderDraftKind,
   LoginSetupKind,
   OAuthFileDraftKind,
-} from '$lib/vault/state/provider.svelte'
+} from "$lib/vault/state/provider.svelte";
 
 export enum ExistingVaultProviderPreparationKind {
-  Inactive = 'inactive',
-  MissingOAuthFile = 'missing-oauth-file',
-  MissingLocalFolder = 'missing-local-folder',
-  Ready = 'ready',
+  Inactive = "inactive",
+  MissingOAuthFile = "missing-oauth-file",
+  MissingLocalFolder = "missing-local-folder",
+  Ready = "ready",
 }
 
 export type ExistingVaultProviderPreparation =
@@ -21,30 +21,30 @@ export type ExistingVaultProviderPreparation =
   | { kind: ExistingVaultProviderPreparationKind.MissingOAuthFile }
   | { kind: ExistingVaultProviderPreparationKind.MissingLocalFolder }
   | {
-      kind: ExistingVaultProviderPreparationKind.Ready
-      provider: ExistingVaultProviderSnapshot
-    }
+      kind: ExistingVaultProviderPreparationKind.Ready;
+      provider: ExistingVaultProviderSnapshot;
+    };
 
 export function prepareExistingVaultProvider(
   state: ProviderActionsContext,
 ): ExistingVaultProviderPreparation {
   if (state.loginSetup.kind !== LoginSetupKind.Active) {
-    return { kind: ExistingVaultProviderPreparationKind.Inactive }
+    return { kind: ExistingVaultProviderPreparationKind.Inactive };
   }
-  const setupType = state.loginSetup.providerType
+  const setupType = state.loginSetup.providerType;
   if (
-    setupType === 'oauth-file' &&
+    setupType === "oauth-file" &&
     state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
   ) {
-    return { kind: ExistingVaultProviderPreparationKind.MissingOAuthFile }
+    return { kind: ExistingVaultProviderPreparationKind.MissingOAuthFile };
   }
   if (
-    setupType === 'local-folder' &&
+    setupType === "local-folder" &&
     state.localFolderDraft.kind !== LocalFolderDraftKind.Configured
   ) {
-    return { kind: ExistingVaultProviderPreparationKind.MissingLocalFolder }
+    return { kind: ExistingVaultProviderPreparationKind.MissingLocalFolder };
   }
-  if (setupType === 'github') {
+  if (setupType === "github") {
     return {
       kind: ExistingVaultProviderPreparationKind.Ready,
       provider: {
@@ -53,10 +53,10 @@ export function prepareExistingVaultProvider(
         githubPat: state.githubPat,
         githubRepo: state.githubRepo,
       },
-    }
+    };
   }
   if (
-    setupType === 'oauth-file' &&
+    setupType === "oauth-file" &&
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
   ) {
     return {
@@ -66,10 +66,10 @@ export function prepareExistingVaultProvider(
         setupType,
         oauthFile: $state.snapshot(state.oauthFileDraft.config),
       },
-    }
+    };
   }
   if (
-    setupType === 'local-folder' &&
+    setupType === "local-folder" &&
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured
   ) {
     return {
@@ -79,7 +79,7 @@ export function prepareExistingVaultProvider(
         setupType,
         localFolder: $state.snapshot(state.localFolderDraft.config),
       },
-    }
+    };
   }
   return {
     kind: ExistingVaultProviderPreparationKind.Ready,
@@ -87,5 +87,5 @@ export function prepareExistingVaultProvider(
       kind: ExistingVaultProviderSnapshotKind.Local,
       setupType,
     },
-  }
+  };
 }

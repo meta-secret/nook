@@ -23,7 +23,7 @@ export type AuthenticationOutcomeClassifyMessage = {
   type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
   payload: {
     observation: AuthenticationOutcomeObservationView
-    timeoutMs?: number
+    timeoutMs: number
   }
 }
 
@@ -57,9 +57,9 @@ export function isAuthenticationOutcomeClassifyMessage(
     typeof view.elapsedMs === 'number' &&
     Number.isFinite(view.elapsedMs) &&
     view.elapsedMs >= 0 &&
-    (!('timeoutMs' in payload) ||
-      (typeof payload.timeoutMs === 'number' &&
-        Number.isFinite(payload.timeoutMs) &&
-        payload.timeoutMs > 0))
+    'timeoutMs' in payload &&
+    typeof payload.timeoutMs === 'number' &&
+    Number.isFinite(payload.timeoutMs) &&
+    payload.timeoutMs > 0
   )
 }

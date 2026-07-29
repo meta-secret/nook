@@ -2,38 +2,38 @@ import {
   ColorMode,
   LegalRouteKind,
   type LegalRoute,
-} from '$lib/app-lifecycle-state'
+} from "$lib/app-lifecycle-state";
 import {
   saveAuthProviders,
   type AuthProvidersSnapshot,
-} from '$lib/auth-providers'
-import { subscribeToLocalBrowserDataDeletion } from '$lib/browser-data'
-import { configuredVaultApplication, VaultApplication } from '$app-wasm'
-import { legalPageForId } from '$lib/legal-content'
-import type { VaultState } from '$lib/vault.svelte'
+} from "$lib/auth-providers";
+import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
+import { configuredVaultApplicationName } from "$app-wasm";
+import { legalPageForId } from "$lib/legal-content";
+import type { VaultState } from "$lib/vault.svelte";
 
-export const THEME_STORAGE_KEY = 'nook_color_mode'
+export const THEME_STORAGE_KEY = "nook_color_mode";
 
 type BrowserLifecycleOptions = {
-  vault: VaultState
-  followsSystemColorMode(): boolean
-  setColorMode(mode: ColorMode): void
-  stopFollowingSystemColorMode(): void
-  syncRoute(): void
-}
+  vault: VaultState;
+  followsSystemColorMode(): boolean;
+  setColorMode(mode: ColorMode): void;
+  stopFollowingSystemColorMode(): void;
+  syncRoute(): void;
+};
 
 type AuthProviderDebugHooks = {
-  loadAuthProviders(): Promise<AuthProvidersSnapshot>
+  loadAuthProviders(): Promise<AuthProvidersSnapshot>;
   saveAuthProviders(
     snapshot: Parameters<typeof saveAuthProviders>[1],
-  ): ReturnType<typeof saveAuthProviders>
-}
+  ): ReturnType<typeof saveAuthProviders>;
+};
 
 type BrowserDebugHooks = {
-  __nookVault: VaultState
-  __nookConfiguredVaultApplication: VaultApplication
-  __nookAuthProviders: AuthProviderDebugHooks
-}
+  __nookVault: VaultState;
+  __nookConfiguredVaultApplication: string;
+  __nookAuthProviders: AuthProviderDebugHooks;
+};
 
 export function mountBrowserLifecycle({
   vault,
@@ -42,29 +42,29 @@ export function mountBrowserLifecycle({
   stopFollowingSystemColorMode,
   syncRoute,
 }: BrowserLifecycleOptions): () => void {
-  const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
-  const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
+  const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+  const savedMode = localStorage.getItem(THEME_STORAGE_KEY);
   if (savedMode === ColorMode.Light || savedMode === ColorMode.Dark) {
-    setColorMode(savedMode)
-    stopFollowingSystemColorMode()
+    setColorMode(savedMode);
+    stopFollowingSystemColorMode();
   } else {
-    setColorMode(colorScheme.matches ? ColorMode.Dark : ColorMode.Light)
+    setColorMode(colorScheme.matches ? ColorMode.Dark : ColorMode.Light);
   }
   const handleColorSchemeChange = (event: MediaQueryListEvent) => {
     if (followsSystemColorMode()) {
-      setColorMode(event.matches ? ColorMode.Dark : ColorMode.Light)
+      setColorMode(event.matches ? ColorMode.Dark : ColorMode.Light);
     }
-  }
-  colorScheme.addEventListener('change', handleColorSchemeChange)
+  };
+  colorScheme.addEventListener("change", handleColorSchemeChange);
   const unsubscribeLocalDataDeletion = subscribeToLocalBrowserDataDeletion(() =>
     vault.handleRemoteLocalBrowserDataDeletion(),
-  )
-  void vault.init()
+  );
+  void vault.init();
 
   if (vault.runtimeConfig.exposeDebugHooks()) {
     const debugHooks: BrowserDebugHooks = {
       __nookVault: vault,
-      __nookConfiguredVaultApplication: configuredVaultApplication(),
+      __nookConfiguredVaultApplication: configuredVaultApplicationName(),
       __nookAuthProviders: {
         loadAuthProviders: () =>
           vault.enqueueStorage(() =>
@@ -77,23 +77,23 @@ export function mountBrowserLifecycle({
             saveAuthProviders(vault.requireManager(), snapshot),
           ),
       },
-    }
-    Object.assign(window, debugHooks)
+    };
+    Object.assign(window, debugHooks);
   }
 
-  syncRoute()
-  window.addEventListener('popstate', syncRoute)
-  window.addEventListener('hashchange', syncRoute)
+  syncRoute();
+  window.addEventListener("popstate", syncRoute);
+  window.addEventListener("hashchange", syncRoute);
 
   return () => {
-    vault.stopVaultSync()
-    vault.stopIdleSessionTracking()
-    void vault.lockDeviceProtection()
-    window.removeEventListener('popstate', syncRoute)
-    window.removeEventListener('hashchange', syncRoute)
-    colorScheme.removeEventListener('change', handleColorSchemeChange)
-    unsubscribeLocalDataDeletion()
-  }
+    vault.stopVaultSync();
+    vault.stopIdleSessionTracking();
+    void vault.lockDeviceProtection();
+    window.removeEventListener("popstate", syncRoute);
+    window.removeEventListener("hashchange", syncRoute);
+    colorScheme.removeEventListener("change", handleColorSchemeChange);
+    unsubscribeLocalDataDeletion();
+  };
 }
 
 export function updateApplicationDocument(
@@ -104,22 +104,22 @@ export function updateApplicationDocument(
   sentinelApplication: boolean,
 ): void {
   document.documentElement.classList.toggle(
-    'dark',
+    "dark",
     colorMode === ColorMode.Dark,
-  )
+  );
   if (legalRoute.kind === LegalRouteKind.Legal) {
-    document.title = `${legalPageForId(legalRoute.page).title} · Nook`
-    return
+    document.title = `${legalPageForId(legalRoute.page).title} · Nook`;
+    return;
   }
   if (logsPage) {
-    document.title = 'Application logs · Nook'
-    return
+    document.title = "Application logs · Nook";
+    return;
   }
   if (extensionConnectRoute) {
-    document.title = 'Approve extension · Nook'
-    return
+    document.title = "Approve extension · Nook";
+    return;
   }
   document.title = sentinelApplication
-    ? 'Nook Sentinel Vault'
-    : 'Nook Simple Vault'
+    ? "Nook Sentinel Vault"
+    : "Nook Simple Vault";
 }

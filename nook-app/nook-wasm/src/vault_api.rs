@@ -248,6 +248,14 @@ pub fn configured_vault_application() -> nook_core::VaultApplication {
     application::configured_vault_application()
 }
 
+/// Return the stable semantic application name used by browser debug hooks.
+#[wasm_bindgen(js_name = configuredVaultApplicationName)]
+pub fn configured_vault_application_name() -> String {
+    application::configured_vault_application()
+        .as_str()
+        .to_owned()
+}
+
 /// Return the Rust-owned empty-provider policy for a first-connect intent.
 #[wasm_bindgen(js_name = vaultConnectIntentPermitsEmptyRemoteGenesis)]
 pub fn vault_connect_intent_permits_empty_remote_genesis(

@@ -1,5 +1,13 @@
 use super::wasm_bindgen;
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookBip39MnemonicLength {
+    Unsupported,
+    Words12,
+    Words24,
+}
+
 #[wasm_bindgen(js_name = validateBip39Mnemonic)]
 #[must_use]
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
@@ -48,6 +56,10 @@ pub fn join_bip39_words(words: Vec<String>) -> String {
 
 #[wasm_bindgen(js_name = inferBip39MnemonicLength)]
 #[must_use]
-pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
-    nook_core::infer_bip39_mnemonic_length(text)
+pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
+    match nook_core::infer_bip39_mnemonic_length(text) {
+        Some(12) => NookBip39MnemonicLength::Words12,
+        Some(24) => NookBip39MnemonicLength::Words24,
+        Some(_) | None => NookBip39MnemonicLength::Unsupported,
+    }
 }

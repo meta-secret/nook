@@ -55,21 +55,24 @@ async function setContentSyncConflict(page: Page) {
   await page.evaluate(() => {
     const vault = (
       window as Window & {
-        __nookVault?: {
-          pendingSyncConflict?: unknown
+        __nookVault: {
+          stageSyncConflict(conflict: {
+            kind: number
+            providerLabel: string
+            remoteYaml: string
+            contentLocalVersion(): number
+            contentRemoteVersion(): number
+          }): void
         }
       }
     ).__nookVault
-    if (!vault) {
-      throw new Error('__nookVault is not exposed (dev build required).')
-    }
-    vault.pendingSyncConflict = {
+    vault.stageSyncConflict({
       kind: 0,
       providerLabel: 'Remote provider',
       remoteYaml: 'remote-vault',
       contentLocalVersion: () => 1,
       contentRemoteVersion: () => 2,
-    }
+    })
   })
 }
 
@@ -244,9 +247,11 @@ test.describe('sync conflict resolution', () => {
           () =>
             (
               window as Window & {
-                __nookVault?: { manager?: { storage_mode: string } }
+                __nookVault: {
+                  requireManager(): { storage_mode: string }
+                }
               }
-            ).__nookVault?.manager?.storage_mode,
+            ).__nookVault.requireManager().storage_mode,
         ),
       )
       .toBe('local')

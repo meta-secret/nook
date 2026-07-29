@@ -6,6 +6,12 @@ use crate::HiveContext;
 use serde::Deserialize;
 use tokio::process::Command;
 
+use self::command::{gh_output, git_output, run_git_status};
+use self::workbench::validate_workbench_completion;
+
+mod command;
+mod workbench;
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryPullRequest {
@@ -76,7 +82,7 @@ pub(crate) async fn verify_main_repair_delivery(
     validate_workbench_completion(
         repository,
         task_id,
-        &pull_request,
+        pull_request.number,
         successful_main_sha.as_str(),
     )
     .await?;
@@ -619,118 +625,14 @@ fn is_actionable_feedback(body: &str) -> bool {
     })
 }
 
-async fn validate_workbench_completion(
-    repository: &Path,
-    task_id: &str,
-    pull_request: &DeliveryPullRequest,
-    main_sha: &str,
-) -> crate::HiveResult<()> {
-    let task_base = task_id.split("-run-").next().unwrap_or(task_id);
-    crate::hive_ensure!(
-        task_base.starts_with("main-failure-"),
-        "Hive repair task id does not identify its Workbench incident"
-    );
-    let endpoint = format!(
-        "repos/meta-secret/nook-workbench/contents/issues/hive-isolated-agent-platform/{task_base}.md"
-    );
-    let incident = gh_output(
-        repository,
-        &[
-            "api",
-            "-H",
-            "Accept: application/vnd.github.raw+json",
-            endpoint.as_str(),
-        ],
-    )
-    .await
-    .hive_context("read Hive Workbench completion record")?;
-    let completed_status = incident.lines().any(|line| {
-        matches!(
-            line.trim(),
-            "status: completed" | "status: complete" | "status: done"
-        )
-    });
-    crate::hive_ensure!(
-        completed_status,
-        "Hive repair delivery is incomplete: Workbench incident {task_base}.md is not completed"
-    );
-    crate::hive_ensure!(
-        incident.contains(&format!("#{}", pull_request.number))
-            || incident.contains(&format!("/pull/{}", pull_request.number)),
-        "Hive repair delivery is incomplete: Workbench incident does not link PR #{}",
-        pull_request.number
-    );
-    crate::hive_ensure!(
-        incident.contains(main_sha),
-        "Hive repair delivery is incomplete: Workbench incident does not record green Main SHA {main_sha}"
-    );
-    crate::hive_ensure!(
-        incident.to_ascii_lowercase().contains("worklog"),
-        "Hive repair delivery is incomplete: Workbench incident has no linked worklog"
-    );
-    Ok(())
-}
-
-async fn gh_output(repository: &Path, arguments: &[&str]) -> crate::HiveResult<String> {
-    let output = Command::new("gh")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .hive_context("failed to execute gh")?;
-    if !output.status.success() {
-        crate::hive_bail!("gh {:?} failed with status {}", arguments, output.status);
-    }
-    String::from_utf8(output.stdout)
-        .hive_context("gh output is not UTF-8")
-        .map(|value| value.trim().to_owned())
-}
-
-async fn git_output(repository: &Path, arguments: &[&str]) -> crate::HiveResult<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .hive_context("failed to execute git")?;
-    if !output.status.success() {
-        crate::hive_bail!("git {:?} failed with status {}", arguments, output.status);
-    }
-    String::from_utf8(output.stdout)
-        .hive_context("git output is not UTF-8")
-        .map(|value| value.trim().to_owned())
-}
-
-async fn run_git_status(
-    repository: &Path,
-    arguments: &[&str],
-    operation: &str,
-) -> crate::HiveResult<()> {
-    let status = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .with_hive_context(|| format!("failed to {operation}"))?;
-    if !status.success() {
-        crate::hive_bail!("{operation} failed with status {status}");
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use crate::HiveContext;
 
     use super::{
+        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
         delivery_generation, latest_delivery_generation, select_successful_main_run,
         validate_full_e2e_checks, validate_merged_hive_pull_request, validate_repository_checks,
-        DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
     };
 
     fn pull_request(

@@ -310,8 +310,7 @@ function unlockedSessionDevice(response: unknown): UnlockedSessionDeviceParse {
     typeof response !== 'object' ||
     !('ok' in response) ||
     response.ok !== true ||
-    !('status' in response) ||
-    !isUnlockedSessionStatus(response.status) ||
+    !isUnlockedSessionStatus(response) ||
     !('device' in response) ||
     !response.device ||
     typeof response.device !== 'object'
@@ -401,7 +400,7 @@ export async function discoverPairedVaultIdentity(
       type: 'nook:extension-session-status',
       payload: { queueExpiresAt: message.payload.expiresAt },
     })) as ExtensionSessionStatusResponse
-    if (!isUnlockedSessionStatus(statusResponse.status)) {
+    if (!isUnlockedSessionStatus(statusResponse)) {
       return {
         type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
         payload: {
@@ -470,7 +469,7 @@ export async function requestPairedVaultUnlock(
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
-  if (!isUnlockedSessionStatus(statusResponse.status)) {
+  if (!isUnlockedSessionStatus(statusResponse)) {
     await openCompanionLauncher()
   }
   return { ok: true, requestId, vaultStoreId }

@@ -24,7 +24,7 @@ mod lifecycle;
 mod task_prompt;
 mod workspace;
 use lifecycle::{
-    claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested, ClaimStep,
+    ClaimStep, claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested,
 };
 use task_prompt::*;
 use workspace::*;
@@ -535,9 +535,9 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::{
-        blocked_disposition, bounded, obsolete_owner_delivery_targets, persistable_patch,
-        prepare_workspace, task_prompt, validate_dependency_artifacts, TaskDisposition,
-        MAX_PERSISTED_RESULT_BYTES,
+        MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
+        obsolete_owner_delivery_targets, persistable_patch, prepare_workspace, task_prompt,
+        validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -763,8 +763,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch(
-    ) -> crate::HiveResult<()> {
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
+    -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")

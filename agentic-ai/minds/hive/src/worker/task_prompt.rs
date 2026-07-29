@@ -1,8 +1,8 @@
 use std::path::Path;
 
+use crate::HiveContext;
 use crate::delivery::verify_main_repair_merge_and_main;
 use crate::model::{ClaimedTask, TaskId};
-use crate::HiveContext;
 
 pub(super) fn task_prompt(task: &ClaimedTask) -> String {
     let owning_repairs = if task.owning_repairs.is_empty() {

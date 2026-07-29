@@ -1,4 +1,4 @@
 export enum LoginProviderManagementVariant {
-  Setup = 'setup',
-  Manage = 'manage',
+  Setup = "setup",
+  Manage = "manage",
 }

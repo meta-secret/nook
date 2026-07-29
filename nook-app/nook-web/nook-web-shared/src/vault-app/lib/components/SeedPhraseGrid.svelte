@@ -12,6 +12,7 @@
     isBip39WordSequenceValid,
     isKnownBip39Word,
     joinBip39Words,
+    NookBip39MnemonicLength,
     parseBip39Words,
     suggestBip39Words,
     validateBip39Mnemonic,
@@ -65,7 +66,8 @@
 
   function applyValueToCells(seed: string) {
     const inferred = inferBip39MnemonicLength(seed)
-    if (inferred === 12 || inferred === 24) wordCount = inferred
+    if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12
+    if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24
 
     const words = parseBip39Words(seed)
     const next = Array.from({ length: 24 }, () => '')

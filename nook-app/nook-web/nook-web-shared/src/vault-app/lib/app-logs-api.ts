@@ -4,33 +4,33 @@ import {
   LogLevel,
   logCount,
   type LogEntry,
-} from '$lib/log'
-import { stripBasePath } from '$lib/routes'
+} from "$lib/log";
+import { stripBasePath } from "$lib/routes";
 
 /** Machine-readable log export route (JSON body, not the human `/logs` viewer). */
-export const APP_LOGS_PATH = '/app-logs'
+export const APP_LOGS_PATH = "/app-logs";
 
-export const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
+export const APP_LOGS_SCHEMA = "nook.app-logs.v1" as const;
 
 export type AppLogsQuery = {
-  minLevel: LogLevel
-  limit: number
-  offset: number
-}
+  minLevel: LogLevel;
+  limit: number;
+  offset: number;
+};
 
 export type AppLogsResponse = {
   meta: {
-    schema: typeof APP_LOGS_SCHEMA
-    generatedAt: string
-    activeLevel: LogLevel
-    minLevel: LogLevel
-    limit: number
-    offset: number
-    returned: number
-    total: number
-  }
-  entries: LogEntry[]
-}
+    schema: typeof APP_LOGS_SCHEMA;
+    generatedAt: string;
+    activeLevel: LogLevel;
+    minLevel: LogLevel;
+    limit: number;
+    offset: number;
+    returned: number;
+    total: number;
+  };
+  entries: LogEntry[];
+};
 
 const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Error,
@@ -38,16 +38,18 @@ const LOG_LEVELS: readonly LogLevel[] = [
   LogLevel.Info,
   LogLevel.Debug,
   LogLevel.Trace,
-]
+];
 
 function parseLevel(
   params: URLSearchParams,
   name: string,
   fallback: LogLevel,
 ): LogLevel {
-  const raw = params.get(name)
-  const value = raw?.trim().toLowerCase()
-  return LOG_LEVELS.includes(value as LogLevel) ? (value as LogLevel) : fallback
+  const raw = params.get(name);
+  const value = raw?.trim().toLowerCase();
+  return LOG_LEVELS.includes(value as LogLevel)
+    ? (value as LogLevel)
+    : fallback;
 }
 
 function parsePositiveInt(
@@ -56,40 +58,40 @@ function parsePositiveInt(
   fallback: number,
   max: number,
 ) {
-  const raw = params.get(name)
-  const parsed = Number.parseInt(raw ?? '', 10)
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback
-  return Math.min(parsed, max)
+  const raw = params.get(name);
+  const parsed = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.min(parsed, max);
 }
 
 /** True when the current location resolves to the `/app-logs` JSON export route. */
 export function isAppLogsPath(pathname: string): boolean {
-  const normalized = stripBasePath(pathname).replace(/\/$/, '') || '/'
-  return normalized === APP_LOGS_PATH
+  const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
+  return normalized === APP_LOGS_PATH;
 }
 
 /** Parse `/app-logs?minLevel=debug&limit=500&offset=0` query parameters. */
 export function parseAppLogsQuery(search: string): AppLogsQuery {
   const params = new URLSearchParams(
-    search.startsWith('?') ? search.slice(1) : search,
-  )
+    search.startsWith("?") ? search.slice(1) : search,
+  );
   return {
-    minLevel: parseLevel(params, 'minLevel', LogLevel.Trace),
-    limit: parsePositiveInt(params, 'limit', 500, 5000),
-    offset: parsePositiveInt(params, 'offset', 0, Number.MAX_SAFE_INTEGER),
-  }
+    minLevel: parseLevel(params, "minLevel", LogLevel.Trace),
+    limit: parsePositiveInt(params, "limit", 500, 5000),
+    offset: parsePositiveInt(params, "offset", 0, Number.MAX_SAFE_INTEGER),
+  };
 }
 
 export function buildAppLogsUrl(
   query: Partial<AppLogsQuery> = {},
   basePath = APP_LOGS_PATH,
 ): string {
-  const params = new URLSearchParams()
-  if (query.minLevel) params.set('minLevel', query.minLevel)
-  if ('limit' in query) params.set('limit', String(query.limit))
-  if ('offset' in query) params.set('offset', String(query.offset))
-  const qs = params.toString()
-  return qs ? `${basePath}?${qs}` : basePath
+  const params = new URLSearchParams();
+  if (query.minLevel) params.set("minLevel", query.minLevel);
+  if ("limit" in query) params.set("limit", String(query.limit));
+  if ("offset" in query) params.set("offset", String(query.offset));
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
 }
 
 /** Load persisted entries and wrap them in the canonical JSON export envelope. */
@@ -103,7 +105,7 @@ export async function loadAppLogsResponse(
       limit: query.limit,
       offset: query.offset,
     }),
-  ])
+  ]);
 
   return {
     meta: {
@@ -117,5 +119,5 @@ export async function loadAppLogsResponse(
       total,
     },
     entries,
-  }
+  };
 }

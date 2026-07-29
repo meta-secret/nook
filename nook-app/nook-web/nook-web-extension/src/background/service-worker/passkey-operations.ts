@@ -11,7 +11,10 @@ import {
   sendSessionMessage,
   WebsitePasskeyRequestContextKind,
 } from './pairing-identity'
-import { ensureExtensionSessionDocument } from './session-lifecycle'
+import {
+  ensureExtensionSessionDocument,
+  isUnlockedSessionStatus,
+} from './session-lifecycle'
 
 const pendingWebsitePasskeyRequests = new Set<string>()
 
@@ -49,8 +52,7 @@ async function matchingPasskeyAccountCountForOrigin(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     return 0
   }
@@ -123,8 +125,7 @@ export async function websitePasskeyOptions(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     return { ok: true, status: 'locked', options: [] }
   }
