@@ -5,10 +5,13 @@ import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
 } from '$web-shared/extension/extension-connect-types'
-import { ExtensionConnectScope } from '$web-shared/extension/extension-connect-types'
+import {
+  ExtensionConnectScope,
+  ExtensionIdentityRequestSource,
+} from '$web-shared/extension/extension-connect-types'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
 
-export { ExtensionConnectScope }
+export { ExtensionConnectScope, ExtensionIdentityRequestSource }
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>
