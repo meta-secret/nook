@@ -1,4 +1,3 @@
-import { omittedValue } from '../nook-web-shared/src/explicit-state'
 import { defineConfig, type Plugin } from 'vitest/config'
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -190,16 +189,6 @@ function seoStaticFiles(outputDirectory: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const localHttps = env.NOOK_LOCAL_HTTPS === '1'
-  const https = localHttps
-    ? {
-        cert: readFileSync(
-          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_CERT_PATH'),
-        ),
-        key: readFileSync(
-          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
-        ),
-      }
-    : omittedValue()
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
   const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
@@ -253,7 +242,18 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      https,
+      ...(localHttps
+        ? {
+            https: {
+              cert: readFileSync(
+                requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_CERT_PATH'),
+              ),
+              key: readFileSync(
+                requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
+              ),
+            },
+          }
+        : {}),
       fs: {
         allow: ['../../..'],
       },

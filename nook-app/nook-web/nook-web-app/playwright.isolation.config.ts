@@ -1,8 +1,7 @@
-import { omittedValue } from '../nook-web-shared/src/explicit-state'
 import { defineConfig } from '@playwright/test'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 
 const commonEnvironment = {
   VITE_E2E_EXPOSE_VAULT: 'true',
@@ -18,7 +17,9 @@ export default defineConfig({
   use: {
     trace: 'on-first-retry',
     launchOptions: {
-      executablePath: chromiumExecutablePath,
+      ...(chromiumExecutablePath
+        ? { executablePath: chromiumExecutablePath }
+        : {}),
     },
   },
   webServer: [

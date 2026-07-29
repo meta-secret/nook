@@ -26,7 +26,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
@@ -477,7 +477,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       userDataDir,
       {
         headless: false,
-        executablePath: chromiumExecutablePath,
+        ...(chromiumExecutablePath
+          ? { executablePath: chromiumExecutablePath }
+          : {}),
         args: [
           `--disable-extensions-except=${extensionDir}`,
           `--load-extension=${extensionDir}`,

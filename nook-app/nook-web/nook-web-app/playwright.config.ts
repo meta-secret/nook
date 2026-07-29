@@ -1,4 +1,3 @@
-import { omittedValue } from '../nook-web-shared/src/explicit-state'
 import dotenv from 'dotenv'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -21,14 +20,10 @@ const configuredWorkers = Number.parseInt(
   process.env.PLAYWRIGHT_WORKERS ?? '',
   10,
 )
-const workers =
+const hasConfiguredWorkers =
   Number.isSafeInteger(configuredWorkers) && configuredWorkers > 0
-    ? configuredWorkers
-    : isCi
-      ? 2
-      : omittedValue()
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 const distDir = path.join(rootDir, 'dist')
 const uiDemoOutputDir =
   process.env.NOOK_UI_DEMO_OUTPUT_DIR ?? path.join(rootDir, 'ui-demo-results')
@@ -96,10 +91,13 @@ export default defineConfig({
   // Each Task entry point selects a group-specific worker budget. Keep the
   // budget deliberately small: fresh contexts concurrently fetch and compile
   // the large WASM bundle through one preview server.
-  workers,
-  maxFailures: isCi ? 1 : omittedValue(),
+  ...(hasConfiguredWorkers
+    ? { workers: configuredWorkers }
+    : isCi
+      ? { workers: 2 }
+      : {}),
+  ...(isCi ? { maxFailures: 1, globalTimeout: 45 * 60_000 } : {}),
   retries: isCi ? 2 : 0,
-  globalTimeout: isCi ? 45 * 60_000 : omittedValue(),
   globalTeardown: './e2e/global-teardown.ts',
   timeout: isCi ? 120_000 : 60_000,
   reporter: isCi ? 'line' : 'list',
@@ -111,7 +109,9 @@ export default defineConfig({
     trace: 'on-first-retry',
     actionTimeout: 5_000,
     launchOptions: {
-      executablePath: chromiumExecutablePath,
+      ...(chromiumExecutablePath
+        ? { executablePath: chromiumExecutablePath }
+        : {}),
     },
   },
   webServer: {

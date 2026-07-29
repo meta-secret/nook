@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
 const MAX_QR_CANDIDATES = 8
 const MIN_QR_EDGE_PX = 80
@@ -14,9 +13,23 @@ type BarcodeDetectorLike = {
   ) => Promise<Array<{ rawValue?: string; format?: string }>>
 }
 
-function barcodeDetectorConstructor():
-  | (new (options?: { formats?: string[] }) => BarcodeDetectorLike)
-  | void {
+type BarcodeDetectorConstructor = new (options?: {
+  formats?: string[]
+}) => BarcodeDetectorLike
+
+enum BarcodeDetectorAvailabilityKind {
+  Unsupported = 'unsupported',
+  Available = 'available',
+}
+
+type BarcodeDetectorAvailability =
+  | { kind: BarcodeDetectorAvailabilityKind.Unsupported }
+  | {
+      kind: BarcodeDetectorAvailabilityKind.Available
+      Detector: BarcodeDetectorConstructor
+    }
+
+function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
   const candidate = (
     globalThis as typeof globalThis & {
       BarcodeDetector?: new (options?: {
@@ -24,7 +37,9 @@ function barcodeDetectorConstructor():
       }) => BarcodeDetectorLike
     }
   ).BarcodeDetector
-  return typeof candidate === 'function' ? candidate : omittedValue()
+  return typeof candidate === 'function'
+    ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
+    : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
 }
 
 function isVisibleElement(element: Element): boolean {
@@ -183,13 +198,16 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
     return finalizeOtpauthCandidates(marked)
   }
 
-  const Detector = barcodeDetectorConstructor()
-  if (!Detector) {
+  const detectorAvailability = barcodeDetectorConstructor()
+  if (
+    detectorAvailability.kind === BarcodeDetectorAvailabilityKind.Unsupported
+  ) {
     return {
       status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
       candidates: [],
     }
   }
+  const { Detector } = detectorAvailability
   const detector = new Detector({ formats: ['qr_code'] })
   const candidates: DecodedOtpauthCandidate[] = []
   const seen = new Set<string>()

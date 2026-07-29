@@ -1,4 +1,3 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import {
   copyFile,
   mkdir,
@@ -542,7 +541,7 @@ await writeFile(
       shortName: deployment.shortName,
       versionName,
     }),
-    omittedValue(),
+    (_key, value) => value,
     2,
   )}\n`,
 )

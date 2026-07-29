@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -13,10 +12,7 @@ const wasmPath = join(
 )
 const originalFetch = globalThis.fetch?.bind(globalThis)
 
-Object.defineProperty(WebAssembly, 'instantiateStreaming', {
-  configurable: true,
-  value: omittedValue(),
-})
+Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input.toString()

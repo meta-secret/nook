@@ -1,4 +1,3 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'bun:test'
 import { isAuthenticationWorkflowSnapshotMessage } from '../src/lib/auth-workflow-messages'
 
@@ -29,7 +28,21 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('rejects missing, negative, fractional, and unbounded counts', () => {
-    for (const invalidCount of [omittedValue(), -1, 0.5, 101]) {
+    const {
+      oneTimeCodeFieldCount: _omittedCount,
+      ...observationWithoutOneTimeCodeCount
+    } = validMessage.payload.observations[0]
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [observationWithoutOneTimeCodeCount],
+        },
+      }),
+    ).toBe(false)
+
+    for (const invalidCount of [-1, 0.5, 101]) {
       expect(
         isAuthenticationWorkflowSnapshotMessage({
           ...validMessage,

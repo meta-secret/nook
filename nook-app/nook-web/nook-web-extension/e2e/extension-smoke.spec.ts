@@ -1,7 +1,6 @@
 import { chromium, expect, test } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import {
   advanceCreateVaultWizardToFinalStep,
   belongsToSentinelVault,
@@ -28,7 +27,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
@@ -469,7 +468,9 @@ test('shows extension unlock when a paired device identity is unavailable', asyn
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    executablePath: chromiumExecutablePath,
+    ...(chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath }
+      : {}),
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,

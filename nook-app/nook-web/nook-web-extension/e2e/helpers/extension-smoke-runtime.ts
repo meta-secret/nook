@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   chromium,
   expect,
@@ -74,7 +73,7 @@ const rootDir = path.resolve(
 export const extensionDir =
   process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 export const setupStorageKey = 'nook:extension-setup'
 export const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
 export const syntheticEventLogRecords = [
@@ -182,7 +181,9 @@ export async function launchExtensionContext(userDataDir: string) {
   await mkdir(userDataDir, { recursive: true })
   return chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    executablePath: chromiumExecutablePath,
+    ...(chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath }
+      : {}),
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
