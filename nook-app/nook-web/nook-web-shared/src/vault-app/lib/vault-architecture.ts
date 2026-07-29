@@ -16,15 +16,15 @@ import {
   validateVaultArchitecture as wasmValidateVaultArchitecture,
   vaultArchitectureCanCreateSecret as canCreateSecret,
   vaultArchitectureOnboardingType as onboardingType,
-} from "$app-wasm";
-import type { StorageProvider } from "$lib/auth-providers";
+} from '$app-wasm'
+import type { StorageProvider } from '$lib/auth-providers'
 
 export type {
   NookProviderReplicationCapability as ProviderReplicationCapability,
   SharedStorageGrantOutcome,
   SharedStorageGrantRequest,
   NookVaultArchitecture as VaultArchitecture,
-} from "$app-wasm";
+} from '$app-wasm'
 
 export {
   DeviceMode,
@@ -41,18 +41,18 @@ export {
   providerSupportsReplication,
   prepareSharedStorageGrant,
   validateProviderReplication,
-};
+}
 
 export type VaultArchitectureDraft = {
-  device_mode: DeviceMode;
-  vault_type: VaultType;
-  replication_type: ReplicationType;
+  device_mode: DeviceMode
+  vault_type: VaultType
+  replication_type: ReplicationType
   sentinel?: {
-    threshold: number;
-    required_participants: number;
-    ready_participants: number;
-  };
-};
+    threshold: number
+    required_participants: number
+    ready_participants: number
+  }
+}
 
 export function validateVaultArchitecture(
   architecture: VaultArchitectureDraft,
@@ -69,29 +69,29 @@ export function validateVaultArchitecture(
       : NookVaultArchitecture.simple(
           architecture.device_mode,
           architecture.replication_type,
-        );
+        )
   try {
-    return wasmValidateVaultArchitecture(candidate);
+    return wasmValidateVaultArchitecture(candidate)
   } finally {
-    candidate.free();
+    candidate.free()
   }
 }
 
 export type ProviderCapabilityLabelKey =
-  | "provider_picker.capability_personal_only"
-  | "provider_picker.capability_personal_shared";
+  | 'provider_picker.capability_personal_only'
+  | 'provider_picker.capability_personal_shared'
 
 /** Presentation label derived from the Rust-owned provider capability. */
 export function providerCapabilityLabelKey(
   provider: StorageProvider,
 ): ProviderCapabilityLabelKey {
-  const capability = providerReplicationCapability(provider);
+  const capability = providerReplicationCapability(provider)
   try {
     return capability.supportsShared
-      ? "provider_picker.capability_personal_shared"
-      : "provider_picker.capability_personal_only";
+      ? 'provider_picker.capability_personal_shared'
+      : 'provider_picker.capability_personal_only'
   } finally {
-    capability.free();
+    capability.free()
   }
 }
 
@@ -100,29 +100,44 @@ export function providerCapabilityLabelKey(
  * accepted by Rust. Incompatible rows remain visible for explanation/removal.
  */
 export enum CompatibleProviderSelectionKind {
-  Selected = "selected",
-  Unavailable = "unavailable",
+  Selected = 'selected',
+  Unavailable = 'unavailable',
 }
 
 export type CompatibleProviderSelection =
   | {
-      kind: CompatibleProviderSelectionKind.Selected;
-      provider: StorageProvider;
+      kind: CompatibleProviderSelectionKind.Selected
+      provider: StorageProvider
     }
-  | { kind: CompatibleProviderSelectionKind.Unavailable };
+  | { kind: CompatibleProviderSelectionKind.Unavailable }
+
+export enum CompatibleProviderPreferenceKind {
+  Automatic = 'automatic',
+  Selected = 'selected',
+}
+
+export type CompatibleProviderPreference =
+  | { kind: CompatibleProviderPreferenceKind.Automatic }
+  | {
+      kind: CompatibleProviderPreferenceKind.Selected
+      providerId: string
+    }
 
 export function firstCompatibleProvider(
   providers: StorageProvider[],
   replicationType: ReplicationType,
-  preferredId?: string,
+  preference: CompatibleProviderPreference,
 ): CompatibleProviderSelection {
-  const selectedId = wasmFirstCompatibleProviderId(
-    { providers },
-    replicationType,
-    preferredId,
-  );
-  const provider = providers.find((candidate) => candidate.id === selectedId);
+  const selectedId =
+    preference.kind === CompatibleProviderPreferenceKind.Selected
+      ? wasmFirstCompatibleProviderId(
+          { providers },
+          replicationType,
+          preference.providerId,
+        )
+      : wasmFirstCompatibleProviderId({ providers }, replicationType)
+  const provider = providers.find((candidate) => candidate.id === selectedId)
   return provider
     ? { kind: CompatibleProviderSelectionKind.Selected, provider }
-    : { kind: CompatibleProviderSelectionKind.Unavailable };
+    : { kind: CompatibleProviderSelectionKind.Unavailable }
 }

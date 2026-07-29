@@ -49,6 +49,7 @@
     adoptExtensionIdentity,
     discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
+    ExtensionConnectRequestStateKind,
     isExtensionConnectPath,
     openInstalledExtension,
     requestPairedExtensionUnlock,
@@ -141,14 +142,14 @@
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
     const routeConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
-      : false
-    extensionConnectRequestState = routeConnectRequest
-      ? extensionConnectIntent(routeConnectRequest)
-      : { kind: ExtensionConnectIntentKind.Absent }
-    if (routeConnectRequest) {
+      : { kind: ExtensionConnectRequestStateKind.Absent }
+    extensionConnectRequestState = extensionConnectIntent(routeConnectRequest)
+    if (
+      routeConnectRequest.kind === ExtensionConnectRequestStateKind.Requested
+    ) {
       extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Requested,
-        request: routeConnectRequest,
+        request: routeConnectRequest.request,
       }
     }
     if (APP_KIND !== VaultApplication.Simple) {

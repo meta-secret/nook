@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import {
     ExtensionPairingApprovedMessageType,
@@ -15,6 +13,7 @@
   import type { ExtensionConnectRequest } from '$lib/extension-connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { approveExtensionDevice } from '$app-wasm'
+  import { VaultType } from '$lib/vault-architecture'
 
   let {
     vault,
@@ -84,7 +83,7 @@
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: 'simple',
+        vaultType: VaultType.Simple,
         deviceId: request.deviceId,
         devicePublicKey: request.devicePublicKey,
         deviceSigningPublicKey: request.deviceSigningPublicKey,
@@ -118,26 +117,21 @@
               resolve()
               return
             }
-            const failure =
-              !!response && typeof response === 'object'
-                ? (response as { reason?: unknown; error?: unknown })
-                : omittedValue()
-            const reason =
-              typeof failure?.reason === 'string' && failure.reason.length > 0
-                ? failure.reason
-                : typeof failure?.error === 'string' && failure.error.length > 0
-                  ? failure.error
-                  : omittedValue()
-            const detail =
-              reason === 'auth-provider-plaintext-migration-required'
-                ? vault.t(
-                    'extension.consent.plaintext_provider_migration_required',
-                  )
-                : omittedValue()
+            const migrationRequired =
+              !!response &&
+              typeof response === 'object' &&
+              (('reason' in response &&
+                response.reason ===
+                  'auth-provider-plaintext-migration-required') ||
+                ('error' in response &&
+                  response.error ===
+                    'auth-provider-plaintext-migration-required'))
             reject(
               new Error(
-                detail
-                  ? `${vault.t('extension.consent.grant_rejected')} (${detail})`
+                migrationRequired
+                  ? `${vault.t('extension.consent.grant_rejected')} (${vault.t(
+                      'extension.consent.plaintext_provider_migration_required',
+                    )})`
                   : vault.t('extension.consent.grant_rejected'),
               ),
             )

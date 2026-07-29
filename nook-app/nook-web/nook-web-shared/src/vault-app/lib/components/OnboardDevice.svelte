@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     ChevronLeft,
     Cloud,
@@ -56,8 +54,12 @@
   import {
     PasswordEntrySelectionKind,
     ProviderSelectionKind,
+    ResolvedOnboardingPasswordKind,
+    ResolvedOnboardingProviderKind,
     type PasswordEntrySelection,
     type ProviderSelection,
+    type ResolvedOnboardingPassword,
+    type ResolvedOnboardingProvider,
   } from './onboard-device-state'
 
   let {
@@ -165,9 +167,7 @@
     const selection = firstCompatibleProvider(
       syncProviders,
       vault.vaultArchitecture.replication_type,
-      selectedProviderIdState.kind === ProviderSelectionKind.Selected
-        ? selectedProviderIdState.providerId
-        : omittedValue(),
+      selectedProviderIdState,
     )
     return selection.kind === CompatibleProviderSelectionKind.Selected
       ? selection.provider.id
@@ -182,13 +182,20 @@
     }
     return ''
   })
-  const selectedProvider = $derived(
-    syncProviders.find((provider) => provider.id === effectiveProviderId) ??
-      omittedValue(),
-  )
+  const selectedProvider = $derived.by((): ResolvedOnboardingProvider => {
+    const provider = syncProviders.find(
+      (candidate) => candidate.id === effectiveProviderId,
+    )
+    return provider
+      ? { kind: ResolvedOnboardingProviderKind.Available, provider }
+      : { kind: ResolvedOnboardingProviderKind.Unavailable }
+  })
   const derivedOnboardingType = $derived(
-    selectedProvider
-      ? providerOnboardingType(selectedProvider, vault.vaultArchitecture)
+    selectedProvider.kind === ResolvedOnboardingProviderKind.Available
+      ? providerOnboardingType(
+          selectedProvider.provider,
+          vault.vaultArchitecture,
+        )
       : onboardingType(vault.vaultArchitecture),
   )
   const usesSharedProviderGrant = $derived(
@@ -200,13 +207,21 @@
       : 'personal-credential-transfer',
   )
   const requiresSharedJoinerIdentity = $derived(
-    usesSharedProviderGrant && selectedProvider?.oauthFile?.preset !== 'icloud',
+    usesSharedProviderGrant &&
+      selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
+      selectedProvider.provider.oauthFile?.preset !== 'icloud',
   )
-  const selectedPassword = $derived(
-    passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
-      omittedValue(),
+  const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
+    const entry = passwordEntries.find(
+      (candidate) => candidate.id === effectivePasswordEntryId,
+    )
+    return entry
+      ? { kind: ResolvedOnboardingPasswordKind.Available, entry }
+      : { kind: ResolvedOnboardingPasswordKind.Unavailable }
+  })
+  const hasPasswordSelection = $derived(
+    selectedPassword.kind === ResolvedOnboardingPasswordKind.Available,
   )
-  const hasPasswordSelection = $derived(Boolean(selectedPassword))
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )
@@ -222,9 +237,9 @@
   )
 
   const passwordStepSubtitle = $derived(
-    selectedPassword
+    selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
       ? vault.t('onboard_device.wizard_password_selected', {
-          label: selectedPassword.label,
+          label: selectedPassword.entry.label,
         })
       : hasPasswords
         ? passwordEntries.length === 1
@@ -317,11 +332,11 @@
   async function submitOnboard() {
     localError = ''
     onClearCode()
-    if (!selectedProvider) {
+    if (selectedProvider.kind === ResolvedOnboardingProviderKind.Unavailable) {
       localError = vault.t('onboard_device.choose_sync_provider_err')
       return
     }
-    if (!selectedPassword) {
+    if (selectedPassword.kind === ResolvedOnboardingPasswordKind.Unavailable) {
       localError = vault.t('onboard_device.choose_pw_err')
       return
     }
@@ -335,7 +350,11 @@
     }
     isGenerating = true
     try {
-      await onIssueCode(selectedPassword.id, passwordInput, selectedProvider.id)
+      await onIssueCode(
+        selectedPassword.entry.id,
+        passwordInput,
+        selectedProvider.provider.id,
+      )
       passwordInput = ''
     } catch (e: unknown) {
       localError =
@@ -810,7 +829,7 @@
             void submitOnboard()
           }}
         >
-          {#if selectedPassword}
+          {#if selectedPassword.kind === ResolvedOnboardingPasswordKind.Available}
             <div
               class="rounded-lg border border-border bg-muted/20 px-3 py-2.5"
               data-testid="onboard-password-selected-summary"
@@ -819,7 +838,7 @@
                 {vault.t('onboard_device.vault_password')}
               </p>
               <p class="truncate text-sm font-medium text-foreground">
-                {selectedPassword.label}
+                {selectedPassword.entry.label}
               </p>
             </div>
           {/if}
@@ -829,9 +848,10 @@
               for="onboard-password"
               class="text-xs font-medium text-foreground"
             >
-              {selectedPassword
+              {selectedPassword.kind ===
+              ResolvedOnboardingPasswordKind.Available
                 ? vault.t('vault_passwords.password_for', {
-                    label: selectedPassword.label,
+                    label: selectedPassword.entry.label,
                   })
                 : vault.t('vault_passwords.confirm_password')}
             </label>

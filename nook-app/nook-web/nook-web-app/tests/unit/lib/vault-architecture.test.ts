@@ -14,6 +14,7 @@ import type { StorageProvider } from '$lib/auth-providers'
 import { takeWasmStringValue } from '$lib/wasm-string-value'
 import {
   canCreateSecret,
+  CompatibleProviderPreferenceKind,
   CompatibleProviderSelectionKind,
   defaultVaultArchitecture,
   firstCompatibleProvider,
@@ -259,19 +260,28 @@ describe('vault architecture adapter', () => {
       true,
     )
     expect(
-      firstCompatibleProvider(providers, ReplicationType.Shared, github.id),
+      firstCompatibleProvider(providers, ReplicationType.Shared, {
+        kind: CompatibleProviderPreferenceKind.Selected,
+        providerId: github.id,
+      }),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,
       provider: drive,
     })
     expect(
-      firstCompatibleProvider(providers, ReplicationType.Personal, github.id),
+      firstCompatibleProvider(providers, ReplicationType.Personal, {
+        kind: CompatibleProviderPreferenceKind.Selected,
+        providerId: github.id,
+      }),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,
       provider: github,
     })
     expect(
-      firstCompatibleProvider([github], ReplicationType.Shared, github.id),
+      firstCompatibleProvider([github], ReplicationType.Shared, {
+        kind: CompatibleProviderPreferenceKind.Selected,
+        providerId: github.id,
+      }),
     ).toEqual({ kind: CompatibleProviderSelectionKind.Unavailable })
   })
 
@@ -292,7 +302,10 @@ describe('vault architecture adapter', () => {
       firstCompatibleProvider(
         [privateICloud, sharedICloud],
         ReplicationType.Shared,
-        privateICloud.id,
+        {
+          kind: CompatibleProviderPreferenceKind.Selected,
+          providerId: privateICloud.id,
+        },
       ),
     ).toEqual({
       kind: CompatibleProviderSelectionKind.Selected,

@@ -1,4 +1,3 @@
-import { omittedValue } from '../../explicit-state'
 import { stripBasePath } from '$lib/routes'
 import type { NookVaultManager } from '$app-wasm'
 import {
@@ -33,6 +32,30 @@ export type ExtensionConnectRequest =
 export type PairedExtensionIdentityDiscovery =
   PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>
 
+export enum ExtensionConnectRequestStateKind {
+  Absent = 'absent',
+  Requested = 'requested',
+}
+
+export type ExtensionConnectRequestState =
+  | { kind: ExtensionConnectRequestStateKind.Absent }
+  | {
+      kind: ExtensionConnectRequestStateKind.Requested
+      request: ExtensionConnectRequest
+    }
+
+export enum InstalledExtensionRuntimeKind {
+  NotInstalled = 'not-installed',
+  Installed = 'installed',
+}
+
+export type InstalledExtensionRuntime =
+  | { kind: InstalledExtensionRuntimeKind.NotInstalled }
+  | {
+      kind: InstalledExtensionRuntimeKind.Installed
+      extensionRuntimeId: string
+    }
+
 const validScopes = new Set<ExtensionConnectScope>([
   'vault-access',
   'password-filling',
@@ -60,8 +83,10 @@ function parseScopes(raw: string | void): ExtensionConnectScope[] {
 
 export function extensionConnectRequestFromLocation(
   location: Location,
-): ExtensionConnectRequest | void {
-  if (!isExtensionConnectPath(location.pathname)) return
+): ExtensionConnectRequestState {
+  if (!isExtensionConnectPath(location.pathname)) {
+    return { kind: ExtensionConnectRequestStateKind.Absent }
+  }
 
   const params = new URLSearchParams(location.search)
   const deviceId = params.get('device_id')?.trim() ?? ''
@@ -83,18 +108,21 @@ export function extensionConnectRequestFromLocation(
     !nonce ||
     scopes.length === 0
   ) {
-    return
+    return { kind: ExtensionConnectRequestStateKind.Absent }
   }
 
   return {
-    source: 'extension-connect',
-    deviceId,
-    devicePublicKey,
-    deviceSigningPublicKey,
-    extensionRuntimeId,
-    deviceLabel,
-    nonce,
-    scopes,
+    kind: ExtensionConnectRequestStateKind.Requested,
+    request: {
+      source: 'extension-connect',
+      deviceId,
+      devicePublicKey,
+      deviceSigningPublicKey,
+      extensionRuntimeId,
+      deviceLabel,
+      nonce,
+      scopes,
+    },
   }
 }
 
@@ -116,12 +144,13 @@ type ExtensionMessageDelivery =
   | { kind: ExtensionMessageDeliveryKind.Unavailable }
   | { kind: ExtensionMessageDeliveryKind.Received; response: unknown }
 
-export function readInstalledExtensionRuntimeId(): string | void {
-  return (
-    document.documentElement
-      .getAttribute(extensionRuntimeIdAttribute)
-      ?.trim() || omittedValue()
-  )
+export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
+  const extensionRuntimeId = document.documentElement
+    .getAttribute(extensionRuntimeIdAttribute)
+    ?.trim()
+  return extensionRuntimeId
+    ? { kind: InstalledExtensionRuntimeKind.Installed, extensionRuntimeId }
+    : { kind: InstalledExtensionRuntimeKind.NotInstalled }
 }
 
 function sendExtensionMessage(
@@ -180,14 +209,19 @@ function sendExtensionMessage(
 }
 
 export async function openInstalledExtension(): Promise<boolean> {
-  const extensionRuntimeId = readInstalledExtensionRuntimeId()
-  if (!extensionRuntimeId) return false
+  const installedExtension = readInstalledExtensionRuntimeId()
+  if (installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled) {
+    return false
+  }
 
   const message: OpenCompanionLauncherMessage = {
     type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
     payload: { intent: 'pair' },
   }
-  const delivery = await sendExtensionMessage(extensionRuntimeId, message)
+  const delivery = await sendExtensionMessage(
+    installedExtension.extensionRuntimeId,
+    message,
+  )
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false
   const response = delivery.response
   return (
@@ -200,9 +234,17 @@ export async function openInstalledExtension(): Promise<boolean> {
 
 async function discoverPairedExtensionIdentityOnce(
   vaultStoreId: string,
-): Promise<PairedExtensionIdentityDiscovery | void> {
-  const extensionRuntimeId = readInstalledExtensionRuntimeId()
-  if (!extensionRuntimeId) return Promise.resolve()
+): Promise<
+  | { kind: ExtensionMessageDeliveryKind.Unavailable }
+  | {
+      kind: ExtensionMessageDeliveryKind.Received
+      discovery: PairedExtensionIdentityDiscovery
+    }
+> {
+  const installedExtension = readInstalledExtensionRuntimeId()
+  if (installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled) {
+    return { kind: ExtensionMessageDeliveryKind.Unavailable }
+  }
 
   const discoveryRequestId = requestId()
   const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
@@ -214,15 +256,18 @@ async function discoverPairedExtensionIdentityOnce(
     },
   }
 
-  const delivery = await sendExtensionMessage(extensionRuntimeId, message)
-  if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return
+  const delivery = await sendExtensionMessage(
+    installedExtension.extensionRuntimeId,
+    message,
+  )
+  if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return delivery
   const statusMessage = delivery.response
   if (
     !isExtensionPairedVaultIdentityStatusMessage(statusMessage) ||
     statusMessage.payload.requestId !== discoveryRequestId ||
     statusMessage.payload.vaultStoreId !== vaultStoreId
   ) {
-    return
+    return { kind: ExtensionMessageDeliveryKind.Unavailable }
   }
   if (
     statusMessage.payload.status !==
@@ -233,12 +278,19 @@ async function discoverPairedExtensionIdentityOnce(
       ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
     ) {
       return {
-        status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
-        connectedVaultStoreId: statusMessage.payload.connectedVaultStoreId,
-        connectedVaultName: statusMessage.payload.connectedVaultName,
+        kind: ExtensionMessageDeliveryKind.Received,
+        discovery: {
+          status:
+            ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
+          connectedVaultStoreId: statusMessage.payload.connectedVaultStoreId,
+          connectedVaultName: statusMessage.payload.connectedVaultName,
+        },
       }
     }
-    return { status: statusMessage.payload.status }
+    return {
+      kind: ExtensionMessageDeliveryKind.Received,
+      discovery: { status: statusMessage.payload.status },
+    }
   }
   const scopes = statusMessage.payload.scopes.filter(
     (scope): scope is ExtensionConnectScope =>
@@ -246,21 +298,27 @@ async function discoverPairedExtensionIdentityOnce(
   )
   if (scopes.length === 0) {
     return {
-      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+      kind: ExtensionMessageDeliveryKind.Received,
+      discovery: {
+        status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+      },
     }
   }
   return {
-    status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
-    request: {
-      source: 'paired-vault',
-      vaultStoreId,
-      deviceId: statusMessage.payload.deviceId,
-      devicePublicKey: statusMessage.payload.devicePublicKey,
-      deviceSigningPublicKey: statusMessage.payload.deviceSigningPublicKey,
-      extensionRuntimeId: statusMessage.payload.extensionRuntimeId,
-      deviceLabel: statusMessage.payload.deviceLabel,
-      nonce: statusMessage.payload.nonce,
-      scopes,
+    kind: ExtensionMessageDeliveryKind.Received,
+    discovery: {
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
+      request: {
+        source: 'paired-vault',
+        vaultStoreId,
+        deviceId: statusMessage.payload.deviceId,
+        devicePublicKey: statusMessage.payload.devicePublicKey,
+        deviceSigningPublicKey: statusMessage.payload.deviceSigningPublicKey,
+        extensionRuntimeId: statusMessage.payload.extensionRuntimeId,
+        deviceLabel: statusMessage.payload.deviceLabel,
+        nonce: statusMessage.payload.nonce,
+        scopes,
+      },
     },
   }
 }
@@ -270,7 +328,9 @@ export async function discoverPairedExtensionIdentity(
 ): Promise<PairedExtensionIdentityDiscovery> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const result = await discoverPairedExtensionIdentityOnce(vaultStoreId)
-    if (result) return result
+    if (result.kind === ExtensionMessageDeliveryKind.Received) {
+      return result.discovery
+    }
   }
   return {
     status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
@@ -280,15 +340,20 @@ export async function discoverPairedExtensionIdentity(
 export async function requestPairedExtensionUnlock(
   vaultStoreId: string,
 ): Promise<boolean> {
-  const extensionId = readInstalledExtensionRuntimeId()
-  if (!extensionId) return false
+  const installedExtension = readInstalledExtensionRuntimeId()
+  if (installedExtension.kind === InstalledExtensionRuntimeKind.NotInstalled) {
+    return false
+  }
 
   const unlockRequestId = requestId()
   const message: ExtensionPairedVaultUnlockRequestMessage = {
     type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
     payload: { requestId: unlockRequestId, vaultStoreId },
   }
-  const delivery = await sendExtensionMessage(extensionId, message)
+  const delivery = await sendExtensionMessage(
+    installedExtension.extensionRuntimeId,
+    message,
+  )
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false
   const response = delivery.response
   return (

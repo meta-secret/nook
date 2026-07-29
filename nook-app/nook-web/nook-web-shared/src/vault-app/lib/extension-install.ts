@@ -1,67 +1,68 @@
-import { DEFAULT_SITE_URL } from "$lib/sitemap";
+import { DEFAULT_SITE_URL } from '$lib/sitemap'
 import {
   discoverPairedExtensionIdentity,
+  InstalledExtensionRuntimeKind,
   readInstalledExtensionRuntimeId,
-} from "$lib/extension-connect";
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/runtime-messages";
+} from '$lib/extension-connect'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
 
-export type ExtensionInstallMethod = "chrome_web_store" | "manual_zip";
+export type ExtensionInstallMethod = 'chrome_web_store' | 'manual_zip'
 
 export type ExtensionInstallTarget = {
-  installMethod: ExtensionInstallMethod;
-  installUrl: string;
-  channel?: string;
-  version?: string;
-  source: "metadata" | "fallback";
-};
+  installMethod: ExtensionInstallMethod
+  installUrl: string
+  channel?: string
+  version?: string
+  source: 'metadata' | 'fallback'
+}
 
 export type ExtensionSetupStatus =
-  | "not_installed"
-  | "installed_unpaired"
-  | "paired_elsewhere"
-  | "paired";
+  | 'not_installed'
+  | 'installed_unpaired'
+  | 'paired_elsewhere'
+  | 'paired'
 
 export type ExtensionSetupState = {
-  status: ExtensionSetupStatus;
-  connectedVaultName?: string;
-  connectedVaultStoreId?: string;
-};
+  status: ExtensionSetupStatus
+  connectedVaultName?: string
+  connectedVaultStoreId?: string
+}
 
 type BrowserExtensionEnvironment = {
-  maxTouchPoints: number;
-  platform: string;
-  userAgent: string;
-  userAgentData?: Navigator["userAgentData"] | { mobile?: boolean };
-};
+  maxTouchPoints: number
+  platform: string
+  userAgent: string
+  userAgentData?: Navigator['userAgentData'] | { mobile?: boolean }
+}
 
 type ExtensionDeploymentMetadata = {
-  channel: string;
-  version: string;
-  extension_id: string;
-  install_method: ExtensionInstallMethod;
-  install_url: string;
-};
+  channel: string
+  version: string
+  extension_id: string
+  install_method: ExtensionInstallMethod
+  install_url: string
+}
 
 function marketingSiteBaseUrl(): string {
-  const fromEnv = import.meta.env.VITE_SITE_URL?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return DEFAULT_SITE_URL;
+  const fromEnv = import.meta.env.VITE_SITE_URL?.trim()
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  return DEFAULT_SITE_URL
 }
 
 export function extensionInstallLandingUrl(): string {
-  return `${marketingSiteBaseUrl()}/#browser-extension`;
+  return `${marketingSiteBaseUrl()}/#browser-extension`
 }
 
 export function browserSupportsExtensionInstallation(
   environment: BrowserExtensionEnvironment = navigator,
 ): boolean {
-  const userAgentData = environment.userAgentData;
+  const userAgentData = environment.userAgentData
   if (
     userAgentData &&
-    "mobile" in userAgentData &&
+    'mobile' in userAgentData &&
     userAgentData.mobile === true
   ) {
-    return false;
+    return false
   }
 
   if (
@@ -69,14 +70,14 @@ export function browserSupportsExtensionInstallation(
       environment.userAgent,
     )
   ) {
-    return false;
+    return false
   }
 
   const isDesktopModeIPad =
     /Macintosh/i.test(environment.userAgent) &&
-    environment.platform === "MacIntel" &&
-    environment.maxTouchPoints > 1;
-  return !isDesktopModeIPad;
+    environment.platform === 'MacIntel' &&
+    environment.maxTouchPoints > 1
+  return !isDesktopModeIPad
 }
 
 export function shouldOfferExtensionSetup(
@@ -84,28 +85,28 @@ export function shouldOfferExtensionSetup(
   environment: BrowserExtensionEnvironment = navigator,
 ): boolean {
   return (
-    status !== "not_installed" ||
+    status !== 'not_installed' ||
     browserSupportsExtensionInstallation(environment)
-  );
+  )
 }
 
 function isExtensionInstallMethod(
   value: unknown,
 ): value is ExtensionInstallMethod {
-  return value === "chrome_web_store" || value === "manual_zip";
+  return value === 'chrome_web_store' || value === 'manual_zip'
 }
 
 function parseExtensionMetadata(
   value: unknown,
 ): ExtensionDeploymentMetadata | void {
-  if (!value || typeof value !== "object") return;
-  const record = value as Record<string, unknown>;
-  const channel = typeof record.channel === "string" ? record.channel : "";
-  const version = typeof record.version === "string" ? record.version : "";
+  if (!value || typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  const channel = typeof record.channel === 'string' ? record.channel : ''
+  const version = typeof record.version === 'string' ? record.version : ''
   const extensionId =
-    typeof record.extension_id === "string" ? record.extension_id : "";
+    typeof record.extension_id === 'string' ? record.extension_id : ''
   const installUrl =
-    typeof record.install_url === "string" ? record.install_url.trim() : "";
+    typeof record.install_url === 'string' ? record.install_url.trim() : ''
   if (
     !channel ||
     !version ||
@@ -113,15 +114,15 @@ function parseExtensionMetadata(
     !installUrl ||
     !isExtensionInstallMethod(record.install_method)
   ) {
-    return;
+    return
   }
   try {
-    const parsed = new URL(installUrl);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return;
+    const parsed = new URL(installUrl)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return
     }
   } catch {
-    return;
+    return
   }
   return {
     channel,
@@ -129,15 +130,15 @@ function parseExtensionMetadata(
     extension_id: extensionId,
     install_method: record.install_method,
     install_url: installUrl,
-  };
+  }
 }
 
 function metadataCandidateUrls(): string[] {
   const urls = [
-    new URL("./downloads/extension.json", window.location.href).href,
+    new URL('./downloads/extension.json', window.location.href).href,
     `${marketingSiteBaseUrl()}/downloads/extension.json`,
-  ];
-  return [...new Set(urls)];
+  ]
+  return [...new Set(urls)]
 }
 
 async function fetchExtensionMetadata(
@@ -145,65 +146,70 @@ async function fetchExtensionMetadata(
 ): Promise<ExtensionDeploymentMetadata | void> {
   try {
     const response = await fetch(url, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) return;
-    return parseExtensionMetadata(await response.json());
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+    if (!response.ok) return
+    return parseExtensionMetadata(await response.json())
   } catch {
-    return;
+    return
   }
 }
 
 export async function loadExtensionInstallTarget(): Promise<ExtensionInstallTarget> {
   for (const url of metadataCandidateUrls()) {
-    const metadata = await fetchExtensionMetadata(url);
-    if (!metadata) continue;
+    const metadata = await fetchExtensionMetadata(url)
+    if (!metadata) continue
     return {
       installMethod: metadata.install_method,
       installUrl: metadata.install_url,
       channel: metadata.channel,
       version: metadata.version,
-      source: "metadata",
-    };
+      source: 'metadata',
+    }
   }
   return {
-    installMethod: "manual_zip",
+    installMethod: 'manual_zip',
     installUrl: extensionInstallLandingUrl(),
-    source: "fallback",
-  };
+    source: 'fallback',
+  }
 }
 
 export async function resolveExtensionSetupState(
   vaultStoreId: string | void,
 ): Promise<ExtensionSetupState> {
-  if (!readInstalledExtensionRuntimeId()) return { status: "not_installed" };
-  if (!vaultStoreId) return { status: "installed_unpaired" };
+  if (
+    readInstalledExtensionRuntimeId().kind ===
+    InstalledExtensionRuntimeKind.NotInstalled
+  ) {
+    return { status: 'not_installed' }
+  }
+  if (!vaultStoreId) return { status: 'installed_unpaired' }
 
-  const discovery = await discoverPairedExtensionIdentity(vaultStoreId);
+  const discovery = await discoverPairedExtensionIdentity(vaultStoreId)
   if (
     discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
     discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
   ) {
-    return { status: "paired" };
+    return { status: 'paired' }
   }
   if (
     discovery.status ===
     ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
   ) {
     return {
-      status: "paired_elsewhere",
+      status: 'paired_elsewhere',
       connectedVaultName: discovery.connectedVaultName,
       connectedVaultStoreId: discovery.connectedVaultStoreId,
-    };
+    }
   }
-  return { status: "installed_unpaired" };
+  return { status: 'installed_unpaired' }
 }
 
 export function openExtensionInstallTarget(
   target: ExtensionInstallTarget,
 ): void {
-  window.open(target.installUrl, "_blank", "noopener,noreferrer");
+  window.open(target.installUrl, '_blank', 'noopener,noreferrer')
 }

@@ -5,6 +5,7 @@ import {
   extensionConnectIntent,
 } from '$lib/app-lifecycle-state'
 import {
+  ExtensionConnectRequestStateKind,
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
   openInstalledExtension,
@@ -59,14 +60,21 @@ describe('extension connect route parsing', () => {
     )
 
     expect(request).toEqual({
-      source: 'extension-connect',
-      deviceId: 'device-1',
-      devicePublicKey: 'enc-pk',
-      deviceSigningPublicKey: 'sign-pk',
-      extensionRuntimeId: 'ext-123',
-      deviceLabel: 'Nook Extension',
-      nonce: 'n-1',
-      scopes: ['vault-access', 'password-filling', 'sync-provider-credentials'],
+      kind: ExtensionConnectRequestStateKind.Requested,
+      request: {
+        source: 'extension-connect',
+        deviceId: 'device-1',
+        devicePublicKey: 'enc-pk',
+        deviceSigningPublicKey: 'sign-pk',
+        extensionRuntimeId: 'ext-123',
+        deviceLabel: 'Nook Extension',
+        nonce: 'n-1',
+        scopes: [
+          'vault-access',
+          'password-filling',
+          'sync-provider-credentials',
+        ],
+      },
     })
   })
 
