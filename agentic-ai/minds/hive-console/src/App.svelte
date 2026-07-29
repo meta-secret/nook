@@ -90,11 +90,13 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       snapshotState.kind === ObserverFeedKind.Loaded
         ? snapshotState.snapshot.tasks
         : [];
-    const durableTasks =
-      durableMatchState.kind === DurableTaskLookupKind.Found &&
-      !snapshotTasks.some((task) => task.id === durableMatchState.task.id)
-        ? [durableMatchState.task]
-        : [];
+    const durableTasks: ObservedTask[] = [];
+    if (durableMatchState.kind === DurableTaskLookupKind.Found) {
+      const durableTask = durableMatchState.task;
+      if (!snapshotTasks.some((task) => task.id === durableTask.id)) {
+        durableTasks.push(durableTask);
+      }
+    }
     return [...durableTasks, ...snapshotTasks].filter((task) => {
       const query = search.trim().toLocaleLowerCase();
       return (
