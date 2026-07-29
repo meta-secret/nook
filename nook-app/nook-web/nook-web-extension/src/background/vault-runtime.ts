@@ -20,6 +20,7 @@ import initNookWasm, {
   NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
+  VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthenticationPageObservationView,
@@ -55,7 +56,7 @@ function ensureExtensionWasm(): Promise<unknown> {
   const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }).then((value) => {
-    configureVaultApplication('extension')
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
   backgroundWasmStartup = {

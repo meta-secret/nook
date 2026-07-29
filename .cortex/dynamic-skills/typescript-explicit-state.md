@@ -27,9 +27,14 @@ mutable flags create the same problem.
 
 - Use a discriminated union for named product, workflow, lifecycle, resource,
   and component states.
-- Back every authored closed discriminant vocabulary with a meaningfully named
-  string enum. Union variants reference enum members (`kind:
-SessionKind.Closed`), never raw string literal types (`kind: "closed"`).
+- Classify ownership before creating an enum. Authentication, vault, recovery,
+  Sentinel, provider, sync, secret-schema, and other portable product
+  vocabularies belong to `nook-core` and are exposed directly through
+  `nook-wasm`; TypeScript must not mirror or rename them. Browser protocol,
+  browser lifecycle, and presentation-only vocabularies use a cohesive,
+  meaningfully named TypeScript enum. Union variants reference enum members
+  (`kind: SessionKind.Closed`), never raw string literal types
+  (`kind: "closed"`).
   Preserve the enum's serialized string values when browser messaging,
   persistence, or external compatibility requires them.
 - Apply the same enum ownership to closed protocol fields such as `type`,
@@ -49,15 +54,18 @@ SessionKind.Closed`), never raw string literal types (`kind: "closed"`).
 - Group values that transition together; expose operations such as `start`,
   `cancel`, `succeed`, and `reset` instead of exposing mutable handles.
 - Put portable domain state and policy in Rust and export typed enums through
-  WASM. Keep browser lifecycle and visual state in TypeScript/Svelte.
+  WASM. Consume the generated enum itself; a differently named TypeScript enum
+  or type alias with the same values is still a forbidden domain mirror. Keep
+  browser lifecycle and visual state in TypeScript/Svelte.
 - Match variants exhaustively. Do not convert a discriminated union back into
   parallel booleans.
-- Use optional property/parameter syntax only to mirror external input shape,
-  and normalize the value into an explicit union immediately.
-- Use `void` for callbacks and commands that intentionally return no value.
+- Normalize optional external input shape into an explicit union immediately.
+- Give callbacks, commands, and promises a meaningful completion/result type;
+  authored `void` is not an acceptable result model.
 - Normalize missing browser, lookup, parser, cache, and DOM results directly
   into a domain-specific union at the narrow boundary.
-- Normalize `null` from external APIs directly into the same explicit union.
+- Normalize external `null` directly into the same explicit union at the
+  boundary; authored `null` is forbidden.
 - Never introduce a generic TypeScript `Option` clone. Names such as
   `ValueState`, `EMPTY_VALUE`, `presentValue`, `valueState`, and
   `valueFromState` merely rename `undefined`; they do not explain why a value
@@ -131,8 +139,8 @@ type ImportState =
 
 ## Validation
 
-The AST-backed preflight rejects every executable or type-level `undefined`
-token, every `typeof` comparison against the string `"undefined"`, and every
+The AST-backed preflight rejects every executable or type-level `undefined`,
+`null`, and `void` token, every quoted-sentinel comparison, and every
 generic optional-state escape hatch in authored JavaScript, TypeScript, and
 Svelte. It also rejects raw string literal types on closed unions and
 discriminant fields (`kind`, `type`, `status`, `phase`, `stage`, `mode`,

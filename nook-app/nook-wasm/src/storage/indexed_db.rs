@@ -403,34 +403,29 @@ pub(crate) async fn device_identity_protection_status()
     })
 }
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StoredDeviceMode {
+pub enum DeviceProtectionDeviceModeState {
     Missing,
     Pin,
     Standard,
     AntiHacker,
 }
 
-impl StoredDeviceMode {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Missing => "missing",
-            Self::Pin => "pin",
-            Self::Standard => "standard",
-            Self::AntiHacker => "anti-hacker",
-        }
-    }
-}
-
-pub(crate) async fn device_identity_device_mode() -> Result<StoredDeviceMode, NookError> {
+pub(crate) async fn device_identity_device_mode()
+-> Result<DeviceProtectionDeviceModeState, NookError> {
     let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
-        return Ok(StoredDeviceMode::Missing);
+        return Ok(DeviceProtectionDeviceModeState::Missing);
     };
     let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
     Ok(match wrapped {
-        nook_core::WrappedDeviceIdentity::Pin(_) => StoredDeviceMode::Pin,
-        nook_core::WrappedDeviceIdentity::PasskeyDerived(_) => StoredDeviceMode::Standard,
-        nook_core::WrappedDeviceIdentity::PasskeyWrappedLocal(_) => StoredDeviceMode::AntiHacker,
+        nook_core::WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
+        nook_core::WrappedDeviceIdentity::PasskeyDerived(_) => {
+            DeviceProtectionDeviceModeState::Standard
+        }
+        nook_core::WrappedDeviceIdentity::PasskeyWrappedLocal(_) => {
+            DeviceProtectionDeviceModeState::AntiHacker
+        }
     })
 }
 
@@ -541,7 +536,7 @@ mod device_identity_storage_tests {
         assert_eq!(reloaded.device_mode()?, "standard");
         assert_eq!(
             device_identity_device_mode().await?,
-            StoredDeviceMode::Standard
+            DeviceProtectionDeviceModeState::Standard
         );
         assert_eq!(reloaded.user_handle_bytes()?, setup.user_handle());
         Ok(())
@@ -556,7 +551,10 @@ mod device_identity_storage_tests {
 
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
-        assert_eq!(device_identity_device_mode().await?, StoredDeviceMode::Pin);
+        assert_eq!(
+            device_identity_device_mode().await?,
+            DeviceProtectionDeviceModeState::Pin
+        );
         Ok(())
     }
 

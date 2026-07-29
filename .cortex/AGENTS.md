@@ -106,9 +106,13 @@ domain policy. Do not spread optional-value unions, zero-argument `$state<T>()`
 runes, optional-field bags, and parallel booleans across a controller and then
 reconstruct the real state through condition chains.
 
-Every authored closed TypeScript/Svelte discriminant vocabulary uses a
-meaningfully named string enum. Union variants and protocol shapes reference
-enum members instead of raw string literal types for `kind`, `type`, `status`,
+Classify ownership before authoring an enum. Authentication, vault, recovery,
+Sentinel, provider, sync, secret-schema, and other portable product
+vocabularies are Rust enums in `nook-core`, exposed directly through
+`nook-wasm`; TypeScript must not mirror or rename them. Browser protocol,
+browser lifecycle, and presentation-only closed vocabularies use a meaningfully
+named TypeScript enum. Union variants and protocol shapes reference enum
+members instead of raw string literal types for `kind`, `type`, `status`,
 `phase`, `stage`, `mode`, `action`, and `operation`. Serialized strings remain
 stable through enum values where wire or persistence compatibility requires
 them; unrelated state machines must not be collapsed into one generic enum.
@@ -120,12 +124,13 @@ enums from a cohesive adjacent TypeScript state module because the Svelte
 compilation boundary does not preprocess runtime TypeScript enum syntax.
 
 External and browser contracts may still produce JavaScript's missing value at
-runtime. Express optional input shape with `?`, express no callback result as
-`void`, and normalize lookup/parser/browser results immediately into an
-explicit `none`/`some` or domain-specific union. Generated declarations may
+runtime. Optional external input shape is normalized at its narrow boundary,
+and lookup/parser/browser results become a domain-specific union immediately.
+Authored code must not use `undefined`, `null`, or `void` as values, types,
+operators, callback results, or promise results. Generated declarations may
 mirror external contracts and are excluded. Tests, build scripts, `.agents`,
 and `.github` code are authored code and are not excluded. Do not evade the
-rule with `void 0`, `null`, casts, fake defaults, decorative wrappers, or
+rule with quoted sentinel names, casts, fake defaults, decorative wrappers, or
 sentinel strings. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 

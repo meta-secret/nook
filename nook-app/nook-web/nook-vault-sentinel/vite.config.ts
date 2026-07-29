@@ -21,8 +21,7 @@ const sentinelSpa = vaultSpaPlugin({
 export default defineConfig({
   base: "./",
   define: {
-    __NOOK_APP_KIND__: JSON.stringify("sentinel"),
-    __NOOK_WASM_APPLICATION__: JSON.stringify("sentinel"),
+    __NOOK_APP_KIND__: "VaultApplication.Sentinel",
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(sentinelAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
   },

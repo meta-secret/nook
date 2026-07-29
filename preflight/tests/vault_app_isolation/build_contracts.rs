@@ -192,8 +192,8 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 fn assert_vault_runtime_boundary_contract(root: &Path) {
     let sentinel_config = read(root, "nook-app/nook-web/nook-vault-sentinel/vite.config.ts");
     assert!(sentinel_config.contains("lib/nook-wasm/nook_wasm"));
-    assert!(sentinel_config.contains("__NOOK_WASM_APPLICATION__"));
-    assert!(sentinel_config.contains("JSON.stringify(\"sentinel\")"));
+    assert!(sentinel_config.contains("__NOOK_APP_KIND__"));
+    assert!(sentinel_config.contains("VaultApplication.Sentinel"));
     assert!(
         sentinel_config.contains("pathname ===") && sentinel_config.contains("/extension-connect")
     );
@@ -201,15 +201,25 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
 
     let simple_config = read(root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
     assert!(simple_config.contains("lib/nook-wasm/nook_wasm"));
-    assert!(simple_config.contains("__NOOK_WASM_APPLICATION__"));
-    assert!(simple_config.contains("JSON.stringify(\"simple\")"));
+    assert!(simple_config.contains("__NOOK_APP_KIND__"));
+    assert!(simple_config.contains("VaultApplication.Simple"));
     assert!(simple_config.contains("extension-connect"));
 
     let wasm_bridge = read(
         root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/lib/wasm-bootstrap.ts",
     );
-    assert!(wasm_bridge.contains("configureVaultApplication(WASM_APPLICATION)"));
+    assert!(wasm_bridge.contains("configureVaultApplication(APP_KIND)"));
+    let wasm_vault_api = read(root, "nook-app/nook-wasm/src/vault_api.rs");
+    assert!(wasm_vault_api.contains("application: nook_core::VaultApplication"));
+    assert!(wasm_vault_api.contains("-> nook_core::VaultApplication"));
+    assert!(!wasm_vault_api.contains("application_name: &str"));
+    let app_kind = read(
+        root,
+        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/app-kind.ts",
+    );
+    assert!(app_kind.contains("import { VaultApplication } from \"$app-wasm\""));
+    assert!(!app_kind.contains("enum AppKind"));
     let shared_entry = read(
         root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
@@ -219,11 +229,11 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
     for (entry, expected_kind) in [
         (
             "nook-app/nook-web/nook-vault-simple/src/main.ts",
-            "mountVaultApp(\"simple\")",
+            "mountVaultApp(VaultApplication.Simple)",
         ),
         (
             "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
-            "mountVaultApp(\"sentinel\")",
+            "mountVaultApp(VaultApplication.Sentinel)",
         ),
     ] {
         let source = read(root, entry);

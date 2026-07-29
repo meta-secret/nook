@@ -2,17 +2,21 @@ import { omittedValue } from "../../explicit-state";
 import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
+  VaultApplication,
 } from "$app-wasm";
-import { APP_KIND, AppKind } from "$lib/app-kind";
+import { APP_KIND } from "$lib/app-kind";
 
 const ENROLLMENT_HASH_PREFIX = "#enroll=";
 
 export function enrollmentAppRootUrl(
   siteRoot: string,
-  appKind: AppKind = APP_KIND,
+  appKind: VaultApplication = APP_KIND,
 ): string {
   const normalized = siteRoot.replace(/\/$/, "");
-  if (appKind === AppKind.Simple || appKind === AppKind.Sentinel) {
+  if (
+    appKind === VaultApplication.Simple ||
+    appKind === VaultApplication.Sentinel
+  ) {
     return `${normalized}/`;
   }
   return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;

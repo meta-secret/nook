@@ -1,15 +1,4 @@
-import type {
-  ExtensionDeviceProtectionResult,
-  ExtensionDeviceProtectionStatus,
-} from '../lib/nook-wasm'
-
-export enum PopupProtectionStatus {
-  PinSetup = 'pin-setup',
-}
-
-export type ResolvedPopupProtectionStatus =
-  | ExtensionDeviceProtectionStatus
-  | PopupProtectionStatus
+import type { ExtensionDeviceProtectionResult } from '../lib/nook-wasm'
 
 export enum PairingCandidateKind {
   NotSelected = 'not-selected',

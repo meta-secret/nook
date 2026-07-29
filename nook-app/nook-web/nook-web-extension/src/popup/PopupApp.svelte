@@ -6,17 +6,16 @@
   import {
     createExtensionPasskey,
     createExtensionPin,
+    DeviceMode,
+    DeviceProtectionStatus,
     recoverExtensionPasskey,
     unlockExtensionPasskey,
     unlockExtensionPin,
-    type ExtensionDeviceMode,
-    type ExtensionDeviceProtectionStatus,
+    type ExtensionDeviceProtectionResult,
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
-    PopupProtectionStatus,
     type PairingCandidate,
-    type ResolvedPopupProtectionStatus,
   } from './popup-app-state'
 
   let {
@@ -31,19 +30,19 @@
     isConnected: boolean
     vaultName?: string
     pairingRequested?: boolean
-    protectionStatus: ExtensionDeviceProtectionStatus
+    protectionStatus: DeviceProtectionStatus
     activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
 
-  function initialProtectionStatus(): ResolvedPopupProtectionStatus {
+  function initialProtectionStatus(): DeviceProtectionStatus {
     return protectionStatus
   }
 
-  let status = $state<ResolvedPopupProtectionStatus>(initialProtectionStatus())
+  let status = $state<DeviceProtectionStatus>(initialProtectionStatus())
   let busy = $state(false)
   let error = $state('')
   let passkeyLabel = $state('')
-  let deviceMode = $state<ExtensionDeviceMode>('standard')
+  let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
   let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
   let pin = $state('')
   let pinConfirm = $state('')
@@ -52,8 +51,11 @@
   })
   let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
 
-  const needsSetup = $derived(status === 'missing' || status === 'plaintext')
-  const showCompanionHome = $derived(status === 'unlocked')
+  const needsSetup = $derived(
+    status === DeviceProtectionStatus.Missing ||
+      status === DeviceProtectionStatus.Plaintext,
+  )
+  const showCompanionHome = $derived(status === DeviceProtectionStatus.Unlocked)
   const showExistingConnection = $derived(isConnected && !pairingRequested)
 
   const loginDetectionKey = $derived(
@@ -145,7 +147,7 @@
 
   function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
     pairingCandidate = { kind: PairingCandidateKind.Selected, device }
-    status = 'unlocked'
+    status = DeviceProtectionStatus.Unlocked
     busy = false
     error = ''
   }
@@ -170,7 +172,7 @@
         (caught.message.includes('PASSKEY_UNAVAILABLE') ||
           caught.message.includes('PASSKEY_PRF_UNAVAILABLE'))
       ) {
-        status = PopupProtectionStatus.PinSetup
+        status = DeviceProtectionStatus.PinSetup
         error = i18n.t(
           caught.message.includes('PASSKEY_UNAVAILABLE')
             ? 'device_protection.passkey_unavailable_pin_fallback_ready'
@@ -307,7 +309,7 @@
   <main class="device-setup" data-testid="extension-device-setup">
     <p class="step-label">{i18n.t('device_protection.step_label')}</p>
     <div class="shield-icon" aria-hidden="true">
-      {#if needsSetup || status === PopupProtectionStatus.PinSetup}
+      {#if needsSetup || status === DeviceProtectionStatus.PinSetup}
         <ShieldCheck size={26} />
       {:else}
         <KeyRound size={25} />
@@ -316,17 +318,18 @@
     <h1>{i18n.t('device_protection.title')}</h1>
     <p class="description">
       {i18n.t(
-        status === 'passkey' || status === 'unlocked'
+        status === DeviceProtectionStatus.Passkey ||
+          status === DeviceProtectionStatus.Unlocked
           ? 'device_protection.unlock_description'
-          : status === 'pin'
+          : status === DeviceProtectionStatus.Pin
             ? 'device_protection.pin_unlock_description'
-            : status === PopupProtectionStatus.PinSetup
+            : status === DeviceProtectionStatus.PinSetup
               ? 'device_protection.pin_setup_description'
               : 'device_protection.setup_description',
       )}
     </p>
 
-    {#if status === PopupProtectionStatus.PinSetup}
+    {#if status === DeviceProtectionStatus.PinSetup}
       <div class="field-group">
         <label for="device-protection-pin">
           {i18n.t('device_protection.pin_label')}
@@ -412,16 +415,16 @@
           disabled={busy}
           data-testid="device-mode-select"
         >
-          <option value="standard">
+          <option value={DeviceMode.Standard}>
             {i18n.t('device_protection.mode_standard_title')}
           </option>
-          <option value="anti-hacker">
+          <option value={DeviceMode.AntiHacker}>
             {i18n.t('device_protection.mode_anti_hacker_title')}
           </option>
         </select>
         <p class="field-hint">
           {i18n.t(
-            deviceMode === 'standard'
+            deviceMode === DeviceMode.Standard
               ? 'device_protection.mode_standard_description'
               : 'device_protection.mode_anti_hacker_description',
           )}
@@ -469,7 +472,7 @@
         <KeyRound size={17} />
         {i18n.t('device_protection.existing_passkey_action')}
       </button>
-    {:else if status === 'pin'}
+    {:else if status === DeviceProtectionStatus.Pin}
       <div class="field-group">
         <label for="device-protection-pin">
           {i18n.t('device_protection.pin_label')}

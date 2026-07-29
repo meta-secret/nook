@@ -32,6 +32,7 @@ pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords, NookVaultManager,
 };
+pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
 use types::NookStringValueRef;
 pub use types::{

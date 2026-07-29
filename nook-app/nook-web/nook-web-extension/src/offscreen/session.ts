@@ -2,12 +2,13 @@ import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import initNookWasm, {
   configureVaultApplication,
   currentCodeFromOtpauthUri,
-  deviceProtectionStatusName,
+  DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
   NookVaultManager,
   previewOtpauthUri,
   providerWasmArgs,
+  VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
@@ -126,7 +127,7 @@ function ensureWasm(): Promise<unknown> {
   const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
   }).then((value) => {
-    configureVaultApplication('extension')
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
   wasmStartup = { kind: WasmStartupKind.Initializing, operation }
@@ -324,7 +325,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const status = await activeManager.deviceProtectionStatus()
       return {
         ok: true,
-        status: deviceProtectionStatusName(status),
+        status,
         ...(status === DeviceProtectionStatus.Unlocked
           ? { device: await deviceResult(activeManager) }
           : {}),
@@ -351,8 +352,11 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const userHandle = toBytes(payload.userHandle)
       const prfInput = toBytes(payload.prfInput)
       const prfOutput = toBytes(payload.prfOutput)
-      const deviceMode = payload.deviceMode
-      if (deviceMode !== 'standard' && deviceMode !== 'anti-hacker') {
+      const deviceMode = payload.deviceMode as DeviceMode
+      if (
+        deviceMode !== DeviceMode.Standard &&
+        deviceMode !== DeviceMode.AntiHacker
+      ) {
         throw new Error('Unsupported extension device protection mode.')
       }
       try {

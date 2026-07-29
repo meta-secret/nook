@@ -15,8 +15,8 @@ import {
 } from "$lib/auth-providers";
 import {
   defaultVaultArchitecture,
+  DeviceMode,
   VaultType,
-  type DeviceMode,
   type ReplicationType,
   type VaultArchitecture,
 } from "$lib/vault-architecture";
@@ -192,7 +192,7 @@ export class VaultProviderState {
     "window" in globalThis && isLocalFolderBackupSupported(),
   );
   vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
-  draftDeviceMode = $state<DeviceMode>("standard");
+  draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard);
   draftVaultType = $state(VaultType.Simple);
   draftReplicationType = $state<ReplicationType>("personal");
   private oauthSetupPresetState = $state<OAuthSetupPreset>({

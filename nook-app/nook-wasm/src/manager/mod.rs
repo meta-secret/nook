@@ -565,8 +565,8 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(getter, js_name = vaultApplication)]
-    pub fn vault_application(&self) -> String {
-        self.application.as_str().to_owned()
+    pub fn vault_application(&self) -> nook_core::VaultApplication {
+        self.application
     }
 
     #[wasm_bindgen(getter, js_name = vaultStoreId)]

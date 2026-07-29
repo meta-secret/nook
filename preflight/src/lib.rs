@@ -50,14 +50,33 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
 ];
 
 const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
+    "AppKind",
     "DeviceMode",
+    "DeviceProtectionStatus",
     "ExtensionDeviceMode",
+    "ExtensionDeviceProtectionStatus",
+    "PopupProtectionStatus",
+    "VaultApplication",
+    "WasmApplication",
     "VaultType",
     "ReplicationType",
     "StorageProviderType",
     "OAuthFilePreset",
     "GoogleDriveMode",
     "ICloudMode",
+];
+
+const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
+    "AppKind",
+    "WasmApplication",
+    "ExtensionDeviceMode",
+    "ExtensionDeviceProtectionStatus",
+    "PopupProtectionStatus",
+    "VaultApplication",
+    "DeviceMode",
+    "DeviceProtectionStatus",
+    "VaultType",
+    "ReplicationType",
 ];
 
 const TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES: &[(&str, &str)] = &[
@@ -623,6 +642,7 @@ fn typescript_boundary_violation_lines(contents: &str) -> Vec<usize> {
             .iter()
             .any(|marker| line.contains(marker))
             || is_wasm_type_alias(line, &wasm_bindings)
+            || is_domain_mirror_enum(line)
         {
             violations.push(index + 1);
         }
@@ -663,6 +683,19 @@ fn typescript_boundary_violation_lines(contents: &str) -> Vec<usize> {
     violations.sort_unstable();
     violations.dedup();
     violations
+}
+
+fn is_domain_mirror_enum(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix("export ").unwrap_or(line);
+    let Some(declaration) = line.strip_prefix("enum ") else {
+        return false;
+    };
+    let name = declaration
+        .split(|character: char| character.is_whitespace() || character == '{')
+        .next()
+        .unwrap_or_default();
+    TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES.contains(&name)
 }
 
 fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) -> bool {
@@ -1114,6 +1147,12 @@ export type ProviderReplicationCapability = NookProviderReplicationCapability;
 export type VaultSyncAccessStatus = VaultAccessStatus;
 export type DeviceMode = 'standard' | 'anti-hacker';
 export type { NookVaultMember as VaultMember } from "$app-wasm";
+export enum AppKind {
+  Simple = 'simple',
+}
+enum DeviceProtectionStatus {
+  Missing = 'missing',
+}
 
 export function providerReplicationCapability(
   provider: StorageProvider,
@@ -1134,7 +1173,7 @@ export function adaptedProviderCapability(
 
         assert_eq!(
             typescript_boundary_violation_lines(source),
-            vec![7, 8, 9, 12, 18]
+            vec![7, 8, 9, 11, 14, 18, 24]
         );
     }
 

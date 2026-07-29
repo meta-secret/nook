@@ -1,5 +1,5 @@
 import initNookWasm, { configureVaultApplication } from "$app-wasm";
-import { WASM_APPLICATION } from "$lib/wasm-application";
+import { APP_KIND } from "$lib/app-kind";
 
 enum AppWasmStartupKind {
   NotStarted = "not-started",
@@ -18,7 +18,7 @@ export function ensureAppWasm(): Promise<void> {
     return appWasmStartup.completion;
   }
   const promise = initNookWasm().then(() => {
-    configureVaultApplication(WASM_APPLICATION);
+    configureVaultApplication(APP_KIND);
   });
   appWasmStartup = {
     kind: AppWasmStartupKind.Initializing,

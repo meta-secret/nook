@@ -1,5 +1,4 @@
-import type { NookVaultManager } from "$app-wasm";
-import type { DeviceMode } from "$lib/vault-architecture";
+import { DeviceMode, type NookVaultManager } from "$app-wasm";
 
 const PASSKEY_PRF_UNAVAILABLE = "PASSKEY_PRF_UNAVAILABLE";
 const PASSKEY_UNAVAILABLE = "PASSKEY_UNAVAILABLE";
@@ -70,7 +69,7 @@ function sanitizedPasskeyErrorName(error: unknown): string | void {
 export async function setupDeviceProtection(
   manager: NookVaultManager,
   passkeyLabel: string,
-  deviceMode: DeviceMode = "standard",
+  deviceMode: DeviceMode = DeviceMode.Standard,
 ): Promise<void> {
   await manager.setupDeviceProtectionWithPasskeyMode(
     location.hostname,

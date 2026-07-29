@@ -58,11 +58,14 @@
     resolveExtensionSetupState,
     shouldOfferExtensionSetup,
   } from "$lib/extension-install";
-  import { assessVaultSecurity, configuredVaultApplication } from "$app-wasm";
+  import {
+    assessVaultSecurity,
+    configuredVaultApplication,
+    VaultApplication,
+  } from "$app-wasm";
   import { consumeSentinelOnboardingFromLocation } from "$lib/sentinel-onboarding-link";
   import {
     APP_KIND,
-    AppKind,
     IS_SENTINEL_APP,
     SUPPORTS_EXTENSION,
   } from "$lib/app-kind";
@@ -119,17 +122,17 @@
   let extensionConnectError = $state(false);
   const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
-    "window" in globalThis && APP_KIND !== AppKind.Simple
+    "window" in globalThis && APP_KIND !== VaultApplication.Simple
       ? consumeSentinelGenesisRequestFromLocation()
       : "",
   );
   let sentinelParticipantResponse = $state(
-    "window" in globalThis && APP_KIND !== AppKind.Simple
+    "window" in globalThis && APP_KIND !== VaultApplication.Simple
       ? consumeSentinelGenesisParticipantResponseFromLocation()
       : "",
   );
   let sentinelOnboardingPackage = $state(
-    "window" in globalThis && APP_KIND !== AppKind.Simple
+    "window" in globalThis && APP_KIND !== VaultApplication.Simple
       ? consumeSentinelOnboardingFromLocation()
       : "",
   );
@@ -153,7 +156,7 @@
         request: routeConnectRequest,
       };
     }
-    if (APP_KIND !== AppKind.Simple) {
+    if (APP_KIND !== VaultApplication.Simple) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation();
       if (invitationRequest) sentinelInvitationRequest = invitationRequest;
       const participantResponse =

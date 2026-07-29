@@ -10,6 +10,7 @@ import {
   peekEnrollmentEntryId,
   peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
+  VaultApplication,
 } from '$app-wasm'
 import { takeWasmStringValue } from '$lib/wasm-string-value'
 
@@ -43,17 +44,23 @@ function decodeOuterJson(code: string): Record<string, unknown> {
 
 describe('enrollment-code links', () => {
   test('isolated applications generate links at their own root', () => {
-    expect(enrollmentAppRootUrl('https://simple.nokey.sh', 'simple')).toBe(
-      'https://simple.nokey.sh/',
-    )
-    expect(enrollmentAppRootUrl('https://sentinel.nokey.sh/', 'sentinel')).toBe(
-      'https://sentinel.nokey.sh/',
-    )
+    expect(
+      enrollmentAppRootUrl('https://simple.nokey.sh', VaultApplication.Simple),
+    ).toBe('https://simple.nokey.sh/')
+    expect(
+      enrollmentAppRootUrl(
+        'https://sentinel.nokey.sh/',
+        VaultApplication.Sentinel,
+      ),
+    ).toBe('https://sentinel.nokey.sh/')
   })
 
   test('the unified development application keeps its /app route', () => {
     expect(
-      enrollmentAppRootUrl('https://nokey.sh', 'unified-development'),
+      enrollmentAppRootUrl(
+        'https://nokey.sh',
+        VaultApplication.UnifiedDevelopment,
+      ),
     ).toBe('https://nokey.sh/app/')
   })
 

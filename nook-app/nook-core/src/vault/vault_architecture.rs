@@ -14,9 +14,9 @@ use std::collections::BTreeSet;
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum DeviceMode {
     /// Passkey PRF deterministically derives the local age/device identity.
     #[default]

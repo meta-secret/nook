@@ -14,13 +14,15 @@ import {
   buildPasskeyPrfRequestOptions,
   buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
+  DeviceMode,
+  DeviceProtectionStatus,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
   parseAppLocale as wasmParseAppLocale,
   resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
+  VaultApplication,
   type NookAppLocale,
-  type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 enum ExtensionWasmStartupKind {
@@ -36,17 +38,15 @@ let extensionWasmStartup: ExtensionWasmStartup = {
   kind: ExtensionWasmStartupKind.NotStarted,
 }
 
-export type {
-  NookAppLocale,
-  DeviceMode as ExtensionDeviceMode,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+export type { NookAppLocale } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+export { DeviceMode, DeviceProtectionStatus }
 
 export function ensureNookWasm() {
   if (extensionWasmStartup.kind === ExtensionWasmStartupKind.Initializing) {
     return extensionWasmStartup.operation
   }
   const operation = initNookWasm().then((value) => {
-    configureVaultApplication('extension')
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
   extensionWasmStartup = {
@@ -61,13 +61,6 @@ export type ExtensionDeviceProtectionResult = {
   devicePublicKey: string
   deviceSigningPublicKey: string
 }
-
-export type ExtensionDeviceProtectionStatus =
-  | 'missing'
-  | 'plaintext'
-  | 'passkey'
-  | 'pin'
-  | 'unlocked'
 
 type SessionResponse<T> = { ok: true } & T
 
@@ -206,29 +199,39 @@ async function createPasskey(
   }
 }
 
-export async function extensionDeviceProtectionStatus(): Promise<ExtensionDeviceProtectionStatus> {
+export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
   const { status } = await sessionMessage<
-    SessionResponse<{ status: ExtensionDeviceProtectionStatus }>
+    SessionResponse<{ status: DeviceProtectionStatus }>
   >({ type: 'nook:extension-session-status' })
-  if (['missing', 'plaintext', 'passkey', 'pin', 'unlocked'].includes(status)) {
-    return status
+  switch (status) {
+    case DeviceProtectionStatus.Missing:
+    case DeviceProtectionStatus.Plaintext:
+    case DeviceProtectionStatus.Passkey:
+    case DeviceProtectionStatus.Pin:
+    case DeviceProtectionStatus.Unlocked:
+      return status
+    default:
+      throw new Error(
+        `Unsupported extension device protection status: ${status}`,
+      )
   }
-  throw new Error(`Unsupported extension device protection status: ${status}`)
 }
 
 export async function extensionSessionDevice(): Promise<ExtensionDeviceProtectionResult | void> {
   const response = await sessionMessage<
     SessionResponse<{
-      status: ExtensionDeviceProtectionStatus
+      status: DeviceProtectionStatus
       device?: ExtensionDeviceProtectionResult
     }>
   >({ type: 'nook:extension-session-status' })
-  return response.status === 'unlocked' ? response.device : omittedValue()
+  return response.status === DeviceProtectionStatus.Unlocked
+    ? response.device
+    : omittedValue()
 }
 
 export async function createExtensionPasskey(
   passkeyLabel: string,
-  deviceMode: ExtensionDeviceMode,
+  deviceMode: DeviceMode,
 ): Promise<ExtensionDeviceProtectionResult> {
   await ensureNookWasm()
   const { setup } = await sessionMessage<

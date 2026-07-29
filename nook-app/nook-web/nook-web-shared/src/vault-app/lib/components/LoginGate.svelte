@@ -33,13 +33,13 @@
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import type { AppKind } from '$lib/app-kind'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
     SentinelGenesisPhase,
+    type VaultApplication,
   } from '$app-wasm'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
 
@@ -78,7 +78,7 @@
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
-    appKind: AppKind
+    appKind: VaultApplication
     providers: StorageProvider[]
     setupType?: StorageProviderType | void
     githubPat: string

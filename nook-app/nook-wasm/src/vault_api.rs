@@ -238,20 +238,14 @@ fn validate_configured_application_for_content(content: &str) -> Result<(), Nook
 
 /// Configure the immutable application capability for this browser realm.
 #[wasm_bindgen(js_name = configureVaultApplication)]
-pub fn configure_vault_application_name(
-    application_name: &str,
-) -> Result<(), wasm_bindgen::JsError> {
-    let application = nook_core::VaultApplication::parse(application_name)?;
+pub fn configure_vault_application(application: nook_core::VaultApplication) {
     application::configure_vault_application(application);
-    Ok(())
 }
 
 /// Return the immutable capability configured by the current web app.
 #[wasm_bindgen(js_name = configuredVaultApplication)]
-pub fn configured_vault_application_name() -> String {
+pub fn configured_vault_application() -> nook_core::VaultApplication {
     application::configured_vault_application()
-        .as_str()
-        .to_owned()
 }
 
 /// Return the Rust-owned empty-provider policy for a first-connect intent.

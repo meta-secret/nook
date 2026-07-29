@@ -1,5 +1,6 @@
+import { VaultApplication } from "$app-wasm";
 import { mountVaultApp } from "$vault-shared/main";
 
-await mountVaultApp("simple");
+await mountVaultApp(VaultApplication.Simple);
 
 export default {};

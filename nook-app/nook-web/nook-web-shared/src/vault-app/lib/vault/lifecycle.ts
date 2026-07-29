@@ -4,6 +4,8 @@ import type { NookSecretRecord } from "$lib/nook";
 import { getVaultManager } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
+  DeviceMode,
+  DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
   hasActiveLocalVault,
   parseAppLocale,
@@ -56,11 +58,12 @@ export async function initOnce(state: VaultState): Promise<void> {
     state.deviceProtectionStatus = await state.manager.deviceProtectionStatus();
     const persistedDeviceMode =
       await state.manager.deviceProtectionDeviceMode();
-    if (
-      persistedDeviceMode === "standard" ||
-      persistedDeviceMode === "anti-hacker"
+    if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
+      state.draftDeviceMode = DeviceMode.Standard;
+    } else if (
+      persistedDeviceMode === DeviceProtectionDeviceModeState.AntiHacker
     ) {
-      state.draftDeviceMode = persistedDeviceMode;
+      state.draftDeviceMode = DeviceMode.AntiHacker;
     }
     if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
       state.deviceProtectionLockedStatus = DeviceProtectionStatus.Pin;

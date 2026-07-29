@@ -1,9 +1,12 @@
 import { mount } from "svelte";
 import "./app.css";
+import { VaultApplication } from "$app-wasm";
 import { ensureAppWasm } from "$lib/wasm-bootstrap";
-import { APP_KIND, type AppKind } from "$lib/app-kind";
+import { APP_KIND } from "$lib/app-kind";
 
-export async function mountVaultApp(expectedKind: AppKind): Promise<void> {
+export async function mountVaultApp(
+  expectedKind: VaultApplication,
+): Promise<void> {
   if (APP_KIND !== expectedKind) {
     throw new Error(
       `Expected ${expectedKind} vault build, received ${APP_KIND}.`,

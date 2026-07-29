@@ -19,8 +19,7 @@ const simpleSpa = vaultSpaPlugin({
 export default defineConfig({
   base: "./",
   define: {
-    __NOOK_APP_KIND__: JSON.stringify("simple"),
-    __NOOK_WASM_APPLICATION__: JSON.stringify("simple"),
+    __NOOK_APP_KIND__: "VaultApplication.Simple",
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SITE_URL": JSON.stringify(siteUrl.replace(/\/$/, "")),

@@ -1,6 +1,7 @@
 import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
+  DeviceMode,
   NookVaultArchitecture,
   OnboardingType,
   VaultType,
@@ -94,7 +95,7 @@ describe('vault architecture adapter', () => {
       vault_type: architecture.vault_type,
       replication_type: architecture.replication_type,
     }).toEqual({
-      device_mode: 'standard',
+      device_mode: DeviceMode.Standard,
       vault_type: VaultType.Simple,
       replication_type: 'personal',
     })
@@ -103,12 +104,12 @@ describe('vault architecture adapter', () => {
 
   test('draft construction delegates vault-specific defaults to Rust', () => {
     const simple = NookVaultArchitecture.draft(
-      'anti-hacker',
+      DeviceMode.AntiHacker,
       VaultType.Simple,
       'shared',
     )
     const sentinel = NookVaultArchitecture.draft(
-      'standard',
+      DeviceMode.Standard,
       VaultType.Sentinel,
       'personal',
     )
@@ -144,7 +145,7 @@ describe('vault architecture adapter', () => {
 
   test('sentinel vaults are gated until their policy is ready', () => {
     const draft: VaultArchitectureDraft = {
-      device_mode: 'anti-hacker',
+      device_mode: DeviceMode.AntiHacker,
       vault_type: VaultType.Sentinel,
       replication_type: 'shared',
       sentinel: {
@@ -165,7 +166,7 @@ describe('vault architecture adapter', () => {
 
   test('round-trips the Sentinel wire shape', () => {
     const normalized = validateVaultArchitecture({
-      device_mode: 'standard',
+      device_mode: DeviceMode.Standard,
       vault_type: VaultType.Sentinel,
       replication_type: 'personal',
       sentinel: {
@@ -183,7 +184,7 @@ describe('vault architecture adapter', () => {
       sentinel_required_participants: normalized.sentinel_required_participants,
       sentinel_ready_participants: normalized.sentinel_ready_participants,
     }).toEqual({
-      device_mode: 'standard',
+      device_mode: DeviceMode.Standard,
       vault_type: VaultType.Sentinel,
       replication_type: 'personal',
       sentinel_threshold: 2,
@@ -264,7 +265,7 @@ describe('vault architecture adapter', () => {
 
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
     const architecture = validateVaultArchitecture({
-      device_mode: 'standard',
+      device_mode: DeviceMode.Standard,
       vault_type: VaultType.Simple,
       replication_type: 'shared',
     })

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { DeviceMode } from '$app-wasm'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -12,19 +13,23 @@
     disabled?: boolean
   } = $props()
 
-  const deviceModes = ['standard', 'anti-hacker'] as const
+  const deviceModes = [DeviceMode.Standard, DeviceMode.AntiHacker]
 
   function modeTranslationKey(
-    mode: (typeof deviceModes)[number],
+    mode: DeviceMode,
     suffix: 'title' | 'description',
   ) {
-    return `device_protection.mode_${mode.replace('-', '_')}_${suffix}`
+    const modeKey =
+      mode === DeviceMode.AntiHacker ? 'anti_hacker' : 'standard'
+    return `device_protection.mode_${modeKey}_${suffix}`
   }
 
   function selectMode(value: string | void) {
-    if (value === 'standard' || value === 'anti-hacker') {
-      vault.draftDeviceMode = value
-    }
+    const selectedMode = Number(value)
+    if (selectedMode === DeviceMode.Standard)
+      vault.draftDeviceMode = DeviceMode.Standard
+    if (selectedMode === DeviceMode.AntiHacker)
+      vault.draftDeviceMode = DeviceMode.AntiHacker
   }
 </script>
 
@@ -34,7 +39,7 @@
   </label>
   <Select.Root
     type="single"
-    value={vault.draftDeviceMode}
+    value={String(vault.draftDeviceMode)}
     onValueChange={selectMode}
     {disabled}
   >
@@ -48,7 +53,7 @@
     </Select.Trigger>
     <Select.Content portalProps={{ disabled: true }}>
       {#each deviceModes as mode (mode)}
-        <Select.Item value={mode}>
+        <Select.Item value={String(mode)}>
           {vault.t(modeTranslationKey(mode, 'title'))}
         </Select.Item>
       {/each}

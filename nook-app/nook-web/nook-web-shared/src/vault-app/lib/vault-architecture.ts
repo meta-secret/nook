@@ -1,4 +1,5 @@
 import {
+  DeviceMode,
   NookVaultArchitecture,
   VaultType,
   defaultVaultArchitecture,
@@ -12,11 +13,10 @@ import {
   vaultArchitectureCanCreateSecret as canCreateSecret,
   vaultArchitectureOnboardingType as onboardingType,
 } from "$app-wasm";
-import type { DeviceMode, ReplicationType } from "$app-wasm";
+import type { ReplicationType } from "$app-wasm";
 import type { StorageProvider } from "$lib/auth-providers";
 
 export type {
-  DeviceMode,
   NookProviderReplicationCapability as ProviderReplicationCapability,
   ReplicationType,
   SharedStorageGrantOutcome,
@@ -25,6 +25,7 @@ export type {
 } from "$app-wasm";
 
 export {
+  DeviceMode,
   VaultType,
   canCreateSecret,
   defaultVaultArchitecture,

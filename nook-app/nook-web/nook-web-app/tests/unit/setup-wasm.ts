@@ -2,7 +2,10 @@ import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import initNookWasm, { configureVaultApplication } from '$app-wasm'
+import initNookWasm, {
+  configureVaultApplication,
+  VaultApplication,
+} from '$app-wasm'
 
 const wasmPath = join(
   process.cwd(),
@@ -29,4 +32,4 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 }
 
 await initNookWasm()
-configureVaultApplication('unified-development')
+configureVaultApplication(VaultApplication.UnifiedDevelopment)

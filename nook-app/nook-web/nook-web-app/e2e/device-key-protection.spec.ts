@@ -384,18 +384,9 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     await unlockExistingVaultWithPasskey(page)
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookVault?: { draftDeviceMode?: string }
-              }
-            ).__nookVault?.draftDeviceMode,
-        ),
-      )
-      .toBe('anti-hacker')
+    expect(await readPersistedDeviceIdentity(page)).toContain(
+      '"protection":"passkey-wrapped-local"',
+    )
   })
 
   test('recovers the same device identity from an existing passkey after local metadata is cleared', async ({
