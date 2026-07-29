@@ -50,10 +50,9 @@ test.describe('sync provider credential encryption', () => {
     expect(decrypted.providers[0]?.githubPat).toBe(pat)
   })
 
-  test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
-    await page.goto('/app/')
-    await clearBrowserVault(page)
-    await page.reload()
+  test('replacement conflict refresh avoids recursive wasm closure use', async ({
+    page,
+  }) => {
     await connectLocalVault(page)
     await disableVaultIdleLock(page)
     await page.evaluate(async () => {
@@ -67,28 +66,6 @@ test.describe('sync provider credential encryption', () => {
       }
       await vault.refreshReplacementConflicts()
     })
-
-    const pat = 'github_pat_22E2ElegacyUPGRADE'
-    await seedExtraGithubProviders(page, [
-      {
-        id: 'gh-e2e-legacy',
-        label: 'GitHub · legacy',
-        githubRepo: 'nook-legacy',
-        githubPat: pat,
-      },
-    ])
-
-    // Re-enter through the supported unlock flow so the manager has the
-    // unwrapped device identity needed to inspect the persisted credential.
-    await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await waitForAuthProvidersE2eHook(page)
     await waitForStorageChainIdle(page)
     await waitForVaultSyncIdle(page)
     await flushNookLogPersistQueue(page)
@@ -104,6 +81,20 @@ test.describe('sync provider credential encryption', () => {
           ),
       ),
     ).toBe(false)
+  })
+
+  test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
+    const pat = 'github_pat_22E2ElegacyUPGRADE'
+    await seedExtraGithubProviders(page, [
+      {
+        id: 'gh-e2e-legacy',
+        label: 'GitHub · legacy',
+        githubRepo: 'nook-legacy',
+        githubPat: pat,
+      },
+    ])
+
+    await waitForAuthProvidersE2eHook(page)
 
     await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
       'Provider credential is not age-encrypted.',
