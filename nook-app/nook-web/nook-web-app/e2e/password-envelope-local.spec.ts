@@ -218,7 +218,7 @@ test.describe('vault password envelope (local)', () => {
     ) as {
       issued_at: string
       entry_id?: string
-      entry_label?: string
+      entry_label?: { label: string; state: string }
       ct?: string
       password?: string
       provider?: unknown
@@ -229,7 +229,10 @@ test.describe('vault password envelope (local)', () => {
       60_000,
     )
     expect(outer.entry_id).toBeTruthy()
-    expect(outer.entry_label).toBe('Enrollment test')
+    expect(outer.entry_label).toEqual({
+      label: 'Enrollment test',
+      state: 'labeled',
+    })
     expect(outer.ct).toBeTruthy()
     expect(outer.password).toBeUndefined()
     expect(outer.provider).toBeUndefined()
