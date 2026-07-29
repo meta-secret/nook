@@ -87,7 +87,8 @@ jobs:
         with:
           tool: cargo-fuzz@0.13.2
       - name: Exercise wire parsers
-        run: cargo fuzz run wire-parsers --manifest-path fuzz/Cargo.toml -- -max_total_time=20
+        working-directory: fuzz
+        run: cargo fuzz run wire-parsers -- -max_total_time=20
 
   kani:
     if: >-
