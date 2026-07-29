@@ -21,7 +21,6 @@
     manualColorMode,
     systemColorMode,
     type EnrollmentSubmitQueue,
-    type ExistingVaultProviderSnapshot,
     type ExistingVaultImportQueue,
     type ExtensionConnectIntent,
     type ExtensionSetupOffer,
@@ -46,16 +45,20 @@
     ExtensionConnectRequestStateKind,
     ExtensionIdentityRequestSource,
     isExtensionConnectPath,
-    openInstalledExtension,
     requestPairedExtensionUnlock,
     type ExtensionConnectRequestState,
   } from '$lib/extension-connect'
   import {
-    loadExtensionInstallTarget,
-    openExtensionInstallTarget,
-    resolveExtensionSetupState,
-    shouldOfferExtensionSetup,
-  } from '$lib/extension-install'
+    connectInstalledExtension,
+    loadExtensionSetupOffer,
+    observeExtensionSetupChanges,
+    openExtensionInstaller,
+  } from '$lib/app-extension-setup'
+  import {
+    APP_SHELL_WIDTH,
+    APP_VERSION,
+    appShellSpacing,
+  } from '$lib/app-shell-layout'
   import { assessVaultSecurity, VaultApplication } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
   import { APP_KIND, IS_SENTINEL_APP, SUPPORTS_EXTENSION } from '$lib/app-kind'
@@ -70,14 +73,16 @@
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
+    ExistingVaultProviderPreparationKind,
+    prepareExistingVaultProvider,
+  } from '$lib/vault/existing-vault-provider.svelte'
+  import {
     mountBrowserLifecycle,
     updateApplicationDocument,
   } from '$lib/app-browser-lifecycle'
   import {
     ActiveVaultKind,
-    LocalFolderDraftKind,
     LoginSetupKind,
-    OAuthFileDraftKind,
     RecoveryDiscoveryKind,
   } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
@@ -365,24 +370,17 @@
     colorMode = manualColorMode(colorMode, THEME_STORAGE_KEY)
   }
 
-  const compactShellWidth = 'max-w-5xl'
-  const authenticatedShellWidth = 'max-w-5xl'
-  const appVersion = '0.1.0'
-  const shellWidth = $derived(
-    vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,
-  )
+  const appVersion = APP_VERSION
+  const shellWidth = APP_SHELL_WIDTH
   let secretsAddOpen = $state(false)
-  const authenticatedShellSpacing = $derived(
-    secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
-  )
   const shellSpacing = $derived(
-    legalPageState.kind === LegalRouteKind.Legal ||
-      logsPage ||
-      extensionConnectRoute
-      ? 'py-5 sm:py-6'
-      : vault.isAuthenticated
-        ? authenticatedShellSpacing
-        : 'py-5 sm:py-6',
+    appShellSpacing({
+      legalRouteKind: legalPageState.kind,
+      logsOpen: logsPage,
+      extensionConnectOpen: extensionConnectRoute,
+      authenticated: vault.isAuthenticated,
+      editorOpen: secretsAddOpen,
+    }),
   )
 
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
@@ -424,54 +422,27 @@
   )
 
   function rememberExistingVaultImport(storeId: string): void {
-    if (vault.loginSetup.kind !== LoginSetupKind.Active) return
-    const setupType = vault.loginSetup.providerType
+    const preparation = prepareExistingVaultProvider(vault)
     if (
-      setupType === 'oauth-file' &&
-      vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
+      preparation.kind === ExistingVaultProviderPreparationKind.MissingOAuthFile
     ) {
       vault.errorMsg = vault.t('errors.cloud_sync_provider_required')
       return
     }
     if (
-      setupType === 'local-folder' &&
-      vault.localFolderDraft.kind !== LocalFolderDraftKind.Configured
+      preparation.kind ===
+      ExistingVaultProviderPreparationKind.MissingLocalFolder
     ) {
       vault.errorMsg = vault.t('auth_storage.local_folder_choose_err')
       return
     }
-    const provider: ExistingVaultProviderSnapshot =
-      setupType === 'github'
-        ? {
-            kind: ExistingVaultProviderSnapshotKind.Github,
-            setupType,
-            githubPat: vault.githubPat,
-            githubRepo: vault.githubRepo,
-          }
-        : setupType === 'oauth-file' &&
-            vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-          ? {
-              kind: ExistingVaultProviderSnapshotKind.OAuthFile,
-              setupType,
-              oauthFile: $state.snapshot(vault.oauthFileDraft.config),
-            }
-          : setupType === 'local-folder' &&
-              vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-            ? {
-                kind: ExistingVaultProviderSnapshotKind.LocalFolder,
-                setupType,
-                localFolder: $state.snapshot(vault.localFolderDraft.config),
-              }
-            : {
-                kind: ExistingVaultProviderSnapshotKind.Local,
-                setupType,
-              }
+    if (preparation.kind !== ExistingVaultProviderPreparationKind.Ready) return
     pendingExistingVaultImportState = {
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
         storeId,
         previousActiveVault: vault.activeVault,
-        provider,
+        provider: preparation.provider,
       },
     }
   }
@@ -756,17 +727,13 @@
       extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden }
       return
     }
-    const state = await resolveExtensionSetupState(vault.activeVault)
-    extensionSetupStateValue = shouldOfferExtensionSetup(state.status)
-      ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
-      : { kind: ExtensionSetupOfferKind.Hidden }
+    extensionSetupStateValue = await loadExtensionSetupOffer(vault.activeVault)
   }
 
   async function handleExtensionInstall() {
     extensionInstallBusy = true
     try {
-      const target = await loadExtensionInstallTarget()
-      openExtensionInstallTarget(target)
+      await openExtensionInstaller()
     } finally {
       extensionInstallBusy = false
     }
@@ -776,7 +743,7 @@
     extensionInstallBusy = true
     extensionConnectError = false
     try {
-      extensionConnectError = !(await openInstalledExtension())
+      extensionConnectError = !(await connectInstalledExtension())
     } finally {
       extensionInstallBusy = false
     }
@@ -787,25 +754,7 @@
     void vault.activeVault
     void refreshExtensionSetupStatus()
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshExtensionSetupStatus()
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-
-    const observer = new MutationObserver(() => {
-      void refreshExtensionSetupStatus()
-    })
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-nook-extension-runtime-id'],
-    })
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      observer.disconnect()
-    }
+    return observeExtensionSetupChanges(refreshExtensionSetupStatus)
   })
 
   $effect(() => {

@@ -1,6 +1,11 @@
 //! Event-log persistence and provider fan-out.
 
 mod provider_io;
+mod records;
+
+pub(in crate::manager) use records::{
+    EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
+};
 
 use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
 use crate::NookError;
@@ -29,37 +34,12 @@ use nook_core::{
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
     rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct ExternalEventLogRecord {
-    pub event_id: String,
-    pub event: VaultEvent,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct EventLogStorageRecord {
-    pub event_id: String,
-    pub path: String,
-    pub event: VaultEvent,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct ExtensionEventLogImportStatus {
-    pub vault_store_id: String,
-    pub event_count: usize,
-    pub heads: Vec<String>,
-    pub access_granted: bool,
 }
 
 struct PreparedEpochRotation {

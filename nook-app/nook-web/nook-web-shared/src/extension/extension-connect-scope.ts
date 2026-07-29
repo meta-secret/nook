@@ -5,12 +5,17 @@ export enum ExtensionConnectScope {
   SyncProviderCredentials = 'sync-provider-credentials',
 }
 
-const extensionConnectScopes = new Set<string>(
-  Object.values(ExtensionConnectScope),
-)
-
 export function isExtensionConnectScope(
   value: unknown,
 ): value is ExtensionConnectScope {
-  return typeof value === 'string' && extensionConnectScopes.has(value)
+  if (typeof value !== 'string') return false
+  switch (value) {
+    case ExtensionConnectScope.VaultAccess:
+    case ExtensionConnectScope.PasswordFilling:
+    case ExtensionConnectScope.PasskeyManagement:
+    case ExtensionConnectScope.SyncProviderCredentials:
+      return true
+    default:
+      return false
+  }
 }

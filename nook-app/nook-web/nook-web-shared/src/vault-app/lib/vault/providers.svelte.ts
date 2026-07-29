@@ -55,6 +55,10 @@ import {
   type LocalProviderLookup,
   type StagedRemoteStorage,
 } from '$lib/vault/state/provider.svelte'
+import {
+  startVaultDiscoveryTimeout,
+  VAULT_ASSESS_TIMEOUT_ERROR_NAME,
+} from '$lib/vault/vault-discovery-timeout'
 enum OAuthProviderUpdateKind {
   NotRequired = 'not-required',
   Required = 'required',
@@ -73,35 +77,9 @@ type ProviderSaveStoreId =
   | { kind: ProviderSaveStoreIdKind.Unavailable }
   | { kind: ProviderSaveStoreIdKind.Available; storeId: string }
 
-export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = 'VaultAssessTimeoutError'
+export { VAULT_ASSESS_TIMEOUT_ERROR_NAME }
 
 const log = createLogger('vault-providers')
-
-type VaultDiscoveryTimeout = {
-  completion: Promise<never>
-  cancel(): void
-}
-
-function startVaultDiscoveryTimeout(
-  message: string,
-  timeoutMs: number,
-): VaultDiscoveryTimeout {
-  const controller = new AbortController()
-  const completion = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      const timeoutError = new Error(message)
-      timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME
-      reject(timeoutError)
-    }, timeoutMs)
-    controller.signal.addEventListener('abort', () => clearTimeout(timer), {
-      once: true,
-    })
-  })
-  return {
-    completion,
-    cancel: () => controller.abort(),
-  }
-}
 
 function takeStorageArgsTuple(
   args: NookStorageConnectArgs,
