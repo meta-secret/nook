@@ -98,8 +98,8 @@ control-plane unavailability is preferred to mixed schema semantics.
 The worker installs termination handling before its first claim and finishes
 any in-flight claim transaction before releasing a newly acquired lease. During
 Pod shutdown, the coordinator remains available until the worker records its
-terminal lifecycle marker, so the rollout cannot strand a `RUNNING` lease under
-a removed Pod.
+terminal lifecycle marker or Kubernetes exhausts the Pod grace period, so the
+rollout cannot strand a `RUNNING` lease under a removed Pod.
 
 ## 3. Components and ownership
 

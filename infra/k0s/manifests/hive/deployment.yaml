@@ -161,11 +161,8 @@ spec:
                   - /bin/bash
                   - -ceu
                   - |
-                    for attempt in $(seq 1 60); do
-                      if [ -e /workspace/.hive-task-finished ] \
-                        || [ ! -e /workspace/.hive-worker-ready ]; then
-                        exit 0
-                      fi
+                    while [ ! -e /workspace/.hive-task-finished ] \
+                      && [ -e /workspace/.hive-worker-ready ]; do
                       sleep 1
                     done
           env:

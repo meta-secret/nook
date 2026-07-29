@@ -15,15 +15,15 @@ use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::{verify_main_repair_delivery, verify_main_repair_merge_and_main};
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimOutcome, ClaimedTask,
-    CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
 mod lifecycle;
 
 use lifecycle::{
-    ClaimWindow, establish_worker_lifecycle, finish_claim_during_shutdown, shutdown_requested,
+    ClaimStep, claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested,
 };
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -83,11 +83,6 @@ impl<S: TaskStore> Worker<S> {
         });
 
         let task = loop {
-            let interrupted = || async {
-                tokio::fs::write(&lifecycle_marker, b"rollout-before-execution")
-                    .await
-                    .context("mark interrupted Pod for replacement")
-            };
             if let Err(error) = external_auth.validate().await {
                 let _ =
                     tokio::fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
@@ -99,43 +94,22 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 ));
             }
-            let claim = self
-                .store
-                .claim(&self.config.agent_id, self.config.lease_seconds);
-            match finish_claim_during_shutdown(claim, shutdown_rx.clone()).await {
-                ClaimWindow::Stopped => {
-                    interrupted().await?;
-                    return Ok(());
-                }
-                ClaimWindow::CompletedDuringShutdown(outcome) => {
-                    match outcome {
-                        Ok(ClaimOutcome::Claimed(task)) => {
-                            let released =
-                                self.store
-                                    .release(&task, &self.config.agent_id)
-                                    .await
-                                    .context("release task claimed during rollout shutdown")?;
-                            anyhow::ensure!(
-                                released,
-                                "task claimed during shutdown could not be released"
-                            );
-                        }
-                        Ok(ClaimOutcome::NoTask) => {}
-                        Err(error) => {
-                            interrupted().await?;
-                            return Err(error);
-                        }
-                    }
-                    interrupted().await?;
-                    return Ok(());
-                }
-                ClaimWindow::Completed(Ok(ClaimOutcome::Claimed(task))) => break task,
-                ClaimWindow::Completed(Ok(ClaimOutcome::NoTask)) => {
+            match claim_once(
+                &self.store,
+                &self.config.agent_id,
+                self.config.lease_seconds,
+                shutdown_rx.clone(),
+                &lifecycle_marker,
+            )
+            .await?
+            {
+                ClaimStep::Stopped => return Ok(()),
+                ClaimStep::Claimed(task) => break *task,
+                ClaimStep::NoTask => {
                     self.store
                         .register_agent(&self.config.agent_id, &self.config.pod_name)
                         .await?;
                 }
-                ClaimWindow::Completed(Err(error)) => return Err(error),
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
@@ -143,7 +117,7 @@ impl<S: TaskStore> Worker<S> {
                 biased;
                 shutdown = shutdown_requested(shutdown_rx.clone()) => {
                     shutdown?;
-                    interrupted().await?;
+                    mark_interrupted(&lifecycle_marker).await?;
                     return Ok(());
                 }
                 () = tokio::time::sleep(Duration::from_secs(wait)) => {}

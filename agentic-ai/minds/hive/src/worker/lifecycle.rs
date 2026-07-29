@@ -1,14 +1,72 @@
 use std::future::Future;
 use std::io::Write as _;
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::Context;
 use tokio::sync::watch;
+
+use crate::model::{AgentId, ClaimOutcome, ClaimedTask};
+use crate::store::TaskStore;
 
 pub(super) enum ClaimWindow<T> {
     Completed(T),
     CompletedDuringShutdown(T),
     Stopped,
+}
+
+pub(super) enum ClaimStep {
+    Claimed(Box<ClaimedTask>),
+    NoTask,
+    Stopped,
+}
+
+pub(super) async fn claim_once<S: TaskStore>(
+    store: &S,
+    agent_id: &AgentId,
+    lease_seconds: i64,
+    shutdown: watch::Receiver<bool>,
+    lifecycle_marker: &Path,
+) -> anyhow::Result<ClaimStep> {
+    let claim = store.claim(agent_id, lease_seconds);
+    match finish_claim_during_shutdown(claim, shutdown).await {
+        ClaimWindow::Stopped => {
+            mark_interrupted(lifecycle_marker).await?;
+            Ok(ClaimStep::Stopped)
+        }
+        ClaimWindow::CompletedDuringShutdown(outcome) => {
+            match outcome {
+                Ok(ClaimOutcome::Claimed(task)) => {
+                    release_during_shutdown(store, &task, agent_id).await;
+                }
+                Ok(ClaimOutcome::NoTask) => {}
+                Err(error) => {
+                    mark_interrupted(lifecycle_marker).await?;
+                    return Err(error);
+                }
+            }
+            mark_interrupted(lifecycle_marker).await?;
+            Ok(ClaimStep::Stopped)
+        }
+        ClaimWindow::Completed(Ok(ClaimOutcome::Claimed(task))) => Ok(ClaimStep::Claimed(task)),
+        ClaimWindow::Completed(Ok(ClaimOutcome::NoTask)) => Ok(ClaimStep::NoTask),
+        ClaimWindow::Completed(Err(error)) => Err(error),
+    }
+}
+
+async fn release_during_shutdown<S: TaskStore>(store: &S, task: &ClaimedTask, agent_id: &AgentId) {
+    loop {
+        match store.release(task, agent_id).await {
+            Ok(_) => return,
+            Err(_) => tokio::time::sleep(Duration::from_millis(250)).await,
+        }
+    }
+}
+
+pub(super) async fn mark_interrupted(lifecycle_marker: &Path) -> anyhow::Result<()> {
+    tokio::fs::write(lifecycle_marker, b"rollout-before-execution")
+        .await
+        .context("mark interrupted Pod for replacement")
 }
 
 pub(super) async fn finish_claim_during_shutdown<F, T>(
@@ -64,7 +122,22 @@ pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> an
 
 #[cfg(test)]
 mod tests {
-    use super::{ClaimWindow, establish_worker_lifecycle, finish_claim_during_shutdown};
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    use async_trait::async_trait;
+    use tokio::sync::Notify;
+
+    use super::{
+        ClaimStep, ClaimWindow, claim_once, establish_worker_lifecycle,
+        finish_claim_during_shutdown,
+    };
+    use crate::model::{
+        ActivityLease, AgentId, AttemptId, CancellationTarget, ClaimOutcome, ClaimedTask,
+        CompletionArtifact, EnqueueTask, LeaseToken, TaskActivity, TaskId,
+    };
+    use crate::store::TaskStore;
 
     #[tokio::test]
     async fn shutdown_finishes_an_inflight_claim_before_releasing_control() -> anyhow::Result<()> {
@@ -109,6 +182,32 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn shutdown_releases_an_inflight_claim_before_writing_the_marker() -> anyhow::Result<()> {
+        let workspace = tempfile::tempdir()?;
+        let marker = workspace.path().join(".hive-task-finished");
+        let store = RecordingStore::new(marker.clone())?;
+        let agent = AgentId::new("agent-a")?;
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let shutdown_tx = _shutdown_tx;
+        let claim_store = store.clone();
+        let claim_agent = agent.clone();
+        let claim_marker = marker.clone();
+        let claim = tokio::spawn(async move {
+            claim_once(&claim_store, &claim_agent, 3600, shutdown_rx, &claim_marker).await
+        });
+
+        store.claim_started.notified().await;
+        shutdown_tx.send(true)?;
+        store.finish_claim.notify_one();
+
+        assert!(matches!(claim.await??, ClaimStep::Stopped));
+        assert!(store.released.load(Ordering::SeqCst));
+        assert_eq!(store.release_attempts.load(Ordering::SeqCst), 2);
+        assert!(marker.is_file());
+        Ok(())
+    }
+
     #[test]
     fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
         let workspace = tempfile::tempdir()?;
@@ -124,5 +223,157 @@ mod tests {
         );
         assert!(workspace.path().join(".hive-task-finished").is_file());
         Ok(())
+    }
+
+    #[derive(Clone)]
+    struct RecordingStore {
+        task: ClaimedTask,
+        marker: PathBuf,
+        claim_started: Arc<Notify>,
+        finish_claim: Arc<Notify>,
+        released: Arc<AtomicBool>,
+        release_attempts: Arc<AtomicUsize>,
+    }
+
+    impl RecordingStore {
+        fn new(marker: PathBuf) -> anyhow::Result<Self> {
+            Ok(Self {
+                task: ClaimedTask {
+                    id: TaskId::new("task-a")?,
+                    kind: "main-repair".to_owned(),
+                    prompt: "repair Main".to_owned(),
+                    source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+                    attempt_id: AttemptId::new("attempt-a")?,
+                    attempt_number: 1,
+                    lease_token: LeaseToken::new("lease-a")?,
+                    owning_repairs: Vec::new(),
+                    dependency_context: Vec::new(),
+                    dependency_artifacts: Vec::new(),
+                },
+                marker,
+                claim_started: Arc::new(Notify::new()),
+                finish_claim: Arc::new(Notify::new()),
+                released: Arc::new(AtomicBool::new(false)),
+                release_attempts: Arc::new(AtomicUsize::new(0)),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl TaskStore for RecordingStore {
+        async fn migrate(&self) -> anyhow::Result<()> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn register_agent(&self, _agent_id: &AgentId, _pod_name: &str) -> anyhow::Result<()> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn enqueue(&self, _task: &EnqueueTask) -> anyhow::Result<()> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn active_delivery(
+            &self,
+            _source_commit: &str,
+            _kind: &str,
+        ) -> anyhow::Result<Option<TaskId>> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn cancellation_targets(
+            &self,
+            _task_id: &TaskId,
+        ) -> anyhow::Result<Vec<CancellationTarget>> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn finalize_cancellation(&self, _task_id: &TaskId) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn acknowledge_cancellation(
+            &self,
+            _task: &ClaimedTask,
+            _agent_id: &AgentId,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn claim(
+            &self,
+            _agent_id: &AgentId,
+            _lease_seconds: i64,
+        ) -> anyhow::Result<ClaimOutcome> {
+            self.claim_started.notify_one();
+            self.finish_claim.notified().await;
+            Ok(ClaimOutcome::Claimed(Box::new(self.task.clone())))
+        }
+
+        async fn heartbeat(
+            &self,
+            _task_id: &TaskId,
+            _agent_id: &AgentId,
+            _lease_token: &LeaseToken,
+            _lease_seconds: i64,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn record_activity(
+            &self,
+            _lease: &ActivityLease,
+            _agent_id: &AgentId,
+            _activity: &TaskActivity,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn release(&self, task: &ClaimedTask, _agent_id: &AgentId) -> anyhow::Result<bool> {
+            assert_eq!(task.id, self.task.id);
+            assert!(
+                !self.marker.exists(),
+                "worker lifecycle marker must follow the lease release"
+            );
+            if self.release_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                anyhow::bail!("transient coordinator transport failure");
+            }
+            self.released.store(true, Ordering::SeqCst);
+            Ok(true)
+        }
+
+        async fn complete(
+            &self,
+            _task: &ClaimedTask,
+            _agent_id: &AgentId,
+            _obsolete: bool,
+            _summary: &str,
+            _artifact: &CompletionArtifact,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn fail(
+            &self,
+            _task: &ClaimedTask,
+            _agent_id: &AgentId,
+            _error: &str,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
+
+        async fn block(
+            &self,
+            _task: &ClaimedTask,
+            _agent_id: &AgentId,
+            _blocker: &EnqueueTask,
+            _reason: &str,
+        ) -> anyhow::Result<bool> {
+            unreachable!("not used by claim lifecycle test")
+        }
     }
 }
