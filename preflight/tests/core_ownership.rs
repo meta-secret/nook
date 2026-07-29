@@ -121,11 +121,11 @@ fn authored_javascript_typescript_and_svelte_never_use_undefined() -> anyhow::Re
 }
 
 #[test]
-fn mutable_typescript_state_never_hides_absence_behind_void() -> anyhow::Result<()> {
+fn typescript_value_contracts_never_hide_absence_behind_void() -> anyhow::Result<()> {
     let violations = typescript_mutable_void_state(&repository_root())?;
     assert!(
         violations.is_empty(),
-        "mutable TypeScript and Svelte storage must use an explicit state union, never T | void or $state<T | void>: {violations:#?}"
+        "TypeScript and Svelte value contracts must use explicit state, never T | void in storage, parameters, returns, or nested generics: {violations:#?}"
     );
     Ok(())
 }

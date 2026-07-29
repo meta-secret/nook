@@ -3,6 +3,7 @@ import {
   fillGeneratedPassword,
   fillLoginCredentials,
   findPasskeyControl,
+  PasskeyControlLookupKind,
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
@@ -338,7 +339,7 @@ export async function proposePasskeyWithNook(
   )
   try {
     const control = findPasskeyControl(document)
-    if (!control) {
+    if (control.kind === PasskeyControlLookupKind.Absent) {
       setStatus(
         description,
         continueButton,
@@ -347,7 +348,7 @@ export async function proposePasskeyWithNook(
       )
       return
     }
-    control.click()
+    control.control.click()
     setStatus(
       description,
       continueButton,

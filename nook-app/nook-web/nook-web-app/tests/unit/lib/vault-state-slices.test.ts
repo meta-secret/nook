@@ -21,7 +21,7 @@ describe('vault state slice transitions', () => {
       kind: LoginSetupKind.Inactive,
     } satisfies LoginSetup)
 
-    state.syncingProviderId = 'provider-1'
+    state.beginManualProviderSync('provider-1')
     expect(state.manualProviderSyncRunning).toBe(true)
     state.clearSyncingProvider()
     expect(state.manualProviderSyncRunning).toBe(false)

@@ -1,4 +1,3 @@
-import type { SvelteDate } from 'svelte/reactivity'
 import type { NookPendingSyncConflict, NookRuntimeConfig } from '$app-wasm'
 import type { NookVaultSyncResult, VaultAccessStatus } from '$lib/nook'
 import type { StorageProvider } from '$lib/auth-providers'
@@ -11,7 +10,7 @@ import type { VaultRuntimeState } from '$lib/vault/state/runtime.svelte'
 import type { VaultSecretsState } from '$lib/vault/state/secrets.svelte'
 import type { VaultSentinelState } from '$lib/vault/state/sentinel.svelte'
 import type { VaultSessionState } from '$lib/vault/state/session.svelte'
-import type { SyncConflictReview } from '$lib/vault/state/sync.svelte'
+import type { VaultSyncState } from '$lib/vault/state/sync.svelte'
 import type { VaultUiState } from '$lib/vault/state/ui.svelte'
 import type { VaultArchitecture } from '$lib/vault-architecture'
 import type { ProviderSyncRevision } from '$lib/vault/sync-operation-state'
@@ -105,11 +104,8 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
 export type ProviderActionsContext = ProviderStateFields &
   ProviderRuntimeFields &
   ProviderSessionFields &
-  ProviderActionPorts & {
-    localFolderMultipleVaultsIssue: {
-      message: string
-    } | void
-  }
+  ProviderActionPorts &
+  Pick<VaultSyncState, 'localFolderHealth'>
 
 type SyncProviderFields = Pick<
   VaultProviderState,
@@ -142,24 +138,22 @@ type SyncSessionFields = Pick<
   | 'vaultMembers'
 >
 
-interface SyncStateFields {
+type SyncStateFields = Pick<
+  VaultSyncState,
+  | 'beginManualProviderSync'
+  | 'clearLocalFolderMultipleVaultsIssue'
+  | 'clearSyncingProvider'
+  | 'isFanOutSyncing'
+  | 'isSyncing'
+  | 'localFolderHealth'
+  | 'manualProviderSync'
+  | 'markSynced'
+  | 'replacementConflicts'
+  | 'reportLocalFolderMultipleVaults'
+  | 'securityConflicts'
+  | 'syncConflictReview'
+> & {
   fanOutSyncChain: Promise<void>
-  isFanOutSyncing: boolean
-  isSyncing: boolean
-  lastSyncedAt: SvelteDate | void
-  localFolderMultipleVaultsIssue: {
-    providerId: string
-    providerLabel: string
-    storeIds: string[]
-    message: string
-  } | void
-  syncConflictReview: SyncConflictReview
-  replacementConflicts: Array<{
-    oldSecretId: string
-    candidates: Array<{ eventId: string; secretId: string }>
-  }>
-  securityConflicts: Array<{ events: string[]; reasons: string[] }>
-  syncingProviderId: string | void
   isSyncScheduled(): boolean
   scheduleSync(callback: () => void, intervalMs: number): void
 }

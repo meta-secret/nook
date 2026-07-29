@@ -41,6 +41,7 @@ import {
   wasmStorageArgs as wasmStorageArgsCore,
   type NookStorageConnectArgs,
 } from '$app-wasm'
+import { LocalFolderHealthKind } from '$lib/vault/state/sync.svelte'
 import { createLogger } from '$lib/log'
 import {
   LocalProviderLookupKind,
@@ -948,11 +949,12 @@ export async function connectAndSyncStagedProvider(
         ? await state.stageStagedProviderSyncIssue(stagedRemoteArgs.args)
         : false
     if (!stagedConflict) {
-      state.errorMsg = state.localFolderMultipleVaultsIssue
-        ? state.t('auth_storage.local_folder_multiple_vaults_short')
-        : e instanceof Error
-          ? e.message
-          : state.t('auth_storage.sync_failed')
+      state.errorMsg =
+        state.localFolderHealth.kind === LocalFolderHealthKind.MultipleVaults
+          ? state.t('auth_storage.local_folder_multiple_vaults_short')
+          : e instanceof Error
+            ? e.message
+            : state.t('auth_storage.sync_failed')
     }
   } finally {
     state.isVerifying = false

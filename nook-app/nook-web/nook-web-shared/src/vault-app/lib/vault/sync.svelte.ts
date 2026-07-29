@@ -42,7 +42,11 @@ import {
   SettingsSection,
 } from '$lib/vault/state/ui.svelte'
 import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
-import { SyncConflictReviewKind } from '$lib/vault/state/sync.svelte'
+import {
+  LocalFolderHealthKind,
+  ManualProviderSyncKind,
+  SyncConflictReviewKind,
+} from '$lib/vault/state/sync.svelte'
 import {
   scheduleAutoConnectAfterApproval,
   syncError,
@@ -186,7 +190,7 @@ export async function syncFromSyncProviders(
       await hydrateMultiDeviceState(state)
     }
     await publishExtensionEventLogUpdateForVault(state)
-    state.lastSyncedAt = new SvelteDate()
+    state.markSynced(new SvelteDate())
   } catch {
     // Background sync should not interrupt the UI.
   } finally {
@@ -317,7 +321,7 @@ export async function updateProviderSyncMetadata(
     isoTimestamp(),
   ).providers
   await state.persistProviders()
-  state.lastSyncedAt = new SvelteDate()
+  state.markSynced(new SvelteDate())
 }
 
 export function dismissLocalFolderMultipleVaultsIssue(
@@ -329,17 +333,18 @@ export function dismissLocalFolderMultipleVaultsIssue(
 export async function disconnectLocalFolderMultipleVaultsProvider(
   state: SyncActionsContext,
 ): Promise<void> {
-  const issue = state.localFolderMultipleVaultsIssue
-  if (!issue) return
+  const health = state.localFolderHealth
+  if (health.kind !== LocalFolderHealthKind.MultipleVaults) return
   state.clearLocalFolderMultipleVaultsIssue()
-  await state.removeProvider(issue.providerId)
+  await state.removeProvider(health.issue.providerId)
 }
 
 export async function chooseReplacementLocalFolderForIssue(
   state: SyncActionsContext,
 ): Promise<void> {
-  const issue = state.localFolderMultipleVaultsIssue
-  if (!issue) return
+  const health = state.localFolderHealth
+  if (health.kind !== LocalFolderHealthKind.MultipleVaults) return
+  const issue = health.issue
   state.clearLocalFolderMultipleVaultsIssue()
   if (state.providers.some((provider) => provider.id === issue.providerId)) {
     await state.removeProvider(issue.providerId)
@@ -592,7 +597,7 @@ export async function syncFromStorage(
         state.applyVaultSyncResult(raw)
       }
       await state.refreshSecretsFromSession()
-      state.lastSyncedAt = new SvelteDate()
+      state.markSynced(new SvelteDate())
     } catch (error) {
       syncError('background sync (unauthenticated)', error)
     } finally {
@@ -621,7 +626,7 @@ export async function syncFromStorage(
     )
     state.applyVaultSyncResult(raw)
     await state.refreshSecretsFromSession()
-    state.lastSyncedAt = new SvelteDate()
+    state.markSynced(new SvelteDate())
   } catch (error) {
     syncError('background sync', error)
   } finally {
@@ -712,7 +717,7 @@ function stageLocalFolderMultipleVaultsIssue(
   state: SyncActionsContext,
   issue: LocalFolderMultipleVaultsIssue,
 ) {
-  state.localFolderMultipleVaultsIssue = issue
+  state.reportLocalFolderMultipleVaults(issue)
   log.warn('local folder contains multiple vault logs', {
     provider: issue.providerLabel,
     storeIds: issue.storeIds,
@@ -872,9 +877,13 @@ export async function syncProviderById(
   if (state.isSaving) return
   const provider = state.providers.find((p) => p.id === providerId)
   if (!provider || provider.type === 'local') return
-  if (state.syncingProviderId && state.syncingProviderId !== providerId) return
+  if (
+    state.manualProviderSync.kind === ManualProviderSyncKind.Running &&
+    state.manualProviderSync.providerId !== providerId
+  )
+    return
 
-  state.syncingProviderId = providerId
+  state.beginManualProviderSync(providerId)
   if (!options?.quiet) {
     state.errorMsg = ''
   }
@@ -973,7 +982,10 @@ export async function syncProviderById(
     if (state.isAuthenticated) {
       await state.hydrateMultiDeviceState()
     }
-    if (state.syncingProviderId === providerId) {
+    if (
+      state.manualProviderSync.kind === ManualProviderSyncKind.Running &&
+      state.manualProviderSync.providerId === providerId
+    ) {
       state.clearSyncingProvider()
     }
   }

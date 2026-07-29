@@ -498,7 +498,7 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_obsolete) {
-            Ok(_) => anyhow::bail!("blocked obsolete result was accepted"),
+            Ok(_) => crate::hive_bail!("blocked obsolete result was accepted"),
             Err(error) => error,
         };
         assert!(error.to_string().contains("cannot retire"));

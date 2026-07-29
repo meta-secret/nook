@@ -1,4 +1,7 @@
-import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
+import {
+  EnrollmentLocationKind,
+  consumeEnrollmentFromLocation,
+} from '$lib/enrollment-code'
 import type { VaultIdleSessionTracker } from '$lib/vault-idle-session'
 import { VaultStateSlices } from '$lib/vault/state/index.svelte'
 
@@ -29,28 +32,28 @@ enum SyncScheduleKind {
 type SyncSchedule =
   | { kind: SyncScheduleKind.Stopped }
   | { kind: SyncScheduleKind.Scheduled; timer: ReturnType<typeof setInterval> }
-enum VaultInitializationKind {
+export enum VaultInitializationKind {
   NotStarted = 'not-started',
   Initializing = 'initializing',
 }
 
-type VaultInitialization =
+export type VaultInitialization =
   | { kind: VaultInitializationKind.NotStarted }
   | { kind: VaultInitializationKind.Initializing; completion: Promise<void> }
-enum EnrollmentLinkKind {
+export enum EnrollmentLinkKind {
   Absent = 'absent',
   Pending = 'pending',
 }
 
-type EnrollmentLink =
+export type EnrollmentLink =
   | { kind: EnrollmentLinkKind.Absent }
   | { kind: EnrollmentLinkKind.Pending; payload: string }
 
 function initialEnrollmentLink(): EnrollmentLink {
   if (!('window' in globalThis)) return { kind: EnrollmentLinkKind.Absent }
-  const payload = consumeEnrollmentFromLocation()
-  return payload
-    ? { kind: EnrollmentLinkKind.Pending, payload }
+  const enrollment = consumeEnrollmentFromLocation()
+  return enrollment.kind === EnrollmentLocationKind.Consumed
+    ? { kind: EnrollmentLinkKind.Pending, payload: enrollment.payload }
     : { kind: EnrollmentLinkKind.Absent }
 }
 
@@ -59,20 +62,13 @@ export class VaultLifecycleState extends VaultStateSlices {
     kind: SuccessDismissScheduleKind.Stopped,
   }
 
-  get successDismissTimer(): ReturnType<typeof setTimeout> | void {
-    if (
-      this.successDismissSchedule.kind === SuccessDismissScheduleKind.Scheduled
-    )
-      return this.successDismissSchedule.timer
-    return
-  }
   get successDismissScheduled(): boolean {
     return (
       this.successDismissSchedule.kind === SuccessDismissScheduleKind.Scheduled
     )
   }
 
-  set successDismissTimer(value: ReturnType<typeof setTimeout>) {
+  scheduleSuccessDismiss(value: ReturnType<typeof setTimeout>): void {
     this.successDismissSchedule = {
       kind: SuccessDismissScheduleKind.Scheduled,
       timer: value,
@@ -98,13 +94,11 @@ export class VaultLifecycleState extends VaultStateSlices {
     kind: IdleSessionTrackingKind.Inactive,
   }
 
-  get idleSessionTracker(): VaultIdleSessionTracker | void {
-    if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active)
-      return this.idleSessionTracking.tracker
-    return
+  hasIdleSessionTracker(): boolean {
+    return this.idleSessionTracking.kind === IdleSessionTrackingKind.Active
   }
 
-  set idleSessionTracker(value: VaultIdleSessionTracker) {
+  setIdleSessionTracker(value: VaultIdleSessionTracker): void {
     this.idleSessionTracking = {
       kind: IdleSessionTrackingKind.Active,
       tracker: value,
@@ -113,6 +107,18 @@ export class VaultLifecycleState extends VaultStateSlices {
 
   clearIdleSessionTracker(): void {
     this.idleSessionTracking = { kind: IdleSessionTrackingKind.Inactive }
+  }
+
+  startIdleSessionTracker(): void {
+    if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
+      this.idleSessionTracking.tracker.start()
+    }
+  }
+
+  stopIdleSessionTracker(): void {
+    if (this.idleSessionTracking.kind === IdleSessionTrackingKind.Active) {
+      this.idleSessionTracking.tracker.stop()
+    }
   }
 
   private syncSchedule: SyncSchedule = { kind: SyncScheduleKind.Stopped }
@@ -140,13 +146,11 @@ export class VaultLifecycleState extends VaultStateSlices {
     kind: VaultInitializationKind.NotStarted,
   }
 
-  get initPromise(): Promise<void> | void {
-    if (this.initialization.kind === VaultInitializationKind.Initializing)
-      return this.initialization.completion
-    return
+  get vaultInitialization(): VaultInitialization {
+    return this.initialization
   }
 
-  set initPromise(value: Promise<void>) {
+  beginInitialization(value: Promise<void>): void {
     this.initialization = {
       kind: VaultInitializationKind.Initializing,
       completion: value,
@@ -159,10 +163,8 @@ export class VaultLifecycleState extends VaultStateSlices {
 
   private enrollmentLink: EnrollmentLink = initialEnrollmentLink()
 
-  get pendingEnrollmentFromUrl(): string | void {
-    if (this.enrollmentLink.kind === EnrollmentLinkKind.Pending)
-      return this.enrollmentLink.payload
-    return
+  get enrollmentLinkState(): EnrollmentLink {
+    return this.enrollmentLink
   }
 
   set pendingEnrollmentFromUrl(value: string) {

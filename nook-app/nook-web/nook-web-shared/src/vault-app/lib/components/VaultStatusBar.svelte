@@ -8,7 +8,7 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { StorageProviderType } from '$lib/auth-providers'
-  import type { VaultState } from '$lib/vault.svelte'
+  import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
   import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
   import { VaultStatusBarVariant } from './vault-status-bar-state'
 
@@ -105,9 +105,9 @@
 
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
-    if (vault.syncingProviderLabel) {
+    if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
       return vault.t('status_bar.syncing_to', {
-        provider: vault.syncingProviderLabel,
+        provider: vault.syncingProviderLabel.label,
       })
     }
     if (vault.isFanOutSyncing) {

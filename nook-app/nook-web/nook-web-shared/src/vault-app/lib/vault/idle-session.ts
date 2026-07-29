@@ -7,23 +7,25 @@ import { intoWasmStringValue } from '$lib/wasm-string-value'
 const log = createLogger('vault-session')
 
 export function ensureIdleSessionTracker(state: VaultState): void {
-  if (state.idleSessionTracker) return
+  if (state.hasIdleSessionTracker()) return
   const idleTimeoutConfig = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS
   const idleWarningConfig = import.meta.env.VITE_VAULT_IDLE_WARNING_MS
-  state.idleSessionTracker = createVaultIdleSessionTracker({
-    timeoutMs: state.runtimeConfig.resolveVaultIdleTimeoutMs(
-      typeof idleTimeoutConfig === 'string'
-        ? intoWasmStringValue(idleTimeoutConfig)
-        : NookStringValue.unavailable(),
-    ),
-    warningMs: state.runtimeConfig.resolveVaultIdleWarningMs(
-      typeof idleWarningConfig === 'string'
-        ? intoWasmStringValue(idleWarningConfig)
-        : NookStringValue.unavailable(),
-    ),
-    onExpire: () => lockVaultDueToIdle(state),
-    onWarning: () => showIdleLockWarning(state),
-  })
+  state.setIdleSessionTracker(
+    createVaultIdleSessionTracker({
+      timeoutMs: state.runtimeConfig.resolveVaultIdleTimeoutMs(
+        typeof idleTimeoutConfig === 'string'
+          ? intoWasmStringValue(idleTimeoutConfig)
+          : NookStringValue.unavailable(),
+      ),
+      warningMs: state.runtimeConfig.resolveVaultIdleWarningMs(
+        typeof idleWarningConfig === 'string'
+          ? intoWasmStringValue(idleWarningConfig)
+          : NookStringValue.unavailable(),
+      ),
+      onExpire: () => lockVaultDueToIdle(state),
+      onWarning: () => showIdleLockWarning(state),
+    }),
+  )
 }
 
 export function showIdleLockWarning(state: VaultState): void {
@@ -40,12 +42,12 @@ export function lockVaultDueToIdle(state: VaultState): void {
 export function startIdleSessionTracking(state: VaultState) {
   if (!state.isAuthenticated) return
   state.ensureIdleSessionTracker()
-  state.idleSessionTracker!.start()
+  state.startIdleSessionTracker()
   log.debug('idle session tracking started')
 }
 
 export function stopIdleSessionTracking(state: VaultState) {
-  state.idleSessionTracker?.stop()
+  state.stopIdleSessionTracker()
 }
 
 export function lockVault(state: VaultState) {

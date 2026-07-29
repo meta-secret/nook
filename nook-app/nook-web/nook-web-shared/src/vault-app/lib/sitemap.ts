@@ -27,9 +27,7 @@ export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
   },
 ]
 
-export function siteUrlFromEnv(
-  env: Record<string, string | void> = process.env,
-): string {
+export function siteUrlFromEnv(env: typeof process.env = process.env): string {
   const trimmed = env.VITE_SITE_URL?.trim()
   if (trimmed) {
     return trimmed.replace(/\/$/, '')

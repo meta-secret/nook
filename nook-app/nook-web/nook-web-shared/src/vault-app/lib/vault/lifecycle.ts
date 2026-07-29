@@ -26,6 +26,10 @@ import { JoinEnrollmentState } from '$app-wasm'
 import * as localLoginActions from '$lib/vault/local-login'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
 import { LocalProviderLookupKind } from '$lib/vault/state/provider.svelte'
+import {
+  EnrollmentLinkKind,
+  VaultInitializationKind,
+} from '$lib/vault/state/lifecycle.svelte'
 
 const log = createLogger('vault-lifecycle')
 
@@ -114,10 +118,10 @@ export async function initOnce(state: VaultState): Promise<void> {
     }
 
     if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {
-      if (state.pendingEnrollmentFromUrl) {
-        const code = state.pendingEnrollmentFromUrl
+      const enrollment = state.enrollmentLinkState
+      if (enrollment.kind === EnrollmentLinkKind.Pending) {
         state.clearPendingEnrollmentFromUrl()
-        state.prefillEnrollmentCode = code
+        state.prefillEnrollmentCode = enrollment.payload
         state.enrollmentFromUrlPending = true
       }
       if (!state.localVaultPresent && state.localVaults.length === 0) {
@@ -188,7 +192,8 @@ export async function continueInitializationAfterDeviceUnlock(
   } else {
     state.applyActiveProviderCredentials()
   }
-  const hasPendingEnrollment = Boolean(state.pendingEnrollmentFromUrl)
+  const hasPendingEnrollment =
+    state.enrollmentLinkState.kind === EnrollmentLinkKind.Pending
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE
     await state.refreshPasswordEntriesList()
@@ -206,10 +211,13 @@ export async function continueInitializationAfterDeviceUnlock(
     await state.refreshDeviceState()
   }
 
-  if (state.pendingEnrollmentFromUrl && !state.isAuthenticated) {
-    const code = state.pendingEnrollmentFromUrl
+  const enrollment = state.enrollmentLinkState
+  if (
+    enrollment.kind === EnrollmentLinkKind.Pending &&
+    !state.isAuthenticated
+  ) {
     state.clearPendingEnrollmentFromUrl()
-    state.prefillEnrollmentCode = code
+    state.prefillEnrollmentCode = enrollment.payload
     state.enrollmentFromUrlPending = true
   }
   if (state.isAuthenticated) {
@@ -286,11 +294,13 @@ export async function authorizeWithExternalDeviceIdentity(
 }
 
 export async function init(state: VaultState) {
-  if (state.initPromise) {
-    return state.initPromise
+  const initialization = state.vaultInitialization
+  if (initialization.kind === VaultInitializationKind.Initializing) {
+    return initialization.completion
   }
-  state.initPromise = state.initOnce()
-  return state.initPromise
+  const completion = state.initOnce()
+  state.beginInitialization(completion)
+  return completion
 }
 
 export async function createFreshVault(state: VaultState) {

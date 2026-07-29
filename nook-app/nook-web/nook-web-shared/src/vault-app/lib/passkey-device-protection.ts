@@ -58,17 +58,35 @@ export function sanitizedPasskeyCeremonyData(error: unknown): {
 } {
   const outcome = passkeyCeremonyOutcome(error)
   const errorName = sanitizedPasskeyErrorName(error)
-  return errorName ? { outcome, errorName } : { outcome }
+  return errorName.kind === SanitizedPasskeyErrorNameKind.Safe
+    ? { outcome, errorName: errorName.name }
+    : { outcome }
 }
 
-function sanitizedPasskeyErrorName(error: unknown): string | void {
-  if (!(error instanceof Error)) return
-  if (SAFE_PASSKEY_ERROR_NAMES.has(error.name)) return error.name
+enum SanitizedPasskeyErrorNameKind {
+  Omitted = 'omitted',
+  Safe = 'safe',
+}
+
+type SanitizedPasskeyErrorName =
+  | { kind: SanitizedPasskeyErrorNameKind.Omitted }
+  | { kind: SanitizedPasskeyErrorNameKind.Safe; name: string }
+
+function sanitizedPasskeyErrorName(error: unknown): SanitizedPasskeyErrorName {
+  if (!(error instanceof Error)) {
+    return { kind: SanitizedPasskeyErrorNameKind.Omitted }
+  }
+  if (SAFE_PASSKEY_ERROR_NAMES.has(error.name)) {
+    return { kind: SanitizedPasskeyErrorNameKind.Safe, name: error.name }
+  }
 
   const fromMessage = error.message.match(
     /\b(NotAllowedError|NotSupportedError|SecurityError|InvalidStateError|AbortError|NetworkError|UnknownError)\b/,
   )
-  return fromMessage?.[1]
+  const name = fromMessage?.[1]
+  return name
+    ? { kind: SanitizedPasskeyErrorNameKind.Safe, name }
+    : { kind: SanitizedPasskeyErrorNameKind.Omitted }
 }
 
 export async function setupDeviceProtection(

@@ -1,5 +1,6 @@
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
+  LoginCredentialsLookupKind,
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -250,8 +251,8 @@ export function captureSubmittedLogin(event: Event): void {
   )
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
   const credentials = readLoginCredentials(workflow.root, workflow.formScope)
-  if (!credentials) return
-  void stageSaveForCredentials(credentials)
+  if (credentials.kind === LoginCredentialsLookupKind.Absent) return
+  void stageSaveForCredentials(credentials.credentials)
 }
 
 export enum PendingSaveOfferLoadKind {

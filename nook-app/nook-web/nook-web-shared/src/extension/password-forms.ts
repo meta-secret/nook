@@ -18,6 +18,18 @@ export type LoginCredentials = {
   password: string;
 };
 
+export enum LoginCredentialsLookupKind {
+  Absent = "absent",
+  Found = "found",
+}
+
+export type LoginCredentialsLookup =
+  | { kind: LoginCredentialsLookupKind.Absent }
+  | {
+      kind: LoginCredentialsLookupKind.Found;
+      credentials: LoginCredentials;
+    };
+
 export enum PasswordFormScopeKind {
   Owned = "owned",
   Unowned = "unowned",
@@ -388,15 +400,26 @@ function hasAutocompleteToken(
 const passkeyControlPositivePattern =
   /\b(?:pass\s*key|passkey|webauthn|security\s*key|hardware\s*key|fido|touch\s*id|face\s*id|windows\s*hello)\b/iu;
 
+export enum PasskeyControlLookupKind {
+  Absent = "absent",
+  Found = "found",
+}
+
+export type PasskeyControlLookup =
+  | { kind: PasskeyControlLookupKind.Absent }
+  | { kind: PasskeyControlLookupKind.Found; control: HTMLElement };
+
 export function findPasskeyControl(
   root: ParentNode = document,
-): HTMLElement | void {
+): PasskeyControlLookup {
   // Only marked controls and labeled activatable elements count. Do not treat
   // password/username inputs that happen to include `webauthn` in autocomplete
   // (common on combined login forms) as passkey controls — that falsely
   // proposes "Create passkey" instead of password autofill.
   const marked = root.querySelector?.("[data-nook-passkey-control]");
-  if (marked instanceof HTMLElement) return marked;
+  if (marked instanceof HTMLElement) {
+    return { kind: PasskeyControlLookupKind.Found, control: marked };
+  }
   const controls = Array.from(
     root.querySelectorAll?.<HTMLElement>(
       'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
@@ -411,14 +434,14 @@ export function findPasskeyControl(
       ""
     ).trim();
     if (labeled && passkeyControlPositivePattern.test(labeled)) {
-      return control;
+      return { kind: PasskeyControlLookupKind.Found, control };
     }
   }
-  return;
+  return { kind: PasskeyControlLookupKind.Absent };
 }
 
 export function pageHasPasskeyControl(root: ParentNode = document): boolean {
-  return Boolean(findPasskeyControl(root));
+  return findPasskeyControl(root).kind === PasskeyControlLookupKind.Found;
 }
 
 function pageHasManualCheckpoint(root: ParentNode): boolean {
@@ -660,9 +683,11 @@ export function fillGeneratedPassword(
 export function readLoginCredentials(
   root: ParentNode = document,
   formScope?: PasswordFormScope,
-): LoginCredentials | void {
+): LoginCredentialsLookup {
   const passwordFields = findPasswordFields(root, formScope);
-  if (passwordFields.length === 0) return;
+  if (passwordFields.length === 0) {
+    return { kind: LoginCredentialsLookupKind.Absent };
+  }
 
   const newPasswordFields = passwordFields.filter((field) =>
     hasAutocompleteToken(field, "new-password"),
@@ -675,8 +700,13 @@ export function readLoginCredentials(
     passwordFields[0];
   const password = passwordField.value.trim();
   const username = findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
-  if (!username || !password) return;
-  return { username, password };
+  if (!username || !password) {
+    return { kind: LoginCredentialsLookupKind.Absent };
+  }
+  return {
+    kind: LoginCredentialsLookupKind.Found,
+    credentials: { username, password },
+  };
 }
 
 export function submitLoginForm(

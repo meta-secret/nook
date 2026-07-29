@@ -23,7 +23,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes and generated DTOs in Rust/WASM, reserve TypeScript for UI/browser glue, and model sum types as enums | |
 | [svelte-state-modeling.md](svelte-state-modeling.md) | Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM | |
 | [typescript-serial-operation-queues.md](typescript-serial-operation-queues.md) | Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains | |
-| [typescript-explicit-state.md](typescript-explicit-state.md) | Replace authored `undefined`/`null` state with semantic unions while retaining `void` as TypeScript's unit/effect type; reject mutable `T \| void` only when it stores unnamed absence | |
+| [typescript-explicit-state.md](typescript-explicit-state.md) | Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns | |
 | [ui-design-skills.md](ui-design-skills.md) | Always load both `impeccable` and `design-taste-frontend` for user-visible UI work, applying them through Nook's Svelte, product, accessibility, and typed-boundary constraints | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 

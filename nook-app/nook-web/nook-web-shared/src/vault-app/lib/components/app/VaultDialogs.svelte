@@ -7,7 +7,10 @@
   import { Button } from '$lib/components/ui/button'
   import * as multiDeviceActions from '$lib/vault/multi-device'
   import type { VaultState } from '$lib/vault.svelte'
-  import { SyncConflictReviewKind } from '$lib/vault/state/sync.svelte'
+  import {
+    LocalFolderHealthKind,
+    SyncConflictReviewKind,
+  } from '$lib/vault/state/sync.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -48,10 +51,10 @@
   />
 {/if}
 
-{#if vault.localFolderMultipleVaultsIssue}
+{#if vault.localFolderHealth.kind === LocalFolderHealthKind.MultipleVaults}
   <LocalFolderMultipleVaultsDialog
     {vault}
-    issue={vault.localFolderMultipleVaultsIssue}
+    issue={vault.localFolderHealth.issue}
     onChooseFolder={() => vault.chooseReplacementLocalFolderForIssue()}
     onDisconnect={() => vault.disconnectLocalFolderMultipleVaultsProvider()}
     onDismiss={() => vault.dismissLocalFolderMultipleVaultsIssue()}

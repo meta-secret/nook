@@ -2,15 +2,25 @@ import { describe, expect, test } from 'vitest'
 import { LegalRouteKind, legalRoute } from '$lib/app-lifecycle-state'
 import {
   LEGAL_PAGES,
+  LegalPageLookupKind,
   LegalPageId,
   getLegalPageFromPath,
 } from '$lib/legal-content'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {
-    expect(getLegalPageFromPath('/privacy')).toBe(LegalPageId.Privacy)
-    expect(getLegalPageFromPath('/privacy/')).toBe(LegalPageId.Privacy)
-    expect(getLegalPageFromPath('/terms')).toBe(LegalPageId.Terms)
+    expect(getLegalPageFromPath('/privacy')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Privacy,
+    })
+    expect(getLegalPageFromPath('/privacy/')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Privacy,
+    })
+    expect(getLegalPageFromPath('/terms')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Terms,
+    })
     expect(legalRoute(getLegalPageFromPath('/'))).toEqual({
       kind: LegalRouteKind.Application,
     })

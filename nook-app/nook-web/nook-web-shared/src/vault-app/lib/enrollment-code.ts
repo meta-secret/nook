@@ -11,6 +11,24 @@ enum EnrollmentHistoryState {
   EnrollmentConsumed = 'enrollment-consumed',
 }
 
+export enum EnrollmentLocationKind {
+  Absent = 'absent',
+  Consumed = 'consumed',
+}
+
+export type EnrollmentLocation =
+  | { kind: EnrollmentLocationKind.Absent }
+  | { kind: EnrollmentLocationKind.Consumed; payload: string }
+
+enum EnrollmentUrlCodeKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type EnrollmentUrlCode =
+  | { kind: EnrollmentUrlCodeKind.Absent }
+  | { kind: EnrollmentUrlCodeKind.Present; code: string }
+
 export function enrollmentAppRootUrl(
   siteRoot: string,
   appKind: VaultApplication = APP_KIND,
@@ -50,16 +68,16 @@ export function buildEnrollmentLink(
  * Read an enrollment code from the current page URL (hash or query), then
  * strip it from the address bar so secrets do not linger in history.
  */
-export function consumeEnrollmentFromLocation(): string | void {
+export function consumeEnrollmentFromLocation(): EnrollmentLocation {
   if (!('window' in globalThis)) {
-    return
+    return { kind: EnrollmentLocationKind.Absent }
   }
 
   const url = new URL(window.location.href)
   const raw = enrollmentCodeFromUrl(url)
 
-  if (!raw) {
-    return
+  if (raw.kind === EnrollmentUrlCodeKind.Absent) {
+    return { kind: EnrollmentLocationKind.Absent }
   }
 
   history.replaceState(
@@ -67,20 +85,24 @@ export function consumeEnrollmentFromLocation(): string | void {
     '',
     `${url.pathname}${url.search}${url.hash}`,
   )
-  return normalizeEnrollmentCode(raw)
+  return {
+    kind: EnrollmentLocationKind.Consumed,
+    payload: normalizeEnrollmentCode(raw.code),
+  }
 }
 
-function enrollmentCodeFromUrl(url: URL): string | void {
+function enrollmentCodeFromUrl(url: URL): EnrollmentUrlCode {
   if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
     const code = decodeURIComponent(
       url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
     )
     url.hash = ''
-    return code
+    return { kind: EnrollmentUrlCodeKind.Present, code }
   }
   const code = url.searchParams.get('enroll')?.valueOf()
   if (code) {
     url.searchParams.delete('enroll')
+    return { kind: EnrollmentUrlCodeKind.Present, code }
   }
-  return code
+  return { kind: EnrollmentUrlCodeKind.Absent }
 }

@@ -69,11 +69,13 @@ pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violatio
     Ok(violations)
 }
 
-/// Finds mutable TypeScript/Svelte storage that disguises absence as `void`.
+/// Finds TypeScript/Svelte unions that disguise absence as `void`.
 ///
 /// `void` is TypeScript's unit/effect type for function returns, callbacks,
-/// promises, and intentionally discarded results. A mutable `let` slot must
-/// instead use an explicit tagged state because `T | void` stores absence.
+/// promises, and intentionally discarded results. Any value-or-void contract
+/// must instead use an explicit tagged state because `T | void` represents
+/// unnamed absence regardless of whether it appears in storage, a parameter,
+/// a return type, or a nested generic.
 ///
 /// # Errors
 ///
@@ -508,10 +510,15 @@ fn is_type_utility_key_union(node: tree_sitter::Node<'_>, source: &str) -> bool 
 }
 
 fn is_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    node.kind() == "literal_type"
-        && node
+    if node.kind() == "literal_type" {
+        return node
             .utf8_text(source.as_bytes())
-            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')))
+            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')));
+    }
+    matches!(node.kind(), "type_annotation" | "parenthesized_type")
+        && node
+            .named_child(0)
+            .is_some_and(|child| is_string_literal_type(child, source))
 }
 
 fn typescript_code_generic_optional_state_lines(
@@ -564,19 +571,11 @@ fn collect_mutable_void_nodes(
     first_line: usize,
     lines: &mut Vec<usize>,
 ) {
-    if node.kind() == "lexical_declaration"
-        && node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text.trim_start().starts_with("let "))
+    if node.kind() == "union_type"
+        && union_contains_void(node, source)
+        && union_contains_non_effect_value(node, source)
     {
-        let mut cursor = node.walk();
-        for declarator in node.named_children(&mut cursor) {
-            if declarator.kind() == "variable_declarator"
-                && variable_declarator_has_mutable_void(declarator, source)
-            {
-                lines.push(first_line + declarator.start_position().row);
-            }
-        }
+        lines.push(first_line + node.start_position().row);
         return;
     }
     let mut cursor = node.walk();
@@ -585,31 +584,32 @@ fn collect_mutable_void_nodes(
     }
 }
 
-fn variable_declarator_has_mutable_void(declarator: tree_sitter::Node<'_>, source: &str) -> bool {
-    let mut cursor = declarator.walk();
-    declarator.named_children(&mut cursor).any(|child| {
-        (child.kind() == "type_annotation"
-            && child
-                .named_child(0)
-                .is_some_and(|declared_type| direct_union_contains_void(declared_type, source)))
-            || (child.kind() == "call_expression"
-                && child
-                    .utf8_text(source.as_bytes())
-                    .is_ok_and(|text| text.starts_with("$state<") && text.contains("| void")))
+fn union_contains_void(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).any(|child| {
+        if child.kind() == "union_type" {
+            return union_contains_void(child, source);
+        }
+        type_text_without_whitespace(child, source) == "void"
     })
 }
 
-fn direct_union_contains_void(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    if node.kind() != "union_type" {
-        return false;
-    }
+fn union_contains_non_effect_value(node: tree_sitter::Node<'_>, source: &str) -> bool {
     let mut cursor = node.walk();
     node.named_children(&mut cursor).any(|child| {
-        child
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| text.trim() == "void")
-            || direct_union_contains_void(child, source)
+        if child.kind() == "union_type" {
+            return union_contains_non_effect_value(child, source);
+        }
+        !matches!(
+            type_text_without_whitespace(child, source).as_str(),
+            "void" | "Promise<void>" | "globalThis.Promise<void>"
+        )
     })
+}
+
+fn type_text_without_whitespace(node: tree_sitter::Node<'_>, source: &str) -> String {
+    node.utf8_text(source.as_bytes())
+        .map_or_else(|_| String::new(), |text| text.split_whitespace().collect())
 }
 
 fn collect_undefined_nodes(
@@ -910,7 +910,7 @@ expect(value).toBeNull()
     }
 
     #[test]
-    fn reports_mutable_void_slots_but_not_returns_or_nested_boundary_results()
+    fn reports_value_or_void_contracts_but_not_unit_effects()
     -> Result<(), tree_sitter::LanguageError> {
         let source = r"
 let timer: ReturnType<typeof setTimeout> | void
@@ -920,12 +920,13 @@ let selected = $state<string | void>()
 const command = (): void => {}
 const effect = async (): Promise<void> => {}
 const callback: (value: string) => void = () => {}
+const maybeEffect = (): void | Promise<void> => {}
 void effect()
 ";
 
         assert_eq!(
             typescript_code_mutable_void_state_lines(source, 1)?,
-            vec![2, 5]
+            vec![2, 3, 4, 5]
         );
         Ok(())
     }

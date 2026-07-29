@@ -157,12 +157,14 @@ Do not evade the rule with quoted sentinel names, casts, fake defaults,
 decorative wrappers, or sentinel strings.
 
 `void` is not an absence value when used as TypeScript's unit/effect type. It
-is permitted for function and callback return types, `Promise<void>`, and the
-unary `void` operator when a result is intentionally discarded. This is
-equivalent to Rust `()`, not `Option<T>`. A mutable application-state slot such
-as `let result: T | void` is still forbidden because that union uses `void` as
-unnamed absence rather than effect completion. Tests assert semantic variants
-or structural property contracts, never `toBeUndefined`, `toBeNull`,
+is permitted as the complete return of a function or callback, as
+`Promise<void>`, in `void | Promise<void>` for a synchronous-or-asynchronous
+effect, and in the unary `void` operator when a result is intentionally
+discarded. This is equivalent to Rust `()`, not `Option<T>`. Any union of a
+value with `void`, such as `T | void` or `Promise<T | void>`, is forbidden in
+storage, parameters, callbacks, and return types because it represents unnamed
+absence rather than effect completion. Tests assert semantic variants or
+structural property contracts, never `toBeUndefined`, `toBeNull`,
 `toBeDefined`, or equivalent absence matchers. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 

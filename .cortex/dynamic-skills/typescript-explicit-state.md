@@ -61,11 +61,15 @@ mutable flags create the same problem.
   parallel booleans.
 - Normalize optional external input shape into an explicit union immediately.
 - Use `void` normally as TypeScript's unit/effect type. Function and callback
-  return types, `Promise<void>`, and unary `void expression` for intentionally
-  discarded results are valid and equivalent to Rust `()`, not `Option<T>`.
-- Do not use `void` as unnamed mutable absence. A slot such as
-  `let result: Result | void` still needs a semantic state union because the
-  union is storing “missing result,” not describing effect completion.
+  return types, `Promise<void>`, `void | Promise<void>` for a
+  synchronous-or-asynchronous effect, and unary `void expression` for
+  intentionally discarded results are valid and equivalent to Rust `()`, not
+  `Option<T>`.
+- Do not use `void` as unnamed value absence. `Result | void`,
+  `Promise<Result | void>`, parameters, callback results, and other nested
+  value-or-void contracts all need a semantic state union. This is true even
+  when no mutable slot stores the result: the caller still receives unnamed
+  absence rather than unit effect completion.
 - Normalize missing browser, lookup, parser, cache, and DOM results directly
   into a domain-specific union at the narrow boundary.
 - Normalize external `null` directly into the same explicit union at the
@@ -135,7 +139,7 @@ type ImportState =
 - [ ] Inventory every authored token before editing and classify boundary
       absence separately from named application state.
 - [ ] Replace modeled `undefined`, optional state fields, zero-argument runes,
-      and coupled booleans with discriminated unions.
+      value-or-void contracts, and coupled booleans with discriminated unions.
 - [ ] Reject generic optional-value wrappers and require semantic type and
       variant names at every application-state site.
 - [ ] Replace every raw string-literal discriminant with a member of a
@@ -148,10 +152,11 @@ type ImportState =
 ## Validation
 
 The AST-backed preflight rejects every executable or type-level `undefined` and
-`null` token, every quoted-sentinel comparison, every mutable `T | void`
-absence slot, every generic optional-state escape hatch, and assertion matchers
-that encode implicit absence in authored JavaScript, TypeScript, and Svelte. It
-accepts `void` in function and callback return types, `Promise<void>`, and unary
+`null` token, every quoted-sentinel comparison, every `T | void` value contract
+including nested generics and returns, every generic optional-state escape
+hatch, and assertion matchers that encode implicit absence in authored
+JavaScript, TypeScript, and Svelte. It accepts complete `void` function and
+callback returns, `Promise<void>`, `void | Promise<void>` effects, and unary
 discard expressions. The Rust-boundary preflight also rejects
 `#[tsify(type = "...")]` field overrides containing `undefined`, `null`, or
 `void`, `Option<T>` fields on `Tsify` exports, and `Option<T>` parameters or

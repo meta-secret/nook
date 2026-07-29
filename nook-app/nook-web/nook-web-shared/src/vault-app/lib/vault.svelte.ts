@@ -48,6 +48,7 @@ import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
 import * as lifecycleActions from '$lib/vault/lifecycle'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
 import { SerialOperationQueue } from '$lib/serial-operation-queue'
+import { ManualProviderSyncKind } from '$lib/vault/state/sync.svelte'
 import { VaultLifecycleState } from '$lib/vault/state/lifecycle.svelte'
 import {
   AdminAccordionSection,
@@ -73,6 +74,15 @@ export type VaultEditRestriction =
         | VaultEditDecision.BlockedByArchitecture
       reason: string
     }
+
+export enum SyncProviderLabelKind {
+  Idle = 'idle',
+  Active = 'active',
+}
+
+export type SyncProviderLabel =
+  | { kind: SyncProviderLabelKind.Idle }
+  | { kind: SyncProviderLabelKind.Active; label: string }
 
 export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0
@@ -129,17 +139,22 @@ export class VaultState extends VaultLifecycleState {
     return this.syncProviders.length
   }
 
-  get syncingProviderLabel(): string | void {
-    if (!this.syncingProviderId) return
-    return providerLabelById(
-      $state.snapshot({
-        providers: this.providers,
-        ...(this.activeVaultStoreId
-          ? { activeVaultStoreId: this.activeVaultStoreId }
-          : {}),
-      }),
-      this.syncingProviderId,
-    )
+  get syncingProviderLabel(): SyncProviderLabel {
+    if (this.manualProviderSync.kind === ManualProviderSyncKind.Idle) {
+      return { kind: SyncProviderLabelKind.Idle }
+    }
+    return {
+      kind: SyncProviderLabelKind.Active,
+      label: providerLabelById(
+        $state.snapshot({
+          providers: this.providers,
+          ...(this.activeVaultStoreId
+            ? { activeVaultStoreId: this.activeVaultStoreId }
+            : {}),
+        }),
+        this.manualProviderSync.providerId,
+      ),
+    }
   }
 
   get isSyncActivityVisible(): boolean {
@@ -252,9 +267,11 @@ export class VaultState extends VaultLifecycleState {
   showSuccess(message: string) {
     this.dismissSuccess()
     this.successMsg = message
-    this.successDismissTimer = setTimeout(() => {
-      this.dismissSuccess()
-    }, 5000)
+    this.scheduleSuccessDismiss(
+      setTimeout(() => {
+        this.dismissSuccess()
+      }, 5000),
+    )
   }
 
   get localProvider(): LocalProviderLookup {

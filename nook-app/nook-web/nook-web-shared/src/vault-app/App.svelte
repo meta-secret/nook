@@ -74,7 +74,7 @@
     updateApplicationDocument,
   } from '$lib/app-browser-lifecycle'
   import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
-  import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+  import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
   const vault = new VaultState()
   const vaultSecurityRecommendations = $derived(
     assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),

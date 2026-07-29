@@ -28,12 +28,12 @@ export type SyncConflictReview =
       kind: SyncConflictReviewKind.RequiresDecision
       conflict: NookPendingSyncConflict
     }
-enum LocalFolderHealthKind {
+export enum LocalFolderHealthKind {
   Healthy = 'healthy',
   MultipleVaults = 'multiple-vaults',
 }
 
-type LocalFolderHealth =
+export type LocalFolderHealth =
   | { kind: LocalFolderHealthKind.Healthy }
   | {
       kind: LocalFolderHealthKind.MultipleVaults
@@ -46,12 +46,7 @@ export class VaultSyncState {
   get lastSync(): LastSync {
     return this.lastSyncedState
   }
-  get lastSyncedAt(): SvelteDate | void {
-    if (this.lastSyncedState.kind === LastSyncKind.Synced)
-      return this.lastSyncedState.at
-    return
-  }
-  set lastSyncedAt(value: SvelteDate) {
+  markSynced(value: SvelteDate): void {
     this.lastSyncedState = { kind: LastSyncKind.Synced, at: value }
   }
   isSyncing = $state(false)
@@ -62,15 +57,10 @@ export class VaultSyncState {
   get manualProviderSync(): ManualProviderSync {
     return this.syncingProviderState
   }
-  get syncingProviderId(): string | void {
-    if (this.syncingProviderState.kind === ManualProviderSyncKind.Running)
-      return this.syncingProviderState.providerId
-    return
-  }
   get manualProviderSyncRunning(): boolean {
     return this.syncingProviderState.kind === ManualProviderSyncKind.Running
   }
-  set syncingProviderId(value: string) {
+  beginManualProviderSync(value: string): void {
     this.syncingProviderState = {
       kind: ManualProviderSyncKind.Running,
       providerId: value,
@@ -115,14 +105,10 @@ export class VaultSyncState {
   private localFolderIssueState = $state<LocalFolderHealth>({
     kind: LocalFolderHealthKind.Healthy,
   })
-  get localFolderMultipleVaultsIssue(): LocalFolderMultipleVaultsIssue | void {
-    if (
-      this.localFolderIssueState.kind === LocalFolderHealthKind.MultipleVaults
-    )
-      return this.localFolderIssueState.issue
-    return
+  get localFolderHealth(): LocalFolderHealth {
+    return this.localFolderIssueState
   }
-  set localFolderMultipleVaultsIssue(value: LocalFolderMultipleVaultsIssue) {
+  reportLocalFolderMultipleVaults(value: LocalFolderMultipleVaultsIssue): void {
     this.localFolderIssueState = {
       kind: LocalFolderHealthKind.MultipleVaults,
       issue: value,

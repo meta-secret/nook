@@ -5,6 +5,7 @@ import {
   findOneTimeCodeFields,
   findPasskeyControl,
   pageHasPasskeyControl,
+  PasskeyControlLookupKind,
   PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
@@ -542,14 +543,20 @@ describe('passkey control detection', () => {
     document.body.innerHTML = `
       <button type="button" data-nook-passkey-control>Continue</button>
     `
-    expect(
-      findPasskeyControl()?.getAttribute('data-nook-passkey-control'),
-    ).toBe('')
+    const marked = findPasskeyControl()
+    expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
+    if (marked.kind === PasskeyControlLookupKind.Found) {
+      expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
+    }
 
     document.body.innerHTML = `
       <button type="button">Sign in with a passkey</button>
     `
-    expect(findPasskeyControl()?.textContent).toContain('passkey')
+    const labeled = findPasskeyControl()
+    expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
+    if (labeled.kind === PasskeyControlLookupKind.Found) {
+      expect(labeled.control.textContent).toContain('passkey')
+    }
     expect(pageHasPasskeyControl()).toBe(true)
   })
 })

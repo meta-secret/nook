@@ -10,7 +10,11 @@ import {
   type ExtensionConnectRequestState,
 } from '$lib/extension-connect'
 import type { ExtensionSetupState } from '$lib/extension-install'
-import type { LegalPageId } from '$lib/legal-content'
+import {
+  LegalPageLookupKind,
+  type LegalPageId,
+  type LegalPageLookup,
+} from '$lib/legal-content'
 
 export enum ColorMode {
   Light = 'light',
@@ -42,9 +46,9 @@ export type LegalRoute =
   | { kind: LegalRouteKind.Application }
   | { kind: LegalRouteKind.Legal; page: LegalPageId }
 
-export function legalRoute(page: LegalPageId | void): LegalRoute {
-  return page
-    ? { kind: LegalRouteKind.Legal, page }
+export function legalRoute(page: LegalPageLookup): LegalRoute {
+  return page.kind === LegalPageLookupKind.LegalPage
+    ? { kind: LegalRouteKind.Legal, page: page.page }
     : { kind: LegalRouteKind.Application }
 }
 

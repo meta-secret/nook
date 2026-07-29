@@ -4,7 +4,7 @@ import {
   InstalledExtensionRuntimeKind,
   readInstalledExtensionRuntimeId,
 } from '$lib/extension-connect'
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
 
 export enum ExtensionInstallMethod {
   ChromeWebStore = 'chrome_web_store',
