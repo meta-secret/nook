@@ -656,10 +656,9 @@ mod tests {
         let before_event_ids = local.event_ids();
         let before_outbox = local.pending_outbox("drive");
 
-        let err = union_remote_events(&mut local, &[(remote_id.clone(), remote_bytes)], STORE)
-            .expect_err("invalid existing graph should reject the staged union");
+        let result = union_remote_events(&mut local, &[(remote_id.clone(), remote_bytes)], STORE);
 
-        assert!(matches!(err, EventError::ParseStoredEvent(_)));
+        assert!(matches!(result, Err(EventError::ParseStoredEvent(_))));
         assert_eq!(local.event_ids(), before_event_ids);
         assert_eq!(
             local.get_bytes(&existing_id),
