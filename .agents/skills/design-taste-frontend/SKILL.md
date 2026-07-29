@@ -9,9 +9,11 @@ Ship Nook interfaces that feel deliberate, calm, trustworthy, and distinctly
 crafted without weakening product truth or security boundaries.
 
 This skill is Nook-specific. Do not translate examples from React, Next.js, or
-another design system into this repository. Read
-[`impeccable`](../impeccable/SKILL.md) as the design workflow and use this skill
-as Nook's Svelte implementation and visual-quality layer.
+another design system into this repository. Read the externally managed
+`impeccable` skill as the design workflow and use this skill as Nook's Svelte
+implementation and visual-quality layer. If it is unavailable, run
+`task impeccable:install` and restart the agent harness so it discovers the
+generated local skill.
 
 ## 1. Start With Evidence
 

@@ -16,8 +16,8 @@ use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::verify_main_repair_delivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
-    TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimOutcome, ClaimedTask,
+    CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
@@ -236,25 +236,7 @@ impl<S: TaskStore> Worker<S> {
                         summary, blocker, ..
                     } = &result
                     {
-                        if blocker.id == task.id {
-                            return Err(anyhow!(
-                                "a blocked task cannot name itself as its blocker"
-                            ));
-                        }
-                        let blocker = EnqueueTask {
-                            id: blocker.id.clone(),
-                            kind: "blocker".to_owned(),
-                            trigger: TaskTrigger::AgentDependency,
-                            prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
-                            source_commit: task.source_commit.clone(),
-                            priority: if task.kind == "main-repair" { 200 } else { 10 },
-                            max_attempts: 3,
-                            dependencies: Vec::new(),
-                        };
-                        return Ok(TaskDisposition::Blocked {
-                            blocker,
-                            reason: bounded(summary),
-                        });
+                        return Ok(blocked_disposition(task, summary, blocker));
                     }
                     if task.kind == "main-repair" {
                         verify_main_repair_delivery(
@@ -306,6 +288,17 @@ impl<S: TaskStore> Worker<S> {
                             .block(task, &self.config.agent_id, &blocker, &reason)
                             .await?
                         {
+                            return Err(WorkerCancellationRequested.into());
+                        }
+                        Err(WorkerBlocked.into())
+                    }
+                    TaskDisposition::Deferred { reason } => {
+                        eprintln!(
+                            "Hive task {} deferred without consuming an attempt: {}",
+                            task.id,
+                            bounded(&reason)
+                        );
+                        if !self.store.release(task, &self.config.agent_id).await? {
                             return Err(WorkerCancellationRequested.into());
                         }
                         Err(WorkerBlocked.into())
@@ -400,6 +393,34 @@ enum TaskDisposition {
         blocker: EnqueueTask,
         reason: String,
     },
+    Deferred {
+        reason: String,
+    },
+}
+
+fn blocked_disposition(
+    task: &ClaimedTask,
+    summary: &str,
+    blocker: &BlockerRequest,
+) -> TaskDisposition {
+    if blocker.id == task.id {
+        return TaskDisposition::Deferred {
+            reason: bounded(summary),
+        };
+    }
+    TaskDisposition::Blocked {
+        blocker: EnqueueTask {
+            id: blocker.id.clone(),
+            kind: "blocker".to_owned(),
+            trigger: TaskTrigger::AgentDependency,
+            prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
+            source_commit: task.source_commit.clone(),
+            priority: if task.kind == "main-repair" { 200 } else { 10 },
+            max_attempts: 3,
+            dependencies: Vec::new(),
+        },
+        reason: bounded(summary),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -898,11 +919,13 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::{
-        MAX_PERSISTED_RESULT_BYTES, bounded, establish_worker_lifecycle, persistable_patch,
-        prepare_workspace, task_prompt, validate_dependency_artifacts,
+        MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
+        establish_worker_lifecycle, persistable_patch, prepare_workspace, task_prompt,
+        validate_dependency_artifacts,
     };
     use crate::model::{
-        Artifact, AttemptId, ClaimedTask, CompletionArtifact, LeaseToken, TaskId, TerminalResult,
+        Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
+        TerminalResult,
     };
     use sha2::{Digest, Sha256};
 
@@ -914,6 +937,32 @@ mod tests {
         assert!(bounded.is_char_boundary(bounded.len()));
         assert!(bounded.len() <= MAX_PERSISTED_RESULT_BYTES + "\n[truncated]".len());
         assert!(bounded.ends_with("[truncated]"));
+    }
+
+    #[test]
+    fn self_named_external_blocker_defers_without_creating_a_dependency() -> anyhow::Result<()> {
+        let task = ClaimedTask {
+            id: TaskId::new("github-actions-pr-42")?,
+            kind: "blocker".to_owned(),
+            prompt: "Wait for the exact-head workflow".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-1")?,
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let blocker = BlockerRequest {
+            id: task.id.clone(),
+            title: "Workflow still running".to_owned(),
+            prompt: "Check the same workflow again later.".to_owned(),
+        };
+
+        assert!(matches!(
+            blocked_disposition(&task, "workflow pending", &blocker),
+            TaskDisposition::Deferred { reason } if reason == "workflow pending"
+        ));
+        Ok(())
     }
 
     #[test]

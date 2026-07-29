@@ -27,10 +27,17 @@ a failing invariant. Full critical contract:
 ## ⛔ Non-negotiable: load both design skills for every UI task
 
 Before designing, implementing, or reviewing any user-visible website or browser
-extension UI, agents MUST read and use both installed skills:
+extension UI, agents MUST read and use both skills:
 
 - [`design-taste-frontend`](../.agents/skills/design-taste-frontend/SKILL.md)
-- [`impeccable`](../.agents/skills/impeccable/SKILL.md)
+- `impeccable`, generated locally with `task impeccable:install`
+
+The upstream Impeccable distribution is a pinned, generated dependency rather
+than authored Nook source. It MUST NOT be committed. A fresh checkout or
+isolated worker runs `task impeccable:install`, then restarts its agent harness
+so Codex discovers `.agents/skills/impeccable/SKILL.md`. Run its executable
+setup through `task impeccable:context -- <arguments>`; repository hooks use
+the same pinned Docker runtime.
 
 This applies to new screens, redesigns, component and style changes, responsive
 behavior, interaction states, and visual polish.

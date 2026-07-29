@@ -3,12 +3,20 @@
 ## Rule
 
 Every task that designs, implements, or reviews user-visible UI must first read
-and use both installed skills:
+and use both skills:
 
-- [`impeccable`](../../.agents/skills/impeccable/SKILL.md)
+- `impeccable`, generated locally with `task impeccable:install`
 - [`design-taste-frontend`](../../.agents/skills/design-taste-frontend/SKILL.md)
 
 Do not treat either skill as an optional finishing pass.
+
+Impeccable is an upstream toolchain dependency. Its generated
+`.agents/skills/impeccable/` tree is ignored and MUST NOT be committed or
+edited as Nook source. Fresh checkouts and isolated workers must run
+`task impeccable:install` before starting the agent harness, then restart the
+harness for skill discovery. Use `task impeccable:context -- <arguments>` for
+the setup step and the repository Task targets for executable hook operations;
+these run in the pinned Docker image without a host Node installation.
 
 This includes:
 
@@ -20,8 +28,9 @@ This includes:
 ## Apply It In Nook
 
 1. Read both complete skill entry points before changing UI.
-2. Follow Impeccable's setup: run its context script once per session, load the
-   one playbook that owns the request, and inspect an incumbent source of visual
+2. Follow Impeccable's setup: run
+   `task impeccable:context -- <arguments>` once per session, load the one
+   playbook that owns the request, and inspect an incumbent source of visual
    truth. Load its `craft-floor.md` immediately before editing UI.
 3. Classify the surface with Impeccable's Persuade, Operate, Read, or Experience
    mode. Make the taste skill's one-line design read before implementation and
