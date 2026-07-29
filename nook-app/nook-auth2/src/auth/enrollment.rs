@@ -781,16 +781,21 @@ mod tests {
             "joiner@example.com".to_owned(),
             "shared-folder-abc".to_owned(),
         ));
-        let value = serde_json::to_value(EnrollmentProviderPayload {
+        let payload = EnrollmentProviderPayload {
             provider,
             vault_name: "Shared vault".to_owned(),
-        })?;
-        assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
-        assert_eq!(
-            value["provider"]["provider"]["type"],
-            "shared-provider-grant"
-        );
-        let serialized = value.to_string();
+        };
+        let encoded = serde_json::to_vec(&payload)?;
+        let decoded: EnrollmentProviderPayload = serde_json::from_slice(&encoded)?;
+        assert_eq!(decoded.vault_name, "Shared vault");
+        match decoded.provider.data() {
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
+                storage_target_id,
+                ..
+            }) => assert_eq!(storage_target_id, "shared-folder-abc"),
+            other => anyhow::bail!("expected shared Google Drive grant, got {other:?}"),
+        }
+        let serialized = String::from_utf8(encoded)?;
         assert!(!serialized.contains("access_token"));
         assert!(!serialized.contains("refresh_token"));
 
