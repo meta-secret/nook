@@ -5,7 +5,7 @@
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
 use super::multi_device::{
-    DeviceIdentity, SentinelShareEnvelope, VaultMember, VaultMetaRecord, build_members_records,
+    DeviceIdentity, VaultMember, VaultMetaRecord, build_members_records,
     create_sentinel_root_share_records_for_recipients, dec_auth_id_from_public_key,
     device_id_from_public_key, generate_id,
 };
@@ -13,7 +13,7 @@ pub use super::sentinel_genesis_types::*;
 use super::sentinel_signing;
 use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
-    MultiDeviceResult, StoreId,
+    MultiDeviceResult, StoreId, StoredSecretRecord,
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signer, SigningKey};

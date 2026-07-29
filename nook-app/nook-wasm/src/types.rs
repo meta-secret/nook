@@ -7,11 +7,13 @@ use crate::NookVaultManager;
 use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod authentication;
 mod conflicts;
 mod core;
 mod runtime;
 mod sync;
 
+pub use authentication::*;
 pub use conflicts::*;
 pub use core::*;
 pub use runtime::*;
