@@ -49,6 +49,7 @@ enum Request {
     Complete {
         task: ClaimedTask,
         agent_id: AgentId,
+        obsolete: bool,
         summary: String,
         artifact: CompletionArtifact,
     },
@@ -259,12 +260,14 @@ impl TaskStore for CoordinatorTaskStore {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> crate::HiveResult<bool> {
         self.accepted(Request::Complete {
             task: task.clone(),
             agent_id: agent_id.clone(),
+            obsolete,
             summary: summary.to_owned(),
             artifact: artifact.clone(),
         })
@@ -387,11 +390,12 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> crate::Hiv
         Request::Complete {
             task,
             agent_id,
+            obsolete,
             summary,
             artifact,
         } => Ok(Response::Accepted(
             store
-                .complete(&task, &agent_id, &summary, &artifact)
+                .complete(&task, &agent_id, obsolete, &summary, &artifact)
                 .await?,
         )),
         Request::Fail {

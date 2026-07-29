@@ -383,6 +383,32 @@ tasks:
           -e "s|HIVE_NEO4J_ENDPOINT_CIDR|$neo4j_endpoint_ip/32|g" \
           -e "s|HIVE_K0S_API_CIDR|$k0s_api_ip/32|g" \
           "$remote_dir/infra/k0s/manifests/hive/network-policy.yaml" >> "$rendered"
+        for deployment in hive hive-workbench-dispatcher hive-observer; do
+          if kubectl get "deployment/$deployment" \
+            --namespace hive-system >/dev/null 2>&1; then
+            kubectl scale "deployment/$deployment" \
+              --namespace hive-system \
+              --replicas=0
+            kubectl rollout status "deployment/$deployment" \
+              --namespace hive-system \
+              --timeout=5m
+            for attempt in $(seq 1 60); do
+              if [ -z "$(
+                kubectl get pods \
+                  --namespace hive-system \
+                  --selector "app.kubernetes.io/name=$deployment" \
+                  --output name
+              )" ]; then
+                break
+              fi
+              if [ "$attempt" -eq 60 ]; then
+                echo "Timed out draining graph client deployment/$deployment" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+          fi
+        done
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
         kubectl apply -f "$rendered"
         kubectl rollout status deployment/hive \

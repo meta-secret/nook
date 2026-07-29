@@ -514,6 +514,7 @@ mod tests {
             &self,
             _: &ClaimedTask,
             _: &AgentId,
+            _: bool,
             _: &str,
             _: &CompletionArtifact,
         ) -> crate::HiveResult<bool> {

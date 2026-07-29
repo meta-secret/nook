@@ -13,7 +13,9 @@ use crate::model::{
 use crate::store::TaskStore;
 
 mod admin;
+mod block;
 mod claim_retry;
+mod rearm;
 
 const CONSTRAINTS: &[&str] = &[
     "CREATE CONSTRAINT hive_task_id IF NOT EXISTS FOR (node:Task) REQUIRE node.id IS UNIQUE",
@@ -24,7 +26,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 7;
+const LATEST_SCHEMA_VERSION: i64 = 8;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     pub(crate) graph: Graph,
@@ -118,6 +120,24 @@ impl TaskStore for Neo4jTaskStore {
                 .await
                 .hive_context("failed to backfill schema-7 latest activity state")?;
         }
+        if installed_version < 8 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     WHERE task.obsolete IS NULL
+                     SET task.obsolete = false",
+                ))
+                .await
+                .hive_context("failed to backfill schema-8 task retirement state")?;
+            self.graph
+                .run(query(
+                    "MATCH (attempt:Attempt)
+                     WHERE attempt.obsolete IS NULL
+                     SET attempt.obsolete = false",
+                ))
+                .await
+                .hive_context("failed to backfill schema-8 attempt retirement state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -165,6 +185,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.attempt_count = 0,
                                    task.last_retry_release = '',
                                    task.version = 0,
+                                   task.obsolete = false,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
                                    task.trigger_kind = $trigger_kind,
@@ -172,6 +193,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.source_commit = $source_commit,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
+                                   task.status = 'BLOCKED',
                                    task.updated_at = timestamp()
                      RETURN task.enqueue_token = $enqueue_token AS created",
                 )
@@ -201,6 +223,7 @@ impl TaskStore for Neo4jTaskStore {
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
                          WHERE dependency.source_commit = task.source_commit
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
+                         SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",
                     )
                     .param("id", task.id.as_str())
@@ -214,6 +237,8 @@ impl TaskStore for Neo4jTaskStore {
                     "dependency {dependency} does not exist or targets a different source commit"
                 ));
             }
+            drop(rows);
+            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
         }
 
         transaction
@@ -526,6 +551,26 @@ impl TaskStore for Neo4jTaskStore {
                           [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
                           [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
                           [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH DISTINCT task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents, active_owner
+                     ORDER BY active_owner.id
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          collect(active_owner) AS active_owners
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          CASE
+                            WHEN size(active_owners) > 0
+                              AND all(owner IN active_owners WHERE owner.kind = 'main-repair')
+                            THEN [owner IN active_owners | owner.id]
+                            ELSE []
+                          END AS owning_repair_ids
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
                      WHERE expired_attempt.lease_token = task.lease_token
                      OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
@@ -545,12 +590,13 @@ impl TaskStore for Neo4jTaskStore {
                        id: $attempt_id,
                        number: task.attempt_count,
                        status: 'RUNNING',
+                       obsolete: false,
                        started_at: timestamp(),
                        lease_token: $lease_token
                      })
                      WITH task, attempt, dependency_ids, dependency_summaries,
                           artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents
+                          artifact_contents, owning_repair_ids
                      MATCH (agent:Agent {id: $agent_id})
                      MERGE (agent)-[:EXECUTED]->(attempt)
                      MERGE (attempt)-[:FOR_TASK]->(task)
@@ -560,6 +606,7 @@ impl TaskStore for Neo4jTaskStore {
                             task.prompt AS prompt,
                             task.source_commit AS source_commit,
                             attempt.number AS attempt_number,
+                            owning_repair_ids,
                             dependency_ids,
                             dependency_summaries,
                             artifact_ids,
@@ -581,7 +628,7 @@ impl TaskStore for Neo4jTaskStore {
                 };
                 let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
                 transaction.commit().await?;
-                Ok(ClaimOutcome::Claimed(claimed))
+                Ok(ClaimOutcome::Claimed(Box::new(claimed)))
             }
             .await;
 
@@ -593,7 +640,9 @@ impl TaskStore for Neo4jTaskStore {
                 },
             }
         }
-        unreachable!("bounded claim retry loop always returns")
+        Err(crate::hive_error!(
+            "Neo4j claim retry budget exhausted after transient failures"
+        ))
     }
 
     async fn heartbeat(
@@ -713,6 +762,7 @@ impl TaskStore for Neo4jTaskStore {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> crate::HiveResult<bool> {
@@ -726,13 +776,29 @@ impl TaskStore for Neo4jTaskStore {
                        AND task.lease_token = $lease_token
                        AND task.lease_until > timestamp()
                        AND attempt.lease_token = $lease_token
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH task, attempt, collect(DISTINCT active_owner) AS active_owners
+                     WHERE NOT $obsolete
+                        OR (
+                          size($owning_repair_ids) > 0
+                          AND size(active_owners) = size($owning_repair_ids)
+                          AND all(
+                            owner IN active_owners
+                            WHERE owner.kind = 'main-repair'
+                              AND owner.id IN $owning_repair_ids
+                          )
+                        )
                      SET task.status = 'COMPLETED',
+                         task.obsolete = $obsolete,
                          task.result_summary = $summary,
                          task.updated_at = timestamp(),
                          task.lease_owner = null,
                          task.lease_token = null,
                          task.lease_until = null,
                          attempt.status = 'COMPLETED',
+                         attempt.obsolete = $obsolete,
                          attempt.summary = $summary,
                          attempt.completed_at = timestamp()
                      WITH task
@@ -744,6 +810,14 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
+                .param("obsolete", obsolete)
+                .param(
+                    "owning_repair_ids",
+                    task.owning_repairs
+                        .iter()
+                        .map(|owner| owner.as_str())
+                        .collect::<Vec<_>>(),
+                )
                 .param("summary", summary),
             )
             .await?;
@@ -874,88 +948,6 @@ impl TaskStore for Neo4jTaskStore {
         if !blocker.dependencies.is_empty() {
             crate::hive_bail!("a newly discovered blocker must not have undeclared dependencies");
         }
-        let mut rows = self
-            .graph
-            .execute(
-                query(
-                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
-                     WHERE task.status = 'RUNNING'
-                       AND task.lease_owner = $agent_id
-                       AND task.lease_token = $lease_token
-                       AND task.lease_until > timestamp()
-                       AND attempt.lease_token = $lease_token
-                     MERGE (blocker:Task {id: $blocker_id})
-                     ON CREATE SET blocker.created_at = timestamp(),
-                                   blocker.attempt_count = 0,
-                                   blocker.version = 0,
-                                   blocker.kind = $blocker_kind,
-                                   blocker.trigger_kind = $blocker_trigger_kind,
-                                   blocker.prompt = $blocker_prompt,
-                                   blocker.source_commit = $source_commit,
-                                   blocker.priority = $blocker_priority,
-                                   blocker.max_attempts = $blocker_max_attempts,
-                                   blocker.status = 'READY',
-                                   blocker.updated_at = timestamp()
-                     WITH task, attempt, blocker
-                     WHERE blocker.source_commit = $source_commit
-                       AND blocker.id <> task.id
-                       AND NOT EXISTS {
-                         MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
-                       }
-                     MERGE (task)-[:DEPENDS_ON]->(blocker)
-                     SET task.status = CASE
-                             WHEN blocker.status = 'COMPLETED' THEN 'READY'
-                             WHEN blocker.status = 'FAILED' THEN 'FAILED'
-                             ELSE 'BLOCKED'
-                         END,
-                         task.attempt_count = task.attempt_count - 1,
-                         task.blocked_reason = CASE
-                           WHEN blocker.status = 'COMPLETED' THEN null
-                           ELSE $reason
-                         END,
-                         task.failure_reason = CASE
-                           WHEN blocker.status = 'FAILED'
-                           THEN 'discovered blocker has already exhausted its retry budget'
-                           ELSE null
-                         END,
-                         task.updated_at = timestamp(),
-                         task.lease_owner = null,
-                         task.lease_token = null,
-                         task.lease_until = null,
-                         attempt.status = 'BLOCKED',
-                         attempt.error = $reason,
-                         attempt.completed_at = timestamp()
-                     WITH task, blocker
-                     OPTIONAL MATCH (dependent:Task)-[:DEPENDS_ON*1..]->(task)
-                     WITH task, blocker, collect(dependent) AS dependents
-                     FOREACH (dependent IN CASE
-                       WHEN blocker.status = 'FAILED' THEN dependents
-                       ELSE []
-                     END |
-                       SET dependent.status = 'FAILED',
-                           dependent.failure_reason =
-                             'upstream task reused an exhausted blocker',
-                           dependent.updated_at = timestamp()
-                     )
-                     WITH task
-                     MATCH (agent:Agent {id: $agent_id})
-                     SET agent.status = 'IDLE', agent.last_seen_at = timestamp()
-                     RETURN task.id AS id",
-                )
-                .param("task_id", task.id.as_str())
-                .param("attempt_id", task.attempt_id.as_str())
-                .param("agent_id", agent_id.as_str())
-                .param("lease_token", task.lease_token.as_str())
-                .param("blocker_id", blocker.id.as_str())
-                .param("blocker_kind", blocker.kind.as_str())
-                .param("blocker_trigger_kind", blocker.trigger.as_str())
-                .param("blocker_prompt", blocker.prompt.as_str())
-                .param("source_commit", blocker.source_commit.as_str())
-                .param("blocker_priority", blocker.priority)
-                .param("blocker_max_attempts", blocker.max_attempts)
-                .param("reason", reason),
-            )
-            .await?;
-        Ok(rows.next().await?.is_some())
+        self.block_task(task, agent_id, blocker, reason).await
     }
 }

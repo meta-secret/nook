@@ -174,6 +174,45 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
+    for manifest in [
+        "infra/k0s/manifests/hive/deployment.yaml",
+        "infra/k0s/manifests/hive/dispatcher.yaml",
+        "infra/k0s/manifests/hive/observer.yaml",
+    ] {
+        let deployment = read(manifest);
+        assert!(
+            deployment.contains("strategy:\n    type: Recreate"),
+            "{manifest} must drain its prior graph-schema revision before starting a new one"
+        );
+    }
+    let deployment_tasks = read("infra/tasks/hive.yml");
+    for required in [
+        "for deployment in hive hive-workbench-dispatcher hive-observer",
+        "kubectl scale \"deployment/$deployment\"",
+        "--replicas=0",
+        "--selector \"app.kubernetes.io/name=$deployment\"",
+        "Timed out draining graph client deployment/$deployment",
+    ] {
+        assert!(
+            deployment_tasks.contains(required),
+            "Hive graph-client rollout is missing: {required}"
+        );
+    }
+    let drain = deployment_tasks
+        .find("kubectl scale \"deployment/$deployment\"")
+        .context("graph-client drain must exist")?;
+    let apply = deployment_tasks
+        .find("kubectl apply -f \"$rendered\"")
+        .context("Hive manifest apply must exist")?;
+    assert!(
+        drain < apply,
+        "every old graph client must stop before the new revision is applied"
+    );
+    Ok(())
+}
+
 fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [

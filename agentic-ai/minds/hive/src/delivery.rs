@@ -6,7 +6,7 @@ use crate::HiveContext;
 use serde::Deserialize;
 use tokio::process::Command;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryPullRequest {
     number: u64,
@@ -20,17 +20,17 @@ struct DeliveryPullRequest {
     status_check_rollup: Vec<DeliveryCheck>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 struct DeliveryLabel {
     name: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 struct DeliveryCommit {
     oid: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryCheck {
     name: String,
@@ -54,6 +54,34 @@ pub(crate) async fn verify_main_repair_delivery(
     branch: &str,
     task_id: &str,
 ) -> crate::HiveResult<()> {
+    let (pull_request, successful_main_sha) =
+        main_repair_merge_and_main(repository, branch).await?;
+    validate_repository_checks(&pull_request, true)?;
+    validate_full_e2e_checks(&pull_request, true)?;
+    validate_review_and_deployment_readiness(repository, &pull_request).await?;
+    validate_workbench_completion(
+        repository,
+        task_id,
+        &pull_request,
+        successful_main_sha.as_str(),
+    )
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn verify_main_repair_merge_and_main(
+    repository: &Path,
+    branch: &str,
+) -> crate::HiveResult<()> {
+    main_repair_merge_and_main(repository, branch)
+        .await
+        .map(|_| ())
+}
+
+async fn main_repair_merge_and_main(
+    repository: &Path,
+    branch: &str,
+) -> crate::HiveResult<(DeliveryPullRequest, String)> {
     let pull_requests: Vec<DeliveryPullRequest> = serde_json::from_str(
         &gh_output(
             repository,
@@ -72,13 +100,11 @@ pub(crate) async fn verify_main_repair_delivery(
     )
     .hive_context("GitHub returned invalid Hive pull request state")?;
     let pull_request = latest_delivery_generation(&pull_requests, branch)?
-        .hive_context("Hive repair delivery is incomplete: no pull request generation exists")?;
+        .hive_context("Hive repair delivery is incomplete: no pull request generation exists")?
+        .clone();
 
-    validate_hive_marker(pull_request)?;
-    validate_merged_hive_pull_request(pull_request)?;
-    validate_repository_checks(pull_request)?;
-    validate_full_e2e_checks(pull_request)?;
-    validate_review_and_deployment_readiness(repository, pull_request).await?;
+    validate_hive_marker(&pull_request)?;
+    validate_merged_hive_pull_request(&pull_request)?;
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
@@ -101,7 +127,7 @@ pub(crate) async fn verify_main_repair_delivery(
         "verify Main contains the Hive repair merge",
     )
     .await?;
-    validate_squash_merge(repository, pull_request).await?;
+    validate_squash_merge(repository, &pull_request).await?;
 
     let mut runs: Vec<DeliveryRun> = serde_json::from_str(
         &gh_output(
@@ -144,9 +170,9 @@ pub(crate) async fn verify_main_repair_delivery(
         }
         applicable_runs.push(run);
     }
-    let successful_main_sha = select_successful_main_run(&applicable_runs, &merge_commit.oid)?;
-    validate_workbench_completion(repository, task_id, pull_request, successful_main_sha).await?;
-    Ok(())
+    let successful_main_sha =
+        select_successful_main_run(&applicable_runs, &merge_commit.oid)?.to_owned();
+    Ok((pull_request, successful_main_sha))
 }
 
 fn select_successful_main_run<'a>(
@@ -282,7 +308,10 @@ fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> crat
     Ok(())
 }
 
-fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
+fn validate_full_e2e_checks(
+    pull_request: &DeliveryPullRequest,
+    successful_main_contains_merge: bool,
+) -> crate::HiveResult<()> {
     if !pull_request
         .labels
         .iter()
@@ -298,12 +327,12 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> crate::HiveRe
         "Full browser e2e (main fix)",
         "Full extension e2e (main fix)",
     ] {
-        let successful = pull_request
+        let matching = pull_request
             .status_check_rollup
             .iter()
             .filter(|check| check.name == required_check)
-            .any(successful_check);
-        if !successful {
+            .collect::<Vec<_>>();
+        if !successful_or_merge_cancelled(&matching, successful_main_contains_merge) {
             crate::hive_bail!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number,
@@ -315,13 +344,16 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> crate::HiveRe
     Ok(())
 }
 
-fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
-    let verify_succeeded = pull_request
+fn validate_repository_checks(
+    pull_request: &DeliveryPullRequest,
+    successful_main_contains_merge: bool,
+) -> crate::HiveResult<()> {
+    let verify_checks = pull_request
         .status_check_rollup
         .iter()
         .filter(|check| check.name == "Verify and preview")
-        .any(successful_check);
-    if !verify_succeeded {
+        .collect::<Vec<_>>();
+    if !successful_or_merge_cancelled(&verify_checks, successful_main_contains_merge) {
         crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
             pull_request.number,
@@ -338,6 +370,12 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> crate::Hive
         }
     }
     for (name, checks) in repository_checks {
+        if matches!(
+            name,
+            "Verify and preview" | "Full browser e2e (main fix)" | "Full extension e2e (main fix)"
+        ) {
+            continue;
+        }
         if checks.iter().any(|check| successful_check(check)) {
             continue;
         }
@@ -361,6 +399,26 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> crate::Hive
 
 fn successful_check(check: &DeliveryCheck) -> bool {
     check.status == "COMPLETED" && check.conclusion == "SUCCESS"
+}
+
+fn successful_or_merge_cancelled(
+    checks: &[&DeliveryCheck],
+    successful_main_contains_merge: bool,
+) -> bool {
+    if checks.iter().any(|check| successful_check(check)) {
+        return true;
+    }
+    successful_main_contains_merge
+        && checks
+            .iter()
+            .any(|check| check.status == "COMPLETED" && check.conclusion == "CANCELLED")
+        && checks.iter().all(|check| {
+            check.status == "COMPLETED"
+                && matches!(
+                    check.conclusion.as_str(),
+                    "CANCELLED" | "SKIPPED" | "NEUTRAL"
+                )
+        })
 }
 
 async fn validate_review_and_deployment_readiness(
@@ -795,13 +853,13 @@ mod tests {
     }
 
     #[test]
-    fn delivery_requires_the_full_e2e_label() -> anyhow::Result<()> {
+    fn delivery_requires_the_full_e2e_label() -> crate::HiveResult<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request
             .labels
             .retain(|label| label.name != "ci:full-e2e");
 
-        let error = validate_full_e2e_checks(&pull_request)
+        let error = validate_full_e2e_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
                 crate::hive_error!("a Hive repair without the opt-in label cannot complete")
@@ -822,12 +880,12 @@ mod tests {
             workflow_name: "PR".to_owned(),
         });
 
-        validate_full_e2e_checks(&pull_request)?;
+        validate_full_e2e_checks(&pull_request, false)?;
         Ok(())
     }
 
     #[test]
-    fn repository_workflow_failure_without_success_is_rejected() -> anyhow::Result<()> {
+    fn repository_workflow_failure_without_success_is_rejected() -> crate::HiveResult<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
@@ -837,13 +895,58 @@ mod tests {
             workflow_name: "Hive".to_owned(),
         });
 
-        let error = validate_repository_checks(&pull_request)
+        let error = validate_repository_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
                 crate::hive_error!(
                     "a failed applicable repository workflow cannot complete a Hive task"
                 )
             })?;
+        assert!(error.to_string().contains("Hive Rust"));
+        Ok(())
+    }
+
+    #[test]
+    fn successful_main_accepts_checks_cancelled_by_the_squash_merge() -> crate::HiveResult<()> {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        for check in &mut pull_request.status_check_rollup {
+            check.conclusion = "CANCELLED".to_owned();
+        }
+
+        validate_repository_checks(&pull_request, true)?;
+        validate_full_e2e_checks(&pull_request, true)?;
+        Ok(())
+    }
+
+    #[test]
+    fn successful_main_does_not_hide_a_failed_pr_check() -> crate::HiveResult<()> {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        pull_request.status_check_rollup[0].conclusion = "FAILURE".to_owned();
+        pull_request.status_check_rollup[1].conclusion = "CANCELLED".to_owned();
+
+        let error = validate_full_e2e_checks(&pull_request, true)
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!("a failed exact-head e2e run remains a delivery failure")
+            })?;
+        assert!(error.to_string().contains("Full browser e2e"));
+        Ok(())
+    }
+
+    #[test]
+    fn successful_main_does_not_replace_cancelled_hive_verification() -> crate::HiveResult<()> {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        pull_request.status_check_rollup.push(DeliveryCheck {
+            name: "Hive Rust and infrastructure verification".to_owned(),
+            status: "COMPLETED".to_owned(),
+            conclusion: "CANCELLED".to_owned(),
+            started_at: "2026-07-28T02:00:00Z".to_owned(),
+            workflow_name: "Hive".to_owned(),
+        });
+
+        let error = validate_repository_checks(&pull_request, true)
+            .err()
+            .ok_or_else(|| crate::hive_error!("Main does not exercise Hive-only verification"))?;
         assert!(error.to_string().contains("Hive Rust"));
         Ok(())
     }

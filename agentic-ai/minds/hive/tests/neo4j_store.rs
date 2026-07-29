@@ -10,6 +10,11 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
 
+#[path = "neo4j_store/rearm.rs"]
+mod rearm;
+#[path = "neo4j_store/schema.rs"]
+mod schema;
+
 fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     Ok(EnqueueTask {
         id: TaskId::new(id)?,
@@ -84,6 +89,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &dependency_claim,
                 &agent_a,
+                false,
                 "dependency complete",
                 &CompletionArtifact::Produced(artifact.clone()),
             )
@@ -131,7 +137,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let (stale_claim, stale_agent, retry_agent) = match (claim_b, claim_c) {
         (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask) => (claim, &agent_b, &agent_c),
         (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => (claim, &agent_c, &agent_b),
-        _ => panic!("only one worker may win a claim"),
+        _ => return Err(anyhow::anyhow!("only one worker may win a claim")),
     };
     assert_eq!(
         stale_claim.dependency_artifacts,
@@ -217,6 +223,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &stale_claim,
                 stale_agent,
+                false,
                 "stale completion",
                 &CompletionArtifact::NotProduced
             )
@@ -234,6 +241,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &retry_claim,
                 retry_agent,
+                false,
                 "retry complete",
                 &CompletionArtifact::Produced(dependent_artifact.clone()),
             )
@@ -252,6 +260,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &descendant_claim,
                 &agent_a,
+                false,
                 "descendant complete",
                 &CompletionArtifact::NotProduced
             )
@@ -280,6 +289,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .complete(
                     &claim,
                     &agent_a,
+                    false,
                     "branch complete",
                     &CompletionArtifact::Produced(branch_artifact.clone())
                 )
@@ -306,11 +316,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &diamond_claim,
                 &agent_a,
+                false,
                 "diamond complete",
                 &CompletionArtifact::NotProduced
             )
             .await?
     );
+
+    rearm::verify_release_retry(&store, &graph, &agent_a, &suffix).await?;
 
     let mut rows = graph
         .execute(
@@ -339,6 +352,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed,
                 &agent_b,
+                false,
                 "rollout recovery complete",
                 &CompletionArtifact::NotProduced
             )
@@ -382,6 +396,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &blocker_claim,
                 &agent_a,
+                false,
                 "blocker complete",
                 &CompletionArtifact::NotProduced
             )
@@ -395,11 +410,16 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed_original,
                 &agent_a,
+                false,
                 "original complete",
                 &CompletionArtifact::NotProduced
             )
             .await?
     );
+
+    rearm::verify_completed_parent_gate(&store, &graph, &agent_a, &blocker, &suffix).await?;
+    rearm::verify_block_serializes_with_retirement(&store, &graph, &agent_a, &suffix).await?;
+    rearm::verify_enqueue_serializes_with_retirement(&store, &graph, &agent_a, &suffix).await?;
 
     let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new())?;
     let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new())?;
@@ -459,6 +479,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed_reused,
                 &agent_a,
+                false,
                 "completed reused-blocker task",
                 &CompletionArtifact::NotProduced,
             )
@@ -490,6 +511,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &cycle_claim,
                 &agent_a,
+                false,
                 "cycle root complete",
                 &CompletionArtifact::NotProduced
             )
@@ -501,6 +523,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &cycle_dependent_claim,
                 &agent_a,
+                false,
                 "cycle dependent complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -568,7 +591,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     repair.max_attempts = 1;
     store.enqueue(&repair).await?;
     let ClaimOutcome::Claimed(repair_claim) = store.claim(&agent_a, 300).await? else {
-        panic!("Main repair must be available");
+        return Err(anyhow::anyhow!("Main repair must be available"));
     };
     assert!(
         store
@@ -606,7 +629,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     for attempt_number in 2..=4 {
         let ClaimOutcome::Claimed(retried_claim) = store.claim(&agent_a, 300).await? else {
-            panic!("retried Main repair must be available");
+            return Err(anyhow::anyhow!("retried Main repair must be available"));
         };
         assert_eq!(retried_claim.id, repair.id);
         assert_eq!(retried_claim.attempt_number, attempt_number);
@@ -663,6 +686,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &release_b_claim,
                 &agent_a,
+                false,
                 "platform repaired",
                 &CompletionArtifact::NotProduced,
             )
@@ -741,6 +765,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &recovered_blocker,
                 &agent_a,
+                false,
                 "sandbox dependency repaired",
                 &CompletionArtifact::NotProduced,
             )
@@ -753,6 +778,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &recovered_parent,
                 &agent_a,
+                false,
                 "dependent repair complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -891,92 +917,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &current_claim,
                 &agent_b,
+                false,
                 "late",
                 &CompletionArtifact::NotProduced,
             )
             .await?
     );
 
-    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 1})
-             CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
-        ))
-        .await?;
-    assert!(
-        store
-            .migrate()
-            .await
-            .err()
-            .ok_or_else(|| anyhow::anyhow!("schema-1 legacy tasks must block schema 2"))?
-            .to_string()
-            .contains("without source_commit")
-    );
-    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 3})
-             CREATE (:Task {
-               id: 'schema-3-task',
-               status: 'FAILED',
-               manual_retry_used: true,
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (:Task {
-               id: 'schema-4-rollback-task',
-               status: 'FAILED',
-               manual_retry_used: true,
-               last_retry_release:
-                 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (activity_task:Task {
-               id: 'schema-6-activity-task',
-               status: 'RUNNING',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (activity:TaskActivity {
-               id: 'schema-6-activity',
-               created_at: 123456
-             })
-             CREATE (activity)-[:FOR_TASK]->(activity_task)",
-        ))
-        .await?;
-    store.migrate().await?;
-    let mut schema_seven_rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (activity_task:Task {id: 'schema-6-activity-task'})
-             MATCH (migration:HiveSchemaMigration {version: 7})
-             RETURN task.last_retry_release AS last_retry_release,
-                    task.manual_retry_used IS NULL AS removed_legacy_marker,
-                    activity_task.latest_activity_at AS latest_activity_at,
-                    migration.version AS version",
-        ))
-        .await?;
-    let schema_seven = schema_seven_rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-7 migration row was missing"))?;
-    assert_eq!(schema_seven.get::<String>("last_retry_release")?, "");
-    assert!(schema_seven.get::<bool>("removed_legacy_marker")?);
-    assert_eq!(schema_seven.get::<i64>("latest_activity_at")?, 123456);
-    assert_eq!(schema_seven.get::<i64>("version")?, 7);
-    let mut rollback_marker_rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-4-rollback-task'})
-             RETURN task.last_retry_release AS last_retry_release",
-        ))
-        .await?;
-    assert_eq!(
-        rollback_marker_rows
-            .next()
-            .await?
-            .context("rolled-back task must have a retry marker row")?
-            .get::<String>("last_retry_release")?,
-        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    );
-    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
+    schema::verify_migrations(&store, &graph).await?;
     Ok(())
 }

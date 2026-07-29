@@ -21,7 +21,9 @@ use crate::model::{
 };
 use crate::store::TaskStore;
 
+mod task_prompt;
 mod workspace;
+use task_prompt::*;
 use workspace::*;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
@@ -242,6 +244,22 @@ impl<S: TaskStore> Worker<S> {
                     {
                         return Ok(blocked_disposition(task, summary, blocker));
                     }
+                    if result.is_obsolete() {
+                        if task.kind != "blocker" {
+                            crate::hive_bail!("only a blocker task may retire as obsolete");
+                        }
+                        if task.owning_repairs.is_empty() {
+                            crate::hive_bail!(
+                                "obsolete blocker retirement requires active owning Main repairs"
+                            );
+                        }
+                        if !result.changed_files().is_empty() {
+                            crate::hive_bail!(
+                                "obsolete blocker retirement cannot report changed files"
+                            );
+                        }
+                        verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
+                    }
                     if task.kind == "main-repair" {
                         verify_main_repair_delivery(
                             &repository,
@@ -265,9 +283,16 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
+                    if result.is_obsolete() && !matches!(artifact, CompletionArtifact::NotProduced)
+                    {
+                        crate::hive_bail!(
+                            "obsolete blocker retirement cannot persist a patch artifact"
+                        );
+                    }
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
                         artifact,
+                        obsolete: result.is_obsolete(),
                     })
                 }
                 .await;
@@ -276,12 +301,22 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .hive_context("task activity persistence panicked")??;
                 let terminal_result: crate::HiveResult<()> = match task_result? {
-                    TaskDisposition::Completed { summary, artifact } => {
-                        if !self
+                    TaskDisposition::Completed {
+                        summary,
+                        artifact,
+                        obsolete,
+                    } => {
+                        let accepted = self
                             .store
-                            .complete(task, &self.config.agent_id, &summary, &artifact)
-                            .await?
-                        {
+                            .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
+                            .await?;
+                        if !accepted && obsolete {
+                            if !self.store.release(task, &self.config.agent_id).await? {
+                                return Err(WorkerCancellationRequested.into());
+                            }
+                            return Err(WorkerBlocked.into());
+                        }
+                        if !accepted {
                             return Err(WorkerCancellationRequested.into());
                         }
                         Ok(())
@@ -394,6 +429,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
+        obsolete: bool,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -451,73 +487,6 @@ impl From<WorkerCancellationRequested> for crate::HiveError {
     }
 }
 
-fn task_prompt(task: &ClaimedTask) -> String {
-    let dependencies = if task.dependency_context.is_empty() {
-        "No dependency results.".to_owned()
-    } else {
-        task.dependency_context
-            .iter()
-            .map(|dependency| format!("- {}: {}", dependency.id, dependency.summary))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    let delivery = if task.kind == "main-repair" {
-        let branch = repair_branch_name(task.id.as_str());
-        format!(
-            "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
-         You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
-         `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
-         authenticated Git push. Reuse or create the deterministic branch \
-         `{branch}` (or the next `-gN` generation after a closed or red-Main delivery), publish \
-         the repair PR with a `[Hive]` title and both the `hive` and \
-         `ci:full-e2e` labels, traverse all \
-         checks and review feedback, fix and reply \
-         to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
-         readiness audit, squash-merge, verify the \
-         resulting Main workflow is green, and publish the required Workbench completion records \
-         and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
-         PR, merge, or Main verification completed by an earlier attempt. Do not report completed \
-         before the squash merge and green Main verification. If blocked by another change, report \
-         structured blocked status and identify the blocker precisely."
-        )
-    } else if task.kind == "blocker" {
-        "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
-         prerequisite yourself using the available repository and GitHub access. When the task \
-         names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
-         belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Never report this task's \
-         own id as its blocker and never create a duplicate repair PR. Report blocked only for a \
-         genuinely separate prerequisite, using a distinct stable blocker id and an actionable \
-         prompt that another worker can complete."
-            .to_owned()
-    } else {
-        String::new()
-    };
-    format!(
-        "You are Hive worker attempt {} for task {}.\n\
-         Work only inside the supplied repository workspace.\n\
-         Complete the task and return the required structured terminal result.\n\n\
-         Task kind: {}\n\
-         Task:\n{}\n\n\
-         Completed dependency context:\n{}{}",
-        task.attempt_number, task.id, task.kind, task.prompt, dependencies, delivery
-    )
-}
-
-fn repair_branch_name(task_id: &str) -> String {
-    let slug = task_id
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || character == '-' {
-                character.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    format!("codex/hive-{}", slug.trim_matches('-'))
-}
-
 fn bounded(value: &str) -> String {
     if value.len() <= MAX_PERSISTED_RESULT_BYTES {
         return value.to_owned();
@@ -546,8 +515,8 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        establish_worker_lifecycle, persistable_patch, prepare_workspace, task_prompt,
-        validate_dependency_artifacts,
+        establish_worker_lifecycle, obsolete_owner_delivery_targets, persistable_patch,
+        prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -575,6 +544,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -601,6 +571,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: vec![TaskId::new("main-failure-abc-run-42-attempt-1")?],
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -609,6 +580,16 @@ mod tests {
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("Never report this task's own id as its blocker"));
+        assert!(prompt.contains("this prerequisite obsolete"));
+        assert!(prompt.contains("Never extend an obsolete blocker chain"));
+        assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
+        assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
+        let targets = obsolete_owner_delivery_targets(&[
+            task.owning_repairs[0].clone(),
+            TaskId::new("main-failure-def-run-43-attempt-1")?,
+        ]);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
         Ok(())
     }
 
@@ -640,6 +621,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-recovery")?,
             attempt_number: 2,
             lease_token: LeaseToken::new("lease-recovery")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -752,6 +734,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -759,12 +742,13 @@ mod tests {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         let artifact =
             persistable_patch(repository.path(), baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            panic!("patch artifact");
+            return Err(crate::hive_error!("patch artifact must be produced"));
         };
 
         assert_eq!(artifact.kind, "git-patch");
@@ -813,6 +797,7 @@ mod tests {
             attempt_id: AttemptId::new("resumed-attempt")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("resumed-lease")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -820,6 +805,7 @@ mod tests {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         assert!(matches!(
@@ -942,6 +928,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-2")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-2")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -949,10 +936,11 @@ mod tests {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            panic!("task patch");
+            return Err(crate::hive_error!("task patch must be produced"));
         };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));
