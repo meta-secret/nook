@@ -849,9 +849,9 @@ mod tests {
         let WrappedDeviceIdentity::Pin(pin) = &mut ciphertext_tampered else {
             panic!("expected pin record");
         };
-        let mut ciphertext = decode_field("ciphertext", &pin.ciphertext)?;
+        let mut ciphertext = URL_SAFE_NO_PAD.decode(&pin.ciphertext)?;
         ciphertext[0] ^= 0x80;
-        pin.ciphertext = encode(&ciphertext);
+        pin.ciphertext = URL_SAFE_NO_PAD.encode(&ciphertext);
         assert!(matches!(
             unwrap_device_identity_with_pin(&ciphertext_tampered, "123456"),
             Err(DeviceKeyProtectionError::Decrypt)
