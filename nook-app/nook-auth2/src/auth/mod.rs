@@ -325,11 +325,15 @@ pub mod mock_passkey {
             let credential_id = self.match_credential_id(request)?;
             let credential = self
                 .credentials
-                .get_mut(&credential_id)
+                .get(&credential_id)
                 .ok_or(MockPasskeyError::NoMatchingCredential)?;
             if credential.rp_id != request.rp_id {
                 return Err(MockPasskeyError::RpIdMismatch);
             }
+            let credential = self
+                .credentials
+                .get_mut(&credential_id)
+                .expect("credential existence was validated before mutation");
             credential.sign_count = credential.sign_count.saturating_add(1);
 
             Ok(MockPasskeyAssertion {

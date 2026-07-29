@@ -135,12 +135,12 @@ pub fn union_remote_events(
             accepted.queue_outbox(&provider_id, event_id, bytes);
         }
     }
-    *local = accepted;
     let imported = candidates
         .into_iter()
         .filter(|event_id| !quarantined.contains(event_id))
         .collect();
-    let _ = local.load_graph(store_id)?;
+    let _ = accepted.load_graph(store_id)?;
+    *local = accepted;
     Ok(imported)
 }
 

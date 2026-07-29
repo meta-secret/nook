@@ -712,16 +712,24 @@ pub fn rename_vault_member(
     if trimmed.len() > 80 {
         return Err(MultiDeviceError::DeviceNameTooLong);
     }
-    let mut roster = resolve_member_roster(records, members_key)?;
-    let member = roster
-        .iter_mut()
-        .find(|member| member.auth_id == *auth_id)
-        .ok_or(MultiDeviceError::DeviceNotFound)?;
-    member.label = if trimmed.is_empty() {
+    let roster = resolve_member_roster(records, members_key)?;
+    if !roster.iter().any(|member| member.auth_id == *auth_id) {
+        return Err(MultiDeviceError::DeviceNotFound);
+    }
+    let updated_label = if trimmed.is_empty() {
         None
     } else {
         Some(trimmed.to_owned())
     };
+    let roster = roster
+        .into_iter()
+        .map(|mut member| {
+            if member.auth_id == *auth_id {
+                member.label.clone_from(&updated_label);
+            }
+            member
+        })
+        .collect::<Vec<_>>();
     build_members_records(&roster, members_key)
 }
 
