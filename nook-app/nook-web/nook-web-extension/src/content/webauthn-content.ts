@@ -2,6 +2,9 @@ export {}
 
 import {
   WebsitePasskeyCeremony,
+  WebsitePasskeyCancelMessageType,
+  WebsitePasskeyOptionsMessageType,
+  WebsitePasskeyPerformMessageType,
   type WebsitePasskeyCancelMessage,
   type WebsitePasskeyOptionsMessage,
   type WebsitePasskeyPerformMessage,
@@ -178,7 +181,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
     status?: PasskeyOptionsStatus
     options?: unknown
   }>({
-    type: 'nook:website-passkey-options',
+    type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
     payload: {
       requestId: request.requestId,
       ceremony: request.ceremony,
@@ -202,7 +205,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
   }
   const { option: selected } = choice
   const result = await runtimeMessage<Record<string, unknown>>({
-    type: 'nook:website-passkey-perform',
+    type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform,
     payload: {
       requestId: request.requestId,
       ceremony: request.ceremony,
@@ -236,7 +239,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (message.type === 'cancel') {
     removePrompt(message.requestId)
     void runtimeMessage({
-      type: 'nook:website-passkey-cancel',
+      type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel,
       payload: { requestId: message.requestId },
     } satisfies WebsitePasskeyCancelMessage).catch(() => {})
     return

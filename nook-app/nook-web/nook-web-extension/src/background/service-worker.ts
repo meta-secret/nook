@@ -27,6 +27,7 @@ import {
 } from '../lib/enrollment-messages'
 import {
   isQueryActiveTabLoginDetectionMessage,
+  LoginDetectionStatus,
   type LoginDetectionResponse,
 } from '../lib/login-detection-messages'
 import {
@@ -539,7 +540,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() =>
         sendResponse({
           ok: true,
-          status: 'unavailable',
+          status: LoginDetectionStatus.Unavailable,
         } satisfies LoginDetectionResponse),
       )
     return true

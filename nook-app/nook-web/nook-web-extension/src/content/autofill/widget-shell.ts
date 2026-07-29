@@ -1,4 +1,3 @@
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   type EnrollmentFlowHost,
   type EnrollmentPageHints,

@@ -49,7 +49,6 @@ import * as lifecycleActions from '$lib/vault/lifecycle'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
 import { SerialOperationQueue } from '$lib/serial-operation-queue'
 import { ManualProviderSyncKind } from '$lib/vault/state/sync.svelte'
-import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import { VaultLifecycleState } from '$lib/vault/state/lifecycle.svelte'
 import {
   AdminAccordionSection,

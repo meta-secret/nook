@@ -228,16 +228,14 @@ async function stageSaveForCredentials(
   })
   credentials.password = ''
   credentials.username = ''
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.offer
-  ) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return
   }
   const { response } = delivery
-  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) return
-  beginPendingSaveWatch(response.offer)
+  const offer = response.offer
+  if (response.ok !== true || !offer) return
+  if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
+  beginPendingSaveWatch(offer)
 }
 
 export function captureSubmittedLogin(event: Event): void {

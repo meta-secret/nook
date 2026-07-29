@@ -274,7 +274,7 @@ export async function generatePasswordWithNook(
     false,
   )
   try {
-    const response = await sendRuntimeMessage<{
+    const delivery = await sendRuntimeMessage<{
       ok?: boolean
       password?: string
       reason?: string
@@ -282,7 +282,17 @@ export async function generatePasswordWithNook(
       type: 'nook:website-generate-password',
       payload: { origin: location.origin },
     })
-    if (!response?.ok || typeof response.password !== 'string') {
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      setStatus(
+        description,
+        continueButton,
+        translatedMessage('widgetGeneratePasswordFailed'),
+        true,
+      )
+      return
+    }
+    const { response } = delivery
+    if (response.ok !== true || typeof response.password !== 'string') {
       setStatus(
         description,
         continueButton,

@@ -40,7 +40,7 @@ export type SessionMessageTypeParse =
 function sessionMessagePriority(type: string): SessionOperationPriority {
   switch (type) {
     case 'nook:extension-session-reset':
-      return 'expiry'
+      return SessionOperationPriority.Expiry
     case 'nook:extension-session-migrate-auth-providers':
     case 'nook:extension-session-seal-identity-handoff':
     case 'nook:extension-session-plan-login-save':
@@ -57,9 +57,9 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
     case 'nook:extension-session-unlock-options':
     case 'nook:extension-session-unlock-passkey':
     case 'nook:extension-session-unlock-pin':
-      return 'interactive'
+      return SessionOperationPriority.Interactive
     default:
-      return 'normal'
+      return SessionOperationPriority.Normal
   }
 }
 
@@ -265,8 +265,8 @@ export class ExtensionSessionMessageDispatcher {
     const priority =
       requestedExpiry.kind === RequestedQueueExpiryKind.Requested
         ? payload.queuePriority === 'interactive'
-          ? 'interactive'
-          : 'probe'
+          ? SessionOperationPriority.Interactive
+          : SessionOperationPriority.Probe
         : sessionMessagePriority(type)
     const sensitiveFields = sensitiveSessionFields[type]
     if (sensitiveFields) {
@@ -281,7 +281,7 @@ export class ExtensionSessionMessageDispatcher {
       priority,
       ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
         ? { expiresAt: requestedExpiry.expiresAt }
-        : priority === 'interactive'
+        : priority === SessionOperationPriority.Interactive
           ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
           : {}),
     })

@@ -15,6 +15,8 @@ import {
   setICloudProviderMode,
   wasmStorageModeForProvider,
   type AuthProvidersSnapshot,
+  type LocalFolderConfig,
+  type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,

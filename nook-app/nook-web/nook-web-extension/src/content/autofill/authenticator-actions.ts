@@ -29,11 +29,7 @@ export async function fillAuthenticatorCode(
       secretId: account.secretId,
     },
   })
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.code
-  ) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
@@ -44,7 +40,22 @@ export async function fillAuthenticatorCode(
     return false
   }
   const { response } = delivery
-  const code = { value: response.code }
+  const codeValue = response.code
+  if (
+    response.ok !== true ||
+    typeof codeValue !== 'string' ||
+    codeValue.length === 0
+  ) {
+    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return false
+  }
+  const code = { value: codeValue }
   response.code = ''
   const filled = fillOneTimeCode(code.value, workflow.root, workflow.formScope)
   code.value = ''

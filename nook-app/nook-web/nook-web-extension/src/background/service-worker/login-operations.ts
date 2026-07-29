@@ -376,8 +376,9 @@ export async function websiteLoginSaveCommit(
     'vaultStoreId' in pending.offer &&
     typeof pending.offer.vaultStoreId === 'string'
   ) {
+    const pendingVaultStoreId = pending.offer.vaultStoreId
     const matchingGrant = grants.find(
-      (candidate) => candidate.vaultStoreId === pending.offer.vaultStoreId,
+      (candidate) => candidate.vaultStoreId === pendingVaultStoreId,
     )
     if (matchingGrant) grant = matchingGrant
   }

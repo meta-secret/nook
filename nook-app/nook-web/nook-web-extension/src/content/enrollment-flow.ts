@@ -205,11 +205,7 @@ async function beginEnrollmentCeremony(
   })
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
-  if (
-    stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !stageDelivery.response?.ok ||
-    typeof stageDelivery.response.stageId !== 'string'
-  ) {
+  if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     stopPendingEnrollmentWatch()
     setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
     host.setBusy(false)
@@ -217,19 +213,22 @@ async function beginEnrollmentCeremony(
     return
   }
   const { response: stageResponse } = stageDelivery
+  const stageId = stageResponse.stageId
+  if (stageResponse.ok !== true || typeof stageId !== 'string') {
+    stopPendingEnrollmentWatch()
+    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    host.setBusy(false)
+    renderEnrollmentActions(host, detectEnrollmentHints())
+    return
+  }
   // Replace the temporary pending watch with the real stage id.
   beginEnrollmentEvidenceWatch(
     host,
-    stageResponse.stageId,
-    enrollmentEvidenceCallbacks(
-      host,
-      section,
-      stageResponse.stageId,
-      vaultStoreId,
-    ),
+    stageId,
+    enrollmentEvidenceCallbacks(host, section, stageId, vaultStoreId),
   )
 
-  const filled = await fillStagedEnrollmentCode(host, stageResponse.stageId)
+  const filled = await fillStagedEnrollmentCode(host, stageId)
   setHostDescription(
     host,
     host.translatedMessage(

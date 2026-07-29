@@ -741,12 +741,6 @@ async function handleMessage(message: unknown): Promise<unknown> {
         }
         pendingLoginSaveOfferStore.clearForOrigin(payload.origin)
         const offerId = crypto.randomUUID()
-        if (
-          decision === NookWebsiteLoginSaveDecision.Update &&
-          typeof plan.secretId !== 'string'
-        ) {
-          throw new Error('Login save update is missing its target secret.')
-        }
         const commonOffer = {
           offerId,
           origin: payload.origin,
@@ -758,14 +752,23 @@ async function handleMessage(message: unknown): Promise<unknown> {
             pendingLoginSaveOfferStore.clearById(offerId)
           }, LOGIN_SAVE_OFFER_TTL_MS),
         }
-        const offer: PendingLoginSaveOffer =
-          decision === NookWebsiteLoginSaveDecision.Update
-            ? {
-                ...commonOffer,
-                decision,
-                replaceSecretId: plan.secretId,
-              }
-            : { ...commonOffer, decision }
+        let offer: PendingLoginSaveOffer
+        if (decision === NookWebsiteLoginSaveDecision.Update) {
+          const replaceSecretId = plan.secretId
+          if (typeof replaceSecretId !== 'string') {
+            throw new Error('Login save update is missing its target secret.')
+          }
+          offer = {
+            ...commonOffer,
+            decision: NookWebsiteLoginSaveDecision.Update,
+            replaceSecretId,
+          }
+        } else {
+          offer = {
+            ...commonOffer,
+            decision: NookWebsiteLoginSaveDecision.Create,
+          }
+        }
         pendingLoginSaveOfferStore.store(offer)
         payload.password = ''
         return {

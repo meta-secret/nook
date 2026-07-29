@@ -9,6 +9,7 @@ import {
   extensionSessionDevice,
   ExtensionSessionDeviceStateKind,
   DeviceProtectionStatus,
+  type ExtensionSessionDeviceState,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
@@ -54,7 +55,7 @@ async function main() {
 
   const vaultConnection = await loadCompanionVaultConnection()
   const protectionStatus = await extensionDeviceProtectionStatus()
-  const activeSessionDevice =
+  const activeSessionDevice: ExtensionSessionDeviceState =
     protectionStatus === DeviceProtectionStatus.Unlocked
       ? await extensionSessionDevice()
       : { kind: ExtensionSessionDeviceStateKind.Locked }

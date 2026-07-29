@@ -111,23 +111,24 @@ async function scanAndRender(): Promise<void> {
     },
   })
   if (sequence !== scanState.sequence) return
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !delivery.response.snapshot
-  ) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
     return
   }
   const { response } = delivery
-  const selected = workflowForms[response.snapshot.observationIndex]
+  const snapshot = response.snapshot
+  if (response.ok !== true || !snapshot) {
+    removeScannedWidget()
+    return
+  }
+  const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
     return
   }
   const vaultConnection = await loadPilotVaultConnection()
   if (sequence !== scanState.sequence) return
-  renderWidget(response.snapshot, selected, vaultConnection)
+  renderWidget(snapshot, selected, vaultConnection)
 }
 
 function scheduleScan() {
