@@ -96,6 +96,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz@0.13.2
