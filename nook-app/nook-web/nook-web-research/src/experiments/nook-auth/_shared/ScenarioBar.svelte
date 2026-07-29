@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Presence } from '../../vault-auth-workflow/_shared/vault-auth-workflow-state.svelte'
+  import { DemoVaultPresence as Presence } from './nook-auth-state'
 
   interface Props {
     presence: Presence

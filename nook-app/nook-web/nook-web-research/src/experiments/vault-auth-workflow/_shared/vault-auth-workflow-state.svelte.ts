@@ -1,9 +1,7 @@
 import { VaultAuthStepKey } from './vault-auth-workflow-messages'
+import { DemoVaultPresence as Presence } from '../../nook-auth/_shared/nook-auth-state'
 
-export enum Presence {
-  Empty = 'empty',
-  Existing = 'existing',
-}
+export { DemoVaultPresence as Presence } from '../../nook-auth/_shared/nook-auth-state'
 
 export enum VaultPath {
   Undecided = 'undecided',

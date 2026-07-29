@@ -1,5 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+const DISCRIMINANT_NAMES: [&str; 8] = [
+    "action",
+    "kind",
+    "mode",
+    "operation",
+    "phase",
+    "stage",
+    "status",
+    "type",
+];
+
 pub(crate) fn enclosing_enum_name<'a>(
     mut node: tree_sitter::Node<'_>,
     source: &'a str,
@@ -39,15 +50,5 @@ pub(crate) fn discriminant_member_name<'a>(
     }
     let property = node.child_by_field_name("property")?;
     let name = property.utf8_text(source.as_bytes()).ok()?;
-    const DISCRIMINANT_NAMES: [&str; 8] = [
-        "action",
-        "kind",
-        "mode",
-        "operation",
-        "phase",
-        "stage",
-        "status",
-        "type",
-    ];
     DISCRIMINANT_NAMES.contains(&name).then_some(name)
 }

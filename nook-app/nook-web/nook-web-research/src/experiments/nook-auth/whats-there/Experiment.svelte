@@ -2,17 +2,19 @@
   import { Fingerprint, KeyRound, Shield, Sparkles } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar from '../_shared/ScenarioBar.svelte'
+  import {
+    DemoVaultPresence as Presence,
+    NookAuthStage,
+  } from '../_shared/nook-auth-state'
 
   let { navigate }: ExperimentProps = $props()
-  let presence = $state<Presence>('empty')
-  let stage = $state<'home' | 'simple' | 'sentinel' | 'unlock' | 'passkey'>(
-    'home',
-  )
+  let presence = $state<Presence>(Presence.Empty)
+  let stage = $state<NookAuthStage>(NookAuthStage.Home)
 
   function setPresence(next: Presence) {
     presence = next
-    stage = 'home'
+    stage = NookAuthStage.Home
   }
 </script>
 
@@ -27,7 +29,7 @@
       Auth 01 · What's there?
     </p>
 
-    {#if stage === 'home' && presence === 'empty'}
+    {#if stage === NookAuthStage.Home && presence === Presence.Empty}
       <h1
         class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl"
       >
@@ -40,7 +42,7 @@
       <div class="mt-10 grid gap-3 sm:grid-cols-2">
         <button
           class="rounded-2xl border border-black/10 bg-white p-6 text-left transition hover:border-black/30"
-          onclick={() => (stage = 'simple')}
+          onclick={() => (stage = NookAuthStage.Simple)}
         >
           <Sparkles class="size-5" />
           <p class="mt-4 text-xl font-semibold">Create a simple vault</p>
@@ -50,7 +52,7 @@
         </button>
         <button
           class="rounded-2xl border border-black/10 bg-white p-6 text-left transition hover:border-black/30"
-          onclick={() => (stage = 'sentinel')}
+          onclick={() => (stage = NookAuthStage.Sentinel)}
         >
           <Shield class="size-5" />
           <p class="mt-4 text-xl font-semibold">Build a Sentinel vault</p>
@@ -60,7 +62,7 @@
           </p>
         </button>
       </div>
-    {:else if stage === 'home' && presence === 'existing'}
+    {:else if stage === NookAuthStage.Home && presence === Presence.Existing}
       <h1
         class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl"
       >
@@ -78,12 +80,12 @@
         <p class="mt-2 text-sm text-[#6a7164]">Last opened on this device</p>
         <button
           class="mt-6 inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-medium text-white"
-          onclick={() => (stage = 'unlock')}
+          onclick={() => (stage = NookAuthStage.Unlock)}
         >
           <KeyRound class="size-4" /> Unlock with passkey
         </button>
       </div>
-    {:else if stage === 'simple'}
+    {:else if stage === NookAuthStage.Simple}
       <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
         Name it. Open it.
       </h1>
@@ -98,9 +100,9 @@
       >
       <button
         class="mt-4 text-sm text-[#6a7164]"
-        onclick={() => (stage = 'home')}>Back</button
+        onclick={() => (stage = NookAuthStage.Home)}>Back</button
       >
-    {:else if stage === 'sentinel'}
+    {:else if stage === NookAuthStage.Sentinel}
       <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
         Sentinel setup
       </h1>
@@ -126,20 +128,20 @@
       </div>
       <button
         class="mt-8 w-fit rounded-full bg-black px-5 py-3 text-sm text-white"
-        onclick={() => (stage = 'passkey')}
+        onclick={() => (stage = NookAuthStage.Passkey)}
       >
         Initialize this device
       </button>
       <button
         class="mt-4 text-sm text-[#6a7164]"
-        onclick={() => (stage = 'home')}>Back</button
+        onclick={() => (stage = NookAuthStage.Home)}>Back</button
       >
-    {:else if stage === 'passkey' || stage === 'unlock'}
+    {:else if stage === NookAuthStage.Passkey || stage === NookAuthStage.Unlock}
       <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
-        {stage === 'unlock' ? 'Unlock vault' : 'Initialize device'}
+        {stage === NookAuthStage.Unlock ? 'Unlock vault' : 'Initialize device'}
       </h1>
       <p class="mt-4 max-w-lg text-[#5d6458]">
-        Passkey now has a reason: {stage === 'unlock'
+        Passkey now has a reason: {stage === NookAuthStage.Unlock
           ? 'open a vault that already exists.'
           : 'bind this browser as a Sentinel participant.'}
       </p>
@@ -150,7 +152,7 @@
       </button>
       <button
         class="mt-4 text-sm text-[#6a7164]"
-        onclick={() => (stage = 'home')}>Back</button
+        onclick={() => (stage = NookAuthStage.Home)}>Back</button
       >
     {/if}
   </section>
