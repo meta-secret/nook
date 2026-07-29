@@ -1,6 +1,7 @@
 import { chromium, expect, test } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import {
   advanceCreateVaultWizardToFinalStep,
   belongsToSentinelVault,
@@ -27,7 +28,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
 
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,

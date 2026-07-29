@@ -1,5 +1,10 @@
 <script lang="ts">
   import { renderMarkdown } from '$lib/markdown'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
   import MarkdownBody from './MarkdownBody.svelte'
 
   let {
@@ -21,10 +26,20 @@
 
   const previewHtml = $derived(renderMarkdown(value))
 
-  let textareaEl!: HTMLTextAreaElement
+  let textareaState: ValueState<HTMLTextAreaElement> = EMPTY_VALUE
+
+  function registerTextarea(node: HTMLTextAreaElement) {
+    textareaState = presentValue(node)
+    return {
+      destroy() {
+        textareaState = EMPTY_VALUE
+      },
+    }
+  }
 
   function adjustHeight() {
-    if (fill || !textareaEl) return
+    if (fill || textareaState.kind === 'empty') return
+    const textareaEl = textareaState.value
     textareaEl.style.height = 'auto'
     textareaEl.style.height = `${textareaEl.scrollHeight}px`
   }
@@ -80,7 +95,7 @@
   >
     {#if tab === 'write'}
       <textarea
-        bind:this={textareaEl}
+    use:registerTextarea
         id="secure-note-body"
         data-testid={testId}
         bind:value

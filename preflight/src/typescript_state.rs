@@ -181,10 +181,7 @@ fn collect_mutable_void_nodes(
     }
 }
 
-fn variable_declarator_has_mutable_void(
-    declarator: tree_sitter::Node<'_>,
-    source: &str,
-) -> bool {
+fn variable_declarator_has_mutable_void(declarator: tree_sitter::Node<'_>, source: &str) -> bool {
     let mut cursor = declarator.walk();
     declarator.named_children(&mut cursor).any(|child| {
         (child.kind() == "type_annotation"
@@ -310,9 +307,7 @@ fn collect_svelte_script_fragments(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        typescript_code_mutable_void_state_lines, typescript_code_undefined_token_lines,
-    };
+    use super::{typescript_code_mutable_void_state_lines, typescript_code_undefined_token_lines};
 
     #[test]
     fn reports_every_code_and_type_token_but_not_prose() {

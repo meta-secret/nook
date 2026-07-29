@@ -5,8 +5,7 @@ use nook_preflight::{
     portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
     typescript_domain_boundary_boilerplate, typescript_implicit_application_state,
     typescript_json_round_trip_clones, typescript_mutable_void_state,
-    typescript_null_absence_sentinels,
-    typescript_svelte_state_modeling_violations,
+    typescript_null_absence_sentinels, typescript_svelte_state_modeling_violations,
 };
 
 fn repository_root() -> PathBuf {

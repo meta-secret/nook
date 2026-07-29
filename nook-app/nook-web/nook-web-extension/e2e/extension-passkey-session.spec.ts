@@ -31,7 +31,7 @@ import {
 } from './helpers/extension-smoke-runtime'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
 
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,

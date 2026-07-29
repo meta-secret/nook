@@ -19,7 +19,6 @@ import {
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
-  VaultSyncConflictKind,
 } from "$app-wasm";
 import {
   LOCAL_FOLDER_PROVIDER_TYPE,
@@ -36,6 +35,7 @@ import {
 } from "../../../explicit-state";
 
 export * from "$lib/vault/sync-resolution";
+export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
 
 const log = createLogger("vault-sync");
 
@@ -49,21 +49,6 @@ export type LocalFolderMultipleVaultsIssue = {
 
 async function readLocalVaultBlob(): Promise<string> {
   return readLocalVaultYaml();
-}
-
-type SyncConflictLabelState = {
-  pendingSyncConflict: NookPendingSyncConflict | void;
-  t(key: string, values?: Record<string, string>): string;
-};
-
-export function syncConflictLabel(state: SyncConflictLabelState): string {
-  const conflict = state.pendingSyncConflict;
-  if (!conflict) return "";
-  const key =
-    conflict.kind === VaultSyncConflictKind.StoreId
-      ? "auth_storage.sync_conflict_store_id_banner"
-      : "auth_storage.sync_conflict_banner";
-  return state.t(key, { provider: conflict.providerLabel });
 }
 
 function syncError(context: string, error: unknown) {

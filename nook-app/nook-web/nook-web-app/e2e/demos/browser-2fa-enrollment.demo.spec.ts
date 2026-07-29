@@ -3,6 +3,11 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
 import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
@@ -38,18 +43,20 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  let signalWasmBootstrapStarted: (() => void) | undefined
+  let signalWasmBootstrapStarted: ValueState<() => void> = EMPTY_VALUE
   const wasmBootstrapStarted = new Promise<void>((resolve) => {
-    signalWasmBootstrapStarted = resolve
+    signalWasmBootstrapStarted = presentValue(resolve)
   })
-  let releaseWasmBootstrap: (() => void) | undefined
+  let releaseWasmBootstrap: ValueState<() => void> = EMPTY_VALUE
   const wasmBootstrapReleased = new Promise<void>((resolve) => {
-    releaseWasmBootstrap = resolve
+    releaseWasmBootstrap = presentValue(resolve)
   })
   await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
-    signalWasmBootstrapStarted?.()
+    if (signalWasmBootstrapStarted.kind === 'present') {
+      signalWasmBootstrapStarted.value()
+    }
     await wasmBootstrapReleased
-    await route.continue().catch(() => undefined)
+    await route.continue().catch(() => {})
   })
 
   // Replace the document while the real app bootstrap is active. This covers
@@ -120,7 +127,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
-  releaseWasmBootstrap?.()
+  if (releaseWasmBootstrap.kind === 'present') {
+    releaseWasmBootstrap.value()
+  }
   const replacementChildCount = await page
     .locator('[data-bootstrap-sentinel="replacement-root"]')
     .evaluate((root) => root.children.length)
