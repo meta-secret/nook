@@ -13,6 +13,7 @@
     copySentinelRequest,
     runSentinelDashboardAction,
   } from '$lib/components/login/sentinel-dashboard-actions'
+  import { SentinelCardOnboardingStage } from '$lib/components/login/sentinel-dashboard-state'
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
@@ -23,8 +24,6 @@
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
-
-  type OnboardingStage = 'identity' | 'name' | 'policy' | 'roster' | 'build'
 
   let {
     vault,
@@ -79,7 +78,9 @@
   let selected = $state(0)
   let participantInputError = $state('')
   let deliveriesAcknowledged = $state(false)
-  let onboardingStage = $state<OnboardingStage>('identity')
+  let onboardingStage = $state<SentinelCardOnboardingStage>(
+    SentinelCardOnboardingStage.Identity,
+  )
 
   const participantChoices = [3, 4, 5]
 
@@ -105,11 +106,12 @@
       threshold <= participantCount,
   )
   const onboardingStep = $derived(
-    onboardingStage === 'identity'
+    onboardingStage === SentinelCardOnboardingStage.Identity
       ? 0
-      : onboardingStage === 'name' || onboardingStage === 'policy'
+      : onboardingStage === SentinelCardOnboardingStage.Name ||
+          onboardingStage === SentinelCardOnboardingStage.Policy
         ? 1
-        : onboardingStage === 'roster'
+        : onboardingStage === SentinelCardOnboardingStage.Roster
           ? 2
           : 3,
   )
@@ -129,13 +131,16 @@
 
   $effect(() => {
     if (status === SentinelGenesisPhase.CollectingParticipants) {
-      onboardingStage = 'roster'
+      onboardingStage = SentinelCardOnboardingStage.Roster
     } else if (status !== SentinelGenesisPhase.Inactive) {
-      onboardingStage = 'build'
-    } else if (initiatorKeyReady && onboardingStage === 'identity') {
-      onboardingStage = 'name'
+      onboardingStage = SentinelCardOnboardingStage.Build
+    } else if (
+      initiatorKeyReady &&
+      onboardingStage === SentinelCardOnboardingStage.Identity
+    ) {
+      onboardingStage = SentinelCardOnboardingStage.Name
     } else if (!initiatorKeyReady) {
-      onboardingStage = 'identity'
+      onboardingStage = SentinelCardOnboardingStage.Identity
     }
   })
 
@@ -151,7 +156,7 @@
 
   function continueToPolicy() {
     if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return
-    onboardingStage = 'policy'
+    onboardingStage = SentinelCardOnboardingStage.Policy
   }
 
   async function continueToRoster() {
@@ -163,7 +168,9 @@
         participantCount,
         threshold,
       })
-      if (started !== false) onboardingStage = 'roster'
+      if (started !== false) {
+        onboardingStage = SentinelCardOnboardingStage.Roster
+      }
     } catch {
       // The vault action publishes the core error through the shared error UI.
     } finally {
@@ -279,7 +286,7 @@
         >
           {vault.t('login.sentinel_card_stack_participant_cards')}
         </p>
-        {#if onboardingStage === 'identity'}
+        {#if onboardingStage === SentinelCardOnboardingStage.Identity}
           <div
             class="mt-5 border border-[#79dfff]/35 bg-[#79dfff]/5 p-5 shadow-[0_0_40px_rgb(82_198_238/0.08)]"
             data-testid="sentinel-onboarding-identity"
@@ -339,7 +346,7 @@
             {/if}
           </button>
 
-          {#if initiatorKeyReady && onboardingStage !== 'identity' && onboardingStage !== 'name'}
+          {#if initiatorKeyReady && onboardingStage !== SentinelCardOnboardingStage.Identity && onboardingStage !== SentinelCardOnboardingStage.Name}
             <button
               type="button"
               class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 border-white/10 border-l-[#63eaa1] bg-[#303840]/85 px-5 py-4 text-left transition hover:border-[#6ed9ff]/60 hover:bg-[#37424b] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:border-l-[#63eaa1] disabled:hover:bg-[#303840]/85"
@@ -348,7 +355,8 @@
               disabled={status !== SentinelGenesisPhase.Inactive ||
                 isBusy ||
                 actionBusy}
-              onclick={() => (onboardingStage = 'name')}
+              onclick={() =>
+                (onboardingStage = SentinelCardOnboardingStage.Name)}
             >
               <span
                 class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[10px] text-[#79dfff]"
@@ -501,7 +509,7 @@
             </div>
           {/if}
 
-          {#if onboardingStage === 'roster'}
+          {#if onboardingStage === SentinelCardOnboardingStage.Roster}
             <div
               class="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-4 py-3"
               data-testid="sentinel-onboarding-roster-next"
@@ -521,7 +529,7 @@
           {/if}
         </div>
 
-        {#if status === SentinelGenesisPhase.Inactive && onboardingStage === 'name'}
+        {#if status === SentinelGenesisPhase.Inactive && onboardingStage === SentinelCardOnboardingStage.Name}
           <section
             class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
             data-testid="sentinel-genesis-name-step"
@@ -556,7 +564,7 @@
               </button>
             </div>
           </section>
-        {:else if status === SentinelGenesisPhase.Inactive && onboardingStage === 'policy'}
+        {:else if status === SentinelGenesisPhase.Inactive && onboardingStage === SentinelCardOnboardingStage.Policy}
           <section
             class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
             data-testid="sentinel-genesis-policy-step"
@@ -660,7 +668,8 @@
                 type="button"
                 class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
                 data-testid="sentinel-onboarding-policy-back"
-                onclick={() => (onboardingStage = 'name')}
+                onclick={() =>
+                  (onboardingStage = SentinelCardOnboardingStage.Name)}
               >
                 {vault.t('common.back')}
               </button>
@@ -800,7 +809,8 @@
                 class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-policy"
               >
-                {onboardingStage === 'identity' || onboardingStage === 'name'
+                {onboardingStage === SentinelCardOnboardingStage.Identity ||
+                onboardingStage === SentinelCardOnboardingStage.Name
                   ? vault.t('login.sentinel_onboarding_not_set')
                   : vault.t('login.sentinel_onboarding_threshold_summary', {
                       threshold: String(threshold),
@@ -908,7 +918,7 @@
           {/if}
         </div>
 
-        {#if onboardingStage !== 'identity' || status !== SentinelGenesisPhase.Inactive}
+        {#if onboardingStage !== SentinelCardOnboardingStage.Identity || status !== SentinelGenesisPhase.Inactive}
           <div class="mt-6 flex items-center gap-3 text-xs text-[#a4afb9]">
             <span
               class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"

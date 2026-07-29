@@ -22,6 +22,7 @@ import {
   firstCompatibleProvider,
   onboardingType,
   providerCapabilityLabelKey,
+  ProviderCapabilityLabelKey,
   providerOnboardingType,
   providerReplicationCapability,
   providerSupportsReplication,
@@ -250,10 +251,10 @@ describe('vault architecture adapter', () => {
     const providers = [github, drive]
 
     expect(providerCapabilityLabelKey(github)).toBe(
-      'provider_picker.capability_personal_only',
+      ProviderCapabilityLabelKey.PersonalOnly,
     )
     expect(providerCapabilityLabelKey(drive)).toBe(
-      'provider_picker.capability_personal_shared',
+      ProviderCapabilityLabelKey.PersonalShared,
     )
     expect(providerSupportsReplication(github, ReplicationType.Shared)).toBe(
       false,

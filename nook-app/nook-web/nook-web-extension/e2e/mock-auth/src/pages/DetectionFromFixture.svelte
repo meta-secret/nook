@@ -3,7 +3,7 @@
     DetectionFixtureRenderKind,
     type DetectionFixtureRenderState,
   } from '../lib/detection-fixture-state'
-  import { completePlainLogin } from '../lib/plain-login'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
   import {
     getSiteFixture,
     getTemplateFixture,
@@ -97,7 +97,7 @@
     }
     const username = readUsername(form)
     const password = readPassword(form)
-    if (completePlainLogin(username, password) === 'invalid') {
+    if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }
   }

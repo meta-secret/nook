@@ -6,7 +6,7 @@
     credentialsFromLoginSubmit,
     resetLoginSubmission,
   } from '../lib/login-form'
-  import { completePlainLogin } from '../lib/plain-login'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
 
   const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
     (account) => !account.totpSecret,
@@ -21,7 +21,7 @@
     if (
       credentials &&
       completePlainLogin(credentials.username, credentials.password) ===
-        'invalid'
+        PlainLoginResult.Invalid
     ) {
       error = 'Invalid username or password.'
     }

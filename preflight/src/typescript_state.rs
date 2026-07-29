@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -314,7 +314,7 @@ fn typescript_code_raw_string_discriminant_lines(
     let Some(tree) = parser.parse(source, None) else {
         return Ok(Vec::new());
     };
-    let mut enum_values = HashSet::new();
+    let mut enum_values = HashMap::new();
     collect_enum_string_values(tree.root_node(), source, &mut enum_values);
     let mut lines = Vec::new();
     collect_raw_string_discriminant_nodes(
@@ -333,7 +333,7 @@ fn collect_raw_string_discriminant_nodes(
     node: tree_sitter::Node<'_>,
     source: &str,
     first_line: usize,
-    enum_values: &HashSet<String>,
+    enum_values: &HashMap<String, HashSet<String>>,
     lines: &mut Vec<usize>,
 ) {
     const DISCRIMINANT_NAMES: [&str; 8] = [
@@ -377,7 +377,11 @@ fn collect_raw_string_discriminant_nodes(
         if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
             && value
                 .and_then(|literal| string_literal_value(literal, source))
-                .is_some_and(|literal| enum_values.contains(literal))
+                .is_some_and(|literal| {
+                    name.is_some_and(|name| {
+                        enum_value_matches_discriminant(enum_values, literal, name)
+                    })
+                })
         {
             lines.push(first_line + node.start_position().row);
             return;
@@ -387,15 +391,18 @@ fn collect_raw_string_discriminant_nodes(
         let left = node.child_by_field_name("left");
         let right = node.child_by_field_name("right");
         if left.zip(right).is_some_and(|(left, right)| {
-            let literal = if is_discriminant_member(left, source) {
-                string_literal_value(right, source)
-            } else if is_discriminant_member(right, source) {
-                string_literal_value(left, source)
-            } else {
-                None
-            };
+            let (literal, discriminant) =
+                if let Some(discriminant) = discriminant_member_name(left, source) {
+                    (string_literal_value(right, source), Some(discriminant))
+                } else if let Some(discriminant) = discriminant_member_name(right, source) {
+                    (string_literal_value(left, source), Some(discriminant))
+                } else {
+                    (None, None)
+                };
             is_equality_comparison(node, left, right, source)
-                && literal.is_some_and(|value| enum_values.contains(value))
+                && literal.zip(discriminant).is_some_and(|(value, name)| {
+                    enum_value_matches_discriminant(enum_values, value, name)
+                })
         }) {
             lines.push(first_line + node.start_position().row);
             return;
@@ -424,18 +431,49 @@ fn is_equality_comparison(
 fn collect_enum_string_values(
     node: tree_sitter::Node<'_>,
     source: &str,
-    values: &mut HashSet<String>,
+    values: &mut HashMap<String, HashSet<String>>,
 ) {
     if node.kind() == "enum_assignment"
         && let Some(value) = node.child_by_field_name("value")
         && let Some(literal) = string_literal_value(value, source)
+        && let Some(enum_name) = enclosing_enum_name(node, source)
     {
-        values.insert(literal.to_owned());
+        values
+            .entry(literal.to_owned())
+            .or_default()
+            .insert(enum_name.to_owned());
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_enum_string_values(child, source, values);
     }
+}
+
+fn enclosing_enum_name<'a>(mut node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
+    while let Some(parent) = node.parent() {
+        if parent.kind() == "enum_declaration" {
+            return parent
+                .child_by_field_name("name")
+                .and_then(|name| name.utf8_text(source.as_bytes()).ok());
+        }
+        node = parent;
+    }
+    None
+}
+
+fn enum_value_matches_discriminant(
+    enum_values: &HashMap<String, HashSet<String>>,
+    value: &str,
+    discriminant: &str,
+) -> bool {
+    let normalized_discriminant = discriminant.trim_matches(['\'', '"']);
+    enum_values.get(value).is_some_and(|enum_names| {
+        enum_names.iter().any(|enum_name| {
+            enum_name
+                .to_ascii_lowercase()
+                .ends_with(&normalized_discriminant.to_ascii_lowercase())
+        })
+    })
 }
 
 fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
@@ -451,23 +489,23 @@ fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
     matches!(node.kind(), "string" | "template_string")
 }
 
-fn is_discriminant_member(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    const DISCRIMINANT_SUFFIXES: [&str; 8] = [
-        ".action",
-        ".kind",
-        ".mode",
-        ".operation",
-        ".phase",
-        ".stage",
-        ".status",
-        ".type",
+fn discriminant_member_name<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
+    if node.kind() != "member_expression" {
+        return None;
+    }
+    let property = node.child_by_field_name("property")?;
+    let name = property.utf8_text(source.as_bytes()).ok()?;
+    const DISCRIMINANT_NAMES: [&str; 8] = [
+        "action",
+        "kind",
+        "mode",
+        "operation",
+        "phase",
+        "stage",
+        "status",
+        "type",
     ];
-    node.kind() == "member_expression"
-        && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
-            DISCRIMINANT_SUFFIXES
-                .iter()
-                .any(|suffix| text.ends_with(suffix))
-        })
+    DISCRIMINANT_NAMES.contains(&name).then_some(name)
 }
 
 fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
@@ -940,6 +978,9 @@ enum SessionKind {
   Closed = 'closed',
   Open = 'open',
 }
+enum ProviderKind {
+  Local = 'local',
+}
 type SessionState =
   | { kind: 'closed' }
   | { kind: SessionKind.Open; handle: number }
@@ -949,6 +990,7 @@ type Panel = 'closed' | 'open'
 const state: SessionState = { kind: 'closed' }
 if (state.kind === 'closed') console.log('closed')
 if ('closed' !== state.kind) console.log('open')
+if (provider.type === 'local') console.log('unrelated enum value')
 if (server.transport.type !== 'stdio') console.log('external protocol')
 const description = { label: 'static copy' }
 const externalKind = state.kind ?? 'external-value'
@@ -956,7 +998,7 @@ const externalKind = state.kind ?? 'external-value'
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
-            vec![7, 11, 12, 13, 14]
+            vec![10, 14, 15, 16, 17]
         );
         Ok(())
     }

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { Check, Fingerprint, Shield } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
-  import type { SentinelUi } from './KeyLaterAuth.svelte'
   import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
     createVaultAuthWorkflowState,
-    type Presence,
+    Presence,
+    SentinelUi,
+    VaultPath,
   } from './vault-auth-workflow-state.svelte'
 
   interface Props {
@@ -23,8 +24,8 @@
     workflow.setPresence(next)
     vaultName = ''
   }
-  const chooseSentinel = () => workflow.choose('sentinel')
-  const chooseSimple = () => workflow.choose('simple')
+  const chooseSentinel = () => workflow.choose(VaultPath.Sentinel)
+  const chooseSimple = () => workflow.choose(VaultPath.Simple)
   const continueAfterName = () => workflow.continueAfterName(vaultName)
   const goBack = () => workflow.goBack()
 </script>
@@ -44,12 +45,12 @@
       <h1
         class="mt-5 text-5xl leading-[0.95] font-semibold tracking-[-0.05em] sm:text-6xl"
       >
-        {presence === 'existing'
+        {presence === Presence.Existing
           ? 'Keys you already keep.'
           : 'Keys, not accounts.'}
       </h1>
       <p class="mt-6 max-w-md text-base leading-7 text-[#555]">
-        {presence === 'existing'
+        {presence === Presence.Existing
           ? 'Open Nook found a sealed vault on this device. Unlock continues the landing promise.'
           : 'Name the vault first. Then choose Simple or Sentinel — same workflow as Key later, in the landing voice.'}
       </p>
@@ -103,7 +104,7 @@
                   {vaultAuthStepMessage(label)}
                 </p>
 
-                {#if presence === 'empty' && index === step && step === 0}
+                {#if presence === Presence.Empty && index === step && step === 0}
                   <input
                     class="mt-3 w-full border-b border-black/20 bg-transparent py-2 text-base outline-none"
                     placeholder="Vault name"
@@ -116,7 +117,7 @@
                   >
                     Continue
                   </button>
-                {:else if presence === 'empty' && index === step && step === 1}
+                {:else if presence === Presence.Empty && index === step && step === 1}
                   <div class="mt-3 flex flex-wrap gap-2">
                     <button
                       class="rounded-md border border-black/15 bg-white px-4 py-2.5 text-sm font-medium"
@@ -131,7 +132,7 @@
                       Build Sentinel vault
                     </button>
                   </div>
-                {:else if presence === 'empty' && path === 'simple' && index === step && step === 2}
+                {:else if presence === Presence.Empty && path === VaultPath.Simple && index === step && step === 2}
                   <p class="mt-2 text-sm text-[#666]">
                     Create “{vaultName.trim()}” locally — no passkey prologue.
                   </p>
@@ -140,19 +141,21 @@
                   >
                     Create simple vault
                   </button>
-                {:else if presence === 'empty' && path === 'sentinel' && index === step && step === 2}
+                {:else if presence === Presence.Empty && path === VaultPath.Sentinel && index === step && step === 2}
                   <div
                     class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap"
                   >
                     <button
                       class="rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
-                      onclick={() => onSentinel('card-stack', vaultName.trim())}
+                      onclick={() =>
+                        onSentinel(SentinelUi.CardStack, vaultName.trim())}
                     >
                       Sentinel card stack · default
                     </button>
                     <button
                       class="rounded-md border border-black/15 bg-white px-4 py-2.5 text-sm font-medium"
-                      onclick={() => onSentinel('terminal', vaultName.trim())}
+                      onclick={() =>
+                        onSentinel(SentinelUi.Terminal, vaultName.trim())}
                     >
                       Vault terminal
                     </button>
@@ -161,14 +164,14 @@
                     Opens the full setup UI for “{vaultName.trim()}”. Passkey
                     comes later at device init.
                   </p>
-                {:else if presence === 'existing' && index === step && step === 0}
+                {:else if presence === Presence.Existing && index === step && step === 0}
                   <button
                     class="mt-3 rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
                     onclick={() => (workflow.step = 1)}
                   >
                     Continue to unlock
                   </button>
-                {:else if index === step && index === steps.length - 1 && !(presence === 'empty' && path === 'simple' && step === 2)}
+                {:else if index === step && index === steps.length - 1 && !(presence === Presence.Empty && path === VaultPath.Simple && step === 2)}
                   <button
                     class="mt-3 inline-flex items-center gap-2 rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
                   >

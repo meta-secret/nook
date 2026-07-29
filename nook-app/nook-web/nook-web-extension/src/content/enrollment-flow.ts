@@ -73,6 +73,11 @@ enum EnrollPreviewResponseStatus {
   Unavailable = 'unavailable',
 }
 
+enum BackupAttachMode {
+  Replace = 'replace',
+  Merge = 'merge',
+}
+
 type EnrollPreviewResponse = {
   ok?: boolean
   status?:
@@ -386,7 +391,7 @@ async function showQrPreview(
       return
     }
 
-    if (response.status === 'unavailable') {
+    if (response.status === EnrollPreviewResponseStatus.Unavailable) {
       setHostDescription(host, unavailableMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearOtpauthUri(otpauthUri)
@@ -539,7 +544,7 @@ function showBackupModeChooser(
   section.replaceChildren()
   setHostDescription(host, host.translatedMessage('widgetBackupReview'))
 
-  const attach = (mode: 'replace' | 'merge') => {
+  const attach = (mode: BackupAttachMode) => {
     if (host.isBusy()) return
     host.setBusy(true)
     setHostDescription(host, host.translatedMessage('widgetBackupWorking'))
@@ -575,7 +580,7 @@ function showBackupModeChooser(
     'widgetBackupModeReplace',
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach('replace')
+      attach(BackupAttachMode.Replace)
     },
   )
   const mergeButton = createSecondaryButton(
@@ -583,7 +588,7 @@ function showBackupModeChooser(
     'widgetBackupModeMerge',
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach('merge')
+      attach(BackupAttachMode.Merge)
     },
   )
   appendButtonRow(section, [replaceButton, mergeButton])
@@ -664,7 +669,7 @@ async function continueBackupWithAuthenticatorOptions(
       return
     }
 
-    if (response.status === 'unavailable') {
+    if (response.status === AuthenticatorOptionsResponseStatus.Unavailable) {
       setHostDescription(host, unavailableMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)

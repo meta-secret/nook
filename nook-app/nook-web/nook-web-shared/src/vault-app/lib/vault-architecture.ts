@@ -77,9 +77,10 @@ export function validateVaultArchitecture(
   }
 }
 
-export type ProviderCapabilityLabelKey =
-  | 'provider_picker.capability_personal_only'
-  | 'provider_picker.capability_personal_shared'
+export enum ProviderCapabilityLabelKey {
+  PersonalOnly = 'provider_picker.capability_personal_only',
+  PersonalShared = 'provider_picker.capability_personal_shared',
+}
 
 /** Presentation label derived from the Rust-owned provider capability. */
 export function providerCapabilityLabelKey(
@@ -88,8 +89,8 @@ export function providerCapabilityLabelKey(
   const capability = providerReplicationCapability(provider)
   try {
     return capability.supportsShared
-      ? 'provider_picker.capability_personal_shared'
-      : 'provider_picker.capability_personal_only'
+      ? ProviderCapabilityLabelKey.PersonalShared
+      : ProviderCapabilityLabelKey.PersonalOnly
   } finally {
     capability.free()
   }
