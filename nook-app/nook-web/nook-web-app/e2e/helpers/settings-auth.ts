@@ -223,7 +223,7 @@ export async function dismissSyncConflictIfVisible(page: Page) {
 
 export async function expectVaultPasswordStatus(
   page: Page,
-  count: number | 'none',
+  count: number,
   options?: { timeout?: number },
 ) {
   await expandSettingsSection(page, 'unlock')
@@ -231,16 +231,25 @@ export async function expectVaultPasswordStatus(
     .getByTestId('vault-unlock-section')
     .getByTestId('vault-password-status')
   const timeout = options?.timeout ?? UI_TIMEOUT_MS
-  if (count === 'none') {
-    await expect(status).toContainText('None', { timeout })
-    return
-  }
   if (count === 1) {
     await expect(status).toContainText(/1 (password|item)/, { timeout })
     return
   }
   await expect(status).toContainText(new RegExp(`${count} (passwords|items)`), {
     timeout,
+  })
+}
+
+export async function expectNoVaultPasswords(
+  page: Page,
+  options?: { timeout?: number },
+) {
+  await expandSettingsSection(page, 'unlock')
+  const status = page
+    .getByTestId('vault-unlock-section')
+    .getByTestId('vault-password-status')
+  await expect(status).toContainText('None', {
+    timeout: options?.timeout ?? UI_TIMEOUT_MS,
   })
 }
 

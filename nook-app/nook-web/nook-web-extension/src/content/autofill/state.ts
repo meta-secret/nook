@@ -14,28 +14,28 @@ type PendingAuthenticatorPicker = {
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
-enum ScanScheduleKind {
+export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',
 }
 
-type ScanSchedule =
+export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
   | { kind: ScanScheduleKind.Scheduled; timer: number }
-enum WidgetHostKind {
+export enum WidgetHostKind {
   Detached = 'detached',
   Attached = 'attached',
 }
 
-type WidgetHost =
+export type WidgetHost =
   | { kind: WidgetHostKind.Detached }
   | { kind: WidgetHostKind.Attached; element: HTMLElement }
-enum WidgetWorkflowKeyKind {
+export enum WidgetWorkflowKeyKind {
   Unassigned = 'unassigned',
   Assigned = 'assigned',
 }
 
-type WidgetWorkflowKey =
+export type WidgetWorkflowKey =
   | { kind: WidgetWorkflowKeyKind.Unassigned }
   | { kind: WidgetWorkflowKeyKind.Assigned; key: string }
 export enum WidgetWorkflowRootKind {
@@ -49,47 +49,47 @@ export type WidgetWorkflowRoot =
       kind: WidgetWorkflowRootKind.Assigned
       observation: PasswordFormObservation
     }
-enum WidgetPlacementKind {
+export enum WidgetPlacementKind {
   Unpositioned = 'unpositioned',
   Positioned = 'positioned',
 }
 
-type WidgetPlacement =
+export type WidgetPlacement =
   | { kind: WidgetPlacementKind.Unpositioned }
   | { kind: WidgetPlacementKind.Positioned; position: WidgetPosition }
-enum SaveOfferDisplayKind {
+export enum SaveOfferDisplayKind {
   Hidden = 'hidden',
   Visible = 'visible',
 }
 
-type SaveOfferDisplay =
+export type SaveOfferDisplay =
   | { kind: SaveOfferDisplayKind.Hidden }
   | { kind: SaveOfferDisplayKind.Visible; offer: WebsiteLoginSaveOfferView }
-enum SavePageWatchKind {
+export enum SavePageWatchKind {
   Idle = 'idle',
   Watching = 'watching',
 }
 
-type SavePageWatch =
+export type SavePageWatch =
   | { kind: SavePageWatchKind.Idle }
   | { kind: SavePageWatchKind.Watching; watch: PendingSaveWatch }
-enum AuthenticatorPickerKind {
+export enum AuthenticatorPickerKind {
   Closed = 'closed',
   Open = 'open',
 }
 
-type AuthenticatorPicker =
+export type AuthenticatorPicker =
   | { kind: AuthenticatorPickerKind.Closed }
   | { kind: AuthenticatorPickerKind.Open; request: PendingAuthenticatorPicker }
-enum LoginPickerKind {
+export enum LoginPickerKind {
   Closed = 'closed',
   Open = 'open',
 }
 
-type LoginPicker =
+export type LoginPicker =
   | { kind: LoginPickerKind.Closed }
   | { kind: LoginPickerKind.Open; request: PendingLoginPicker }
-type PendingSaveWatch = {
+export type PendingSaveWatch = {
   offer: WebsiteLoginSaveOfferView
   startedAt: number
   authPath: string
@@ -99,23 +99,17 @@ type PendingSaveWatch = {
 }
 
 class ScanState {
-  private scheduleState: ScanSchedule = { kind: ScanScheduleKind.Idle }
+  private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   sequence = 0
   schedule: () => void = () => {}
-  get pendingTimer(): number | void {
-    if (this.scheduleState.kind === ScanScheduleKind.Scheduled) {
-      return this.scheduleState.timer
-    }
-    return
+  get scheduleState(): ScanSchedule {
+    return this.currentSchedule
   }
-  get scanScheduled(): boolean {
-    return this.scheduleState.kind === ScanScheduleKind.Scheduled
-  }
-  set pendingTimer(value: number) {
-    this.scheduleState = { kind: ScanScheduleKind.Scheduled, timer: value }
+  scheduleTimer(timer: number): void {
+    this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
   }
   clearPendingTimer(): void {
-    this.scheduleState = { kind: ScanScheduleKind.Idle }
+    this.currentSchedule = { kind: ScanScheduleKind.Idle }
   }
 }
 
@@ -133,21 +127,16 @@ class WidgetState {
   dismissed = false
   busy = false
   collapsed = false
-  get host(): HTMLElement | void {
-    if (this.hostState.kind === WidgetHostKind.Attached)
-      return this.hostState.element
-    return
+  get host(): WidgetHost {
+    return this.hostState
   }
-  set host(value: HTMLElement) {
-    this.hostState = { kind: WidgetHostKind.Attached, element: value }
+  attachHost(element: HTMLElement): void {
+    this.hostState = { kind: WidgetHostKind.Attached, element }
   }
-  get renderedWorkflowKey(): string | void {
-    if (this.workflowKeyState.kind === WidgetWorkflowKeyKind.Assigned) {
-      return this.workflowKeyState.key
-    }
-    return
+  get workflowKey(): WidgetWorkflowKey {
+    return this.workflowKeyState
   }
-  set renderedWorkflowKey(value: string) {
+  assignWorkflowKey(value: string): void {
     this.workflowKeyState = {
       kind: WidgetWorkflowKeyKind.Assigned,
       key: value,
@@ -156,16 +145,13 @@ class WidgetState {
   get renderedWorkflowRoot(): WidgetWorkflowRoot {
     return this.workflowRootState
   }
-  set renderedWorkflowRoot(value: WidgetWorkflowRoot) {
+  setRenderedWorkflowRoot(value: WidgetWorkflowRoot): void {
     this.workflowRootState = value
   }
-  get position(): WidgetPosition | void {
-    if (this.placementState.kind === WidgetPlacementKind.Positioned) {
-      return this.placementState.position
-    }
-    return
+  get placement(): WidgetPlacement {
+    return this.placementState
   }
-  set position(value: WidgetPosition) {
+  setPosition(value: WidgetPosition): void {
     this.placementState = {
       kind: WidgetPlacementKind.Positioned,
       position: value,
@@ -183,20 +169,16 @@ class SaveOfferState {
   private watchState: SavePageWatch = { kind: SavePageWatchKind.Idle }
   confirmationActive = false
   dismissedOfferIds = new Set<string>()
-  get activeOffer(): WebsiteLoginSaveOfferView | void {
-    if (this.offerState.kind === SaveOfferDisplayKind.Visible)
-      return this.offerState.offer
-    return
+  get display(): SaveOfferDisplay {
+    return this.offerState
   }
-  set activeOffer(value: WebsiteLoginSaveOfferView) {
+  showOffer(value: WebsiteLoginSaveOfferView): void {
     this.offerState = { kind: SaveOfferDisplayKind.Visible, offer: value }
   }
-  get pendingWatch(): PendingSaveWatch | void {
-    if (this.watchState.kind === SavePageWatchKind.Watching)
-      return this.watchState.watch
-    return
+  get watch(): SavePageWatch {
+    return this.watchState
   }
-  set pendingWatch(value: PendingSaveWatch) {
+  watchPage(value: PendingSaveWatch): void {
     this.watchState = { kind: SavePageWatchKind.Watching, watch: value }
   }
   clearActiveOffer(): void {
@@ -212,24 +194,19 @@ class PickerState {
     kind: AuthenticatorPickerKind.Closed,
   }
   private loginState: LoginPicker = { kind: LoginPickerKind.Closed }
-  get pendingAuthenticator(): PendingAuthenticatorPicker | void {
-    if (this.authenticatorState.kind === AuthenticatorPickerKind.Open) {
-      return this.authenticatorState.request
-    }
-    return
+  get authenticator(): AuthenticatorPicker {
+    return this.authenticatorState
   }
-  set pendingAuthenticator(value: PendingAuthenticatorPicker) {
+  openAuthenticator(value: PendingAuthenticatorPicker): void {
     this.authenticatorState = {
       kind: AuthenticatorPickerKind.Open,
       request: value,
     }
   }
-  get pendingLogin(): PendingLoginPicker | void {
-    if (this.loginState.kind === LoginPickerKind.Open)
-      return this.loginState.request
-    return
+  get login(): LoginPicker {
+    return this.loginState
   }
-  set pendingLogin(value: PendingLoginPicker) {
+  openLogin(value: PendingLoginPicker): void {
     this.loginState = { kind: LoginPickerKind.Open, request: value }
   }
   clearPendingAuthenticator(): void {

@@ -17,7 +17,12 @@ import {
   PasskeyWidgetAction,
   proposePasskeyWithNook,
 } from './login-passkey-actions'
-import { WidgetWorkflowRootKind, widgetState } from './state'
+import {
+  WidgetHostKind,
+  WidgetWorkflowKeyKind,
+  WidgetWorkflowRootKind,
+  widgetState,
+} from './state'
 import {
   buildEnrollmentFlowHost,
   createWidgetShell,
@@ -42,10 +47,14 @@ export function renderEnrollmentWidget(
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
-  if (widgetState.host && widgetState.renderedWorkflowKey === workflowKey) {
+  if (
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
+    widgetState.workflowKey.key === workflowKey
+  ) {
     return
   }
-  if (widgetState.host) removeWidget()
+  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
   const shell = createWidgetShell(enrollmentCopy(hints), vaultConnection, 1, 1)
   const { body, step, title, description, continueButton, openVaultButton } =
@@ -89,8 +98,9 @@ export function renderWidget(
     vaultConnection.vaultName ?? '',
   ].join(':')
   if (
-    widgetState.host &&
-    widgetState.renderedWorkflowKey === workflowKey &&
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
+    widgetState.workflowKey.key === workflowKey &&
     widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned &&
     widgetState.renderedWorkflowRoot.observation.root === workflow.root &&
     widgetState.renderedWorkflowRoot.observation.formScope.kind ===
@@ -102,7 +112,7 @@ export function renderWidget(
   ) {
     return
   }
-  if (widgetState.host) removeWidget()
+  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
   const shell = createWidgetShell(
     workflowCopy(snapshot.kind),

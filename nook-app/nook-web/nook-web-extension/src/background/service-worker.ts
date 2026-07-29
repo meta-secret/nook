@@ -114,6 +114,7 @@ import {
   queryActiveTabLoginDetection,
 } from './service-worker/session-lifecycle'
 import {
+  AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
@@ -248,7 +249,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           })),
         ),
       )
-      .then((snapshot) => sendResponse({ ok: true, snapshot }))
+      .then((result) =>
+        sendResponse(
+          result.kind === AuthenticationWorkflowSnapshotKind.Matched
+            ? { ok: true, snapshot: result.snapshot }
+            : { ok: true },
+        ),
+      )
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),
       )
@@ -465,9 +472,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (isExtensionSessionLockMessage(message)) {
-    const extensionSender =
-      sender.id === chrome.runtime.id &&
-      (!('url' in sender) || sender.url.startsWith(chrome.runtime.getURL('')))
+    const senderUrlAllowed =
+      !('url' in sender) ||
+      (typeof sender.url === 'string' &&
+        sender.url.startsWith(chrome.runtime.getURL('')))
+    const extensionSender = sender.id === chrome.runtime.id && senderUrlAllowed
     if (!extensionSender) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false

@@ -102,9 +102,21 @@ export async function removeAuthenticatorPicker(
   await removeSessionStorage(authenticatorPickerStorageKey(requestId))
 }
 
+export enum AuthenticatorPickerLoadKind {
+  Available = 'available',
+  Unavailable = 'unavailable',
+}
+
+export type AuthenticatorPickerLoad =
+  | {
+      kind: AuthenticatorPickerLoadKind.Available
+      request: PendingAuthenticatorPicker
+    }
+  | { kind: AuthenticatorPickerLoadKind.Unavailable }
+
 export async function loadAuthenticatorPicker(
   requestId: string,
-): Promise<PendingAuthenticatorPicker | void> {
+): Promise<AuthenticatorPickerLoad> {
   let request = pendingAuthenticatorPickers.get(requestId)
   if (!request) {
     const key = authenticatorPickerStorageKey(requestId)
@@ -114,16 +126,16 @@ export async function loadAuthenticatorPicker(
       stored.requestId !== requestId
     ) {
       if (stored) await removeSessionStorage(key)
-      return
+      return { kind: AuthenticatorPickerLoadKind.Unavailable }
     }
     request = stored
     pendingAuthenticatorPickers.set(requestId, request)
   }
   if (request.expiresAt <= Date.now()) {
     await removeAuthenticatorPicker(requestId)
-    return
+    return { kind: AuthenticatorPickerLoadKind.Unavailable }
   }
-  return request
+  return { kind: AuthenticatorPickerLoadKind.Available, request }
 }
 
 export function isAuthenticatorPickerSender(
@@ -301,25 +313,34 @@ export async function removeLoginPicker(requestId: string): Promise<void> {
   await removeSessionStorage(loginPickerStorageKey(requestId))
 }
 
+export enum LoginPickerLoadKind {
+  Available = 'available',
+  Unavailable = 'unavailable',
+}
+
+export type LoginPickerLoad =
+  | { kind: LoginPickerLoadKind.Available; request: PendingLoginPicker }
+  | { kind: LoginPickerLoadKind.Unavailable }
+
 export async function loadLoginPicker(
   requestId: string,
-): Promise<PendingLoginPicker | void> {
+): Promise<LoginPickerLoad> {
   let request = pendingLoginPickers.get(requestId)
   if (!request) {
     const key = loginPickerStorageKey(requestId)
     const stored = (await getSessionStorage(key))[key]
     if (!isPendingLoginPicker(stored) || stored.requestId !== requestId) {
       if (stored) await removeSessionStorage(key)
-      return
+      return { kind: LoginPickerLoadKind.Unavailable }
     }
     request = stored
     pendingLoginPickers.set(requestId, request)
   }
   if (request.expiresAt <= Date.now()) {
     await removeLoginPicker(requestId)
-    return
+    return { kind: LoginPickerLoadKind.Unavailable }
   }
-  return request
+  return { kind: LoginPickerLoadKind.Available, request }
 }
 
 export function isLoginPickerSender(

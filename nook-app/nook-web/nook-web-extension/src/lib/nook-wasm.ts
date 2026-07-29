@@ -88,7 +88,7 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
 
 function runtimeMessage<T>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: T | void) => {
+    chrome.runtime.sendMessage(message, (response: unknown) => {
       if (chrome.runtime.lastError?.message) {
         reject(new Error(chrome.runtime.lastError.message))
         return
@@ -97,7 +97,7 @@ function runtimeMessage<T>(message: unknown): Promise<T> {
         reject(new Error('Extension session did not respond.'))
         return
       }
-      resolve(response)
+      resolve(response as T)
     })
   })
 }
@@ -415,13 +415,28 @@ export async function getResolvedTranslationCatalog(
   locale: NookAppLocale,
 ): Promise<string> {
   await ensureNookWasm()
-  return wasmResolveTranslationCatalog(locale, readWasmCatalog(locale))
+  const catalog = readWasmCatalog(locale)
+  return catalog.kind === WasmCatalogReadKind.Available
+    ? wasmResolveTranslationCatalog(locale, catalog.catalog)
+    : wasmResolveTranslationCatalog(locale)
 }
 
-function readWasmCatalog(locale: NookAppLocale): string | void {
+enum WasmCatalogReadKind {
+  Available = 'available',
+  Unavailable = 'unavailable',
+}
+
+type WasmCatalogRead =
+  | { kind: WasmCatalogReadKind.Available; catalog: string }
+  | { kind: WasmCatalogReadKind.Unavailable }
+
+function readWasmCatalog(locale: NookAppLocale): WasmCatalogRead {
   try {
-    return wasmGetTranslationCatalog(locale)
+    return {
+      kind: WasmCatalogReadKind.Available,
+      catalog: wasmGetTranslationCatalog(locale),
+    }
   } catch {
-    return
+    return { kind: WasmCatalogReadKind.Unavailable }
   }
 }

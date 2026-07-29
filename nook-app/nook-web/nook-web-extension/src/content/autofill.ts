@@ -3,6 +3,7 @@ import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
+  RuntimeMessageDeliveryKind,
   sendRuntimeMessage,
 } from './autofill/login-passkey-actions'
 import {
@@ -14,7 +15,15 @@ import {
   renderSaveOfferWidget,
 } from './autofill/login-save'
 import { removeScannedWidget } from './autofill/message-router'
-import { saveOfferState, scanState, widgetState } from './autofill/state'
+import {
+  SaveOfferDisplayKind,
+  SavePageWatchKind,
+  ScanScheduleKind,
+  WidgetWorkflowKeyKind,
+  saveOfferState,
+  scanState,
+  widgetState,
+} from './autofill/state'
 import {
   renderEnrollmentWidget,
   renderWidget,
@@ -34,16 +43,17 @@ async function scanAndRender(): Promise<void> {
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
   const sequence = ++scanState.sequence
-  if (saveOfferState.activeOffer) {
+  if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+    const { offer } = saveOfferState.display
     if (
-      widgetState.renderedWorkflowKey !==
-      `save:${saveOfferState.activeOffer.offerId}`
+      widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
+      widgetState.workflowKey.key !== `save:${offer.offerId}`
     ) {
-      renderSaveOfferWidget(saveOfferState.activeOffer)
+      renderSaveOfferWidget(offer)
     }
     return
   }
-  if (saveOfferState.pendingWatch) {
+  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
     void evaluatePendingSaveEvidence()
     return
   }
@@ -78,7 +88,7 @@ async function scanAndRender(): Promise<void> {
   }
 
   const boundedCount = (count: number) => Math.min(count, 100)
-  const response = await sendRuntimeMessage<WorkflowSnapshotResponse>({
+  const delivery = await sendRuntimeMessage<WorkflowSnapshotResponse>({
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
@@ -101,10 +111,15 @@ async function scanAndRender(): Promise<void> {
     },
   })
   if (sequence !== scanState.sequence) return
-  if (!response?.ok || !response.snapshot) {
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    !delivery.response.snapshot
+  ) {
     removeScannedWidget()
     return
   }
+  const { response } = delivery
   const selected = workflowForms[response.snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
@@ -116,14 +131,16 @@ async function scanAndRender(): Promise<void> {
 }
 
 function scheduleScan() {
-  if (scanState.scanScheduled) {
-    window.clearTimeout(scanState.pendingTimer)
+  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
+    window.clearTimeout(scanState.scheduleState.timer)
   }
 
-  scanState.pendingTimer = window.setTimeout(() => {
-    scanState.clearPendingTimer()
-    void scanAndRender()
-  }, 150)
+  scanState.scheduleTimer(
+    window.setTimeout(() => {
+      scanState.clearPendingTimer()
+      void scanAndRender()
+    }, 150),
+  )
 }
 
 scanState.schedule = scheduleScan

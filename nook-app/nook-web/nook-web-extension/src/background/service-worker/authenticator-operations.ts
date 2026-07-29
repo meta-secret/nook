@@ -1,5 +1,6 @@
 import { type OtpauthEnrollmentPreview } from '../../lib/enrollment-messages'
 import {
+  AuthenticatorPickerLoadKind,
   authenticatorAccounts,
   authorizedWebsiteGrant,
   isAuthenticatorPickerSender,
@@ -42,7 +43,11 @@ export async function openWebsiteAuthenticatorPicker(
     'authenticator-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (!sender.tab || !('id' in sender.tab)) {
+  if (
+    !sender.tab ||
+    !('id' in sender.tab) ||
+    typeof sender.tab.id !== 'number'
+  ) {
     return { ok: false, reason: 'authenticator-picker-tab-missing' }
   }
 
@@ -84,10 +89,11 @@ export async function queryAuthenticatorPicker(
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
-  const request = await loadAuthenticatorPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadAuthenticatorPicker(message.payload.requestId)
+  if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -108,10 +114,11 @@ export async function selectAuthenticatorPicker(
   if (!isAuthenticatorPickerSender(sender)) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
-  const request = await loadAuthenticatorPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadAuthenticatorPicker(message.payload.requestId)
+  if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'authenticator-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -155,10 +162,11 @@ export async function cancelAuthenticatorPicker(
   message: { payload: { requestId: string } },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  const request = await loadAuthenticatorPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadAuthenticatorPicker(message.payload.requestId)
+  if (loaded.kind === AuthenticatorPickerLoadKind.Unavailable) {
     return { ok: true }
   }
+  const { request } = loaded
   if (
     !isAuthenticatorPickerSender(sender) &&
     !isAuthorizedWebsiteSender(sender, request.origin)

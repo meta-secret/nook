@@ -10,7 +10,7 @@ import {
   type ExtensionPairedVaultIdentityStatusMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-types'
+import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
@@ -292,9 +292,19 @@ type UnlockedSessionDevice = {
   deviceSigningPublicKey: string
 }
 
-function unlockedSessionDevice(
-  response: unknown,
-): UnlockedSessionDevice | void {
+enum UnlockedSessionDeviceParseKind {
+  Invalid = 'invalid',
+  Parsed = 'parsed',
+}
+
+type UnlockedSessionDeviceParse =
+  | { kind: UnlockedSessionDeviceParseKind.Invalid }
+  | {
+      kind: UnlockedSessionDeviceParseKind.Parsed
+      device: UnlockedSessionDevice
+    }
+
+function unlockedSessionDevice(response: unknown): UnlockedSessionDeviceParse {
   if (
     !response ||
     typeof response !== 'object' ||
@@ -306,7 +316,7 @@ function unlockedSessionDevice(
     !response.device ||
     typeof response.device !== 'object'
   ) {
-    return
+    return { kind: UnlockedSessionDeviceParseKind.Invalid }
   }
   const device = response.device
   if (
@@ -317,12 +327,15 @@ function unlockedSessionDevice(
     !('deviceSigningPublicKey' in device) ||
     typeof device.deviceSigningPublicKey !== 'string'
   ) {
-    return
+    return { kind: UnlockedSessionDeviceParseKind.Invalid }
   }
   return {
-    deviceId: device.deviceId,
-    devicePublicKey: device.devicePublicKey,
-    deviceSigningPublicKey: device.deviceSigningPublicKey,
+    kind: UnlockedSessionDeviceParseKind.Parsed,
+    device: {
+      deviceId: device.deviceId,
+      devicePublicKey: device.devicePublicKey,
+      deviceSigningPublicKey: device.deviceSigningPublicKey,
+    },
   }
 }
 
@@ -398,16 +411,16 @@ export async function discoverPairedVaultIdentity(
         },
       }
     }
-    const sessionDevice = unlockedSessionDevice(statusResponse)
+    const parsedSessionDevice = unlockedSessionDevice(statusResponse)
     if (
-      !sessionDevice ||
-      sessionDevice.deviceId !== grant.deviceId ||
-      sessionDevice.devicePublicKey !== grant.devicePublicKey ||
-      sessionDevice.deviceSigningPublicKey !== grant.deviceSigningPublicKey
+      parsedSessionDevice.kind === UnlockedSessionDeviceParseKind.Invalid ||
+      parsedSessionDevice.device.deviceId !== grant.deviceId ||
+      parsedSessionDevice.device.devicePublicKey !== grant.devicePublicKey ||
+      parsedSessionDevice.device.deviceSigningPublicKey !==
+        grant.deviceSigningPublicKey
     ) {
       return unavailable
     }
-
     const nonce = randomNonce()
     await issueIdentityHandoff(nonce, {
       kind: PendingIdentityHandoffKind.PairedVault,

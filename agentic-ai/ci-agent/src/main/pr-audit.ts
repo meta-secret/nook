@@ -24,6 +24,12 @@ type BranchProtectionAudit = {
   requiredStatusChecks?: string[];
 };
 
+export enum PullRequestMergeability {
+  Conflicting = "conflicting",
+  Mergeable = "mergeable",
+  Unknown = "unknown",
+}
+
 export type PrAudit = {
   base: { branch: string; sha: string };
   branchProtection: BranchProtectionAudit;
@@ -35,7 +41,7 @@ export type PrAudit = {
   mergeState: {
     behindBy: number;
     draft: boolean;
-    mergeability: "conflicting" | "mergeable" | "unknown";
+    mergeability: PullRequestMergeability;
     state: string;
   };
   number: number;
@@ -113,13 +119,13 @@ export async function buildPrAudit(
   if (pr.draft) reasons.push("pull request is draft");
   const mergeability =
     mergeable === true
-      ? "mergeable"
+      ? PullRequestMergeability.Mergeable
       : mergeable === false
-        ? "conflicting"
-        : "unknown";
-  if (mergeability === "conflicting")
+        ? PullRequestMergeability.Conflicting
+        : PullRequestMergeability.Unknown;
+  if (mergeability === PullRequestMergeability.Conflicting)
     reasons.push("pull request has a merge conflict");
-  if (mergeability === "unknown")
+  if (mergeability === PullRequestMergeability.Unknown)
     reasons.push("pull request mergeability is unknown");
   if (comparison.data.behind_by > 0) {
     reasons.push(

@@ -15,8 +15,18 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../../lib/outcome-evidence-messages'
-import { sendRuntimeMessage } from './login-passkey-actions'
-import { saveOfferState, scanState, widgetState } from './state'
+import {
+  RuntimeMessageDeliveryKind,
+  sendRuntimeMessage,
+} from './login-passkey-actions'
+import {
+  SavePageWatchKind,
+  WidgetPlacementKind,
+  saveOfferState,
+  scanState,
+  widgetState,
+  type PendingSaveWatch,
+} from './state'
 import { applyWidgetPosition, attachPointerDrag } from './widget-position'
 import { createWidgetMark } from './widget-shell'
 import {
@@ -49,12 +59,25 @@ type LoginSaveActionResponse = {
   reason?: string
 }
 
+enum AuthenticationOutcomeReadKind {
+  Available = 'available',
+  Unavailable = 'unavailable',
+}
+
+type AuthenticationOutcomeRead =
+  | {
+      kind: AuthenticationOutcomeReadKind.Available
+      verdict: AuthenticationOutcomeVerdictView
+    }
+  | { kind: AuthenticationOutcomeReadKind.Unavailable }
+
 function stopPendingSaveWatch(): void {
-  if (!saveOfferState.pendingWatch) return
-  if ('timer' in saveOfferState.pendingWatch) {
-    window.clearInterval(saveOfferState.pendingWatch.timer)
+  if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+  const { watch } = saveOfferState.watch
+  if ('timer' in watch) {
+    window.clearInterval(watch.timer)
   }
-  saveOfferState.pendingWatch.observer?.disconnect()
+  watch.observer?.disconnect()
   saveOfferState.clearPendingWatch()
 }
 
@@ -101,8 +124,8 @@ function collectOutcomeObservation(
 
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeVerdictView | void> {
-  const response = await sendRuntimeMessage<{
+): Promise<AuthenticationOutcomeRead> {
+  const delivery = await sendRuntimeMessage<{
     ok?: boolean
     verdict?: AuthenticationOutcomeVerdictView
   }>({
@@ -112,30 +135,41 @@ async function classifyOutcomeEvidence(
       timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
     },
   })
-  if (!response?.ok || !response.verdict) return
-  return response.verdict
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    !delivery.response.verdict
+  ) {
+    return { kind: AuthenticationOutcomeReadKind.Unavailable }
+  }
+  return {
+    kind: AuthenticationOutcomeReadKind.Available,
+    verdict: delivery.response.verdict,
+  }
 }
 
 export async function evaluatePendingSaveEvidence(): Promise<void> {
-  const watch = saveOfferState.pendingWatch
-  if (!watch) return
+  if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+  const { watch } = saveOfferState.watch
   const observation = collectOutcomeObservation(
     watch.startedAt,
     watch.authPath,
     watch.sawMutation,
   )
-  const verdict = await classifyOutcomeEvidence(observation)
+  const verdictRead = await classifyOutcomeEvidence(observation)
   if (
-    !verdict ||
-    saveOfferState.pendingWatch?.offer.offerId !== watch.offer.offerId
+    verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
+    saveOfferState.watch.kind !== SavePageWatchKind.Watching ||
+    saveOfferState.watch.watch.offer.offerId !== watch.offer.offerId
   ) {
     return
   }
+  const { verdict } = verdictRead
   if (verdict.allowsCredentialCommit) {
     stopPendingSaveWatch()
     if (saveOfferState.dismissedOfferIds.has(watch.offer.offerId)) return
     widgetState.dismissed = false
-    saveOfferState.activeOffer = watch.offer
+    saveOfferState.showOffer(watch.offer)
     renderSaveOfferWidget(watch.offer)
     return
   }
@@ -157,15 +191,15 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
   stopPendingSaveWatch()
   const startedAt = Date.now()
   const authPath = location.pathname
-  const watch: NonNullable<typeof saveOfferState.pendingWatch> = {
+  const watch: PendingSaveWatch = {
     offer,
     startedAt,
     authPath,
     sawMutation: false,
   }
   watch.observer = new MutationObserver(() => {
-    if (!saveOfferState.pendingWatch) return
-    saveOfferState.pendingWatch.sawMutation = true
+    if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+    saveOfferState.watch.watch.sawMutation = true
     void evaluatePendingSaveEvidence()
   })
   watch.observer.observe(document.documentElement, {
@@ -176,14 +210,14 @@ export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
   watch.timer = window.setInterval(() => {
     void evaluatePendingSaveEvidence()
   }, OUTCOME_EVIDENCE_POLL_MS)
-  saveOfferState.pendingWatch = watch
+  saveOfferState.watchPage(watch)
   void evaluatePendingSaveEvidence()
 }
 
 async function stageSaveForCredentials(
   credentials: LoginCredentials,
 ): Promise<void> {
-  const response = await sendRuntimeMessage<LoginSaveOfferResponse>({
+  const delivery = await sendRuntimeMessage<LoginSaveOfferResponse>({
     type: 'nook:website-login-save-offer',
     payload: {
       origin: location.origin,
@@ -193,7 +227,14 @@ async function stageSaveForCredentials(
   })
   credentials.password = ''
   credentials.username = ''
-  if (!response?.ok || !response.offer) return
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    !delivery.response.offer
+  ) {
+    return
+  }
+  const { response } = delivery
   if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) return
   beginPendingSaveWatch(response.offer)
 }
@@ -223,15 +264,17 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
 export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const response = await sendRuntimeMessage<WebsiteLoginSavePendingResponse>({
+  const delivery = await sendRuntimeMessage<WebsiteLoginSavePendingResponse>({
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   })
   if (
-    !response?.ok ||
-    response.state !== WebsiteLoginSavePendingState.Available
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    delivery.response.state !== WebsiteLoginSavePendingState.Available
   )
     return { kind: PendingSaveOfferLoadKind.Absent }
+  const { response } = delivery
   if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
     return { kind: PendingSaveOfferLoadKind.Absent }
   }
@@ -240,7 +283,7 @@ export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
 
 export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   removeWidget()
-  saveOfferState.activeOffer = offer
+  saveOfferState.showOffer(offer)
   const host = document.createElement('div')
   host.id = WIDGET_HOST_ID
   host.setAttribute('data-testid', 'nook-auth-widget')
@@ -340,8 +383,11 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         evidence,
       },
     })
-      .then((response) => {
-        if (!response?.ok) {
+      .then((delivery) => {
+        if (
+          delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+          !delivery.response?.ok
+        ) {
           description.textContent = translatedMessage('widgetSaveLoginFailed')
           saveButton.disabled = false
           return
@@ -497,10 +543,10 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   panel.append(toolbar, body)
   shadow.append(style, panel)
   document.documentElement.append(host)
-  widgetState.host = host
-  widgetState.renderedWorkflowKey = `save:${offer.offerId}`
+  widgetState.attachHost(host)
+  widgetState.assignWorkflowKey(`save:${offer.offerId}`)
   attachPointerDrag(host, toolbar)
-  if (widgetState.position) {
-    applyWidgetPosition(host, widgetState.position)
+  if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
+    applyWidgetPosition(host, widgetState.placement.position)
   }
 }

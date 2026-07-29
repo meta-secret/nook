@@ -87,19 +87,18 @@ export function formatToolCompleted(
   }
 }
 
-export function extractShellOutputChunk(
-  event: Record<string, unknown> | void,
-): string {
-  if (!event) {
+export function extractShellOutputChunk(event: unknown): string {
+  if (!event || typeof event !== "object") {
     return "";
   }
+  const eventRecord = event as Record<string, unknown>;
 
-  const direct = readShellText(event);
+  const direct = readShellText(eventRecord);
   if (direct) {
     return direct;
   }
 
-  const nested = event.value;
+  const nested = eventRecord.value;
   if (nested && typeof nested === "object") {
     const fromNested = readShellText(nested as Record<string, unknown>);
     if (fromNested) {
@@ -107,10 +106,11 @@ export function extractShellOutputChunk(
     }
   }
 
-  const protobufCase = typeof event.case === "string" ? event.case : "";
+  const protobufCase =
+    typeof eventRecord.case === "string" ? eventRecord.case : "";
   if (protobufCase.includes("stdout") || protobufCase.includes("stderr")) {
-    if (typeof event.value === "string") {
-      return event.value;
+    if (typeof eventRecord.value === "string") {
+      return eventRecord.value;
     }
     if (nested && typeof nested === "object") {
       return readShellText(nested as Record<string, unknown>);
@@ -194,7 +194,7 @@ function readShellText(value: Record<string, unknown>): string {
   return "";
 }
 
-function stringArg(args: ToolCall["args"] | void, key: string): string {
+function stringArg(args: unknown, key: string): string {
   if (!args || typeof args !== "object") {
     return "";
   }

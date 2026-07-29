@@ -26,6 +26,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObserverCopy,
     ObserverSnapshot,
   } from './types';
+  import { ObservedAlertSeverity } from './types';
   import { emergencyCopy } from './emergency-copy';
   import {
     DurableTaskLookupKind,
@@ -666,9 +667,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   {@const observedAge = relativeTime(alert.first_observed_at)}
   <button
     class:active
-    class:critical={alert.severity === 'critical'}
+    class:critical={alert.severity === ObservedAlertSeverity.Critical}
     class="alert-row"
-    aria-label={`${task.kind_label} ${alert.severity === 'critical' ? copy.critical : copy.warning} ${alert.reason} ${observedAge} ${task.id}`}
+    aria-label={`${task.kind_label} ${alert.severity === ObservedAlertSeverity.Critical ? copy.critical : copy.warning} ${alert.reason} ${observedAge} ${task.id}`}
     onclick={onselect}
   >
     <span class="alert-mark" aria-hidden="true"
@@ -678,7 +679,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div>
         <strong>{task.kind_label}</strong>
         <span
-          >{alert.severity === 'critical' ? copy.critical : copy.warning}</span
+          >{alert.severity === ObservedAlertSeverity.Critical
+            ? copy.critical
+            : copy.warning}</span
         >
       </div>
       <p>{alert.reason}</p>

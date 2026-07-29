@@ -9,6 +9,7 @@ import {
   createIsolatedContext,
   E2E_SYNC_ONBOARD_PROVIDER,
   expandSettingsSection,
+  expectNoVaultPasswords,
   expectVaultPasswordStatus,
   openStorageSettings,
   revealSecretInRow,
@@ -52,7 +53,7 @@ test.describe('vault password envelope (local)', () => {
 
     const card = page.getByTestId('vault-password-card')
     await expect(card).toBeVisible()
-    await expectVaultPasswordStatus(page, 'none')
+    await expectNoVaultPasswords(page)
 
     // 1. Set a backup password — device keys still unlock the vault.
     await addVaultPassword(page, 'Primary password', 'correct-horse-1')
@@ -76,7 +77,7 @@ test.describe('vault password envelope (local)', () => {
     // 3. Remove backup password — vault still unlocks with device keys.
     await page.getByTestId('remove-vault-password-btn').click()
     await page.getByTestId('confirm-remove-vault-password').click()
-    await expectVaultPasswordStatus(page, 'none', { timeout: UI_TIMEOUT_MS })
+    await expectNoVaultPasswords(page, { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
       'password removed',
       { timeout: UI_TIMEOUT_MS },
@@ -135,7 +136,7 @@ test.describe('vault password envelope (local)', () => {
     const error = page.getByTestId('vault-password-error')
     await expect(error).toBeVisible()
     await expect(error).toContainText('at least 5')
-    await expectVaultPasswordStatus(page, 'none')
+    await expectNoVaultPasswords(page)
   })
 
   test('rejects mismatched password / confirmation', async ({ page }) => {
@@ -150,7 +151,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-password-error')).toContainText(
       'do not match',
     )
-    await expectVaultPasswordStatus(page, 'none')
+    await expectNoVaultPasswords(page)
   })
 
   test('issuing an enrollment code rejects the wrong password', async ({
@@ -268,7 +269,7 @@ test.describe('vault password envelope (local)', () => {
 
     await page.getByTestId('remove-vault-password-btn').click()
     await page.getByTestId('confirm-remove-vault-password').click()
-    await expectVaultPasswordStatus(page, 'none', { timeout: UI_TIMEOUT_MS })
+    await expectNoVaultPasswords(page, { timeout: UI_TIMEOUT_MS })
 
     await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)

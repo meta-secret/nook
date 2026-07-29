@@ -5,6 +5,7 @@ import {
 } from '../../lib/login-save-messages'
 import { classifyAuthenticationOutcome } from '../vault-runtime'
 import {
+  LoginPickerLoadKind,
   authorizedWebsiteGrant,
   isLoginPickerSender,
   loadLoginPicker,
@@ -36,7 +37,11 @@ export async function openWebsiteLoginPicker(
     'login-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (!sender.tab || !('id' in sender.tab)) {
+  if (
+    !sender.tab ||
+    !('id' in sender.tab) ||
+    typeof sender.tab.id !== 'number'
+  ) {
     return { ok: false, reason: 'login-picker-tab-missing' }
   }
 
@@ -78,10 +83,11 @@ export async function queryLoginPicker(
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -106,10 +112,11 @@ export async function selectLoginPicker(
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -153,10 +160,11 @@ export async function cancelLoginPicker(
   message: { payload: { requestId: string } },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: true }
   }
+  const { request } = loaded
   if (
     !isLoginPickerSender(sender) &&
     !isAuthorizedWebsiteSender(sender, request.origin)

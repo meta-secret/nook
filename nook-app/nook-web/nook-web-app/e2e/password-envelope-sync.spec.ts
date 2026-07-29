@@ -7,6 +7,7 @@ import {
   dismissSyncConflictIfVisible,
   expandSettingsSection,
   expandLoginEnrollmentPanel,
+  expectNoVaultPasswords,
   expectVaultPasswordStatus,
   openStorageSettings,
   revealSecretValue,
@@ -72,7 +73,7 @@ test.describe('vault password envelope with sync provider', () => {
 
   test('attaching a password switches the vault to password unlock mode', async () => {
     await openStorageSettings(deviceA)
-    await expectVaultPasswordStatus(deviceA, 'none')
+    await expectNoVaultPasswords(deviceA)
 
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
     await deviceA.getByTestId('vault-secrets-tab').click()
@@ -240,7 +241,7 @@ test.describe('vault password envelope with sync provider', () => {
       (snapshot) => !snapshot.hasPasswordEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await expectVaultPasswordStatus(deviceA, 'none', {
+    await expectNoVaultPasswords(deviceA, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 

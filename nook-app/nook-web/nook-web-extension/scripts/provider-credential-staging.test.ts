@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  ProviderCredentialStagingKind,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../src/lib/provider-credential-staging'
@@ -21,9 +22,11 @@ describe('provider credential staging', () => {
       },
     ]
 
-    const staged = stageProviderCredentials(source)
+    const staging = stageProviderCredentials(source)
 
-    expect(staged).toEqual([
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
+    expect(staging.providers).toEqual([
       {
         id: 'github',
         githubPat: 'github_pat_secret',
@@ -45,7 +48,7 @@ describe('provider credential staging', () => {
   })
 
   test('scrubs a staged copy when queued import work expires', () => {
-    const staged = stageProviderCredentials([
+    const staging = stageProviderCredentials([
       {
         id: 'drive',
         oauthFile: {
@@ -55,14 +58,18 @@ describe('provider credential staging', () => {
       },
     ])
 
-    scrubProviderCredentials(staged)
+    expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
+    if (staging.kind !== ProviderCredentialStagingKind.Staged) return
+    scrubProviderCredentials(staging.providers)
 
-    expect(staged?.[0]).toEqual({
+    expect(staging.providers[0]).toEqual({
       id: 'drive',
       oauthFile: {
         accessToken: '',
       },
     })
-    expect(staged?.[0]?.oauthFile).not.toHaveProperty('refreshToken')
+    expect(
+      (staging.providers[0] as { oauthFile?: unknown }).oauthFile,
+    ).not.toHaveProperty('refreshToken')
   })
 })

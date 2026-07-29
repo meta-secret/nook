@@ -6,7 +6,7 @@ import {
   submitLoginForm,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
-import { pickerState, widgetState } from './state'
+import { LoginPickerKind, pickerState, widgetState } from './state'
 import type {
   LoginFillResponse,
   LoginOptionsResponse,
@@ -19,14 +19,28 @@ export enum PasskeyWidgetAction {
   CreatePasskey = 'create-passkey',
 }
 
-export function sendRuntimeMessage<T>(message: unknown): Promise<T | void> {
+export enum RuntimeMessageDeliveryKind {
+  Delivered = 'delivered',
+  Unavailable = 'unavailable',
+}
+
+export type RuntimeMessageDelivery<T> =
+  | { kind: RuntimeMessageDeliveryKind.Delivered; response: T }
+  | { kind: RuntimeMessageDeliveryKind.Unavailable }
+
+export function sendRuntimeMessage<T>(
+  message: unknown,
+): Promise<RuntimeMessageDelivery<T>> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response: T | void) => {
+    chrome.runtime.sendMessage(message, (response: unknown) => {
       if (chrome.runtime.lastError) {
-        resolve()
+        resolve({ kind: RuntimeMessageDeliveryKind.Unavailable })
         return
       }
-      resolve(response)
+      resolve({
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: response as T,
+      })
     })
   })
 }
@@ -49,7 +63,7 @@ export async function fillAndSubmitAccount(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<boolean> {
-  const response = await sendRuntimeMessage<LoginFillResponse>({
+  const delivery = await sendRuntimeMessage<LoginFillResponse>({
     type: 'nook:website-login-fill',
     payload: {
       origin: location.origin,
@@ -57,7 +71,22 @@ export async function fillAndSubmitAccount(
       secretId: account.secretId,
     },
   })
-  if (!response?.ok || !response.username || !('password' in response)) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetFillFailed'),
+      true,
+    )
+    return false
+  }
+  const { response } = delivery
+  if (
+    !response?.ok ||
+    !response.username ||
+    typeof response.password !== 'string'
+  ) {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
@@ -109,12 +138,15 @@ async function openLoginPicker(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<void> {
-  if (pickerState.pendingLogin) return
-  const response = await sendRuntimeMessage<LoginPickerOpenResponse>({
+  if (pickerState.login.kind === LoginPickerKind.Open) return
+  const delivery = await sendRuntimeMessage<LoginPickerOpenResponse>({
     type: 'nook:website-login-picker-open',
     payload: { origin: location.origin },
   })
-  if (!response?.ok) {
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok
+  ) {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
@@ -124,6 +156,7 @@ async function openLoginPicker(
     )
     return
   }
+  const { response } = delivery
   if (response.status === 'locked') {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
@@ -165,8 +198,13 @@ async function openLoginPicker(
   }
   const timeoutId = window.setTimeout(
     () => {
-      if (pickerState.pendingLogin?.requestId !== requestId) return
-      const pending = pickerState.pendingLogin
+      if (
+        pickerState.login.kind !== LoginPickerKind.Open ||
+        pickerState.login.request.requestId !== requestId
+      ) {
+        return
+      }
+      const pending = pickerState.login.request
       pickerState.clearPendingLogin()
       setStatus(
         pending.description,
@@ -183,7 +221,7 @@ async function openLoginPicker(
     },
     Math.max(0, response.expiresAt - Date.now()),
   )
-  pickerState.pendingLogin = {
+  pickerState.openLogin({
     requestId,
     workflow,
     step,
@@ -191,7 +229,7 @@ async function openLoginPicker(
     description,
     continueButton,
     timeoutId,
-  }
+  })
   setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
   setStatus(
     description,
@@ -209,8 +247,8 @@ function cancelLoginPickerRequest(requestId: string): void {
 }
 
 export function cancelPendingLoginPickerRequest(): void {
-  const pending = pickerState.pendingLogin
-  if (!pending) return
+  if (pickerState.login.kind === LoginPickerKind.Closed) return
+  const pending = pickerState.login.request
   pickerState.clearPendingLogin()
   window.clearTimeout(pending.timeoutId)
   cancelLoginPickerRequest(pending.requestId)
@@ -345,7 +383,8 @@ export async function continueWithNook(
   _panel: HTMLElement,
   workflow: PasswordFormObservation,
 ): Promise<void> {
-  if (widgetState.busy || pickerState.pendingLogin) return
+  if (widgetState.busy || pickerState.login.kind === LoginPickerKind.Open)
+    return
   widgetState.busy = true
   continueButton.disabled = true
   setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
@@ -357,12 +396,15 @@ export async function continueWithNook(
   )
 
   try {
-    const response = await sendRuntimeMessage<LoginOptionsResponse>({
+    const delivery = await sendRuntimeMessage<LoginOptionsResponse>({
       type: 'nook:website-login-options',
       payload: { origin: location.origin },
     })
 
-    if (!response?.ok) {
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response?.ok
+    ) {
       setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
       setStatus(
         description,
@@ -372,6 +414,7 @@ export async function continueWithNook(
       )
       return
     }
+    const { response } = delivery
 
     if (response.status === 'locked') {
       setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
@@ -423,7 +466,7 @@ export async function continueWithNook(
   } finally {
     widgetState.busy = false
     if (
-      !pickerState.pendingLogin &&
+      pickerState.login.kind === LoginPickerKind.Closed &&
       continueButton.isConnected &&
       !continueButton.hidden
     ) {

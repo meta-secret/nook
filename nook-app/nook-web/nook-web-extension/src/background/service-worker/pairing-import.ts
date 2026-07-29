@@ -1,5 +1,6 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
+  ProviderCredentialStagingKind,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../../lib/provider-credential-staging'
@@ -59,9 +60,11 @@ export async function importApprovedPairing(
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
     await ensureExtensionSessionDocument()
+    const staging = stageProviderCredentials(message.payload.providers)
     const providers =
-      stageProviderCredentials(message.payload.providers) ??
-      message.payload.providers
+      staging.kind === ProviderCredentialStagingKind.Staged
+        ? staging.providers
+        : message.payload.providers
     const pairingItems = extensionPairingGrantStorageItems(
       message.payload,
       imported,

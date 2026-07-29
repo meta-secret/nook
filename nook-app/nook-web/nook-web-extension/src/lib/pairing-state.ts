@@ -11,6 +11,15 @@ export type ExtensionPairingStateQueryMessage = {
   type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
 }
 
+export enum ExtensionSetupLoadKind {
+  Ready = 'ready',
+  Unavailable = 'unavailable',
+}
+
+export type ExtensionSetupLoad =
+  | { kind: ExtensionSetupLoadKind.Ready; setup: ExtensionReadySetupState }
+  | { kind: ExtensionSetupLoadKind.Unavailable }
+
 export function isExtensionPairingStateQueryMessage(
   message: unknown,
 ): message is ExtensionPairingStateQueryMessage {
@@ -23,22 +32,26 @@ export function isExtensionPairingStateQueryMessage(
   )
 }
 
-export function loadExtensionSetupState(): Promise<ExtensionReadySetupState | void> {
+export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       {
         type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
       },
-      (response: { ok?: boolean; setup?: unknown } | void) => {
+      (response: unknown) => {
         if (
           chrome.runtime.lastError ||
-          response?.ok !== true ||
+          !response ||
+          typeof response !== 'object' ||
+          !('ok' in response) ||
+          response.ok !== true ||
+          !('setup' in response) ||
           !isExtensionReadySetupState(response.setup)
         ) {
-          resolve()
+          resolve({ kind: ExtensionSetupLoadKind.Unavailable })
           return
         }
-        resolve(response.setup)
+        resolve({ kind: ExtensionSetupLoadKind.Ready, setup: response.setup })
       },
     )
   })

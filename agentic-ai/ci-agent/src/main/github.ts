@@ -170,14 +170,10 @@ export async function requestCodexReview(
       (review) =>
         review.commit_id === pr.head.sha &&
         isSubmittedReviewState(review.state) &&
-        isCodexReviewer(review.user?.login),
+        isCodexReviewer(review.user),
     ) ||
     comments.some((comment) =>
-      isCleanCodexReviewComment(
-        comment.body ?? "",
-        comment.user?.login,
-        pr.head.sha,
-      ),
+      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
     );
   const requestReactions = reviewSettled
     ? []
@@ -194,8 +190,7 @@ export async function requestCodexReview(
         )
       ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) =>
-      reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const settled = reviewSettled || approvalReaction;
   const lastRequestIndex = comments.reduce(
@@ -208,7 +203,7 @@ export async function requestCodexReview(
     comments
       .slice(lastRequestIndex + 1)
       .some((comment) =>
-        isCodexUsageLimitComment(comment.body ?? "", comment.user?.login),
+        isCodexUsageLimitComment(comment.body ?? "", comment.user),
       );
   if (settled || (reviewRequests.length > 0 && !retryAfterUsageLimit)) {
     return { headSha: pr.head.sha, requested: false, settled };
@@ -363,7 +358,7 @@ export async function inspectPrFeedback(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
-      isCodexReviewer(review.user?.login),
+      isCodexReviewer(review.user),
   );
   const requestReactions = (
     await Promise.all(
@@ -378,21 +373,16 @@ export async function inspectPrFeedback(
     )
   ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) =>
-      reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const cleanComment = issueComments.some((comment) =>
-    isCleanCodexReviewComment(
-      comment.body ?? "",
-      comment.user?.login,
-      pr.head.sha,
-    ),
+    isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = issueComments.filter(
     (comment) =>
       !isRepositoryStatusComment(comment.body ?? "") &&
-      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user?.login),
+      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
   const substantiveReviews = reviews.filter((review) => {
     if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
@@ -402,9 +392,7 @@ export async function inspectPrFeedback(
       return true;
     }
     const body = review.body?.trim() ?? "";
-    return (
-      body.length > 0 && !isCodexReviewStatusBody(body, review.user?.login)
-    );
+    return body.length > 0 && !isCodexReviewStatusBody(body, review.user);
   });
 
   return {
@@ -458,12 +446,17 @@ function isRepositoryStatusComment(body: string): boolean {
   );
 }
 
-function isCodexReviewer(login: string | void): boolean {
-  return login === CODEX_REVIEWER_LOGIN;
+function isCodexReviewer(actor: unknown): boolean {
+  return (
+    typeof actor === "object" &&
+    Boolean(actor) &&
+    "login" in actor &&
+    (actor as { login?: unknown }).login === CODEX_REVIEWER_LOGIN
+  );
 }
 
-function isCodexReviewStatusBody(body: string, login: string | void): boolean {
-  if (!isCodexReviewer(login)) {
+function isCodexReviewStatusBody(body: string, actor: unknown): boolean {
+  if (!isCodexReviewer(actor)) {
     return false;
   }
   const trimmed = body.trim();
@@ -488,19 +481,19 @@ function isCodexReviewStatusBody(body: string, login: string | void): boolean {
   );
 }
 
-function isCodexUsageLimitComment(body: string, login: string | void): boolean {
+function isCodexUsageLimitComment(body: string, actor: unknown): boolean {
   return (
-    isCodexReviewer(login) &&
+    isCodexReviewer(actor) &&
     body.includes("Codex usage limits for code reviews")
   );
 }
 
 function isCleanCodexReviewComment(
   body: string,
-  login: string | void,
+  actor: unknown,
   headSha: string,
 ): boolean {
-  if (!isCodexCleanReviewStatusComment(body, login)) {
+  if (!isCodexCleanReviewStatusComment(body, actor)) {
     return false;
   }
   const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
@@ -509,10 +502,10 @@ function isCleanCodexReviewComment(
 
 function isCodexCleanReviewStatusComment(
   body: string,
-  login: string | void,
+  actor: unknown,
 ): boolean {
   return (
-    isCodexReviewer(login) &&
+    isCodexReviewer(actor) &&
     body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX) &&
     REVIEWED_COMMIT_PATTERN.test(body)
   );

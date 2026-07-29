@@ -7,19 +7,28 @@ const RECOVERY_HINT =
 
 const CODE_LINE = /^(?:[-*•]\s*)?([A-Za-z0-9][A-Za-z0-9 _-]{4,62}[A-Za-z0-9])$/
 
+enum BackupCodeCandidateKind {
+  Accepted = 'accepted',
+  Rejected = 'rejected',
+}
+
+type BackupCodeCandidate =
+  | { kind: BackupCodeCandidateKind.Accepted; value: string }
+  | { kind: BackupCodeCandidateKind.Rejected }
+
 export function pageHasBackupCodeHint(): boolean {
   const bodyText = document.body?.innerText ?? ''
   return RECOVERY_HINT.test(bodyText)
 }
 
-function normalizeCandidate(value: string): string | void {
+function normalizeCandidate(value: string): BackupCodeCandidate {
   const trimmed = value.trim().replace(/\s+/g, ' ')
   if (
     trimmed.length < MIN_CODE_LEN ||
     trimmed.length > MAX_CODE_LEN ||
     !CODE_LINE.test(trimmed)
   ) {
-    return
+    return { kind: BackupCodeCandidateKind.Rejected }
   }
   // Reject ordinary sentences, hint copy, and URLs.
   if (
@@ -28,19 +37,23 @@ function normalizeCandidate(value: string): string | void {
     /\s{2,}/.test(trimmed) ||
     RECOVERY_HINT.test(trimmed)
   ) {
-    return
+    return { kind: BackupCodeCandidateKind.Rejected }
   }
   const words = trimmed.split(' ')
   // Recovery codes are single tokens or short grouped tokens, not prose.
-  if (words.length > 2) return
+  if (words.length > 2) return { kind: BackupCodeCandidateKind.Rejected }
   if (words.length === 2 && words.every((word) => /^[A-Za-z]+$/.test(word))) {
-    return
+    return { kind: BackupCodeCandidateKind.Rejected }
   }
   const compact = trimmed.replace(/[\s_-]/g, '')
-  if (compact.length < MIN_CODE_LEN) return
+  if (compact.length < MIN_CODE_LEN) {
+    return { kind: BackupCodeCandidateKind.Rejected }
+  }
   // Real backup codes always include at least one digit.
-  if (!/[0-9]/.test(compact)) return
-  return trimmed
+  if (!/[0-9]/.test(compact)) {
+    return { kind: BackupCodeCandidateKind.Rejected }
+  }
+  return { kind: BackupCodeCandidateKind.Accepted, value: trimmed }
 }
 
 export function extractBackupCodeCandidates(sourceText?: string): string[] {
@@ -50,9 +63,14 @@ export function extractBackupCodeCandidates(sourceText?: string): string[] {
   const seen = new Set<string>()
   for (const line of lines) {
     const normalized = normalizeCandidate(line)
-    if (!normalized || seen.has(normalized)) continue
-    seen.add(normalized)
-    candidates.push(normalized)
+    if (
+      normalized.kind === BackupCodeCandidateKind.Rejected ||
+      seen.has(normalized.value)
+    ) {
+      continue
+    }
+    seen.add(normalized.value)
+    candidates.push(normalized.value)
     if (candidates.length >= MAX_CANDIDATES) break
   }
   return candidates

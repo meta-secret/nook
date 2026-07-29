@@ -1,8 +1,11 @@
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
-import { loadExtensionSetupState } from '../../lib/pairing-state'
-import { saveOfferState, widgetState } from './state'
+import {
+  ExtensionSetupLoadKind,
+  loadExtensionSetupState,
+} from '../../lib/pairing-state'
+import { WidgetHostKind, saveOfferState, widgetState } from './state'
 
 export type PilotVaultConnection = {
   connected: boolean
@@ -168,8 +171,8 @@ export function translatedMessageWithSubstitution(
 
 export async function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
   const setup = await loadExtensionSetupState()
-  return setup
-    ? { connected: true, vaultName: setup.selectedVaultName }
+  return setup.kind === ExtensionSetupLoadKind.Ready
+    ? { connected: true, vaultName: setup.setup.selectedVaultName }
     : { connected: false }
 }
 
@@ -184,7 +187,9 @@ export function vaultConnectionLabel(connection: PilotVaultConnection): string {
 }
 
 export function removeWidget(): void {
-  widgetState.host?.remove()
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    widgetState.host.element.remove()
+  }
   widgetState.clearRenderedWidget()
   saveOfferState.clearActiveOffer()
   saveOfferState.confirmationActive = false

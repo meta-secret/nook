@@ -17,7 +17,7 @@ import {
   belongsToSentinelVault,
   belongsToSimpleVault,
   DEFAULT_SIMPLE_VAULT_URL,
-  matchingSentinelVaultBaseUrl,
+  sentinelVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
 } from '../../src/lib/simple-vault-target'
@@ -35,7 +35,7 @@ export {
   belongsToSimpleVault,
   installMockPasskeyRuntime,
   lockExtensionSession,
-  matchingSentinelVaultBaseUrl,
+  sentinelVaultBaseUrl,
   readPersistedAppLogs,
   simpleVaultUrl,
   waitForExtensionPairingReady,

@@ -2,6 +2,9 @@ import {
   isExtensionConnectScope,
   type ExtensionConnectScope,
 } from './extension-connect-scope'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from './paired-vault-identity-status'
+
+export { ExtensionPairedVaultIdentityStatusMessageStatus }
 
 export enum ExtensionPairingVaultType {
   Simple = 'simple',
@@ -129,13 +132,6 @@ type ExtensionPairedVaultIdentityStatusBase = {
 
 export enum ExtensionPairedVaultIdentityStatusMessageType {
   NookExtensionPairedVaultIdentityStatus = 'nook:extension-paired-vault-identity-status',
-}
-
-export enum ExtensionPairedVaultIdentityStatusMessageStatus {
-  Unavailable = 'unavailable',
-  Locked = 'locked',
-  DifferentVault = 'different-vault',
-  Unlocked = 'unlocked',
 }
 
 export type ExtensionPairedVaultIdentityStatusMessage =

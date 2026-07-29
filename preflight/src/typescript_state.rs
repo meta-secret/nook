@@ -363,7 +363,7 @@ fn collect_raw_string_discriminant_nodes(
         }
     }
     if node.kind() == "union_type"
-        && contains_string_literal_type(node, source)
+        && union_contains_direct_string_literal(node, source)
         && !is_type_utility_key_union(node, source)
     {
         lines.push(first_line + node.start_position().row);
@@ -463,22 +463,32 @@ fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
     matches!(node.kind(), "string" | "template_string")
 }
 
-fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
+fn union_contains_direct_string_literal(node: tree_sitter::Node<'_>, source: &str) -> bool {
     if is_string_literal_type(node, source) {
         return true;
     }
+    if !matches!(node.kind(), "union_type" | "parenthesized_type") {
+        return false;
+    }
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
-        .any(|child| contains_string_literal_type(child, source))
+        .any(|child| union_contains_direct_string_literal(child, source))
 }
 
 fn is_type_utility_key_union(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    let Some(type_arguments) = node.parent() else {
-        return false;
+    let mut ancestor = node;
+    let type_arguments = loop {
+        let Some(parent) = ancestor.parent() else {
+            return false;
+        };
+        if parent.kind() == "type_arguments" {
+            break parent;
+        }
+        if !matches!(parent.kind(), "union_type" | "parenthesized_type") {
+            return false;
+        }
+        ancestor = parent;
     };
-    if type_arguments.kind() != "type_arguments" {
-        return false;
-    }
     let Some(generic_type) = type_arguments.parent() else {
         return false;
     };
@@ -976,6 +986,7 @@ if (server.transport.type !== 'stdio') console.log('external protocol')
 const description = { label: 'static copy' }
 const externalKind = state.kind ?? 'external-value'
 type SelectedFields = Pick<SessionState, 'kind' | 'handle'>
+type ToolArguments = ToolCall['args'] | void
 ";
 
         assert_eq!(

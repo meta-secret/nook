@@ -1,4 +1,5 @@
 import {
+  ProviderCredentialStagingKind,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
@@ -187,22 +188,31 @@ export class ExtensionSessionMessageDispatcher {
     message: Record<string, unknown>,
     payload: Record<string, unknown>,
   ): Promise<unknown> {
-    const stagedProviders = stageProviderCredentials(payload.providers)
+    const staging = stageProviderCredentials(payload.providers)
     // Pairing imports are one-shot and may run against a cold offscreen WASM
     // runtime. Never expire them with the short interactive probe budget.
-    if (!stagedProviders || stagedProviders.length === 0) {
+    if (
+      staging.kind === ProviderCredentialStagingKind.InvalidInput ||
+      staging.providers.length === 0
+    ) {
       return this.operations.enqueue(
         () =>
           this.context.handleMessage({
             ...message,
             payload: {
               ...payload,
-              providers: stagedProviders ?? payload.providers ?? [],
+              providers:
+                staging.kind === ProviderCredentialStagingKind.Staged
+                  ? staging.providers
+                  : Array.isArray(payload.providers)
+                    ? payload.providers
+                    : [],
             },
           }),
         { priority: SessionOperationPriority.Interactive },
       )
     }
+    const stagedProviders = staging.providers
     payload.providers = []
     let payloadResidency: SensitivePayloadResidency = {
       kind: SensitivePayloadResidencyKind.Resident,

@@ -3,14 +3,14 @@ import {
   isNookVaultAppUrl,
   isSentinelVaultHostname,
   isSimpleVaultHostname,
-  matchingSentinelVaultBaseUrl,
+  sentinelVaultBaseUrl,
   nookVaultAppExcludeMatchPatterns,
   sentinelVaultMatchPatterns,
 } from '../src/lib/simple-vault-target'
 
 describe('Sentinel deployment exclusions', () => {
   test('derives the isolated production and development Sentinel origins', () => {
-    expect(matchingSentinelVaultBaseUrl('https://simple.dev.nokey.sh/')).toBe(
+    expect(sentinelVaultBaseUrl('https://simple.dev.nokey.sh/')).toBe(
       'https://sentinel.dev.nokey.sh/',
     )
     expect(sentinelVaultMatchPatterns('https://simple.nokey.sh/')).toContain(

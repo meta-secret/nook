@@ -40,6 +40,19 @@ type PasskeyOption = {
   }
 }
 
+enum PasskeyOptionChoiceKind {
+  BrowserFallback = 'browser-fallback',
+  Selected = 'selected',
+}
+
+type PasskeyOptionChoice =
+  | { kind: PasskeyOptionChoiceKind.BrowserFallback }
+  | { kind: PasskeyOptionChoiceKind.Selected; option: PasskeyOption }
+
+enum PasskeyOptionsStatus {
+  Ready = 'ready',
+}
+
 function t(key: string, fallback: string): string {
   return chrome.i18n.getMessage(key) || fallback
 }
@@ -90,7 +103,7 @@ function removePrompt(requestId: string): void {
 function chooseOption(
   request: PageRequest,
   options: PasskeyOption[],
-): Promise<PasskeyOption | void> {
+): Promise<PasskeyOptionChoice> {
   return new Promise((resolve) => {
     const host = document.createElement('aside')
     host.setAttribute('aria-label', 'Nook passkey')
@@ -108,9 +121,13 @@ function chooseOption(
         : 'Use a Nook passkey?',
     )
     const detail = document.createElement('p')
+    const relyingParty = request.request.relyingParty
     const rp =
-      request.ceremony === WebsitePasskeyCeremony.Create
-        ? (request.request.relyingParty as { name?: unknown } | void)?.name
+      request.ceremony === WebsitePasskeyCeremony.Create &&
+      relyingParty &&
+      typeof relyingParty === 'object' &&
+      'name' in relyingParty
+        ? relyingParty.name
         : request.request.rpId
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
     const choices = document.createElement('div')
@@ -123,7 +140,7 @@ function chooseOption(
         : option.vaultName
       button.addEventListener('click', () => {
         removePrompt(request.requestId)
-        resolve(option)
+        resolve({ kind: PasskeyOptionChoiceKind.Selected, option })
       })
       choices.append(button)
     }
@@ -133,7 +150,7 @@ function chooseOption(
     fallback.textContent = t('passkeyUseBrowser', 'Use browser or security key')
     fallback.addEventListener('click', () => {
       removePrompt(request.requestId)
-      resolve()
+      resolve({ kind: PasskeyOptionChoiceKind.BrowserFallback })
     })
     const style = document.createElement('style')
     style.textContent = `
@@ -158,7 +175,7 @@ async function handleRequest(request: PageRequest): Promise<void> {
   const requestJson = JSON.stringify(request.request)
   const optionsResponse = await runtimeMessage<{
     ok?: boolean
-    status?: string
+    status?: PasskeyOptionsStatus
     options?: unknown
   }>({
     type: 'nook:website-passkey-options',
@@ -172,17 +189,18 @@ async function handleRequest(request: PageRequest): Promise<void> {
   const options = validOptions(optionsResponse?.options)
   if (
     optionsResponse?.ok !== true ||
-    optionsResponse.status !== 'ready' ||
+    optionsResponse.status !== PasskeyOptionsStatus.Ready ||
     options.length === 0
   ) {
     respond(request.requestId, PageResponseAction.Fallback)
     return
   }
-  const selected = await chooseOption(request, options)
-  if (!selected) {
+  const choice = await chooseOption(request, options)
+  if (choice.kind === PasskeyOptionChoiceKind.BrowserFallback) {
     respond(request.requestId, PageResponseAction.Fallback)
     return
   }
+  const { option: selected } = choice
   const result = await runtimeMessage<Record<string, unknown>>({
     type: 'nook:website-passkey-perform',
     payload: {

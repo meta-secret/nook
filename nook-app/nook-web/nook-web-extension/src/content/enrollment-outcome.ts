@@ -4,13 +4,19 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
+import {
+  RuntimeMessageDeliveryKind,
+  type RuntimeMessageDelivery,
+} from './autofill/login-passkey-actions'
 
 // Multi-step QR → verify → success under CI load regularly exceeds 12s.
 const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 30_000
 const ENROLLMENT_EVIDENCE_POLL_MS = 250
 
 type EnrollmentOutcomeHost = {
-  sendRuntimeMessage: <T>(message: unknown) => Promise<T | void>
+  sendRuntimeMessage: <T>(
+    message: unknown,
+  ) => Promise<RuntimeMessageDelivery<T>>
 }
 
 type EnrollmentEvidenceCallbacks = {
@@ -23,6 +29,18 @@ type EnrollCodeResponse = {
   ok?: boolean
   code?: string
 }
+
+enum EnrollmentOutcomeClassificationKind {
+  Classified = 'classified',
+  Unavailable = 'unavailable',
+}
+
+type EnrollmentOutcomeClassification =
+  | {
+      kind: EnrollmentOutcomeClassificationKind.Classified
+      verdict: AuthenticationOutcomeVerdictView
+    }
+  | { kind: EnrollmentOutcomeClassificationKind.Unavailable }
 
 type EnrollmentWatch = {
   stageId: string
@@ -71,8 +89,8 @@ function isDisplayedOutcomeMarker(element: Element): boolean {
   return rect.width > 0 && rect.height > 0
 }
 
-function queryDisplayedOutcomeMarker(selector: string): Element | void {
-  return Array.from(document.querySelectorAll(selector)).find(
+function hasDisplayedOutcomeMarker(selector: string): boolean {
+  return Array.from(document.querySelectorAll(selector)).some(
     isDisplayedOutcomeMarker,
   )
 }
@@ -84,16 +102,12 @@ function collectEnrollmentOutcomeObservation(
 ): AuthenticationOutcomeObservationView {
   // Only count markers that are actually shown. Soft SPA demos keep a hidden
   // success node in the document; treating that as present commits too early.
-  const successMarkerPresent = Boolean(
-    queryDisplayedOutcomeMarker(
-      '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-    ),
+  const successMarkerPresent = hasDisplayedOutcomeMarker(
+    '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
   )
   // Bare [role="alert"] is too broad during SPA route swaps.
-  const errorMarkerPresent = Boolean(
-    queryDisplayedOutcomeMarker(
-      '[data-nook-auth-outcome="error"], .error[role="alert"]',
-    ),
+  const errorMarkerPresent = hasDisplayedOutcomeMarker(
+    '[data-nook-auth-outcome="error"], .error[role="alert"]',
   )
   return {
     navigatedAwayFromAuthPath:
@@ -115,8 +129,8 @@ function collectEnrollmentOutcomeObservation(
 async function classifyEnrollmentOutcome(
   host: EnrollmentOutcomeHost,
   observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeVerdictView | void> {
-  const response = await host.sendRuntimeMessage<{
+): Promise<EnrollmentOutcomeClassification> {
+  const delivery = await host.sendRuntimeMessage<{
     ok?: boolean
     verdict?: AuthenticationOutcomeVerdictView
   }>({
@@ -126,20 +140,35 @@ async function classifyEnrollmentOutcome(
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
     },
   })
-  if (!response?.ok || !response.verdict) return
-  return response.verdict
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    !delivery.response.verdict
+  ) {
+    return { kind: EnrollmentOutcomeClassificationKind.Unavailable }
+  }
+  return {
+    kind: EnrollmentOutcomeClassificationKind.Classified,
+    verdict: delivery.response.verdict,
+  }
 }
 
 export async function fillStagedEnrollmentCode(
   host: EnrollmentOutcomeHost,
   stageId: string,
 ): Promise<boolean> {
-  const response = await host.sendRuntimeMessage<EnrollCodeResponse>({
+  const delivery = await host.sendRuntimeMessage<EnrollCodeResponse>({
     type: 'nook:website-authenticator-enroll-code',
     payload: { origin: location.origin, stageId },
   })
-  if (!response?.ok || typeof response.code !== 'string') return false
-  return fillOneTimeCode(response.code)
+  if (
+    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+    !delivery.response?.ok ||
+    typeof delivery.response.code !== 'string'
+  ) {
+    return false
+  }
+  return fillOneTimeCode(delivery.response.code)
 }
 
 export function stopPendingEnrollmentWatch(): void {
@@ -181,14 +210,18 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
     return
   }
 
-  const verdict = await classifyEnrollmentOutcome(watch.host, observation)
+  const classification = await classifyEnrollmentOutcome(
+    watch.host,
+    observation,
+  )
   if (
-    !verdict ||
+    classification.kind === EnrollmentOutcomeClassificationKind.Unavailable ||
     enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching ||
     enrollmentWatchState.watch.stageId !== watch.stageId
   ) {
     return
   }
+  const { verdict } = classification
 
   if (verdict.allowsCredentialCommit) {
     stopPendingEnrollmentWatch()

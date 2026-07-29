@@ -1,12 +1,9 @@
-import { ExtensionConnectScope } from './extension-connect-scope'
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from './runtime-messages'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from './paired-vault-identity-status'
 
 export enum ExtensionIdentityRequestSource {
   ExtensionConnect = 'extension-connect',
   PairedVault = 'paired-vault',
 }
-
-export { ExtensionConnectScope }
 
 export type ExtensionConnectRequestFor<Scope extends string> =
   | (ExtensionIdentityRequestBase<Scope> & {

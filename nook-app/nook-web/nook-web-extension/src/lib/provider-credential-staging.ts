@@ -1,5 +1,14 @@
 type UnknownRecord = Record<string, unknown>
 
+export enum ProviderCredentialStagingKind {
+  InvalidInput = 'invalid-input',
+  Staged = 'staged',
+}
+
+export type ProviderCredentialStaging =
+  | { kind: ProviderCredentialStagingKind.InvalidInput }
+  | { kind: ProviderCredentialStagingKind.Staged; providers: unknown[] }
+
 function isRecord(value: unknown): value is UnknownRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
@@ -27,9 +36,13 @@ export function scrubProviderCredentials(providers: unknown): void {
   }
 }
 
-export function stageProviderCredentials(providers: unknown): unknown[] | void {
-  if (!Array.isArray(providers)) return
+export function stageProviderCredentials(
+  providers: unknown,
+): ProviderCredentialStaging {
+  if (!Array.isArray(providers)) {
+    return { kind: ProviderCredentialStagingKind.InvalidInput }
+  }
   const staged = providers.map(cloneProvider)
   scrubProviderCredentials(providers)
-  return staged
+  return { kind: ProviderCredentialStagingKind.Staged, providers: staged }
 }

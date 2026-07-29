@@ -82,13 +82,14 @@ export function attachPointerDrag(
     if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
     dragged = true
     host.classList.add('dragging')
-    widgetState.position = clampWidgetPosition(
+    const position = clampWidgetPosition(
       originLeft + dx,
       originTop + dy,
       host.offsetWidth,
       host.offsetHeight,
     )
-    applyWidgetPosition(host, widgetState.position)
+    widgetState.setPosition(position)
+    applyWidgetPosition(host, position)
   })
 
   const endDrag = (event: PointerEvent) => {

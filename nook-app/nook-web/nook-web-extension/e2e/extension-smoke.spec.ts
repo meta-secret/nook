@@ -10,7 +10,7 @@ import {
   getServiceWorker,
   installMockPasskeyRuntime,
   launchExtensionContext,
-  matchingSentinelVaultBaseUrl,
+  sentinelVaultBaseUrl,
   openSimpleVaultConnection,
   pairingGrantStorageKey,
   readExtensionStorage,
@@ -292,9 +292,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     }
 
     const sentinelPage = await context.newPage()
-    const sentinelUrl =
-      matchingSentinelVaultBaseUrl(simpleVaultBaseUrl) ??
-      'https://sentinel.nokey.sh/'
+    const sentinelUrl = sentinelVaultBaseUrl(simpleVaultBaseUrl)
     await sentinelPage.goto(sentinelUrl)
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 

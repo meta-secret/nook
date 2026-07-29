@@ -29,6 +29,15 @@ type BarcodeDetectorAvailability =
       Detector: BarcodeDetectorConstructor
     }
 
+enum QrBitmapCaptureKind {
+  Captured = 'captured',
+  Unavailable = 'unavailable',
+}
+
+type QrBitmapCapture =
+  | { kind: QrBitmapCaptureKind.Captured; bitmap: ImageBitmap }
+  | { kind: QrBitmapCaptureKind.Unavailable }
+
 function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
   const candidate = (
     globalThis as typeof globalThis & {
@@ -101,24 +110,35 @@ export function pageHasQrEnrollmentHint(): boolean {
 
 async function bitmapFromElement(
   element: HTMLElement,
-): Promise<ImageBitmap | void> {
+): Promise<QrBitmapCapture> {
   try {
     if (element instanceof HTMLCanvasElement) {
-      return await createImageBitmap(element)
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(element),
+      }
     }
     if (element instanceof HTMLImageElement) {
-      if (!element.complete || element.naturalWidth === 0) return
-      return await createImageBitmap(element)
+      if (!element.complete || element.naturalWidth === 0) {
+        return { kind: QrBitmapCaptureKind.Unavailable }
+      }
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(element),
+      }
     }
     if (element instanceof SVGSVGElement) {
       const serialized = new XMLSerializer().serializeToString(element)
       const blob = new Blob([serialized], { type: 'image/svg+xml' })
-      return await createImageBitmap(blob)
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(blob),
+      }
     }
   } catch {
-    return
+    return { kind: QrBitmapCaptureKind.Unavailable }
   }
-  return
+  return { kind: QrBitmapCaptureKind.Unavailable }
 }
 
 function collectQrMedia(): HTMLElement[] {
@@ -214,8 +234,9 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
   let index = 0
   for (const element of collectQrMedia()) {
     index += 1
-    const bitmap = await bitmapFromElement(element)
-    if (!bitmap) continue
+    const capture = await bitmapFromElement(element)
+    if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
+    const { bitmap } = capture
     try {
       const codes = await detector.detect(bitmap)
       for (const code of codes) {

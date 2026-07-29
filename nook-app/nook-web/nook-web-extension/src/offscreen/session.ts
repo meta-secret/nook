@@ -16,6 +16,12 @@ import {
   SessionMessageTypeParseKind,
   type SessionMessageTypeParse,
 } from './session-message-dispatch'
+import {
+  LOGIN_SAVE_OFFER_TTL_MS,
+  PendingLoginSaveLookupState,
+  pendingLoginSaveOfferStore,
+  type PendingLoginSaveOffer,
+} from './login-save-offers'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -81,57 +87,7 @@ let sessionExpirySchedule: SessionExpirySchedule = {
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
-const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
-
-type PendingLoginSaveOffer = {
-  offerId: string
-  origin: string
-  username: string
-  password: string
-  vaultStoreId: string
-  expiresAt: number
-  expiryTimer: ReturnType<typeof setTimeout>
-} & (
-  | { decision: NookWebsiteLoginSaveDecision.Create }
-  | {
-      decision: NookWebsiteLoginSaveDecision.Update
-      replaceSecretId: string
-    }
-)
-
-enum PendingLoginSaveLookupState {
-  Unavailable = 'unavailable',
-  Available = 'available',
-}
-
-const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
-
-function clearLoginSaveOffer(offer: PendingLoginSaveOffer | void): void {
-  if (!offer) return
-  offer.username = ''
-  offer.password = ''
-  clearTimeout(offer.expiryTimer)
-  pendingLoginSaveOffers.delete(offer.offerId)
-}
-
-function purgeExpiredLoginSaveOffers(now = Date.now()): void {
-  for (const offer of [...pendingLoginSaveOffers.values()]) {
-    if (offer.expiresAt <= now) {
-      clearLoginSaveOffer(offer)
-    }
-  }
-}
-
-function findPendingLoginSaveOffer(
-  origin: string,
-): PendingLoginSaveOffer | void {
-  purgeExpiredLoginSaveOffers()
-  for (const offer of pendingLoginSaveOffers.values()) {
-    if (offer.origin === origin) return offer
-  }
-  return
-}
 
 function ensureWasm(): Promise<unknown> {
   if (wasmStartup.kind === WasmStartupKind.Initializing) {
@@ -319,10 +275,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
   }
   switch (parsedType.messageType) {
     case 'nook:extension-session-reset': {
-      for (const offer of Array.from(pendingLoginSaveOffers.values())) {
-        clearLoginSaveOffer(offer)
-      }
-      pendingLoginSaveOffers.clear()
+      pendingLoginSaveOfferStore.clearAll()
       canceledWebsitePasskeyRequests.clear()
       sessionMessageDispatcher.replaceOperations(
         new Error('Extension session reset.'),
@@ -786,12 +739,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           payload.password = ''
           return { ok: true, decision, secretId: plan.secretId }
         }
-        purgeExpiredLoginSaveOffers()
-        for (const existing of [...pendingLoginSaveOffers.values()]) {
-          if (existing.origin === payload.origin) {
-            clearLoginSaveOffer(existing)
-          }
-        }
+        pendingLoginSaveOfferStore.clearForOrigin(payload.origin)
         const offerId = crypto.randomUUID()
         if (
           decision === NookWebsiteLoginSaveDecision.Update &&
@@ -807,7 +755,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           vaultStoreId: grant.vaultStoreId,
           expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
           expiryTimer: setTimeout(() => {
-            clearLoginSaveOffer(pendingLoginSaveOffers.get(offerId))
+            pendingLoginSaveOfferStore.clearById(offerId)
           }, LOGIN_SAVE_OFFER_TTL_MS),
         }
         const offer: PendingLoginSaveOffer =
@@ -818,7 +766,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
                 replaceSecretId: plan.secretId,
               }
             : { ...commonOffer, decision }
-        pendingLoginSaveOffers.set(offerId, offer)
+        pendingLoginSaveOfferStore.store(offer)
         payload.password = ''
         return {
           ok: true,
@@ -840,10 +788,11 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'Extension session received an invalid pending login save lookup.',
         )
       }
-      const offer = findPendingLoginSaveOffer(payload.origin)
-      if (!offer) {
+      const lookup = pendingLoginSaveOfferStore.findByOrigin(payload.origin)
+      if (lookup.state === PendingLoginSaveLookupState.Unavailable) {
         return { ok: true, state: PendingLoginSaveLookupState.Unavailable }
       }
+      const { offer } = lookup
       return {
         ok: true,
         state: PendingLoginSaveLookupState.Available,
@@ -862,16 +811,18 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'Extension session received an invalid login save commit.',
         )
       }
-      purgeExpiredLoginSaveOffers()
-      const offer = pendingLoginSaveOffers.get(payload.offerId)
-      if (!offer || offer.origin !== (payload.origin as string)) {
+      const lookup = pendingLoginSaveOfferStore.findById(payload.offerId)
+      if (
+        lookup.state === PendingLoginSaveLookupState.Unavailable ||
+        lookup.offer.origin !== (payload.origin as string)
+      ) {
         throw new Error('Login save offer is missing or expired.')
       }
+      const { offer } = lookup
+      pendingLoginSaveOfferStore.removeForCommit(offer)
       if (offer.vaultStoreId !== grant.vaultStoreId) {
         throw new Error('Login save offer does not match the vault grant.')
       }
-      clearTimeout(offer.expiryTimer)
-      pendingLoginSaveOffers.delete(offer.offerId)
       const committedOffer = { ...offer }
       offer.username = ''
       offer.password = ''
@@ -889,7 +840,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
         return { ok: true, decision: committedOffer.decision }
       } finally {
-        clearLoginSaveOffer(committedOffer)
+        pendingLoginSaveOfferStore.clearOffer(committedOffer)
       }
     }
     case 'nook:extension-session-dismiss-login-save': {
@@ -899,7 +850,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'Extension session received an invalid login save dismissal.',
         )
       }
-      clearLoginSaveOffer(pendingLoginSaveOffers.get(payload.offerId))
+      pendingLoginSaveOfferStore.clearById(payload.offerId)
       return { ok: true }
     }
     case 'nook:extension-session-cancel-passkey': {

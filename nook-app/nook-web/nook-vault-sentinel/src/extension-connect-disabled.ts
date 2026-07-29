@@ -6,7 +6,7 @@ import type {
   PairedExtensionIdentityDiscoveryFor,
 } from '$web-shared/extension/extension-connect-types'
 import { ExtensionIdentityRequestSource } from '$web-shared/extension/extension-connect-types'
-import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
 
 export { ExtensionIdentityRequestSource }
 

@@ -78,6 +78,11 @@ export enum ObservedAlertKind {
   CancellationStuck = 'cancellation-stuck',
 }
 
+export enum ObservedAlertSeverity {
+  Critical = 'critical',
+  Warning = 'warning',
+}
+
 export type ObservedAlert = {
   id: string;
   kind:
@@ -86,7 +91,7 @@ export type ObservedAlert = {
     | ObservedAlertKind.DependencyBlocked
     | ObservedAlertKind.ActivityStale
     | ObservedAlertKind.CancellationStuck;
-  severity: 'critical' | 'warning';
+  severity: ObservedAlertSeverity;
   task_id: string;
   first_observed_at: number;
   reason: string;

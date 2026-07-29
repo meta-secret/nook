@@ -108,9 +108,21 @@ export async function reconcileExtensionPairingState(
   }
 }
 
+export enum AuthenticationWorkflowSnapshotKind {
+  Matched = 'matched',
+  NoMatch = 'no-match',
+}
+
+export type AuthenticationWorkflowSnapshot =
+  | { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
+  | {
+      kind: AuthenticationWorkflowSnapshotKind.Matched
+      snapshot: AuthenticationWorkflowSnapshotView
+    }
+
 export async function authenticationWorkflowSnapshot(
   observations: AuthenticationPageObservationView[],
-): Promise<AuthenticationWorkflowSnapshotView | void> {
+): Promise<AuthenticationWorkflowSnapshot> {
   await ensureExtensionWasm()
   const inputs = new NookAuthenticationPageObservations()
   try {
@@ -138,18 +150,21 @@ export async function authenticationWorkflowSnapshot(
       if (
         workflowMatch.state === NookAuthenticationWorkflowMatchState.NoMatch
       ) {
-        return
+        return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
       }
       const snapshot = workflowMatch.snapshot()
       try {
         return {
-          kind: snapshot.kindName,
-          stage: snapshot.stageName,
-          action: snapshot.actionName,
-          currentStep: snapshot.currentStep,
-          totalSteps: snapshot.totalSteps,
-          requiresHumanApproval: snapshot.requiresHumanApproval,
-          observationIndex: snapshot.observationIndex,
+          kind: AuthenticationWorkflowSnapshotKind.Matched,
+          snapshot: {
+            kind: snapshot.kindName,
+            stage: snapshot.stageName,
+            action: snapshot.actionName,
+            currentStep: snapshot.currentStep,
+            totalSteps: snapshot.totalSteps,
+            requiresHumanApproval: snapshot.requiresHumanApproval,
+            observationIndex: snapshot.observationIndex,
+          },
         }
       } finally {
         snapshot.free()

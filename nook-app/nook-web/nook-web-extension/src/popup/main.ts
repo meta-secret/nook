@@ -1,6 +1,9 @@
 import { mount } from 'svelte'
 import { initializeExtensionI18n } from '../lib/i18n'
-import { loadExtensionSetupState } from '../lib/pairing-state'
+import {
+  ExtensionSetupLoadKind,
+  loadExtensionSetupState,
+} from '../lib/pairing-state'
 import {
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
@@ -17,8 +20,8 @@ async function loadCompanionVaultConnection(): Promise<{
   vaultName?: string
 }> {
   const setup = await loadExtensionSetupState()
-  return setup
-    ? { isConnected: true, vaultName: setup.selectedVaultName }
+  return setup.kind === ExtensionSetupLoadKind.Ready
+    ? { isConnected: true, vaultName: setup.setup.selectedVaultName }
     : { isConnected: false }
 }
 

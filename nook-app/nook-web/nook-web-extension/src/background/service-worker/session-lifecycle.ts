@@ -1,6 +1,6 @@
 import {
+  LoginDetectionStatus,
   type LoginDetectionResponse,
-  type LoginDetectionStatus,
 } from '../../lib/login-detection-messages'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 
@@ -169,35 +169,49 @@ export function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
-function queryActiveTab(): Promise<chrome.tabs.Tab | void> {
+enum ActiveTabQueryKind {
+  Found = 'found',
+  Unavailable = 'unavailable',
+}
+
+type ActiveTabQuery =
+  | { kind: ActiveTabQueryKind.Found; tab: chrome.tabs.Tab }
+  | { kind: ActiveTabQueryKind.Unavailable }
+
+function queryActiveTab(): Promise<ActiveTabQuery> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      resolve(tabs[0])
+      const tab = tabs[0]
+      resolve(
+        tab
+          ? { kind: ActiveTabQueryKind.Found, tab }
+          : { kind: ActiveTabQueryKind.Unavailable },
+      )
     })
   })
 }
 
 export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
-  const tab = await queryActiveTab()
-  const tabId = tab?.id
-  if (!Number.isInteger(tabId)) {
-    return { ok: true, status: 'unavailable' }
+  const activeTab = await queryActiveTab()
+  if (activeTab.kind === ActiveTabQueryKind.Unavailable) {
+    return { ok: true, status: LoginDetectionStatus.Unavailable }
+  }
+  const tabId = activeTab.tab.id
+  if (typeof tabId !== 'number' || !Number.isInteger(tabId)) {
+    return { ok: true, status: LoginDetectionStatus.Unavailable }
   }
   try {
-    const response = await new Promise<{
-      ok?: boolean
-      status?: LoginDetectionStatus
-    } | void>((resolve) => {
+    const response = await new Promise<LoginDetectionResponse>((resolve) => {
       chrome.tabs.sendMessage(
         tabId,
         { type: 'nook:query-login-detection' },
         (result: unknown) => {
           if (chrome.runtime.lastError) {
-            resolve()
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
           if (!result || typeof result !== 'object') {
-            resolve()
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
           const payload = result as {
@@ -206,24 +220,25 @@ export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResp
           }
           if (
             payload.ok !== true ||
-            (payload.status !== 'detected' &&
-              payload.status !== 'not-detected' &&
-              payload.status !== 'unavailable')
+            (payload.status !== LoginDetectionStatus.Detected &&
+              payload.status !== LoginDetectionStatus.NotDetected &&
+              payload.status !== LoginDetectionStatus.Unavailable)
           ) {
-            resolve()
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
-          resolve({ ok: true, status: payload.status })
+          resolve({
+            ok: true,
+            status: payload.status as LoginDetectionStatus,
+          })
         },
       )
     })
-    if (response?.ok === true && response.status) {
-      return { ok: true, status: response.status }
-    }
+    return response
   } catch {
     // Content script may be absent on restricted pages.
   }
-  return { ok: true, status: 'unavailable' }
+  return { ok: true, status: LoginDetectionStatus.Unavailable }
 }
 
 export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {

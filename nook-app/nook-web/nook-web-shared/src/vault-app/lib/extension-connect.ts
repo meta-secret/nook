@@ -15,11 +15,11 @@ import {
   type OpenCompanionLauncherMessage,
 } from '$web-shared/extension/runtime-messages'
 import {
-  ExtensionConnectScope,
   ExtensionIdentityRequestSource,
   type ExtensionConnectRequestFor,
   type PairedExtensionIdentityDiscoveryFor,
 } from '$web-shared/extension/extension-connect-types'
+import { ExtensionConnectScope } from '$web-shared/extension/extension-connect-scope'
 
 export const EXTENSION_CONNECT_PATH = '/extension-connect'
 

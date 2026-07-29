@@ -77,15 +77,29 @@
             : 'extension.companion.login_checking',
   )
 
+  function isOkResponse(response: unknown): boolean {
+    return Boolean(
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true,
+    )
+  }
+
   function refreshLoginDetection(): void {
     loginDetectionView = { kind: LoginDetectionViewKind.Loading }
     chrome.runtime.sendMessage(
       { type: 'nook:query-active-tab-login-detection' },
-      (response: { ok?: boolean; status?: LoginDetectionStatus } | void) => {
+      (response: unknown) => {
         if (
           chrome.runtime.lastError ||
-          response?.ok !== true ||
-          !response.status
+          !isOkResponse(response) ||
+          !response ||
+          typeof response !== 'object' ||
+          !('status' in response) ||
+          (response.status !== LoginDetectionStatus.Detected &&
+            response.status !== LoginDetectionStatus.NotDetected &&
+            response.status !== LoginDetectionStatus.Unavailable)
         ) {
           loginDetectionView = {
             kind: LoginDetectionViewKind.Ready,
@@ -95,7 +109,7 @@
         }
         loginDetectionView = {
           kind: LoginDetectionViewKind.Ready,
-          status: response.status,
+          status: response.status as LoginDetectionStatus,
         }
       },
     )
@@ -124,8 +138,8 @@
     error = ''
     chrome.runtime.sendMessage(
       { type: 'nook:open-simple-vault' },
-      (response: { ok?: boolean } | void) => {
-        if (chrome.runtime.lastError || response?.ok !== true) {
+      (response: unknown) => {
+        if (chrome.runtime.lastError || !isOkResponse(response)) {
           error = i18n.t('extension.connect.start_failed')
           return
         }
@@ -145,9 +159,9 @@
           deviceLabel: i18n.t('extension.setup.profile_title'),
         },
       },
-      (response: { ok?: boolean } | void) => {
+      (response: unknown) => {
         busy = false
-        if (chrome.runtime.lastError || response?.ok !== true) {
+        if (chrome.runtime.lastError || !isOkResponse(response)) {
           error = i18n.t('extension.connect.start_failed')
           return
         }
