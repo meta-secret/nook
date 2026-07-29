@@ -122,7 +122,7 @@ impl NookVaultManager {
         username.zeroize();
         password.zeroize();
         let data = yaml.as_str().to_owned();
-        let secret_type = nook_core::SecretType::Login.as_str().to_owned();
+        let secret_type = nook_core::SecretType::Login;
 
         if decision.as_str() == "update" {
             let old_id = replace_secret_id.unwrap_or_default().to_owned();

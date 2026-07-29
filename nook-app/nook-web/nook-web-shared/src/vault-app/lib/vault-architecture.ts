@@ -1,6 +1,7 @@
 import {
   DeviceMode,
   NookVaultArchitecture,
+  OnboardingType,
   ReplicationType,
   VaultType,
   defaultVaultArchitecture,
@@ -25,6 +26,7 @@ export type {
 
 export {
   DeviceMode,
+  OnboardingType,
   ReplicationType,
   VaultType,
   canCreateSecret,

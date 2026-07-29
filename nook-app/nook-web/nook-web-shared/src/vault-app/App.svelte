@@ -80,13 +80,11 @@
   import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
-
   const vault = new VaultState();
   const vaultSecurityRecommendations = $derived(
     assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
   );
   const THEME_STORAGE_KEY = "nook_color_mode";
-
   let colorMode = $state<ColorMode>(systemColorMode());
   let followsSystemColorMode = $state(true);
   let legalPageState = $state(initialLegalRoute());

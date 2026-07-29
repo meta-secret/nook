@@ -100,7 +100,9 @@ describe('vault architecture adapter', () => {
       vault_type: VaultType.Simple,
       replication_type: ReplicationType.Personal,
     })
-    expect(onboardingType(architecture)).toBe('personal-credential-transfer')
+    expect(onboardingType(architecture)).toBe(
+      OnboardingType.PersonalCredentialTransfer,
+    )
   })
 
   test('draft construction delegates vault-specific defaults to Rust', () => {
@@ -162,7 +164,9 @@ describe('vault architecture adapter', () => {
     expect(architecture.sentinel_required_participants).toBe(3)
     expect(architecture.sentinel_ready_participants).toBe(1)
     expect(canCreateSecret(architecture)).toBe(false)
-    expect(onboardingType(architecture)).toBe('shared-provider-grant')
+    expect(onboardingType(architecture)).toBe(
+      OnboardingType.SharedProviderGrant,
+    )
   })
 
   test('round-trips the Sentinel wire shape', () => {

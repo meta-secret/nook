@@ -62,6 +62,7 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "WasmApplication",
     "VaultType",
     "ReplicationType",
+    "OnboardingType",
     "SecretFormInputType",
     "SecretType",
     "StorageProviderType",
@@ -84,6 +85,7 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "DeviceProtectionStatus",
     "VaultType",
     "ReplicationType",
+    "OnboardingType",
     "SecretFormInputType",
     "SecretType",
 ];

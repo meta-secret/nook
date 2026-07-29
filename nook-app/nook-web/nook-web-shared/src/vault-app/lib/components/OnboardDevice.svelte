@@ -34,7 +34,7 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import { VaultType } from '$lib/vault-architecture'
+  import { OnboardingType, VaultType } from '$lib/vault-architecture'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
     firstCompatibleProvider,
@@ -175,7 +175,12 @@
       : onboardingType(vault.vaultArchitecture),
   )
   const usesSharedProviderGrant = $derived(
-    derivedOnboardingType === 'shared-provider-grant',
+    derivedOnboardingType === OnboardingType.SharedProviderGrant,
+  )
+  const onboardingTypeTranslationSegment = $derived(
+    derivedOnboardingType === OnboardingType.SharedProviderGrant
+      ? 'shared-provider-grant'
+      : 'personal-credential-transfer',
   )
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
@@ -830,7 +835,7 @@
               data-testid="onboarding-type-label"
             >
               {vault.t(
-                `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
+                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_title`,
               )}
             </p>
             <p
@@ -838,7 +843,7 @@
               data-testid="onboarding-type-description"
             >
               {vault.t(
-                `architecture_modes.onboarding_type_${derivedOnboardingType}_description`,
+                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_description`,
               )}
             </p>
           </div>

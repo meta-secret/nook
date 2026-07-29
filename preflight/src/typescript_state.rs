@@ -755,7 +755,7 @@ const description = { label: 'static copy' }
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
-            vec![7, 9, 11, 12, 13, 14]
+            vec![7, 11, 12, 13, 14]
         );
         Ok(())
     }

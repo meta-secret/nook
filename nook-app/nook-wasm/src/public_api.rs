@@ -734,10 +734,10 @@ pub fn validate_vault_architecture(
 #[wasm_bindgen(js_name = vaultArchitectureOnboardingType)]
 pub fn vault_architecture_onboarding_type(
     architecture: &NookVaultArchitecture,
-) -> Result<String, wasm_bindgen::JsError> {
+) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
     architecture.validate()?;
-    Ok(architecture.onboarding_type().as_str().to_owned())
+    Ok(architecture.onboarding_type())
 }
 
 #[wasm_bindgen(js_name = providerOnboardingType)]
@@ -745,13 +745,12 @@ pub fn vault_architecture_onboarding_type(
 pub fn provider_onboarding_type(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
-) -> Result<String, wasm_bindgen::JsError> {
+) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
-    Ok(
-        nook_core::provider_onboarding_type(&provider, &architecture)?
-            .as_str()
-            .to_owned(),
-    )
+    Ok(nook_core::provider_onboarding_type(
+        &provider,
+        &architecture,
+    )?)
 }
 
 #[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]

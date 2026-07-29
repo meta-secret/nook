@@ -4,7 +4,6 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
-use crate::types::NookStringValue;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -362,7 +361,7 @@ mod prepared_page_tests {
         manager.vault.crypto = VaultCryptoState::Locked;
 
         manager
-            .query_prepared_secret_page_js("", NookStringValue::unavailable(), 0, 25)
+            .query_prepared_secret_page_js("", NookSecretTypeFilter::All, 0, 25)
             .await?;
 
         assert!(manager.vault.crypto.is_unlocked());

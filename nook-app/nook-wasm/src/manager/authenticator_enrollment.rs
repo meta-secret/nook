@@ -14,7 +14,7 @@ impl NookVaultManager {
         let yaml = Zeroizing::new(yaml);
         self.add_secret(
             id.clone(),
-            nook_core::SecretType::Authenticator.as_str().to_owned(),
+            nook_core::SecretType::Authenticator,
             yaml.as_str().to_owned(),
         )
         .await?;
@@ -57,7 +57,7 @@ impl NookVaultManager {
         self.replace_secret(
             secret_id.to_owned(),
             new_id.clone(),
-            nook_core::SecretType::Authenticator.as_str().to_owned(),
+            nook_core::SecretType::Authenticator,
             yaml.as_str().to_owned(),
         )
         .await?;
