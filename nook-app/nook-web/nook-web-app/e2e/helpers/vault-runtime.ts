@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   expect,
   type Browser,
@@ -283,14 +282,30 @@ export async function setupGithubProvider(
   await page.getByTestId('github-pat-input').fill(pat)
 }
 
-export async function readGoogleOAuthError(page: Page): Promise<string | void> {
+export enum GoogleOAuthErrorStateKind {
+  Hidden = 'hidden',
+  Visible = 'visible',
+}
+
+export type GoogleOAuthErrorState =
+  | { kind: GoogleOAuthErrorStateKind.Hidden }
+  | { kind: GoogleOAuthErrorStateKind.Visible; message: string }
+
+export async function readGoogleOAuthError(
+  page: Page,
+): Promise<GoogleOAuthErrorState> {
   const error = page.getByTestId('google-oauth-error')
   if (!(await error.isVisible())) {
-    return
+    return { kind: GoogleOAuthErrorStateKind.Hidden }
   }
-  return (
-    ((await error.textContent()) ?? omittedValue())?.trim() || omittedValue()
-  )
+  const content = await error.textContent()
+  if (typeof content !== 'string') {
+    return { kind: GoogleOAuthErrorStateKind.Hidden }
+  }
+  const message = content.trim()
+  return message
+    ? { kind: GoogleOAuthErrorStateKind.Visible, message }
+    : { kind: GoogleOAuthErrorStateKind.Hidden }
 }
 
 export async function waitForGoogleOAuthSignedIn(page: Page) {
@@ -298,8 +313,8 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
     .poll(
       async () => {
         const errorText = await readGoogleOAuthError(page)
-        if (errorText) {
-          throw new Error(`Google OAuth failed: ${errorText}`)
+        if (errorText.kind === GoogleOAuthErrorStateKind.Visible) {
+          throw new Error(`Google OAuth failed: ${errorText.message}`)
         }
         return (
           (await page.getByTestId('google-account-status').isVisible()) ||

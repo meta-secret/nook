@@ -10,6 +10,7 @@ import {
   isStoredExtensionPairingGrant,
   pairingGrantStorageKey,
   setupAfterPairingGrantRemoval,
+  PairingSetupAfterRemovalKind,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -130,10 +131,17 @@ export async function importLocalEventLogUpdate(
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
       const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
-      await reconcilePairingStorage(setup ? { [setupStorageKey]: setup } : {}, [
-        key,
-        ...(setup ? [] : [setupStorageKey]),
-      ])
+      await reconcilePairingStorage(
+        setup.kind === PairingSetupAfterRemovalKind.Ready
+          ? { [setupStorageKey]: setup.setup }
+          : {},
+        [
+          key,
+          ...(setup.kind === PairingSetupAfterRemovalKind.Ready
+            ? []
+            : [setupStorageKey]),
+        ],
+      )
       return { ok: false, reason: 'event-log-access-revoked' }
     }
     const setup = stored[setupStorageKey]

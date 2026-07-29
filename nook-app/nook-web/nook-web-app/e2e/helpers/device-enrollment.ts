@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
@@ -296,12 +295,7 @@ export async function approveJoinFromBanner(
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target,
-    expectedMembers,
-    omittedValue(),
-    page,
-  )
+  await assertEnrolledVaultOnGithub(target, expectedMembers, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
@@ -316,12 +310,7 @@ export async function approveJoinFromSettings(
   await waitForPendingJoinInSettings(page, deviceId)
   const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target,
-    expectedMembers,
-    omittedValue(),
-    page,
-  )
+  await assertEnrolledVaultOnGithub(target, expectedMembers, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 

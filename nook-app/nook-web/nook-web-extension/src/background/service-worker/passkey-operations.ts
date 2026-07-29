@@ -9,6 +9,7 @@ import {
   passkeyPairingGrants,
   requestOriginAndRpId,
   sendSessionMessage,
+  WebsitePasskeyRequestContextKind,
 } from './pairing-identity'
 import { ensureExtensionSessionDocument } from './session-lifecycle'
 
@@ -105,7 +106,10 @@ export async function websitePasskeyOptions(
     message.payload.ceremony,
     message.payload.requestJson,
   )
-  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+  if (
+    context.kind === WebsitePasskeyRequestContextKind.Rejected ||
+    !isAuthorizedWebsiteSender(sender, context.origin)
+  ) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
   const grants = await passkeyPairingGrants()
@@ -182,7 +186,10 @@ export async function performWebsitePasskey(
     message.payload.ceremony,
     message.payload.requestJson,
   )
-  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+  if (
+    context.kind === WebsitePasskeyRequestContextKind.Rejected ||
+    !isAuthorizedWebsiteSender(sender, context.origin)
+  ) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
   const key = passkeyRequestKey(sender, message.payload.requestId)

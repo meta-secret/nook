@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   defaultPasswordGenerationOptions,
   generatePasswordWithOptions,
@@ -217,16 +216,28 @@ export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectio
   }
 }
 
-export async function extensionSessionDevice(): Promise<ExtensionDeviceProtectionResult | void> {
+export enum ExtensionSessionDeviceStateKind {
+  Locked = 'locked',
+  Active = 'active',
+}
+
+export type ExtensionSessionDeviceState =
+  | { kind: ExtensionSessionDeviceStateKind.Locked }
+  | {
+      kind: ExtensionSessionDeviceStateKind.Active
+      device: ExtensionDeviceProtectionResult
+    }
+
+export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {
   const response = await sessionMessage<
     SessionResponse<{
       status: DeviceProtectionStatus
       device?: ExtensionDeviceProtectionResult
     }>
   >({ type: 'nook:extension-session-status' })
-  return response.status === DeviceProtectionStatus.Unlocked
-    ? response.device
-    : omittedValue()
+  return response.status === DeviceProtectionStatus.Unlocked && response.device
+    ? { kind: ExtensionSessionDeviceStateKind.Active, device: response.device }
+    : { kind: ExtensionSessionDeviceStateKind.Locked }
 }
 
 export async function createExtensionPasskey(

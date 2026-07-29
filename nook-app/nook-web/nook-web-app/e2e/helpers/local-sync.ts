@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
@@ -729,12 +728,14 @@ export async function reloadUnlockWithSyncProvider(
     timeout: UI_TIMEOUT_MS,
   })
   await ensureLoginLocalUnlockReady(page)
-  await unlockVaultOnLogin(
-    page,
-    opts?.password
-      ? { password: opts.password, entryLabel: opts.entryLabel }
-      : omittedValue(),
-  )
+  if (opts?.password) {
+    await unlockVaultOnLogin(page, {
+      password: opts.password,
+      entryLabel: opts.entryLabel,
+    })
+  } else {
+    await unlockVaultOnLogin(page)
+  }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

@@ -1,10 +1,10 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { mount } from 'svelte'
 import { initializeExtensionI18n } from '../lib/i18n'
 import { loadExtensionSetupState } from '../lib/pairing-state'
 import {
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
+  ExtensionSessionDeviceStateKind,
   DeviceProtectionStatus,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
@@ -54,7 +54,7 @@ async function main() {
   const activeSessionDevice =
     protectionStatus === DeviceProtectionStatus.Unlocked
       ? await extensionSessionDevice()
-      : omittedValue()
+      : { kind: ExtensionSessionDeviceStateKind.Locked }
 
   mount(PopupApp, {
     target,

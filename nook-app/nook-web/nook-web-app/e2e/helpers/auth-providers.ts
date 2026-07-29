@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
@@ -250,13 +249,17 @@ export async function readRawAuthProvidersFromIdb(
 }
 
 export async function waitForAuthProvidersE2eHook(page: Page) {
-  await page.waitForFunction(
-    () =>
-      !!(window as Window & { __nookAuthProviders?: unknown })
-        .__nookAuthProviders,
-    omittedValue(),
-    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-  )
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            !!(window as Window & { __nookAuthProviders?: unknown })
+              .__nookAuthProviders,
+        ),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
 }
 
 /** Load decrypted sync providers via wasm in the browser. */

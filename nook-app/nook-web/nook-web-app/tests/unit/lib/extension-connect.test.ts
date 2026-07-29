@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   ExtensionConnectIntentKind,
@@ -31,7 +30,9 @@ import {
   pairingGrantStorageKey,
   selectedPairingGrant,
   selectedPairingGrantFirst,
+  SelectedPairingGrantKind,
   setupAfterPairingGrantRemoval,
+  PairingSetupAfterRemovalKind,
   setupStorageKey,
 } from '../../../../nook-web-extension/src/background/pairing-grants'
 
@@ -277,7 +278,7 @@ describe('extension pairing approved message', () => {
   })
 
   test('does not present incomplete or revoked setup as connected', () => {
-    expect(isExtensionReadySetupState(omittedValue())).toBe(false)
+    expect(isExtensionReadySetupState({})).toBe(false)
     expect(
       isExtensionReadySetupState({
         status: 'ready',
@@ -393,10 +394,13 @@ describe('extension pairing approved message', () => {
     )
     const stored = { ...first, ...second }
 
-    expect(setupAfterPairingGrantRemoval(stored, 'store-2')).toMatchObject({
-      selectedVaultStoreId: 'store-1',
-      selectedVaultName: 'Personal',
-      eventCount: 2,
+    expect(setupAfterPairingGrantRemoval(stored, 'store-2')).toEqual({
+      kind: PairingSetupAfterRemovalKind.Ready,
+      setup: expect.objectContaining({
+        selectedVaultStoreId: 'store-1',
+        selectedVaultName: 'Personal',
+        eventCount: 2,
+      }),
     })
     const grants = [
       stored[pairingGrantStorageKey('store-1')],
@@ -405,7 +409,10 @@ describe('extension pairing approved message', () => {
     expect(selectedPairingGrantFirst(stored, grants)[0]?.vaultStoreId).toBe(
       'store-2',
     )
-    expect(selectedPairingGrant(stored)?.vaultStoreId).toBe('store-2')
+    expect(selectedPairingGrant(stored)).toEqual({
+      kind: SelectedPairingGrantKind.Selected,
+      grant: expect.objectContaining({ vaultStoreId: 'store-2' }),
+    })
   })
 
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {

@@ -250,28 +250,19 @@ export async function assertGenesisVaultOnGithub(
 }
 
 export async function assertEnrolledVaultOnGithub(
-  target: GithubE2eTarget | string,
-  repoNameOrMembers?: string | number,
-  expectedMembers?: number,
+  target: GithubE2eTarget,
+  expectedMembers: number,
   page?: Page,
 ) {
-  const resolved: GithubE2eTarget =
-    typeof target === 'string'
-      ? { pat: target, repoName: repoNameOrMembers as string }
-      : target
-  const members =
-    typeof target === 'string'
-      ? (expectedMembers as number)
-      : (repoNameOrMembers as number)
   const snapshot = await waitForGithubVaultState(
-    resolved,
+    target,
     (yaml) =>
       yaml.joinEntries.length === 0 &&
-      yaml.authPkIds.length === members &&
-      yaml.memberPkIds.length === members,
+      yaml.authPkIds.length === expectedMembers &&
+      yaml.memberPkIds.length === expectedMembers,
     { page },
   )
-  assertEnrolledVaultYaml(snapshot, members)
+  assertEnrolledVaultYaml(snapshot, expectedMembers)
   return snapshot
 }
 

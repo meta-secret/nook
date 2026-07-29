@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import type {
   BeginExtensionPairingMessage,
   ExtensionIdentityHandoffRequestMessage,
@@ -23,6 +22,7 @@ import {
   pairingGrantStorageKey,
   selectedPairingGrant,
   selectedPairingGrantFirst,
+  SelectedPairingGrantKind,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -332,15 +332,18 @@ export async function discoverPairedVaultIdentity(
     const stored = await getPairingStorage()
     const grant = stored[key]
     const selectedGrant = selectedPairingGrant(stored)
-    if (selectedGrant && selectedGrant.vaultStoreId !== vaultStoreId) {
+    if (
+      selectedGrant.kind === SelectedPairingGrantKind.Selected &&
+      selectedGrant.grant.vaultStoreId !== vaultStoreId
+    ) {
       return {
         type: 'nook:extension-paired-vault-identity-status',
         payload: {
           requestId,
           vaultStoreId,
           status: 'different-vault',
-          connectedVaultStoreId: selectedGrant.vaultStoreId,
-          connectedVaultName: selectedGrant.vaultName,
+          connectedVaultStoreId: selectedGrant.grant.vaultStoreId,
+          connectedVaultName: selectedGrant.grant.vaultName,
         },
       }
     }
@@ -571,26 +574,54 @@ export async function getPairingStorage(
   return key in stored ? { [key]: stored[key] } : {}
 }
 
+export enum WebsitePasskeyRequestContextKind {
+  Rejected = 'rejected',
+  Validated = 'validated',
+}
+
+export type WebsitePasskeyRequestContext =
+  | { kind: WebsitePasskeyRequestContextKind.Rejected }
+  | {
+      kind: WebsitePasskeyRequestContextKind.Validated
+      origin: string
+      rpId: string
+      request: Record<string, unknown>
+    }
+
 export function requestOriginAndRpId(
   ceremony: WebsitePasskeyCeremony,
   requestJson: string,
-): { origin: string; rpId: string; request: Record<string, unknown> } | void {
+): WebsitePasskeyRequestContext {
   const parsed = parsedWebsitePasskeyRequest(requestJson)
-  if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) return
+  if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) {
+    return { kind: WebsitePasskeyRequestContextKind.Rejected }
+  }
   const { request } = parsed
-  if (typeof request.origin !== 'string') return
+  if (typeof request.origin !== 'string') {
+    return { kind: WebsitePasskeyRequestContextKind.Rejected }
+  }
   if (ceremony === 'get') {
     return typeof request.rpId === 'string'
-      ? { origin: request.origin, rpId: request.rpId, request }
-      : omittedValue()
+      ? {
+          kind: WebsitePasskeyRequestContextKind.Validated,
+          origin: request.origin,
+          rpId: request.rpId,
+          request,
+        }
+      : { kind: WebsitePasskeyRequestContextKind.Rejected }
   }
   const relyingParty = request.relyingParty
   return relyingParty &&
     typeof relyingParty === 'object' &&
     'id' in relyingParty &&
     typeof relyingParty.id === 'string'
-    ? { origin: request.origin, rpId: relyingParty.id, request }
-    : omittedValue()
+    ? {
+        kind: WebsitePasskeyRequestContextKind.Validated,
+        origin: request.origin,
+        rpId: relyingParty.id,
+        request,
+      }
+    : { kind: WebsitePasskeyRequestContextKind.Rejected }
 }
 
 export function isAuthorizedWebsiteSender(

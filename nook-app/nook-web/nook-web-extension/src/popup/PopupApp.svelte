@@ -8,10 +8,12 @@
     createExtensionPin,
     DeviceMode,
     DeviceProtectionStatus,
+    ExtensionSessionDeviceStateKind,
     recoverExtensionPasskey,
     unlockExtensionPasskey,
     unlockExtensionPin,
     type ExtensionDeviceProtectionResult,
+    type ExtensionSessionDeviceState,
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
@@ -31,7 +33,7 @@
     vaultName?: string
     pairingRequested?: boolean
     protectionStatus: DeviceProtectionStatus
-    activeSessionDevice?: ExtensionDeviceProtectionResult
+    activeSessionDevice: ExtensionSessionDeviceState
   } = $props()
 
   function initialProtectionStatus(): DeviceProtectionStatus {
@@ -153,8 +155,9 @@
   }
 
   $effect(() => {
-    if (!activeSessionDevice) return
-    enterCompanionHome(activeSessionDevice)
+    if (activeSessionDevice.kind !== ExtensionSessionDeviceStateKind.Active)
+      return
+    enterCompanionHome(activeSessionDevice.device)
   })
 
   async function runDeviceAction(

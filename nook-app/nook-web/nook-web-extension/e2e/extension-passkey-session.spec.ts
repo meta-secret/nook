@@ -1,5 +1,4 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
-import { chromium, expect, test } from '@playwright/test'
+import { chromium, expect, test, type Page } from '@playwright/test'
 import {
   assertWebsitePasskey,
   attachNookLogsForTest,
@@ -27,6 +26,15 @@ import {
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+
+enum WebsitePageStateKind {
+  Skipped = 'skipped',
+  Opened = 'opened',
+}
+
+type WebsitePageState =
+  | { kind: WebsitePageStateKind.Skipped }
+  | { kind: WebsitePageStateKind.Opened; page: Page }
 
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
@@ -58,12 +66,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     testInfo.outputPath('chromium-profile')
   const context = await launchExtensionContext(userDataDir)
   const loginServer = await startLoginServer()
-  const website = isHostedSmoke ? omittedValue() : await context.newPage()
-  await website?.goto(`${loginServer.origin}/login`)
-  const websiteAfterUnlock = isHostedSmoke
-    ? omittedValue()
-    : await context.newPage()
-  await websiteAfterUnlock?.goto(`${loginServer.origin}/login`)
+  const website: WebsitePageState = isHostedSmoke
+    ? { kind: WebsitePageStateKind.Skipped }
+    : { kind: WebsitePageStateKind.Opened, page: await context.newPage() }
+  if (website.kind === WebsitePageStateKind.Opened) {
+    await website.page.goto(`${loginServer.origin}/login`)
+  }
+  const websiteAfterUnlock: WebsitePageState = isHostedSmoke
+    ? { kind: WebsitePageStateKind.Skipped }
+    : { kind: WebsitePageStateKind.Opened, page: await context.newPage() }
+  if (websiteAfterUnlock.kind === WebsitePageStateKind.Opened) {
+    await websiteAfterUnlock.page.goto(`${loginServer.origin}/login`)
+  }
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
@@ -211,15 +225,15 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     let websitePasskeyState: WebsitePasskeyState = {
       kind: WebsitePasskeyStateKind.NotCreated,
     }
-    if (website) {
-      const websiteCredentialId = await registerWebsitePasskey(website)
+    if (website.kind === WebsitePageStateKind.Opened) {
+      const websiteCredentialId = await registerWebsitePasskey(website.page)
       websitePasskeyState = {
         kind: WebsitePasskeyStateKind.Created,
         credentialId: websiteCredentialId,
       }
       expect(websiteCredentialId).toBeTruthy()
-      await assertWebsitePasskey(website, websiteCredentialId)
-      await website.close()
+      await assertWebsitePasskey(website.page, websiteCredentialId)
+      await website.page.close()
     }
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
@@ -461,14 +475,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       })
       .toBe(3)
     if (
-      websiteAfterUnlock &&
+      websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
       websitePasskeyState.kind === WebsitePasskeyStateKind.Created
     ) {
       await assertWebsitePasskey(
-        websiteAfterUnlock,
+        websiteAfterUnlock.page,
         websitePasskeyState.credentialId,
       )
-      await websiteAfterUnlock.close()
+      await websiteAfterUnlock.page.close()
     }
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
 

@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
 import { UI_TIMEOUT_MS } from './environment'
@@ -332,8 +331,8 @@ export function expectAppLogEntry(
   return entry
 }
 
-export function parseLogsPageStoredCount(text: string | void): number {
-  const match = text?.match(/(\d+) stored/)
+export function parseLogsPageStoredCount(text: unknown): number {
+  const match = typeof text === 'string' ? text.match(/(\d+) stored/) : false
   return match ? Number(match[1]) : 0
 }
 
@@ -349,8 +348,7 @@ export async function waitForLogsPageStoredCount(
       async () => {
         await page.getByTestId('logs-refresh-btn').click()
         count = parseLogsPageStoredCount(
-          (await page.getByTestId('logs-count').textContent()) ??
-            omittedValue(),
+          await page.getByTestId('logs-count').textContent(),
         )
         return predicate(count)
       },
