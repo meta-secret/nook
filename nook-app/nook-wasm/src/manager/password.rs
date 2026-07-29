@@ -495,20 +495,6 @@ mod metadata_tests {
             }
         );
 
-        manager.sync_outbox.provider_id = "configured-provider".to_owned();
-        manager.sync_outbox.storage_mode = nook_core::StorageMode::Github;
-        manager.sync_outbox.access_token = "invalid-token".to_owned();
-        manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
-        assert!(manager.set_vault_name("Rejected rename").await.is_err());
-        assert!(matches!(
-            &manager.vault.vault_name,
-            super::super::VaultNameState::Named(name) if name == "Personal"
-        ));
-        assert_eq!(
-            nook_core::read_vault_name(&manager.vault.last_synced_content)?,
-            nook_core::VaultName::Named("Personal".to_owned())
-        );
-        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
         Ok(())
     }
 }
@@ -520,6 +506,57 @@ mod wasm_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn failed_sync_flush_restores_local_projection_and_storage() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.last_synced_content =
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &manager.vault.meta.to_stored_records(),
+                &manager.vault.unlock,
+                &manager.vault.password_entries,
+                nook_core::VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
+                nook_core::VaultNameRef::Named("Personal"),
+                nook_core::VaultVersionWrite::Initial,
+                &manager.vault.architecture,
+            )?
+            .into_inner();
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.bootstrap_event_log_genesis().await?;
+        manager.sync_outbox.provider_id = "configured-provider".to_owned();
+        manager.sync_outbox.storage_mode = nook_core::StorageMode::Github;
+        manager.sync_outbox.access_token = "invalid-token".to_owned();
+        manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
+
+        assert!(manager.set_vault_name("Rejected rename").await.is_err());
+        assert!(
+            manager.event_log_has_events().await?,
+            "the browser-backed local write must succeed before the remote flush fails"
+        );
+        assert!(matches!(
+            &manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Personal"
+        ));
+        assert_eq!(
+            nook_core::read_vault_name(&manager.vault.last_synced_content)?,
+            nook_core::VaultName::Named("Personal".to_owned())
+        );
+        let persisted_projection = crate::storage::indexed_db::load_from_indexed_db()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("persisted rolled-back projection is missing"))?;
+        assert_eq!(
+            nook_core::read_vault_name(&persisted_projection)?,
+            nook_core::VaultName::Named("Personal".to_owned())
+        );
+        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     async fn password_unlock_requires_event_log() {

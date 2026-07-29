@@ -1,6 +1,9 @@
 //! Event-log persistence and provider fan-out.
 
-use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
+use super::{
+    CeremonyState, EventLogSessionState, EventLogSyncIssueState, NookVaultManager, SyncOutboxState,
+    VaultNameState, VaultSessionState,
+};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
@@ -690,6 +693,45 @@ impl NookVaultManager {
         self.export_event_log_records().await
     }
 
+    fn validate_extension_import_records(
+        expected_store_id: &nook_core::StoreId,
+        records: &[ExternalEventLogRecord],
+    ) -> Result<(), NookError> {
+        for record in records {
+            let event_id = EventId::parse(&record.event_id)?;
+            Self::validate_event_record_id(&event_id, &record.event)?;
+            let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
+            let record_store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+            if record_store_id != *expected_store_id {
+                return Err(NookError::Database(format!(
+                    "Approved vault store_id {} does not match imported store_id {}.",
+                    expected_store_id.as_str(),
+                    record_store_id.as_str()
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    async fn restore_rejected_extension_import(
+        &mut self,
+        previous_active_store_id: Option<&str>,
+        previous_vault: VaultSessionState,
+        previous_event_log: EventLogSessionState,
+        previous_sync_outbox: SyncOutboxState,
+    ) -> Result<(), NookError> {
+        self.vault.reset();
+        self.vault = previous_vault;
+        self.event_log = previous_event_log;
+        self.sync_outbox = previous_sync_outbox;
+        if let Some(store_id) = previous_active_store_id {
+            crate::storage::indexed_db::switch_active_vault(store_id).await?;
+        } else {
+            crate::storage::indexed_db::clear_active_vault_id().await?;
+        }
+        Ok(())
+    }
+
     /// Import the website's encrypted event-log projection for the extension.
     ///
     /// The caller transports bytes only. Rust owns every trust decision: the
@@ -703,9 +745,7 @@ impl NookVaultManager {
         expected_device_signing_public_key: &str,
         records: Vec<ExternalEventLogRecord>,
     ) -> Result<ExtensionEventLogImportStatus, NookError> {
-        if crate::application::configured_vault_application()
-            != nook_core::VaultApplication::Extension
-        {
+        if self.application != nook_core::VaultApplication::Extension {
             return Err(NookError::Database(
                 "Extension event-log import requires the extension application capability."
                     .to_owned(),
@@ -736,33 +776,77 @@ impl NookVaultManager {
                 "Approved extension device does not match the protected local identity.".to_owned(),
             ));
         }
+        Self::validate_extension_import_records(&expected_store_id, &records)?;
 
-        let merged = self.sync_external_event_log_records(records).await?;
-        if self.vault.store_id != expected_store_id.as_str() {
-            return Err(NookError::Database(format!(
-                "Approved vault store_id {} does not match imported store_id {}.",
-                expected_store_id.as_str(),
-                self.vault.store_id
-            )));
+        // Stage the complete replacement projection in fresh vault/event-log
+        // state while retaining the active session for rollback. IndexedDB
+        // writes target the replacement store id, so a transient failure
+        // cannot corrupt or evict the currently active vault.
+        let previous_active_store_id = crate::storage::indexed_db::get_active_vault_id().await?;
+        let mut previous_vault = std::mem::take(&mut self.vault);
+        let mut previous_event_log = std::mem::take(&mut self.event_log);
+        let mut previous_sync_outbox = std::mem::take(&mut self.sync_outbox);
+        let import = async {
+            let merged = self.sync_external_event_log_records(records).await?;
+            if self.vault.store_id != expected_store_id.as_str() {
+                return Err(NookError::Database(format!(
+                    "Approved vault store_id {} does not match imported store_id {}.",
+                    expected_store_id.as_str(),
+                    self.vault.store_id
+                )));
+            }
+
+            let store = load_local_event_store(&self.vault.store_id).await?;
+            let graph = store.load_graph(&self.vault.store_id)?;
+            let has_active_grant = nook_core::event_graph_has_active_device_access(
+                &graph,
+                &expected_device_id,
+                &expected_device_public_key,
+                &expected_device_signing_public_key,
+            )?;
+            let auth_id = nook_core::dec_auth_id_from_public_key(&expected_device_public_key)?;
+            let has_device_envelope = self.vault.meta.auth.contains_key(&auth_id);
+
+            Ok(ExtensionEventLogImportStatus {
+                vault_store_id: self.vault.store_id.clone(),
+                event_count: merged.len(),
+                heads: self.event_log.heads.clone(),
+                access_granted: has_active_grant && has_device_envelope,
+            })
         }
-
-        let store = load_local_event_store(&self.vault.store_id).await?;
-        let graph = store.load_graph(&self.vault.store_id)?;
-        let has_active_grant = nook_core::event_graph_has_active_device_access(
-            &graph,
-            &expected_device_id,
-            &expected_device_public_key,
-            &expected_device_signing_public_key,
-        )?;
-        let auth_id = nook_core::dec_auth_id_from_public_key(&expected_device_public_key)?;
-        let has_device_envelope = self.vault.meta.auth.contains_key(&auth_id);
-
-        Ok(ExtensionEventLogImportStatus {
-            vault_store_id: self.vault.store_id.clone(),
-            event_count: merged.len(),
-            heads: self.event_log.heads.clone(),
-            access_granted: has_active_grant && has_device_envelope,
-        })
+        .await;
+        match import {
+            Ok(status) if status.access_granted => {
+                previous_vault.reset();
+                previous_event_log.reset();
+                previous_sync_outbox.reset();
+                self.sentinel_genesis = CeremonyState::Inactive;
+                self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
+                self.pending_sentinel_genesis_request = CeremonyState::Inactive;
+                self.sentinel_unlock = CeremonyState::Inactive;
+                Ok(status)
+            }
+            Ok(status) => {
+                self.restore_rejected_extension_import(
+                    previous_active_store_id.as_deref(),
+                    previous_vault,
+                    previous_event_log,
+                    previous_sync_outbox,
+                )
+                .await?;
+                Ok(status)
+            }
+            Err(error) => {
+                self.restore_rejected_extension_import(
+                    previous_active_store_id.as_deref(),
+                    previous_vault,
+                    previous_event_log,
+                    previous_sync_outbox,
+                )
+                .await?;
+                Err(error)
+            }
+        }
     }
 
     pub(in crate::manager) async fn sync_local_folder_provider(
@@ -1218,6 +1302,10 @@ mod tests {
         assert_eq!(issue.remote_store_id().as_deref(), Some("store_remote1234"));
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+#[path = "event_log_browser_tests.rs"]
+mod browser_tests;
 
 #[wasm_bindgen]
 impl NookVaultManager {

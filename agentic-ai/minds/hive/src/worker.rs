@@ -911,7 +911,12 @@ fn task_prompt(task: &ClaimedTask) -> String {
          readiness audit, squash-merge, verify the \
          resulting Main workflow is green, and publish the required Workbench completion records \
          and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
-         PR, merge, or Main verification completed by an earlier attempt. Do not report completed \
+         PR, merge, or Main verification completed by an earlier attempt. A merged generation is \
+         not finished when it has unresolved actionable review: create the next `-gN` delivery \
+         branch from current `origin/main`, implement the follow-up there, open and own a new \
+         marked Hive PR, then reply to the original review threads with the follow-up link. Keep \
+         those original threads unresolved until the follow-up is successfully merged, then resolve \
+         them before reporting completion. Do not repeatedly audit an immutable merged branch. Do not report completed \
          before the squash merge and green Main verification. If blocked by another change, report \
          structured blocked status and identify the blocker precisely."
         )
@@ -1124,6 +1129,9 @@ mod tests {
         assert!(prompt.contains("`hive`"));
         assert!(prompt.contains("ci:full-e2e"));
         assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
+        assert!(prompt.contains("unresolved actionable review"));
+        assert!(prompt.contains("next `-gN` delivery branch"));
+        assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
         Ok(())
     }
 
