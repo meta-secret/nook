@@ -1,8 +1,10 @@
-use super::{
+use crate::types::NookStringValueRef;
+use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookStringValue,
-    NookStringValueRef, NookVaultSecurityRecommendations, wasm_bindgen,
+    NookVaultSecurityRecommendations,
 };
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen(js_name = translate)]
 #[must_use]

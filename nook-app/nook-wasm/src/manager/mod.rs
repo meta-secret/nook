@@ -390,6 +390,7 @@ impl Drop for NookVaultManager {
     }
 }
 
+#[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
