@@ -1,4 +1,5 @@
 import {
+  activeVaultScope,
   VaultAccessStatus,
   type NookImportResult,
   type NookSecretRecord,
@@ -29,6 +30,7 @@ import {
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
+  unselectedVaultScope,
 } from "$lib/auth-providers";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import * as localeActions from "$lib/vault/locale";
@@ -146,9 +148,10 @@ export class VaultState extends VaultLifecycleState {
       label: providerLabelById(
         $state.snapshot({
           providers: this.providers,
-          ...(this.activeVault.kind === ActiveVaultKind.Open
-            ? { activeVaultStoreId: this.activeVault.storeId }
-            : {}),
+          activeVaultStoreId:
+            this.activeVault.kind === ActiveVaultKind.Open
+              ? activeVaultScope(this.activeVault.storeId)
+              : unselectedVaultScope(),
         }),
         this.manualProviderSync.providerId,
       ),

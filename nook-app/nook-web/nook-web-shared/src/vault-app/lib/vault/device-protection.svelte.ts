@@ -8,7 +8,11 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from "$lib/passkey-device-protection";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
+import {
+  activeVaultScope,
+  LOCAL_PROVIDER_TYPE,
+  unselectedVaultScope,
+} from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
 import type { DeviceMode } from "$lib/vault-architecture";
 import type { VaultState } from "$lib/vault.svelte";
@@ -28,9 +32,10 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
   state.providers = providersVisibleWhileDeviceLocked(
     $state.snapshot({
       providers: state.providers,
-      ...(state.activeVault.kind === ActiveVaultKind.Open
-        ? { activeVaultStoreId: state.activeVault.storeId }
-        : {}),
+      activeVaultStoreId:
+        state.activeVault.kind === ActiveVaultKind.Open
+          ? activeVaultScope(state.activeVault.storeId)
+          : unselectedVaultScope(),
     }),
   ).providers;
   state.providersLoaded = state.providers.length > 0;

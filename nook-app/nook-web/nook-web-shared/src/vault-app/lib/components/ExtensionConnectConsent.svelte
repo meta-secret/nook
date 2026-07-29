@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import {
+    activeVaultScope,
+    providerBelongsToVault,
     ExtensionPairingApprovedMessageType,
     ExtensionPairingVaultType,
     type ExtensionEventLogRecord,
@@ -198,13 +200,13 @@
           vault.requireManager().loadAuthProviders(),
         )
         const matchingProviders = authProviders.providers.filter(
-          (provider) => !provider.storeId || provider.storeId === vaultStoreId,
+          (provider) => providerBelongsToVault(provider, vaultStoreId),
         )
         grantedProviders = sealAuthProvidersForDevicePublicKey(
           request.devicePublicKey,
           {
             providers: matchingProviders,
-            activeVaultStoreId: vaultStoreId,
+            activeVaultStoreId: activeVaultScope(vaultStoreId),
           },
         ).providers
       }

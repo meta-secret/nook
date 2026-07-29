@@ -39,6 +39,28 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> 
     Ok(())
 }
 
+fn is_rust_test_source(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str() == "tests")
+        || path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .is_some_and(|stem| stem == "test" || stem.ends_with("_test") || stem.ends_with("_tests"))
+}
+
+#[test]
+fn rust_test_sources_are_classified_without_exempting_production_modules() {
+    assert!(is_rust_test_source(Path::new(
+        "crate/src/manager/event_log_browser_tests.rs"
+    )));
+    assert!(is_rust_test_source(Path::new(
+        "crate/tests/event_log_browser.rs"
+    )));
+    assert!(!is_rust_test_source(Path::new(
+        "crate/src/manager/event_log_browser.rs"
+    )));
+}
+
 #[test]
 fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
     let root = repository_root();
@@ -96,10 +118,7 @@ fn anyhow_is_available_only_to_rust_tests() -> Result<()> {
 
     let mut violations = Vec::new();
     for path in files {
-        if path
-            .components()
-            .any(|component| component.as_os_str() == "tests")
-        {
+        if is_rust_test_source(&path) {
             continue;
         }
         let source =

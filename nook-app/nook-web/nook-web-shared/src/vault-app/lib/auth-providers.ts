@@ -126,6 +126,16 @@ export function scopedProviderVault(storeId: string): ProviderVaultScope {
   return { state: "storeId", value: storeId };
 }
 
+export function providerBelongsToVault(
+  provider: StorageProvider,
+  storeId: string,
+): boolean {
+  return (
+    provider.storeId.state === "unscoped" ||
+    provider.storeId.value === storeId
+  );
+}
+
 export function missingGithubPat(): StoredGithubPat {
   return { state: "missing" };
 }

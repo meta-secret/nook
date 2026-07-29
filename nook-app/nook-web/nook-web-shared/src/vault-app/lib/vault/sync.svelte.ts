@@ -3,6 +3,7 @@ import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";
 import {
+  activeVaultScope,
   isoTimestamp,
   VaultAccessStatus,
   type JoinRequest,
@@ -23,6 +24,7 @@ import {
 import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
+  unselectedVaultScope,
   type StorageProvider,
 } from "$lib/auth-providers";
 import {
@@ -309,9 +311,10 @@ export async function updateProviderSyncMetadata(
   state.providers = updateProviderSyncMetadataWasm(
     $state.snapshot({
       providers: state.providers,
-      ...(state.activeVault.kind === ActiveVaultKind.Open
-        ? { activeVaultStoreId: state.activeVault.storeId }
-        : {}),
+      activeVaultStoreId:
+        state.activeVault.kind === ActiveVaultKind.Open
+          ? activeVaultScope(state.activeVault.storeId)
+          : unselectedVaultScope(),
     }),
     providerId,
     yaml,

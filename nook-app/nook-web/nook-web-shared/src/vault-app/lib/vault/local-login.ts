@@ -13,7 +13,7 @@ import {
   NookActiveVaultSelectionState,
   type NookVaultManager,
 } from "$app-wasm";
-import { saveAuthProviders } from "$lib/auth-providers";
+import { activeVaultScope, saveAuthProviders } from "$lib/auth-providers";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-local");
@@ -25,8 +25,8 @@ export async function reloadProvidersForActiveVault(
     state.requireManager().loadAuthProviders(),
   );
   state.providers = snapshot.providers;
-  if (snapshot.activeVaultStoreId) {
-    state.openActiveVault(snapshot.activeVaultStoreId);
+  if (snapshot.activeVaultStoreId.state === "storeId") {
+    state.openActiveVault(snapshot.activeVaultStoreId.value);
   }
   state.applyActiveProviderCredentials();
 }
@@ -311,7 +311,7 @@ export async function syncActiveVaultStoreIdToAuth(
   await state.enqueueStorage(() =>
     saveAuthProviders(state.requireManager(), {
       providers: state.providers,
-      activeVaultStoreId: storeId,
+      activeVaultStoreId: activeVaultScope(storeId),
     }),
   );
 }

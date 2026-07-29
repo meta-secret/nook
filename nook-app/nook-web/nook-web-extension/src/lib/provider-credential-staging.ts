@@ -17,7 +17,12 @@ function cloneProvider(provider: unknown): unknown {
   if (!isRecord(provider)) return provider
   const clone = { ...provider }
   if (isRecord(provider.oauthFile)) {
-    clone.oauthFile = { ...provider.oauthFile }
+    clone.oauthFile = {
+      ...provider.oauthFile,
+      ...(isRecord(provider.oauthFile.config)
+        ? { config: { ...provider.oauthFile.config } }
+        : {}),
+    }
   }
   return clone
 }
@@ -26,11 +31,11 @@ export function scrubProviderCredentials(providers: unknown): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
-    if ('githubPat' in provider) delete provider.githubPat
+    if ('githubPat' in provider) provider.githubPat = { state: 'missing' }
     if (isRecord(provider.oauthFile)) {
-      provider.oauthFile.accessToken = ''
-      if ('refreshToken' in provider.oauthFile) {
-        delete provider.oauthFile.refreshToken
+      if (isRecord(provider.oauthFile.config)) {
+        provider.oauthFile.config.accessToken = { state: 'signedOut' }
+        provider.oauthFile.config.refreshToken = { state: 'notIssued' }
       }
     }
   }

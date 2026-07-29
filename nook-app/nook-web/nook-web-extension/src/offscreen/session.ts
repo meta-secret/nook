@@ -10,7 +10,10 @@ import initNookWasm, {
   providerWasmArgs,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import type {
+  AuthProvidersSnapshot,
+  StorageProvider,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ExtensionSessionMessageDispatcher,
   SessionMessageTypeParseKind,
@@ -468,21 +471,26 @@ async function handleMessage(message: unknown): Promise<unknown> {
       if (protection === DeviceProtectionStatus.Unlocked) {
         await activeManager.replaceAuthProvidersForVault({
           providers: grantedProviders,
-          activeVaultStoreId: grant.vaultStoreId,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
         })
       } else {
         // Pairing may race a closed/locked offscreen session. Website grants are
         // already sealed for this device public key, so replace this vault's
         // complete provider set without unlock, including an empty set.
         const lockedManager = activeManager as NookVaultManager & {
-          savePresealedAuthProviders: (snapshot: {
-            providers: StorageProvider[]
-            activeVaultStoreId: string
-          }) => Promise<void>
+          savePresealedAuthProviders: (
+            snapshot: AuthProvidersSnapshot,
+          ) => Promise<void>
         }
         await lockedManager.savePresealedAuthProviders({
           providers: grantedProviders,
-          activeVaultStoreId: grant.vaultStoreId,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
         })
       }
       return { ok: true, status }
