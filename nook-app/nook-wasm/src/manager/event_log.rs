@@ -1200,11 +1200,10 @@ mod tests {
             remote_store_id: "store_remote1234".to_owned(),
         };
 
-        assert!(
-            manager
-                .guard_remote_event_log_classification("Sync provider", &classification)
-                .is_err()
-        );
+        match manager.guard_remote_event_log_classification("Sync provider", &classification) {
+            Ok(()) => panic!("different remote store must be rejected"),
+            Err(_) => {}
+        }
         let issue = manager
             .take_event_log_sync_issue()
             .issue()
