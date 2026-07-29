@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import type { Page } from '@playwright/test'
 import {
   EVENT_DIGEST_PATTERN,
@@ -60,7 +61,7 @@ export function createLocalE2eGoogleDriveVaultStub(
   function eventDigestFromFileId(id: string) {
     return id.startsWith('e2e-drive-event-')
       ? id.slice('e2e-drive-event-'.length)
-      : undefined
+      : omittedValue()
   }
 
   function eventListEntries(parentId: string, digest?: string) {
@@ -78,11 +79,11 @@ export function createLocalE2eGoogleDriveVaultStub(
 
   function parseEventMultipart(
     body: string,
-  ): { digest: string; content: string; parentId: string } | undefined {
+  ): { digest: string; content: string; parentId: string } | void {
     const event = parseMultipartEvent(body)
     return event
       ? { ...event, parentId: parseParentsFromBody(body) }
-      : undefined
+      : omittedValue()
   }
 
   return {
@@ -113,7 +114,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         sharedPermissionStatus?: number
       },
     ) {
-      if (opts?.vaultYaml !== undefined) {
+      if (typeof opts?.vaultYaml !== 'undefined') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -262,7 +263,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             const content = allEventFiles().get(eventDigest)
-            if (content === undefined) {
+            if (typeof content === 'undefined') {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }

@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { type WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
 import { classifyAuthenticationOutcome } from '../vault-runtime'
 import {
@@ -32,7 +33,7 @@ export async function openWebsiteLoginPicker(
     'login-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (sender.tab?.id === undefined) {
+  if (typeof sender.tab?.id === 'undefined') {
     return { ok: false, reason: 'login-picker-tab-missing' }
   }
 
@@ -265,7 +266,7 @@ export async function websiteLoginSavePending(
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: true, offer: undefined }
+    return { ok: true, offer: omittedValue() }
   }
   await ensureExtensionSessionDocument()
   const response = await sendSessionMessage({
@@ -285,7 +286,7 @@ export async function websiteLoginSavePending(
     !response.offer ||
     typeof response.offer !== 'object'
   ) {
-    return { ok: true, offer: undefined }
+    return { ok: true, offer: omittedValue() }
   }
   const staged = response.offer as {
     offerId?: string
@@ -300,7 +301,7 @@ export async function websiteLoginSavePending(
     typeof staged.offerId !== 'string' ||
     (staged.decision !== 'create' && staged.decision !== 'update')
   ) {
-    return { ok: true, offer: undefined }
+    return { ok: true, offer: omittedValue() }
   }
   const offer: WebsiteLoginSaveOfferView = {
     offerId: staged.offerId,
@@ -358,7 +359,7 @@ export async function websiteLoginSaveCommit(
     'vaultStoreId' in pending.offer &&
     typeof pending.offer.vaultStoreId === 'string'
       ? pending.offer.vaultStoreId
-      : undefined
+      : omittedValue()
   const grant =
     grants.find((candidate) => candidate.vaultStoreId === stagedVaultStoreId) ??
     grants[0]

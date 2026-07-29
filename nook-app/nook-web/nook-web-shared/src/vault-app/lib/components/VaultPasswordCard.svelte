@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     EMPTY_VALUE,
     presentValue,
@@ -84,11 +86,11 @@
   const activeEntry = $derived(
     activeEntryId.kind === 'present'
       ? passwordEntries.find((entry) => entry.id === activeEntryId.value)
-      : undefined,
+      : omittedValue(),
   )
 
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return undefined
+    if (!enrollmentCode) return
     return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode))
   })
   const enrollmentLink = $derived.by(() =>
@@ -109,10 +111,10 @@
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
-  function openPanel(target: Panel, entryId: string | undefined = undefined) {
+  function openPanel(target: Panel, entryId: string | void = omittedValue()) {
     panel = target
     activeEntryId =
-      entryId === undefined ? EMPTY_VALUE : presentValue(entryId)
+      typeof entryId === "undefined" ? EMPTY_VALUE : presentValue(entryId)
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -205,7 +207,7 @@
 <svelte:element
   this={embedded ? 'div' : 'section'}
   class={embedded
-    ? undefined
+    ? omittedValue()
     : 'rounded-xl border border-dashed border-border/70 bg-muted/15 p-4 sm:p-5'}
   data-testid="vault-password-card"
 >
@@ -288,7 +290,7 @@
                 disabled={isBusy}
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'rotate-vault-password-btn'
-                  : undefined}
+                  : omittedValue()}
                 onclick={() => openPanel('rotate', entry.id)}
               >
                 <RefreshCw class="size-4" />
@@ -302,7 +304,7 @@
                   disabled={isBusy}
                   data-testid={entry.id === passwordEntries[0]?.id
                     ? 'issue-enrollment-code-btn'
-                    : undefined}
+                    : omittedValue()}
                   onclick={() => openPanel('issue', entry.id)}
                 >
                   <QrCode class="size-4" />
@@ -319,7 +321,7 @@
                 disabled={isBusy}
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'remove-vault-password-btn'
-                  : undefined}
+                  : omittedValue()}
                 onclick={() => openPanel('remove', entry.id)}
               >
                 <Trash2 class="size-4" />

@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   bindGoogleDriveSharedFolder,
@@ -48,7 +49,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     expiresAt: state.oauthFile.expiresAt,
   });
   const providerToRefresh =
-    state.loginSetupType === undefined && !state.addProviderOpen
+    typeof state.loginSetupType === "undefined" && !state.addProviderOpen
       ? findDuplicateSyncProvider(state.syncProviders, {
           id: "oauth-refresh-target",
           type: "oauth-file",
@@ -56,7 +57,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
           oauthFile: state.oauthFile,
           createdAt: "",
         })
-      : undefined;
+      : omittedValue();
   const refreshed =
     state.oauthFile.preset === "icloud"
       ? await ensureValidICloudOAuthFileConfig(state.oauthFile)
@@ -165,7 +166,7 @@ export async function createICloudSharedProvider(
     ...state.oauthFile,
     iCloudMode: "shared",
     iCloudShareTarget: target.storageTargetId,
-    fileId: undefined,
+    fileId: omittedValue(),
   };
   state.sharedGrantInstructions = state.t(
     "provider_setup.icloud_shared_created",
@@ -195,7 +196,7 @@ export async function useICloudSharedProvider(
     ...state.oauthFile,
     iCloudMode: "shared",
     iCloudShareTarget: target.storageTargetId,
-    fileId: undefined,
+    fileId: omittedValue(),
   };
   state.sharedGrantInstructions = state.t(
     "provider_setup.icloud_shared_connected",

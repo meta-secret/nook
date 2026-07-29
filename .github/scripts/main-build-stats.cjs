@@ -412,10 +412,10 @@ function validateMainBuildStats(record, expected = {}) {
   timestampMilliseconds(source.started_at, 'source_run.started_at')
   timestampMilliseconds(source.completed_at, 'source_run.completed_at')
 
-  if (expected.runId !== undefined && source.run_id !== expected.runId) {
+  if (typeof expected.runId !== "undefined" && source.run_id !== expected.runId) {
     throw new Error(`source run ${source.run_id} does not match expected run ${expected.runId}`)
   }
-  if (expected.runAttempt !== undefined && source.run_attempt !== expected.runAttempt) {
+  if (typeof expected.runAttempt !== "undefined" && source.run_attempt !== expected.runAttempt) {
     throw new Error(
       `source attempt ${source.run_attempt} does not match expected attempt ${expected.runAttempt}`,
     )
@@ -577,8 +577,8 @@ function normalizeLegacyMainBuildStats(record) {
   const totals = normalized.cache_telemetry.totals
   if (
     totals &&
-    totals.direct_compile_job_count === undefined &&
-    totals.local_fallback_job_count !== undefined
+    typeof totals.direct_compile_job_count === "undefined" &&
+    typeof totals.local_fallback_job_count !== "undefined"
   ) {
     totals.direct_compile_job_count = totals.local_fallback_job_count
     delete totals.local_fallback_job_count
@@ -604,10 +604,12 @@ if (require.main === module) {
     process.exit(2)
   }
   validateFile(path, {
-    runId: process.env.SOURCE_RUN_ID ? Number(process.env.SOURCE_RUN_ID) : undefined,
-    runAttempt: process.env.SOURCE_RUN_ATTEMPT
-      ? Number(process.env.SOURCE_RUN_ATTEMPT)
-      : undefined,
+    ...(process.env.SOURCE_RUN_ID
+      ? { runId: Number(process.env.SOURCE_RUN_ID) }
+      : {}),
+    ...(process.env.SOURCE_RUN_ATTEMPT
+      ? { runAttempt: Number(process.env.SOURCE_RUN_ATTEMPT) }
+      : {}),
   })
   console.log(`validated ${path}`)
 }

@@ -151,5 +151,5 @@ test("extractShellOutputChunk reads common event shapes", () => {
   assert.equal(extractShellOutputChunk({ text: "line 1\n" }), "line 1\n");
   assert.equal(extractShellOutputChunk({ case: "stdout", value: { content: "ok" } }), "ok");
   assert.equal(extractShellOutputChunk({ case: "stdoutDelta", value: { output: "live" } }), "live");
-  assert.equal(extractShellOutputChunk(undefined), "");
+  assert.equal(extractShellOutputChunk(), "");
 });

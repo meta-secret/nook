@@ -95,7 +95,7 @@ export class SecretFormState {
 
   toInput(
     selectedType: VaultItemType,
-    initialItem: NookSecretRecord | undefined,
+    initialItem: NookSecretRecord | void,
   ): SecretFormInput {
     if (selectedType === "login") {
       return {
@@ -169,7 +169,7 @@ export class SecretFormState {
     };
   }
 
-  canSubmit(selectedType: VaultItemType | undefined, isSaving: boolean) {
+  canSubmit(selectedType: VaultItemType | void, isSaving: boolean) {
     if (isSaving || !selectedType) return false;
     if (selectedType === "seed-phrase") return this.seedPhraseValid;
     if (selectedType === "secure-note") {

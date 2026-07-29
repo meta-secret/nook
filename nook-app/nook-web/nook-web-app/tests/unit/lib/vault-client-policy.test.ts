@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
@@ -103,7 +104,7 @@ describe('portable vault client policy', () => {
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
     expect(() =>
-      stagedRemoteStorageArgs('oauth-file', undefined, 'nook-events', {
+      stagedRemoteStorageArgs('oauth-file', omittedValue(), 'nook-events', {
         preset: '' as OAuthFilePreset,
         accessToken: 'token',
         fileId: 'file-id',

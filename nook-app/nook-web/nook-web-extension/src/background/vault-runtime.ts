@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
   EMPTY_VALUE,
@@ -98,7 +99,7 @@ export async function reconcileExtensionPairingState(
 
 export async function authenticationWorkflowSnapshot(
   observations: AuthenticationPageObservationView[],
-): Promise<AuthenticationWorkflowSnapshotView | undefined> {
+): Promise<AuthenticationWorkflowSnapshotView | void> {
   await ensureExtensionWasm()
   const inputs = new NookAuthenticationPageObservations()
   try {
@@ -126,7 +127,7 @@ export async function authenticationWorkflowSnapshot(
       if (
         workflowMatch.state === NookAuthenticationWorkflowMatchState.NoMatch
       ) {
-        return undefined
+        return
       }
       const snapshot = workflowMatch.snapshot()
       try {
@@ -175,7 +176,9 @@ export async function classifyAuthenticationOutcome(
   try {
     const verdict = wasmClassifyAuthenticationOutcome(
       input,
-      timeoutMs === undefined ? undefined : Math.max(1, Math.floor(timeoutMs)),
+      typeof timeoutMs === 'undefined'
+        ? omittedValue()
+        : Math.max(1, Math.floor(timeoutMs)),
     )
     try {
       const name = verdict.name

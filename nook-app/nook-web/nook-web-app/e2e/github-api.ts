@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 const GITHUB_VAULT_PATH = 'nook-events'
 const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
@@ -111,7 +112,7 @@ export async function githubRepoContext(
 export async function fetchGithubVaultYaml(
   pat: string,
   repoName: string,
-): Promise<string | undefined> {
+): Promise<string | void> {
   const { headers, repo } = await githubRepoContext(pat, repoName)
   const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_VAULT_PATH}`
   const etagKey = `${pat}:${repoName}`
@@ -121,12 +122,12 @@ export async function fetchGithubVaultYaml(
   })
 
   if (res.status === 304) {
-    return vaultContentCache.get(etagKey) ?? undefined
+    return vaultContentCache.get(etagKey) ?? omittedValue()
   }
   if (res.status === 404) {
     vaultEtagCache.delete(etagKey)
     vaultContentCache.delete(etagKey)
-    return undefined
+    return
   }
 
   const nextEtag = res.headers.get('etag')

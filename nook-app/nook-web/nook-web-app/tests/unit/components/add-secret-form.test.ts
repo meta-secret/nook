@@ -29,11 +29,11 @@ const legacyAuthenticator = {
 function renderLegacyAuthenticatorEditor() {
   const onReplaceSecret = vi
     .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
-    .mockResolvedValue(undefined)
+    .mockResolvedValue()
   const view = render(AddSecretForm, {
     vault,
     isSaving: false,
-    onAddSecret: vi.fn(async () => undefined),
+    onAddSecret: vi.fn(async () => {}),
     onReplaceSecret,
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
@@ -48,7 +48,7 @@ describe('AddSecretForm file attachment picker', () => {
     const view = render(AddSecretForm, {
       vault,
       isSaving: false,
-      onAddSecret: vi.fn(async () => undefined),
+      onAddSecret: vi.fn(async () => {}),
       onGeneratePassword: vi.fn(() => ''),
       onCancel: vi.fn(),
     })

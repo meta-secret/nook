@@ -66,12 +66,13 @@ This document defines the strict development standards, architectural boundaries
   whose signatures require `null` may retain it only at that explicit boundary;
   normalize before values enter application state. Do not hand-edit generated
   files or spread nullable types into internal helpers.
-- **Explicit TypeScript/Svelte state:** Mutable application state must not use
-  `T | undefined`, an optional property, a zero-argument `$state<T>()`, or
-  parallel flags to encode named states. Use discriminated unions with
-  variant-owned data. Keep `undefined` only when absence is the truthful
-  structural contract of an external input, browser/generated API, lookup,
-  parser, cache, optional callback, or DOM reference.
+- **Explicit JavaScript/TypeScript/Svelte absence:** Authored code contains no
+  `undefined` value or type tokens, including tests, build scripts, `.agents`,
+  and `.github`. Use optional syntax only for external input shape, `void` for
+  callbacks with no result, and immediately normalize browser, lookup, parser,
+  cache, and DOM absence into an explicit discriminated union. Mutable state
+  always uses domain-specific variants with variant-owned data. Generated
+  declarations and generated WASM bindings may mirror external contracts.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.

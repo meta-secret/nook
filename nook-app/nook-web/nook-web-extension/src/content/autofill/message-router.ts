@@ -45,7 +45,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.payload.requestId === pickerState.pendingLogin?.requestId
   ) {
     const pending = pickerState.pendingLogin
-    pickerState.pendingLogin = undefined
+    pickerState.clearPendingLogin()
     window.clearTimeout(pending.timeoutId)
     setStatus(
       pending.description,
@@ -66,7 +66,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.payload.requestId === pickerState.pendingLogin?.requestId
   ) {
     const pending = pickerState.pendingLogin
-    pickerState.pendingLogin = undefined
+    pickerState.clearPendingLogin()
     window.clearTimeout(pending.timeoutId)
     sendResponse({ ok: true })
     widgetState.busy = true
@@ -96,7 +96,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.payload.requestId === pickerState.pendingAuthenticator?.requestId
   ) {
     const pending = pickerState.pendingAuthenticator
-    pickerState.pendingAuthenticator = undefined
+    pickerState.clearPendingAuthenticator()
     window.clearTimeout(pending.timeoutId)
     setStatus(
       pending.description,
@@ -119,7 +119,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false
   }
   const pending = pickerState.pendingAuthenticator
-  pickerState.pendingAuthenticator = undefined
+  pickerState.clearPendingAuthenticator()
   window.clearTimeout(pending.timeoutId)
   sendResponse({ ok: true })
   widgetState.busy = true

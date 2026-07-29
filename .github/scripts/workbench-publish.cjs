@@ -23,33 +23,36 @@ if (
 }
 
 const content = readFileSync(localPath).toString('base64')
-let sha
+let remoteFile = { kind: 'missing' }
 try {
-  sha = execFileSync(
-    'gh',
-    ['api', `repos/${repository}/contents/${remotePath}`, '--jq', '.sha'],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-  ).trim()
+  remoteFile = {
+    kind: 'present',
+    sha: execFileSync(
+      'gh',
+      ['api', `repos/${repository}/contents/${remotePath}`, '--jq', '.sha'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim(),
+  }
 } catch {
-  sha = undefined
+  remoteFile = { kind: 'missing' }
 }
 
 if (
-  sha &&
+  remoteFile.kind === 'present' &&
   (remotePath.startsWith('plans/') || remotePath.startsWith('stats/'))
 ) {
   console.error(`Refusing to overwrite immutable Workbench record: ${remotePath}`)
   process.exit(3)
 }
-if (sha && !expectedSha) {
+if (remoteFile.kind === 'present' && !expectedSha) {
   console.error(
     `Refusing to overwrite mutable Workbench record without NOOK_WORKBENCH_EXPECTED_SHA: ${remotePath}`,
   )
   process.exit(4)
 }
-if (sha && sha !== expectedSha) {
+if (remoteFile.kind === 'present' && remoteFile.sha !== expectedSha) {
   console.error(
-    `Refusing stale Workbench update for ${remotePath}: expected ${expectedSha}, current ${sha}`,
+    `Refusing stale Workbench update for ${remotePath}: expected ${expectedSha}, current ${remoteFile.sha}`,
   )
   process.exit(5)
 }
@@ -66,6 +69,6 @@ const args = [
   '-f',
   'branch=main',
 ]
-if (sha) args.push('-f', `sha=${sha}`)
+if (remoteFile.kind === 'present') args.push('-f', `sha=${remoteFile.sha}`)
 
 execFileSync('gh', args, { stdio: 'inherit' })

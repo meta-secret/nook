@@ -42,7 +42,7 @@ export function registerDynamicMockAuthAccount(
 export function findDynamicMockAuthAccount(
   username: string,
   password: string,
-): DynamicMockAuthAccount | undefined {
+): DynamicMockAuthAccount | void {
   return readAccounts().find(
     (account) => account.username === username && account.password === password,
   )

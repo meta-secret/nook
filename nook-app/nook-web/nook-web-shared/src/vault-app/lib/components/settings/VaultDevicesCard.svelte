@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
   import {
     Check,
     ChevronDown,
@@ -272,7 +273,7 @@
             : 'outline'}
           class={extensionSetup.status !== 'not_installed'
             ? 'border-border'
-            : undefined}
+            : omittedValue()}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
           onclick={() => void handleExtensionSetupAction()}

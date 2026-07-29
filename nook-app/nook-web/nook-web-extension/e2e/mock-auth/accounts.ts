@@ -32,7 +32,7 @@ export const MOCK_AUTH_DEFAULT_PIN = '123456'
 export function findMockAuthAccount(
   username: string,
   password: string,
-): MockAuthAccount | undefined {
+): MockAuthAccount | void {
   return MOCK_AUTH_ACCOUNTS.find(
     (account) => account.username === username && account.password === password,
   )
@@ -42,8 +42,8 @@ export function findMockAuthAccount(
 export function findPlainMockAuthAccount(
   username: string,
   password: string,
-): MockAuthAccount | undefined {
+): MockAuthAccount | void {
   const account = findMockAuthAccount(username, password)
-  if (!account || account.totpSecret) return undefined
+  if (!account || account.totpSecret) return
   return account
 }

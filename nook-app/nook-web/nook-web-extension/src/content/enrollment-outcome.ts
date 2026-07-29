@@ -9,7 +9,7 @@ const ENROLLMENT_EVIDENCE_TIMEOUT_MS = 30_000
 const ENROLLMENT_EVIDENCE_POLL_MS = 250
 
 type EnrollmentOutcomeHost = {
-  sendRuntimeMessage: <T>(message: unknown) => Promise<T | undefined>
+  sendRuntimeMessage: <T>(message: unknown) => Promise<T | void>
 }
 
 type EnrollmentEvidenceCallbacks = {
@@ -63,7 +63,7 @@ function isDisplayedOutcomeMarker(element: Element): boolean {
   return rect.width > 0 && rect.height > 0
 }
 
-function queryDisplayedOutcomeMarker(selector: string): Element | undefined {
+function queryDisplayedOutcomeMarker(selector: string): Element | void {
   return Array.from(document.querySelectorAll(selector)).find(
     isDisplayedOutcomeMarker,
   )
@@ -107,7 +107,7 @@ function collectEnrollmentOutcomeObservation(
 async function classifyEnrollmentOutcome(
   host: EnrollmentOutcomeHost,
   observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeVerdictView | undefined> {
+): Promise<AuthenticationOutcomeVerdictView | void> {
   const response = await host.sendRuntimeMessage<{
     ok?: boolean
     verdict?: AuthenticationOutcomeVerdictView
@@ -118,7 +118,7 @@ async function classifyEnrollmentOutcome(
       timeoutMs: ENROLLMENT_EVIDENCE_TIMEOUT_MS,
     },
   })
-  if (!response?.ok || !response.verdict) return undefined
+  if (!response?.ok || !response.verdict) return
   return response.verdict
 }
 

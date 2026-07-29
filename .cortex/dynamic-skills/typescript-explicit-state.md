@@ -2,15 +2,16 @@
 
 ## Purpose
 
-Make TypeScript and Svelte application state describe meaningful variants
-directly, so callers do not reconstruct a hidden state machine from
-`undefined`, optional fields, booleans, and defensive condition chains.
+Make every authored JavaScript, TypeScript, and Svelte absence explicit, so
+callers do not reconstruct a hidden state machine from `undefined`, optional
+fields, booleans, and defensive condition chains.
 
 ## Problem Pattern
 
-`T | undefined` is TypeScript's structural optional-value union, analogous to
-Rust's `Option<T>`. It is precise for a lookup or external input, but it is too
-weak when absence means a named product or lifecycle state:
+`T | undefined` is TypeScript's implicit optional-value union, analogous to an
+unnamed Rust `Option<T>`. In authored code it loses the semantic distinction
+between a missing lookup, an idle workflow, a released resource, and a
+contract violation:
 
 ```ts
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -33,31 +34,23 @@ mutable flags create the same problem.
   WASM. Keep browser lifecycle and visual state in TypeScript/Svelte.
 - Match variants exhaustively. Do not convert a discriminated union back into
   parallel booleans.
-- Keep `undefined` only when absence is the truthful structural contract:
-  external/optional input, browser or generated API, lookup/parser result,
-  cache, optional callback, or DOM reference.
-- Normalize `null` from external APIs to `undefined` at the narrow boundary,
-  then convert it to a named state before storing it.
+- Use optional property/parameter syntax only to mirror external input shape,
+  and normalize the value into an explicit union immediately.
+- Use `void` for callbacks and commands that intentionally return no value.
+- Normalize missing browser, lookup, parser, cache, and DOM results directly
+  into a `none`/`some` or domain-specific union at the narrow boundary.
+- Normalize `null` from external APIs directly into the same explicit union.
 - Do not create sentinel strings, fake default objects, non-null assertions,
   casts, or decorative one-variant wrappers to satisfy the check.
 
 ## Scope
 
-Applies to:
+Applies to every authored `.js`, `.mjs`, `.cjs`, `.ts`, and `.svelte` file,
+including production source, tests, fixtures, demos, build configuration,
+`.agents`, `.github`, and `agentic-ai`.
 
-- Mutable application state in authored `nook-app/nook-web` TypeScript and
-  Svelte source.
-- Svelte rune state, controller/class fields, module lifecycle resources,
-  timers, in-flight operations, selections, results, and workflow data.
-
-Does not apply to:
-
-- Generated declarations and ambient external contracts.
-- Function parameters and return values that truthfully model optional input,
-  lookup, parsing, cache probing, or browser API behavior.
-- Optional callbacks and Svelte/DOM references controlled by framework APIs.
-- Test fixtures and build configuration unless they themselves model product
-  state.
+Generated declarations, dependency/build directories, and generated WASM
+bindings are excluded because they mirror contracts Nook does not author.
 
 ## Examples
 
@@ -95,19 +88,19 @@ type ImportState =
 
 ## Application Checklist
 
-- [ ] Inventory every candidate before editing and classify structural absence
-      separately from named application state.
+- [ ] Inventory every authored token before editing and classify boundary
+      absence separately from named application state.
 - [ ] Replace modeled `undefined`, optional state fields, zero-argument runes,
       and coupled booleans with discriminated unions.
 - [ ] Move portable policy and domain variants to Rust/WASM.
 - [ ] Keep boundary conversion narrow and documented by the surrounding type.
 - [ ] Add transition-focused tests and syntax-aware preflight fixtures.
-- [ ] Search the changed scope again for implicit application-state absence.
+- [ ] Run the repository-wide AST preflight and require a zero-result inventory.
 
 ## Validation
 
-The AST-backed preflight rejects mutable application state that contains an
-`undefined` type/value or a zero-argument state rune, while permitting explicit
-boundary/query contracts. Add positive and negative fixtures whenever the rule
-is sharpened. Run `task format` before pushing and use GitHub Actions as the
+The AST-backed preflight rejects every executable or type-level `undefined`
+token in authored JavaScript, TypeScript, and Svelte while ignoring comments
+and string literals. Add positive and negative fixtures whenever the rule is
+sharpened. Run `task format` before pushing and use GitHub Actions as the
 product validation gate.

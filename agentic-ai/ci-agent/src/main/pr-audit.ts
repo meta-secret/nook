@@ -116,7 +116,7 @@ export async function buildPrAudit(
     reasons.push(`head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`);
   }
   for (const workflow of requiredWorkflows) {
-    if (workflow.runId === undefined) {
+    if (typeof workflow.runId === "undefined") {
       reasons.push(`${workflow.workflowName} run is not indexed for the current head`);
     } else if (workflow.status !== "completed") {
       reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
@@ -188,10 +188,10 @@ async function auditWorkflows(
       );
       return {
         ...workflow,
-        conclusion: run?.conclusion ?? undefined,
         runId: run?.id,
-        status: run?.status ?? undefined,
-        url: run?.html_url ?? undefined,
+        ...(run?.conclusion ? { conclusion: run.conclusion } : {}),
+        ...(run?.status ? { status: run.status } : {}),
+        ...(run?.html_url ? { url: run.html_url } : {}),
       };
     }),
   );
@@ -244,11 +244,11 @@ async function inspectExactHeadDeployment(
       return {
         environment: deployment.environment,
         state: latest.state,
-        url: latest.environment_url ?? undefined,
+        ...(latest.environment_url ? { url: latest.environment_url } : {}),
       };
     }
   }
-  return undefined;
+  return ;
 }
 
 function readPrNumber(): number {

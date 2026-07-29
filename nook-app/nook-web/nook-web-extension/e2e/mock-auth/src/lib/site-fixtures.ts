@@ -73,12 +73,12 @@ for (const [pathKey, template] of Object.entries(templateModules)) {
   templatesById.set(id, { ...template, id })
 }
 
-function resolveSiteFixture(id: string): SiteFixture | undefined {
+function resolveSiteFixture(id: string): SiteFixture | void {
   const ref = siteShells[id]
-  if (!ref) return undefined
+  if (!ref) return
   const template = templatesById.get(ref.template)
   const steps = ref.steps ?? template?.steps
-  if (!steps || steps.length === 0) return undefined
+  if (!steps || steps.length === 0) return
   return {
     id,
     source: ref.source,
@@ -103,20 +103,18 @@ export function listShellTemplateIds(): string[] {
   return [...templatesById.keys()].sort()
 }
 
-export function getSiteFixture(id: string): SiteFixture | undefined {
+export function getSiteFixture(id: string): SiteFixture | void {
   return fixturesById.get(id)
 }
 
-export function getShellTemplate(id: string): ShellTemplate | undefined {
+export function getShellTemplate(id: string): ShellTemplate | void {
   return templatesById.get(id)
 }
 
 /** Render a shared template as a fixture (CI exercises unique shells, not every catalog id). */
-export function getTemplateFixture(
-  templateId: string,
-): SiteFixture | undefined {
+export function getTemplateFixture(templateId: string): SiteFixture | void {
   const template = templatesById.get(templateId)
-  if (!template || template.steps.length === 0) return undefined
+  if (!template || template.steps.length === 0) return
   return {
     id: templateId,
     source: 'research',

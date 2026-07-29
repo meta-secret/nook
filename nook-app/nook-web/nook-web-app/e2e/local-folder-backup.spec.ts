@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { test, expect, type Page } from './fixtures'
 import {
   addSecret,
@@ -38,7 +39,7 @@ async function installUnsupportedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'showDirectoryPicker', {
       configurable: true,
-      value: undefined,
+      value: omittedValue(),
     })
   })
 }

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { ArrowLeft, RefreshCw } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -25,7 +27,7 @@
     onReplaceSecret,
     onGeneratePassword,
     onCancel,
-    initialItem = undefined,
+    initialItem = omittedValue(),
     selectedTypeState = $bindable<ValueState<VaultItemType>>(EMPTY_VALUE),
   }: {
     vault: VaultState;
@@ -48,7 +50,7 @@
       symbols: boolean,
     ) => string;
     onCancel: () => void;
-    initialItem?: NookSecretRecord | undefined;
+    initialItem?: NookSecretRecord | void;
     selectedTypeState?: ValueState<VaultItemType>;
   } = $props();
 
@@ -56,9 +58,9 @@
   const selectedType = $derived(
     selectedTypeState.kind === "present"
       ? selectedTypeState.value
-      : undefined,
+      : omittedValue(),
   );
-  const isEditMode = $derived(initialItem !== undefined);
+  const isEditMode = $derived(typeof initialItem !== "undefined");
 
   const typeTitle = $derived(
     isEditMode
@@ -150,7 +152,7 @@
   );
 </script>
 
-{#if selectedType === undefined && !isEditMode}
+{#if selectedType === omittedValue() && !isEditMode}
   <SecretTypePicker
     {vault}
     onSelect={(type) => (selectedTypeState = presentValue(type))}
@@ -167,7 +169,7 @@
     class={isSecureNoteForm
       ? "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain"
       : "space-y-4"}
-    data-testid={isEditMode ? "edit-secret-form" : undefined}
+    data-testid={isEditMode ? "edit-secret-form" : omittedValue()}
   >
     <div
       class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"

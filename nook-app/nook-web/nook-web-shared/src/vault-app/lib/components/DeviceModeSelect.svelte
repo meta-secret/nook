@@ -21,7 +21,7 @@
     return `device_protection.mode_${mode.replace('-', '_')}_${suffix}`
   }
 
-  function selectMode(value: string | undefined) {
+  function selectMode(value: string | void) {
     if (value === 'standard' || value === 'anti-hacker') {
       vault.draftDeviceMode = value
     }

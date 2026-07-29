@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   scrubProviderCredentials,
   stageProviderCredentials,
@@ -17,7 +18,7 @@ const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
   messagePayload: (message: unknown) => Record<string, unknown>
-  messageType: (message: unknown) => string | undefined
+  messageType: (message: unknown) => string | void
 }
 
 function sessionMessagePriority(type: string): SessionOperationPriority {
@@ -46,18 +47,16 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
   }
 }
 
-function requestedQueueExpiry(
-  payload: Record<string, unknown>,
-): number | undefined {
+function requestedQueueExpiry(payload: Record<string, unknown>): number | void {
   const value = payload.queueExpiresAt
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined
+    return
   }
   return Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS)
 }
 
 const sensitiveSessionFields: Readonly<
-  Record<string, readonly string[] | undefined>
+  Record<string, readonly string[] | void>
 > = {
   'nook:extension-session-finish-passkey-setup': [
     'credentialId',
@@ -124,7 +123,7 @@ export class ExtensionSessionMessageDispatcher {
       if (pendingPayload.kind === 'empty') return
       for (const field of fields) {
         clearSensitiveValue(pendingPayload.value[field])
-        pendingPayload.value[field] = undefined
+        delete pendingPayload.value[field]
       }
       pendingPayload = EMPTY_VALUE
     }
@@ -143,7 +142,7 @@ export class ExtensionSessionMessageDispatcher {
         } finally {
           for (const field of fields) {
             clearSensitiveValue(operationPayload[field])
-            operationPayload[field] = undefined
+            delete operationPayload[field]
           }
         }
       },
@@ -211,7 +210,7 @@ export class ExtensionSessionMessageDispatcher {
 
   enqueue(message: unknown): Promise<unknown> {
     const type = this.context.messageType(message)
-    if (!type) return Promise.resolve(undefined)
+    if (!type) return Promise.resolve()
     const payload = this.context.messagePayload(message)
     if (type === 'nook:extension-session-import-vault') {
       return this.enqueueVaultImport(
@@ -238,7 +237,7 @@ export class ExtensionSessionMessageDispatcher {
       requestedExpiry ??
       (priority === 'interactive'
         ? Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS
-        : undefined)
+        : omittedValue())
     return this.operations.enqueue(() => this.context.handleMessage(message), {
       priority,
       expiresAt,
@@ -253,8 +252,8 @@ export class ExtensionSessionMessageDispatcher {
         type === 'nook:extension-session-seal-identity-handoff' ||
         type === 'nook:extension-session-cancel-passkey'
       const serviceWorkerSender =
-        sender.tab === undefined &&
-        (sender.url === undefined ||
+        typeof sender.tab === 'undefined' &&
+        (typeof sender.url === 'undefined' ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
       if (
         sender.id !== chrome.runtime.id ||

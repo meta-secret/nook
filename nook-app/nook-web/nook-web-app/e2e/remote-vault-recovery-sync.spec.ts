@@ -104,7 +104,7 @@ test.describe('remote vault recovery (local-first sync)', () => {
             target,
             (state) => state.secretIds.length >= 1,
             { timeoutMs: 1_000 },
-          ).catch(() => undefined)
+          ).catch(() => {})
           return snapshot?.secretIds.length ?? 0
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

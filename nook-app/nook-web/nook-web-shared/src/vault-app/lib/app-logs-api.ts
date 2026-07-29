@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import {
   dumpLogs,
   getLogLevel,
@@ -40,18 +41,14 @@ const LOG_LEVELS: readonly LogLevel[] = [
   "trace",
 ];
 
-function parseLevel(raw: string | undefined, fallback: LogLevel): LogLevel {
+function parseLevel(raw: string | void, fallback: LogLevel): LogLevel {
   const value = raw?.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
     ? (value as LogLevel)
     : fallback;
 }
 
-function parsePositiveInt(
-  raw: string | undefined,
-  fallback: number,
-  max: number,
-) {
+function parsePositiveInt(raw: string | void, fallback: number, max: number) {
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.min(parsed, max);
@@ -69,10 +66,10 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith("?") ? search.slice(1) : search,
   );
   return {
-    minLevel: parseLevel(params.get("minLevel") ?? undefined, "trace"),
-    limit: parsePositiveInt(params.get("limit") ?? undefined, 500, 5000),
+    minLevel: parseLevel(params.get("minLevel") ?? omittedValue(), "trace"),
+    limit: parsePositiveInt(params.get("limit") ?? omittedValue(), 500, 5000),
     offset: parsePositiveInt(
-      params.get("offset") ?? undefined,
+      params.get("offset") ?? omittedValue(),
       0,
       Number.MAX_SAFE_INTEGER,
     ),
@@ -85,8 +82,10 @@ export function buildAppLogsUrl(
 ): string {
   const params = new URLSearchParams();
   if (query.minLevel) params.set("minLevel", query.minLevel);
-  if (query.limit !== undefined) params.set("limit", String(query.limit));
-  if (query.offset !== undefined) params.set("offset", String(query.offset));
+  if (typeof query.limit !== "undefined")
+    params.set("limit", String(query.limit));
+  if (typeof query.offset !== "undefined")
+    params.set("offset", String(query.offset));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }

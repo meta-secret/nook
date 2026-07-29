@@ -104,7 +104,7 @@ export async function removeAuthenticatorPicker(
 
 export async function loadAuthenticatorPicker(
   requestId: string,
-): Promise<PendingAuthenticatorPicker | undefined> {
+): Promise<PendingAuthenticatorPicker | void> {
   let request = pendingAuthenticatorPickers.get(requestId)
   if (!request) {
     const key = authenticatorPickerStorageKey(requestId)
@@ -113,15 +113,15 @@ export async function loadAuthenticatorPicker(
       !isPendingAuthenticatorPicker(stored) ||
       stored.requestId !== requestId
     ) {
-      if (stored !== undefined) await removeSessionStorage(key)
-      return undefined
+      if (typeof stored !== 'undefined') await removeSessionStorage(key)
+      return
     }
     request = stored
     pendingAuthenticatorPickers.set(requestId, request)
   }
   if (request.expiresAt <= Date.now()) {
     await removeAuthenticatorPicker(requestId)
-    return undefined
+    return
   }
   return request
 }
@@ -303,21 +303,21 @@ export async function removeLoginPicker(requestId: string): Promise<void> {
 
 export async function loadLoginPicker(
   requestId: string,
-): Promise<PendingLoginPicker | undefined> {
+): Promise<PendingLoginPicker | void> {
   let request = pendingLoginPickers.get(requestId)
   if (!request) {
     const key = loginPickerStorageKey(requestId)
     const stored = (await getSessionStorage(key))[key]
     if (!isPendingLoginPicker(stored) || stored.requestId !== requestId) {
-      if (stored !== undefined) await removeSessionStorage(key)
-      return undefined
+      if (typeof stored !== 'undefined') await removeSessionStorage(key)
+      return
     }
     request = stored
     pendingLoginPickers.set(requestId, request)
   }
   if (request.expiresAt <= Date.now()) {
     await removeLoginPicker(requestId)
-    return undefined
+    return
   }
   return request
 }

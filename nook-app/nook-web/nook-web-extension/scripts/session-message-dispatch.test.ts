@@ -1,11 +1,17 @@
+import {
+  EMPTY_VALUE,
+  omittedValue,
+  presentValue,
+  type ValueState,
+} from '../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'bun:test'
 import { ExtensionSessionMessageDispatcher } from '../src/offscreen/session-message-dispatch'
 
-function messageType(message: unknown): string | undefined {
+function messageType(message: unknown): string | void {
   if (!message || typeof message !== 'object' || !('type' in message)) {
-    return undefined
+    return
   }
-  return typeof message.type === 'string' ? message.type : undefined
+  return typeof message.type === 'string' ? message.type : omittedValue()
 }
 
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -39,20 +45,19 @@ describe('ExtensionSessionMessageDispatcher', () => {
   })
 
   test('rejects runtime messages from another extension', () => {
-    let listener:
-      | ((
-          message: unknown,
-          sender: chrome.runtime.MessageSender,
-          sendResponse: (response?: unknown) => void,
-        ) => boolean)
-      | undefined
+    type RuntimeListener = (
+      message: unknown,
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => boolean
+    let listenerState: ValueState<RuntimeListener> = EMPTY_VALUE
     globalThis.chrome = {
       runtime: {
         id: 'nook-extension',
         getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
         onMessage: {
-          addListener: (registered: typeof listener) => {
-            listener = registered
+          addListener: (registered: RuntimeListener) => {
+            listenerState = presentValue(registered)
           },
         },
       },
@@ -64,11 +69,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     dispatcher.registerRuntimeListener()
 
+    if (listenerState.kind === 'empty') {
+      throw new Error('runtime listener was not registered')
+    }
     expect(
-      listener?.(
+      listenerState.value(
         { type: 'nook:extension-session-status' },
         { id: 'other-extension' },
-        () => undefined,
+        () => {},
       ),
     ).toBe(false)
   })

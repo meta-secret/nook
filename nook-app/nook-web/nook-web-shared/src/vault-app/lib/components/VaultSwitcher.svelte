@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     Check,
     ChevronDown,
@@ -23,7 +25,7 @@
   const activeVault = $derived(
     vaults.find((entry) => entry.storeId === activeStoreId) ??
       vaults[0] ??
-      undefined,
+      omittedValue(),
   )
   const activeLabel = $derived(
     activeVault

@@ -25,14 +25,14 @@
   } = $props();
 
   let videoElement: HTMLVideoElement;
-  let scanner: QrScanner | undefined;
+  let scannerState: ValueState<QrScanner> = EMPTY_VALUE;
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
   let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE);
   let error = $state("");
 
   function stopCamera() {
-    scanner?.stop();
+    if (scannerState.kind === "present") scannerState.value.stop();
     scanning = false;
   }
 
@@ -60,19 +60,23 @@
     }
     error = "";
     result = EMPTY_VALUE;
-    scanner ??= new QrScanner(
-      videoElement,
-      (scanResult) => addMigrationUri(scanResult.data),
-      {
-        preferredCamera: "environment",
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-        returnDetailedScanResult: true,
-      },
-    );
+    if (scannerState.kind === "empty") {
+      scannerState = presentValue(
+        new QrScanner(
+          videoElement,
+          (scanResult) => addMigrationUri(scanResult.data),
+          {
+            preferredCamera: "environment",
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+            returnDetailedScanResult: true,
+          },
+        ),
+      );
+    }
     scanning = true;
     try {
-      await scanner.start();
+      await scannerState.value.start();
     } catch {
       scanning = false;
       error = vault.t("google_authenticator_import.camera_failed");
@@ -116,7 +120,8 @@
   }
 
   onDestroy(() => {
-    scanner?.destroy();
+    if (scannerState.kind === "present") scannerState.value.destroy();
+    scannerState = EMPTY_VALUE;
     migrationUris = [];
   });
 </script>

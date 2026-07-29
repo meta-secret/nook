@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
@@ -15,7 +17,7 @@
     vault,
     isSaving,
     onImport,
-    onClose = undefined,
+    onClose = omittedValue(),
     embedded = false,
   }: {
     vault: VaultState
@@ -24,7 +26,7 @@
       json: string,
       password: string,
     ) => Promise<NookImportResult>
-    onClose?: (() => void) | undefined
+    onClose?: (() => void) | void
     embedded?: boolean
   } = $props()
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import type {
     OAuthFilePreset,
@@ -30,8 +32,8 @@
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
       type,
       label: type,
-      githubPat: type === 'github' ? 'github_pat_draft' : undefined,
-      githubRepo: type === 'github' ? 'nook' : undefined,
+      githubPat: type === 'github' ? 'github_pat_draft' : omittedValue(),
+      githubRepo: type === 'github' ? 'nook' : omittedValue(),
       oauthFile:
         type === 'oauth-file'
           ? {
@@ -41,9 +43,9 @@
               driveMode: 'private',
               iCloudMode: 'private',
             }
-          : undefined,
-      localFolder: undefined,
-      storeId: undefined,
+          : omittedValue(),
+      localFolder: omittedValue(),
+      storeId: omittedValue(),
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
     }

@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   NookClientRunModeUtil,
@@ -18,7 +19,7 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        undefined,
+        omittedValue(),
         'store-local',
         'store-remote',
       )
@@ -32,11 +33,11 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        undefined,
+        omittedValue(),
       )
 }
 
-function labelFor(conflict: PendingSyncConflict | undefined): string {
+function labelFor(conflict: PendingSyncConflict | void): string {
   return syncConflictLabel({
     pendingSyncConflict: conflict,
     t: (key, values) => `${key}:${values?.provider ?? ''}`,
@@ -77,7 +78,7 @@ describe('resolveVaultSyncIntervalMs', () => {
 
 describe('syncConflictLabel', () => {
   test('returns an empty label when no conflict is staged', () => {
-    expect(labelFor(undefined)).toBe('')
+    expect(labelFor(omittedValue())).toBe('')
   })
 
   test('uses the content conflict banner for normal conflicts', () => {

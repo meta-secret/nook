@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     ArrowLeft,
     ChevronLeft,
@@ -45,7 +47,7 @@
     vault,
     isSaving,
     editsBlocked = false,
-    editBlockMessage = undefined,
+    editBlockMessage = omittedValue(),
     secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,
@@ -56,7 +58,7 @@
     vault: VaultState
     isSaving: boolean
     editsBlocked?: boolean
-    editBlockMessage?: string | undefined
+    editBlockMessage?: string | void
     secrets?: NookSecretListItem[]
     onAddSecret: (
       id: string,
@@ -76,7 +78,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
+    onAddModeChange?: (open: boolean, type?: VaultItemType | void) => void
   } = $props()
 
   let searchPattern = $derived(vault.secretQuery)
@@ -154,11 +156,11 @@
       addSecretOpen,
       formSelectedType.kind === 'present'
         ? formSelectedType.value
-        : undefined,
+        : omittedValue(),
     )
   }
 
-  function selectTypeFilter(value: string | undefined) {
+  function selectTypeFilter(value: string | void) {
     const nextFilter = typeFilters.find((filter) => filter.value === value)
     vault.secretTypeFilter = nextFilter?.value
     void vault.loadSecretPage(searchPattern.trim(), 0)
@@ -235,7 +237,7 @@
   }
 
   async function toggleReveal(id: string) {
-    const revealing = decryptedSecrets[id] === undefined
+    const revealing = typeof decryptedSecrets[id] === "undefined"
     decryptedSecrets = await toggleSecretExposure(
       decryptedSecrets,
       id,
@@ -266,7 +268,7 @@
 
   async function refreshAuthenticatorCode(id: string) {
     const code = await vault.currentAuthenticatorCode(id)
-    if (decryptedSecrets[id] === undefined) return
+    if (typeof decryptedSecrets[id] === "undefined") return
     authenticatorCodes = { ...authenticatorCodes, [id]: code }
   }
 
@@ -354,7 +356,7 @@
         onCancel={closeAddSecret}
         initialItem={editingItem.kind === 'present'
           ? editingItem.value
-          : undefined}
+          : omittedValue()}
       />
     </div>
   {:else}
@@ -381,7 +383,7 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            title={editsBlocked ? editBlockMessage : undefined}
+            title={editsBlocked ? editBlockMessage : omittedValue()}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -515,7 +517,7 @@
                     authenticatorCode={authenticatorCodes[item.id]}
                     copiedKey={copiedKey.kind === 'present'
                       ? copiedKey.value
-                      : undefined}
+                      : omittedValue()}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}

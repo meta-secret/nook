@@ -34,8 +34,8 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
   ).providers;
   state.providersLoaded = state.providers.length > 0;
   state.githubPat = "";
-  state.oauthFile = undefined;
-  state.localFolder = undefined;
+  state.clearOauthFile();
+  state.clearLocalFolder();
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
   }
@@ -282,8 +282,8 @@ export async function resetDeviceProtectionForRecovery(
     state.providers = [];
     state.providersLoaded = false;
     state.githubPat = "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.showSuccess(state.t("device_protection.recovery_complete"));
   } catch (error) {

@@ -9,11 +9,21 @@ export function presentValue<T>(value: T): ValueState<T> {
 }
 
 /** Normalize optional boundary data immediately into explicit application state. */
-export function valueState<T>(value: T | undefined): ValueState<T> {
-  return value === undefined ? EMPTY_VALUE : presentValue(value);
+export function valueState<T>(value: T | void): ValueState<T> {
+  return typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
 }
 
 /** Expose an explicit state through an API that must retain optional compatibility. */
-export function valueFromState<T>(state: ValueState<T>): T | undefined {
-  return state.kind === "present" ? state.value : undefined;
+export function valueFromState<T>(state: ValueState<T>): T | void {
+  if (state.kind === "present") return state.value;
+  return;
 }
+
+/** Adapt a condition to a structural optional value at an external API boundary. */
+export function presentWhen<T>(condition: boolean, value: T): T | void {
+  if (condition) return value;
+  return;
+}
+
+/** Supply an intentionally omitted positional value to an external API. */
+export function omittedValue(): void {}

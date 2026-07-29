@@ -32,52 +32,64 @@ export class VaultProviderState {
   localVaults = $state<NookLocalVaultEntry[]>([]);
   /** Active vault store_id — sync providers and local blob are scoped to this. */
   private activeVaultStoreState = $state<ValueState<StoreId>>(EMPTY_VALUE);
-  get activeVaultStoreId(): StoreId | undefined {
-    return this.activeVaultStoreState.kind === "present"
-      ? this.activeVaultStoreState.value
-      : undefined;
+  get activeVaultStoreId(): StoreId | void {
+    if (this.activeVaultStoreState.kind === "present")
+      return this.activeVaultStoreState.value;
+    return;
   }
-  set activeVaultStoreId(value: StoreId | undefined) {
+  set activeVaultStoreId(value: StoreId | void) {
     this.activeVaultStoreState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearActiveVaultStore(): void {
+    this.activeVaultStoreState = EMPTY_VALUE;
   }
   /** Login gate: user picked a vault but has not unlocked yet. */
   private selectedLoginVaultStoreState =
     $state<ValueState<StoreId>>(EMPTY_VALUE);
-  get selectedLoginVaultStoreId(): StoreId | undefined {
-    return this.selectedLoginVaultStoreState.kind === "present"
-      ? this.selectedLoginVaultStoreState.value
-      : undefined;
+  get selectedLoginVaultStoreId(): StoreId | void {
+    if (this.selectedLoginVaultStoreState.kind === "present")
+      return this.selectedLoginVaultStoreState.value;
+    return;
   }
-  set selectedLoginVaultStoreId(value: StoreId | undefined) {
+  set selectedLoginVaultStoreId(value: StoreId | void) {
     this.selectedLoginVaultStoreState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSelectedLoginVaultStore(): void {
+    this.selectedLoginVaultStoreState = EMPTY_VALUE;
   }
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false);
   localLoginPrepared = $state(false);
   private loginSetupState =
     $state<ValueState<StorageProviderType>>(EMPTY_VALUE);
-  get loginSetupType(): StorageProviderType | undefined {
-    return this.loginSetupState.kind === "present"
-      ? this.loginSetupState.value
-      : undefined;
+  get loginSetupType(): StorageProviderType | void {
+    if (this.loginSetupState.kind === "present")
+      return this.loginSetupState.value;
+    return;
   }
-  set loginSetupType(value: StorageProviderType | undefined) {
+  set loginSetupType(value: StorageProviderType | void) {
     this.loginSetupState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearLoginSetup(): void {
+    this.loginSetupState = EMPTY_VALUE;
   }
   loginRequiresExistingVault = $state(false);
   private recoverySummaryState =
     $state<ValueState<VaultRecoverySummary>>(EMPTY_VALUE);
-  get existingVaultRecoverySummary(): VaultRecoverySummary | undefined {
-    return this.recoverySummaryState.kind === "present"
-      ? this.recoverySummaryState.value
-      : undefined;
+  get existingVaultRecoverySummary(): VaultRecoverySummary | void {
+    if (this.recoverySummaryState.kind === "present")
+      return this.recoverySummaryState.value;
+    return;
   }
-  set existingVaultRecoverySummary(value: VaultRecoverySummary | undefined) {
+  set existingVaultRecoverySummary(value: VaultRecoverySummary | void) {
     this.recoverySummaryState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearExistingVaultRecoverySummary(): void {
+    this.recoverySummaryState = EMPTY_VALUE;
   }
   addProviderOpen = $state(false);
 
@@ -85,25 +97,31 @@ export class VaultProviderState {
   githubPat = $state("");
   githubRepo = $state(DEFAULT_GITHUB_REPO);
   private oauthFileState = $state.raw<ValueState<OAuthFileConfig>>(EMPTY_VALUE);
-  get oauthFile(): OAuthFileConfig | undefined {
-    return this.oauthFileState.kind === "present"
-      ? this.oauthFileState.value
-      : undefined;
+  get oauthFile(): OAuthFileConfig | void {
+    if (this.oauthFileState.kind === "present")
+      return this.oauthFileState.value;
+    return;
   }
-  set oauthFile(value: OAuthFileConfig | undefined) {
+  set oauthFile(value: OAuthFileConfig | void) {
     this.oauthFileState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearOauthFile(): void {
+    this.oauthFileState = EMPTY_VALUE;
   }
   private localFolderState =
     $state.raw<ValueState<LocalFolderConfig>>(EMPTY_VALUE);
-  get localFolder(): LocalFolderConfig | undefined {
-    return this.localFolderState.kind === "present"
-      ? this.localFolderState.value
-      : undefined;
+  get localFolder(): LocalFolderConfig | void {
+    if (this.localFolderState.kind === "present")
+      return this.localFolderState.value;
+    return;
   }
-  set localFolder(value: LocalFolderConfig | undefined) {
+  set localFolder(value: LocalFolderConfig | void) {
     this.localFolderState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearLocalFolder(): void {
+    this.localFolderState = EMPTY_VALUE;
   }
   localFolderBackupSupported = $state(
     typeof window !== "undefined" && isLocalFolderBackupSupported(),
@@ -114,14 +132,17 @@ export class VaultProviderState {
   draftReplicationType = $state<ReplicationType>("personal");
   private oauthSetupPresetState =
     $state<ValueState<OAuthFilePreset>>(EMPTY_VALUE);
-  get oauthSetupPreset(): OAuthFilePreset | undefined {
-    return this.oauthSetupPresetState.kind === "present"
-      ? this.oauthSetupPresetState.value
-      : undefined;
+  get oauthSetupPreset(): OAuthFilePreset | void {
+    if (this.oauthSetupPresetState.kind === "present")
+      return this.oauthSetupPresetState.value;
+    return;
   }
-  set oauthSetupPreset(value: OAuthFilePreset | undefined) {
+  set oauthSetupPreset(value: OAuthFilePreset | void) {
     this.oauthSetupPresetState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearOauthSetupPreset(): void {
+    this.oauthSetupPresetState = EMPTY_VALUE;
   }
   googleOAuthBusy = $state(false);
   icloudOAuthPreparing = $state(false);

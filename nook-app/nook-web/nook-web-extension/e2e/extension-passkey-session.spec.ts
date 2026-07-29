@@ -1,3 +1,9 @@
+import {
+  EMPTY_VALUE,
+  omittedValue,
+  presentValue,
+  type ValueState,
+} from '../../nook-web-shared/src/explicit-state'
 import { chromium, expect, test } from '@playwright/test'
 import {
   assertWebsitePasskey,
@@ -57,9 +63,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     testInfo.outputPath('chromium-profile')
   const context = await launchExtensionContext(userDataDir)
   const loginServer = await startLoginServer()
-  const website = isHostedSmoke ? undefined : await context.newPage()
+  const website = isHostedSmoke ? omittedValue() : await context.newPage()
   await website?.goto(`${loginServer.origin}/login`)
-  const websiteAfterUnlock = isHostedSmoke ? undefined : await context.newPage()
+  const websiteAfterUnlock = isHostedSmoke
+    ? omittedValue()
+    : await context.newPage()
   await websiteAfterUnlock?.goto(`${loginServer.origin}/login`)
   await context.addInitScript(installMockPasskeyRuntime)
 
@@ -197,9 +205,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reconnectPage.close()
     await pairingLauncher.close()
 
-    let websiteCredentialId: string | undefined
+    let websiteCredentialState: ValueState<string> = EMPTY_VALUE
     if (website) {
-      websiteCredentialId = await registerWebsitePasskey(website)
+      const websiteCredentialId = await registerWebsitePasskey(website)
+      websiteCredentialState = presentValue(websiteCredentialId)
       expect(websiteCredentialId).toBeTruthy()
       await assertWebsitePasskey(website, websiteCredentialId)
       await website.close()
@@ -443,8 +452,11 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    if (websiteAfterUnlock && websiteCredentialId) {
-      await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
+    if (websiteAfterUnlock && websiteCredentialState.kind === 'present') {
+      await assertWebsitePasskey(
+        websiteAfterUnlock,
+        websiteCredentialState.value,
+      )
       await websiteAfterUnlock.close()
     }
     await attachNookLogsForTest(reopenedVaultPage, testInfo)

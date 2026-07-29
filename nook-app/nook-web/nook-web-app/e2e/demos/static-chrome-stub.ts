@@ -48,7 +48,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
-  let stagedOffer: StagedSaveOffer | undefined
+  let stagedOffer:
+    | { kind: 'empty' }
+    | { kind: 'present'; offer: StagedSaveOffer } = { kind: 'empty' }
   let enrollStaged = false
   const demoExtensionSetup = {
     status: 'ready' as const,
@@ -278,24 +280,29 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         }
         case 'nook:website-login-save-offer':
           stagedOffer = {
-            offerId: 'demo-save-offer',
-            decision: 'create',
-            vaultStoreId: 'demo-vault',
-            vaultName: 'Demo vault',
+            kind: 'present',
+            offer: {
+              offerId: 'demo-save-offer',
+              decision: 'create',
+              vaultStoreId: 'demo-vault',
+              vaultName: 'Demo vault',
+            },
           }
           return {
             ok: true,
             status: 'ready',
             decision: 'create',
-            offer: stagedOffer,
+            offer: stagedOffer.offer,
           }
         case 'nook:website-login-save-pending':
-          return { ok: true, offer: stagedOffer }
+          return stagedOffer.kind === 'present'
+            ? { ok: true, offer: stagedOffer.offer }
+            : { ok: true }
         case 'nook:website-login-save-commit':
-          stagedOffer = undefined
+          stagedOffer = { kind: 'empty' }
           return { ok: true, decision: 'create' }
         case 'nook:website-login-save-dismiss':
-          stagedOffer = undefined
+          stagedOffer = { kind: 'empty' }
           return { ok: true }
         default:
           return { ok: true }
@@ -404,7 +411,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     },
     runtime: {
       id: 'demo-extension',
-      lastError: undefined,
       onMessage: {
         addListener(
           listener: (message: unknown, sender: { id: string }) => boolean,

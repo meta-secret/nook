@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
   import {
     ArrowLeft,
     Check,
@@ -139,12 +140,12 @@
     }
   })
 
-  function changeParticipantCount(value: string | undefined) {
+  function changeParticipantCount(value: string | void) {
     if (!value) return
     participantCount = Number(value)
   }
 
-  function changeThreshold(value: string | undefined) {
+  function changeThreshold(value: string | void) {
     if (!value) return
     threshold = Number(value)
   }
@@ -250,7 +251,7 @@
                 ? 'text-[#63eaa1]'
                 : 'text-[#66737e]',
           ]}
-          data-current={index === onboardingStep ? 'step' : undefined}
+          data-current={index === onboardingStep ? 'step' : omittedValue()}
         >
           <span
             class={[

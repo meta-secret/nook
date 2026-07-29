@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
@@ -151,7 +152,7 @@ export async function removeVaultPasswordEntry(
     await state.refreshPasswordEntriesList();
     if (state.activeEnrollmentEntryId === entryId) {
       state.enrollmentCode = "";
-      state.activeEnrollmentEntryId = undefined;
+      state.clearActiveEnrollmentEntry();
     }
     state.showSuccess(state.t("toasts.password_removed"));
     await state.runFanOutSyncAfterLocalSave();
@@ -245,12 +246,12 @@ export async function unlockWithPassword(
 
 export function clearEnrollmentCode(state: VaultState) {
   state.enrollmentCode = "";
-  state.activeEnrollmentEntryId = undefined;
+  state.clearActiveEnrollmentEntry();
 }
 
 function applySavedEnrollmentProvider(
   state: VaultState,
-  provider: StorageProvider | undefined,
+  provider: StorageProvider | void,
 ) {
   if (!provider || provider.type === "local") {
     state.storageMode = "local";
@@ -259,32 +260,32 @@ function applySavedEnrollmentProvider(
   }
 
   state.storageMode = provider.type;
-  state.loginSetupType = undefined;
+  state.clearLoginSetup();
   if (provider.type === "github") {
     state.githubPat = provider.githubPat ?? "";
     state.githubRepo = provider.githubRepo ?? "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
     return;
   }
   if (provider.type === "oauth-file") {
-    state.oauthFile = provider.oauthFile ?? undefined;
+    state.oauthFile = provider.oauthFile ?? omittedValue();
     state.githubPat = "";
     state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo;
-    state.localFolder = undefined;
+    state.clearLocalFolder();
     return;
   }
 
-  state.localFolder = provider.localFolder ?? undefined;
+  state.localFolder = provider.localFolder ?? omittedValue();
   state.githubPat = "";
-  state.oauthFile = undefined;
+  state.clearOauthFile();
 }
 
 export function findSharedGrantProvider(
   providers: StorageProvider[],
   preset: string,
   storageTargetId?: string,
-): StorageProvider | undefined {
+): StorageProvider | void {
   const withToken = providers.filter(
     (provider) =>
       provider.type === "oauth-file" &&
@@ -379,7 +380,7 @@ export async function connectWithEnrollmentCode(
         const oauthFile = oauthTokensToConfig(tokens, {
           preset: "google-drive",
           accessToken: tokens.accessToken,
-          folderId: storageTargetId || undefined,
+          folderId: storageTargetId || omittedValue(),
           fileName: "nook-events",
           driveMode: "shared",
           iCloudMode: "private",
@@ -472,13 +473,13 @@ export async function connectWithEnrollmentCode(
       state.oauthFile = oauthProvider.oauthFile;
       state.githubPat = "";
       state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo;
-      state.localFolder = undefined;
+      state.clearLocalFolder();
       enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
     } else {
       await state.loadProviders();
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state);
       const provider = hasLocalPasswordEntries
-        ? undefined
+        ? omittedValue()
         : (state.syncProviders[0] ??
           state.providers.find((candidate) => candidate.type !== "local"));
       applySavedEnrollmentProvider(state, provider);
@@ -665,7 +666,7 @@ export async function issueEnrollmentCode(
           storageTargetHint:
             selectedProvider.oauthFile?.fileName ??
             selectedProvider.githubRepo ??
-            undefined,
+            omittedValue(),
           storageTargetId: selectedProvider.oauthFile?.folderId,
           accessToken,
         });
@@ -733,13 +734,13 @@ export async function issueEnrollmentCode(
     const sharedStorageTargetId =
       sharedStorageTarget.kind === "present"
         ? sharedStorageTarget.value
-        : undefined;
+        : omittedValue();
     const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
       enrollmentProviderRow,
       state.vaultArchitecture,
       usesSharedProviderGrant && !usesSharedICloud
         ? sharedJoinerIdentity
-        : undefined,
+        : omittedValue(),
       sharedStorageTargetId,
     );
     log.info("enrollment provider payload prepared", { providerId });

@@ -59,7 +59,7 @@ interface SharedStorageActionsContext {
 
 interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly activeVaultProviders: StorageProvider[];
-  readonly localProvider: StorageProvider | undefined;
+  readonly localProvider: StorageProvider | void;
   readonly syncProviders: StorageProvider[];
   applyActiveProviderCredentials(): void;
   assessVaultConnectStatus(
@@ -81,7 +81,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   stageStagedProviderSyncIssue(
     args: [string, string, string],
   ): Promise<boolean>;
-  stagedRemoteStorageArgs(): [string, string, string] | undefined;
+  stagedRemoteStorageArgs(): [string, string, string] | void;
   syncProviderById(
     providerId: string,
     options?: { quiet?: boolean; propagateError?: boolean },
@@ -93,11 +93,9 @@ export type ProviderActionsContext = ProviderStateFields &
   ProviderRuntimeFields &
   ProviderSessionFields &
   ProviderActionPorts & {
-    localFolderMultipleVaultsIssue:
-      | {
-          message: string;
-        }
-      | undefined;
+    localFolderMultipleVaultsIssue: {
+      message: string;
+    } | void;
   };
 
 type SyncProviderFields = Pick<
@@ -133,23 +131,21 @@ interface SyncStateFields {
   fanOutSyncChain: Promise<void>;
   isFanOutSyncing: boolean;
   isSyncing: boolean;
-  lastSyncedAt: SvelteDate | undefined;
-  localFolderMultipleVaultsIssue:
-    | {
-        providerId: string;
-        providerLabel: string;
-        storeIds: string[];
-        message: string;
-      }
-    | undefined;
-  pendingSyncConflict: NookPendingSyncConflict | undefined;
+  lastSyncedAt: SvelteDate | void;
+  localFolderMultipleVaultsIssue: {
+    providerId: string;
+    providerLabel: string;
+    storeIds: string[];
+    message: string;
+  } | void;
+  pendingSyncConflict: NookPendingSyncConflict | void;
   replacementConflicts: Array<{
     oldSecretId: string;
     candidates: Array<{ eventId: string; secretId: string }>;
   }>;
   securityConflicts: Array<{ events: string[]; reasons: string[] }>;
-  syncingProviderId: string | undefined;
-  syncTimer: ReturnType<typeof setInterval> | undefined;
+  syncingProviderId: string | void;
+  syncTimer: ReturnType<typeof setInterval> | void;
 }
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -189,7 +185,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ensureProviderSaved(): Promise<boolean>;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
-  stagedRemoteStorageArgs(): [string, string, string] | undefined;
+  stagedRemoteStorageArgs(): [string, string, string] | void;
   stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
   syncActiveVaultStoreIdToAuth(): Promise<void>;
@@ -205,7 +201,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | undefined,
+    revision: string | void,
   ): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }

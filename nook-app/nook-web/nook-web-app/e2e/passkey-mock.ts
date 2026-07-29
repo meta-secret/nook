@@ -1,9 +1,10 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 /** Deterministic WebAuthn PRF mock used by browser-flow tests. */
 export function installMockPasskeyRuntime() {
   const credentialId = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
   const saved = window.name.startsWith('nook-e2e-passkey:')
     ? window.name.slice('nook-e2e-passkey:'.length)
-    : undefined
+    : omittedValue()
   let userHandle = saved
     ? Uint8Array.from(JSON.parse(saved) as number[])
     : Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
@@ -72,7 +73,7 @@ export function installMockPasskeyRuntime() {
     configurable: true,
     get: () =>
       localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable'
-        ? undefined
+        ? omittedValue()
         : publicKeyCredential,
   })
   Object.defineProperty(navigator, 'credentials', {

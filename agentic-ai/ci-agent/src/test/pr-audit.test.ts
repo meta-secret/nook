@@ -278,7 +278,9 @@ function mockOctokit(options: MockOptions = {}): Octokit {
           data: {
             workflow_runs: [
               {
-                conclusion: options.runStatus === "in_progress" ? undefined : "success",
+                ...(options.runStatus === "in_progress"
+                  ? {}
+                  : { conclusion: "success" }),
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,

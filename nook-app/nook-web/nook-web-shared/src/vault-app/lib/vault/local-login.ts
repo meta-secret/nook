@@ -30,7 +30,7 @@ export async function reloadProvidersForActiveVault(
 }
 
 export function beginLoginVaultPicker(state: VaultState): void {
-  state.selectedLoginVaultStoreId = undefined;
+  state.clearSelectedLoginVaultStore();
   state.localLoginPrepared = false;
   state.resetVaultSessionState();
 }
@@ -49,7 +49,7 @@ export async function switchToVault(
 ): Promise<void> {
   const switchDecision = state.clientPolicy.vaultSwitchTarget(
     storeId,
-    state.activeVaultStoreId !== undefined,
+    typeof state.activeVaultStoreId !== "undefined",
     state.activeVaultStoreId ?? "",
     state.isVerifying,
   );
@@ -105,8 +105,8 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
   log.debug("preparing local login gate");
   state.storageMode = "local";
   state.githubPat = "";
-  state.oauthFile = undefined;
-  state.localFolder = undefined;
+  state.clearOauthFile();
+  state.clearLocalFolder();
   await state.refreshPasswordEntriesList();
   state.localLoginPrepared = true;
 }
@@ -145,7 +145,7 @@ export async function prepareExistingVaultImportSlot(
   if (state.manager) {
     await state.enqueueStorage(() => state.manager!.resetVaultSession());
   }
-  state.activeVaultStoreId = undefined;
+  state.clearActiveVaultStore();
   state.localVaultPresent = await hasActiveLocalVault();
   state.localLoginPrepared = false;
 }
@@ -170,8 +170,8 @@ export async function createLocalVaultWithDeviceKeys(
   state.dismissSuccess();
   state.storageMode = "local";
   state.githubPat = "";
-  state.oauthFile = undefined;
-  state.localFolder = undefined;
+  state.clearOauthFile();
+  state.clearLocalFolder();
   state.isVerifying = true;
 
   try {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../../nook-web-shared/src/explicit-state'
+
   import { completePlainLogin } from '../lib/plain-login'
   import {
     getSiteFixture,
@@ -22,7 +24,7 @@
       ? getTemplateFixture(templateId)
       : siteId
         ? getSiteFixture(siteId)
-        : undefined,
+        : omittedValue(),
   )
   const label = $derived(templateId ?? siteId ?? 'unknown')
   const step = $derived(fixture?.steps[stepIndex])

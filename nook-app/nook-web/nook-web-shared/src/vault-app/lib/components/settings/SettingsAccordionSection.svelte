@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import type { Snippet } from 'svelte'
   import { ChevronDown } from '@lucide/svelte'
 
@@ -6,7 +8,7 @@
     title,
     subtitle,
     section,
-    activeSection = $bindable<string | undefined>(undefined),
+    activeSection = $bindable<string | void>(omittedValue()),
     disabled = false,
     testId,
     badge,
@@ -15,7 +17,7 @@
     title: string
     subtitle?: string
     section: string
-    activeSection?: string | undefined
+    activeSection?: string | void
     disabled?: boolean
     testId?: string
     badge?: Snippet
@@ -25,7 +27,7 @@
   const open = $derived(activeSection === section)
 
   function handleToggle() {
-    activeSection = open ? undefined : section
+    activeSection = open ? omittedValue() : section
   }
 </script>
 

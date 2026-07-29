@@ -37,9 +37,7 @@ export function simpleVaultMatchPattern(baseUrl: string): string {
   return `${url.origin}${url.pathname}*`
 }
 
-export function matchingSentinelVaultBaseUrl(
-  baseUrl: string,
-): string | undefined {
+export function matchingSentinelVaultBaseUrl(baseUrl: string): string | void {
   const url = new URL(normalizeSimpleVaultBaseUrl(baseUrl))
   if (url.hostname.startsWith('simple.')) {
     return `${url.protocol}//sentinel.${url.hostname.slice('simple.'.length)}/`
@@ -54,7 +52,7 @@ export function matchingSentinelVaultBaseUrl(
     const sentinelPath = `${url.pathname.slice(0, -'/simple/'.length)}/sentinel/`
     return `${url.origin}${sentinelPath.replace(/^\/\//, '/')}`
   }
-  return undefined
+  return
 }
 
 export function sentinelVaultMatchPatterns(baseUrl: string): string[] {

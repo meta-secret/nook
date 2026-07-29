@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   defaultPasswordGenerationOptions,
   generatePasswordWithOptions,
@@ -69,7 +70,7 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
 
 function runtimeMessage<T>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+    chrome.runtime.sendMessage(message, (response: T | void) => {
       if (chrome.runtime.lastError?.message) {
         reject(new Error(chrome.runtime.lastError.message))
         return
@@ -206,16 +207,14 @@ export async function extensionDeviceProtectionStatus(): Promise<ExtensionDevice
   throw new Error(`Unsupported extension device protection status: ${status}`)
 }
 
-export async function extensionSessionDevice(): Promise<
-  ExtensionDeviceProtectionResult | undefined
-> {
+export async function extensionSessionDevice(): Promise<ExtensionDeviceProtectionResult | void> {
   const response = await sessionMessage<
     SessionResponse<{
       status: ExtensionDeviceProtectionStatus
       device?: ExtensionDeviceProtectionResult
     }>
   >({ type: 'nook:extension-session-status' })
-  return response.status === 'unlocked' ? response.device : undefined
+  return response.status === 'unlocked' ? response.device : omittedValue()
 }
 
 export async function createExtensionPasskey(
@@ -340,12 +339,12 @@ export async function generateSuggestedPassword(
 }
 
 export async function parseStoredAppLocale(
-  value: string | undefined,
-): Promise<NookAppLocale | undefined> {
+  value: string | void,
+): Promise<NookAppLocale | void> {
   await ensureNookWasm()
-  return takeWasmStringValue(wasmParseAppLocale(intoWasmStringValue(value))) as
-    | NookAppLocale
-    | undefined
+  return takeWasmStringValue(
+    wasmParseAppLocale(intoWasmStringValue(value)),
+  ) as NookAppLocale | void
 }
 
 export async function resolveAppLocaleFromTags(
@@ -362,10 +361,10 @@ export async function getResolvedTranslationCatalog(
   return wasmResolveTranslationCatalog(locale, readWasmCatalog(locale))
 }
 
-function readWasmCatalog(locale: NookAppLocale): string | undefined {
+function readWasmCatalog(locale: NookAppLocale): string | void {
   try {
     return wasmGetTranslationCatalog(locale)
   } catch {
-    return undefined
+    return
   }
 }

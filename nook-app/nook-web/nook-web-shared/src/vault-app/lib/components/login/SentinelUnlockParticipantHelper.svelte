@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
   import { onMount } from 'svelte'
   import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
@@ -163,10 +164,10 @@
               type="single"
               value={selectedDelivery.kind === 'present'
                 ? selectedDelivery.value
-                : undefined}
+                : omittedValue()}
               onValueChange={(value) => {
                 selectedDelivery =
-                  value === undefined ? EMPTY_VALUE : presentValue(value)
+                  value === omittedValue() ? EMPTY_VALUE : presentValue(value)
               }}
             >
               <Select.Trigger

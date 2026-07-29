@@ -21,10 +21,10 @@ export const isExtensionConnectPath: (pathname: string) => boolean = () =>
 
 export const extensionConnectRequestFromLocation: (
   location: Location,
-) => undefined = () => undefined;
+) => void = () => {};
 
-export function readInstalledExtensionRuntimeId(): undefined {
-  return undefined;
+export function readInstalledExtensionRuntimeId(): void {
+  return;
 }
 
 export async function openInstalledExtension(): Promise<boolean> {

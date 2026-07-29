@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
   import {
     KeyRound,
     QrCode,
@@ -43,7 +44,7 @@
   >
     <button
       type="button"
-      aria-current={vaultOpen ? 'page' : undefined}
+      aria-current={vaultOpen ? 'page' : omittedValue()}
       class="relative flex flex-1 flex-col items-center gap-1 px-2 py-2.5 text-center transition-colors sm:py-3 {vaultOpen
         ? 'bg-background text-primary shadow-xs sm:shadow-none'
         : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
@@ -57,7 +58,7 @@
     </button>
     <button
       type="button"
-      aria-current={adminOpen ? 'page' : undefined}
+      aria-current={adminOpen ? 'page' : omittedValue()}
       aria-label={vault.t('nav.admin')}
       class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/35 px-2 py-2.5 text-center transition-colors sm:border-border/60 sm:py-3 {adminOpen
         ? 'bg-background text-primary shadow-xs sm:shadow-none'
@@ -72,7 +73,7 @@
     </button>
     <button
       type="button"
-      aria-current={onboardOpen ? 'page' : undefined}
+      aria-current={onboardOpen ? 'page' : omittedValue()}
       aria-label={vault.t('nav.onboard')}
       class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/35 px-2 py-2.5 text-center transition-colors sm:border-border/60 sm:py-3 {onboardOpen
         ? 'bg-background text-primary shadow-xs sm:shadow-none'
@@ -87,7 +88,7 @@
     </button>
     <button
       type="button"
-      aria-current={generalSettingsOpen ? 'page' : undefined}
+      aria-current={generalSettingsOpen ? 'page' : omittedValue()}
       aria-label={vault.t('nav.settings')}
       class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/35 px-2 py-2.5 text-center transition-colors sm:border-border/60 sm:py-3 {generalSettingsOpen
         ? 'bg-background text-primary shadow-xs sm:shadow-none'

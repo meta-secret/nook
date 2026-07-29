@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import privacyPolicyMd from "../../../../../../docs/privacy-policy.md?raw";
 import termsOfServiceMd from "../../../../../../docs/terms-of-service.md?raw";
 import { stripBasePath } from "$lib/routes";
@@ -43,11 +44,9 @@ export const LOGS_PATH = "/logs";
 export { stripBasePath } from "$lib/routes";
 
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
-export function getLegalPageFromPath(
-  pathname: string,
-): LegalPageId | undefined {
+export function getLegalPageFromPath(pathname: string): LegalPageId | void {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
-  return LEGAL_PATHS.get(normalized) ?? undefined;
+  return LEGAL_PATHS.get(normalized) ?? omittedValue();
 }
 
 export function legalPageForId(id: LegalPageId): LegalPage {

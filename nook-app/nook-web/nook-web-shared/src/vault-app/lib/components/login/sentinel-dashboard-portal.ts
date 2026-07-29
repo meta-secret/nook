@@ -2,7 +2,7 @@ export type SentinelDashboard = "card-stack" | "terminal";
 
 type SentinelDashboardPortalParameters = {
   active: boolean;
-  dashboard: SentinelDashboard | undefined;
+  dashboard: SentinelDashboard | void;
 };
 
 export function sentinelDashboardPortal(
@@ -20,7 +20,7 @@ export function sentinelDashboardPortal(
   ].join(",");
   const siblingInertState: Array<[HTMLElement, boolean]> = [];
   let active = false;
-  let previousFocus: HTMLElement | undefined;
+  let previousFocus: ValueState<HTMLElement> = EMPTY_VALUE;
   let returnFocusTestId = "sentinel-dashboard-card-stack";
   node.before(anchor);
 
@@ -65,15 +65,15 @@ export function sentinelDashboardPortal(
     }
   }
 
-  function activate(dashboard: SentinelDashboard | undefined) {
+  function activate(dashboard: SentinelDashboard | void) {
     returnFocusTestId =
       dashboard === "terminal"
         ? "sentinel-dashboard-terminal"
         : "sentinel-dashboard-card-stack";
     previousFocus =
       document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : undefined;
+        ? presentValue(document.activeElement)
+        : EMPTY_VALUE;
     document.body.appendChild(node);
     setBackgroundInert(true);
     node.addEventListener("keydown", trapFocus);
@@ -91,14 +91,17 @@ export function sentinelDashboardPortal(
     anchor.parentNode?.insertBefore(node, anchor.nextSibling);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (previousFocus?.isConnected) {
-          previousFocus.focus();
+        if (
+          previousFocus.kind === "present" &&
+          previousFocus.value.isConnected
+        ) {
+          previousFocus.value.focus();
         } else {
           node
             .querySelector<HTMLElement>(`[data-testid="${returnFocusTestId}"]`)
             ?.focus();
         }
-        previousFocus = undefined;
+        previousFocus = EMPTY_VALUE;
       });
     });
     active = false;
@@ -120,10 +123,15 @@ export function sentinelDashboardPortal(
       if (active) {
         node.removeEventListener("keydown", trapFocus);
         setBackgroundInert(false);
-        previousFocus?.focus();
+        if (previousFocus.kind === "present") previousFocus.value.focus();
       }
       node.remove();
       anchor.remove();
     },
   };
 }
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../../explicit-state";

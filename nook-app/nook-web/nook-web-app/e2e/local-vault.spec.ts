@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures'
 import {
@@ -255,12 +256,12 @@ test.describe('local vault', () => {
           ).__nookVault
           if (!vault || vault.isAuthenticated) return false
           const cleanupProbe =
-            sessionStorage.getItem('nook_cleanup_probe') ?? undefined
-          if (cleanupProbe !== undefined) {
+            sessionStorage.getItem('nook_cleanup_probe') ?? omittedValue()
+          if (typeof cleanupProbe !== 'undefined') {
             return false
           }
           try {
-            await vault.enqueueStorage(() => undefined)
+            await vault.enqueueStorage(() => {})
             return false
           } catch {
             return true

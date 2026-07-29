@@ -132,7 +132,7 @@ async function loadExtensionMetadata() {
 
 function updateGitHubStars(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (githubStarCount === undefined) {
+  if (typeof githubStarCount === 'undefined') {
     githubStarsCount.textContent = '—'
     githubStarsLink.setAttribute('aria-label', messages['github.link_label'])
     return
@@ -161,7 +161,7 @@ function readCachedGitHubStarCount() {
   } catch {
     // A malformed or unavailable cache must not affect the header.
   }
-  return undefined
+  return
 }
 
 async function loadGitHubStars() {
@@ -234,7 +234,7 @@ function applyLandingLocale(locale, persist = false) {
     )
   }
   for (const label of document.querySelectorAll('.system-label')) {
-    if (label.dataset.termIndex === undefined) continue
+    if (typeof label.dataset.termIndex === 'undefined') continue
     const term = cryptoTerms[Number(label.dataset.termIndex)]
     label.dataset.detail = term.dataset.detail
     label.setAttribute(

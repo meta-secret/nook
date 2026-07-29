@@ -4,10 +4,10 @@ export function resetLoginSubmission(): void {
 
 export function credentialsFromLoginSubmit(
   event: SubmitEvent,
-): { username: string; password: string } | undefined {
+): { username: string; password: string } | void {
   event.preventDefault()
   const form = event.currentTarget
-  if (!(form instanceof HTMLFormElement)) return undefined
+  if (!(form instanceof HTMLFormElement)) return
   return {
     username:
       form.querySelector<HTMLInputElement>('[name="username"]')?.value ?? '',

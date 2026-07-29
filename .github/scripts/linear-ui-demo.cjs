@@ -279,7 +279,7 @@ async function transitionUiDemoIssue({ apiKey, config, merged, prNumber, client 
   const linear = client || new LinearApi(apiKey)
   const issueId = deterministicIssueId(config.repository, prNumber)
   const issue = await linear.issue(issueId)
-  if (!issue) return undefined
+  if (!issue) return
 
   const states = await linear.teamStates(config.teamId)
   const target = stateByType(states, merged ? 'completed' : 'canceled')

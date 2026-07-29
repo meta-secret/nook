@@ -1,12 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import { SessionOperationQueue } from '../src/lib/session-operation-queue'
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../nook-web-shared/src/explicit-state'
 
 function deferred() {
-  let release: (() => void) | undefined
+  let release: ValueState<() => void> = EMPTY_VALUE
   const promise = new Promise<void>((resolve) => {
-    release = resolve
+    release = presentValue(resolve)
   })
-  return { promise, release: () => release?.() }
+  return {
+    promise,
+    release: () => {
+      if (release.kind === 'present') release.value()
+    },
+  }
 }
 
 describe('SessionOperationQueue', () => {
@@ -38,22 +48,26 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let password: string | undefined = 'temporary-password'
+    let password: ValueState<string> = presentValue('temporary-password')
     const queued = queue.enqueue(
       async () => {
-        throw new Error(`Unexpected password use: ${password}`)
+        throw new Error(
+          `Unexpected password use: ${
+            password.kind === 'present' ? password.value : 'cleared'
+          }`,
+        )
       },
       {
         priority: 'interactive',
         expiresAt: Date.now() + 10,
         onExpire: () => {
-          password = undefined
+          password = EMPTY_VALUE
         },
       },
     )
 
     await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
-    expect(password).toBeUndefined()
+    expect(password.kind).toBe('empty')
     blocker.release()
     await first
   })
@@ -71,18 +85,18 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let pendingSecret: string | undefined = 'temporary-secret'
-    const queued = queue.enqueue(async () => undefined, {
+    let pendingSecret: ValueState<string> = presentValue('temporary-secret')
+    const queued = queue.enqueue(async () => {}, {
       onExpire: () => {
-        pendingSecret = undefined
+        pendingSecret = EMPTY_VALUE
       },
     })
 
     queue.close(new Error('session expired'))
 
     await expect(queued).rejects.toThrow('session expired')
-    expect(pendingSecret).toBeUndefined()
-    await expect(queue.enqueue(async () => undefined)).rejects.toThrow(
+    expect(pendingSecret.kind).toBe('empty')
+    await expect(queue.enqueue(async () => {})).rejects.toThrow(
       'session expired',
     )
     blocker.release()

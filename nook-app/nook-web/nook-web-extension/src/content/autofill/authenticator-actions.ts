@@ -133,7 +133,7 @@ export async function continueWithAuthenticator(
       () => {
         if (pickerState.pendingAuthenticator?.requestId !== requestId) return
         const pending = pickerState.pendingAuthenticator
-        pickerState.pendingAuthenticator = undefined
+        pickerState.clearPendingAuthenticator()
         setStatus(
           pending.description,
           pending.continueButton,
@@ -187,7 +187,7 @@ function cancelAuthenticatorPickerRequest(requestId: string): void {
 export function cancelPendingAuthenticatorPickerRequest(): void {
   const pending = pickerState.pendingAuthenticator
   if (!pending) return
-  pickerState.pendingAuthenticator = undefined
+  pickerState.clearPendingAuthenticator()
   window.clearTimeout(pending.timeoutId)
   cancelAuthenticatorPickerRequest(pending.requestId)
 }

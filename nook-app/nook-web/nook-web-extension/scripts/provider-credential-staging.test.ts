@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'bun:test'
 import {
   scrubProviderCredentials,
@@ -59,7 +60,7 @@ describe('provider credential staging', () => {
       id: 'drive',
       oauthFile: {
         accessToken: '',
-        refreshToken: undefined,
+        refreshToken: omittedValue(),
       },
     })
   })

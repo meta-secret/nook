@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 /**
  * Google Identity Services (GIS) token client for Drive access.
  *
@@ -199,7 +200,9 @@ export async function requestGoogleAccessToken(options?: {
       }
     });
     slot.client.requestAccessToken(
-      options?.prompt !== undefined ? { prompt: options.prompt } : undefined,
+      typeof options?.prompt !== "undefined"
+        ? { prompt: options.prompt }
+        : omittedValue(),
     );
   });
 }
@@ -250,7 +253,7 @@ export async function ensureValidOAuthFileConfig(
 
 export async function fetchGoogleAccountEmail(
   accessToken: string,
-): Promise<string | undefined> {
+): Promise<string | void> {
   const response = await fetch(
     "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
     {
@@ -258,7 +261,7 @@ export async function fetchGoogleAccountEmail(
     },
   );
   if (!response.ok) {
-    return undefined;
+    return;
   }
   const payload = (await response.json()) as {
     user?: { emailAddress?: string; displayName?: string };

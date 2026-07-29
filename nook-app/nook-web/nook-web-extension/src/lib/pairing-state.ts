@@ -18,19 +18,17 @@ export function isExtensionPairingStateQueryMessage(
   )
 }
 
-export function loadExtensionSetupState(): Promise<
-  ExtensionReadySetupState | undefined
-> {
+export function loadExtensionSetupState(): Promise<ExtensionReadySetupState | void> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { type: 'nook:extension-pairing-state-query' },
-      (response: { ok?: boolean; setup?: unknown } | undefined) => {
+      (response: { ok?: boolean; setup?: unknown } | void) => {
         if (
           chrome.runtime.lastError ||
           response?.ok !== true ||
           !isExtensionReadySetupState(response.setup)
         ) {
-          resolve(undefined)
+          resolve()
           return
         }
         resolve(response.setup)

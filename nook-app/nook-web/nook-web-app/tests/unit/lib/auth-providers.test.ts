@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -33,7 +34,7 @@ describe('maskGithubPat', () => {
   })
 
   test('handles missing token', () => {
-    expect(maskGithubPat(undefined)).toBe('No token saved')
+    expect(maskGithubPat(omittedValue())).toBe('No token saved')
   })
 })
 
@@ -124,7 +125,7 @@ describe('formatDriveStorageRef', () => {
   })
 
   test('omits empty file id for new vaults', () => {
-    expect(formatDriveStorageRef(undefined, 'work.yaml')).toBe('work.yaml')
+    expect(formatDriveStorageRef(omittedValue(), 'work.yaml')).toBe('work.yaml')
     expect(formatDriveStorageRef('', DEFAULT_DRIVE_BACKUP_NAME)).toBe(
       DEFAULT_DRIVE_BACKUP_NAME,
     )
@@ -155,7 +156,7 @@ describe('providerDefaultLabel', () => {
     expect(providerDefaultLabel('oauth-file', 'work.yaml', 'icloud')).toBe(
       'iCloud · work.yaml',
     )
-    expect(providerDefaultLabel('oauth-file', undefined, 'icloud')).toBe(
+    expect(providerDefaultLabel('oauth-file', omittedValue(), 'icloud')).toBe(
       'iCloud',
     )
   })

@@ -42,7 +42,7 @@ export async function openWebsiteAuthenticatorPicker(
     'authenticator-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (sender.tab?.id === undefined) {
+  if (typeof sender.tab?.id === 'undefined') {
     return { ok: false, reason: 'authenticator-picker-tab-missing' }
   }
 

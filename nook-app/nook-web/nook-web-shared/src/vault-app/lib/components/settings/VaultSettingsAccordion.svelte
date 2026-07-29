@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
@@ -24,7 +26,7 @@
     onRenameDevice,
     onRevokeDevice,
     accordionSection = $bindable(
-      undefined as VaultSettingsAccordionSection | undefined,
+      omittedValue() as VaultSettingsAccordionSection | void,
     ),
   }: {
     vault: VaultState
@@ -39,7 +41,7 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: VaultSettingsAccordionSection | undefined
+    accordionSection?: VaultSettingsAccordionSection | void
   } = $props()
 
   const hasDevices = $derived(vaultMembers.length > 0)

@@ -101,13 +101,10 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
 }
 
-async function readVaultValue<T>(
-  page: Page,
-  key: string,
-): Promise<T | undefined> {
+async function readVaultValue<T>(page: Page, key: string): Promise<T | void> {
   return page.evaluate(
     (valueKey) =>
-      new Promise<T | undefined>((resolve, reject) => {
+      new Promise<T | void>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () => reject(request.error)
         request.onsuccess = () => {
@@ -118,7 +115,7 @@ async function readVaultValue<T>(
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
-            resolve(valueRequest.result as T | undefined)
+            resolve(valueRequest.result as T | void)
           }
         }
       }),
@@ -126,13 +123,11 @@ async function readVaultValue<T>(
   )
 }
 
-async function readPersistedDeviceIdentity(
-  page: Page,
-): Promise<string | undefined> {
+async function readPersistedDeviceIdentity(page: Page): Promise<string | void> {
   return readVaultValue<string>(page, 'device_identity_wrapped')
 }
 
-async function readDeviceId(page: Page): Promise<string | undefined> {
+async function readDeviceId(page: Page): Promise<string | void> {
   return readVaultValue<string>(page, 'device_id')
 }
 

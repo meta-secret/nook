@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import { KeyRound, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
@@ -15,21 +17,21 @@
   let {
     vault,
     code,
-    passwordEntryId = undefined,
-    passwordEntryLabel = undefined,
+    passwordEntryId = omittedValue(),
+    passwordEntryLabel = omittedValue(),
     isVerifying,
     onSubmit,
   }: {
     vault: VaultState;
     code: string;
-    passwordEntryId?: string | undefined;
-    passwordEntryLabel?: string | undefined;
+    passwordEntryId?: string | void;
+    passwordEntryLabel?: string | void;
     isVerifying: boolean;
     onSubmit: (password: string) => void | Promise<void>;
   } = $props();
 
   let passwordInput = $state("");
-  let passwordField: HTMLInputElement | undefined = $state();
+  let passwordField!: HTMLInputElement;
 
   $effect(() => {
     void code;

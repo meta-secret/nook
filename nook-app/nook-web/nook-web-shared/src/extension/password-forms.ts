@@ -1,3 +1,4 @@
+import { omittedValue, valueState } from '../explicit-state'
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -119,8 +120,8 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   if (field.getAttribute("aria-hidden") === "true") {
     return false;
   }
-  let element: HTMLElement | undefined = field;
-  while (element) {
+  let element = field as HTMLElement;
+  while (true) {
     if (element.hidden) {
       return false;
     }
@@ -128,7 +129,9 @@ function isRenderedInput(field: HTMLInputElement): boolean {
     if (style?.display === "none" || style?.visibility === "hidden") {
       return false;
     }
-    element = element.parentElement ?? undefined;
+    const parent = element.parentElement;
+    if (!parent) break;
+    element = parent;
   }
   return true;
 }
@@ -143,7 +146,7 @@ function findFields(
   return Array.from(
     queryRoot.querySelectorAll<HTMLInputElement>(selector),
   ).filter((field) =>
-    formScope === undefined
+    typeof formScope === "undefined"
       ? true
       : formScope.kind === "unowned"
         ? !field.form
@@ -238,9 +241,10 @@ function hasLoginContext(field: HTMLInputElement): boolean {
       return true;
     }
   }
-  let container: HTMLElement | undefined = field.parentElement ?? undefined;
+  let containerState = valueState(field.parentElement ?? omittedValue());
   let depth = 0;
-  while (container && depth < 6) {
+  while (containerState.kind === "present" && depth < 6) {
+    const container = containerState.value;
     const identity = expandIdentityText(
       [container.id, container.className, container.getAttribute("role") ?? ""].join(
         " ",
@@ -249,7 +253,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
     if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(identity)) {
       return true;
     }
-    container = container.parentElement ?? undefined;
+    containerState = valueState(container.parentElement ?? omittedValue());
     depth += 1;
   }
   const doc = field.ownerDocument;
@@ -354,7 +358,7 @@ const passkeyControlPositivePattern =
 
 export function findPasskeyControl(
   root: ParentNode = document,
-): HTMLElement | undefined {
+): HTMLElement | void {
   // Only marked controls and labeled activatable elements count. Do not treat
   // password/username inputs that happen to include `webauthn` in autocomplete
   // (common on combined login forms) as passkey controls — that falsely
@@ -378,7 +382,7 @@ export function findPasskeyControl(
       return control;
     }
   }
-  return undefined;
+  return ;
 }
 
 export function pageHasPasskeyControl(root: ParentNode = document): boolean {
@@ -618,9 +622,9 @@ export function fillGeneratedPassword(
 export function readLoginCredentials(
   root: ParentNode = document,
   formScope?: PasswordFormScope,
-): LoginCredentials | undefined {
+): LoginCredentials | void {
   const passwordFields = findPasswordFields(root, formScope);
-  if (passwordFields.length === 0) return undefined;
+  if (passwordFields.length === 0) return ;
 
   const newPasswordFields = passwordFields.filter((field) =>
     hasAutocompleteToken(field, "new-password"),
@@ -634,7 +638,7 @@ export function readLoginCredentials(
   const password = passwordField.value.trim();
   const username =
     findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
-  if (!username || !password) return undefined;
+  if (!username || !password) return ;
   return { username, password };
 }
 

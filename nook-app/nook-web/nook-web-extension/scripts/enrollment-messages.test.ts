@@ -132,7 +132,7 @@ describe('backup code candidate extraction', () => {
       body.innerText = 'Enable 2FA codes for your account'
       expect(pageHasBackupCodeHint()).toBe(true)
     } finally {
-      if (previous === undefined) {
+      if (typeof previous === 'undefined') {
         Reflect.deleteProperty(globalThis, 'document')
       } else {
         Object.defineProperty(globalThis, 'document', {

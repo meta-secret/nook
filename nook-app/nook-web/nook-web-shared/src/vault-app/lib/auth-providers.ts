@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import {
   bindGoogleDriveSharedFolder,
   deleteAuthProvidersDb,
@@ -58,11 +59,11 @@ export function findDuplicateSyncProvider(
   providers: StorageProvider[],
   candidate: StorageProvider,
   options?: { excludeId?: string },
-): StorageProvider | undefined {
+): StorageProvider | void {
   return findDuplicateSyncProviderWasm(
     { providers },
     candidate,
-    options?.excludeId ?? undefined,
+    options?.excludeId ?? omittedValue(),
   );
 }
 
@@ -78,7 +79,7 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = "google-drive",
 ): string {
-  return providerDefaultLabelCore(type, detail ?? undefined, oauthPreset);
+  return providerDefaultLabelCore(type, detail ?? omittedValue(), oauthPreset);
 }
 
 export function localizeProviderLabel(
@@ -97,11 +98,11 @@ export function localizeProviderLabel(
 
 /** Safe PAT hint for provider lists — never shows the full token. */
 export function maskGithubPat(
-  pat: string | undefined,
+  pat: string | void,
   t?: (key: string) => string,
 ): string {
-  const hint = maskGithubPatHintCore(pat ?? undefined);
-  if (hint == undefined) {
+  const hint = maskGithubPatHintCore(pat ?? omittedValue());
+  if (typeof hint == "undefined") {
     return t ? t("auth_storage.no_token_saved") : "No token saved";
   }
   return hint;

@@ -33,7 +33,7 @@
     onEditorOpenChange,
   }: {
     vault: VaultState;
-    extensionSetupState: ExtensionSetupState | undefined;
+    extensionSetupState: ExtensionSetupState | void;
     extensionInstallBusy: boolean;
     extensionConnectError: boolean;
     hasSecurityRecommendations: boolean;
@@ -55,10 +55,10 @@
       secretsAddFormType.value === "secure-note",
   );
 
-  function setAddMode(open: boolean, type: VaultItemType | undefined) {
+  function setAddMode(open: boolean, type: VaultItemType | void) {
     secretsAddOpen = open;
     secretsAddFormType =
-      type === undefined ? EMPTY_VALUE : presentValue(type);
+      typeof type === "undefined" ? EMPTY_VALUE : presentValue(type);
     onEditorOpenChange(open);
   }
 

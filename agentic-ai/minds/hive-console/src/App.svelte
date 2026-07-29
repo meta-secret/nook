@@ -28,23 +28,44 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   } from './types';
   import { emergencyCopy } from './emergency-copy';
 
-  let snapshot = $state<ObserverSnapshot | undefined>(undefined);
-  let selectedId = $state<string | undefined>(undefined);
+  type ValueState<T> = { kind: 'empty' } | { kind: 'present'; value: T };
+  const EMPTY_VALUE: ValueState<never> = { kind: 'empty' };
+  const presentValue = <T,>(value: T): ValueState<T> => ({
+    kind: 'present',
+    value,
+  });
+  const valueState = <T,>(value: T | void): ValueState<T> =>
+    typeof value === 'undefined' ? EMPTY_VALUE : presentValue(value);
+  const stateValue = <T,>(state: ValueState<T>): T | void => {
+    if (state.kind === 'present') return state.value;
+    return;
+  };
+
+  let snapshotState = $state<ValueState<ObserverSnapshot>>(EMPTY_VALUE);
+  let selectedIdState = $state<ValueState<string>>(EMPTY_VALUE);
   let search = $state('');
   let loading = $state(true);
   let unavailable = $state(false);
-  let detailPanel = $state<HTMLElement | undefined>(undefined);
+  let detailPanel!: HTMLElement;
   let detailsClosed = $state(false);
-  let durableMatch = $state<ObservedTask | undefined>(undefined);
+  let durableMatchState = $state<ValueState<ObservedTask>>(EMPTY_VALUE);
   let nowMs = $state(Date.now());
 
+  const snapshot = $derived(stateValue(snapshotState));
+  const selectedId = $derived(stateValue(selectedIdState));
+  const durableMatch = $derived(stateValue(durableMatchState));
   const copy = $derived(
     snapshot?.copy ?? emergencyCopy(navigator.language || 'en'),
   );
-  const selected = $derived(
-    snapshot?.tasks.find((task) => task.id === selectedId) ??
-      (durableMatch?.id === selectedId ? durableMatch : undefined),
+  const selectedState = $derived(
+    valueState(
+      snapshot?.tasks.find((task) => task.id === selectedId) ??
+        (durableMatch?.id === selectedId
+          ? durableMatch
+          : stateValue(EMPTY_VALUE)),
+    ),
   );
+  const selected = $derived(stateValue(selectedState));
   const filteredTasks = $derived(
     [
       ...(durableMatch &&
@@ -68,7 +89,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       const task = snapshot?.tasks.find(
         (candidate) => candidate.id === alert.task_id,
       );
-      return task === undefined ? [] : [{ alert, task }];
+      return typeof task === 'undefined' ? [] : [{ alert, task }];
     }),
   );
   const attentionTaskIds = $derived(
@@ -85,17 +106,19 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   $effect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timerState: ValueState<ReturnType<typeof setTimeout>> = EMPTY_VALUE;
 
     const poll = async () => {
       await loadSnapshot(controller.signal);
-      if (!controller.signal.aborted) timer = setTimeout(poll, 15_000);
+      if (!controller.signal.aborted) {
+        timerState = presentValue(setTimeout(poll, 15_000));
+      }
     };
     void poll();
 
     return () => {
       controller.abort();
-      if (timer !== undefined) clearTimeout(timer);
+      if (timerState.kind === 'present') clearTimeout(timerState.value);
     };
   });
 
@@ -111,7 +134,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       if (taskId.length === 0) {
-        durableMatch = undefined;
+        durableMatchState = EMPTY_VALUE;
         return;
       }
       try {
@@ -121,15 +144,16 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           { signal: controller.signal },
         );
         if (response.status === 404) {
-          durableMatch = undefined;
+          durableMatchState = EMPTY_VALUE;
           return;
         }
         if (!response.ok) return;
-        durableMatch = (await response.json()) as ObservedTask;
-        if (!detailsClosed) selectedId = durableMatch.id;
+        const match = (await response.json()) as ObservedTask;
+        durableMatchState = presentValue(match);
+        if (!detailsClosed) selectedIdState = presentValue(match.id);
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          durableMatch = undefined;
+          durableMatchState = EMPTY_VALUE;
         }
       }
     }, 250);
@@ -146,11 +170,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       !detailsClosed &&
       !filteredTasks.some((task) => task.id === selectedId)
     ) {
-      selectedId = filteredTasks[0]?.id;
+      selectedIdState = valueState(filteredTasks[0]?.id);
     }
   });
 
-  async function loadSnapshot(signal: AbortSignal | undefined = undefined) {
+  async function loadSnapshot(signal?: AbortSignal) {
     try {
       const locale = navigator.language || 'en';
       document.documentElement.lang = locale
@@ -164,14 +188,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       );
       if (!response.ok) throw new Error(`observer returned ${response.status}`);
       const next = (await response.json()) as ObserverSnapshot;
-      snapshot = next;
+      snapshotState = presentValue(next);
       unavailable = false;
       if (
-        (!detailsClosed && selectedId === undefined) ||
+        (!detailsClosed && typeof selectedId === 'undefined') ||
         (!next.tasks.some((task) => task.id === selectedId) &&
           durableMatch?.id !== selectedId)
       ) {
-        if (!detailsClosed) selectedId = next.tasks[0]?.id;
+        if (!detailsClosed) selectedIdState = valueState(next.tasks[0]?.id);
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -202,7 +226,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   function relativeTime(timestamp: number) {
     if (timestamp <= 0) return '—';
     const seconds = Math.round((timestamp - nowMs) / 1000);
-    const formatter = new Intl.RelativeTimeFormat(undefined, {
+    const formatter = new Intl.RelativeTimeFormat([], {
       numeric: 'auto',
     });
     if (Math.abs(seconds) < 60) return formatter.format(seconds, 'second');
@@ -221,7 +245,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function selectTask(taskId: string) {
     detailsClosed = false;
-    selectedId = taskId;
+    selectedIdState = presentValue(taskId);
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
       const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -235,7 +259,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function closeDetails() {
     detailsClosed = true;
-    selectedId = undefined;
+    selectedIdState = EMPTY_VALUE;
   }
 </script>
 
@@ -256,7 +280,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="skeleton loading-detail"></div>
     </div>
   </main>
-{:else if unavailable && snapshot === undefined}
+{:else if unavailable && snapshotState.kind === 'empty'}
   <main class="unavailable-shell">
     <div class="unavailable-mark"><Hexagon size={28} strokeWidth={1.6} /></div>
     <h1>{copy.unavailable}</h1>
@@ -419,7 +443,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
       <aside
         bind:this={detailPanel}
-        class:detail-open={selected !== undefined}
+        class:detail-open={selectedState.kind === 'present'}
         class="detail-panel"
         aria-live="polite"
         tabindex="-1"

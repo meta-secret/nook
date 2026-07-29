@@ -116,7 +116,7 @@ export function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
-function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
+function queryActiveTab(): Promise<chrome.tabs.Tab | void> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       resolve(tabs[0])
@@ -127,23 +127,24 @@ function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
   const tab = await queryActiveTab()
   const tabId = tab?.id
-  if (tabId === undefined) {
+  if (typeof tabId === 'undefined') {
     return { ok: true, status: 'unavailable' }
   }
   try {
-    const response = await new Promise<
-      { ok?: boolean; status?: LoginDetectionStatus } | undefined
-    >((resolve) => {
+    const response = await new Promise<{
+      ok?: boolean
+      status?: LoginDetectionStatus
+    } | void>((resolve) => {
       chrome.tabs.sendMessage(
         tabId,
         { type: 'nook:query-login-detection' },
         (result: unknown) => {
           if (chrome.runtime.lastError) {
-            resolve(undefined)
+            resolve()
             return
           }
           if (!result || typeof result !== 'object') {
-            resolve(undefined)
+            resolve()
             return
           }
           const payload = result as {
@@ -156,7 +157,7 @@ export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResp
               payload.status !== 'not-detected' &&
               payload.status !== 'unavailable')
           ) {
-            resolve(undefined)
+            resolve()
             return
           }
           resolve({ ok: true, status: payload.status })

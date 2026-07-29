@@ -41,11 +41,11 @@ type LoginSaveActionResponse = {
 
 function stopPendingSaveWatch(): void {
   if (!saveOfferState.pendingWatch) return
-  if (saveOfferState.pendingWatch.timer !== undefined) {
+  if (typeof saveOfferState.pendingWatch.timer !== 'undefined') {
     window.clearInterval(saveOfferState.pendingWatch.timer)
   }
   saveOfferState.pendingWatch.observer?.disconnect()
-  saveOfferState.pendingWatch = undefined
+  saveOfferState.clearPendingWatch()
 }
 
 function pageLooksLikeAuthPath(pathname: string): boolean {
@@ -91,7 +91,7 @@ function collectOutcomeObservation(
 
 async function classifyOutcomeEvidence(
   observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeVerdictView | undefined> {
+): Promise<AuthenticationOutcomeVerdictView | void> {
   const response = await sendRuntimeMessage<{
     ok?: boolean
     verdict?: AuthenticationOutcomeVerdictView
@@ -102,7 +102,7 @@ async function classifyOutcomeEvidence(
       timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
     },
   })
-  if (!response?.ok || !response.verdict) return undefined
+  if (!response?.ok || !response.verdict) return
   return response.verdict
 }
 
@@ -202,16 +202,13 @@ export function captureSubmittedLogin(event: Event): void {
   void stageSaveForCredentials(credentials)
 }
 
-export async function loadPendingSaveOffer(): Promise<
-  WebsiteLoginSaveOfferView | undefined
-> {
+export async function loadPendingSaveOffer(): Promise<WebsiteLoginSaveOfferView | void> {
   const response = await sendRuntimeMessage<LoginSavePendingResponse>({
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   })
-  if (!response?.ok || !response.offer) return undefined
-  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId))
-    return undefined
+  if (!response?.ok || !response.offer) return
+  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) return
   return response.offer
 }
 
@@ -328,7 +325,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
         )
         saveButton.hidden = true
         notNowButton.hidden = true
-        saveOfferState.activeOffer = undefined
+        saveOfferState.clearActiveOffer()
         // Hold confirmation through the dismiss window so formless success
         // pages cannot scan-away "Login saved" before the user sees it.
         saveOfferState.confirmationActive = true

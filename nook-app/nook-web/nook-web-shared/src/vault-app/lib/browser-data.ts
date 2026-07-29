@@ -151,7 +151,7 @@ async function quiesceOtherTabs(): Promise<void> {
   };
   const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
   const seen = new Set<string>();
-  const ready = new Map<string, string | undefined>();
+  const ready = new Map<string, string | void>();
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
     const message = event.data;
     if (
@@ -179,7 +179,7 @@ async function quiesceOtherTabs(): Promise<void> {
   }
   channel.close();
   const errors = [...ready.values()].filter(
-    (error): error is string => error !== undefined,
+    (error): error is string => typeof error !== "undefined",
   );
   if (errors.length > 0) {
     throw new Error(errors.join("; "));

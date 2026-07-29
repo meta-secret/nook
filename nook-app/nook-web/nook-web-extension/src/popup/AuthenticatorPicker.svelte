@@ -23,11 +23,11 @@
   let querySequence = 0
   let completed = false
 
-  function sendRuntimeMessage<T>(message: unknown): Promise<T | undefined> {
+  function sendRuntimeMessage<T>(message: unknown): Promise<T | void> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: T | undefined) => {
+      chrome.runtime.sendMessage(message, (response: T | void) => {
         if (chrome.runtime.lastError) {
-          resolve(undefined)
+          resolve()
           return
         }
         resolve(response)

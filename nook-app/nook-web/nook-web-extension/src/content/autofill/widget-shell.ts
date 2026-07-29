@@ -433,7 +433,7 @@ export function createWidgetShell(
 export function mountWidgetShell(
   shell: WidgetShell,
   workflowKey: string,
-  workflowRoot: PasswordFormObservation | undefined,
+  workflowRoot: PasswordFormObservation | void,
 ): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {

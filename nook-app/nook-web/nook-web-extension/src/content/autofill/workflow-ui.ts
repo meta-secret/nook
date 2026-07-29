@@ -158,9 +158,7 @@ export function vaultConnectionLabel(connection: PilotVaultConnection): string {
 
 export function removeWidget(): void {
   widgetState.host?.remove()
-  widgetState.host = undefined
-  widgetState.renderedWorkflowKey = undefined
-  widgetState.renderedWorkflowRoot = undefined
-  saveOfferState.activeOffer = undefined
+  widgetState.clearRenderedWidget()
+  saveOfferState.clearActiveOffer()
   saveOfferState.confirmationActive = false
 }

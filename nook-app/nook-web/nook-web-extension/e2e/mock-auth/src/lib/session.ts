@@ -9,9 +9,9 @@ export function setPendingTotpSession(session: PendingTotpSession): void {
   sessionStorage.setItem(PENDING_KEY, JSON.stringify(session))
 }
 
-export function readPendingTotpSession(): PendingTotpSession | undefined {
+export function readPendingTotpSession(): PendingTotpSession | void {
   const raw = sessionStorage.getItem(PENDING_KEY)
-  if (!raw) return undefined
+  if (!raw) return
   try {
     const parsed = JSON.parse(raw) as PendingTotpSession
     if (
@@ -23,7 +23,7 @@ export function readPendingTotpSession(): PendingTotpSession | undefined {
   } catch {
     // ignore corrupt session
   }
-  return undefined
+  return
 }
 
 export function clearPendingTotpSession(): void {

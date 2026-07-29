@@ -14,13 +14,11 @@ import type {
 } from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
-export function sendRuntimeMessage<T>(
-  message: unknown,
-): Promise<T | undefined> {
+export function sendRuntimeMessage<T>(message: unknown): Promise<T | void> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+    chrome.runtime.sendMessage(message, (response: T | void) => {
       if (chrome.runtime.lastError) {
-        resolve(undefined)
+        resolve()
         return
       }
       resolve(response)
@@ -54,7 +52,11 @@ export async function fillAndSubmitAccount(
       secretId: account.secretId,
     },
   })
-  if (!response?.ok || !response.username || response.password === undefined) {
+  if (
+    !response?.ok ||
+    !response.username ||
+    typeof response.password === 'undefined'
+  ) {
     setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
     setStatus(
       description,
@@ -164,7 +166,7 @@ async function openLoginPicker(
     () => {
       if (pickerState.pendingLogin?.requestId !== requestId) return
       const pending = pickerState.pendingLogin
-      pickerState.pendingLogin = undefined
+      pickerState.clearPendingLogin()
       setStatus(
         pending.description,
         pending.continueButton,
@@ -208,7 +210,7 @@ function cancelLoginPickerRequest(requestId: string): void {
 export function cancelPendingLoginPickerRequest(): void {
   const pending = pickerState.pendingLogin
   if (!pending) return
-  pickerState.pendingLogin = undefined
+  pickerState.clearPendingLogin()
   window.clearTimeout(pending.timeoutId)
   cancelLoginPickerRequest(pending.requestId)
 }

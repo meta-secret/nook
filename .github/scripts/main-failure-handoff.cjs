@@ -306,7 +306,7 @@ function buildMainFailureIssue({
   const failures = failedJobNames(jobs)
   const relatedPrs = pullRequestNumbers(sourcePullRequests)
   const marker = `<!-- main-run:${run.id}:attempt:${run.run_attempt} -->`
-  const hasNewAttempt = existingBody !== undefined && !existingBody.includes(marker)
+  const hasNewAttempt = typeof existingBody !== "undefined" && !existingBody.includes(marker)
   const actionableExistingBody =
     hasNewAttempt ||
     existingBody?.includes(DEFERRED_E2E_RETIREMENT_MARKER) ||

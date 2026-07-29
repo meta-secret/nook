@@ -96,21 +96,24 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
-## ⛔ Non-negotiable: TypeScript application state must be explicit
+## ⛔ Non-negotiable: authored JavaScript/TypeScript state must be explicit
 
-Authored TypeScript and Svelte must not use `undefined` to encode a named
-product, workflow, lifecycle, resource, or UI state. Mutable state uses a
-discriminated union whose variants own their data, or a generated Rust/WASM
-enum when the state is portable domain policy. Do not spread `T | undefined`
-fields, zero-argument `$state<T>()` runes, optional-field bags, and parallel
-booleans across a controller and then reconstruct the real state through
-condition chains.
+Authored JavaScript, TypeScript, and Svelte must not contain the `undefined`
+value or type token. Model optional data and named product, workflow,
+lifecycle, resource, and UI states with discriminated unions whose variants
+own their data, or with generated Rust/WASM enums when the state is portable
+domain policy. Do not spread optional-value unions, zero-argument `$state<T>()`
+runes, optional-field bags, and parallel booleans across a controller and then
+reconstruct the real state through condition chains.
 
-Truthful structural absence remains valid at external inputs, browser and
-generated contracts, lookups, parsers, caches, optional callbacks, and DOM
-references. Normalize those values at the boundary and do not store them as
-implicit application state. Do not create decorative one-variant wrappers or
-sentinel strings merely to avoid the token. Full contract:
+External and browser contracts may still produce JavaScript's missing value at
+runtime. Express optional input shape with `?`, express no callback result as
+`void`, and normalize lookup/parser/browser results immediately into an
+explicit `none`/`some` or domain-specific union. Generated declarations may
+mirror external contracts and are excluded. Tests, build scripts, `.agents`,
+and `.github` code are authored code and are not excluded. Do not evade the
+rule with `void 0`, `null`, casts, fake defaults, decorative wrappers, or
+sentinel strings. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 
 Authored Rust must not call `.unwrap()`. Production paths propagate or classify

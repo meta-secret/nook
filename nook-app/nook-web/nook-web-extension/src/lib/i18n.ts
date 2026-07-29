@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   getResolvedTranslationCatalog,
   parseStoredAppLocale,
@@ -13,19 +14,19 @@ export type ExtensionI18n = {
   t: (key: string, replacements?: Record<string, string>) => string
 }
 
-function readSavedLocale(): string | undefined {
+function readSavedLocale(): string | void {
   try {
-    return localStorage.getItem(NOOK_LOCALE_STORAGE_KEY) ?? undefined
+    return localStorage.getItem(NOOK_LOCALE_STORAGE_KEY) ?? omittedValue()
   } catch {
-    return undefined
+    return
   }
 }
 
-function chromeUiLanguage(): string | undefined {
+function chromeUiLanguage(): string | void {
   try {
     return chrome.i18n?.getUILanguage?.()
   } catch {
-    return undefined
+    return
   }
 }
 
@@ -39,7 +40,7 @@ function navigatorLanguages(): string[] {
   )
 }
 
-function uniqueLanguageTags(tags: Array<string | undefined>): string[] {
+function uniqueLanguageTags(tags: Array<string | void>): string[] {
   return [...new Set(tags.filter((tag): tag is string => Boolean(tag)))]
 }
 

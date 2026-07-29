@@ -11,7 +11,7 @@ export const SUPPORTS_EXTENSION = APP_KIND !== "sentinel";
 const SIMPLE_APP_URL =
   import.meta.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
-export function siblingAppUrl(): string | undefined {
+export function siblingAppUrl(): string | void {
   if (IS_SENTINEL_APP) return `${SIMPLE_APP_URL.replace(/\/$/, "")}/`;
-  return undefined;
+  return;
 }

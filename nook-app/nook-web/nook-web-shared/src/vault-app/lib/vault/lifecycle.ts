@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { getVaultManager } from "$lib/nook";
@@ -35,9 +36,11 @@ export async function initOnce(state: VaultState): Promise<void> {
   try {
     const savedLocale = takeWasmStringValue(
       parseAppLocale(
-        intoWasmStringValue(localStorage.getItem("nook_locale") ?? undefined),
+        intoWasmStringValue(
+          localStorage.getItem("nook_locale") ?? omittedValue(),
+        ),
       ),
-    ) as NookAppLocale | undefined;
+    ) as NookAppLocale | void;
     const browserLocale = state.browserLocale.appLocale() as NookAppLocale;
     const locale = savedLocale ?? browserLocale;
     await state.updateLocale(locale);
@@ -91,7 +94,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {
       if (state.pendingEnrollmentFromUrl) {
         const code = state.pendingEnrollmentFromUrl;
-        state.pendingEnrollmentFromUrl = undefined;
+        state.clearPendingEnrollmentFromUrl();
         state.prefillEnrollmentCode = code;
         state.enrollmentFromUrlPending = true;
       }
@@ -152,14 +155,14 @@ export async function continueInitializationAfterDeviceUnlock(
     state.activeVaultStoreId = state.localVaults[0]?.storeId;
   }
   if (state.activeVaultStoreId) {
-    await setActiveVault(state.activeVaultStoreId).catch(() => undefined);
+    await setActiveVault(state.activeVaultStoreId).catch(() => {});
   }
   state.localVaultPresent = await hasActiveLocalVault();
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.githubPat = "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
   } else {
     state.applyActiveProviderCredentials();
   }
@@ -180,7 +183,7 @@ export async function continueInitializationAfterDeviceUnlock(
 
   if (state.pendingEnrollmentFromUrl && !state.isAuthenticated) {
     const code = state.pendingEnrollmentFromUrl;
-    state.pendingEnrollmentFromUrl = undefined;
+    state.clearPendingEnrollmentFromUrl();
     state.prefillEnrollmentCode = code;
     state.enrollmentFromUrlPending = true;
   }
@@ -194,7 +197,7 @@ export async function continueInitializationAfterDeviceUnlock(
     authenticated: state.isAuthenticated,
     providers: state.providers.length,
     syncProviders: state.syncProviders.length,
-    deviceId: state.deviceId || undefined,
+    deviceId: state.deviceId || omittedValue(),
   });
 }
 

@@ -59,7 +59,7 @@ describe('secret exposure lifecycle', () => {
       { 'secret-1': record },
       'secret-1',
       load,
-      () => undefined,
+      () => {},
     )
 
     expect(load).not.toHaveBeenCalled()

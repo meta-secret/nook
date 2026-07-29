@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 type UnknownRecord = Record<string, unknown>
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -17,20 +18,18 @@ export function scrubProviderCredentials(providers: unknown): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
-    if ('githubPat' in provider) provider.githubPat = undefined
+    if ('githubPat' in provider) provider.githubPat = omittedValue()
     if (isRecord(provider.oauthFile)) {
       provider.oauthFile.accessToken = ''
       if ('refreshToken' in provider.oauthFile) {
-        provider.oauthFile.refreshToken = undefined
+        delete provider.oauthFile.refreshToken
       }
     }
   }
 }
 
-export function stageProviderCredentials(
-  providers: unknown,
-): unknown[] | undefined {
-  if (!Array.isArray(providers)) return undefined
+export function stageProviderCredentials(providers: unknown): unknown[] | void {
+  if (!Array.isArray(providers)) return
   const staged = providers.map(cloneProvider)
   scrubProviderCredentials(providers)
   return staged

@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookBrowserLocale,
@@ -56,7 +57,7 @@ describe('locale', () => {
       takeWasmStringValue(parseAppLocale(intoWasmStringValue('de'))),
     ).toBeUndefined()
     expect(
-      takeWasmStringValue(parseAppLocale(intoWasmStringValue(undefined))),
+      takeWasmStringValue(parseAppLocale(intoWasmStringValue(omittedValue()))),
     ).toBeUndefined()
   })
 

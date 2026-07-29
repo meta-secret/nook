@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 /**
  * Web-side console authority + shim over the WASM-owned logger
  * (`nook-wasm/src/logger.rs`).
@@ -102,29 +103,29 @@ const originalConsole: Record<
         log: () => {},
       };
 
-function parseLevel(raw: string | undefined): LogLevel | undefined {
+function parseLevel(raw: string | void): LogLevel | void {
   const value = raw?.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
     ? (value as LogLevel)
-    : undefined;
+    : omittedValue();
 }
 
 function initialLevel(): LogLevel {
   if (typeof localStorage !== "undefined") {
     const stored = parseLevel(
-      localStorage.getItem("nook_log_level") ?? undefined,
+      localStorage.getItem("nook_log_level") ?? omittedValue(),
     );
     if (stored) return stored;
   }
   const env =
     typeof import.meta !== "undefined"
-      ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | undefined)
-      : undefined;
+      ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | void)
+      : omittedValue();
   return env ?? "info";
 }
 
-function serializeData(data: unknown): string | undefined {
-  if (data === undefined) return undefined;
+function serializeData(data: unknown): string | void {
+  if (typeof data === "undefined") return;
   try {
     return typeof data === "string" ? data : JSON.stringify(data);
   } catch {
@@ -208,7 +209,7 @@ function persist(
     return;
   }
   try {
-    nookLog(level, scope, message, serialized ?? undefined);
+    nookLog(level, scope, message, serialized ?? omittedValue());
   } catch {
     // Logging must never break the app.
   }
@@ -231,7 +232,7 @@ function record(
 }
 
 /** True for browser-extension scripts we should not persist as app errors. */
-export function isIgnoredErrorSource(source: string | undefined): boolean {
+export function isIgnoredErrorSource(source: string | void): boolean {
   if (!source) return false;
   const value = source.trim();
   if (!value) return false;
@@ -246,7 +247,7 @@ export function sanitizeLogUrl(url: string): string {
   try {
     const parsed = new URL(
       url,
-      typeof location !== "undefined" ? location.href : undefined,
+      typeof location !== "undefined" ? location.href : omittedValue(),
     );
     parsed.search = "";
     parsed.hash = "";
@@ -290,7 +291,7 @@ function installGlobalErrorHandlers() {
 
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
-    const stack = reason instanceof Error ? reason.stack : undefined;
+    const stack = reason instanceof Error ? reason.stack : omittedValue();
     if (isIgnoredErrorSource(stack)) return;
     const message =
       reason instanceof Error
@@ -301,7 +302,7 @@ function installGlobalErrorHandlers() {
       "error",
       "unhandledrejection",
       message,
-      stack ? { stack } : undefined,
+      stack ? { stack } : omittedValue(),
     );
   });
 }
@@ -390,9 +391,9 @@ export async function dumpLogs(options?: {
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
   const entries = await nookLogDump(
-    options?.minLevel ?? undefined,
-    options?.limit ?? undefined,
-    options?.offset ?? undefined,
+    options?.minLevel ?? omittedValue(),
+    options?.limit ?? omittedValue(),
+    options?.offset ?? omittedValue(),
   );
   try {
     return entries.toArray() as LogEntry[];
@@ -484,7 +485,7 @@ export function initWasmLogging() {
           entry.level,
           entry.scope,
           entry.message,
-          entry.data ?? undefined,
+          entry.data ?? omittedValue(),
         );
       } catch {
         // Ignore — a broken early log must not block startup.

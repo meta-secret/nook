@@ -12,14 +12,14 @@ export function pageHasBackupCodeHint(): boolean {
   return RECOVERY_HINT.test(bodyText)
 }
 
-function normalizeCandidate(value: string): string | undefined {
+function normalizeCandidate(value: string): string | void {
   const trimmed = value.trim().replace(/\s+/g, ' ')
   if (
     trimmed.length < MIN_CODE_LEN ||
     trimmed.length > MAX_CODE_LEN ||
     !CODE_LINE.test(trimmed)
   ) {
-    return undefined
+    return
   }
   // Reject ordinary sentences, hint copy, and URLs.
   if (
@@ -28,18 +28,18 @@ function normalizeCandidate(value: string): string | undefined {
     /\s{2,}/.test(trimmed) ||
     RECOVERY_HINT.test(trimmed)
   ) {
-    return undefined
+    return
   }
   const words = trimmed.split(' ')
   // Recovery codes are single tokens or short grouped tokens, not prose.
-  if (words.length > 2) return undefined
+  if (words.length > 2) return
   if (words.length === 2 && words.every((word) => /^[A-Za-z]+$/.test(word))) {
-    return undefined
+    return
   }
   const compact = trimmed.replace(/[\s_-]/g, '')
-  if (compact.length < MIN_CODE_LEN) return undefined
+  if (compact.length < MIN_CODE_LEN) return
   // Real backup codes always include at least one digit.
-  if (!/[0-9]/.test(compact)) return undefined
+  if (!/[0-9]/.test(compact)) return
   return trimmed
 }
 

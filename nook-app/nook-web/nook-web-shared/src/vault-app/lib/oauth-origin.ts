@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 export type BrowserOAuthProvider = "google-drive" | "icloud";
 
 export type OAuthOriginSupport = {
@@ -29,8 +30,8 @@ const ICLOUD_AUTHORIZED_ORIGINS = new Set([
 const CLOUDFLARE_PR_PREVIEW_HOST =
   /^pr-\d+\.(?:nook-1n8|nokey-(?:sh|simple|sentinel))\.pages\.dev$/i;
 
-function currentLocation(): BrowserLocation | undefined {
-  return typeof window === "undefined" ? undefined : window.location;
+function currentLocation(): BrowserLocation | void {
+  return typeof window === "undefined" ? omittedValue() : window.location;
 }
 
 function isAuthorizedOrigin(
@@ -50,7 +51,7 @@ export function isCloudflarePrPreviewHost(hostname: string): boolean {
 
 export function resolveOAuthOriginSupport(
   provider: BrowserOAuthProvider,
-  location: BrowserLocation | undefined = currentLocation(),
+  location: BrowserLocation | void = currentLocation(),
 ): OAuthOriginSupport {
   if (!location) {
     return { supported: true, origin: "" };

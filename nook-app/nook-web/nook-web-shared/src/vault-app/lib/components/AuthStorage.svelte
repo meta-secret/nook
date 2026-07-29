@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     ShieldCheck,
     RefreshCw,
@@ -34,12 +36,12 @@
   let {
     vault,
     syncProviders,
-    syncingProviderId = undefined,
+    syncingProviderId = omittedValue(),
     isVerifying,
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    setupType = $bindable(omittedValue() as StorageProviderType | void),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
@@ -52,12 +54,12 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | undefined
+    syncingProviderId?: string | void
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    setupType?: StorageProviderType | undefined
+    setupType?: StorageProviderType | void
     githubPat: string
     githubRepo: string
     onReconnect: () => void | Promise<void>
@@ -92,7 +94,7 @@
     })
   }
 
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(typeof setupType !== "undefined")
   const addingProvider = $derived(addProviderOpen || showSetup)
   const setupCanConnect = $derived(
     setupType === 'local' ||
@@ -292,10 +294,10 @@
                       disabled={isVerifying ||
                         isInitializing ||
                         !supportsVaultReplication ||
-                        syncingProviderId !== undefined}
+                        syncingProviderId !== omittedValue()}
                       title={!supportsVaultReplication
                         ? vault.t('provider_picker.unsupported_current_vault')
-                        : undefined}
+                        : omittedValue()}
                       aria-busy={syncingProviderId === provider.id}
                       onclick={() => void onSyncProvider(provider.id)}
                     >

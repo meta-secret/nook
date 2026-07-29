@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import { stripBasePath } from "$lib/routes";
 import type { NookVaultManager } from "$app-wasm";
 import {
@@ -40,7 +41,7 @@ export function isExtensionConnectPath(pathname: string): boolean {
   return normalized === EXTENSION_CONNECT_PATH;
 }
 
-function parseScopes(raw: string | undefined): ExtensionConnectScope[] {
+function parseScopes(raw: string | void): ExtensionConnectScope[] {
   const scopes = (raw ?? "")
     .split(",")
     .map((scope) => scope.trim())
@@ -53,8 +54,8 @@ function parseScopes(raw: string | undefined): ExtensionConnectScope[] {
 
 export function extensionConnectRequestFromLocation(
   location: Location,
-): ExtensionConnectRequest | undefined {
-  if (!isExtensionConnectPath(location.pathname)) return undefined;
+): ExtensionConnectRequest | void {
+  if (!isExtensionConnectPath(location.pathname)) return;
 
   const params = new URLSearchParams(location.search);
   const deviceId = params.get("device_id")?.trim() ?? "";
@@ -66,7 +67,7 @@ export function extensionConnectRequestFromLocation(
     params.get("device_label")?.trim() ??
     "Nook Extension - this browser profile";
   const nonce = params.get("nonce")?.trim() ?? "";
-  const scopes = parseScopes(params.get("scopes") ?? undefined);
+  const scopes = parseScopes(params.get("scopes") ?? omittedValue());
 
   if (
     !deviceId ||
@@ -76,7 +77,7 @@ export function extensionConnectRequestFromLocation(
     !nonce ||
     scopes.length === 0
   ) {
-    return undefined;
+    return;
   }
 
   return {
@@ -100,18 +101,18 @@ function requestId(): string {
   );
 }
 
-export function readInstalledExtensionRuntimeId(): string | undefined {
+export function readInstalledExtensionRuntimeId(): string | void {
   return (
     document.documentElement
       .getAttribute(extensionRuntimeIdAttribute)
-      ?.trim() || undefined
+      ?.trim() || omittedValue()
   );
 }
 
 function sendExtensionMessage(
   extensionId: string,
   message: unknown,
-): Promise<unknown | undefined> {
+): Promise<unknown | void> {
   return new Promise((resolve) => {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -128,7 +129,7 @@ function sendExtensionMessage(
       }
     ).chrome?.runtime;
     if (!runtime?.sendMessage) {
-      resolve(undefined);
+      resolve();
       return;
     }
 
@@ -172,9 +173,9 @@ export async function openInstalledExtension(): Promise<boolean> {
 
 async function discoverPairedExtensionIdentityOnce(
   vaultStoreId: string,
-): Promise<PairedExtensionIdentityDiscovery | undefined> {
+): Promise<PairedExtensionIdentityDiscovery | void> {
   const extensionRuntimeId = readInstalledExtensionRuntimeId();
-  if (!extensionRuntimeId) return Promise.resolve(undefined);
+  if (!extensionRuntimeId) return Promise.resolve();
 
   const discoveryRequestId = requestId();
   const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
@@ -192,7 +193,7 @@ async function discoverPairedExtensionIdentityOnce(
     statusMessage.payload.requestId !== discoveryRequestId ||
     statusMessage.payload.vaultStoreId !== vaultStoreId
   ) {
-    return undefined;
+    return;
   }
   if (statusMessage.payload.status !== "unlocked") {
     if (statusMessage.payload.status === "different-vault") {

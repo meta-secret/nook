@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../explicit-state'
+
   import { onMount } from "svelte";
   import { VaultState } from "$lib/vault.svelte";
   import {
@@ -106,7 +108,7 @@
   const initialExtensionConnectRequest =
     typeof window !== "undefined" && SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
-      : undefined;
+      : omittedValue();
   let extensionConnectRoute = $state<boolean>(
     typeof window !== "undefined"
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
@@ -183,7 +185,7 @@
 
   function navigateHome() {
     vault.closeHelp();
-    history.pushState(undefined, "", appPath("/"));
+    history.pushState({}, "", appPath("/"));
     legalPageState = EMPTY_VALUE;
     logsPage = false;
     appLogsPage = false;
@@ -196,7 +198,7 @@
       extensionIdentityRequestState = EMPTY_VALUE;
     }
     vault.closeHelp();
-    history.pushState(undefined, "", appPath("/"));
+    history.pushState({}, "", appPath("/"));
     legalPageState = EMPTY_VALUE;
     logsPage = false;
     appLogsPage = false;
@@ -287,11 +289,11 @@
 
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
-      vault.loginRequiresExistingVault && vault.loginSetupType !== undefined;
+      vault.loginRequiresExistingVault && typeof vault.loginSetupType !== "undefined";
     const existingVaultImportNeedsIdentity =
       vault.clientPolicy.existingVaultIdentityRecoveryRequired(
         vault.loginRequiresExistingVault,
-        vault.loginSetupType !== undefined,
+        typeof vault.loginSetupType !== "undefined",
         vault.deviceProtectionReady,
       );
     if (
@@ -392,7 +394,7 @@
         await vault.activateConnectedExistingVault(pending.storeId);
       }
       pendingExistingVaultImportState = EMPTY_VALUE;
-      vault.existingVaultRecoverySummary = undefined;
+      vault.clearExistingVaultRecoverySummary();
     }
   }
 
@@ -455,12 +457,12 @@
   );
   type PendingExistingVaultImport = {
     storeId: string;
-    previousActiveStoreId: string | undefined;
+    previousActiveStoreId: string | void;
     setupType: StorageProviderType;
     githubPat: string;
     githubRepo: string;
-    oauthFile: OAuthFileConfig | undefined;
-    localFolder: LocalFolderConfig | undefined;
+    oauthFile: OAuthFileConfig | void;
+    localFolder: LocalFolderConfig | void;
   };
   let pendingExistingVaultImportState =
     $state<ValueState<PendingExistingVaultImport>>(EMPTY_VALUE);
@@ -476,7 +478,7 @@
     valueFromState(pendingEnrollmentSubmitState),
   );
   const showPasskeyOverlay = $derived(
-    pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
+    typeof pendingVaultCreation !== "undefined" && !vault.deviceProtectionReady,
   );
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
@@ -498,10 +500,10 @@
       githubRepo: vault.githubRepo,
       oauthFile: vault.oauthFile
         ? $state.snapshot(vault.oauthFile)
-        : undefined,
+        : omittedValue(),
       localFolder: vault.localFolder
         ? $state.snapshot(vault.localFolder)
-        : undefined,
+        : omittedValue(),
     });
   }
 
@@ -537,7 +539,7 @@
     if (vault.isAuthenticated) {
       await vault.activateConnectedExistingVault(pending.storeId);
       pendingExistingVaultImportState = EMPTY_VALUE;
-      vault.existingVaultRecoverySummary = undefined;
+      vault.clearExistingVaultRecoverySummary();
       return;
     }
     if (vault.loginPasswordPrompt) {
@@ -545,7 +547,7 @@
         vault.selectedPasswordEntryId =
           recoverySummary.passwordEntries.length === 1
             ? recoverySummary.passwordEntries[0]!.id
-            : undefined;
+            : omittedValue();
       }
       return;
     }
@@ -562,14 +564,14 @@
     if (!pending || !vault.isAuthenticated) return;
     await vault.activateConnectedExistingVault(pending.storeId);
     pendingExistingVaultImportState = EMPTY_VALUE;
-    vault.existingVaultRecoverySummary = undefined;
+    vault.clearExistingVaultRecoverySummary();
   }
 
   async function leaveExistingVaultImport(): Promise<void> {
     const previousStoreId =
       pendingExistingVaultImport?.previousActiveStoreId?.trim() ?? "";
     pendingExistingVaultImportState = EMPTY_VALUE;
-    vault.existingVaultRecoverySummary = undefined;
+    vault.clearExistingVaultRecoverySummary();
     if (previousStoreId) {
       await vault.selectVaultForUnlock(previousStoreId);
     }
@@ -590,7 +592,7 @@
     storeId: string,
   ): Promise<"unavailable" | "locked" | "unlocked"> {
     const discoveringStagedImport =
-      vault.loginRequiresExistingVault && vault.loginSetupType !== undefined;
+      vault.loginRequiresExistingVault && typeof vault.loginSetupType !== "undefined";
     extensionDiscoveryStoreId = storeId;
     const discovery = await discoverPairedExtensionIdentity(storeId);
     if (
@@ -804,7 +806,7 @@
       return;
     }
     pendingExistingVaultUnlock = false;
-    const importPending = pendingExistingVaultImport !== undefined;
+    const importPending = typeof pendingExistingVaultImport !== "undefined";
     void (importPending ? resumeExistingVaultImport() : vault.loadDb());
   });
 
@@ -843,7 +845,7 @@
       {vault}
       {colorMode}
       {shellWidth}
-      legalPageOpen={legalPage !== undefined}
+      legalPageOpen={legalPage !== omittedValue()}
       {logsPage}
       {extensionConnectRoute}
       onNavigateHome={navigateHome}
@@ -870,7 +872,7 @@
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
             {appVersion}
-            label={vault.isAuthenticated ? undefined : "Nook"}
+            label={vault.isAuthenticated ? omittedValue() : "Nook"}
             showSyncStatus={vault.isAuthenticated}
             showStorageIcon={vault.isAuthenticated}
             variant={vault.isAuthenticated ? "panel" : "quiet"}
@@ -905,7 +907,7 @@
             showLoginWithoutPasskey ||
             existingVaultNeedsDeviceUnlock}
           {existingVaultNeedsDeviceUnlock}
-          usesExtensionDeviceIdentity={extensionIdentityRequest !== undefined &&
+          usesExtensionDeviceIdentity={extensionIdentityRequest !== omittedValue() &&
             (extensionIdentityRequest.source === "paired-vault" ||
               !requiresPasskeyFirst ||
               extensionBackedVaultSession ||
@@ -930,7 +932,7 @@
             if (showExistingVaultPasskeyOverlay) {
               pendingExistingVaultUnlock = false;
               pendingExistingVaultImportState = EMPTY_VALUE;
-              vault.existingVaultRecoverySummary = undefined;
+              vault.clearExistingVaultRecoverySummary();
               return;
             }
             if (showEnrollmentPasskeyOverlay) {

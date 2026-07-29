@@ -1,3 +1,9 @@
+import {
+  EMPTY_VALUE,
+  omittedValue,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import fs from 'node:fs/promises'
 import { UI_TIMEOUT_MS } from './environment'
@@ -21,8 +27,9 @@ function buildAppLogsUrl(options?: {
 }): string {
   const params = new URLSearchParams()
   if (options?.minLevel) params.set('minLevel', options.minLevel)
-  if (options?.limit !== undefined) params.set('limit', String(options.limit))
-  if (options?.offset !== undefined) {
+  if (typeof options?.limit !== 'undefined')
+    params.set('limit', String(options.limit))
+  if (typeof options?.offset !== 'undefined') {
     params.set('offset', String(options.offset))
   }
   const query = params.toString()
@@ -47,7 +54,7 @@ export /** Read persisted app log entries (`window.__nookLog`) from the page, or
 async function readNookLogEntries(
   page: Page,
   limit: number,
-): Promise<NookLogEntry[] | undefined> {
+): Promise<NookLogEntry[] | void> {
   return page.evaluate(async (lim) => {
     const log = (
       window as Window & {
@@ -64,7 +71,7 @@ async function readNookLogEntries(
         }
       }
     ).__nookLog
-    if (!log) return undefined
+    if (!log) return
     return log.dump({ limit: lim })
   }, limit)
 }
@@ -72,7 +79,7 @@ async function readNookLogEntries(
 export async function readNookLogSnapshot(
   page: Page,
   options?: { minLevel?: string; limit?: number; offset?: number },
-): Promise<AppLogsResponse | undefined> {
+): Promise<AppLogsResponse | void> {
   const query = {
     schema: APP_LOGS_SCHEMA,
     minLevel: options?.minLevel ?? 'trace',
@@ -102,7 +109,7 @@ export async function readNookLogSnapshot(
         }
       }
     ).__nookLog
-    if (!log) return undefined
+    if (!log) return
     await log.flush()
     const [total, entries] = await Promise.all([
       log.count(),
@@ -171,7 +178,7 @@ export async function fetchAppLogs(
 export async function readPersistedAppLogs(
   page: Page,
   limit = 500,
-): Promise<NookLogEntry[] | undefined> {
+): Promise<NookLogEntry[] | void> {
   return readNookLogEntries(page, limit)
 }
 
@@ -194,19 +201,24 @@ export async function waitForPersistedAppLog(
   },
   options?: { limit?: number; timeoutMs?: number },
 ): Promise<NookLogEntry> {
-  let found: NookLogEntry | undefined
+  let foundState: ValueState<NookLogEntry> = EMPTY_VALUE
   await expect
     .poll(
       async () => {
         await flushNookLogPersistQueue(page)
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
-        found = findAppLogEntry(entries ?? [], filter)
-        return found ?? undefined
+        const found = findAppLogEntry(entries ?? [], filter)
+        foundState =
+          typeof found === 'undefined' ? EMPTY_VALUE : presentValue(found)
+        return found
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
     .not.toBeUndefined()
-  return found!
+  if (foundState.kind === 'empty') {
+    throw new Error('persisted app log poll completed without a matching entry')
+  }
+  return foundState.value
 }
 
 /** Wait for each persisted log milestone in order (see `.cortex/references/logging.md`). */
@@ -245,7 +257,7 @@ export function findAppLogEntry(
     level?: string
     messageIncludes?: string
   },
-): NookLogEntry | undefined {
+): NookLogEntry | void {
   return entries.find((entry) => {
     if (filter.scope && entry.scope !== filter.scope) return false
     if (filter.level && entry.level !== filter.level) return false
@@ -316,7 +328,7 @@ export function expectAppLogEntry(
   return entry!
 }
 
-export function parseLogsPageStoredCount(text: string | undefined): number {
+export function parseLogsPageStoredCount(text: string | void): number {
   const match = text?.match(/(\d+) stored/)
   return match ? Number(match[1]) : 0
 }
@@ -333,9 +345,10 @@ export async function waitForLogsPageStoredCount(
       async () => {
         await page.getByTestId('logs-refresh-btn').click()
         count = parseLogsPageStoredCount(
-          (await page.getByTestId('logs-count').textContent()) ?? undefined,
+          (await page.getByTestId('logs-count').textContent()) ??
+            omittedValue(),
         )
-        return predicate(count) ? count : undefined
+        return predicate(count) ? count : omittedValue()
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
@@ -402,7 +415,7 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, undefined, 2)
+    const body = JSON.stringify(payload, (_key, value) => value, 2)
     const attachmentPath = testInfo.outputPath('nook-app-logs.json')
     await fs.writeFile(attachmentPath, body)
     await testInfo.attach('nook-app-logs.json', {

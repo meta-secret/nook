@@ -289,18 +289,26 @@ export async function inspectPrFeedback(
   });
 
   let unresolvedThreads = 0;
-  let cursor: string | undefined;
-  do {
+  let pagination:
+    | { kind: "first-page" }
+    | { kind: "next-page"; cursor: string }
+    | { kind: "complete" } = { kind: "first-page" };
+  while (pagination.kind !== "complete") {
     const page = await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
       owner,
       repo,
       number: prNumber,
-      cursor,
+      ...(pagination.kind === "next-page"
+        ? { cursor: pagination.cursor }
+        : {}),
     });
     const threads = page.repository.pullRequest.reviewThreads;
     unresolvedThreads += threads.nodes.filter((thread) => !thread.isResolved).length;
-    cursor = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : undefined;
-  } while (cursor);
+    pagination =
+      threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
+        ? { kind: "next-page", cursor: threads.pageInfo.endCursor }
+        : { kind: "complete" };
+  }
 
   const [issueComments, reviews] = await Promise.all([
     octokit.paginate(octokit.rest.issues.listComments, {
@@ -412,11 +420,11 @@ function isRepositoryStatusComment(body: string): boolean {
   );
 }
 
-function isCodexReviewer(login: string | undefined): boolean {
+function isCodexReviewer(login: string | void): boolean {
   return login === CODEX_REVIEWER_LOGIN;
 }
 
-function isCodexReviewStatusBody(body: string, login: string | undefined): boolean {
+function isCodexReviewStatusBody(body: string, login: string | void): boolean {
   if (!isCodexReviewer(login)) {
     return false;
   }
@@ -438,23 +446,23 @@ function isCodexReviewStatusBody(body: string, login: string | undefined): boole
   );
 }
 
-function isCodexUsageLimitComment(body: string, login: string | undefined): boolean {
+function isCodexUsageLimitComment(body: string, login: string | void): boolean {
   return isCodexReviewer(login) && body.includes("Codex usage limits for code reviews");
 }
 
 function isCleanCodexReviewComment(
   body: string,
-  login: string | undefined,
+  login: string | void,
   headSha: string,
 ): boolean {
   if (!isCodexCleanReviewStatusComment(body, login)) {
     return false;
   }
   const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
-  return reviewedCommit !== undefined && headSha.startsWith(reviewedCommit);
+  return typeof reviewedCommit !== "undefined" && headSha.startsWith(reviewedCommit);
 }
 
-function isCodexCleanReviewStatusComment(body: string, login: string | undefined): boolean {
+function isCodexCleanReviewStatusComment(body: string, login: string | void): boolean {
   return (
     isCodexReviewer(login) &&
     body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX) &&

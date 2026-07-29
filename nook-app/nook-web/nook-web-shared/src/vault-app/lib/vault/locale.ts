@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookAppLocale } from "$app-wasm";
 import {
@@ -9,11 +10,11 @@ type TranslationCatalog = string;
 
 function wasmTranslationCatalog(
   locale: NookAppLocale,
-): TranslationCatalog | undefined {
+): TranslationCatalog | void {
   try {
     return getTranslationCatalog(locale);
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -31,6 +32,6 @@ export async function updateLocale(
   const preferWasm = options?.preferWasm ?? Boolean(state.manager);
   const wasmCatalog = preferWasm
     ? wasmTranslationCatalog(newLocale)
-    : undefined;
+    : omittedValue();
   state.translations = resolveTranslationCatalog(newLocale, wasmCatalog);
 }

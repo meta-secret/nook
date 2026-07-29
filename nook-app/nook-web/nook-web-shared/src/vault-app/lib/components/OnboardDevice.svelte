@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     ChevronLeft,
     Cloud,
@@ -57,7 +59,7 @@
     isVerifying,
     isInitializing,
     addProviderOpen = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    setupType = $bindable(omittedValue() as StorageProviderType | void),
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     onIssueCode,
@@ -78,7 +80,7 @@
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | undefined
+    setupType?: StorageProviderType | void
     githubPat: string
     githubRepo: string
     onIssueCode: (
@@ -111,7 +113,7 @@
   const hasCompatibleSyncProviders = $derived(
     compatibleSyncProviders.length > 0,
   )
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(typeof setupType !== "undefined")
   const addingProvider = $derived(addProviderOpen || showSetup)
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -145,7 +147,7 @@
         vault.vaultArchitecture.replication_type,
         selectedProviderIdState.kind === 'present'
           ? selectedProviderIdState.value
-          : undefined,
+          : omittedValue(),
       )?.id ?? ''
     )
   })
@@ -160,7 +162,7 @@
   })
   const selectedProvider = $derived(
     syncProviders.find((provider) => provider.id === effectiveProviderId) ??
-      undefined,
+      omittedValue(),
   )
   const derivedOnboardingType = $derived(
     selectedProvider
@@ -176,9 +178,9 @@
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
-      undefined,
+      omittedValue(),
   )
-  const hasPasswordSelection = $derived(selectedPassword !== undefined)
+  const hasPasswordSelection = $derived(typeof selectedPassword !== "undefined")
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )

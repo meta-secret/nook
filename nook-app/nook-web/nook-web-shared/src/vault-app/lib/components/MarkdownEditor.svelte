@@ -21,7 +21,7 @@
 
   const previewHtml = $derived(renderMarkdown(value))
 
-  let textareaEl: HTMLTextAreaElement | undefined = $state()
+  let textareaEl!: HTMLTextAreaElement
 
   function adjustHeight() {
     if (fill || !textareaEl) return
@@ -30,7 +30,7 @@
   }
 
   $effect(() => {
-    if (!fill && tab === 'write' && value !== undefined) {
+    if (!fill && tab === 'write' && typeof value !== "undefined") {
       setTimeout(adjustHeight, 0)
     }
   })

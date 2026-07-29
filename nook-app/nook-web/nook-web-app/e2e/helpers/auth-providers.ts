@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
@@ -40,12 +41,10 @@ export async function appendAuthProviders(
           getRequest.onerror = () =>
             reject(getRequest.error ?? new Error('idb read failed'))
           getRequest.onsuccess = () => {
-            const snapshot = (getRequest.result as
-              | {
-                  providers: SeededAuthProvider[]
-                  activeVaultStoreId?: string
-                }
-              | undefined) ?? { providers: [] }
+            const snapshot = (getRequest.result as {
+              providers: SeededAuthProvider[]
+              activeVaultStoreId?: string
+            } | void) ?? { providers: [] }
             const activeStoreId =
               snapshot.activeVaultStoreId?.trim() || fallbackStoreId
             snapshot.providers.push(
@@ -127,9 +126,9 @@ export async function waitForAuthProviderIds(
           const getRequest = tx.objectStore('auth').get('providers')
           getRequest.onerror = () => resolve(false)
           getRequest.onsuccess = () => {
-            const snapshot = getRequest.result as
-              | { providers?: Array<{ id: string }> }
-              | undefined
+            const snapshot = getRequest.result as {
+              providers?: Array<{ id: string }>
+            } | void
             const storedIds = new Set(
               snapshot?.providers?.map((provider) => provider.id) ?? [],
             )
@@ -238,7 +237,7 @@ export async function readRawAuthProvidersFromIdb(
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
           resolve(
-            (getReq.result as RawAuthProvidersSnapshot | undefined) ?? {
+            (getReq.result as RawAuthProvidersSnapshot | void) ?? {
               providers: [],
             },
           )
@@ -255,7 +254,7 @@ export async function waitForAuthProvidersE2eHook(page: Page) {
     () =>
       !!(window as Window & { __nookAuthProviders?: unknown })
         .__nookAuthProviders,
-    undefined,
+    omittedValue(),
     { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
   )
 }
@@ -307,7 +306,7 @@ export async function saveAuthProvidersInBrowser(
 }
 
 export function expectSealedCredential(
-  stored: string | undefined,
+  stored: string | void,
   plaintext: string,
 ) {
   expect(stored).toBeDefined()

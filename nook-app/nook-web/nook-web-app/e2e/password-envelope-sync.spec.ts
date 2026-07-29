@@ -209,7 +209,7 @@ test.describe('vault password envelope with sync provider', () => {
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope &&
-        snapshot.passwordEnvelopeCiphertext !== undefined &&
+        typeof snapshot.passwordEnvelopeCiphertext !== 'undefined' &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
     )

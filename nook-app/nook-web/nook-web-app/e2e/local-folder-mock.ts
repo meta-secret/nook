@@ -60,7 +60,7 @@ export async function installLocalFolderPickerMock(page: Page) {
             this.files.set(this.name, data)
             this.persist()
           },
-          close: async () => undefined,
+          close: async () => {},
         }
       }
     }

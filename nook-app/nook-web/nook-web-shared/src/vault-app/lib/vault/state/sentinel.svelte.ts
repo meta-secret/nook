@@ -26,14 +26,17 @@ export class VaultSentinelState {
   );
   sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
   private sentinelGenesisStoreState = $state<ValueState<StoreId>>(EMPTY_VALUE);
-  get sentinelGenesisStoreId(): StoreId | undefined {
-    return this.sentinelGenesisStoreState.kind === "present"
-      ? this.sentinelGenesisStoreState.value
-      : undefined;
+  get sentinelGenesisStoreId(): StoreId | void {
+    if (this.sentinelGenesisStoreState.kind === "present")
+      return this.sentinelGenesisStoreState.value;
+    return;
   }
-  set sentinelGenesisStoreId(value: StoreId | undefined) {
+  set sentinelGenesisStoreId(value: StoreId | void) {
     this.sentinelGenesisStoreState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSentinelGenesisStore(): void {
+    this.sentinelGenesisStoreState = EMPTY_VALUE;
   }
 
   sentinelCeremonyPrompt = $state(false);

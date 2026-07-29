@@ -80,7 +80,7 @@ function removePrompt(requestId: string): void {
 function chooseOption(
   request: PageRequest,
   options: PasskeyOption[],
-): Promise<PasskeyOption | undefined> {
+): Promise<PasskeyOption | void> {
   return new Promise((resolve) => {
     const host = document.createElement('aside')
     host.setAttribute('aria-label', 'Nook passkey')
@@ -98,7 +98,7 @@ function chooseOption(
     const detail = document.createElement('p')
     const rp =
       request.ceremony === 'create'
-        ? (request.request.relyingParty as { name?: unknown } | undefined)?.name
+        ? (request.request.relyingParty as { name?: unknown } | void)?.name
         : request.request.rpId
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
     const choices = document.createElement('div')
@@ -121,7 +121,7 @@ function chooseOption(
     fallback.textContent = t('passkeyUseBrowser', 'Use browser or security key')
     fallback.addEventListener('click', () => {
       removePrompt(request.requestId)
-      resolve(undefined)
+      resolve()
     })
     const style = document.createElement('style')
     style.textContent = `
@@ -205,7 +205,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     void runtimeMessage({
       type: 'nook:website-passkey-cancel',
       payload: { requestId: message.requestId },
-    } satisfies WebsitePasskeyCancelMessage).catch(() => undefined)
+    } satisfies WebsitePasskeyCancelMessage).catch(() => {})
     return
   }
   if (

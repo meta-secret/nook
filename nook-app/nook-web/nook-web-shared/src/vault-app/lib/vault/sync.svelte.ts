@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
@@ -51,7 +52,7 @@ async function readLocalVaultBlob(): Promise<string> {
 }
 
 type SyncConflictLabelState = {
-  pendingSyncConflict: NookPendingSyncConflict | undefined;
+  pendingSyncConflict: NookPendingSyncConflict | void;
   t(key: string, values?: Record<string, string>): string;
 };
 
@@ -107,7 +108,7 @@ export function applyVaultSyncResult(
     joinEnrollmentPrompt: state.joinEnrollmentPrompt,
   });
 
-  if (result.accessStatus !== undefined) {
+  if (typeof result.accessStatus !== "undefined") {
     log.info("sync state changed (login gate)", {
       accessStatus: result.accessStatus,
       pendingJoins: result.pendingJoins.length,
@@ -116,7 +117,7 @@ export function applyVaultSyncResult(
 
   const decision = state.clientPolicy.unauthenticatedSyncDecision(
     result.changed,
-    result.accessStatus !== undefined,
+    typeof result.accessStatus !== "undefined",
     result.accessStatus ?? VaultAccessStatus.NewVault,
     state.joinEnrollmentPrompt,
     state.awaitingJoinApproval,
@@ -290,16 +291,18 @@ export async function publishExtensionEventLogUpdateForVault(
 export function remoteEventProviderArgs(
   state: SyncActionsContext,
   provider?: StorageProvider,
-): [string, string, string] | undefined {
-  if (provider?.type === LOCAL_FOLDER_PROVIDER_TYPE) return undefined;
+): [string, string, string] | void {
+  if (provider?.type === LOCAL_FOLDER_PROVIDER_TYPE) return;
   if (provider) return state.providerWasmArgs(provider);
   if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
-    return undefined;
+    return;
   }
   if (state.syncProviders.length > 0) {
     return state.providerWasmArgs(state.syncProviders[0]!);
   }
-  return state.hasRemoteCredentials() ? state.wasmStorageArgs() : undefined;
+  return state.hasRemoteCredentials()
+    ? state.wasmStorageArgs()
+    : omittedValue();
 }
 
 export async function flushRemoteEventOutboxNow(
@@ -314,7 +317,7 @@ export async function flushRemoteEventOutboxNow(
           state.syncProviders[0] &&
           state.syncProviders[0].type === LOCAL_FOLDER_PROVIDER_TYPE
         ? state.syncProviders[0]
-        : undefined;
+        : omittedValue();
   if (folderProvider) {
     try {
       await syncLocalFolderProvider(state, folderProvider);
@@ -344,7 +347,7 @@ export async function updateProviderSyncMetadata(
   state: SyncActionsContext,
   providerId: string,
   yaml: string,
-  revision: string | undefined,
+  revision: string | void,
 ): Promise<void> {
   const managerStoreId = state.manager
     ? await state.enqueueStorage(() => state.manager!.vaultStoreId)
@@ -359,7 +362,7 @@ export async function updateProviderSyncMetadata(
     providerId,
     yaml,
     intoWasmStringValue(revision),
-    intoWasmStringValue(managerStoreId || undefined),
+    intoWasmStringValue(managerStoreId || omittedValue()),
     isoTimestamp(),
   ).providers;
   await state.persistProviders();
@@ -369,7 +372,7 @@ export async function updateProviderSyncMetadata(
 export function dismissLocalFolderMultipleVaultsIssue(
   state: SyncActionsContext,
 ): void {
-  state.localFolderMultipleVaultsIssue = undefined;
+  state.clearLocalFolderMultipleVaultsIssue();
 }
 
 export async function disconnectLocalFolderMultipleVaultsProvider(
@@ -377,7 +380,7 @@ export async function disconnectLocalFolderMultipleVaultsProvider(
 ): Promise<void> {
   const issue = state.localFolderMultipleVaultsIssue;
   if (!issue) return;
-  state.localFolderMultipleVaultsIssue = undefined;
+  state.clearLocalFolderMultipleVaultsIssue();
   await state.removeProvider(issue.providerId);
 }
 
@@ -386,7 +389,7 @@ export async function chooseReplacementLocalFolderForIssue(
 ): Promise<void> {
   const issue = state.localFolderMultipleVaultsIssue;
   if (!issue) return;
-  state.localFolderMultipleVaultsIssue = undefined;
+  state.clearLocalFolderMultipleVaultsIssue();
   if (state.providers.some((provider) => provider.id === issue.providerId)) {
     await state.removeProvider(issue.providerId);
   }
@@ -403,7 +406,7 @@ export function finishStagedProviderConnectAfterConflict(
   conflict: NookPendingSyncConflict,
 ): void {
   if (!conflict.isPendingProvider) return;
-  state.loginSetupType = undefined;
+  state.clearLoginSetup();
   state.addProviderOpen = false;
 }
 
@@ -434,8 +437,8 @@ function localFolderMultipleVaultsIssueFromTypedIssue(
   provider: StorageProvider,
   storeIds: string[],
   message: string,
-): LocalFolderMultipleVaultsIssue | undefined {
-  if (provider.type !== "local-folder") return undefined;
+): LocalFolderMultipleVaultsIssue | void {
+  if (provider.type !== "local-folder") return;
   return {
     providerId: provider.id,
     providerLabel: provider.label,
@@ -464,7 +467,7 @@ async function stageProviderStoreMismatchConflict(
       args[0],
       args[1],
       args[2],
-      undefined,
+      omittedValue(),
       localStoreId,
       remoteStoreId,
     ),
@@ -509,7 +512,7 @@ export async function stageStagedProviderSyncIssue(
         args[0],
         args[1],
         args[2],
-        undefined,
+        omittedValue(),
         localStoreId,
         remoteStoreId,
       ),
@@ -541,7 +544,11 @@ export async function syncLocalFolderProvider(
     manager.syncLocalFolderProvider(handleId),
   )) as string;
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(provider.id, localYaml, undefined);
+    await state.updateProviderSyncMetadata(
+      provider.id,
+      localYaml,
+      omittedValue(),
+    );
   }
 }
 
@@ -553,7 +560,7 @@ export function startVaultSync(state: SyncActionsContext) {
   }
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
     intoWasmStringValue(
-      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? omittedValue(),
     ),
   );
   const needsRemoteUpdates =
@@ -603,9 +610,9 @@ export function startVaultSync(state: SyncActionsContext) {
 }
 
 export function stopVaultSync(state: SyncActionsContext) {
-  if (state.syncTimer !== undefined) {
+  if (typeof state.syncTimer !== "undefined") {
     clearInterval(state.syncTimer);
-    state.syncTimer = undefined;
+    state.clearSyncTimer();
     log.debug("vault sync timer stopped");
   }
 }
@@ -735,7 +742,7 @@ export async function fanOutSyncToProviders(
   const run = state.fanOutSyncChain.then(() =>
     state.runFanOutSyncToProviders(options),
   );
-  state.fanOutSyncChain = run.catch(() => undefined);
+  state.fanOutSyncChain = run.catch(() => {});
   return run;
 }
 
@@ -805,7 +812,7 @@ export async function resolveSyncConflictImportRemote(
     if (conflict.remoteYaml.trim()) {
       importedStoreId = await importLocalVaultBlob(
         conflict.remoteYaml,
-        conflict.providerLabel ?? undefined,
+        conflict.providerLabel ?? omittedValue(),
       );
     } else {
       if (!state.manager) {
@@ -938,7 +945,7 @@ export async function syncProviderById(
     await state.updateProviderSyncMetadata(
       providerId,
       await readLocalVaultBlob(),
-      undefined,
+      omittedValue(),
     );
     log.debug("provider sync finished", { providerId, type: provider.type });
     return;
@@ -948,7 +955,7 @@ export async function syncProviderById(
     const eventLogIssue =
       eventLogIssueResult.state === NookEventLogSyncIssueState.Pending
         ? eventLogIssueResult.issue()
-        : undefined;
+        : omittedValue();
     eventLogIssueResult.free();
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
@@ -997,7 +1004,7 @@ export async function syncProviderById(
       await state.hydrateMultiDeviceState();
     }
     if (state.syncingProviderId === providerId) {
-      state.syncingProviderId = undefined;
+      state.clearSyncingProvider();
     }
   }
 }

@@ -55,7 +55,7 @@ async function findBaseCoverageArtifact({
     }
   }
 
-  return undefined
+  return
 }
 
 module.exports = {

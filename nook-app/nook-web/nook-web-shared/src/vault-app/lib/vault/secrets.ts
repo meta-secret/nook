@@ -237,7 +237,8 @@ async function runPasswordManagerImport(
 ): Promise<NookImportResult> {
   if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
   const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) throw new Error(editBlockMessage);
+  if (typeof editBlockMessage !== "undefined")
+    throw new Error(editBlockMessage);
   state.errorMsg = "";
   state.dismissSuccess();
   state.isSaving = true;
@@ -270,7 +271,7 @@ async function runPasswordManagerImport(
 async function prepareSecretMutation(state: VaultState): Promise<boolean> {
   if (!state.manager) return false;
   const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) {
+  if (typeof editBlockMessage !== "undefined") {
     state.errorMsg = editBlockMessage;
     return false;
   }
@@ -406,7 +407,7 @@ export async function handleProtonPassImport(
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return;
   const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) {
+  if (typeof editBlockMessage !== "undefined") {
     state.errorMsg = editBlockMessage;
     return;
   }

@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import type {
   BeginExtensionPairingMessage,
   ExtensionIdentityHandoffRequestMessage,
@@ -278,7 +279,7 @@ type UnlockedSessionDevice = {
 
 function unlockedSessionDevice(
   response: unknown,
-): UnlockedSessionDevice | undefined {
+): UnlockedSessionDevice | void {
   if (
     !response ||
     typeof response !== 'object' ||
@@ -290,7 +291,7 @@ function unlockedSessionDevice(
     !response.device ||
     typeof response.device !== 'object'
   ) {
-    return undefined
+    return
   }
   const device = response.device
   if (
@@ -301,7 +302,7 @@ function unlockedSessionDevice(
     !('deviceSigningPublicKey' in device) ||
     typeof device.deviceSigningPublicKey !== 'string'
   ) {
-    return undefined
+    return
   }
   return {
     deviceId: device.deviceId,
@@ -539,22 +540,20 @@ export async function getPairingStorage(
 ): Promise<Record<string, unknown>> {
   await ensureLegacyPairingMigration()
   const stored = await readExtensionPairingState()
-  if (key === undefined) return stored
+  if (typeof key === 'undefined') return stored
   return key in stored ? { [key]: stored[key] } : {}
 }
 
 export function requestOriginAndRpId(
   ceremony: WebsitePasskeyCeremony,
   requestJson: string,
-):
-  | { origin: string; rpId: string; request: Record<string, unknown> }
-  | undefined {
+): { origin: string; rpId: string; request: Record<string, unknown> } | void {
   const request = parsedWebsitePasskeyRequest(requestJson)
-  if (!request || typeof request.origin !== 'string') return undefined
+  if (!request || typeof request.origin !== 'string') return
   if (ceremony === 'get') {
     return typeof request.rpId === 'string'
       ? { origin: request.origin, rpId: request.rpId, request }
-      : undefined
+      : omittedValue()
   }
   const relyingParty = request.relyingParty
   return relyingParty &&
@@ -562,7 +561,7 @@ export function requestOriginAndRpId(
     'id' in relyingParty &&
     typeof relyingParty.id === 'string'
     ? { origin: request.origin, rpId: relyingParty.id, request }
-    : undefined
+    : omittedValue()
 }
 
 export function isAuthorizedWebsiteSender(
@@ -571,7 +570,7 @@ export function isAuthorizedWebsiteSender(
 ): boolean {
   if (
     sender.id !== chrome.runtime.id ||
-    sender.tab?.id === undefined ||
+    typeof sender.tab?.id === 'undefined' ||
     !sender.url
   ) {
     return false

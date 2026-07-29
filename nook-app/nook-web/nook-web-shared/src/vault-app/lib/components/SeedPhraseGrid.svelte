@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -38,7 +39,7 @@
   let syncingFromCells = $state(false)
   let focusedIndex = $state<ValueState<number>>(EMPTY_VALUE)
   let suggestionIndex = $state(0)
-  let inputRefs = $state<Array<HTMLInputElement | undefined>>([])
+  let inputRefs = $state<HTMLInputElement[]>([])
   let checksumValid = $state<ValueState<boolean>>(EMPTY_VALUE)
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
@@ -295,12 +296,12 @@
             focusedIndex.value === index &&
             suggestions.length > 0
               ? `seed-word-suggestions-${index + 1}`
-              : undefined}
+              : omittedValue()}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
             aria-describedby={cellInvalid(index)
               ? `seed-word-error-${index + 1}`
-              : undefined}
+              : omittedValue()}
             class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
               index,
             )

@@ -267,7 +267,7 @@ test.describe('iCloud provider modes', () => {
   }) => {
     await page.addInitScript(() => {
       const container = {
-        setUpAuth: async () => undefined,
+        setUpAuth: async () => {},
         whenUserSignsIn: () => new Promise(() => {}),
       }
       ;(

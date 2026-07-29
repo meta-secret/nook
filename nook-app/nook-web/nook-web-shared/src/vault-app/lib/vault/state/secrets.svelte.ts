@@ -12,13 +12,16 @@ export class VaultSecretsState {
   secretQuery = $state("");
   private secretTypeFilterState =
     $state<ValueState<VaultItemType>>(EMPTY_VALUE);
-  get secretTypeFilter(): VaultItemType | undefined {
-    return this.secretTypeFilterState.kind === "present"
-      ? this.secretTypeFilterState.value
-      : undefined;
+  get secretTypeFilter(): VaultItemType | void {
+    if (this.secretTypeFilterState.kind === "present")
+      return this.secretTypeFilterState.value;
+    return;
   }
-  set secretTypeFilter(value: VaultItemType | undefined) {
+  set secretTypeFilter(value: VaultItemType | void) {
     this.secretTypeFilterState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSecretTypeFilter(): void {
+    this.secretTypeFilterState = EMPTY_VALUE;
   }
 }

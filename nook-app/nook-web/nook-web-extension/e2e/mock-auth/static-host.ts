@@ -20,10 +20,10 @@ function contentType(filePath: string): string {
   return 'application/octet-stream'
 }
 
-async function resolveAsset(urlPath: string): Promise<string | undefined> {
+async function resolveAsset(urlPath: string): Promise<string | void> {
   const relative = urlPath === '/' ? '/index.html' : urlPath
   const candidate = path.normalize(path.join(distRoot, relative))
-  if (!candidate.startsWith(distRoot)) return undefined
+  if (!candidate.startsWith(distRoot)) return
   try {
     const info = await stat(candidate)
     if (info.isFile()) return candidate

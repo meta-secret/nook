@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { expect, test, type Page } from './fixtures'
 import { generateKeyPairSync, sign } from 'node:crypto'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
@@ -44,7 +45,7 @@ function signedSentinelInvitation(): string {
     initiatorSigningPublicKey: signingPublicKey,
   }
   const signature = sign(
-    undefined,
+    omittedValue(),
     Buffer.from(
       JSON.stringify([
         request.version,

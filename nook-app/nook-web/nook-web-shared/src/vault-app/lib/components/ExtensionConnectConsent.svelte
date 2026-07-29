@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import type {
     ExtensionEventLogRecord,
@@ -118,19 +120,19 @@
             const failure =
               !!response && typeof response === 'object'
                 ? (response as { reason?: unknown; error?: unknown })
-                : undefined
+                : omittedValue()
             const reason =
               typeof failure?.reason === 'string' && failure.reason.length > 0
                 ? failure.reason
                 : typeof failure?.error === 'string' && failure.error.length > 0
                   ? failure.error
-                  : undefined
+                  : omittedValue()
             const detail =
               reason === 'auth-provider-plaintext-migration-required'
                 ? vault.t(
                     'extension.consent.plaintext_provider_migration_required',
                   )
-                : undefined
+                : omittedValue()
             reject(
               new Error(
                 detail

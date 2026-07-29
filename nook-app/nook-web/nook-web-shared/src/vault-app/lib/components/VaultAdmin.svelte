@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     Check,
     CheckCircle2,
@@ -45,11 +47,11 @@
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId = undefined,
+    syncingProviderId = omittedValue(),
     isAuthenticated,
     isSaving,
     addProviderOpen = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    setupType = $bindable(omittedValue() as StorageProviderType | void),
     githubPat = $bindable(""),
     githubRepo = $bindable(""),
     passwordEntries,
@@ -76,23 +78,23 @@
     onImportGoogleAuthenticator,
     onImportProtonPass,
     activeSection = $bindable(
-      undefined as
+      omittedValue() as
         | "vaults"
         | "storage"
         | "passwords"
         | "import-export"
-        | undefined,
+        | void,
     ),
   }: {
     vault: VaultState;
     isVerifying: boolean;
     isInitializing: boolean;
     syncProviders: StorageProvider[];
-    syncingProviderId?: string | undefined;
+    syncingProviderId?: string | void;
     isAuthenticated: boolean;
     isSaving: boolean;
     addProviderOpen?: boolean;
-    setupType?: StorageProviderType | undefined;
+    setupType?: StorageProviderType | void;
     githubPat: string;
     githubRepo: string;
     passwordEntries: NookPasswordEntrySummary[];
@@ -137,7 +139,7 @@
       | "storage"
       | "passwords"
       | "import-export"
-      | undefined;
+      | void;
   } = $props();
 
   let newVaultName = $state("");
@@ -149,14 +151,14 @@
   let switchingTo = $state<ValueState<StoreId>>(EMPTY_VALUE);
   let activeImportProvider = $state<ValueState<string>>(EMPTY_VALUE);
   const activeImportProviderBinding = {
-    get value(): string | undefined {
+    get value(): string | void {
       return activeImportProvider.kind === "present"
         ? activeImportProvider.value
-        : undefined;
+        : omittedValue();
     },
-    set value(value: string | undefined) {
+    set value(value: string | void) {
       activeImportProvider =
-        value === undefined ? EMPTY_VALUE : presentValue(value);
+        typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
     },
   };
 

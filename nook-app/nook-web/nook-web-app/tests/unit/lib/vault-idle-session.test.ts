@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookClientRunModeUtil,
@@ -17,7 +18,7 @@ describe('resolveVaultIdleTimeoutMs', () => {
       false,
     )
     expect(
-      config.resolveVaultIdleTimeoutMs(intoWasmStringValue(undefined)),
+      config.resolveVaultIdleTimeoutMs(intoWasmStringValue(omittedValue())),
     ).toBe(5 * 60_000)
     expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('1000'))).toBe(
       5 * 60_000,
@@ -52,7 +53,7 @@ describe('resolveVaultIdleWarningMs', () => {
       false,
     )
     expect(
-      config.resolveVaultIdleWarningMs(intoWasmStringValue(undefined)),
+      config.resolveVaultIdleWarningMs(intoWasmStringValue(omittedValue())),
     ).toBe(30_000)
   })
 

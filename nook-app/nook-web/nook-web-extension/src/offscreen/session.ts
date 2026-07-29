@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import initNookWasm, {
   configureVaultApplication,
   currentCodeFromOtpauthUri,
@@ -65,7 +66,7 @@ type PendingLoginSaveOffer = {
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
 
-function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
+function clearLoginSaveOffer(offer: PendingLoginSaveOffer | void): void {
   if (!offer) return
   offer.username = ''
   offer.password = ''
@@ -83,12 +84,12 @@ function purgeExpiredLoginSaveOffers(now = Date.now()): void {
 
 function findPendingLoginSaveOffer(
   origin: string,
-): PendingLoginSaveOffer | undefined {
+): PendingLoginSaveOffer | void {
   purgeExpiredLoginSaveOffers()
   for (const offer of pendingLoginSaveOffers.values()) {
     if (offer.origin === origin) return offer
   }
-  return undefined
+  return
 }
 
 function ensureWasm(): Promise<unknown> {
@@ -184,11 +185,11 @@ function renewSessionExpiry(generation: number): void {
   scheduleSessionExpiry(generation)
 }
 
-function messageType(message: unknown): string | undefined {
+function messageType(message: unknown): string | void {
   if (!message || typeof message !== 'object' || !('type' in message)) {
-    return undefined
+    return
   }
-  return typeof message.type === 'string' ? message.type : undefined
+  return typeof message.type === 'string' ? message.type : omittedValue()
 }
 
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -736,7 +737,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         const replaceSecretId =
           decision === 'update' && typeof plan.secretId === 'string'
             ? plan.secretId
-            : undefined
+            : omittedValue()
         const offer: PendingLoginSaveOffer = {
           offerId,
           origin: payload.origin,
@@ -772,7 +773,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const offer = findPendingLoginSaveOffer(payload.origin)
       if (!offer) {
-        return { ok: true, offer: undefined }
+        return { ok: true, offer: omittedValue() }
       }
       return {
         ok: true,
@@ -911,7 +912,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     default:
-      return undefined
+      return
   }
 }
 

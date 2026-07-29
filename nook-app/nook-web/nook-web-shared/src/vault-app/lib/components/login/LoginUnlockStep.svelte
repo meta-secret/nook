@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import {
     SentinelVaultUnlockState,
     type NookLocalVaultEntry,
@@ -21,10 +23,10 @@
 
   let {
     vault,
-    vaultEntry = undefined as NookLocalVaultEntry | undefined,
+    vaultEntry = omittedValue() as NookLocalVaultEntry | void,
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(undefined as string | undefined),
+    selectedPasswordEntryId = $bindable(omittedValue() as string | void),
     isVerifying,
     isInitializing,
     isUnlocking = false,
@@ -35,10 +37,10 @@
     onImportFromSync,
   }: {
     vault: VaultState
-    vaultEntry?: NookLocalVaultEntry | undefined
+    vaultEntry?: NookLocalVaultEntry | void
     hasMultipleVaults?: boolean
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntryId?: string | undefined
+    selectedPasswordEntryId?: string | void
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean
@@ -125,7 +127,7 @@
           }}
           {onUnlock}
           onUnlockWithPassword={hidePasswordUnlock
-            ? undefined
+            ? omittedValue()
             : onUnlockWithPassword}
         />
       </section>

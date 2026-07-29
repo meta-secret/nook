@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import type { ExtensionPairingApprovedGrant } from '../../../nook-web-shared/src/extension/runtime-messages'
 
 export const setupStorageKey = 'nook:extension-setup'
@@ -173,7 +174,7 @@ export function extensionStoredPairingGrantStorageItems(
 export function setupAfterPairingGrantRemoval(
   stored: Record<string, unknown>,
   removedVaultStoreId: string,
-): ExtensionReadySetupState | undefined {
+): ExtensionReadySetupState | void {
   const current = stored[setupStorageKey]
   if (
     isExtensionReadySetupState(current) &&
@@ -190,7 +191,9 @@ export function setupAfterPairingGrantRemoval(
     )
     .map(([, grant]) => grant as StoredExtensionPairingGrant)
     .sort((left, right) => right.approvedAt.localeCompare(left.approvedAt))
-  return remaining[0] ? setupStateFromPairingGrant(remaining[0]) : undefined
+  return remaining[0]
+    ? setupStateFromPairingGrant(remaining[0])
+    : omittedValue()
 }
 
 export function selectedPairingGrantFirst(
@@ -200,7 +203,7 @@ export function selectedPairingGrantFirst(
   const setup = stored[setupStorageKey]
   const selectedVaultStoreId = isExtensionReadySetupState(setup)
     ? setup.selectedVaultStoreId
-    : undefined
+    : omittedValue()
   return [...grants].sort((left, right) => {
     const leftSelected = left.vaultStoreId === selectedVaultStoreId
     const rightSelected = right.vaultStoreId === selectedVaultStoreId
@@ -211,11 +214,11 @@ export function selectedPairingGrantFirst(
 
 export function selectedPairingGrant(
   stored: Record<string, unknown>,
-): StoredExtensionPairingGrant | undefined {
+): StoredExtensionPairingGrant | void {
   const setup = stored[setupStorageKey]
-  if (!isExtensionReadySetupState(setup)) return undefined
+  if (!isExtensionReadySetupState(setup)) return
   const grant = stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
-  return isStoredExtensionPairingGrant(grant) ? grant : undefined
+  return isStoredExtensionPairingGrant(grant) ? grant : omittedValue()
 }
 
 type LegacyStoredExtensionPairingGrant = Omit<

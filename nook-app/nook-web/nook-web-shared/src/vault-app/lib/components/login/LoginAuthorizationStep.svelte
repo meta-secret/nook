@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import { KeyRound, RefreshCw, ShieldCheck, UserRound } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { NookPasswordEntrySummary } from '$app-wasm'
@@ -13,7 +15,7 @@
   let {
     vault,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(undefined as string | undefined),
+    selectedPasswordEntryId = $bindable(omittedValue() as string | void),
     isVerifying,
     isInitializing,
     isUnlocking = false,
@@ -24,7 +26,7 @@
   }: {
     vault: VaultState
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntryId?: string | undefined
+    selectedPasswordEntryId?: string | void
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean

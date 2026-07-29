@@ -23,7 +23,7 @@ export function resetVaultSessionState(
       });
   }
   state.passwordEntries = [];
-  state.selectedPasswordEntryId = undefined;
+  state.clearSelectedPasswordEntry();
   state.loginPasswordPrompt = false;
   state.sentinelCeremonyPrompt = false;
   state.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel;
@@ -41,7 +41,7 @@ export function resetVaultSessionState(
   state.sentinelGenesisParticipantCount = 0;
   state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive;
   state.sentinelGenesisRequest = "";
-  state.sentinelGenesisStoreId = undefined;
+  state.clearSentinelGenesisStore();
   state.sharedJoinerIdentity = "";
   state.sharedGrantInstructions = "";
 }
@@ -70,7 +70,7 @@ export function clearUnlockedSession(
   state.secretPageOffset = 0;
   state.secretPageRequestOffset = 0;
   state.secretQuery = "";
-  state.secretTypeFilter = undefined;
+  state.clearSecretTypeFilter();
   state.pendingJoins = [];
   state.vaultMembers = [];
   state.joinEnrollmentPrompt = JoinEnrollmentState.None;

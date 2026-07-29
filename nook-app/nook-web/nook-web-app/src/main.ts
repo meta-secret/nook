@@ -17,4 +17,4 @@ if (target?.isConnected) {
   mount(App, { target })
 }
 
-export default undefined
+export default {}

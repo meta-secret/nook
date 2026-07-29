@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
@@ -51,7 +52,7 @@ export function renderEnrollmentWidget(
     shell
   continueButton.hidden = true
   openVaultButton.hidden = true
-  mountWidgetShell(shell, workflowKey, undefined)
+  mountWidgetShell(shell, workflowKey, omittedValue())
 
   renderEnrollmentActions(
     buildEnrollmentFlowHost(

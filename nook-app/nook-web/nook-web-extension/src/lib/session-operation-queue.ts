@@ -73,7 +73,7 @@ export class SessionOperationQueue {
         onExpire: options.onExpire,
         settled: false,
       }
-      if (entry.expiresAt !== undefined) {
+      if (typeof entry.expiresAt !== 'undefined') {
         const remaining = entry.expiresAt - Date.now()
         if (remaining <= 0) {
           entry.settled = true
@@ -105,7 +105,10 @@ export class SessionOperationQueue {
       let entry = this.entries.shift()
       while (entry) {
         if (!entry.settled) {
-          if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+          if (
+            typeof entry.expiresAt !== 'undefined' &&
+            entry.expiresAt <= Date.now()
+          ) {
             entry.settled = true
             if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
             entry.onExpire?.()

@@ -39,7 +39,6 @@ function mainRun(overrides = {}) {
     head_sha: BASE_SHA,
     event: 'push',
     status: 'in_progress',
-    conclusion: undefined,
     ...overrides,
   }
 }
@@ -139,14 +138,12 @@ test('rejects expired and untrusted workflow artifacts', async () => {
     },
   })
 
-  assert.equal(
-    await findBaseCoverageArtifact({
-      github,
-      owner: 'meta-secret',
-      repo: 'nook',
-      baseSha: BASE_SHA,
-      defaultBranch: 'main',
-    }),
-    undefined,
-  )
+  const artifact = await findBaseCoverageArtifact({
+    github,
+    owner: 'meta-secret',
+    repo: 'nook',
+    baseSha: BASE_SHA,
+    defaultBranch: 'main',
+  })
+  assert.equal(typeof artifact, 'undefined')
 })

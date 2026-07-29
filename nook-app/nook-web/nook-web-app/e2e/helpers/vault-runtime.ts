@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   expect,
   type Browser,
@@ -48,17 +49,17 @@ export async function clearBrowserVault(page: Page) {
           pending -= 1
           if (pending === 0) resolve()
         }
-        const onError = (err: DOMException | undefined) =>
+        const onError = (err: DOMException | void) =>
           reject(err ?? new Error('IndexedDB delete failed'))
 
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
-        vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
+        vaultDb.onerror = () => onError(vaultDb.error ?? omittedValue())
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
-        authDb.onerror = () => onError(authDb.error ?? undefined)
+        authDb.onerror = () => onError(authDb.error ?? omittedValue())
         authDb.onblocked = done
       }),
     clearedThroughManager,
@@ -113,7 +114,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
           stopVaultSync?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | undefined
+          syncingProviderId?: string | void
           isPasswordBusy?: boolean
         }
       }
@@ -122,7 +123,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
     vault.stopVaultSync?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = undefined
+    vault.clearSyncingProvider()
     vault.isPasswordBusy = false
   })
 }
@@ -137,7 +138,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
           stopIdleSessionTracking?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | undefined
+          syncingProviderId?: string | void
           isPasswordBusy?: boolean
         }
       }
@@ -147,7 +148,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
     vault.stopIdleSessionTracking?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = undefined
+    vault.clearSyncingProvider()
     vault.isPasswordBusy = false
   })
 }
@@ -280,14 +281,14 @@ export async function setupGithubProvider(
   await page.getByTestId('github-pat-input').fill(pat)
 }
 
-export async function readGoogleOAuthError(
-  page: Page,
-): Promise<string | undefined> {
+export async function readGoogleOAuthError(page: Page): Promise<string | void> {
   const error = page.getByTestId('google-oauth-error')
   if (!(await error.isVisible())) {
-    return undefined
+    return
   }
-  return ((await error.textContent()) ?? undefined)?.trim() || undefined
+  return (
+    ((await error.textContent()) ?? omittedValue())?.trim() || omittedValue()
+  )
 }
 
 export async function waitForGoogleOAuthSignedIn(page: Page) {

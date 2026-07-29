@@ -201,7 +201,7 @@ async function main() {
   await context.addInitScript(() => {
     Object.defineProperty(window, 'PublicKeyCredential', {
       configurable: true,
-      get: () => undefined,
+      get: () => {},
     })
   })
 

@@ -2,7 +2,9 @@ pub mod coverage;
 pub mod source_size;
 mod typescript_state;
 
-pub use typescript_state::typescript_implicit_application_state;
+pub use typescript_state::{
+    typescript_implicit_application_state, typescript_mutable_void_state,
+};
 
 use std::collections::HashSet;
 use std::fs;

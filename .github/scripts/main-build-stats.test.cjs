@@ -225,7 +225,10 @@ test('normalizes legacy schema-2 direct-compile telemetry', () => {
   const normalized = normalizeLegacyMainBuildStats(record)
 
   assert.equal(normalized.cache_telemetry.totals.direct_compile_job_count, 1)
-  assert.equal(normalized.cache_telemetry.totals.local_fallback_job_count, undefined)
+  assert.equal(
+    Object.hasOwn(normalized.cache_telemetry.totals, 'local_fallback_job_count'),
+    false,
+  )
   assert.equal(normalized.cache_telemetry.jobs[0].cache_backend.kind, 'direct_compile')
   validateMainBuildStats(normalized)
 })

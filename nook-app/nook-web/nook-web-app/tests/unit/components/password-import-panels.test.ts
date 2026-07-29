@@ -12,7 +12,7 @@ vi.mock('qr-scanner', () => ({
   default: class MockQrScanner {
     static scanImage = scanImage
 
-    start = vi.fn(async () => undefined)
+    start = vi.fn(async () => {})
     stop = vi.fn()
     destroy = vi.fn()
   },
@@ -34,7 +34,7 @@ function importResult(): NookImportResult {
 
 describe('LastPass import panel', () => {
   test('shows progress and locks the file input until import finishes', async () => {
-    let finishImport: (result: NookImportResult) => void = () => undefined
+    let finishImport: (result: NookImportResult) => void = () => {}
     const onImport = vi.fn(
       async () =>
         new Promise<NookImportResult>((resolve) => {

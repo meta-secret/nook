@@ -57,8 +57,8 @@ export function sanitizedPasskeyCeremonyData(error: unknown): {
   return errorName ? { outcome, errorName } : { outcome };
 }
 
-function sanitizedPasskeyErrorName(error: unknown): string | undefined {
-  if (!(error instanceof Error)) return undefined;
+function sanitizedPasskeyErrorName(error: unknown): string | void {
+  if (!(error instanceof Error)) return;
   if (SAFE_PASSKEY_ERROR_NAMES.has(error.name)) return error.name;
 
   const fromMessage = error.message.match(

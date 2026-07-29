@@ -96,8 +96,8 @@ function isExtensionInstallMethod(
 
 function parseExtensionMetadata(
   value: unknown,
-): ExtensionDeploymentMetadata | undefined {
-  if (!value || typeof value !== "object") return undefined;
+): ExtensionDeploymentMetadata | void {
+  if (!value || typeof value !== "object") return;
   const record = value as Record<string, unknown>;
   const channel = typeof record.channel === "string" ? record.channel : "";
   const version = typeof record.version === "string" ? record.version : "";
@@ -112,15 +112,15 @@ function parseExtensionMetadata(
     !installUrl ||
     !isExtensionInstallMethod(record.install_method)
   ) {
-    return undefined;
+    return;
   }
   try {
     const parsed = new URL(installUrl);
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return undefined;
+      return;
     }
   } catch {
-    return undefined;
+    return;
   }
   return {
     channel,
@@ -141,16 +141,16 @@ function metadataCandidateUrls(): string[] {
 
 async function fetchExtensionMetadata(
   url: string,
-): Promise<ExtensionDeploymentMetadata | undefined> {
+): Promise<ExtensionDeploymentMetadata | void> {
   try {
     const response = await fetch(url, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) return;
     return parseExtensionMetadata(await response.json());
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -174,7 +174,7 @@ export async function loadExtensionInstallTarget(): Promise<ExtensionInstallTarg
 }
 
 export async function resolveExtensionSetupState(
-  vaultStoreId: string | undefined,
+  vaultStoreId: string | void,
 ): Promise<ExtensionSetupState> {
   if (!readInstalledExtensionRuntimeId()) return { status: "not_installed" };
   if (!vaultStoreId) return { status: "installed_unpaired" };

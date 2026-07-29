@@ -71,9 +71,7 @@
     loginDetectionStatus = 'loading'
     chrome.runtime.sendMessage(
       { type: 'nook:query-active-tab-login-detection' },
-      (
-        response: { ok?: boolean; status?: LoginDetectionStatus } | undefined,
-      ) => {
+      (response: { ok?: boolean; status?: LoginDetectionStatus } | void) => {
         if (
           chrome.runtime.lastError ||
           response?.ok !== true ||
@@ -110,7 +108,7 @@
     error = ''
     chrome.runtime.sendMessage(
       { type: 'nook:open-simple-vault' },
-      (response: { ok?: boolean } | undefined) => {
+      (response: { ok?: boolean } | void) => {
         if (chrome.runtime.lastError || response?.ok !== true) {
           error = i18n.t('extension.connect.start_failed')
           return
@@ -131,7 +129,7 @@
           deviceLabel: i18n.t('extension.setup.profile_title'),
         },
       },
-      (response: { ok?: boolean } | undefined) => {
+      (response: { ok?: boolean } | void) => {
         busy = false
         if (chrome.runtime.lastError || response?.ok !== true) {
           error = i18n.t('extension.connect.start_failed')

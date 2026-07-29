@@ -172,7 +172,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   await Promise.all([
     writeFile(
       join(downloads, 'extension.json'),
-      `${JSON.stringify(metadata, undefined, 2)}\n`,
+      `${JSON.stringify(metadata, (_key, value) => value, 2)}\n`,
     ),
     writeFile(join(downloads, `${archive}.sha256`), `${digest}  ${archive}\n`),
   ])

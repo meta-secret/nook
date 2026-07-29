@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { HardDrive, Cloud, RefreshCw, TriangleAlert } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -34,16 +36,16 @@
     conflict.kind === VaultSyncConflictKind.StoreId,
   )
   const localStoreId = $derived(
-    isStoreIdConflict ? conflict.localStoreId() : undefined,
+    isStoreIdConflict ? conflict.localStoreId() : omittedValue(),
   )
   const remoteStoreId = $derived(
-    isStoreIdConflict ? conflict.remoteStoreId() : undefined,
+    isStoreIdConflict ? conflict.remoteStoreId() : omittedValue(),
   )
   const localVersion = $derived(
-    isStoreIdConflict ? undefined : conflict.contentLocalVersion(),
+    isStoreIdConflict ? omittedValue() : conflict.contentLocalVersion(),
   )
   const remoteVersion = $derived(
-    isStoreIdConflict ? undefined : conflict.contentRemoteVersion(),
+    isStoreIdConflict ? omittedValue() : conflict.contentRemoteVersion(),
   )
   const isEventLogStoreMismatch = $derived(
     isStoreIdConflict && !conflict.remoteYaml.trim(),

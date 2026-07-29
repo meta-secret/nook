@@ -15,7 +15,7 @@ export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
 ];
 
 export function siteUrlFromEnv(
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | void> = process.env,
 ): string {
   const trimmed = env.VITE_SITE_URL?.trim();
   if (trimmed) {

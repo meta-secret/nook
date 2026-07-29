@@ -53,6 +53,7 @@ import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 import {
   EMPTY_VALUE,
   presentValue,
+  valueState,
   type ValueState,
 } from "../../explicit-state";
 
@@ -62,7 +63,7 @@ export class VaultState extends VaultStateSlices {
   architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
-    return this.pendingSyncConflict !== undefined;
+    return typeof this.pendingSyncConflict !== "undefined";
   }
 
   get syncConflictLabel(): string {
@@ -81,7 +82,7 @@ export class VaultState extends VaultStateSlices {
     return this.architectureSecretCreationAllowed;
   }
 
-  get editBlockMessage(): string | undefined {
+  get editBlockMessage(): string | void {
     return this.clientPolicy.editBlockMessage(
       this.securityConflicts.length,
       this.syncBlocked,
@@ -99,8 +100,8 @@ export class VaultState extends VaultStateSlices {
     return this.syncProviders.length;
   }
 
-  get syncingProviderLabel(): string | undefined {
-    if (!this.syncingProviderId) return undefined;
+  get syncingProviderLabel(): string | void {
+    if (!this.syncingProviderId) return;
     return providerLabelById(
       $state.snapshot({
         providers: this.providers,
@@ -115,7 +116,7 @@ export class VaultState extends VaultStateSlices {
   get isSyncActivityVisible(): boolean {
     return this.clientPolicy.isSyncActivityVisible(
       this.isFanOutSyncing,
-      this.syncingProviderId !== undefined,
+      typeof this.syncingProviderId !== "undefined",
       this.isSyncing,
       this.isSaving,
     );
@@ -127,53 +128,81 @@ export class VaultState extends VaultStateSlices {
 
   private successDismissTimerState: ValueState<ReturnType<typeof setTimeout>> =
     EMPTY_VALUE;
-  get successDismissTimer(): ReturnType<typeof setTimeout> | undefined {
-    return this.successDismissTimerState.kind === "present"
-      ? this.successDismissTimerState.value
-      : undefined;
+  get successDismissTimer(): ReturnType<typeof setTimeout> | void {
+    if (this.successDismissTimerState.kind === "present")
+      return this.successDismissTimerState.value;
+    return;
   }
-  set successDismissTimer(value: ReturnType<typeof setTimeout> | undefined) {
+  set successDismissTimer(value: ReturnType<typeof setTimeout> | void) {
     this.successDismissTimerState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSuccessDismissTimer(): void {
+    this.successDismissTimerState = EMPTY_VALUE;
   }
 
   private idleSessionTrackerState: ValueState<VaultIdleSessionTracker> =
     EMPTY_VALUE;
-  get idleSessionTracker(): VaultIdleSessionTracker | undefined {
-    return this.idleSessionTrackerState.kind === "present"
-      ? this.idleSessionTrackerState.value
-      : undefined;
+  get idleSessionTracker(): VaultIdleSessionTracker | void {
+    if (this.idleSessionTrackerState.kind === "present")
+      return this.idleSessionTrackerState.value;
+    return;
   }
-  set idleSessionTracker(value: VaultIdleSessionTracker | undefined) {
+  set idleSessionTracker(value: VaultIdleSessionTracker | void) {
     this.idleSessionTrackerState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearIdleSessionTracker(): void {
+    this.idleSessionTrackerState = EMPTY_VALUE;
   }
 
   private syncTimerState: ValueState<ReturnType<typeof setInterval>> =
     EMPTY_VALUE;
-  get syncTimer(): ReturnType<typeof setInterval> | undefined {
-    return this.syncTimerState.kind === "present"
-      ? this.syncTimerState.value
-      : undefined;
+  get syncTimer(): ReturnType<typeof setInterval> | void {
+    if (this.syncTimerState.kind === "present")
+      return this.syncTimerState.value;
+    return;
   }
-  set syncTimer(value: ReturnType<typeof setInterval> | undefined) {
+  set syncTimer(value: ReturnType<typeof setInterval> | void) {
     this.syncTimerState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSyncTimer(): void {
+    this.syncTimerState = EMPTY_VALUE;
   }
 
   private initState: ValueState<Promise<void>> = EMPTY_VALUE;
-  get initPromise(): Promise<void> | undefined {
-    return this.initState.kind === "present" ? this.initState.value : undefined;
+  get initPromise(): Promise<void> | void {
+    if (this.initState.kind === "present") return this.initState.value;
+    return;
   }
-  set initPromise(value: Promise<void> | undefined) {
-    this.initState = value === undefined ? EMPTY_VALUE : presentValue(value);
+  set initPromise(value: Promise<void> | void) {
+    this.initState =
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearInitPromise(): void {
+    this.initState = EMPTY_VALUE;
   }
   private storageQueue = new SerialOperationQueue();
   localDataDeletionStarted = false;
   /** Internal browser-orchestration flag shared with the device-protection actions. */
   deviceAuthorizationInProgress = false;
-  pendingEnrollmentFromUrl =
-    typeof window !== "undefined" ? consumeEnrollmentFromLocation() : undefined;
+  private pendingEnrollmentState: ValueState<string> =
+    typeof window !== "undefined"
+      ? valueState(consumeEnrollmentFromLocation())
+      : EMPTY_VALUE;
+  get pendingEnrollmentFromUrl(): string | void {
+    if (this.pendingEnrollmentState.kind === "present") {
+      return this.pendingEnrollmentState.value;
+    }
+    return;
+  }
+  set pendingEnrollmentFromUrl(value: string | void) {
+    this.pendingEnrollmentState = valueState(value);
+  }
+  clearPendingEnrollmentFromUrl(): void {
+    this.pendingEnrollmentState = EMPTY_VALUE;
+  }
 
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.localDataDeletionStarted) {
@@ -220,7 +249,7 @@ export class VaultState extends VaultStateSlices {
     return providersActions.shouldUseJoinProviderForConnect(this);
   }
 
-  stagedRemoteStorageArgs(): [string, string, string] | undefined {
+  stagedRemoteStorageArgs(): [string, string, string] | void {
     return providersActions.stagedRemoteStorageArgs(this);
   }
 
@@ -257,9 +286,9 @@ export class VaultState extends VaultStateSlices {
   }
 
   dismissSuccess() {
-    if (this.successDismissTimer !== undefined) {
+    if (typeof this.successDismissTimer !== "undefined") {
       clearTimeout(this.successDismissTimer);
-      this.successDismissTimer = undefined;
+      this.clearSuccessDismissTimer();
     }
     this.successMsg = "";
   }
@@ -276,7 +305,7 @@ export class VaultState extends VaultStateSlices {
     }, 5000);
   }
 
-  get localProvider(): StorageProvider | undefined {
+  get localProvider(): StorageProvider | void {
     return providersActions.localProvider(this);
   }
 
@@ -377,7 +406,7 @@ export class VaultState extends VaultStateSlices {
       this.localVaultPresent,
       this.passwordEntries.length,
       this.syncProviders.length,
-      this.loginSetupType !== undefined,
+      typeof this.loginSetupType !== "undefined",
       this.addProviderOpen,
     );
   }
@@ -630,14 +659,14 @@ export class VaultState extends VaultStateSlices {
 
   remoteEventProviderArgs(
     provider?: StorageProvider,
-  ): [string, string, string] | undefined {
+  ): [string, string, string] | void {
     return syncActions.remoteEventProviderArgs(this, provider);
   }
 
   async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | undefined,
+    revision: string | void,
   ): Promise<void> {
     return syncActions.updateProviderSyncMetadata(
       this,
@@ -663,7 +692,7 @@ export class VaultState extends VaultStateSlices {
   }
 
   clearPendingSyncConflict() {
-    this.pendingSyncConflict = undefined;
+    this.clearPendingSyncConflict();
   }
 
   dismissLocalFolderMultipleVaultsIssue() {

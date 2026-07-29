@@ -63,7 +63,7 @@
           props.onImport,
         )
         result =
-          imported.result === undefined
+          typeof imported.result === "undefined"
             ? EMPTY_VALUE
             : presentValue(imported.result)
         error = imported.error
@@ -75,7 +75,7 @@
         props.onImport,
       )
       result =
-        imported.result === undefined
+        typeof imported.result === "undefined"
           ? EMPTY_VALUE
           : presentValue(imported.result)
       error = imported.error

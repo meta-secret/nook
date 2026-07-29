@@ -85,7 +85,7 @@ export function formatToolCompleted(
   }
 }
 
-export function extractShellOutputChunk(event: Record<string, unknown> | undefined): string {
+export function extractShellOutputChunk(event: Record<string, unknown> | void): string {
   if (!event) {
     return "";
   }
@@ -187,7 +187,7 @@ function readShellText(value: Record<string, unknown>): string {
   return "";
 }
 
-function stringArg(args: ToolCall["args"] | undefined, key: string): string {
+function stringArg(args: ToolCall["args"] | void, key: string): string {
   if (!args || typeof args !== "object") {
     return "";
   }

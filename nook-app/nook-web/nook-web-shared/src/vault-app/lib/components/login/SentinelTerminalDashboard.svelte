@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
   import {
     ArrowLeft,
     Check,
@@ -178,7 +179,7 @@
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"
     data-testid={status === SentinelGenesisPhase.Inactive
       ? 'sentinel-genesis-policy-step'
-      : undefined}
+      : omittedValue()}
   >
     <header
       class="flex items-center justify-between border-b border-[#2d4229] bg-[#101510] px-5 py-3 text-xs"
@@ -302,7 +303,7 @@
                     data-participant-count={choice}
                     data-testid={choice === participantCount
                       ? 'sentinel-genesis-participant-count'
-                      : undefined}
+                      : omittedValue()}
                     onclick={() => chooseTotal(choice)}
                     >❯ {choice}
                     {vault.t('login.sentinel_terminal_devices')}</button
@@ -320,7 +321,7 @@
                     class={`border px-4 py-2 text-xs ${choice === threshold ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
                     data-testid={choice === threshold
                       ? 'sentinel-genesis-threshold'
-                      : undefined}
+                      : omittedValue()}
                     onclick={() => chooseThreshold(choice)}
                     >❯ {choice} of {participantCount}</button
                   >

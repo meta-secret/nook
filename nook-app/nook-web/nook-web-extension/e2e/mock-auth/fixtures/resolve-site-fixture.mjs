@@ -42,10 +42,10 @@ for (const name of readdirSync(templatesDir).filter((n) =>
  */
 export function resolveSiteFixture(id) {
   const ref = siteShells[id]
-  if (!ref) return undefined
+  if (!ref) return
   const template = templatesById.get(ref.template)
   const steps = ref.steps ?? template?.steps
-  if (!steps || steps.length === 0) return undefined
+  if (!steps || steps.length === 0) return
   return {
     id,
     source: ref.source,

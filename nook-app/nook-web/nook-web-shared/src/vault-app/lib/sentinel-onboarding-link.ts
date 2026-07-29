@@ -8,7 +8,7 @@ export function consumeSentinelOnboardingFromLocation(): string {
   try {
     if (!/^[A-Za-z0-9_-]+$/.test(encoded)) return "";
     url.hash = "";
-    history.replaceState(undefined, "", `${url.pathname}${url.search}`);
+    history.replaceState({}, "", `${url.pathname}${url.search}`);
     return encoded;
   } catch {
     return "";

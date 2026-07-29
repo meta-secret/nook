@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
@@ -187,7 +188,7 @@ export async function installOauthFileRemoteForLocalE2e(
   const stub =
     existingStub ??
     createLocalE2eFileSyncVaultStub(opts.vaultYaml ?? '', opts.fileName)
-  if (opts.vaultYaml !== undefined) {
+  if (typeof opts.vaultYaml !== 'undefined') {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, {
@@ -205,7 +206,7 @@ export async function stubGithubVaultForLocalE2e(
 ) {
   const stub =
     existingStub ?? createLocalE2eGithubVaultStub(opts.vaultYaml ?? '')
-  if (opts.vaultYaml !== undefined && !existingStub) {
+  if (typeof opts.vaultYaml !== 'undefined' && !existingStub) {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, opts)
@@ -274,7 +275,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
-      if (opts.vaultYaml !== undefined) {
+      if (typeof opts.vaultYaml !== 'undefined') {
         if (opts.vaultYaml !== vaultYaml) {
           bumpSha()
         }
@@ -425,7 +426,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             return
           }
           const stored = eventFiles.get(relativePath)
-          if (stored !== undefined) {
+          if (typeof stored !== 'undefined') {
             const encoded = Buffer.from(stored, 'utf8').toString('base64')
             await route.fulfill({
               status: 200,
@@ -723,7 +724,7 @@ export async function reloadUnlockWithSyncProvider(
     page,
     opts?.password
       ? { password: opts.password, entryLabel: opts.entryLabel }
-      : undefined,
+      : omittedValue(),
   )
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -778,7 +779,7 @@ export async function waitForLoadedSyncProviders(
           }
         })
         if (state.authenticated && state.count < minCount) {
-          await invokeVaultLoadProviders(page).catch(() => undefined)
+          await invokeVaultLoadProviders(page).catch(() => {})
         }
         return state.authenticated ? state.count : -1
       },

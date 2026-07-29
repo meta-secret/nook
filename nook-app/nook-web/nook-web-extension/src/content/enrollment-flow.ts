@@ -43,7 +43,7 @@ export type EnrollmentFlowHost = {
   openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendRuntimeMessage: <T>(message: unknown) => Promise<T | undefined>
+  sendRuntimeMessage: <T>(message: unknown) => Promise<T | void>
   translatedMessage: (key: string) => string
   translatedMessageWithSubstitution: (
     key: string,
@@ -152,7 +152,7 @@ async function beginEnrollmentCeremony(
   section: HTMLElement,
   vaultStoreId: string,
   otpauthUri: { value: string },
-  candidate: DecodedOtpauthCandidate | undefined,
+  candidate: DecodedOtpauthCandidate | void,
 ): Promise<void> {
   holdEnrollmentWidgetAfterSave = false
   setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
@@ -249,7 +249,7 @@ function clearOtpauthUri(uri: { value: string }): void {
   uri.value = ''
 }
 
-function clearCandidate(candidate: DecodedOtpauthCandidate | undefined): void {
+function clearCandidate(candidate: DecodedOtpauthCandidate | void): void {
   if (!candidate) return
   clearOtpauthCandidate(candidate)
 }
@@ -346,7 +346,7 @@ async function showQrPreview(
   host: EnrollmentFlowHost,
   section: HTMLElement,
   otpauthUri: { value: string },
-  candidate: DecodedOtpauthCandidate | undefined,
+  candidate: DecodedOtpauthCandidate | void,
 ): Promise<void> {
   section.replaceChildren()
   host.title.textContent = host.translatedMessage('widgetEnrollPreview')

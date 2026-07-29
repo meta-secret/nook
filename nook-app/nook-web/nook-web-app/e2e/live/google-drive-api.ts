@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 /**
  * Live Google Drive REST helpers for opt-in shared-folder grant smoke.
  * Calls the real Drive API — never the Playwright `drive-stub.ts` routes.
@@ -12,19 +13,17 @@ export type LiveDriveCredentials = {
   joinerAccessToken?: string
 }
 
-export function readLiveDriveSharedGrantCredentials():
-  | LiveDriveCredentials
-  | undefined {
+export function readLiveDriveSharedGrantCredentials(): LiveDriveCredentials | void {
   const ownerAccessToken = process.env.NOOK_GOOGLE_E2E_ACCESS_TOKEN?.trim()
   const joinerEmail = process.env.NOOK_GOOGLE_E2E_JOINER_EMAIL?.trim()
-  if (!ownerAccessToken || !joinerEmail) return undefined
+  if (!ownerAccessToken || !joinerEmail) return
   const joinerAccessToken =
-    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim() || undefined
+    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim() || omittedValue()
   return { ownerAccessToken, joinerEmail, joinerAccessToken }
 }
 
 export function hasLiveDriveSharedGrantCredentials(): boolean {
-  return readLiveDriveSharedGrantCredentials() !== undefined
+  return typeof readLiveDriveSharedGrantCredentials() !== 'undefined'
 }
 
 async function driveJson<T>(

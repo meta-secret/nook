@@ -1,3 +1,4 @@
+import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -18,7 +19,7 @@ function toPosixPath(value: string) {
 
 function sha256FileNameFromPath(filePath: string) {
   const name = path.basename(filePath)
-  return EVENT_FILE_NAME_PATTERN.test(name) ? name : undefined
+  return EVENT_FILE_NAME_PATTERN.test(name) ? name : omittedValue()
 }
 
 /** File-backed e2e sync remote. The browser still uses the OAuth-file code path;
@@ -54,7 +55,7 @@ export function createLocalE2eFileSyncVaultStub(
   function eventDigestFromFileId(id: string) {
     return id.startsWith('e2e-file-event-')
       ? id.slice('e2e-file-event-'.length)
-      : undefined
+      : omittedValue()
   }
 
   function eventDigests() {
@@ -68,7 +69,7 @@ export function createLocalE2eFileSyncVaultStub(
 
   function readEvent(digest: string) {
     const file = eventPath(digest)
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : omittedValue()
   }
 
   function writeEvent(digest: string, content: string) {
@@ -113,7 +114,7 @@ export function createLocalE2eFileSyncVaultStub(
     getEventFileContents: () =>
       eventDigests()
         .map((digest) => readEvent(digest))
-        .filter((content): content is string => content !== undefined),
+        .filter((content): content is string => typeof content !== 'undefined'),
     clearEventFiles: () => {
       if (!fs.existsSync(eventsDir())) return
       for (const name of fs.readdirSync(eventsDir())) {
@@ -136,7 +137,7 @@ export function createLocalE2eFileSyncVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
-      if (opts?.vaultYaml !== undefined) {
+      if (typeof opts?.vaultYaml !== 'undefined') {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -220,7 +221,7 @@ export function createLocalE2eFileSyncVaultStub(
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             const content = readEvent(eventDigest)
-            if (content === undefined) {
+            if (typeof content === 'undefined') {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
@@ -247,7 +248,7 @@ export function createLocalE2eFileSyncVaultStub(
         if (driveFileId && method === 'GET') {
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
-            if (readEvent(eventDigest) === undefined) {
+            if (typeof readEvent(eventDigest) === 'undefined') {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }

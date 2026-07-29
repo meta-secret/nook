@@ -14,13 +14,16 @@ import {
 } from "$app-wasm";
 export class VaultSessionState {
   private managerState = $state<ValueState<NookVaultManager>>(EMPTY_VALUE);
-  get manager(): NookVaultManager | undefined {
-    return this.managerState.kind === "present"
-      ? this.managerState.value
-      : undefined;
+  get manager(): NookVaultManager | void {
+    if (this.managerState.kind === "present") return this.managerState.value;
+    return;
   }
-  set manager(value: NookVaultManager | undefined) {
-    this.managerState = value === undefined ? EMPTY_VALUE : presentValue(value);
+  set manager(value: NookVaultManager | void) {
+    this.managerState =
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearManager(): void {
+    this.managerState = EMPTY_VALUE;
   }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
@@ -61,25 +64,31 @@ export class VaultSessionState {
   passwordEntries = $state<NookPasswordEntrySummary[]>([]);
   private selectedPasswordEntryState =
     $state<ValueState<PasswordEntryId>>(EMPTY_VALUE);
-  get selectedPasswordEntryId(): PasswordEntryId | undefined {
-    return this.selectedPasswordEntryState.kind === "present"
-      ? this.selectedPasswordEntryState.value
-      : undefined;
+  get selectedPasswordEntryId(): PasswordEntryId | void {
+    if (this.selectedPasswordEntryState.kind === "present")
+      return this.selectedPasswordEntryState.value;
+    return;
   }
-  set selectedPasswordEntryId(value: PasswordEntryId | undefined) {
+  set selectedPasswordEntryId(value: PasswordEntryId | void) {
     this.selectedPasswordEntryState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSelectedPasswordEntry(): void {
+    this.selectedPasswordEntryState = EMPTY_VALUE;
   }
 
   private activeEnrollmentEntryState =
     $state<ValueState<PasswordEntryId>>(EMPTY_VALUE);
-  get activeEnrollmentEntryId(): PasswordEntryId | undefined {
-    return this.activeEnrollmentEntryState.kind === "present"
-      ? this.activeEnrollmentEntryState.value
-      : undefined;
+  get activeEnrollmentEntryId(): PasswordEntryId | void {
+    if (this.activeEnrollmentEntryState.kind === "present")
+      return this.activeEnrollmentEntryState.value;
+    return;
   }
-  set activeEnrollmentEntryId(value: PasswordEntryId | undefined) {
+  set activeEnrollmentEntryId(value: PasswordEntryId | void) {
     this.activeEnrollmentEntryState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearActiveEnrollmentEntry(): void {
+    this.activeEnrollmentEntryState = EMPTY_VALUE;
   }
 }

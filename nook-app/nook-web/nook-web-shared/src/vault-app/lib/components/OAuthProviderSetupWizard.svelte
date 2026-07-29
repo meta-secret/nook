@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import {
     FolderOpen,
     FolderPlus,
@@ -175,11 +177,11 @@
       log.info('CloudKit native sign-in click observed', {
         eventPhase: event.eventPhase,
         targetTag:
-          event.target instanceof Element ? event.target.tagName : undefined,
+          event.target instanceof Element ? event.target.tagName : omittedValue(),
         currentTargetTag:
           event.currentTarget instanceof Element
             ? event.currentTarget.tagName
-            : undefined,
+            : omittedValue(),
         isTrusted: event.isTrusted,
         defaultPrevented: event.defaultPrevented,
       })

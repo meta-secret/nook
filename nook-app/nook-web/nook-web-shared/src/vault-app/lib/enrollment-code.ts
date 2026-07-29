@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
@@ -42,27 +43,27 @@ export function buildEnrollmentLink(
  * Read an enrollment code from the current page URL (hash or query), then
  * strip it from the address bar so secrets do not linger in history.
  */
-export function consumeEnrollmentFromLocation(): string | undefined {
+export function consumeEnrollmentFromLocation(): string | void {
   if (typeof window === "undefined") {
-    return undefined;
+    return;
   }
 
   const url = new URL(window.location.href);
   const raw = enrollmentCodeFromUrl(url);
 
   if (!raw) {
-    return undefined;
+    return;
   }
 
   history.replaceState(
-    undefined,
+    omittedValue(),
     "",
     `${url.pathname}${url.search}${url.hash}`,
   );
   return normalizeEnrollmentCode(raw);
 }
 
-function enrollmentCodeFromUrl(url: URL): string | undefined {
+function enrollmentCodeFromUrl(url: URL): string | void {
   if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
     const code = decodeURIComponent(
       url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
@@ -70,7 +71,7 @@ function enrollmentCodeFromUrl(url: URL): string | undefined {
     url.hash = "";
     return code;
   }
-  const code = url.searchParams.get("enroll") ?? undefined;
+  const code = url.searchParams.get("enroll") ?? omittedValue();
   if (code) {
     url.searchParams.delete("enroll");
   }

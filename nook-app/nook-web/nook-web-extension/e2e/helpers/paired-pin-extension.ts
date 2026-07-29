@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   chromium,
   expect,
@@ -31,7 +32,7 @@ const rootDir = path.resolve(
 const extensionDir =
   process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || omittedValue()
 const setupStorageKey = 'nook:extension-setup'
 const EXTENSION_TIMEOUT_MS = 45_000
 

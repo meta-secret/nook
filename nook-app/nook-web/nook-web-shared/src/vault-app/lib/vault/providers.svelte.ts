@@ -1,3 +1,4 @@
+import { omittedValue } from "../../../explicit-state";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
@@ -75,7 +76,7 @@ export function wasmStorageArgs(
     wasmStorageArgsCore(
       state.localVaultPresent,
       state.isAuthenticated,
-      syncProvider ? $state.snapshot(syncProvider) : undefined,
+      syncProvider ? $state.snapshot(syncProvider) : omittedValue(),
       state.storageMode,
       state.githubPat,
       state.githubRepo,
@@ -83,7 +84,7 @@ export function wasmStorageArgs(
       state.oauthFile?.accessToken,
       state.oauthFile
         ? oauthRemoteStorageRef($state.snapshot(state.oauthFile))
-        : undefined,
+        : omittedValue(),
       state.oauthFile?.fileName,
     ),
   );
@@ -116,15 +117,15 @@ export function shouldUseJoinProviderForConnect(
 
 export function stagedRemoteStorageArgs(
   state: ProviderActionsContext,
-): [string, string, string] | undefined {
+): [string, string, string] | void {
   const type = state.loginSetupType ?? state.storageMode;
   const args = stagedRemoteStorageArgsCore(
     type,
-    state.githubPat || undefined,
-    state.githubRepo || undefined,
-    state.oauthFile ? $state.snapshot(state.oauthFile) : undefined,
+    state.githubPat || omittedValue(),
+    state.githubRepo || omittedValue(),
+    state.oauthFile ? $state.snapshot(state.oauthFile) : omittedValue(),
   );
-  return args ? takeStorageArgsTuple(args) : undefined;
+  return args ? takeStorageArgsTuple(args) : omittedValue();
 }
 
 export function stagedProviderLabel(state: ProviderActionsContext): string {
@@ -188,14 +189,14 @@ export function refreshLocalFolderBackupSupport(
 
 export function localProvider(
   state: ProviderActionsContext,
-): StorageProvider | undefined {
+): StorageProvider | void {
   const id = localProviderIdForActiveVault(
     providerSnapshot(state),
     state.activeVaultStoreId,
   );
   return id
     ? state.providers.find((provider) => provider.id === id)
-    : undefined;
+    : omittedValue();
 }
 
 export function activeProviders(
@@ -218,8 +219,8 @@ export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
   return state.clientPolicy.shouldShowLoginVaultPicker(
     state.isAuthenticated,
     state.localVaults.length,
-    state.selectedLoginVaultStoreId !== undefined,
-    state.loginSetupType !== undefined,
+    typeof state.selectedLoginVaultStoreId !== "undefined",
+    typeof state.loginSetupType !== "undefined",
     state.addProviderOpen,
     isVaultSessionLocked(),
   );
@@ -251,7 +252,7 @@ export async function handleRemoteVaultAssessStatus(
   const decision = state.clientPolicy.remoteVaultAssessDecision(
     accessStatus,
     state.loginRequiresExistingVault,
-    state.loginSetupType !== undefined,
+    typeof state.loginSetupType !== "undefined",
   );
   switch (decision) {
     case RemoteVaultAssessDecision.PromptRecoveryFromCache:
@@ -274,7 +275,7 @@ export async function handleRemoteVaultAssessStatus(
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(
   state: ProviderActionsContext,
-): Promise<string | undefined> {
+): Promise<string | void> {
   const fromManager = state.manager
     ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
     : "";
@@ -284,7 +285,7 @@ async function vaultStoreIdForProviderSave(
   return (
     state.activeVaultStoreId?.trim() ||
     state.selectedLoginVaultStoreId?.trim() ||
-    undefined
+    omittedValue()
   );
 }
 
@@ -332,8 +333,8 @@ export async function promoteSessionVaultToLocalIfNeeded(
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.githubPat = "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
   }
 }
 
@@ -341,8 +342,8 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   if (state.localVaultPresent) {
     state.storageMode = "local";
     state.githubPat = "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
     return;
   }
 
@@ -352,10 +353,10 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
       state.githubPat = "";
     }
     if (state.loginSetupType !== "oauth-file") {
-      state.oauthFile = undefined;
+      state.clearOauthFile();
     }
     if (state.loginSetupType !== "local-folder") {
-      state.localFolder = undefined;
+      state.clearLocalFolder();
     }
     return;
   }
@@ -379,18 +380,18 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   state.storageMode = syncProvider.type;
   state.githubPat = syncProvider.githubPat ?? "";
   if (syncProvider.type === "oauth-file") {
-    state.oauthFile = syncProvider.oauthFile ?? undefined;
-    state.localFolder = undefined;
+    state.oauthFile = syncProvider.oauthFile ?? omittedValue();
+    state.clearLocalFolder();
     state.githubRepo =
       syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   } else if (syncProvider.type === "local-folder") {
-    state.localFolder = syncProvider.localFolder ?? undefined;
+    state.localFolder = syncProvider.localFolder ?? omittedValue();
     state.githubRepo = DEFAULT_GITHUB_REPO;
-    state.oauthFile = undefined;
+    state.clearOauthFile();
   } else {
     state.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO;
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
   }
 }
 
@@ -413,7 +414,7 @@ export async function persistProviders(
   await state.enqueueStorage(() =>
     saveAuthProviders(state.manager!, {
       providers: state.providers,
-      activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+      activeVaultStoreId: state.activeVaultStoreId ?? omittedValue(),
     }),
   );
 }
@@ -445,11 +446,11 @@ export function beginProviderSetup(
       iCloudMode: "private",
     };
   } else {
-    state.oauthSetupPreset = undefined;
-    state.oauthFile = undefined;
+    state.clearOauthSetupPreset();
+    state.clearOauthFile();
   }
-  state.localFolder = undefined;
-  state.existingVaultRecoverySummary = undefined;
+  state.clearLocalFolder();
+  state.clearExistingVaultRecoverySummary();
   state.errorMsg = "";
   state.dismissSuccess();
   log.debug("provider setup started", { type, oauthPreset });
@@ -460,36 +461,36 @@ export function beginAddProvider(state: ProviderActionsContext) {
     state.resetVaultSessionState();
   }
   state.addProviderOpen = true;
-  state.loginSetupType = undefined;
+  state.clearLoginSetup();
   state.errorMsg = "";
 }
 
 export function cancelAddProvider(state: ProviderActionsContext) {
   resetICloudSignInState(state);
   state.addProviderOpen = false;
-  state.loginSetupType = undefined;
-  state.existingVaultRecoverySummary = undefined;
+  state.clearLoginSetup();
+  state.clearExistingVaultRecoverySummary();
   state.applyActiveProviderCredentials();
   state.errorMsg = "";
 }
 
 export function cancelProviderSetup(state: ProviderActionsContext) {
   resetICloudSignInState(state);
-  if (state.addProviderOpen && state.loginSetupType !== undefined) {
+  if (state.addProviderOpen && typeof state.loginSetupType !== "undefined") {
     const setupType = state.loginSetupType;
-    state.loginSetupType = undefined;
+    state.clearLoginSetup();
     state.githubPat = "";
     state.githubRepo =
       setupType === "oauth-file"
         ? DEFAULT_DRIVE_BACKUP_NAME
         : DEFAULT_GITHUB_REPO;
-    state.localFolder = undefined;
-    state.existingVaultRecoverySummary = undefined;
+    state.clearLocalFolder();
+    state.clearExistingVaultRecoverySummary();
     state.errorMsg = "";
     return;
   }
-  state.loginSetupType = undefined;
-  state.existingVaultRecoverySummary = undefined;
+  state.clearLoginSetup();
+  state.clearExistingVaultRecoverySummary();
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
   state.errorMsg = "";
@@ -529,12 +530,12 @@ export async function ensureProviderSaved(
     ? state.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
-  const isNewSetup = state.loginSetupType !== undefined;
+  const isNewSetup = typeof state.loginSetupType !== "undefined";
   let oauthProviderToUpdate: ValueState<string> = EMPTY_VALUE;
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
-  const oauthSnapshot: OAuthFileConfig | undefined =
+  const oauthSnapshot: OAuthFileConfig | void =
     type === "oauth-file"
       ? {
           preset: oauthPreset,
@@ -549,18 +550,18 @@ export async function ensureProviderSaved(
           accountEmail: state.oauthFile?.accountEmail,
           fileName: driveFile,
         }
-      : undefined;
-  const localFolderSnapshot: LocalFolderConfig | undefined =
+      : omittedValue();
+  const localFolderSnapshot: LocalFolderConfig | void =
     type === "local-folder"
       ? {
           directoryName: state.localFolder?.directoryName,
           handleId: state.localFolder?.handleId,
         }
-      : undefined;
+      : omittedValue();
 
   const isExplicitAdd =
     state.addProviderOpen ||
-    (state.isAuthenticated && state.loginSetupType !== undefined);
+    (state.isAuthenticated && typeof state.loginSetupType !== "undefined");
 
   if (isNewSetup && type !== "local") {
     if (type === "local-folder" && !localFolderSnapshot?.handleId) {
@@ -578,11 +579,11 @@ export async function ensureProviderSaved(
             ? driveFile
             : type === "local-folder"
               ? localFolderSnapshot?.directoryName
-              : undefined,
+              : omittedValue(),
         oauthPreset,
       ),
-      githubPat: type === "github" ? pat : undefined,
-      githubRepo: type === "github" ? repo : undefined,
+      githubPat: type === "github" ? pat : omittedValue(),
+      githubRepo: type === "github" ? repo : omittedValue(),
       oauthFile: oauthSnapshot,
       localFolder: localFolderSnapshot,
       storeId: vaultStoreId,
@@ -621,9 +622,9 @@ export async function ensureProviderSaved(
     const snapshot = ensureLocalProviderRowWasm(
       {
         providers: state.providers,
-        activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+        activeVaultStoreId: state.activeVaultStoreId ?? omittedValue(),
       } as AuthProvidersSnapshot,
-      vaultStoreId ?? undefined,
+      vaultStoreId ?? omittedValue(),
     );
     state.providers = snapshot.providers;
   }
@@ -645,7 +646,7 @@ export async function ensureProviderSaved(
     const oauthProviderToUpdateId =
       oauthProviderToUpdate.kind === "present"
         ? oauthProviderToUpdate.value
-        : undefined;
+        : omittedValue();
     state.providers = state.providers.map((provider) => {
       if (
         provider.type !== "oauth-file" ||
@@ -683,7 +684,7 @@ export async function ensureProviderSaved(
       )?.oauthFile ?? state.oauthFile;
   }
 
-  state.loginSetupType = undefined;
+  state.clearLoginSetup();
   state.loginRequiresExistingVault = false;
   state.addProviderOpen = false;
   state.applyActiveProviderCredentials();
@@ -752,7 +753,7 @@ export async function discoverStagedVaultStoreId(
             state.manager!.vaultRecoveryOptions(),
           );
         } catch (error) {
-          state.existingVaultRecoverySummary = undefined;
+          state.clearExistingVaultRecoverySummary();
           log.warn("vault recovery summary unavailable", {
             error: error instanceof Error ? error.message : String(error),
           });
@@ -800,7 +801,7 @@ export async function connectAndSyncStagedProvider(
       quiet: true,
       propagateError: true,
     });
-    state.loginSetupType = undefined;
+    state.clearLoginSetup();
     state.addProviderOpen = false;
   } catch (e: unknown) {
     const assessTimedOut =

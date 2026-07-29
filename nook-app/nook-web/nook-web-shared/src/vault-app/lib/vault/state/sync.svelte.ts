@@ -8,26 +8,29 @@ import {
 } from "../../../../explicit-state";
 export class VaultSyncState {
   private lastSyncedState = $state<ValueState<SvelteDate>>(EMPTY_VALUE);
-  get lastSyncedAt(): SvelteDate | undefined {
-    return this.lastSyncedState.kind === "present"
-      ? this.lastSyncedState.value
-      : undefined;
+  get lastSyncedAt(): SvelteDate | void {
+    if (this.lastSyncedState.kind === "present")
+      return this.lastSyncedState.value;
+    return;
   }
-  set lastSyncedAt(value: SvelteDate | undefined) {
+  set lastSyncedAt(value: SvelteDate | void) {
     this.lastSyncedState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
   }
   isSyncing = $state(false);
   /** Provider id currently running a manual sync (Settings UI). */
   private syncingProviderState = $state<ValueState<string>>(EMPTY_VALUE);
-  get syncingProviderId(): string | undefined {
-    return this.syncingProviderState.kind === "present"
-      ? this.syncingProviderState.value
-      : undefined;
+  get syncingProviderId(): string | void {
+    if (this.syncingProviderState.kind === "present")
+      return this.syncingProviderState.value;
+    return;
   }
-  set syncingProviderId(value: string | undefined) {
+  set syncingProviderId(value: string | void) {
     this.syncingProviderState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearSyncingProvider(): void {
+    this.syncingProviderState = EMPTY_VALUE;
   }
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false);
@@ -45,29 +48,33 @@ export class VaultSyncState {
   /** User must pick local vs remote before editing when versions match but content differs. */
   private syncConflictState =
     $state<ValueState<NookPendingSyncConflict>>(EMPTY_VALUE);
-  get pendingSyncConflict(): NookPendingSyncConflict | undefined {
-    return this.syncConflictState.kind === "present"
-      ? this.syncConflictState.value
-      : undefined;
+  get pendingSyncConflict(): NookPendingSyncConflict | void {
+    if (this.syncConflictState.kind === "present")
+      return this.syncConflictState.value;
+    return;
   }
-  set pendingSyncConflict(value: NookPendingSyncConflict | undefined) {
+  set pendingSyncConflict(value: NookPendingSyncConflict | void) {
     this.syncConflictState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearPendingSyncConflict(): void {
+    this.syncConflictState = EMPTY_VALUE;
   }
   /** Local-folder provider points at a folder that contains several vault event logs. */
   private localFolderIssueState =
     $state<ValueState<LocalFolderMultipleVaultsIssue>>(EMPTY_VALUE);
-  get localFolderMultipleVaultsIssue():
-    | LocalFolderMultipleVaultsIssue
-    | undefined {
-    return this.localFolderIssueState.kind === "present"
-      ? this.localFolderIssueState.value
-      : undefined;
+  get localFolderMultipleVaultsIssue(): LocalFolderMultipleVaultsIssue | void {
+    if (this.localFolderIssueState.kind === "present")
+      return this.localFolderIssueState.value;
+    return;
   }
   set localFolderMultipleVaultsIssue(
-    value: LocalFolderMultipleVaultsIssue | undefined,
+    value: LocalFolderMultipleVaultsIssue | void,
   ) {
     this.localFolderIssueState =
-      value === undefined ? EMPTY_VALUE : presentValue(value);
+      typeof value === "undefined" ? EMPTY_VALUE : presentValue(value);
+  }
+  clearLocalFolderMultipleVaultsIssue(): void {
+    this.localFolderIssueState = EMPTY_VALUE;
   }
 }

@@ -1,3 +1,4 @@
+import { omittedValue } from '../nook-web-shared/src/explicit-state'
 import { defineConfig } from '@playwright/test'
 
 const isCi = !!process.env.CI
@@ -9,7 +10,7 @@ export default defineConfig({
   retries: isHostedSmoke ? 0 : isCi ? 2 : 0,
   // The full smoke owns several headed pages and persistent contexts. Hosted
   // runners cannot reliably sustain it beside the other extension workers.
-  workers: isCi ? 1 : undefined,
+  workers: isCi ? 1 : omittedValue(),
   reporter: isCi ? 'line' : 'list',
   timeout: isHostedSmoke ? 180_000 : isCi ? 90_000 : 60_000,
   expect: {
@@ -28,7 +29,7 @@ export default defineConfig({
     },
   ],
   webServer: isHostedSmoke
-    ? undefined
+    ? omittedValue()
     : {
         command: 'bun run dev -- --host 127.0.0.1 --port 5174',
         cwd: '../nook-vault-simple',

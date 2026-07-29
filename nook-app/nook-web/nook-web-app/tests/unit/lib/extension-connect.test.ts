@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   extensionConnectRequestFromLocation,
@@ -259,7 +260,7 @@ describe('extension pairing approved message', () => {
   })
 
   test('does not present incomplete or revoked setup as connected', () => {
-    expect(isExtensionReadySetupState(undefined)).toBe(false)
+    expect(isExtensionReadySetupState(omittedValue())).toBe(false)
     expect(
       isExtensionReadySetupState({
         status: 'ready',
@@ -621,7 +622,7 @@ describe('paired extension unlock request', () => {
     )
     vi.stubGlobal('chrome', {
       runtime: {
-        sendMessage: () => undefined,
+        sendMessage: () => {},
       },
     })
 

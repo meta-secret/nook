@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
@@ -99,7 +100,7 @@ export type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean;
     persist?: boolean;
-  }) => Promise<CloudKitUserIdentity | undefined>;
+  }) => Promise<CloudKitUserIdentity | void>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
   fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
@@ -144,7 +145,7 @@ const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = "nook.icloud.webAuthToken.";
 
 export const webAuthTokenListeners = new Set<(token: string) => void>();
 
-export function tokenDiagnostics(token: string | undefined): {
+export function tokenDiagnostics(token: string | void): {
   present: boolean;
   length: number;
 } {
@@ -154,7 +155,7 @@ export function tokenDiagnostics(token: string | undefined): {
   };
 }
 
-export function sanitizedURLDiagnostics(url: string | undefined): {
+export function sanitizedURLDiagnostics(url: string | void): {
   present: boolean;
   origin?: string;
   pathname?: string;
@@ -220,9 +221,9 @@ export function webAuthTokenStorageDiagnostics(): {
     }
   }
   const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`;
-  const expectedValue = sessionStorage.getItem(expectedKey) ?? undefined;
+  const expectedValue = sessionStorage.getItem(expectedKey) ?? omittedValue();
   return {
-    expectedKeyPresent: expectedValue !== undefined,
+    expectedKeyPresent: typeof expectedValue !== "undefined",
     storedKeyCount: storedKeys.length,
     storedKeys,
   };
@@ -242,7 +243,7 @@ export function iCloudConfigDiagnostics(): {
   };
 }
 
-function elementDiagnostics(element: Element | undefined): {
+function elementDiagnostics(element: Element | void): {
   present: boolean;
   tag?: string;
   id?: string;
@@ -257,12 +258,12 @@ function elementDiagnostics(element: Element | undefined): {
   return {
     present: true,
     tag: element.tagName,
-    id: element.id || undefined,
+    id: element.id || omittedValue(),
     className:
       typeof element.className === "string" && element.className
         ? element.className
-        : undefined,
-    role: element.getAttribute("role") ?? undefined,
+        : omittedValue(),
+    role: element.getAttribute("role") ?? omittedValue(),
     childElementCount: element.childElementCount,
     textLength: element.textContent?.trim().length ?? 0,
   };
@@ -275,16 +276,17 @@ export function cloudKitSignInControlDiagnostics(): {
 } {
   const mount =
     typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) ?? undefined);
+      ? omittedValue()
+      : (document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) ?? omittedValue());
   const control =
     mount?.querySelector<HTMLElement>(
       'button, [role="button"], iframe, a, .apple-auth-button',
-    ) ?? undefined;
+    ) ?? omittedValue();
   const signOutMount =
     typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID) ?? undefined);
+      ? omittedValue()
+      : (document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID) ??
+        omittedValue());
   return {
     mount: elementDiagnostics(mount),
     control: elementDiagnostics(control),
@@ -292,11 +294,11 @@ export function cloudKitSignInControlDiagnostics(): {
   };
 }
 
-export function normalizeWebAuthToken(stored: unknown): string | undefined {
+export function normalizeWebAuthToken(stored: unknown): string | void {
   if (typeof stored === "string" && stored.trim()) {
     return stored.trim();
   }
-  if (stored != undefined && typeof stored === "object") {
+  if (typeof stored != "undefined" && typeof stored === "object") {
     const record = stored as Record<string, unknown>;
     for (const key of [
       "token",
@@ -311,21 +313,21 @@ export function normalizeWebAuthToken(stored: unknown): string | undefined {
       }
     }
   }
-  return undefined;
+  return;
 }
 
 export function storeCloudKitWebAuthToken(
   containerIdentifier: string,
   authToken: unknown,
-): string | undefined {
+): string | void {
   const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
-  if (authToken == undefined) {
+  if (typeof authToken == "undefined") {
     sessionStorage.removeItem(key);
     log.info("CloudKit web auth token cleared", {
       container: containerIdentifier,
       expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
     });
-    return undefined;
+    return;
   }
   sessionStorage.setItem(key, JSON.stringify(authToken));
   const token = normalizeWebAuthToken(authToken);
@@ -348,7 +350,7 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
     log.debug("CloudKit putToken", {
       container: containerIdentifier,
       tokenType: typeof authToken,
-      hasValue: authToken != undefined,
+      hasValue: typeof authToken != "undefined",
     });
     storeCloudKitWebAuthToken(containerIdentifier, authToken);
   },
@@ -357,12 +359,12 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
       `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
     );
     if (!raw) {
-      return undefined;
+      return;
     }
     try {
       return JSON.parse(raw) as unknown;
     } catch {
-      return undefined;
+      return;
     }
   },
 };

@@ -115,12 +115,12 @@ async function scanAndRender(): Promise<void> {
 }
 
 function scheduleScan() {
-  if (scanState.pendingTimer !== undefined) {
+  if (typeof scanState.pendingTimer !== 'undefined') {
     window.clearTimeout(scanState.pendingTimer)
   }
 
   scanState.pendingTimer = window.setTimeout(() => {
-    scanState.pendingTimer = undefined
+    scanState.clearPendingTimer()
     void scanAndRender()
   }, 150)
 }

@@ -568,5 +568,5 @@ export async function disableLoginAutoUnlock(page: Page) {
 
 /** @deprecated `disableLoginAutoUnlock` no longer adds a dummy provider. */
 export async function removeE2eDummyGithubSyncProvider(page: Page) {
-  await page.evaluate(() => undefined)
+  await page.evaluate(() => {})
 }

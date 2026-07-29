@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
+
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -45,7 +47,7 @@
     vault,
     appKind,
     providers,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    setupType = $bindable(omittedValue() as StorageProviderType | void),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
@@ -78,7 +80,7 @@
     vault: VaultState
     appKind: AppKind
     providers: StorageProvider[]
-    setupType?: StorageProviderType | undefined
+    setupType?: StorageProviderType | void
     githubPat: string
     githubRepo: string
     isVerifying: boolean
@@ -130,7 +132,7 @@
   let showProviderSetupLink = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(typeof setupType !== "undefined")
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
@@ -156,7 +158,7 @@
         (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
     ) ??
       vault.localVaults[0] ??
-      undefined,
+      omittedValue(),
   )
   const showQrOnboarding = $derived(
     Boolean(

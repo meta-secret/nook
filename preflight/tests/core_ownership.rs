@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use nook_preflight::{
     portable_core_browser_dependencies, rust_wasm_domain_boundary_escape_hatches,
     typescript_domain_boundary_boilerplate, typescript_implicit_application_state,
-    typescript_json_round_trip_clones, typescript_null_absence_sentinels,
+    typescript_json_round_trip_clones, typescript_mutable_void_state,
+    typescript_null_absence_sentinels,
     typescript_svelte_state_modeling_violations,
 };
 
@@ -89,12 +90,22 @@ fn typescript_svelte_state_keeps_domain_ids_precise() {
 }
 
 #[test]
-fn typescript_application_state_uses_named_variants() {
+fn authored_javascript_typescript_and_svelte_never_use_undefined() {
     let violations =
         typescript_implicit_application_state(&repository_root()).expect("scan TypeScript state");
     assert!(
         violations.is_empty(),
-        "mutable TypeScript and Svelte application state must use explicit discriminated variants instead of undefined: {violations:#?}"
+        "authored JavaScript, TypeScript, and Svelte must use explicit state and boundary adapters instead of undefined: {violations:#?}"
+    );
+}
+
+#[test]
+fn mutable_typescript_state_never_hides_absence_behind_void() {
+    let violations =
+        typescript_mutable_void_state(&repository_root()).expect("scan mutable TypeScript state");
+    assert!(
+        violations.is_empty(),
+        "mutable TypeScript and Svelte storage must use an explicit state union, never T | void or $state<T | void>: {violations:#?}"
     );
 }
 

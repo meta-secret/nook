@@ -41,7 +41,7 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
     const request = normalizeSentinelGenesisRequest(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-request");
-    history.replaceState(undefined, "", `${url.pathname}${url.search}`);
+    history.replaceState({}, "", `${url.pathname}${url.search}`);
     return request;
   } catch {
     return "";
@@ -60,7 +60,7 @@ export function consumeSentinelGenesisParticipantResponseFromLocation(): string 
     const response = normalizeSentinelGenesisParticipantPayload(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-response");
-    history.replaceState(undefined, "", `${url.pathname}${url.search}`);
+    history.replaceState({}, "", `${url.pathname}${url.search}`);
     return response;
   } catch {
     return "";

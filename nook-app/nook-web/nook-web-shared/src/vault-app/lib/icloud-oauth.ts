@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 /**
  * CloudKit JS web auth for iCloud private-database vault storage.
  *
@@ -63,29 +64,25 @@ type ICloudWebAuthTokenRequestOptions = {
 };
 
 let cloudKitInitialization: ValueState<Promise<void>> = EMPTY_VALUE;
-let cloudKitAuthSetup: ValueState<Promise<CloudKitUserIdentity | undefined>> =
+let cloudKitAuthSetup: ValueState<Promise<CloudKitUserIdentity | void>> =
   EMPTY_VALUE;
 let cloudKitIdentity: ValueState<CloudKitUserIdentity> = EMPTY_VALUE;
 
-function currentAuthSetup():
-  | Promise<CloudKitUserIdentity | undefined>
-  | undefined {
+function currentAuthSetup(): Promise<CloudKitUserIdentity | void> | void {
   return cloudKitAuthSetup.kind === "present"
     ? cloudKitAuthSetup.value
-    : undefined;
+    : omittedValue();
 }
 
-function currentCloudKitIdentity(): CloudKitUserIdentity | undefined {
+function currentCloudKitIdentity(): CloudKitUserIdentity | void {
   return cloudKitIdentity.kind === "present"
     ? cloudKitIdentity.value
-    : undefined;
+    : omittedValue();
 }
 
-function rememberCloudKitIdentity(
-  identity: CloudKitUserIdentity | undefined,
-): void {
+function rememberCloudKitIdentity(identity: CloudKitUserIdentity | void): void {
   cloudKitIdentity =
-    identity === undefined ? EMPTY_VALUE : presentValue(identity);
+    typeof identity === "undefined" ? EMPTY_VALUE : presentValue(identity);
 }
 
 /** @internal Clears module singletons between unit tests. */
@@ -104,7 +101,7 @@ export function isICloudOAuthConfigured(): boolean {
   );
 }
 
-function readWebAuthTokenFromCookie(): string | undefined {
+function readWebAuthTokenFromCookie(): string | void {
   for (const part of document.cookie.split(";")) {
     const trimmed = part.trim();
     if (!trimmed.startsWith("ckWebAuthToken")) {
@@ -124,10 +121,10 @@ function readWebAuthTokenFromCookie(): string | undefined {
       return token;
     }
   }
-  return undefined;
+  return;
 }
 
-function readStoredWebAuthToken(): string | undefined {
+function readStoredWebAuthToken(): string | void {
   const fromCookie = readWebAuthTokenFromCookie();
   if (fromCookie) {
     return fromCookie;
@@ -207,24 +204,24 @@ function waitForStoredWebAuthToken(
   });
 }
 
-function stringValue(value: unknown): string | undefined {
+function stringValue(value: unknown): string | void {
   if (typeof value !== "string" && typeof value !== "number") {
-    return undefined;
+    return;
   }
   const text = String(value).trim();
-  return text || undefined;
+  return text || omittedValue();
 }
 
-function numericStatus(value: unknown): number | undefined {
+function numericStatus(value: unknown): number | void {
   const text = stringValue(value);
   if (!text) {
-    return undefined;
+    return;
   }
   const status = Number(text);
-  return Number.isInteger(status) ? status : undefined;
+  return Number.isInteger(status) ? status : omittedValue();
 }
 
-function cloudKitRedirectDetails(redirectURL: string | undefined): {
+function cloudKitRedirectDetails(redirectURL: string | void): {
   origin?: string;
   pathname?: string;
 } {
@@ -240,11 +237,11 @@ function cloudKitRedirectDetails(redirectURL: string | undefined): {
 function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
   if (error instanceof Error) {
     return {
-      code: error.name && error.name !== "Error" ? error.name : undefined,
+      code: error.name && error.name !== "Error" ? error.name : omittedValue(),
       message: stringValue(error.message),
     };
   }
-  if (error != undefined && typeof error === "object") {
+  if (typeof error != "undefined" && typeof error === "object") {
     const authError = error as CloudKitAuthError;
     const redirectURL = stringValue(authError.redirectURL);
     const redirect = cloudKitRedirectDetails(redirectURL);
@@ -400,7 +397,7 @@ export async function initICloudAuth(): Promise<void> {
 
 function setUpCloudKitAuth(
   container: CloudKitContainer,
-): Promise<CloudKitUserIdentity | undefined> {
+): Promise<CloudKitUserIdentity | void> {
   const existingSetup = currentAuthSetup();
   if (existingSetup) {
     log.info("CloudKit setUpAuth reused existing promise");
@@ -436,7 +433,7 @@ function setUpCloudKitAuth(
           control: cloudKitSignInControlDiagnostics(),
         });
         cloudKitIdentity = EMPTY_VALUE;
-        return undefined;
+        return;
       }
       cloudKitAuthSetup = EMPTY_VALUE;
       cloudKitIdentity = EMPTY_VALUE;
@@ -493,22 +490,22 @@ function clickCloudKitSignInButton(): void {
   log.info("CloudKit sign-in control click forwarded", {
     mountTag: mount?.tagName,
     controlTag: control.tagName,
-    controlRole: control.getAttribute("role") ?? undefined,
+    controlRole: control.getAttribute("role") ?? omittedValue(),
     control: cloudKitSignInControlDiagnostics(),
   });
   control.click();
 }
 
 function accountNameFromIdentity(
-  identity: CloudKitUserIdentity | undefined,
-): string | undefined {
+  identity: CloudKitUserIdentity | void,
+): string | void {
   const given = identity?.nameComponents?.givenName?.trim() ?? "";
   const family = identity?.nameComponents?.familyName?.trim() ?? "";
   const fullName = `${given} ${family}`.trim();
   if (fullName) {
     return fullName;
   }
-  return identity?.lookupInfo?.emailAddress?.trim() || undefined;
+  return identity?.lookupInfo?.emailAddress?.trim() || omittedValue();
 }
 
 function requireStoredWebAuthToken(
@@ -571,11 +568,11 @@ function requireCloudKitRecordInfo(
 async function previewCloudKitRecord(
   container: CloudKitContainer,
   shortGuid: string,
-): Promise<CloudKitRecordInfosResponse | undefined> {
+): Promise<CloudKitRecordInfosResponse | void> {
   try {
     return await container.fetchRecordInfos?.([shortGuid]);
   } catch {
-    return undefined;
+    return;
   }
 }
 
@@ -651,7 +648,7 @@ export async function acceptICloudSharedVault(
   const container = window.CloudKit!.getDefaultContainer();
   const encodedTarget = shareReference.trim().startsWith("icloud-share-v1:")
     ? parseICloudSharedStorageTarget(shareReference.trim())
-    : undefined;
+    : omittedValue();
   const shortGuid = normalizedICloudShortGuid(shareReference);
   const identity =
     currentCloudKitIdentity() ?? (await container.fetchCurrentUserIdentity?.());
@@ -732,16 +729,16 @@ async function fetchCloudKitWebAuthChallenge(): Promise<CloudKitAuthChallenge> {
   );
 }
 
-function webAuthTokenFromMessageData(data: unknown): string | undefined {
+function webAuthTokenFromMessageData(data: unknown): string | void {
   if (typeof data === "string") {
     try {
       return webAuthTokenFromMessageData(JSON.parse(data));
     } catch {
-      return undefined;
+      return;
     }
   }
-  if (data == undefined || typeof data !== "object") {
-    return undefined;
+  if (typeof data == "undefined" || typeof data !== "object") {
+    return;
   }
   const record = data as Record<string, unknown>;
   for (const key of ["ckWebAuthToken", "webAuthToken", "authToken", "token"]) {
@@ -750,7 +747,7 @@ function webAuthTokenFromMessageData(data: unknown): string | undefined {
       return candidate.trim();
     }
   }
-  return undefined;
+  return;
 }
 
 async function requestDirectCloudKitWebAuthToken(
@@ -860,7 +857,7 @@ async function waitForCloudKitSignIn(
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         });
-        return undefined;
+        return;
       }
       throw error;
     });
@@ -969,7 +966,7 @@ export function oauthTokensToICloudConfig(
 ): OAuthFileConfig {
   return iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
-    tokens.accountName ?? undefined,
+    tokens.accountName ?? omittedValue(),
     existing,
   );
 }

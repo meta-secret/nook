@@ -67,7 +67,7 @@ export async function start(
   state.errorMsg = "";
   state.dismissSuccess();
   releaseResults(state);
-  state.sentinelGenesisStoreId = undefined;
+  state.clearSentinelGenesisStore();
   try {
     await state.initDeviceIdentity();
     const status = await state.enqueueStorage(() =>

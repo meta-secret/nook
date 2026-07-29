@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookVaultArchitecture,
@@ -129,8 +130,8 @@ describe('vault architecture adapter', () => {
     const enrollmentProvider = enrollmentProviderForArchitecture(
       googleDriveProvider(),
       defaultVaultArchitecture(),
-      undefined,
-      undefined,
+      omittedValue(),
+      omittedValue(),
     )
 
     expect(enrollmentProvider.onboardingType).toBe(
@@ -274,7 +275,7 @@ describe('vault architecture adapter', () => {
         provider,
         architecture,
         'joiner@example.com',
-        undefined,
+        omittedValue(),
       ),
     ).toThrow(/shared_storage_target_required/)
 
@@ -311,7 +312,7 @@ describe('vault architecture adapter', () => {
       provider,
       architecture,
       'joiner@example.com',
-      undefined,
+      omittedValue(),
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
@@ -342,8 +343,8 @@ describe('vault architecture adapter', () => {
     const enrollmentProvider = enrollmentProviderForArchitecture(
       provider,
       architecture,
-      undefined,
-      undefined,
+      omittedValue(),
+      omittedValue(),
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { omittedValue } from '../../../../explicit-state'
+
   import { tick } from 'svelte'
   import {
     ArrowRight,
@@ -123,7 +125,7 @@
   const sentinelDashboard = $derived(
     sentinelDashboardState.kind === 'present'
       ? sentinelDashboardState.value
-      : undefined,
+      : omittedValue(),
   )
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
@@ -189,7 +191,7 @@
       sentinelThreshold <= sentinelParticipantCount,
   )
   const sentinelDashboardActive = $derived(
-    sentinelDashboard !== undefined &&
+    typeof sentinelDashboard !== "undefined" &&
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
   )
   const sentinelGenesisInvitationLink = $derived(
@@ -385,7 +387,7 @@
   data-testid="login-create-vault-chooser"
   data-sentinel-dashboard={sentinelDashboardActive
     ? sentinelDashboard
-    : undefined}
+    : omittedValue()}
   use:sentinelDashboardPortal={{
     active: sentinelDashboardActive,
     dashboard: sentinelDashboard,

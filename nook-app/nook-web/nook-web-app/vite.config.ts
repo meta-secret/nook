@@ -1,3 +1,4 @@
+import { omittedValue } from '../nook-web-shared/src/explicit-state'
 import { defineConfig, type Plugin } from 'vitest/config'
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -152,8 +153,8 @@ function seoStaticFiles(outputDirectory: string): Plugin {
           ? buildRobotsTxt(siteUrl)
           : pathname === '/sitemap.xml'
             ? buildSitemapXml(siteUrl)
-            : undefined
-      if (body === undefined) {
+            : omittedValue()
+      if (typeof body === 'undefined') {
         next()
         return
       }
@@ -196,7 +197,7 @@ export default defineConfig(({ mode }) => {
           requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
         ),
       }
-    : undefined
+    : omittedValue()
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
   const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'

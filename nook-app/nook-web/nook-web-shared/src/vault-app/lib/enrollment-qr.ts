@@ -1,3 +1,4 @@
+import { omittedValue } from "../../explicit-state";
 import type { Options } from "qr-code-styling";
 
 export const enrollmentQrSize = 360;
@@ -21,7 +22,7 @@ export function createEnrollmentQrOptions(
       mode: "Byte",
       errorCorrectionLevel: dense ? "L" : "Q",
     },
-    image: dense ? undefined : nookQrBadgeImage,
+    image: dense ? omittedValue() : nookQrBadgeImage,
     imageOptions: {
       hideBackgroundDots: true,
       imageSize: dense ? 0 : 0.13,

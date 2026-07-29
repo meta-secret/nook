@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 const OTPAUTH_TOTP_PREFIX = 'otpauth://totp/'
 const MAX_QR_CANDIDATES = 8
 const MIN_QR_EDGE_PX = 80
@@ -15,7 +16,7 @@ type BarcodeDetectorLike = {
 
 function barcodeDetectorConstructor():
   | (new (options?: { formats?: string[] }) => BarcodeDetectorLike)
-  | undefined {
+  | void {
   const candidate = (
     globalThis as typeof globalThis & {
       BarcodeDetector?: new (options?: {
@@ -23,7 +24,7 @@ function barcodeDetectorConstructor():
       }) => BarcodeDetectorLike
     }
   ).BarcodeDetector
-  return typeof candidate === 'function' ? candidate : undefined
+  return typeof candidate === 'function' ? candidate : omittedValue()
 }
 
 function isVisibleElement(element: Element): boolean {
@@ -85,13 +86,13 @@ export function pageHasQrEnrollmentHint(): boolean {
 
 async function bitmapFromElement(
   element: HTMLElement,
-): Promise<ImageBitmap | undefined> {
+): Promise<ImageBitmap | void> {
   try {
     if (element instanceof HTMLCanvasElement) {
       return await createImageBitmap(element)
     }
     if (element instanceof HTMLImageElement) {
-      if (!element.complete || element.naturalWidth === 0) return undefined
+      if (!element.complete || element.naturalWidth === 0) return
       return await createImageBitmap(element)
     }
     if (element instanceof SVGSVGElement) {
@@ -100,9 +101,9 @@ async function bitmapFromElement(
       return await createImageBitmap(blob)
     }
   } catch {
-    return undefined
+    return
   }
-  return undefined
+  return
 }
 
 function collectQrMedia(): HTMLElement[] {

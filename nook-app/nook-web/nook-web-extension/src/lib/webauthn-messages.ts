@@ -1,3 +1,4 @@
+import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 export type WebsitePasskeyCeremony = 'create' | 'get'
 
 export type WebsitePasskeyOptionsMessage = {
@@ -73,7 +74,7 @@ export function isWebsitePasskeyPerformMessage(
     typeof message.payload.vaultStoreId === 'string' &&
     message.payload.vaultStoreId.length > 0 &&
     (!('credentialId' in message.payload) ||
-      message.payload.credentialId === undefined ||
+      typeof message.payload.credentialId === 'undefined' ||
       typeof message.payload.credentialId === 'string')
   )
 }
@@ -98,13 +99,13 @@ export function isWebsitePasskeyCancelMessage(
 
 export function parsedWebsitePasskeyRequest(
   requestJson: string,
-): Record<string, unknown> | undefined {
+): Record<string, unknown> | void {
   try {
     const parsed = JSON.parse(requestJson)
     return parsed && typeof parsed === 'object'
       ? (parsed as Record<string, unknown>)
-      : undefined
+      : omittedValue()
   } catch {
-    return undefined
+    return
   }
 }

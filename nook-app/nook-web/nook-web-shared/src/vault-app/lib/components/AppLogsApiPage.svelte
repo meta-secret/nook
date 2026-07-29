@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { omittedValue } from '../../../explicit-state'
   import { onMount } from 'svelte'
   import {
     loadAppLogsResponse,
@@ -42,13 +43,13 @@
   {#if state.kind === 'failed'}
     <pre data-testid="app-logs-error">{JSON.stringify(
         { error: state.message },
-        undefined,
+        omittedValue(),
         2,
       )}</pre>
   {:else if state.kind === 'loaded'}
     <pre data-testid="app-logs-json">{JSON.stringify(
         state.payload,
-        undefined,
+        omittedValue(),
         2,
       )}</pre>
   {:else}

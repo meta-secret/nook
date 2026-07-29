@@ -2,12 +2,19 @@ import init, {
   generateTotpCode as wasmGenerateTotpCode,
   verifyTotpCode as wasmVerifyTotpCode,
 } from 'nook-wasm'
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../../../../nook-web-shared/src/explicit-state'
 
-let ready: Promise<void> | undefined
+let readyState: ValueState<Promise<void>> = EMPTY_VALUE
 
 async function ensureWasm(): Promise<void> {
-  ready ??= init().then(() => undefined)
-  await ready
+  if (readyState.kind === 'empty') {
+    readyState = presentValue(init().then(() => {}))
+  }
+  await readyState.value
 }
 
 /** Thin wrapper over nook-core TOTP via WASM — no hand-rolled crypto. */
