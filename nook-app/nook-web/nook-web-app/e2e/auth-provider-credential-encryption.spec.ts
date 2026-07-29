@@ -10,7 +10,6 @@ import {
   loadDecryptedAuthProvidersInBrowser,
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
-  seedExtraGithubProviders,
   UI_TIMEOUT_MS,
   waitForAuthProvidersE2eHook,
   waitForStorageChainIdle,
