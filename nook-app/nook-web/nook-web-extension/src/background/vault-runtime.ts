@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
   defaultPasswordGenerationOptions,
@@ -186,12 +185,13 @@ export async function classifyAuthenticationOutcome(
     Math.max(0, Math.floor(observation.elapsedMs)),
   )
   try {
-    const verdict = wasmClassifyAuthenticationOutcome(
-      input,
-      !Number.isFinite(timeoutMs)
-        ? omittedValue()
-        : Math.max(1, Math.floor(timeoutMs)),
-    )
+    const verdict =
+      typeof timeoutMs === 'number' && Number.isFinite(timeoutMs)
+        ? wasmClassifyAuthenticationOutcome(
+            input,
+            Math.max(1, Math.floor(timeoutMs)),
+          )
+        : wasmClassifyAuthenticationOutcome(input)
     try {
       return {
         verdict: verdict.verdict,

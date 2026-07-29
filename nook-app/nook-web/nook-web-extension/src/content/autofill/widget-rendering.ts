@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
@@ -17,7 +16,7 @@ import {
   generatePasswordWithNook,
   proposePasskeyWithNook,
 } from './login-passkey-actions'
-import { widgetState } from './state'
+import { WidgetWorkflowRootKind, widgetState } from './state'
 import {
   buildEnrollmentFlowHost,
   createWidgetShell,
@@ -52,7 +51,9 @@ export function renderEnrollmentWidget(
     shell
   continueButton.hidden = true
   openVaultButton.hidden = true
-  mountWidgetShell(shell, workflowKey, omittedValue())
+  mountWidgetShell(shell, workflowKey, {
+    kind: WidgetWorkflowRootKind.Unassigned,
+  })
 
   renderEnrollmentActions(
     buildEnrollmentFlowHost(
@@ -89,12 +90,13 @@ export function renderWidget(
   if (
     widgetState.host &&
     widgetState.renderedWorkflowKey === workflowKey &&
-    widgetState.renderedWorkflowRoot?.root === workflow.root &&
-    widgetState.renderedWorkflowRoot.formScope.kind ===
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned &&
+    widgetState.renderedWorkflowRoot.observation.root === workflow.root &&
+    widgetState.renderedWorkflowRoot.observation.formScope.kind ===
       workflow.formScope.kind &&
-    (widgetState.renderedWorkflowRoot.formScope.kind !== 'owned' ||
+    (widgetState.renderedWorkflowRoot.observation.formScope.kind !== 'owned' ||
       (workflow.formScope.kind === 'owned' &&
-        widgetState.renderedWorkflowRoot.formScope.owner ===
+        widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
   ) {
     return
@@ -190,7 +192,10 @@ export function renderWidget(
   })
 
   body.append(takeOverButton)
-  mountWidgetShell(shell, workflowKey, workflow)
+  mountWidgetShell(shell, workflowKey, {
+    kind: WidgetWorkflowRootKind.Assigned,
+    observation: workflow,
+  })
 
   const enrollmentHints = detectEnrollmentHints()
   if (enrollmentHints.qr || enrollmentHints.backupCodes) {

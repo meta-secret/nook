@@ -8,7 +8,7 @@ import {
   cancelPendingLoginPickerRequest,
   sendRuntimeMessage,
 } from './login-passkey-actions'
-import { widgetState } from './state'
+import { widgetState, type WidgetWorkflowRoot } from './state'
 import {
   applyWidgetPosition,
   attachPointerDrag,
@@ -433,7 +433,7 @@ export function createWidgetShell(
 export function mountWidgetShell(
   shell: WidgetShell,
   workflowKey: string,
-  workflowRoot: PasswordFormObservation | void,
+  workflowRoot: WidgetWorkflowRoot,
 ): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {

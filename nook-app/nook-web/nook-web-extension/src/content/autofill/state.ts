@@ -38,12 +38,12 @@ enum WidgetWorkflowKeyKind {
 type WidgetWorkflowKey =
   | { kind: WidgetWorkflowKeyKind.Unassigned }
   | { kind: WidgetWorkflowKeyKind.Assigned; key: string }
-enum WidgetWorkflowRootKind {
+export enum WidgetWorkflowRootKind {
   Unassigned = 'unassigned',
   Assigned = 'assigned',
 }
 
-type WidgetWorkflowRoot =
+export type WidgetWorkflowRoot =
   | { kind: WidgetWorkflowRootKind.Unassigned }
   | {
       kind: WidgetWorkflowRootKind.Assigned
@@ -146,14 +146,11 @@ class WidgetState {
   set renderedWorkflowKey(value: string) {
     this.workflowKeyState = { kind: 'assigned', key: value }
   }
-  get renderedWorkflowRoot(): PasswordFormObservation | void {
-    if (this.workflowRootState.kind === 'assigned') {
-      return this.workflowRootState.observation
-    }
-    return
+  get renderedWorkflowRoot(): WidgetWorkflowRoot {
+    return this.workflowRootState
   }
-  set renderedWorkflowRoot(value: PasswordFormObservation) {
-    this.workflowRootState = { kind: 'assigned', observation: value }
+  set renderedWorkflowRoot(value: WidgetWorkflowRoot) {
+    this.workflowRootState = value
   }
   get position(): WidgetPosition | void {
     if (this.placementState.kind === WidgetPlacementKind.Positioned) {
