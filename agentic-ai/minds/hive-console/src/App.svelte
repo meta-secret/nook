@@ -39,6 +39,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   type PollSchedule =
     | { kind: 'stopped' }
     | { kind: 'scheduled'; timer: ReturnType<typeof setTimeout> };
+  type SnapshotLoadRequest =
+    | { kind: 'scheduled-refresh'; signal: AbortSignal }
+    | { kind: 'manual-retry' };
 
   function omittedValue(): void {}
 
@@ -100,7 +103,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       const task = snapshot?.tasks.find(
         (candidate) => candidate.id === alert.task_id,
       );
-      return typeof task === 'undefined' ? [] : [{ alert, task }];
+      return task ? [{ alert, task }] : [];
     }),
   );
   const attentionTaskIds = $derived(
@@ -120,7 +123,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     let pollSchedule: PollSchedule = { kind: 'stopped' };
 
     const poll = async () => {
-      await loadSnapshot(controller.signal);
+      await loadSnapshot({
+        kind: 'scheduled-refresh',
+        signal: controller.signal,
+      });
       if (!controller.signal.aborted) {
         pollSchedule = { kind: 'scheduled', timer: setTimeout(poll, 15_000) };
       }
@@ -189,7 +195,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     }
   });
 
-  async function loadSnapshot(signal?: AbortSignal) {
+  async function loadSnapshot(request: SnapshotLoadRequest) {
     try {
       const locale = navigator.language || 'en';
       document.documentElement.lang = locale
@@ -197,16 +203,18 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         .startsWith('ru')
         ? 'ru'
         : 'en';
+      const requestInit: RequestInit =
+        request.kind === 'scheduled-refresh' ? { signal: request.signal } : {};
       const response = await fetch(
         `/api/overview?locale=${encodeURIComponent(locale)}`,
-        { signal },
+        requestInit,
       );
       if (!response.ok) throw new Error(`observer returned ${response.status}`);
       const next = (await response.json()) as ObserverSnapshot;
       snapshotState = { kind: 'loaded', snapshot: next };
       unavailable = false;
       if (
-        (!detailsClosed && typeof selectedId === 'undefined') ||
+        (!detailsClosed && selectedIdState.kind === 'none') ||
         (!next.tasks.some((task) => task.id === selectedId) &&
           durableMatch?.id !== selectedId)
       ) {
@@ -305,7 +313,10 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     <div class="unavailable-mark"><Hexagon size={28} strokeWidth={1.6} /></div>
     <h1>{copy.unavailable}</h1>
     <p>{copy.unavailable_description}</p>
-    <button class="primary-button" onclick={() => void loadSnapshot()}>
+    <button
+      class="primary-button"
+      onclick={() => void loadSnapshot({ kind: 'manual-retry' })}
+    >
       {copy.retry_connection}
     </button>
   </main>
