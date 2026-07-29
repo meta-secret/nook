@@ -2,6 +2,7 @@ pub mod coverage;
 mod rust_tsify_state;
 mod rust_typed_json;
 pub mod source_size;
+mod typescript_discriminants;
 mod typescript_domain_boundary;
 mod typescript_state;
 

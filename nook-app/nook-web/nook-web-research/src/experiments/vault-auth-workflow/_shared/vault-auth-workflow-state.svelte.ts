@@ -12,12 +12,16 @@ export enum VaultPath {
 }
 
 export enum SentinelUi {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   CardStack = 'card-stack',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Terminal = 'terminal',
 }
 
 export enum VaultAuthExperimentStage {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Auth = 'auth',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Sentinel = 'sentinel',
 }
 

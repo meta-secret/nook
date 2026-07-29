@@ -4,6 +4,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::Violation;
+use crate::typescript_discriminants::{
+    discriminant_member_name, enclosing_enum_name, enum_value_matches_discriminant,
+};
 
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`
 /// or an assertion matcher that encodes the same implicit absence contract.
@@ -449,33 +452,6 @@ fn collect_enum_string_values(
     }
 }
 
-fn enclosing_enum_name<'a>(mut node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
-    while let Some(parent) = node.parent() {
-        if parent.kind() == "enum_declaration" {
-            return parent
-                .child_by_field_name("name")
-                .and_then(|name| name.utf8_text(source.as_bytes()).ok());
-        }
-        node = parent;
-    }
-    None
-}
-
-fn enum_value_matches_discriminant(
-    enum_values: &HashMap<String, HashSet<String>>,
-    value: &str,
-    discriminant: &str,
-) -> bool {
-    let normalized_discriminant = discriminant.trim_matches(['\'', '"']);
-    enum_values.get(value).is_some_and(|enum_names| {
-        enum_names.iter().any(|enum_name| {
-            enum_name
-                .to_ascii_lowercase()
-                .ends_with(&normalized_discriminant.to_ascii_lowercase())
-        })
-    })
-}
-
 fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
     if !is_string_literal_expression(node) {
         return None;
@@ -487,25 +463,6 @@ fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Opt
 
 fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
     matches!(node.kind(), "string" | "template_string")
-}
-
-fn discriminant_member_name<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
-    if node.kind() != "member_expression" {
-        return None;
-    }
-    let property = node.child_by_field_name("property")?;
-    let name = property.utf8_text(source.as_bytes()).ok()?;
-    const DISCRIMINANT_NAMES: [&str; 8] = [
-        "action",
-        "kind",
-        "mode",
-        "operation",
-        "phase",
-        "stage",
-        "status",
-        "type",
-    ];
-    DISCRIMINANT_NAMES.contains(&name).then_some(name)
 }
 
 fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
