@@ -616,22 +616,23 @@ test.describe('vault architecture modes', () => {
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
     const sharedSecretKey = uniqueSecretKey('architecture-shared')
     await addSecret(page, sharedSecretKey, SHARED_SECRET_VALUE)
-    await seedGithubSyncProvidersWhileUnlocked(page, [PERSONAL_ONLY_PROVIDER])
+    await seedGithubSyncProvidersWhileUnlocked(
+      page,
+      [PERSONAL_ONLY_PROVIDER],
+      0,
+    )
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
       [SHARED_PROVIDER],
       driveStub,
-      2,
+      1,
     )
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
     await expect(
-      page.getByTestId(`provider-capability-${PERSONAL_ONLY_PROVIDER.id}`),
-    ).toContainText(/personal replication only/i)
-    await expect(
       page.getByTestId(`sync-provider-${PERSONAL_ONLY_PROVIDER.id}`),
-    ).toBeDisabled()
+    ).toHaveCount(0)
     await expect(
       page.getByTestId(`provider-capability-${SHARED_PROVIDER.id}`),
     ).toContainText(/personal and shared replication/i)
@@ -644,15 +645,9 @@ test.describe('vault architecture modes', () => {
       .getByRole('button')
       .click()
 
-    const personalOnlyProvider = page.getByTestId(
-      `onboard-provider-${PERSONAL_ONLY_PROVIDER.id}`,
-    )
-    await expect(personalOnlyProvider).toBeDisabled()
     await expect(
-      page.getByTestId(
-        `onboard-provider-capability-${PERSONAL_ONLY_PROVIDER.id}`,
-      ),
-    ).toContainText(/personal replication only/i)
+      page.getByTestId(`onboard-provider-${PERSONAL_ONLY_PROVIDER.id}`),
+    ).toHaveCount(0)
     await expect(
       page.getByTestId(`onboard-provider-${SHARED_PROVIDER.id}`),
     ).toHaveAttribute('aria-checked', 'true')

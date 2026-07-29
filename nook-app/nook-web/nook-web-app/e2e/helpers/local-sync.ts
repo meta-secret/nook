@@ -608,6 +608,7 @@ export async function approveJoinLocalE2eFromBanner(
 export async function seedGithubSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_GITHUB_ONBOARD_PROVIDER],
+  expectedSyncProviderCount = providers.length,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraGithubProviders(page, providers)
@@ -627,7 +628,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
       await vault.loadProviders()
     }
   })
-  await waitForLoadedSyncProviders(page, providers.length)
+  await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
 
@@ -786,9 +787,11 @@ export async function waitForLoadedSyncProviders(
     .toBeGreaterThanOrEqual(minCount)
 
   const pattern =
-    minCount === 1
-      ? /1 sync provider/
-      : new RegExp(`${minCount} sync providers`)
+    minCount === 0
+      ? /No sync providers/
+      : minCount === 1
+        ? /1 sync provider/
+        : new RegExp(`${minCount} sync providers`)
   const syncStatus = page.getByTestId('vault-sync-out-status')
   await expect(syncStatus).toBeVisible({ timeout: timeoutMs })
   await expect(syncStatus).toContainText(pattern, { timeout: timeoutMs })
