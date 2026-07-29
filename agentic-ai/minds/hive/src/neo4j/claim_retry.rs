@@ -5,20 +5,20 @@ use rand::RngExt;
 
 pub(super) const CLAIM_RETRY_LIMIT: usize = 5;
 
-fn is_transient_claim_error(error: &crate::HiveError) -> bool {
-    let mut cause: &(dyn std::error::Error + 'static) = error;
+fn is_transient_driver_error(error: &Neo4jDriverError) -> bool {
+    match error {
+        Neo4jDriverError::Neo4j(neo4j_error) => neo4j_error.kind() == Neo4jErrorKind::Transient,
+        Neo4jDriverError::UnexpectedMessage(message) => message.contains("Neo.TransientError."),
+        _ => false,
+    }
+}
+
+fn source_chain_has_transient_driver_error(source: &(dyn std::error::Error + 'static)) -> bool {
+    let mut cause = source;
     loop {
         if cause
             .downcast_ref::<Neo4jDriverError>()
-            .is_some_and(|driver_error| match driver_error {
-                Neo4jDriverError::Neo4j(neo4j_error) => {
-                    neo4j_error.kind() == Neo4jErrorKind::Transient
-                }
-                Neo4jDriverError::UnexpectedMessage(message) => {
-                    message.contains("Neo.TransientError.")
-                }
-                _ => false,
-            })
+            .is_some_and(is_transient_driver_error)
         {
             return true;
         }
@@ -26,6 +26,16 @@ fn is_transient_claim_error(error: &crate::HiveError) -> bool {
             return false;
         };
         cause = source;
+    }
+}
+
+fn is_transient_claim_error(error: &crate::HiveError) -> bool {
+    match error {
+        crate::HiveError::Neo4j(driver_error) => is_transient_driver_error(driver_error),
+        crate::HiveError::Context { source, .. } => {
+            source_chain_has_transient_driver_error(source.as_ref())
+        }
+        _ => false,
     }
 }
 
