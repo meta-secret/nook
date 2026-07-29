@@ -12,7 +12,8 @@ use std::io::{Read, Write};
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, MultiDeviceError,
     SentinelGenesisRequest, SentinelGenesisShareDelivery, StorageProviderType, StoredSecretRecord,
-    accept_sentinel_genesis_share_delivery, encrypt_for_recipient,
+    accept_sentinel_genesis_share_delivery, auth_snapshot_legacy_storage_value,
+    encrypt_for_recipient, normalize_auth_snapshot,
 };
 
 const SENTINEL_ONBOARDING_VERSION: u32 = 1;
@@ -41,7 +42,11 @@ pub fn create_sentinel_onboarding_package(
 ) -> Result<SentinelOnboardingPackage, MultiDeviceError> {
     validate_request_delivery(&request, &delivery)?;
     validate_provider_snapshot(provider_snapshot, delivery.store_id.as_str())?;
-    let provider_json = serde_json::to_vec(provider_snapshot)
+    // Keep the encrypted package within the QR budget while retaining semantic
+    // enums in memory. The schema-1 projection is also readable after rollback.
+    let provider_storage = auth_snapshot_legacy_storage_value(provider_snapshot)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    let provider_json = serde_json::to_vec(&provider_storage)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     let provider_snapshot = encrypt_for_recipient(&provider_json, &delivery.encryption_public_key)?;
     Ok(SentinelOnboardingPackage {
@@ -63,8 +68,9 @@ pub fn accept_sentinel_onboarding_package(
     let share_record =
         accept_sentinel_genesis_share_delivery(&package.delivery, &package.request, identity)?;
     let provider_json = identity.open_utf8(&package.provider_snapshot)?;
-    let mut provider_snapshot: AuthProvidersSnapshotData = serde_json::from_str(&provider_json)
+    let provider_storage: serde_json::Value = serde_json::from_str(&provider_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    let mut provider_snapshot = normalize_auth_snapshot(&provider_storage).snapshot;
     validate_provider_snapshot(&provider_snapshot, package.delivery.store_id.as_str())?;
     provider_snapshot.active_vault_store_id =
         crate::ActiveVaultScope::StoreId(package.delivery.store_id.to_string());
