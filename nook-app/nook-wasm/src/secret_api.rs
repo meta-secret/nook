@@ -632,7 +632,10 @@ mod wasm_tests {
         let state = NookExtensionPairingState::from_object(&input)?;
         let output = state.to_object()?;
 
-        assert!(js_sys::Reflect::has(&output, &key.into()).map_err(wasm_bindgen::JsError::from)?);
+        assert!(
+            js_sys::Reflect::has(&output, &key.into())
+                .map_err(|_| wasm_bindgen::JsError::new("failed to inspect reflected field"))?
+        );
         assert!(!output.is_instance_of::<js_sys::Map>());
         Ok(())
     }

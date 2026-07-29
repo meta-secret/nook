@@ -992,20 +992,20 @@ mod wasm_tests {
 
     fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
         Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(wasm_bindgen::JsError::from)?
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected field"))?
             .unchecked_into())
     }
 
     fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsError> {
         js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(wasm_bindgen::JsError::from)?
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected numeric field"))?
             .as_f64()
             .ok_or_else(|| wasm_bindgen::JsError::new("field is not a number"))
     }
 
     fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
         js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(wasm_bindgen::JsError::from)?
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected string field"))?
             .as_string()
             .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
     }
