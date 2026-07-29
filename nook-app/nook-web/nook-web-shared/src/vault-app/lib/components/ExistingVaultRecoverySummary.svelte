@@ -1,12 +1,14 @@
 <script lang="ts">
   import { KeyRound, LockKeyhole, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import { RecoveryDiscoveryKind } from '$lib/vault/state/provider.svelte'
 
   let { vault }: { vault: VaultState } = $props()
-  const summary = $derived(vault.existingVaultRecoverySummary)
+  const discovery = $derived(vault.recoveryDiscovery)
 </script>
 
-{#if summary}
+{#if discovery.kind === RecoveryDiscoveryKind.Found}
+  {@const summary = discovery.summary}
   <section
     class="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3 text-left"
     data-testid="existing-vault-recovery-summary"

@@ -43,6 +43,15 @@ export type GoogleOAuthTokens = {
   expiresAt: string
 }
 
+export enum GoogleAccountIdentityKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+export type GoogleAccountIdentity =
+  | { kind: GoogleAccountIdentityKind.Unavailable }
+  | { kind: GoogleAccountIdentityKind.Available; label: string }
+
 type GoogleTokenResponse = {
   access_token: string
   expires_in: number
@@ -294,7 +303,7 @@ export async function ensureValidOAuthFileConfig(
 
 export async function fetchGoogleAccountEmail(
   accessToken: string,
-): Promise<string | void> {
+): Promise<GoogleAccountIdentity> {
   const response = await fetch(
     'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)',
     {
@@ -302,10 +311,25 @@ export async function fetchGoogleAccountEmail(
     },
   )
   if (!response.ok) {
-    return
+    return { kind: GoogleAccountIdentityKind.Unavailable }
   }
-  const payload = (await response.json()) as {
-    user?: { emailAddress?: string; displayName?: string }
+  const payload: unknown = await response.json()
+  if (Object(payload) !== payload) {
+    return { kind: GoogleAccountIdentityKind.Unavailable }
   }
-  return payload.user?.emailAddress ?? payload.user?.displayName
+  const user: unknown = Reflect.get(payload as object, 'user')
+  if (Object(user) !== user) {
+    return { kind: GoogleAccountIdentityKind.Unavailable }
+  }
+  const emailAddress: unknown = Reflect.get(user as object, 'emailAddress')
+  if (typeof emailAddress === 'string' && emailAddress.trim()) {
+    return {
+      kind: GoogleAccountIdentityKind.Available,
+      label: emailAddress,
+    }
+  }
+  const displayName: unknown = Reflect.get(user as object, 'displayName')
+  return typeof displayName === 'string' && displayName.trim()
+    ? { kind: GoogleAccountIdentityKind.Available, label: displayName }
+    : { kind: GoogleAccountIdentityKind.Unavailable }
 }

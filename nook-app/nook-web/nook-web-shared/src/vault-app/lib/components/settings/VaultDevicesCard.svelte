@@ -79,7 +79,7 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
-    const state = await resolveExtensionSetupState(vault.activeVaultStoreId)
+    const state = await resolveExtensionSetupState(vault.activeVault)
     extensionSetupState = shouldOfferExtensionSetup(state.status)
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
@@ -129,7 +129,7 @@
   }
 
   $effect(() => {
-    void vault.activeVaultStoreId
+    void vault.activeVault
     void refreshExtensionSetupStatus()
 
     const onVisibilityChange = () => {

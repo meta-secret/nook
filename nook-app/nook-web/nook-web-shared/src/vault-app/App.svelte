@@ -73,7 +73,13 @@
     mountBrowserLifecycle,
     updateApplicationDocument,
   } from '$lib/app-browser-lifecycle'
-  import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+  import {
+    ActiveVaultKind,
+    LocalFolderDraftKind,
+    LoginSetupKind,
+    OAuthFileDraftKind,
+    RecoveryDiscoveryKind,
+  } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
   const vault = new VaultState()
   const vaultSecurityRecommendations = $derived(
@@ -230,7 +236,10 @@
       await vault.connectStagedProvider()
       return
     }
-    let activeStoreId = vault.activeVaultStoreId?.trim() ?? ''
+    let activeStoreId =
+      vault.activeVault.kind === ActiveVaultKind.Open
+        ? vault.activeVault.storeId.trim()
+        : ''
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -417,11 +426,17 @@
   function rememberExistingVaultImport(storeId: string): void {
     if (vault.loginSetup.kind !== LoginSetupKind.Active) return
     const setupType = vault.loginSetup.providerType
-    if (setupType === 'oauth-file' && !vault.oauthFile) {
+    if (
+      setupType === 'oauth-file' &&
+      vault.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
+    ) {
       vault.errorMsg = vault.t('errors.cloud_sync_provider_required')
       return
     }
-    if (setupType === 'local-folder' && !vault.localFolder) {
+    if (
+      setupType === 'local-folder' &&
+      vault.localFolderDraft.kind !== LocalFolderDraftKind.Configured
+    ) {
       vault.errorMsg = vault.t('auth_storage.local_folder_choose_err')
       return
     }
@@ -433,17 +448,19 @@
             githubPat: vault.githubPat,
             githubRepo: vault.githubRepo,
           }
-        : setupType === 'oauth-file' && vault.oauthFile
+        : setupType === 'oauth-file' &&
+            vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
           ? {
               kind: ExistingVaultProviderSnapshotKind.OAuthFile,
               setupType,
-              oauthFile: $state.snapshot(vault.oauthFile),
+              oauthFile: $state.snapshot(vault.oauthFileDraft.config),
             }
-          : setupType === 'local-folder' && vault.localFolder
+          : setupType === 'local-folder' &&
+              vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
             ? {
                 kind: ExistingVaultProviderSnapshotKind.LocalFolder,
                 setupType,
-                localFolder: $state.snapshot(vault.localFolder),
+                localFolder: $state.snapshot(vault.localFolderDraft.config),
               }
             : {
                 kind: ExistingVaultProviderSnapshotKind.Local,
@@ -453,7 +470,7 @@
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
         storeId,
-        previousActiveStoreId: vault.activeVaultStoreId,
+        previousActiveVault: vault.activeVault,
         provider,
       },
     }
@@ -476,7 +493,10 @@
     )
     if (existingLocalVault) {
       await vault.selectVaultForUnlock(pending.storeId)
-      if (vault.activeVaultStoreId !== pending.storeId) {
+      if (
+        vault.activeVault.kind !== ActiveVaultKind.Open ||
+        vault.activeVault.storeId !== pending.storeId
+      ) {
         throw new Error(vault.t('errors.vault_selection_failed'))
       }
     } else {
@@ -494,18 +514,18 @@
         ? pending.provider.githubRepo
         : ''
     if (pending.provider.kind === ExistingVaultProviderSnapshotKind.OAuthFile) {
-      vault.oauthFile = pending.provider.oauthFile
+      vault.configureOauthFile(pending.provider.oauthFile)
     } else {
       vault.clearOauthFile()
     }
     if (
       pending.provider.kind === ExistingVaultProviderSnapshotKind.LocalFolder
     ) {
-      vault.localFolder = pending.provider.localFolder
+      vault.configureLocalFolder(pending.provider.localFolder)
     } else {
       vault.clearLocalFolder()
     }
-    const recoverySummary = vault.existingVaultRecoverySummary
+    const recoveryDiscovery = vault.recoveryDiscovery
     await vault.connectStagedProvider()
     if (vault.isAuthenticated) {
       await vault.activateConnectedExistingVault(pending.storeId)
@@ -516,9 +536,15 @@
       return
     }
     if (vault.loginPasswordPrompt) {
-      if (recoverySummary?.passwordEntries.length) {
+      if (
+        recoveryDiscovery.kind === RecoveryDiscoveryKind.Found &&
+        recoveryDiscovery.summary.passwordEntries.length
+      ) {
+        const recoverySummary = recoveryDiscovery.summary
         if (recoverySummary.passwordEntries.length === 1) {
-          vault.selectedPasswordEntryId = recoverySummary.passwordEntries[0]!.id
+          for (const entry of recoverySummary.passwordEntries) {
+            vault.selectPasswordEntry(entry.id)
+          }
         } else {
           vault.clearSelectedPasswordEntry()
         }
@@ -549,18 +575,17 @@
   }
 
   async function leaveExistingVaultImport(): Promise<void> {
-    const previousStoreId =
+    const previousActiveVault =
       pendingExistingVaultImportState.kind ===
       ExistingVaultImportQueueKind.WaitingForDevice
-        ? (pendingExistingVaultImportState.request.previousActiveStoreId?.trim() ??
-          '')
-        : ''
+        ? pendingExistingVaultImportState.request.previousActiveVault
+        : { kind: ActiveVaultKind.Closed }
     pendingExistingVaultImportState = {
       kind: ExistingVaultImportQueueKind.Idle,
     }
     vault.clearExistingVaultRecoverySummary()
-    if (previousStoreId) {
-      await vault.selectVaultForUnlock(previousStoreId)
+    if (previousActiveVault.kind === ActiveVaultKind.Open) {
+      await vault.selectVaultForUnlock(previousActiveVault.storeId)
     }
     vault.beginLoginVaultPicker()
   }
@@ -593,7 +618,9 @@
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
-      (vault.activeVaultStoreId !== storeId && !discoveringStagedImport)
+      ((vault.activeVault.kind !== ActiveVaultKind.Open ||
+        vault.activeVault.storeId !== storeId) &&
+        !discoveringStagedImport)
     ) {
       return discovery.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
@@ -607,7 +634,9 @@
       window.setTimeout(() => {
         if (
           !vault.isAuthenticated &&
-          (vault.activeVaultStoreId === storeId || discoveringStagedImport) &&
+          ((vault.activeVault.kind === ActiveVaultKind.Open &&
+            vault.activeVault.storeId === storeId) ||
+            discoveringStagedImport) &&
           extensionDiscoveryStoreId === storeId
         ) {
           extensionDiscoveryStoreId = ''
@@ -727,7 +756,7 @@
       extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden }
       return
     }
-    const state = await resolveExtensionSetupState(vault.activeVaultStoreId)
+    const state = await resolveExtensionSetupState(vault.activeVault)
     extensionSetupStateValue = shouldOfferExtensionSetup(state.status)
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
@@ -755,7 +784,7 @@
 
   $effect(() => {
     void vault.isAuthenticated
-    void vault.activeVaultStoreId
+    void vault.activeVault
     void refreshExtensionSetupStatus()
 
     const onVisibilityChange = () => {
@@ -806,7 +835,10 @@
   })
 
   $effect(() => {
-    const storeId = vault.activeVaultStoreId?.trim() ?? ''
+    const storeId =
+      vault.activeVault.kind === ActiveVaultKind.Open
+        ? vault.activeVault.storeId.trim()
+        : ''
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&

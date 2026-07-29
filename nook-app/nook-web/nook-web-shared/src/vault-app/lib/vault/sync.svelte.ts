@@ -10,14 +10,12 @@ import {
   type VaultMember,
 } from '$lib/nook'
 import {
-  importLocalVaultBlob,
   JoinEnrollmentState,
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
   NookStringValue,
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
-  VaultSyncConflictKind,
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
 } from '$app-wasm'
 import {
@@ -27,11 +25,9 @@ import {
 } from '$lib/auth-providers'
 import { intoWasmStringValue } from '$lib/wasm-string-value'
 import {
-  ConflictProviderSaveKind,
   EventOutboxTargetKind,
   LocalFolderInspectionKind,
   ProviderSyncRevisionKind,
-  type ConflictProviderSave,
   type EventOutboxTarget,
   type LocalFolderInspection,
   type LocalFolderMultipleVaultsIssue,
@@ -41,11 +37,10 @@ import {
   AdminAccordionSection,
   SettingsSection,
 } from '$lib/vault/state/ui.svelte'
-import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import {
   LocalFolderHealthKind,
   ManualProviderSyncKind,
-  SyncConflictReviewKind,
 } from '$lib/vault/state/sync.svelte'
 import {
   scheduleAutoConnectAfterApproval,
@@ -109,7 +104,7 @@ export function applyVaultSyncResult(
 export async function hydrateMultiDeviceState(
   state: SyncActionsContext,
 ): Promise<void> {
-  if (!state.manager || !state.isAuthenticated) return
+  if (!state.hasManager || !state.isAuthenticated) return
   const mergedJoins: JoinRequest[] = []
   try {
     for (const provider of state.syncProviders) {
@@ -119,7 +114,7 @@ export async function hydrateMultiDeviceState(
       }
       const [mode, pat, repo] = state.providerWasmArgs(provider)
       const joins = (await state.enqueueStorage(() =>
-        state.manager!.mergeRemoteJoinsFromProvider(mode, pat, repo),
+        state.requireManager().mergeRemoteJoinsFromProvider(mode, pat, repo),
       )) as JoinRequest[]
       if (joins.length > 0) {
         mergedJoins.push(...joins)
@@ -132,19 +127,19 @@ export async function hydrateMultiDeviceState(
     const snapshot = await state.enqueueStorage(async () => {
       await Promise.resolve()
       try {
-        await state.manager!.ensureVaultRosterHydrated()
+        await state.requireManager().ensureVaultRosterHydrated()
       } catch {
         // Roster repair is best-effort; still read the current session.
       }
       let pendingJoins: JoinRequest[]
       let vaultMembers: VaultMember[]
       try {
-        pendingJoins = state.manager!.list_pending_joins()
+        pendingJoins = state.requireManager().list_pending_joins()
       } catch {
         pendingJoins = []
       }
       try {
-        vaultMembers = state.manager!.list_vault_members()
+        vaultMembers = state.requireManager().list_vault_members()
       } catch {
         vaultMembers = []
       }
@@ -163,7 +158,7 @@ export async function syncFromSyncProviders(
   state: SyncActionsContext,
   options?: { quiet?: boolean; force?: boolean },
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   if (
     !state.clientPolicy.shouldSyncFromProviders(
       state.syncBlocked,
@@ -268,7 +263,7 @@ export async function flushRemoteEventOutboxNow(
   state: SyncActionsContext,
   provider?: StorageProvider,
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   const target = eventOutboxTarget(state, provider)
   if (target.kind === EventOutboxTargetKind.LocalFolder) {
     try {
@@ -284,7 +279,7 @@ export async function flushRemoteEventOutboxNow(
   if (target.kind === EventOutboxTargetKind.Unavailable) return
   try {
     await state.enqueueStorage(() =>
-      state.manager!.flushEventOutboxForProvider(...target.args),
+      state.requireManager().flushEventOutboxForProvider(...target.args),
     )
   } catch (error) {
     log.warn('event outbox flush skipped', {
@@ -300,14 +295,14 @@ export async function updateProviderSyncMetadata(
   yaml: string,
   revision: ProviderSyncRevision,
 ): Promise<void> {
-  const managerStoreId = state.manager
-    ? await state.enqueueStorage(() => state.manager!.vaultStoreId)
+  const managerStoreId = state.hasManager
+    ? await state.enqueueStorage(() => state.requireManager().vaultStoreId)
     : ''
   state.providers = updateProviderSyncMetadataWasm(
     $state.snapshot({
       providers: state.providers,
-      ...(state.activeVaultStoreId
-        ? { activeVaultStoreId: state.activeVaultStoreId }
+      ...(state.activeVault.kind === ActiveVaultKind.Open
+        ? { activeVaultStoreId: state.activeVault.storeId }
         : {}),
     }),
     providerId,
@@ -443,9 +438,9 @@ export async function stageStagedProviderSyncIssue(
   state: SyncActionsContext,
   args: [string, string, string],
 ): Promise<boolean> {
-  const manager = state.manager
-  const issueResult = manager?.takeEventLogSyncIssue()
-  if (!issueResult) return false
+  if (!state.hasManager) return false
+  const manager = state.requireManager()
+  const issueResult = manager.takeEventLogSyncIssue()
   if (issueResult.state === NookEventLogSyncIssueState.Clear) {
     issueResult.free()
     return false
@@ -456,7 +451,7 @@ export async function stageStagedProviderSyncIssue(
     if (!issue.isStoreMismatch) return false
     const localStoreId = issue.localStoreId
     const remoteStoreId = issue.remoteStoreId
-    if (!localStoreId || !remoteStoreId || !manager) return false
+    if (!localStoreId || !remoteStoreId) return false
 
     const localYaml = await readLocalVaultYaml().catch(() => '')
     await state.enqueueStorage(() =>
@@ -490,10 +485,10 @@ export async function syncLocalFolderProvider(
   state: SyncActionsContext,
   provider: StorageProvider,
 ): Promise<void> {
-  const manager = state.manager
-  if (!manager) {
+  if (!state.hasManager) {
     throw new Error(state.t('errors.manager_uninitialized'))
   }
+  const manager = state.requireManager()
   const handleId = provider.localFolder?.handleId
   if (!handleId) {
     throw new Error(state.t('errors.local_backup_folder_required'))
@@ -576,7 +571,7 @@ export async function syncFromStorage(
   state: SyncActionsContext,
   options?: { force?: boolean },
 ) {
-  if (!state.manager) return
+  if (!state.hasManager) return
   if (state.syncBlocked) return
   if (!options?.force && state.isVerifying) return
   if (!options?.force && state.isSaving) return
@@ -592,7 +587,7 @@ export async function syncFromStorage(
       } else {
         const [mode, pat, repo] = state.providerWasmArgs(provider)
         const raw = await state.enqueueStorage(() =>
-          state.manager!.sync_vault_from_storage(mode, pat, repo),
+          state.requireManager().sync_vault_from_storage(mode, pat, repo),
         )
         state.applyVaultSyncResult(raw)
       }
@@ -622,7 +617,9 @@ export async function syncFromStorage(
   state.isSyncing = true
   try {
     const raw = await state.enqueueStorage(() =>
-      state.manager!.sync_vault_from_storage(...state.wasmStorageArgs()),
+      state
+        .requireManager()
+        .sync_vault_from_storage(...state.wasmStorageArgs()),
     )
     state.applyVaultSyncResult(raw)
     await state.refreshSecretsFromSession()
@@ -635,7 +632,7 @@ export async function syncFromStorage(
 }
 
 export async function manualSync(state: SyncActionsContext) {
-  if (!state.manager) return
+  if (!state.hasManager) return
   if (state.syncBlocked) return
   if (state.isSyncing) return
 
@@ -689,7 +686,7 @@ export async function fanOutSyncToProviders(
   state: SyncActionsContext,
   options?: { quiet?: boolean },
 ): Promise<void> {
-  if (!state.manager || !state.isAuthenticated) return
+  if (!state.hasManager || !state.isAuthenticated) return
   if (state.syncBlocked) return
   if (state.syncProviders.length === 0) return
 
@@ -724,148 +721,12 @@ function stageLocalFolderMultipleVaultsIssue(
   })
 }
 
-/** Finish connect/sync that was paused when the conflict dialog opened. */
-async function resumeConnectAfterSyncConflict(
-  state: SyncActionsContext,
-  providerId: string,
-  pendingProvider: boolean,
-): Promise<void> {
-  if (state.isAuthenticated) {
-    if (!pendingProvider) {
-      await state.syncProviderById(providerId, { quiet: true })
-    }
-    await state.hydrateMultiDeviceState()
-    return
-  }
-  if (!state.manager) return
-  if (
-    state.stagedRemoteStorageArgs().kind ===
-      StagedRemoteStorageKind.Unavailable &&
-    state.syncProviders.length === 0
-  ) {
-    return
-  }
-  await state.loadDb()
-}
-
-export async function resolveSyncConflictImportRemote(
-  state: SyncActionsContext,
-): Promise<void> {
-  const review = state.syncConflictReview
-  if (
-    review.kind !== SyncConflictReviewKind.RequiresDecision ||
-    review.conflict.kind !== VaultSyncConflictKind.StoreId ||
-    state.isVerifying
-  ) {
-    return
-  }
-  const { conflict } = review
-  const remoteStoreId = conflict.remoteStoreId()
-  if (!remoteStoreId) return
-
-  state.isVerifying = true
-  state.errorMsg = ''
-  let providerSave: ConflictProviderSave = {
-    kind: ConflictProviderSaveKind.NotSaved,
-  }
-  let importedAsSeparateVault = false
-  try {
-    let importedStoreId: string
-    if (conflict.remoteYaml.trim()) {
-      importedStoreId = await importLocalVaultBlob(
-        conflict.remoteYaml,
-        conflict.providerLabel,
-      )
-    } else {
-      if (!state.manager) {
-        throw new Error(state.t('errors.manager_uninitialized'))
-      }
-      const provider = state.providers.find((p) => p.id === conflict.providerId)
-      if (provider?.type === 'local-folder') {
-        const handleId = provider.localFolder?.handleId
-        if (!handleId) {
-          throw new Error(state.t('auth_storage.local_folder_choose_err'))
-        }
-        importedStoreId = (await state.enqueueStorage(() =>
-          state.manager!.importLocalFolderEventLogAsLocalVault(handleId),
-        )) as string
-      } else {
-        importedStoreId = (await state.enqueueStorage(() =>
-          state.manager!.importProviderEventLogAsLocalVault(
-            conflict.mode,
-            conflict.pat,
-            conflict.repo,
-          ),
-        )) as string
-      }
-    }
-    state.activeVaultStoreId = importedStoreId
-    state.selectedLoginVaultStoreId = importedStoreId
-    if (state.manager) {
-      await state.enqueueStorage(() => state.manager!.resetVaultSession())
-    }
-    state.localVaultPresent = true
-    await state.refreshLocalVaultCatalog()
-    const providerId = await state.ensureProviderSavedAfterConflict(conflict)
-    providerSave = { kind: ConflictProviderSaveKind.Saved, providerId }
-    if (conflict.remoteYaml.trim()) {
-      await state.updateProviderSyncMetadata(
-        providerId,
-        conflict.remoteYaml,
-        conflict.remoteRevision
-          ? {
-              kind: ProviderSyncRevisionKind.Tracked,
-              revision: conflict.remoteRevision,
-            }
-          : { kind: ProviderSyncRevisionKind.Untracked },
-      )
-    } else {
-      state.providers = state.providers.map((provider) =>
-        provider.id === providerId
-          ? {
-              ...provider,
-              storeId: importedStoreId,
-              lastSyncedAt: new SvelteDate().toISOString(),
-            }
-          : provider,
-      )
-      await state.persistProviders()
-    }
-    state.clearPendingSyncConflict()
-    state.finishStagedProviderConnectAfterConflict(conflict)
-    await state.syncActiveVaultStoreIdToAuth()
-    importedAsSeparateVault = true
-    state.clearUnlockedSession()
-    state.showSuccess(
-      state.t('auth_storage.sync_conflict_imported_vault', {
-        provider: conflict.providerLabel,
-      }),
-    )
-  } catch (e: unknown) {
-    state.errorMsg =
-      e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
-    providerSave = { kind: ConflictProviderSaveKind.NotSaved }
-  } finally {
-    state.isVerifying = false
-  }
-  if (
-    providerSave.kind === ConflictProviderSaveKind.Saved &&
-    !importedAsSeparateVault
-  ) {
-    await resumeConnectAfterSyncConflict(
-      state,
-      providerSave.providerId,
-      conflict.isPendingProvider,
-    )
-  }
-}
-
 export async function syncProviderById(
   state: SyncActionsContext,
   providerId: string,
   options?: { quiet?: boolean; propagateError?: boolean },
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   if (state.syncBlocked) return
   // A foreground password op (verify/enroll/rotate) borrows the wasm manager;
   // a per-provider sync's `&mut self` future would alias that borrow.
@@ -907,7 +768,7 @@ export async function syncProviderById(
     // `eventLogMode()` bit can be false after reload until connect finishes.
     const raw = await state.enqueueStorage(() =>
       state.raceStorageTimeout(
-        state.manager!.sync_vault_from_storage(mode, pat, repo),
+        state.requireManager().sync_vault_from_storage(mode, pat, repo),
         'Vault sync',
       ),
     )
@@ -923,7 +784,7 @@ export async function syncProviderById(
     return
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e)
-    const eventLogIssueResult = state.manager.takeEventLogSyncIssue()
+    const eventLogIssueResult = state.requireManager().takeEventLogSyncIssue()
     const message = e instanceof Error ? e.message : String(e)
     let stagedStoreMismatch = false
     let localFolderInspection: LocalFolderInspection = {

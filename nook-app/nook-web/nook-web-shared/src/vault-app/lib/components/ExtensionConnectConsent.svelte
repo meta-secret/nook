@@ -17,6 +17,7 @@
   } from '$lib/extension-connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { approveExtensionDevice } from '$app-wasm'
+  import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
@@ -47,13 +48,14 @@
   }
 
   function activeVaultName(): string {
-    const active = vault.localVaults.find(
-      (entry) => entry.storeId === vault.activeVaultStoreId,
-    )
-    return (
-      active?.displayLabel(vault.t('login.vault_picker_unnamed')) ??
-      vault.t('login.vault_picker_unnamed')
-    )
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      for (const entry of vault.localVaults) {
+        if (entry.storeId === vault.activeVault.storeId) {
+          return entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+        }
+      }
+    }
+    return vault.t('login.vault_picker_unnamed')
   }
 
   function sendGrantToExtension(
@@ -165,7 +167,7 @@
   }
 
   async function approveExtension() {
-    if (!vault.manager || !canApprove) return
+    if (!vault.hasManager || !canApprove) return
 
     isApproving = true
     vault.isSaving = true
@@ -175,7 +177,7 @@
     try {
       await vault.enqueueStorage(() =>
         approveExtensionDevice(
-          vault.manager!,
+          vault.requireManager(),
           request.deviceId,
           request.devicePublicKey,
           request.deviceSigningPublicKey,
@@ -183,14 +185,17 @@
         ),
       )
       const vaultStoreId =
-        vault.activeVaultStoreId ??
-        (await vault.enqueueStorage(() => vault.manager!.vaultStoreId))
+        vault.activeVault.kind === ActiveVaultKind.Open
+          ? vault.activeVault.storeId
+          : await vault.enqueueStorage(
+              () => vault.requireManager().vaultStoreId,
+            )
       let grantedProviders: StorageProvider[] = []
       if (
         request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
       ) {
         const authProviders = await vault.enqueueStorage(() =>
-          vault.manager!.loadAuthProviders(),
+          vault.requireManager().loadAuthProviders(),
         )
         const matchingProviders = authProviders.providers.filter(
           (provider) => !provider.storeId || provider.storeId === vaultStoreId,
@@ -204,7 +209,7 @@
         ).providers
       }
       const eventLogRecordValues = await vault.enqueueStorage(() =>
-        vault.manager!.exportEventLogRecords(),
+        vault.requireManager().exportEventLogRecords(),
       )
       try {
         await sendGrantToExtension(

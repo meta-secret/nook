@@ -22,7 +22,7 @@ import type {
 
 type ProviderStateFields = Pick<
   VaultProviderState,
-  | 'activeVaultStoreId'
+  | 'activeVault'
   | 'addProviderOpen'
   | 'clearExistingVaultRecoverySummary'
   | 'clearLocalFolder'
@@ -30,26 +30,35 @@ type ProviderStateFields = Pick<
   | 'clearOauthFile'
   | 'clearOauthSetupPreset'
   | 'activateLoginSetup'
-  | 'existingVaultRecoverySummary'
+  | 'recoveryDiscovery'
+  | 'recordExistingVaultRecovery'
+  | 'requireExistingVaultRecovery'
   | 'githubPat'
   | 'githubRepo'
   | 'hasActiveVaultStore'
   | 'icloudOAuthBusy'
   | 'icloudOAuthPreparing'
   | 'icloudOAuthReady'
-  | 'localFolder'
+  | 'localFolderDraft'
+  | 'configureLocalFolder'
+  | 'requireLocalFolderConfig'
   | 'localFolderBackupSupported'
+  | 'localVaultCatalog'
   | 'localVaults'
   | 'localVaultPresent'
   | 'loginRequiresExistingVault'
   | 'loginSetup'
-  | 'oauthFile'
-  | 'oauthSetupPreset'
+  | 'oauthFileDraft'
+  | 'configureOauthFile'
+  | 'requireOauthFileConfig'
+  | 'oauthSetupSelection'
+  | 'selectOauthSetupPreset'
+  | 'openActiveVault'
   | 'providers'
   | 'providersLoaded'
   | 'requireActiveVaultStoreId'
   | 'hasSelectedLoginVaultStore'
-  | 'selectedLoginVaultStoreId'
+  | 'selectLoginVault'
   | 'storageMode'
 >
 
@@ -62,7 +71,8 @@ type ProviderSessionFields = Pick<
   VaultSessionState,
   | 'isAuthenticated'
   | 'joinEnrollmentPrompt'
-  | 'manager'
+  | 'hasManager'
+  | 'requireManager'
   | 'remoteVaultRecoveryState'
 >
 
@@ -109,14 +119,15 @@ export type ProviderActionsContext = ProviderStateFields &
 
 type SyncProviderFields = Pick<
   VaultProviderState,
-  | 'activeVaultStoreId'
+  | 'activeVault'
   | 'addProviderOpen'
   | 'clearLoginSetup'
   | 'activateLoginSetup'
   | 'localVaultPresent'
   | 'loginSetup'
   | 'providers'
-  | 'selectedLoginVaultStoreId'
+  | 'openActiveVault'
+  | 'selectLoginVault'
 >
 
 type SyncRuntimeFields = Pick<
@@ -131,7 +142,8 @@ type SyncSessionFields = Pick<
   | 'isPasswordBusy'
   | 'joinEnrollmentPrompt'
   | 'loginPasswordPrompt'
-  | 'manager'
+  | 'hasManager'
+  | 'requireManager'
   | 'pendingJoins'
   | 'remoteVaultRecoveryState'
   | 'sessionExpiredByIdle'
@@ -236,7 +248,7 @@ export type ArchitectureActionsContext = Pick<
   | 'draftVaultType'
   | 'vaultArchitecture'
 > &
-  Pick<VaultSessionState, 'manager'> & {
+  Pick<VaultSessionState, 'hasManager' | 'requireManager'> & {
     architectureSecretCreationAllowed: boolean
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>
     replaceVaultArchitecture(architecture: VaultArchitecture): void
@@ -255,10 +267,12 @@ export type SessionActionsContext = Pick<VaultRuntimeState, 'errorMsg'> &
     | 'isAuthenticated'
     | 'joinEnrollmentPrompt'
     | 'loginPasswordPrompt'
-    | 'manager'
+    | 'hasManager'
+    | 'requireManager'
     | 'passwordEntries'
     | 'pendingJoins'
-    | 'selectedPasswordEntryId'
+    | 'selectedPasswordEntry'
+    | 'selectPasswordEntry'
     | 'sessionExpiredByIdle'
     | 'sharedGrantInstructions'
     | 'sharedJoinerIdentity'
@@ -282,7 +296,8 @@ export type SessionActionsContext = Pick<VaultRuntimeState, 'errorMsg'> &
     | 'sentinelGenesisParticipants'
     | 'sentinelGenesisPhase'
     | 'sentinelGenesisRequest'
-    | 'sentinelGenesisStoreId'
+    | 'sentinelGenesisTarget'
+    | 'selectSentinelGenesisStore'
     | 'sentinelStoredDeliveries'
     | 'sentinelUnlockRequest'
     | 'sentinelUnlockSession'
@@ -302,7 +317,7 @@ export type UiActionsContext = Pick<
   VaultRuntimeState,
   'errorMsg' | 'isSaving'
 > &
-  Pick<VaultSessionState, 'manager'> &
+  Pick<VaultSessionState, 'hasManager' | 'requireManager'> &
   Pick<
     VaultUiState,
     | 'adminAccordionSection'

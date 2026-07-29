@@ -25,7 +25,11 @@ import { intoWasmStringValue } from '$lib/wasm-string-value'
 import { JoinEnrollmentState } from '$app-wasm'
 import * as localLoginActions from '$lib/vault/local-login'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-import { LocalProviderLookupKind } from '$lib/vault/state/provider.svelte'
+import {
+  ActiveVaultKind,
+  LocalProviderLookupKind,
+  LocalVaultCatalogKind,
+} from '$lib/vault/state/provider.svelte'
 import {
   EnrollmentLinkKind,
   VaultInitializationKind,
@@ -73,18 +77,22 @@ export async function initOnce(state: VaultState): Promise<void> {
         : browserLocale
     await state.updateLocale(locale)
     await state.refreshLocalVaultCatalog()
-    state.manager = await getVaultManager()
-    if (state.manager.vaultApplication !== APP_KIND) {
+    state.openManager(await getVaultManager())
+    if (state.requireManager().vaultApplication !== APP_KIND) {
       throw new Error(
         state.t('app.capability_mismatch', {
           app: String(APP_KIND),
-          wasm: String(state.manager.vaultApplication),
+          wasm: String(state.requireManager().vaultApplication),
         }),
       )
     }
     await state.updateLocale(locale, { preferWasm: true })
-    state.deviceProtectionStatus = await state.manager.deviceProtectionStatus()
-    const persistedDeviceMode = await state.manager.deviceProtectionDeviceMode()
+    state.deviceProtectionStatus = await state
+      .requireManager()
+      .deviceProtectionStatus()
+    const persistedDeviceMode = await state
+      .requireManager()
+      .deviceProtectionDeviceMode()
     if (persistedDeviceMode === DeviceProtectionDeviceModeState.Standard) {
       state.draftDeviceMode = DeviceMode.Standard
     } else if (
@@ -105,12 +113,14 @@ export async function initOnce(state: VaultState): Promise<void> {
       localStorage.getItem('nook_e2e_manual_passkey') !== 'true'
     if (!state.deviceProtectionReady && autoAuthorizeE2e) {
       if (state.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
-        await state.enqueueStorage(() => unlockDeviceProtection(state.manager!))
+        await state.enqueueStorage(() =>
+          unlockDeviceProtection(state.requireManager()),
+        )
       } else if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         return
       } else {
         await state.enqueueStorage(() =>
-          setupDeviceProtection(state.manager!, ''),
+          setupDeviceProtection(state.requireManager(), ''),
         )
       }
       deviceIdentityUnlocked = true
@@ -163,25 +173,28 @@ export async function initOnce(state: VaultState): Promise<void> {
 export async function continueInitializationAfterDeviceUnlock(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   await state.initDeviceIdentity({ allowPendingAuthorization: true })
   if (
     await state.enqueueStorage(() =>
-      state.manager!.hasPendingSentinelGenesisFinalization(),
+      state.requireManager().hasPendingSentinelGenesisFinalization(),
     )
   ) {
     const rawResult = await state.enqueueStorage(() =>
-      state.manager!.resumePendingSentinelGenesisFinalization(),
+      state.requireManager().resumePendingSentinelGenesisFinalization(),
     )
     sentinelGenesisActions.applyFinalizeResult(state, rawResult)
   }
   await state.loadProviders({ ensureLocalRow: true })
   await state.refreshLocalVaultCatalog()
-  if (!state.activeVaultStoreId) {
-    state.activeVaultStoreId = state.localVaults[0]?.storeId
+  if (
+    state.activeVault.kind === ActiveVaultKind.Closed &&
+    state.localVaultCatalog.kind === LocalVaultCatalogKind.Available
+  ) {
+    state.openActiveVault(state.localVaultCatalog.first.storeId)
   }
-  if (state.activeVaultStoreId) {
-    await setActiveVault(state.activeVaultStoreId).catch(() => {})
+  if (state.activeVault.kind === ActiveVaultKind.Open) {
+    await setActiveVault(state.activeVault.storeId).catch(() => {})
   }
   state.localVaultPresent = await hasActiveLocalVault()
   if (state.localVaultPresent) {
@@ -239,7 +252,7 @@ export async function initDeviceIdentity(
   options?: { allowPendingAuthorization?: boolean },
 ): Promise<void> {
   if (
-    !state.manager ||
+    !state.hasManager ||
     (!state.deviceProtectionReady &&
       !state.deviceAuthorizationInProgress &&
       !options?.allowPendingAuthorization)
@@ -247,8 +260,8 @@ export async function initDeviceIdentity(
     throw new Error(state.t('errors.device_protection.authorization_required'))
   }
   const identity = await state.enqueueStorage(() => ({
-    deviceId: state.manager!.device_id,
-    devicePublicKey: state.manager!.device_public_key,
+    deviceId: state.requireManager().device_id,
+    devicePublicKey: state.requireManager().device_public_key,
   }))
   state.deviceId = identity.deviceId
   state.devicePublicKey = identity.devicePublicKey
@@ -259,13 +272,13 @@ export async function authorizeWithExternalDeviceIdentity(
   adopt: (manager: NookVaultManager) => Promise<void>,
   options?: { deferInitialization?: boolean },
 ): Promise<boolean> {
-  if (!state.manager) return false
+  if (!state.hasManager) return false
   const priorDeviceProtectionStatus = state.deviceProtectionStatus
   state.errorMsg = ''
   state.isVerifying = true
   state.deviceAuthorizationInProgress = true
   try {
-    await state.enqueueStorage(() => adopt(state.manager!))
+    await state.enqueueStorage(() => adopt(state.requireManager()))
     if (options?.deferInitialization) {
       await initDeviceIdentity(state, { allowPendingAuthorization: true })
     } else {
@@ -276,7 +289,7 @@ export async function authorizeWithExternalDeviceIdentity(
     return true
   } catch (error) {
     await state.enqueueStorage(() =>
-      state.manager!.rollbackExtensionIdentityHandoff(),
+      state.requireManager().rollbackExtensionIdentityHandoff(),
     )
     state.deviceProtectionStatus =
       priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
@@ -304,7 +317,7 @@ export async function init(state: VaultState) {
 }
 
 export async function createFreshVault(state: VaultState) {
-  if (!state.manager) return
+  if (!state.hasManager) return
   state.errorMsg = ''
   state.dismissSuccess()
   state.isVerifying = true
@@ -317,11 +330,11 @@ export async function createFreshVault(state: VaultState) {
     }
     const rawRecords = await state.enqueueStorage(async () => {
       if (creatingAdditionalVault) {
-        state.manager!.resetVaultSession()
+        state.requireManager().resetVaultSession()
       }
-      const connectPromise = state.manager!.connect_fresh(
-        ...state.wasmStorageArgs(),
-      )
+      const connectPromise = state
+        .requireManager()
+        .connect_fresh(...state.wasmStorageArgs())
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
           () =>
@@ -341,8 +354,8 @@ export async function createFreshVault(state: VaultState) {
     for (const record of rawRecords) record.free()
     await state.loadSecretPage('', 0)
     state.markVaultUnlocked()
-    state.activeVaultStoreId = localLoginActions.requireManagerVaultStoreId(
-      state.manager,
+    state.openActiveVault(
+      localLoginActions.requireManagerVaultStoreId(state.requireManager()),
     )
     await localLoginActions.refreshLocalVaultCatalog(state)
     await state.ensureProviderSaved()

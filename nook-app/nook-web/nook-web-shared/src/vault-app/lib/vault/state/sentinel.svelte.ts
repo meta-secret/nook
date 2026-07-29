@@ -4,62 +4,58 @@ import {
   type NookSentinelGenesisDelivery,
   type NookSentinelGenesisParticipantStatus,
   type StoreId,
-} from "$app-wasm";
+} from '$app-wasm'
 import {
   inactiveSentinelUnlockSession,
   type SentinelStoredDeliverySummary,
   type SentinelUnlockSessionStatus,
-} from "$lib/vault/sentinel-unlock";
-enum SentinelGenesisTargetKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
+} from '$lib/vault/sentinel-unlock'
+export enum SentinelGenesisTargetKind {
+  NotSelected = 'not-selected',
+  Selected = 'selected',
 }
 
-type SentinelGenesisTarget =
+export type SentinelGenesisTarget =
   | { kind: SentinelGenesisTargetKind.NotSelected }
-  | { kind: SentinelGenesisTargetKind.Selected; storeId: StoreId };
+  | { kind: SentinelGenesisTargetKind.Selected; storeId: StoreId }
 export class VaultSentinelState {
   sentinelGenesisPhase = $state<SentinelGenesisPhase>(
     SentinelGenesisPhase.Inactive,
-  );
-  sentinelGenesisRequest = $state("");
-  sentinelGenesisParticipantCount = $state(0);
+  )
+  sentinelGenesisRequest = $state('')
+  sentinelGenesisParticipantCount = $state(0)
   sentinelGenesisParticipants = $state<NookSentinelGenesisParticipantStatus[]>(
     [],
-  );
-  sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
+  )
+  sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([])
   private sentinelGenesisStoreState = $state<SentinelGenesisTarget>({
     kind: SentinelGenesisTargetKind.NotSelected,
-  });
-  get sentinelGenesisStoreId(): StoreId | void {
-    if (
-      this.sentinelGenesisStoreState.kind === SentinelGenesisTargetKind.Selected
-    )
-      return this.sentinelGenesisStoreState.storeId;
-    return;
+  })
+  get sentinelGenesisTarget(): SentinelGenesisTarget {
+    return this.sentinelGenesisStoreState
   }
-  set sentinelGenesisStoreId(value: StoreId) {
+  selectSentinelGenesisStore(value: StoreId): void {
     this.sentinelGenesisStoreState = {
       kind: SentinelGenesisTargetKind.Selected,
       storeId: value,
-    };
+    }
   }
   clearSentinelGenesisStore(): void {
     this.sentinelGenesisStoreState = {
       kind: SentinelGenesisTargetKind.NotSelected,
-    };
+    }
   }
 
-  sentinelCeremonyPrompt = $state(false);
+  sentinelCeremonyPrompt = $state(false)
   sentinelUnlockStatus = $state<SentinelVaultUnlockState>(
     SentinelVaultUnlockState.NotSentinel,
-  );
+  )
   /** Public, signed Sentinel unlock request. It contains no share material. */
-  sentinelUnlockRequest = $state("");
+  sentinelUnlockRequest = $state('')
   /** Rust-owned unlock-session progress rendered by the web layer. */
   sentinelUnlockSession = $state<SentinelUnlockSessionStatus>(
     inactiveSentinelUnlockSession(),
-  );
+  )
   /** Provider-free encrypted deliveries available to this protected device. */
-  sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([]);
+  sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([])
 }

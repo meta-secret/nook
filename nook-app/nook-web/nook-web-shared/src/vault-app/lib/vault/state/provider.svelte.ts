@@ -20,20 +20,20 @@ import {
   VaultType,
   type VaultArchitecture,
 } from '$lib/vault-architecture'
-enum ActiveVaultKind {
+export enum ActiveVaultKind {
   Closed = 'closed',
   Open = 'open',
 }
 
-type ActiveVault =
+export type ActiveVault =
   | { kind: ActiveVaultKind.Closed }
   | { kind: ActiveVaultKind.Open; storeId: StoreId }
-enum LoginVaultSelectionKind {
+export enum LoginVaultSelectionKind {
   NotSelected = 'not-selected',
   Selected = 'selected',
 }
 
-type LoginVaultSelection =
+export type LoginVaultSelection =
   | { kind: LoginVaultSelectionKind.NotSelected }
   | { kind: LoginVaultSelectionKind.Selected; storeId: StoreId }
 export enum LoginSetupKind {
@@ -65,36 +65,44 @@ export enum LocalProviderLookupKind {
 export type LocalProviderLookup =
   | { kind: LocalProviderLookupKind.Missing }
   | { kind: LocalProviderLookupKind.Found; provider: StorageProvider }
-enum RecoveryDiscoveryKind {
+export enum LocalVaultCatalogKind {
+  Empty = 'empty',
+  Available = 'available',
+}
+
+export type LocalVaultCatalog =
+  | { kind: LocalVaultCatalogKind.Empty }
+  | { kind: LocalVaultCatalogKind.Available; first: NookLocalVaultEntry }
+export enum RecoveryDiscoveryKind {
   NotFound = 'not-found',
   Found = 'found',
 }
 
-type RecoveryDiscovery =
+export type RecoveryDiscovery =
   | { kind: RecoveryDiscoveryKind.NotFound }
   | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary }
-enum OAuthFileDraftKind {
+export enum OAuthFileDraftKind {
   NotConfigured = 'not-configured',
   Configured = 'configured',
 }
 
-type OAuthFileDraft =
+export type OAuthFileDraft =
   | { kind: OAuthFileDraftKind.NotConfigured }
   | { kind: OAuthFileDraftKind.Configured; config: OAuthFileConfig }
-enum LocalFolderDraftKind {
+export enum LocalFolderDraftKind {
   NotConfigured = 'not-configured',
   Configured = 'configured',
 }
 
-type LocalFolderDraft =
+export type LocalFolderDraft =
   | { kind: LocalFolderDraftKind.NotConfigured }
   | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig }
-enum OAuthSetupPresetKind {
+export enum OAuthSetupPresetKind {
   NotSelected = 'not-selected',
   Selected = 'selected',
 }
 
-type OAuthSetupPreset =
+export type OAuthSetupPreset =
   | { kind: OAuthSetupPresetKind.NotSelected }
   | { kind: OAuthSetupPresetKind.Selected; preset: OAuthFilePreset }
 export class VaultProviderState {
@@ -102,14 +110,18 @@ export class VaultProviderState {
   providersLoaded = $state(false)
   /** Locally cached vaults on this browser (metadata only). */
   localVaults = $state<NookLocalVaultEntry[]>([])
+  get localVaultCatalog(): LocalVaultCatalog {
+    for (const first of this.localVaults) {
+      return { kind: LocalVaultCatalogKind.Available, first }
+    }
+    return { kind: LocalVaultCatalogKind.Empty }
+  }
   /** Active vault store_id — sync providers and local blob are scoped to this. */
   private activeVaultStoreState = $state<ActiveVault>({
     kind: ActiveVaultKind.Closed,
   })
-  get activeVaultStoreId(): StoreId | void {
-    if (this.activeVaultStoreState.kind === ActiveVaultKind.Open)
-      return this.activeVaultStoreState.storeId
-    return
+  get activeVault(): ActiveVault {
+    return this.activeVaultStoreState
   }
   get hasActiveVaultStore(): boolean {
     return this.activeVaultStoreState.kind === ActiveVaultKind.Open
@@ -119,7 +131,7 @@ export class VaultProviderState {
       return this.activeVaultStoreState.storeId
     throw new Error('Active vault store is required')
   }
-  set activeVaultStoreId(value: StoreId) {
+  openActiveVault(value: StoreId): void {
     this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value }
   }
   clearActiveVaultStore(): void {
@@ -129,13 +141,8 @@ export class VaultProviderState {
   private selectedLoginVaultStoreState = $state<LoginVaultSelection>({
     kind: LoginVaultSelectionKind.NotSelected,
   })
-  get selectedLoginVaultStoreId(): StoreId | void {
-    if (
-      this.selectedLoginVaultStoreState.kind ===
-      LoginVaultSelectionKind.Selected
-    )
-      return this.selectedLoginVaultStoreState.storeId
-    return
+  get selectedLoginVault(): LoginVaultSelection {
+    return this.selectedLoginVaultStoreState
   }
   get hasSelectedLoginVaultStore(): boolean {
     return (
@@ -143,7 +150,7 @@ export class VaultProviderState {
       LoginVaultSelectionKind.Selected
     )
   }
-  set selectedLoginVaultStoreId(value: StoreId) {
+  selectLoginVault(value: StoreId): void {
     this.selectedLoginVaultStoreState = {
       kind: LoginVaultSelectionKind.Selected,
       storeId: value,
@@ -173,12 +180,16 @@ export class VaultProviderState {
   private recoverySummaryState = $state<RecoveryDiscovery>({
     kind: RecoveryDiscoveryKind.NotFound,
   })
-  get existingVaultRecoverySummary(): VaultRecoverySummary | void {
-    if (this.recoverySummaryState.kind === RecoveryDiscoveryKind.Found)
-      return this.recoverySummaryState.summary
-    return
+  get recoveryDiscovery(): RecoveryDiscovery {
+    return this.recoverySummaryState
   }
-  set existingVaultRecoverySummary(value: VaultRecoverySummary) {
+  requireExistingVaultRecovery(): VaultRecoverySummary {
+    if (this.recoverySummaryState.kind === RecoveryDiscoveryKind.Found) {
+      return this.recoverySummaryState.summary
+    }
+    throw new Error('Existing vault recovery summary is required')
+  }
+  recordExistingVaultRecovery(value: VaultRecoverySummary): void {
     this.recoverySummaryState = {
       kind: RecoveryDiscoveryKind.Found,
       summary: value,
@@ -195,12 +206,16 @@ export class VaultProviderState {
   private oauthFileState = $state.raw<OAuthFileDraft>({
     kind: OAuthFileDraftKind.NotConfigured,
   })
-  get oauthFile(): OAuthFileConfig | void {
-    if (this.oauthFileState.kind === OAuthFileDraftKind.Configured)
-      return this.oauthFileState.config
-    return
+  get oauthFileDraft(): OAuthFileDraft {
+    return this.oauthFileState
   }
-  set oauthFile(value: OAuthFileConfig) {
+  requireOauthFileConfig(): OAuthFileConfig {
+    if (this.oauthFileState.kind === OAuthFileDraftKind.Configured) {
+      return this.oauthFileState.config
+    }
+    throw new Error('OAuth file configuration is required')
+  }
+  configureOauthFile(value: OAuthFileConfig): void {
     this.oauthFileState = {
       kind: OAuthFileDraftKind.Configured,
       config: value,
@@ -212,12 +227,16 @@ export class VaultProviderState {
   private localFolderState = $state.raw<LocalFolderDraft>({
     kind: LocalFolderDraftKind.NotConfigured,
   })
-  get localFolder(): LocalFolderConfig | void {
-    if (this.localFolderState.kind === LocalFolderDraftKind.Configured)
-      return this.localFolderState.config
-    return
+  get localFolderDraft(): LocalFolderDraft {
+    return this.localFolderState
   }
-  set localFolder(value: LocalFolderConfig) {
+  requireLocalFolderConfig(): LocalFolderConfig {
+    if (this.localFolderState.kind === LocalFolderDraftKind.Configured) {
+      return this.localFolderState.config
+    }
+    throw new Error('Local folder configuration is required')
+  }
+  configureLocalFolder(value: LocalFolderConfig): void {
     this.localFolderState = {
       kind: LocalFolderDraftKind.Configured,
       config: value,
@@ -236,12 +255,10 @@ export class VaultProviderState {
   private oauthSetupPresetState = $state<OAuthSetupPreset>({
     kind: OAuthSetupPresetKind.NotSelected,
   })
-  get oauthSetupPreset(): OAuthFilePreset | void {
-    if (this.oauthSetupPresetState.kind === OAuthSetupPresetKind.Selected)
-      return this.oauthSetupPresetState.preset
-    return
+  get oauthSetupSelection(): OAuthSetupPreset {
+    return this.oauthSetupPresetState
   }
-  set oauthSetupPreset(value: OAuthFilePreset) {
+  selectOauthSetupPreset(value: OAuthFilePreset): void {
     this.oauthSetupPresetState = {
       kind: OAuthSetupPresetKind.Selected,
       preset: value,

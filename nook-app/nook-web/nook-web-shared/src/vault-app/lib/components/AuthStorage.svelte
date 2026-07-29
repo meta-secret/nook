@@ -31,7 +31,10 @@
   } from '$lib/vault-architecture'
   import { formatProviderSyncStatus } from '$lib/provider-sync-status'
   import {
+    LocalFolderDraftKind,
     LoginSetupKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
   import {
@@ -111,10 +114,19 @@
   const setupCanConnect = $derived(
     setupIs('local') ||
       (setupIs('local-folder') &&
-        Boolean(vault.localFolder?.handleId?.trim())) ||
+        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
+        Boolean(vault.localFolderDraft.config.handleId.trim())) ||
       (setupIs('oauth-file') &&
-        Boolean(vault.oauthFile?.accessToken?.trim())) ||
+        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+        Boolean(vault.oauthFileDraft.config.accessToken?.trim())) ||
       (setupIs('github') && Boolean(githubPat.trim())),
+  )
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
   )
 </script>
 
@@ -179,9 +191,7 @@
             {vault}
             bind:githubRepo
             idPrefix="settings"
-            preset={vault.oauthFile?.preset ??
-              vault.oauthSetupPreset ??
-              'google-drive'}
+            preset={oauthPreset}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}

@@ -39,6 +39,8 @@
   } from '$lib/vault/state/ui.svelte'
   import {
     LoginSetupKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
   import { OnboardingType, VaultType } from '$lib/vault-architecture'
@@ -134,6 +136,13 @@
     )
   }
   const addingProvider = $derived(addProviderOpen || showSetup)
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
+  )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
@@ -665,9 +674,7 @@
                   {vault}
                   bind:githubRepo
                   idPrefix="onboard"
-                  preset={vault.oauthFile?.preset ??
-                    vault.oauthSetupPreset ??
-                    'google-drive'}
+                  preset={oauthPreset}
                   {isVerifying}
                   {isInitializing}
                   {onCancelSetup}

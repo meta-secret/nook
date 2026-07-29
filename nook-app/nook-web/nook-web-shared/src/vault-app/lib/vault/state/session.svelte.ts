@@ -7,12 +7,12 @@ import {
   type NookVaultManager,
   type PasswordEntryId,
 } from '$app-wasm'
-enum ManagerSessionKind {
+export enum ManagerSessionKind {
   Locked = 'locked',
   Unlocked = 'unlocked',
 }
 
-type ManagerSession =
+export type ManagerSession =
   | { kind: ManagerSessionKind.Locked }
   | { kind: ManagerSessionKind.Unlocked; manager: NookVaultManager }
 export enum PasswordEntrySelectionKind {
@@ -23,24 +23,31 @@ export enum PasswordEntrySelectionKind {
 export type PasswordEntrySelection =
   | { kind: PasswordEntrySelectionKind.NotSelected }
   | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId }
-enum EnrollmentEntryKind {
+export enum EnrollmentEntryKind {
   Inactive = 'inactive',
   Active = 'active',
 }
 
-type EnrollmentEntry =
+export type EnrollmentEntry =
   | { kind: EnrollmentEntryKind.Inactive }
   | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId }
 export class VaultSessionState {
   private managerState = $state<ManagerSession>({
     kind: ManagerSessionKind.Locked,
   })
-  get manager(): NookVaultManager | void {
-    if (this.managerState.kind === ManagerSessionKind.Unlocked)
-      return this.managerState.manager
-    return
+  get managerSession(): ManagerSession {
+    return this.managerState
   }
-  set manager(value: NookVaultManager) {
+  get hasManager(): boolean {
+    return this.managerState.kind === ManagerSessionKind.Unlocked
+  }
+  requireManager(): NookVaultManager {
+    if (this.managerState.kind === ManagerSessionKind.Unlocked) {
+      return this.managerState.manager
+    }
+    throw new Error('Vault manager is required')
+  }
+  openManager(value: NookVaultManager): void {
     this.managerState = { kind: ManagerSessionKind.Unlocked, manager: value }
   }
   clearManager(): void {
@@ -92,15 +99,7 @@ export class VaultSessionState {
   set selectedPasswordEntry(value: PasswordEntrySelection) {
     this.selectedPasswordEntryState = value
   }
-  get selectedPasswordEntryId(): PasswordEntryId | void {
-    if (
-      this.selectedPasswordEntryState.kind ===
-      PasswordEntrySelectionKind.Selected
-    )
-      return this.selectedPasswordEntryState.entryId
-    return
-  }
-  set selectedPasswordEntryId(value: PasswordEntryId) {
+  selectPasswordEntry(value: PasswordEntryId): void {
     this.selectedPasswordEntryState = {
       kind: PasswordEntrySelectionKind.Selected,
       entryId: value,
@@ -115,12 +114,10 @@ export class VaultSessionState {
   private activeEnrollmentEntryState = $state<EnrollmentEntry>({
     kind: EnrollmentEntryKind.Inactive,
   })
-  get activeEnrollmentEntryId(): PasswordEntryId | void {
-    if (this.activeEnrollmentEntryState.kind === EnrollmentEntryKind.Active)
-      return this.activeEnrollmentEntryState.entryId
-    return
+  get activeEnrollmentEntry(): EnrollmentEntry {
+    return this.activeEnrollmentEntryState
   }
-  set activeEnrollmentEntryId(value: PasswordEntryId) {
+  beginEnrollmentEntry(value: PasswordEntryId): void {
     this.activeEnrollmentEntryState = {
       kind: EnrollmentEntryKind.Active,
       entryId: value,

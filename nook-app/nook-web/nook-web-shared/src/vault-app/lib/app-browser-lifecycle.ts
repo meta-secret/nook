@@ -66,9 +66,11 @@ export function mountBrowserLifecycle({
       }
     ).__nookAuthProviders = {
       loadAuthProviders: () =>
-        vault.enqueueStorage(() => vault.manager!.loadAuthProviders()),
+        vault.enqueueStorage(() => vault.requireManager().loadAuthProviders()),
       saveAuthProviders: (snapshot) =>
-        vault.enqueueStorage(() => saveAuthProviders(vault.manager!, snapshot)),
+        vault.enqueueStorage(() =>
+          saveAuthProviders(vault.requireManager(), snapshot),
+        ),
     }
   }
 

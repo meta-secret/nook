@@ -992,7 +992,7 @@ type ToolArguments = ToolCall['args'] | void
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
-            vec![10, 14, 15, 16, 17, 18]
+            vec![10, 12, 14, 15, 16, 17, 18]
         );
         Ok(())
     }

@@ -2,19 +2,21 @@ import type { SyncActionsContext } from '$lib/vault/action-contexts'
 import { createLogger } from '$lib/log'
 import { publishExtensionEventLogUpdate } from '$web-shared/extension/event-log-bridge'
 import type { ExtensionEventLogRecord } from '$web-shared/extension/runtime-messages'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 
 const log = createLogger('vault-sync')
 
 export async function publishExtensionEventLogUpdateForVault(
   state: SyncActionsContext,
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   try {
     const vaultStoreId =
-      state.activeVaultStoreId ??
-      (await state.enqueueStorage(() => state.manager!.vaultStoreId))
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? state.activeVault.storeId
+        : await state.enqueueStorage(() => state.requireManager().vaultStoreId)
     const eventLogRecords = await state.enqueueStorage(() =>
-      state.manager!.exportEventLogRecords(),
+      state.requireManager().exportEventLogRecords(),
     )
     try {
       publishExtensionEventLogUpdate(

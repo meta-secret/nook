@@ -7,6 +7,7 @@
   } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
   import {
     DisplayedVaultKind,
     VaultSwitchStateKind,
@@ -26,15 +27,22 @@
     kind: VaultSwitchStateKind.Idle,
   })
 
-  const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
+  const activeStoreId = $derived(
+    vault.activeVault.kind === ActiveVaultKind.Open
+      ? vault.activeVault.storeId.trim()
+      : '',
+  )
   const vaults = $derived(vault.localVaults)
   const activeVault = $derived.by((): DisplayedVault => {
-    const entry =
-      vaults.find((candidate) => candidate.storeId === activeStoreId) ??
-      vaults[0]
-    return entry
-      ? { kind: DisplayedVaultKind.Available, entry }
-      : { kind: DisplayedVaultKind.Unavailable }
+    for (const entry of vaults) {
+      if (entry.storeId === activeStoreId) {
+        return { kind: DisplayedVaultKind.Available, entry }
+      }
+    }
+    for (const entry of vaults) {
+      return { kind: DisplayedVaultKind.Available, entry }
+    }
+    return { kind: DisplayedVaultKind.Unavailable }
   })
   const activeLabel = $derived(
     activeVault.kind === DisplayedVaultKind.Available

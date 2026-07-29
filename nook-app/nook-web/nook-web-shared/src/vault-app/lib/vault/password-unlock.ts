@@ -1,4 +1,6 @@
 import { VaultState } from '$lib/vault.svelte'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+import { EnrollmentEntryKind } from '$lib/vault/state/session.svelte'
 import { isoTimestamp } from '$lib/nook'
 import { createLogger } from '$lib/log'
 export enum SharedStorageTargetKind {
@@ -9,6 +11,14 @@ export enum SharedStorageTargetKind {
 export type SharedStorageTarget =
   | { kind: SharedStorageTargetKind.NotBound }
   | { kind: SharedStorageTargetKind.Bound; storageTargetId: string }
+enum CatalogVaultLabelKind {
+  Missing = 'missing',
+  Present = 'present',
+}
+
+type CatalogVaultLabel =
+  | { kind: CatalogVaultLabelKind.Missing }
+  | { kind: CatalogVaultLabelKind.Present; label: string }
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
@@ -70,7 +80,7 @@ export async function addVaultPassword(
   label: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.passwordError = 'Vault engine is not available.'
     return
   }
@@ -82,7 +92,7 @@ export async function addVaultPassword(
   state.passwordError = ''
   state.isPasswordBusy = true
   try {
-    const manager = state.manager!
+    const manager = state.requireManager()
     await state.enqueueStorage(() => {
       const trimmedLabel = label.trim()
       const e2eManager = manager as typeof manager & E2ePasswordManager
@@ -117,14 +127,14 @@ export async function updateVaultPasswordEntry(
   entryId: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.passwordError = 'Vault engine is not available.'
     return
   }
   state.passwordError = ''
   state.isPasswordBusy = true
   try {
-    const manager = state.manager!
+    const manager = state.requireManager()
     await state.enqueueStorage(() => {
       const e2eManager = manager as typeof manager & E2ePasswordManager
       if (
@@ -151,15 +161,18 @@ export async function removeVaultPasswordEntry(
   state: VaultState,
   entryId: string,
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   state.passwordError = ''
   state.isPasswordBusy = true
   try {
     await state.enqueueStorage(() =>
-      state.manager!.removeVaultPasswordEntry(entryId),
+      state.requireManager().removeVaultPasswordEntry(entryId),
     )
     await state.refreshPasswordEntriesList()
-    if (state.activeEnrollmentEntryId === entryId) {
+    if (
+      state.activeEnrollmentEntry.kind === EnrollmentEntryKind.Active &&
+      state.activeEnrollmentEntry.entryId === entryId
+    ) {
       state.enrollmentCode = ''
       state.clearActiveEnrollmentEntry()
     }
@@ -179,7 +192,7 @@ export async function unlockWithPassword(
   entryId: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t('errors.engine_unavailable')
     return
   }
@@ -206,12 +219,14 @@ export async function unlockWithPassword(
   state.isVerifying = true
   try {
     const page = await state.enqueueStorage(() =>
-      state.manager!.connectWithPassword(
-        ...state.wasmStorageArgs(),
-        entryId,
-        password,
-        state.secretPageSize,
-      ),
+      state
+        .requireManager()
+        .connectWithPassword(
+          ...state.wasmStorageArgs(),
+          entryId,
+          password,
+          state.secretPageSize,
+        ),
     )
     state.applyConnectedSecretPage(page, '')
     if (state.deviceProtectionReady) {
@@ -292,7 +307,7 @@ function applySavedEnrollmentProvider(
     if (!provider.oauthFile) {
       throw new Error('OAuth enrollment provider is missing its configuration.')
     }
-    state.oauthFile = provider.oauthFile
+    state.configureOauthFile(provider.oauthFile)
     state.githubPat = ''
     state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo
     state.clearLocalFolder()
@@ -304,7 +319,7 @@ function applySavedEnrollmentProvider(
       'Local-folder enrollment provider is missing its configuration.',
     )
   }
-  state.localFolder = provider.localFolder
+  state.configureLocalFolder(provider.localFolder)
   state.githubPat = ''
   state.clearOauthFile()
 }
@@ -409,11 +424,11 @@ function enrollmentOauthOptionalFields(provider: NookEnrollmentProvider): {
 async function localVaultHasPasswordEntries(
   state: VaultState,
 ): Promise<boolean> {
-  if (!state.manager) return false
+  if (!state.hasManager) return false
   if (!state.localVaultPresent && !(await hasActiveLocalVault())) return false
   try {
     const entries = await state.enqueueStorage(() =>
-      state.manager!.fetchVaultPasswordEntries('local', '', ''),
+      state.requireManager().fetchVaultPasswordEntries('local', '', ''),
     )
     return entries.length > 0
   } catch {
@@ -426,7 +441,7 @@ export async function connectWithEnrollmentCode(
   code: string,
   password = '',
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t('errors.engine_unavailable')
     return
   }
@@ -619,7 +634,7 @@ export async function connectWithEnrollmentCode(
       if (!oauthFile) {
         throw new Error('Enrollment OAuth provider configuration is required')
       }
-      state.oauthFile = oauthFile
+      state.configureOauthFile(oauthFile)
       state.githubPat = ''
       state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo
       state.clearLocalFolder()
@@ -648,20 +663,24 @@ export async function connectWithEnrollmentCode(
     await state.initDeviceIdentity()
 
     const page = await state.enqueueStorage(() =>
-      state.manager!.connectWithPassword(
-        ...enrollmentStorageArgs,
-        entryId,
-        unlockPassword,
-        state.secretPageSize,
-      ),
+      state
+        .requireManager()
+        .connectWithPassword(
+          ...enrollmentStorageArgs,
+          entryId,
+          unlockPassword,
+          state.secretPageSize,
+        ),
     )
     state.applyConnectedSecretPage(page, '')
     const vaultName = payload.vaultName?.trim()
     const vaultStoreId = (
-      await state.enqueueStorage(() => state.manager!.vaultStoreId)
+      await state.enqueueStorage(() => state.requireManager().vaultStoreId)
     ).trim()
     if (vaultName && vaultStoreId) {
-      await state.enqueueStorage(() => state.manager!.setVaultName(vaultName))
+      await state.enqueueStorage(() =>
+        state.requireManager().setVaultName(vaultName),
+      )
       await setLocalVaultLabel(vaultStoreId, vaultName)
     }
     // Password enrollment downloads an existing vault into this browser. Make
@@ -699,7 +718,7 @@ export async function issueEnrollmentCode(
   password: string,
   providerId = state.syncProviders[0]?.id ?? '',
 ): Promise<string> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     throw new Error('Vault engine is not available.')
   }
   // Password verification borrows the wasm manager synchronously (`&self`).
@@ -748,7 +767,7 @@ export async function issueEnrollmentCode(
     try {
       verified = await state.enqueueStorage(async () => {
         await Promise.resolve()
-        return state.manager!.verifyVaultPassword(entryId, password)
+        return state.requireManager().verifyVaultPassword(entryId, password)
       })
     } catch {
       verified = false
@@ -872,7 +891,7 @@ export async function issueEnrollmentCode(
             ...selectedProvider,
             oauthFile: updatedOauth,
           }
-          state.oauthFile = updatedOauth
+          state.configureOauthFile(updatedOauth)
           state.providers = state.providers.map((row) =>
             row.id === selectedProvider.id ? enrollmentProviderRow : row,
           )
@@ -884,7 +903,7 @@ export async function issueEnrollmentCode(
             // Await Rust/WASM fan-out before issuing the enrollment code.
             const targetArgs = state.providerWasmArgs(enrollmentProviderRow)
             await state.enqueueStorage(() =>
-              state.manager!.flushEventOutboxForProvider(...targetArgs),
+              state.requireManager().flushEventOutboxForProvider(...targetArgs),
             )
           }
         }
@@ -892,7 +911,7 @@ export async function issueEnrollmentCode(
       if (usesSharedICloud) {
         const targetArgs = state.providerWasmArgs(enrollmentProviderRow)
         await state.enqueueStorage(() =>
-          state.manager!.flushEventOutboxForProvider(...targetArgs),
+          state.requireManager().flushEventOutboxForProvider(...targetArgs),
         )
       }
     }
@@ -908,11 +927,23 @@ export async function issueEnrollmentCode(
     )
     log.info('enrollment provider payload prepared', { providerId })
     const managerVaultName = await state.enqueueStorage(
-      () => state.manager!.vaultName,
+      () => state.requireManager().vaultName,
     )
-    const catalogVaultName = state.localVaults
-      .find((entry) => entry.storeId === state.activeVaultStoreId)
-      ?.label?.trim()
+    let catalogVaultName: CatalogVaultLabel = {
+      kind: CatalogVaultLabelKind.Missing,
+    }
+    if (state.activeVault.kind === ActiveVaultKind.Open) {
+      for (const entry of state.localVaults) {
+        const label = entry.label.trim()
+        if (entry.storeId === state.activeVault.storeId && label) {
+          catalogVaultName = {
+            kind: CatalogVaultLabelKind.Present,
+            label,
+          }
+          break
+        }
+      }
+    }
     // The local catalog is the durable browser-level label index. Keep it as
     // the enrollment fallback while older/synced projections without
     // `vault_name` are still supported.
@@ -920,8 +951,8 @@ export async function issueEnrollmentCode(
       try {
         return managerVaultName.state === NookValueState.Value
           ? NookStringValue.value(managerVaultName.string)
-          : catalogVaultName
-            ? NookStringValue.value(catalogVaultName)
+          : catalogVaultName.kind === CatalogVaultLabelKind.Present
+            ? NookStringValue.value(catalogVaultName.label)
             : NookStringValue.unavailable()
       } finally {
         managerVaultName.free()
@@ -950,7 +981,7 @@ export async function issueEnrollmentCode(
       selectedPassword?.label ?? '',
     )
     state.enrollmentCode = code
-    state.activeEnrollmentEntryId = entryId
+    state.beginEnrollmentEntry(entryId)
     log.info('enrollment code issued', { providerId })
     return code
   } finally {

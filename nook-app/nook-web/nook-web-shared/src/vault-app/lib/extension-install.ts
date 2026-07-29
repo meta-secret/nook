@@ -5,6 +5,10 @@ import {
   readInstalledExtensionRuntimeId,
 } from '$lib/extension-connect'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
+import {
+  ActiveVaultKind,
+  type ActiveVault,
+} from '$lib/vault/state/provider.svelte'
 
 export enum ExtensionInstallMethod {
   ChromeWebStore = 'chrome_web_store',
@@ -225,7 +229,7 @@ export async function loadExtensionInstallTarget(): Promise<ExtensionInstallTarg
 }
 
 export async function resolveExtensionSetupState(
-  vaultStoreId: string | void,
+  activeVault: ActiveVault,
 ): Promise<ExtensionSetupState> {
   if (
     readInstalledExtensionRuntimeId().kind ===
@@ -233,9 +237,11 @@ export async function resolveExtensionSetupState(
   ) {
     return { status: ExtensionSetupStatus.NotInstalled }
   }
-  if (!vaultStoreId) return { status: ExtensionSetupStatus.InstalledUnpaired }
+  if (activeVault.kind === ActiveVaultKind.Closed) {
+    return { status: ExtensionSetupStatus.InstalledUnpaired }
+  }
 
-  const discovery = await discoverPairedExtensionIdentity(vaultStoreId)
+  const discovery = await discoverPairedExtensionIdentity(activeVault.storeId)
   if (
     discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||

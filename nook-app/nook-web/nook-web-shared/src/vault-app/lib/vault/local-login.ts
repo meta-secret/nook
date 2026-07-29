@@ -13,6 +13,7 @@ import {
   type NookVaultManager,
 } from '$app-wasm'
 import { saveAuthProviders } from '$lib/auth-providers'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 
 const log = createLogger('vault-local')
 
@@ -20,11 +21,11 @@ export async function reloadProvidersForActiveVault(
   state: VaultState,
 ): Promise<void> {
   const snapshot = await state.enqueueStorage(() =>
-    state.manager!.loadAuthProviders(),
+    state.requireManager().loadAuthProviders(),
   )
   state.providers = snapshot.providers
   if (snapshot.activeVaultStoreId) {
-    state.activeVaultStoreId = snapshot.activeVaultStoreId
+    state.openActiveVault(snapshot.activeVaultStoreId)
   }
   state.applyActiveProviderCredentials()
 }
@@ -40,7 +41,7 @@ export async function chooseLoginVault(
   storeId: string,
 ): Promise<void> {
   await state.selectVaultForUnlock(storeId)
-  state.selectedLoginVaultStoreId = storeId
+  state.selectLoginVault(storeId)
 }
 
 export async function switchToVault(
@@ -50,7 +51,9 @@ export async function switchToVault(
   const switchDecision = state.clientPolicy.vaultSwitchTarget(
     storeId,
     state.hasActiveVaultStore,
-    state.activeVaultStoreId ?? '',
+    state.activeVault.kind === ActiveVaultKind.Open
+      ? state.activeVault.storeId
+      : '',
     state.isVerifying,
   )
   if (switchDecision.state !== NookVaultSwitchState.Switch) {
@@ -96,7 +99,7 @@ export async function refreshLocalVaultCatalog(
   state.localVaultPresent = await hasActiveLocalVault()
   const activeFromWasm = await getActiveVaultId()
   if (activeFromWasm) {
-    state.activeVaultStoreId = activeFromWasm
+    state.openActiveVault(activeFromWasm)
   }
 }
 
@@ -120,9 +123,11 @@ export async function selectVaultForUnlock(
   state.isVerifying = true
   try {
     await setActiveVault(storeId)
-    state.activeVaultStoreId = storeId
-    if (state.manager) {
-      await state.enqueueStorage(() => state.manager!.resetVaultSession())
+    state.openActiveVault(storeId)
+    if (state.hasManager) {
+      await state.enqueueStorage(() =>
+        state.requireManager().resetVaultSession(),
+      )
     }
     state.localVaultPresent = await hasActiveLocalVault()
     state.localLoginPrepared = false
@@ -142,8 +147,8 @@ export async function prepareExistingVaultImportSlot(
   state: VaultState,
 ): Promise<void> {
   await prepareNewLocalVaultSlot()
-  if (state.manager) {
-    await state.enqueueStorage(() => state.manager!.resetVaultSession())
+  if (state.hasManager) {
+    await state.enqueueStorage(() => state.requireManager().resetVaultSession())
   }
   state.clearActiveVaultStore()
   state.localVaultPresent = await hasActiveLocalVault()
@@ -154,7 +159,7 @@ export async function createLocalVaultWithDeviceKeys(
   state: VaultState,
   label?: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t('errors.engine_unavailable')
     return
   }
@@ -179,21 +184,25 @@ export async function createLocalVaultWithDeviceKeys(
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareNewLocalVaultSlot()
-      await state.enqueueStorage(() => state.manager!.resetVaultSession())
+      await state.enqueueStorage(() =>
+        state.requireManager().resetVaultSession(),
+      )
     }
     state.applyDraftVaultArchitecture()
     const rawRecords = (await state.enqueueStorage(() => {
       if (creatingAdditionalVault) {
-        return state.manager!.connect_fresh('local', '', '')
+        return state.requireManager().connect_fresh('local', '', '')
       }
-      return state.manager!.connect('local', '', '')
+      return state.requireManager().connect('local', '', '')
     })) as NookSecretRecord[]
     for (const record of rawRecords) record.free()
     await state.loadSecretPage('', 0)
     state.markVaultUnlocked()
-    const storeId = requireManagerVaultStoreId(state.manager)
-    state.activeVaultStoreId = storeId
-    await state.enqueueStorage(() => state.manager!.setVaultName(trimmedLabel))
+    const storeId = requireManagerVaultStoreId(state.requireManager())
+    state.openActiveVault(storeId)
+    await state.enqueueStorage(() =>
+      state.requireManager().setVaultName(trimmedLabel),
+    )
     await setLocalVaultLabel(storeId, trimmedLabel)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true
@@ -255,9 +264,12 @@ export async function renameLocalVaultLabel(
 
   try {
     await setLocalVaultLabel(trimmedStoreId, trimmedLabel)
-    if (trimmedStoreId === state.activeVaultStoreId?.trim()) {
+    if (
+      state.activeVault.kind === ActiveVaultKind.Open &&
+      trimmedStoreId === state.activeVault.storeId.trim()
+    ) {
       await state.enqueueStorage(() =>
-        state.manager!.setVaultName(trimmedLabel),
+        state.requireManager().setVaultName(trimmedLabel),
       )
     }
     renameCommitted = true
@@ -290,10 +302,11 @@ export async function renameLocalVaultLabel(
 export async function syncActiveVaultStoreIdToAuth(
   state: VaultState,
 ): Promise<void> {
-  const storeId = state.activeVaultStoreId?.trim()
+  if (state.activeVault.kind === ActiveVaultKind.Closed) return
+  const storeId = state.activeVault.storeId.trim()
   if (!storeId) return
   await state.enqueueStorage(() =>
-    saveAuthProviders(state.manager!, {
+    saveAuthProviders(state.requireManager(), {
       providers: state.providers,
       activeVaultStoreId: storeId,
     }),
@@ -304,13 +317,13 @@ export async function activateConnectedExistingVault(
   state: VaultState,
   storeId: string,
 ): Promise<void> {
-  if (!state.manager || !state.isAuthenticated) return
-  const connectedStoreId = requireManagerVaultStoreId(state.manager)
+  if (!state.hasManager || !state.isAuthenticated) return
+  const connectedStoreId = requireManagerVaultStoreId(state.requireManager())
   if (connectedStoreId !== storeId) {
     throw new Error(state.t('errors.vault_selection_failed'))
   }
   await setActiveVault(storeId)
-  state.activeVaultStoreId = storeId
+  state.openActiveVault(storeId)
   await refreshLocalVaultCatalog(state)
   await syncActiveVaultStoreIdToAuth(state)
 }

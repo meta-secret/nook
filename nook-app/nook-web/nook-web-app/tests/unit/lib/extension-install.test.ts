@@ -11,6 +11,12 @@ import {
   shouldOfferExtensionSetup,
 } from '$lib/extension-install'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+
+const activeVault = {
+  kind: ActiveVaultKind.Open,
+  storeId: 'store-1',
+} as const
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-nook-extension-runtime-id')
@@ -181,7 +187,7 @@ describe('extension install target', () => {
 
 describe('extension setup status', () => {
   test('reports not_installed when the content-script attribute is missing', async () => {
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
       status: ExtensionSetupStatus.NotInstalled,
     })
   })
@@ -191,7 +197,7 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
     )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
       status: ExtensionSetupStatus.InstalledUnpaired,
     })
   })
@@ -201,7 +207,7 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
     )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
       status: ExtensionSetupStatus.Paired,
     })
   })
@@ -211,7 +217,7 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
     )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
       status: ExtensionSetupStatus.PairedElsewhere,
       connectedVaultStoreId: 'store-previous',
       connectedVaultName: 'Previous vault',

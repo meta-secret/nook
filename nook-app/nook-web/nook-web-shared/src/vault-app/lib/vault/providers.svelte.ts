@@ -44,8 +44,13 @@ import {
 import { LocalFolderHealthKind } from '$lib/vault/state/sync.svelte'
 import { createLogger } from '$lib/log'
 import {
+  ActiveVaultKind,
+  LocalFolderDraftKind,
   LocalProviderLookupKind,
+  LoginVaultSelectionKind,
   LoginSetupKind,
+  OAuthFileDraftKind,
+  OAuthSetupPresetKind,
   StagedRemoteStorageKind,
   type LocalProviderLookup,
   type StagedRemoteStorage,
@@ -119,8 +124,8 @@ function stagedProviderType(
 function providerSnapshot(state: ProviderActionsContext) {
   return $state.snapshot({
     providers: state.providers,
-    ...(state.activeVaultStoreId
-      ? { activeVaultStoreId: state.activeVaultStoreId }
+    ...(state.activeVault.kind === ActiveVaultKind.Open
+      ? { activeVaultStoreId: state.activeVault.storeId }
       : {}),
   })
 }
@@ -129,13 +134,17 @@ export function wasmStorageArgs(
   state: ProviderActionsContext,
 ): [string, string, string] {
   const syncProvider = syncProviders(state)[0]
+  const oauthFileDraft = state.oauthFileDraft
   const boundary = {
     ...(syncProvider ? { syncProvider: $state.snapshot(syncProvider) } : {}),
-    ...(state.oauthFile
+    ...(oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? {
           oauthRemoteRef: oauthRemoteStorageRef(
-            $state.snapshot(state.oauthFile),
+            $state.snapshot(oauthFileDraft.config),
           ),
+          oauthPreset: oauthFileDraft.config.preset,
+          oauthAccessToken: oauthFileDraft.config.accessToken,
+          oauthFileName: oauthFileDraft.config.fileName,
         }
       : {}),
   }
@@ -147,10 +156,10 @@ export function wasmStorageArgs(
       state.storageMode,
       state.githubPat,
       state.githubRepo,
-      state.oauthFile?.preset,
-      state.oauthFile?.accessToken,
+      boundary.oauthPreset,
+      boundary.oauthAccessToken,
       boundary.oauthRemoteRef,
-      state.oauthFile?.fileName,
+      boundary.oauthFileName,
     ),
   )
 }
@@ -187,7 +196,9 @@ export function stagedRemoteStorageArgs(
   const boundary = {
     ...(state.githubPat ? { githubPat: state.githubPat } : {}),
     ...(state.githubRepo ? { githubRepo: state.githubRepo } : {}),
-    ...(state.oauthFile ? { oauthFile: $state.snapshot(state.oauthFile) } : {}),
+    ...(state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? { oauthFile: $state.snapshot(state.oauthFileDraft.config) }
+      : {}),
   }
   const args = stagedRemoteStorageArgsCore(
     type,
@@ -209,16 +220,15 @@ export function stagedProviderLabel(state: ProviderActionsContext): string {
     return stagedGithubProviderLabel(state.githubRepo)
   }
   if (providerType === 'oauth-file') {
-    const oauthFile = state.oauthFile
-    if (oauthFile) {
+    if (state.oauthFileDraft.kind === OAuthFileDraftKind.Configured) {
+      const oauthFile = state.oauthFileDraft.config
       return stagedConfiguredOauthProviderLabel(
         oauthFile.fileName,
         oauthFile.preset,
       )
     }
-    const setupPreset = state.oauthSetupPreset
-    return setupPreset
-      ? stagedConfiguredOauthProviderLabel('', setupPreset)
+    return state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+      ? stagedConfiguredOauthProviderLabel('', state.oauthSetupSelection.preset)
       : stagedUnconfiguredOauthProviderLabel()
   }
   return stagedLocalProviderLabel(providerType)
@@ -230,8 +240,12 @@ export function hasRemoteProviderCredentials(
   return hasRemoteCredentials(
     state.storageMode,
     state.githubPat,
-    state.oauthFile?.accessToken,
-    state.localFolder?.handleId,
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? state.oauthFileDraft.config.accessToken
+      : '',
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? state.localFolderDraft.config.handleId
+      : '',
   )
 }
 
@@ -240,16 +254,16 @@ export function syncOAuthRemoteRefFromManager(
 ): void {
   if (
     state.storageMode !== OAUTH_FILE_PROVIDER_TYPE ||
-    !state.manager ||
-    !state.oauthFile
+    !state.hasManager ||
+    state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
   ) {
     return
   }
   const updated = updateOauthRemoteRef(
-    $state.snapshot(state.oauthFile),
-    state.manager.storage_remote_ref ?? '',
+    $state.snapshot(state.oauthFileDraft.config),
+    state.requireManager().storage_remote_ref ?? '',
   )
-  if (updated) state.oauthFile = updated
+  if (updated) state.configureOauthFile(updated)
 }
 
 export async function chooseLocalFolder(
@@ -260,10 +274,10 @@ export async function chooseLocalFolder(
     throw new Error(state.t('provider_setup.local_folder_unsupported_browser'))
   }
   const folder = await chooseLocalFolderBackupDirectory()
-  state.localFolder = {
+  state.configureLocalFolder({
     directoryName: folder.directoryName,
     handleId: folder.handleId,
-  }
+  })
 }
 
 export function refreshLocalFolderBackupSupport(
@@ -331,8 +345,8 @@ export async function assessVaultConnectStatus(
   state: ProviderActionsContext,
   args: [string, string, string],
 ): Promise<VaultAccessStatus> {
-  const manager = state.manager
-  if (!manager) throw new Error(state.t('errors.engine_unavailable'))
+  if (!state.hasManager) throw new Error(state.t('errors.engine_unavailable'))
+  const manager = state.requireManager()
   return (await state.enqueueStorage(async () => {
     const assessPromise = manager.assess_vault_connect(...args)
     const timeout = startVaultDiscoveryTimeout(
@@ -378,16 +392,25 @@ export async function handleRemoteVaultAssessStatus(
 async function vaultStoreIdForProviderSave(
   state: ProviderActionsContext,
 ): Promise<ProviderSaveStoreId> {
-  const fromManager = state.manager
-    ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
+  const fromManager = state.hasManager
+    ? (
+        await state.enqueueStorage(() => state.requireManager().vaultStoreId)
+      ).trim()
     : ''
   if (fromManager) {
     return { kind: ProviderSaveStoreIdKind.Available, storeId: fromManager }
   }
-  const storedId =
-    state.activeVaultStoreId?.trim() || state.selectedLoginVaultStoreId?.trim()
-  return storedId
-    ? { kind: ProviderSaveStoreIdKind.Available, storeId: storedId }
+  if (state.activeVault.kind === ActiveVaultKind.Open) {
+    return {
+      kind: ProviderSaveStoreIdKind.Available,
+      storeId: state.activeVault.storeId,
+    }
+  }
+  return state.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
+    ? {
+        kind: ProviderSaveStoreIdKind.Available,
+        storeId: state.selectedLoginVault.storeId,
+      }
     : { kind: ProviderSaveStoreIdKind.Unavailable }
 }
 
@@ -403,14 +426,14 @@ export async function loadProviders(
 ) {
   const snapshot = await state.enqueueStorage(() =>
     options?.ensureLocalRow
-      ? state.manager!.loadAuthProvidersWithLocalRow()
-      : state.manager!.loadAuthProviders(),
+      ? state.requireManager().loadAuthProvidersWithLocalRow()
+      : state.requireManager().loadAuthProviders(),
   )
   state.providers = snapshot.providers.map((p) =>
     p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
   )
   if (snapshot.activeVaultStoreId) {
-    state.activeVaultStoreId = snapshot.activeVaultStoreId
+    state.openActiveVault(snapshot.activeVaultStoreId)
   }
   state.providersLoaded = true
   log.debug('providers loaded', {
@@ -422,13 +445,15 @@ export async function loadProviders(
 export async function promoteSessionVaultToLocalIfNeeded(
   state: ProviderActionsContext,
 ): Promise<void> {
-  const snapshot = await state.manager!.ensureLocalAuthProviderSnapshot({
-    providers: state.providers,
-  })
+  const snapshot = await state
+    .requireManager()
+    .ensureLocalAuthProviderSnapshot({
+      providers: state.providers,
+    })
   if (snapshot.providers.length !== state.providers.length) {
     state.providers = snapshot.providers
     await state.enqueueStorage(() =>
-      saveAuthProviders(state.manager!, snapshot),
+      saveAuthProviders(state.requireManager(), snapshot),
     )
   }
   state.localVaultPresent = await hasLocalVault()
@@ -472,12 +497,12 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   state.storageMode = syncProvider.type
   state.githubPat = syncProvider.githubPat ?? ''
   if (syncProvider.type === 'oauth-file') {
-    state.oauthFile = syncProvider.oauthFile
+    state.configureOauthFile(syncProvider.oauthFile)
     state.clearLocalFolder()
     state.githubRepo =
       syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
   } else if (syncProvider.type === 'local-folder') {
-    state.localFolder = syncProvider.localFolder
+    state.configureLocalFolder(syncProvider.localFolder)
     state.githubRepo = DEFAULT_GITHUB_REPO
     state.clearOauthFile()
   } else {
@@ -493,7 +518,7 @@ export async function persistProviders(
 ) {
   if (!opts?.replace && state.localVaultPresent) {
     const snapshot = await state.enqueueStorage(() =>
-      state.manager!.loadAuthProviders(),
+      state.requireManager().loadAuthProviders(),
     )
     const memoryIds = state.providers.map((p) => p.id)
     const extraSync = snapshot.providers.filter(
@@ -504,7 +529,7 @@ export async function persistProviders(
     }
   }
   await state.enqueueStorage(() =>
-    saveAuthProviders(state.manager!, {
+    saveAuthProviders(state.requireManager(), {
       providers: state.providers,
       ...(state.hasActiveVaultStore
         ? { activeVaultStoreId: state.requireActiveVaultStoreId() }
@@ -531,14 +556,14 @@ export function beginProviderSetup(
     if (preset === 'icloud') {
       resetICloudSignInState(state)
     }
-    state.oauthSetupPreset = preset
-    state.oauthFile = {
+    state.selectOauthSetupPreset(preset)
+    state.configureOauthFile({
       preset,
       accessToken: '',
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
       driveMode: 'private',
       iCloudMode: 'private',
-    }
+    })
   } else {
     state.clearOauthSetupPreset()
     state.clearOauthFile()
@@ -619,12 +644,16 @@ export async function ensureProviderSaved(
 ): Promise<boolean> {
   const pat = state.githubPat.trim()
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO
+  const oauthFileDraft = state.oauthFileDraft
   const sharedGoogleDrive =
-    state.oauthFile?.preset === 'google-drive' &&
-    (state.oauthFile.driveMode === 'shared' ||
-      Boolean(state.oauthFile.folderId?.trim()))
+    oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+    oauthFileDraft.config.preset === 'google-drive' &&
+    (oauthFileDraft.config.driveMode === 'shared' ||
+      Boolean(oauthFileDraft.config.folderId?.trim()))
   const driveFile = sharedGoogleDrive
-    ? state.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+    ? oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? oauthFileDraft.config.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+      : DEFAULT_DRIVE_BACKUP_NAME
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME
   const type = stagedProviderType(state)
   const isNewSetup = state.loginSetup.kind === LoginSetupKind.Active
@@ -637,7 +666,11 @@ export async function ensureProviderSaved(
       ? { storeId: vaultStoreId.storeId }
       : {}
   const oauthPreset =
-    state.oauthFile?.preset ?? state.oauthSetupPreset ?? 'google-drive'
+    oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? oauthFileDraft.config.preset
+      : state.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? state.oauthSetupSelection.preset
+        : 'google-drive'
 
   const isExplicitAdd =
     state.addProviderOpen ||
@@ -660,16 +693,22 @@ export async function ensureProviderSaved(
       }
     } else if (type === 'oauth-file') {
       const oauthFile: OAuthFileConfig = {
+        ...(oauthFileDraft.kind === OAuthFileDraftKind.Configured
+          ? oauthFileDraft.config
+          : {}),
         preset: oauthPreset,
-        accessToken: state.oauthFile?.accessToken ?? '',
-        refreshToken: state.oauthFile?.refreshToken,
-        expiresAt: state.oauthFile?.expiresAt,
-        fileId: state.oauthFile?.fileId,
-        folderId: state.oauthFile?.folderId,
-        driveMode: state.oauthFile?.driveMode ?? 'private',
-        iCloudMode: state.oauthFile?.iCloudMode ?? 'private',
-        iCloudShareTarget: state.oauthFile?.iCloudShareTarget,
-        accountEmail: state.oauthFile?.accountEmail,
+        accessToken:
+          oauthFileDraft.kind === OAuthFileDraftKind.Configured
+            ? oauthFileDraft.config.accessToken
+            : '',
+        driveMode:
+          oauthFileDraft.kind === OAuthFileDraftKind.Configured
+            ? (oauthFileDraft.config.driveMode ?? 'private')
+            : 'private',
+        iCloudMode:
+          oauthFileDraft.kind === OAuthFileDraftKind.Configured
+            ? (oauthFileDraft.config.iCloudMode ?? 'private')
+            : 'private',
         fileName: driveFile,
       }
       provider = {
@@ -684,14 +723,11 @@ export async function ensureProviderSaved(
         createdAt: isoTimestamp(),
       }
     } else {
-      const localFolder: LocalFolderConfig = {
-        directoryName: state.localFolder?.directoryName,
-        handleId: state.localFolder?.handleId,
-      }
-      if (!localFolder.handleId) {
+      if (state.localFolderDraft.kind !== LocalFolderDraftKind.Configured) {
         state.errorMsg = state.t('auth_storage.local_folder_choose_err')
         return false
       }
+      const localFolder: LocalFolderConfig = state.localFolderDraft.config
       provider = {
         id: generateId(),
         type,
@@ -749,22 +785,26 @@ export async function ensureProviderSaved(
     const snapshot = ensureLocalProviderRowWasm(
       {
         providers: state.providers,
-        activeVaultStoreId: state.activeVaultStoreId,
+        activeVaultStoreId: state.requireActiveVaultStoreId(),
       } as AuthProvidersSnapshot,
       providerStoreFields.storeId,
     )
     state.providers = snapshot.providers
   }
 
-  if (state.storageMode === 'oauth-file' && state.oauthFile?.fileId) {
-    const activeOauthFile = state.oauthFile
+  if (
+    state.storageMode === 'oauth-file' &&
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+    state.oauthFileDraft.config.fileId
+  ) {
+    const activeOauthFile = state.oauthFileDraft.config
     const activePreset = activeOauthFile.preset
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
       const duplicate = findDuplicateSyncProvider(state.syncProviders, {
         id: 'oauth-provider-update-target',
         type: 'oauth-file',
         label: '',
-        oauthFile: state.oauthFile,
+        oauthFile: activeOauthFile,
         createdAt: '',
       })
       if (duplicate.kind === DuplicateSyncProviderKind.Duplicate) {
@@ -807,10 +847,11 @@ export async function ensureProviderSaved(
         }
         return { ...provider, oauthFile: merged }
       })
-      state.oauthFile =
+      state.configureOauthFile(
         state.providers.find(
           (provider) => provider.id === oauthProviderToUpdateId,
-        )?.oauthFile ?? activeOauthFile
+        )?.oauthFile ?? activeOauthFile,
+      )
     }
   }
 
@@ -843,7 +884,7 @@ export async function connectStagedProvider(
 export async function discoverStagedVaultStoreId(
   state: ProviderActionsContext,
 ): Promise<string> {
-  if (!state.manager || state.loginSetup.kind !== LoginSetupKind.Active) {
+  if (!state.hasManager || state.loginSetup.kind !== LoginSetupKind.Active) {
     return ''
   }
   const setupType = state.loginSetup.providerType
@@ -854,12 +895,15 @@ export async function discoverStagedVaultStoreId(
   try {
     const discovery = (async () => {
       if (setupType === 'local-folder') {
-        const handleId = state.localFolder?.handleId?.trim() ?? ''
+        const handleId =
+          state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+            ? (state.localFolderDraft.config.handleId?.trim() ?? '')
+            : ''
         if (!handleId) return ''
         return await state.enqueueStorage(async () => {
-          state.manager!.resetVaultSession()
-          await state.manager!.syncLocalFolderProvider(handleId)
-          return state.manager!.vaultStoreId.trim()
+          state.requireManager().resetVaultSession()
+          await state.requireManager().syncLocalFolderProvider(handleId)
+          return state.requireManager().vaultStoreId.trim()
         })
       }
       const stagedStorage = state.stagedRemoteStorageArgs()
@@ -869,11 +913,9 @@ export async function discoverStagedVaultStoreId(
           : state.wasmStorageArgs()
       return (
         await state.enqueueStorage(() =>
-          state.manager!.discoverRemoteVaultStoreId(
-            storageMode,
-            accessToken,
-            remoteRef,
-          ),
+          state
+            .requireManager()
+            .discoverRemoteVaultStoreId(storageMode, accessToken, remoteRef),
         )
       ).trim()
     })()
@@ -883,10 +925,12 @@ export async function discoverStagedVaultStoreId(
     )
     try {
       const storeId = await Promise.race([discovery, timeout.completion])
-      if (storeId && state.manager) {
+      if (storeId && state.hasManager) {
         try {
-          state.existingVaultRecoverySummary = await state.enqueueStorage(() =>
-            state.manager!.vaultRecoveryOptions(),
+          state.recordExistingVaultRecovery(
+            await state.enqueueStorage(() =>
+              state.requireManager().vaultRecoveryOptions(),
+            ),
           )
         } catch (error) {
           state.clearExistingVaultRecoverySummary()
@@ -907,7 +951,7 @@ export async function discoverStagedVaultStoreId(
 export async function connectAndSyncStagedProvider(
   state: ProviderActionsContext,
 ): Promise<void> {
-  if (!state.manager) return
+  if (!state.hasManager) return
   if (state.isVerifying) return
   state.isVerifying = true
   const stagedRemoteArgs = state.stagedRemoteStorageArgs()

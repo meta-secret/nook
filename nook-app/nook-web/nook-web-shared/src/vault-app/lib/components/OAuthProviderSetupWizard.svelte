@@ -26,6 +26,7 @@
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
   import * as oauthActions from '$lib/vault/oauth'
+  import { OAuthFileDraftKind } from '$lib/vault/state/provider.svelte'
   import { SharedFolderAction } from './oauth-provider-setup-state'
 
   const log = createLogger('icloud-oauth')
@@ -51,28 +52,46 @@
   } = $props()
 
   const isICloud = $derived(preset === 'icloud')
-  const googleDriveMode = $derived(
-    vault.oauthFile?.driveMode ??
-      (vault.oauthFile?.folderId?.trim() ? 'shared' : 'private'),
-  )
-  const iCloudMode = $derived(
-    vault.oauthFile?.iCloudMode ??
-      (vault.oauthFile?.iCloudShareTarget?.trim() ? 'shared' : 'private'),
-  )
+  const googleDriveMode = $derived.by((): GoogleDriveMode => {
+    const draft = vault.oauthFileDraft
+    if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
+    return (
+      draft.config.driveMode ??
+      (draft.config.folderId?.trim() ? 'shared' : 'private')
+    )
+  })
+  const iCloudMode = $derived.by((): ICloudMode => {
+    const draft = vault.oauthFileDraft
+    if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
+    return (
+      draft.config.iCloudMode ??
+      (draft.config.iCloudShareTarget?.trim() ? 'shared' : 'private')
+    )
+  })
   const isSharedGoogleDrive = $derived(
     !isICloud && googleDriveMode === 'shared',
   )
   const isSharedICloud = $derived(isICloud && iCloudMode === 'shared')
   const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud)
-  const oauthSignedIn = $derived(Boolean(vault.oauthFile?.accessToken?.trim()))
+  const oauthSignedIn = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+      Boolean(vault.oauthFileDraft.config.accessToken?.trim()),
+  )
   const sharedTargetReady = $derived(
-    (isSharedGoogleDrive && Boolean(vault.oauthFile?.folderId?.trim())) ||
-      (isSharedICloud && Boolean(vault.oauthFile?.iCloudShareTarget?.trim())),
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+      ((isSharedGoogleDrive &&
+        Boolean(vault.oauthFileDraft.config.folderId?.trim())) ||
+        (isSharedICloud &&
+          Boolean(vault.oauthFileDraft.config.iCloudShareTarget?.trim()))),
   )
   const canConnect = $derived(
     oauthSignedIn && (!isSharedProvider || sharedTargetReady),
   )
-  const oauthAccount = $derived(vault.oauthFile?.accountEmail ?? '')
+  const oauthAccount = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? (vault.oauthFileDraft.config.accountEmail ?? '')
+      : '',
+  )
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
   )

@@ -46,7 +46,13 @@
   } from '$app-wasm'
   import { requireWasmStringValue } from '$lib/wasm-string-value'
   import {
+    ActiveVaultKind,
+    LocalFolderDraftKind,
     LoginSetupKind,
+    LoginVaultSelectionKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
+    RecoveryDiscoveryKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
 
@@ -165,15 +171,21 @@
       !showVaultPicker,
   )
   const activeLoginVault = $derived.by((): LoginVaultEntry => {
-    const entry =
-      vault.localVaults.find(
-        (entry) =>
-          entry.storeId ===
-          (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
-      ) ?? vault.localVaults[0]
-    return entry
-      ? { kind: LoginVaultEntryKind.Available, entry }
-      : { kind: LoginVaultEntryKind.Unavailable }
+    const selectedStoreId =
+      vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
+        ? vault.selectedLoginVault.storeId
+        : vault.activeVault.kind === ActiveVaultKind.Open
+          ? vault.activeVault.storeId
+          : ''
+    for (const entry of vault.localVaults) {
+      if (entry.storeId === selectedStoreId) {
+        return { kind: LoginVaultEntryKind.Available, entry }
+      }
+    }
+    for (const entry of vault.localVaults) {
+      return { kind: LoginVaultEntryKind.Available, entry }
+    }
+    return { kind: LoginVaultEntryKind.Unavailable }
   })
   const showQrOnboarding = $derived(
     Boolean(
@@ -211,10 +223,24 @@
   const setupCanConnect = $derived(
     setupIs('local') ||
       (setupIs('local-folder') &&
-        Boolean(vault.localFolder?.handleId?.trim())) ||
+        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
+        Boolean(vault.localFolderDraft.config.handleId.trim())) ||
       (setupIs('oauth-file') &&
-        Boolean(vault.oauthFile?.accessToken?.trim())) ||
+        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+        Boolean(vault.oauthFileDraft.config.accessToken?.trim())) ||
       (setupIs('github') && Boolean(githubPat.trim())),
+  )
+  const recoveryPasswordEntries = $derived(
+    vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
+      ? vault.recoveryDiscovery.summary.passwordEntries
+      : [],
+  )
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
   )
 
   function handleFirstConnectSubmit(e: Event) {
@@ -421,7 +447,7 @@
             hasMultipleVaults={vault.hasMultipleLocalVaults}
             passwordEntries={vault.passwordEntries.length > 0
               ? vault.passwordEntries
-              : (vault.existingVaultRecoverySummary?.passwordEntries ?? [])}
+              : recoveryPasswordEntries}
             bind:selectedPasswordEntry={vault.selectedPasswordEntry}
             {isVerifying}
             {isInitializing}
@@ -444,9 +470,7 @@
               {vault}
               bind:githubRepo
               idPrefix="login"
-              preset={vault.oauthFile?.preset ??
-                vault.oauthSetupPreset ??
-                'google-drive'}
+              preset={oauthPreset}
               {isVerifying}
               {isInitializing}
               {onCancelSetup}

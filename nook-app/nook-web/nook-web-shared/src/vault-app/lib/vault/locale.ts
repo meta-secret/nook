@@ -36,7 +36,7 @@ export async function updateLocale(
     document.documentElement.lang = newLocale
   }
 
-  const preferWasm = options?.preferWasm ?? Boolean(state.manager)
+  const preferWasm = options?.preferWasm ?? state.hasManager
   if (!preferWasm) {
     state.translations = resolveTranslationCatalog(newLocale)
     return

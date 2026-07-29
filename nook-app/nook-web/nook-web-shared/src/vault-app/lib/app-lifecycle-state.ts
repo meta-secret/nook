@@ -10,6 +10,7 @@ import {
   type ExtensionConnectRequestState,
 } from '$lib/extension-connect'
 import type { ExtensionSetupState } from '$lib/extension-install'
+import type { ActiveVault } from '$lib/vault/state/provider.svelte'
 import {
   LegalPageLookupKind,
   type LegalPageId,
@@ -142,7 +143,7 @@ export type ExistingVaultProviderSnapshot =
 
 export type PendingExistingVaultImport = {
   storeId: string
-  previousActiveStoreId: string | void
+  previousActiveVault: ActiveVault
   provider: ExistingVaultProviderSnapshot
 }
 

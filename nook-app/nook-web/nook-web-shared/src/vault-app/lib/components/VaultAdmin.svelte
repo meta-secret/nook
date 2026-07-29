@@ -33,7 +33,10 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import type { LoginSetup } from '$lib/vault/state/provider.svelte'
+  import {
+    ActiveVaultKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
   import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
   import type { ManualProviderSync } from '$lib/vault/state/sync.svelte'
   import {
@@ -169,7 +172,11 @@
       : { kind: ImportProviderSectionKind.Open, providerId }
   }
 
-  const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
+  const activeStoreId = $derived(
+    vault.activeVault.kind === ActiveVaultKind.Open
+      ? vault.activeVault.storeId.trim()
+      : '',
+  )
   const vaults = $derived(vault.localVaults)
   const hasPasswords = $derived(passwordEntries.length > 0)
   const isBusy = $derived(
