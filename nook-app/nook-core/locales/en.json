@@ -1398,6 +1398,11 @@
     "sign_in_with_icloud": "Sign in with Apple",
     "icloud_signing_in": "Opening Apple sign-in…",
     "icloud_signed_in_as": "Signed in as {account}",
+    "icloud_sign_in_required": "Apple sign-in is required. Click Sign in with Apple to continue.",
+    "icloud_sign_in_loading": "Apple sign-in is still loading. Try again in a moment.",
+    "icloud_sign_in_ready": "Apple sign-in is ready. Click Sign in with Apple again.",
+    "icloud_unknown_error": "Apple CloudKit could not complete sign-in. Check that the iCloud API token is enabled for this container and that this browser origin is allowed.",
+    "icloud_sign_in_failed": "iCloud sign-in failed.",
     "icloud_tokens_local_desc": "CloudKit web auth tokens stay in this browser only, like a saved GitHub token.",
     "icloud_event_log_desc": "Event log records are stored as encrypted YAML backups in the selected private or shared CloudKit location.",
     "icloud_oauth_unconfigured": "iCloud sign-in is not configured. Set ICLOUD_CONTAINER_ID and ICLOUD_API_TOKEN in icloud-oauth-config.ts."

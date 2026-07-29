@@ -10,12 +10,31 @@ import {
 } from "./github.js";
 import { prettyJson } from "./json.js";
 
-type WorkflowAudit = RequiredPrWorkflow & {
-  conclusion?: string;
-  runId?: number;
-  status?: string;
-  url?: string;
-};
+export enum WorkflowAuditState {
+  NotIndexed = "not-indexed",
+  Indexed = "indexed",
+}
+
+export enum WorkflowConclusionState {
+  Pending = "pending",
+  Reported = "reported",
+}
+
+type WorkflowConclusion =
+  | { state: WorkflowConclusionState.Pending }
+  | { state: WorkflowConclusionState.Reported; value: string };
+
+type WorkflowAudit = RequiredPrWorkflow &
+  (
+    | { state: WorkflowAuditState.NotIndexed }
+    | {
+        state: WorkflowAuditState.Indexed;
+        conclusion: WorkflowConclusion;
+        runId: number;
+        status: string;
+        url: string;
+      }
+  );
 
 type BranchProtectionAudit = {
   available: boolean;
@@ -133,15 +152,17 @@ export async function buildPrAudit(
     );
   }
   for (const workflow of requiredWorkflows) {
-    if (!("runId" in workflow)) {
+    if (workflow.state === WorkflowAuditState.NotIndexed) {
       reasons.push(
         `${workflow.workflowName} run is not indexed for the current head`,
       );
     } else if (workflow.status !== "completed") {
       reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
-    } else if (workflow.conclusion !== "success") {
+    } else if (workflow.conclusion.state === WorkflowConclusionState.Pending) {
+      reasons.push(`${workflow.workflowName} run has no conclusion`);
+    } else if (workflow.conclusion.value !== "success") {
       reasons.push(
-        `${workflow.workflowName} run concluded ${workflow.conclusion}`,
+        `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
       );
     }
   }
@@ -213,12 +234,21 @@ async function auditWorkflows(
             (pullRequest) => pullRequest.number === prNumber,
           ),
       );
+      if (!run) {
+        return { ...workflow, state: WorkflowAuditState.NotIndexed };
+      }
       return {
         ...workflow,
-        runId: run?.id,
-        ...(run?.conclusion ? { conclusion: run.conclusion } : {}),
-        ...(run?.status ? { status: run.status } : {}),
-        ...(run?.html_url ? { url: run.html_url } : {}),
+        state: WorkflowAuditState.Indexed,
+        conclusion: run.conclusion
+          ? {
+              state: WorkflowConclusionState.Reported,
+              value: run.conclusion,
+            }
+          : { state: WorkflowConclusionState.Pending },
+        runId: run.id,
+        status: run.status,
+        url: run.html_url,
       };
     }),
   );

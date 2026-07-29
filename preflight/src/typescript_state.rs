@@ -765,9 +765,34 @@ fn svelte_raw_string_discriminant_lines(
         &mut lines,
         typescript_code_raw_string_discriminant_lines,
     )?;
+    collect_svelte_expression_fragments_with(
+        tree.root_node(),
+        source,
+        &mut lines,
+        typescript_code_raw_string_discriminant_lines,
+    )?;
     lines.sort_unstable();
     lines.dedup();
     Ok(lines)
+}
+
+fn collect_svelte_expression_fragments_with(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    lines: &mut Vec<usize>,
+    scan: fn(&str, usize) -> Result<Vec<usize>, tree_sitter::LanguageError>,
+) -> Result<(), tree_sitter::LanguageError> {
+    if node.kind() == "expression" {
+        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
+            lines.extend(scan(fragment, node.start_position().row + 1)?);
+        }
+        return Ok(());
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_svelte_expression_fragments_with(child, source, lines, scan)?;
+    }
+    Ok(())
 }
 
 fn collect_svelte_script_fragments_with(
@@ -880,9 +905,9 @@ fn collect_svelte_script_fragments(
 #[cfg(test)]
 mod tests {
     use super::{
-        typescript_code_generic_optional_state_lines, typescript_code_mutable_void_state_lines,
-        typescript_code_null_token_lines, typescript_code_raw_string_discriminant_lines,
-        typescript_code_undefined_token_lines,
+        svelte_raw_string_discriminant_lines, typescript_code_generic_optional_state_lines,
+        typescript_code_mutable_void_state_lines, typescript_code_null_token_lines,
+        typescript_code_raw_string_discriminant_lines, typescript_code_undefined_token_lines,
     };
 
     #[test]
@@ -994,6 +1019,23 @@ type ToolArguments = ToolCall['args'] | void
             typescript_code_raw_string_discriminant_lines(source, 1)?,
             vec![10, 12, 14, 15, 16, 17, 18]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn reports_raw_discriminants_in_svelte_template_expressions()
+    -> Result<(), tree_sitter::LanguageError> {
+        let source = r#"
+<script lang="ts">
+  enum SessionKind { Open = 'open' }
+  const state = { kind: SessionKind.Open }
+</script>
+<button class:active={state.kind === 'open'}>
+  {state.kind === 'open' ? 'Close' : 'Open'}
+</button>
+"#;
+
+        assert_eq!(svelte_raw_string_discriminant_lines(source)?, vec![6, 7]);
         Ok(())
     }
 }

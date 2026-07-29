@@ -297,8 +297,8 @@ export class ExtensionSessionMessageDispatcher {
         type === 'nook:extension-session-seal-identity-handoff' ||
         type === 'nook:extension-session-cancel-passkey'
       const serviceWorkerSender =
-        !('tab' in sender) &&
-        (!('url' in sender) ||
+        !sender.tab &&
+        (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
       if (
         sender.id !== chrome.runtime.id ||

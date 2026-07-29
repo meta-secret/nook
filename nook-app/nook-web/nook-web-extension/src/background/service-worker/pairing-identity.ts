@@ -22,6 +22,7 @@ import {
 } from '../../lib/webauthn-messages'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
 import {
+  firstStoredPairingGrant,
   isStoredExtensionPairingGrant,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
@@ -373,13 +374,10 @@ export async function discoverPairedVaultIdentity(
     }
     if (!isStoredExtensionPairingGrant(grant)) {
       const connectedGrant =
-        selectedGrant ??
-        Object.entries(stored).find(
-          ([storedKey, value]) =>
-            storedKey.startsWith('nook:extension-pairing-grant:') &&
-            isStoredExtensionPairingGrant(value),
-        )?.[1]
-      if (isStoredExtensionPairingGrant(connectedGrant)) {
+        selectedGrant.kind === SelectedPairingGrantKind.Selected
+          ? selectedGrant
+          : firstStoredPairingGrant(stored)
+      if (connectedGrant.kind === SelectedPairingGrantKind.Selected) {
         return {
           type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
           payload: {
@@ -387,8 +385,8 @@ export async function discoverPairedVaultIdentity(
             vaultStoreId,
             status:
               ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
-            connectedVaultStoreId: connectedGrant.vaultStoreId,
-            connectedVaultName: connectedGrant.vaultName,
+            connectedVaultStoreId: connectedGrant.grant.vaultStoreId,
+            connectedVaultName: connectedGrant.grant.vaultName,
           },
         }
       }

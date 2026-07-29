@@ -22,6 +22,7 @@ import {
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
   localFolderConfigurationNotApplicable,
+  missingOAuthAccessToken,
   missingGithubPat,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
@@ -51,7 +52,6 @@ import {
   type LocalFolderConfig,
   type LocalFolderHandle,
   type OAuthFileConfig,
-  type OAuthAccessToken,
   type OAuthFileName,
   type OAuthFilePreset,
   type StorageProvider,
@@ -268,10 +268,10 @@ export function stagedProviderLabel(state: ProviderActionsContext): string {
 export function hasRemoteProviderCredentials(
   state: ProviderActionsContext,
 ): boolean {
-  const oauthCredential: OAuthAccessToken =
+  const oauthCredential =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? oauthAccessToken(state.oauthFileDraft.config)
-      : { kind: OAuthAccessTokenKind.Missing };
+      : missingOAuthAccessToken();
   const folderHandle: LocalFolderHandle =
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? localFolderHandle(state.localFolderDraft.config)

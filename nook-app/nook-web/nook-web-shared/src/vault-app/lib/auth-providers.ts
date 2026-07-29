@@ -9,6 +9,8 @@ import {
   formatDriveStorageRef as formatDriveStorageRefCore,
   formatNewDriveStorageRef,
   maskGithubPatHint as maskGithubPatHintCore,
+  missingOAuthAccessToken,
+  oauthAccessToken,
   localizeProviderLabel as localizeProviderLabelCore,
   providerDefaultLabel as providerDefaultLabelCore,
   providerDefaultLabelWithoutDetail,
@@ -18,6 +20,7 @@ import {
   setICloudProviderMode,
   wasmStorageModeForProvider,
   NookDuplicateSyncProviderState,
+  NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -80,6 +83,9 @@ export {
   setGoogleDriveProviderMode,
   setICloudProviderMode,
   wasmStorageModeForProvider,
+  missingOAuthAccessToken,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
 };
 
 export enum DriveFileIdentityKind {
@@ -319,25 +325,6 @@ export function providerPersistenceDefaults(): Pick<
     localFolder: localFolderConfigurationNotApplicable(),
     storeId: unscopedProviderVault(),
   };
-}
-
-export enum OAuthAccessTokenKind {
-  Missing = "missing",
-  Available = "available",
-}
-
-export type OAuthAccessToken =
-  | { kind: OAuthAccessTokenKind.Missing }
-  | { kind: OAuthAccessTokenKind.Available; token: string };
-
-export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
-  const token =
-    config.accessToken.state === "accessToken"
-      ? config.accessToken.value.trim()
-      : "";
-  return token.length > 0
-    ? { kind: OAuthAccessTokenKind.Available, token }
-    : { kind: OAuthAccessTokenKind.Missing };
 }
 
 export enum OAuthFileNameKind {

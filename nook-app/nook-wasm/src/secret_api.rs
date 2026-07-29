@@ -647,8 +647,8 @@ mod wasm_tests {
     use crate::{
         NookAuthenticationOutcomeObservation, NookAuthenticationPageObservation,
         NookAuthenticationPageObservations, NookExtensionPairingState, NookSecretPage,
-        authentication_workflow_snapshot, classify_authentication_outcome, generate_totp_code,
-        verify_totp_code, wasm_storage_mode_for_provider,
+        authentication_workflow_snapshot, classify_authentication_outcome_with_default_timeout,
+        generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen_test::wasm_bindgen_test;

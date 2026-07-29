@@ -58,7 +58,7 @@ import {
 } from "$lib/icloud-cloudkit-runtime";
 import {
   cloudKitAuthErrorDetails,
-  cloudKitAuthErrorMessage,
+  cloudKitAuthErrorTranslationKey,
   isExpectedCloudKitSignInSetupFailure,
 } from "$lib/icloud-auth-errors";
 import {
@@ -413,7 +413,7 @@ export async function prepareICloudSignInControl(): Promise<void> {
     });
   } catch (error) {
     logCloudKitAuthFailure("CloudKit auth setup failed", error);
-    throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
+    throw new Error(cloudKitAuthErrorTranslationKey(error), { cause: error });
   }
 }
 
@@ -889,7 +889,7 @@ async function waitForCloudKitSignIn(
     cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
     cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
     logCloudKitAuthFailure("CloudKit sign-in failed", error);
-    throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
+    throw new Error(cloudKitAuthErrorTranslationKey(error), { cause: error });
   }
 }
 
@@ -935,7 +935,7 @@ export async function requestICloudWebAuthToken(
   const identity = await setUpCloudKitAuth(container).catch(
     (error: unknown) => {
       logCloudKitAuthFailure("CloudKit auth setup failed", error);
-      throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
+      throw new Error(cloudKitAuthErrorTranslationKey(error), { cause: error });
     },
   );
 

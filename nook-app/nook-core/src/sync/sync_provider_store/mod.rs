@@ -19,6 +19,7 @@ use crate::{
 
 mod catalog;
 mod enrollment;
+mod legacy_storage;
 mod oauth;
 mod scope;
 mod state;
@@ -32,6 +33,7 @@ pub use enrollment::{
     enrollment_provider_for_architecture, enrollment_provider_for_architecture_with_storage_target,
     enrollment_provider_onboarding_type, provider_onboarding_type,
 };
+pub use legacy_storage::auth_snapshot_legacy_storage_value;
 pub use oauth::{
     bind_google_drive_shared_folder, google_oauth_tokens_to_config, icloud_oauth_tokens_to_config,
     oauth_remote_storage_ref, set_google_drive_provider_mode, set_icloud_provider_mode,
@@ -77,6 +79,12 @@ pub struct OAuthFileConfig {
 
 pub type OAuthFileConfigData = OAuthFileConfig;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OAuthAccessTokenRef<'a> {
+    Missing,
+    Available(&'a str),
+}
+
 impl OAuthFileConfigData {
     #[must_use]
     pub const fn resolved_google_drive_mode(&self) -> GoogleDriveMode {
@@ -86,6 +94,14 @@ impl OAuthFileConfigData {
     #[must_use]
     pub const fn resolved_icloud_mode(&self) -> ICloudMode {
         self.icloud_mode
+    }
+
+    #[must_use]
+    pub fn usable_access_token(&self) -> OAuthAccessTokenRef<'_> {
+        match self.access_token.as_deref().map(str::trim) {
+            Some(token) if !token.is_empty() => OAuthAccessTokenRef::Available(token),
+            _ => OAuthAccessTokenRef::Missing,
+        }
     }
 }
 
@@ -569,7 +585,7 @@ mod tests {
             oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset,
                 access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                file_id: file_id.map(str::to_owned),
+                file_id: crate::StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
                 file_name: crate::StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                 ..OAuthFileConfigData::default()
             }),

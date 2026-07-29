@@ -224,7 +224,7 @@ mod tests {
             oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset,
                 access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                file_id: file_id.map(str::to_owned),
+                file_id: crate::StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
                 file_name: crate::StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                 ..OAuthFileConfigData::default()
             }),

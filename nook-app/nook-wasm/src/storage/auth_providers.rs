@@ -15,6 +15,8 @@ use crate::NookError;
 const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
 const STATE_KEY: &str = "providers";
+const SCHEMA_KEY: &str = "providers-schema";
+const STORAGE_SCHEMA_VERSION: u32 = 1;
 
 fn idb_err(context: &str, error: impl std::fmt::Debug) -> NookError {
     NookError::IndexedDb(format!("{context}: {error:?}"))
@@ -57,8 +59,11 @@ async fn read_raw_snapshot() -> Result<serde_json::Value, NookError> {
     }
 }
 
-/// Persist a snapshot object under the `providers` key (structured-clone object,
-/// matching the shape the web layer and e2e seeders read directly).
+/// Persist the rollback-safe schema-1 projection under `providers`.
+///
+/// The semantic Rust enums remain the in-memory contract. The stored projection
+/// deliberately retains the original string-or-absent shape so a previous app
+/// build can read provider rows after rollback.
 async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), NookError> {
     let rexie = open_auth_db().await?;
     let transaction = rexie
@@ -69,12 +74,22 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
         .map_err(|e| idb_err("nook_auth store error", e))?;
     let key =
         serde_wasm_bindgen::to_value(STATE_KEY).map_err(|e| idb_err("nook_auth key error", e))?;
-    let value = serde_wasm_bindgen::to_value(snapshot)
+    let storage_value = nook_core::auth_snapshot_legacy_storage_value(snapshot)
+        .map_err(|e| idb_err("nook_auth compatibility projection error", e))?;
+    let value = serde_wasm_bindgen::to_value(&storage_value)
         .map_err(|e| idb_err("nook_auth serialize error", e))?;
     store
         .put(&value, Some(&key))
         .await
         .map_err(|e| idb_err("nook_auth put error", e))?;
+    let schema_key =
+        serde_wasm_bindgen::to_value(SCHEMA_KEY).map_err(|e| idb_err("schema key error", e))?;
+    let schema_value = serde_wasm_bindgen::to_value(&STORAGE_SCHEMA_VERSION)
+        .map_err(|e| idb_err("schema version error", e))?;
+    store
+        .put(&schema_value, Some(&schema_key))
+        .await
+        .map_err(|e| idb_err("schema version put error", e))?;
     transaction
         .done()
         .await

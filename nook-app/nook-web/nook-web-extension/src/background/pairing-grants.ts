@@ -259,6 +259,22 @@ export function selectedPairingGrant(
     : { kind: SelectedPairingGrantKind.NotSelected }
 }
 
+export function firstStoredPairingGrant(
+  stored: Record<string, unknown>,
+): SelectedPairingGrant {
+  const grants = Object.entries(stored)
+    .filter(
+      ([key, value]) =>
+        key.startsWith('nook:extension-pairing-grant:') &&
+        isStoredExtensionPairingGrant(value),
+    )
+    .map(([, grant]) => grant as StoredExtensionPairingGrant)
+  const first = selectedPairingGrantFirst(stored, grants)[0]
+  return first
+    ? { kind: SelectedPairingGrantKind.Selected, grant: first }
+    : { kind: SelectedPairingGrantKind.NotSelected }
+}
+
 type LegacyStoredExtensionPairingGrant = Omit<
   StoredExtensionPairingGrant,
   'eventCount' | 'eventLogHeads' | 'lastLocalSyncAt'

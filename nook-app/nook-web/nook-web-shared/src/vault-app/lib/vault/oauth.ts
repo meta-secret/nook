@@ -6,6 +6,7 @@ import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
+  missingOAuthAccessToken,
   oauthAccessToken,
   OAuthAccessTokenKind,
   oauthFileName,
@@ -335,7 +336,7 @@ export async function useGoogleSharedFolder(
   const accessCredential =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? oauthAccessToken(state.oauthFileDraft.config)
-      : { kind: OAuthAccessTokenKind.Missing as const };
+      : missingOAuthAccessToken();
   if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
     throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
   }
@@ -402,15 +403,11 @@ export async function signInWithICloud(
         ready: state.icloudOAuthReady,
         preparing: state.icloudOAuthPreparing,
       });
-      throw new Error(
-        "Apple sign-in control is still loading. Try again in a moment.",
-      );
+      throw new Error("provider_setup.icloud_sign_in_loading");
     }
     if (!wasReady) {
       log.info("iCloud sign-in control became ready; waiting for second click");
-      throw new Error(
-        "Apple sign-in is ready. Click Sign in with Apple again.",
-      );
+      throw new Error("provider_setup.icloud_sign_in_ready");
     }
     const tokenRequest = requestPreparedICloudWebAuthToken({
       clickSignInControl: options.clickPreparedControl,
@@ -424,8 +421,12 @@ export async function signInWithICloud(
     });
     await applyICloudOAuthTokens(state, tokens);
   } catch (error) {
-    state.errorMsg =
-      error instanceof Error ? error.message : "iCloud sign-in failed.";
+    state.errorMsg = state.t(
+      error instanceof Error &&
+        error.message.startsWith("provider_setup.icloud_")
+        ? error.message
+        : "provider_setup.icloud_sign_in_failed",
+    );
     log.warn("iCloud sign-in failed", { error: state.errorMsg });
   } finally {
     state.icloudOAuthBusy = false;
@@ -476,8 +477,12 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
     });
   } catch (error) {
     state.icloudOAuthReady = false;
-    state.errorMsg =
-      error instanceof Error ? error.message : "iCloud sign-in failed.";
+    state.errorMsg = state.t(
+      error instanceof Error &&
+        error.message.startsWith("provider_setup.icloud_")
+        ? error.message
+        : "provider_setup.icloud_sign_in_failed",
+    );
     log.warn("iCloud sign-in prepare failed", { error: state.errorMsg });
   } finally {
     state.icloudOAuthPreparing = false;

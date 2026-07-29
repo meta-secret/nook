@@ -704,8 +704,6 @@ function serializeMainBuildStats(record) {
 
 function normalizeLegacyMainBuildStats(record) {
   const normalized = structuredClone(record)
-  if (normalized.schema_version < 2 || !normalized.cache_telemetry)
-    return normalized
 
   if (normalized.schema_version < 3) {
     for (const field of [
@@ -733,24 +731,29 @@ function normalizeLegacyMainBuildStats(record) {
           delete step.duration_seconds
       }
     }
-    const telemetryTotals = normalized.cache_telemetry.totals
-    for (const field of [
-      'sccache_hit_rate_percent',
-      'buildkit_cache_hit_rate_percent',
-    ]) {
-      if (!Number.isFinite(telemetryTotals?.[field])) {
-        delete telemetryTotals?.[field]
+    if (normalized.cache_telemetry) {
+      const telemetryTotals = normalized.cache_telemetry.totals
+      for (const field of [
+        'sccache_hit_rate_percent',
+        'buildkit_cache_hit_rate_percent',
+      ]) {
+        if (!Number.isFinite(telemetryTotals?.[field])) {
+          delete telemetryTotals?.[field]
+        }
       }
-    }
-    for (const job of normalized.cache_telemetry.jobs ?? []) {
-      if (!Number.isFinite(job.sccache?.hit_rate_percent)) {
-        delete job.sccache?.hit_rate_percent
-      }
-      if (!Number.isFinite(job.buildkit?.cache_hit_rate_percent)) {
-        delete job.buildkit?.cache_hit_rate_percent
+      for (const job of normalized.cache_telemetry.jobs ?? []) {
+        if (!Number.isFinite(job.sccache?.hit_rate_percent)) {
+          delete job.sccache?.hit_rate_percent
+        }
+        if (!Number.isFinite(job.buildkit?.cache_hit_rate_percent)) {
+          delete job.buildkit?.cache_hit_rate_percent
+        }
       }
     }
   }
+
+  if (normalized.schema_version < 2 || !normalized.cache_telemetry)
+    return normalized
 
   const totals = normalized.cache_telemetry.totals
   if (

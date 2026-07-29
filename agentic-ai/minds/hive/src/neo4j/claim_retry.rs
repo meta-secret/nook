@@ -13,28 +13,13 @@ fn is_transient_driver_error(error: &Neo4jDriverError) -> bool {
     }
 }
 
-fn source_chain_has_transient_driver_error(source: &(dyn std::error::Error + 'static)) -> bool {
-    let mut cause = source;
-    loop {
-        if cause
-            .downcast_ref::<Neo4jDriverError>()
-            .is_some_and(is_transient_driver_error)
-        {
-            return true;
-        }
-        let Some(source) = cause.source() else {
-            return false;
-        };
-        cause = source;
-    }
-}
-
 fn is_transient_claim_error(error: &crate::HiveError) -> bool {
     match error {
-        crate::HiveError::Neo4j(driver_error) => is_transient_driver_error(driver_error),
-        crate::HiveError::Context { source, .. } => {
-            source_chain_has_transient_driver_error(source.as_ref())
-        }
+        crate::HiveError::Neo4j(driver_error)
+        | crate::HiveError::Neo4jOperation {
+            source: driver_error,
+            ..
+        } => is_transient_driver_error(driver_error),
         _ => false,
     }
 }

@@ -187,10 +187,18 @@ export function isExpectedCloudKitSignInSetupFailure(
   return isOpaqueUnknown && hasSignInControl;
 }
 
-export function cloudKitAuthErrorMessage(error: unknown): string {
+export enum CloudKitAuthErrorTranslationKey {
+  SignInRequired = "provider_setup.icloud_sign_in_required",
+  UnknownError = "provider_setup.icloud_unknown_error",
+  SignInFailed = "provider_setup.icloud_sign_in_failed",
+}
+
+export function cloudKitAuthErrorTranslationKey(
+  error: unknown,
+): CloudKitAuthErrorTranslationKey {
   const details = cloudKitAuthErrorDetails(error);
   if (isAuthRequiredCloudKitError(details)) {
-    return "Apple sign-in is required. Click Sign in with Apple to continue.";
+    return CloudKitAuthErrorTranslationKey.SignInRequired;
   }
   const isMisdirectedRequest =
     details.status === 421 ||
@@ -199,15 +207,10 @@ export function cloudKitAuthErrorMessage(error: unknown): string {
       (value) => value.includes("421") || value.includes("MISDIRECTED"),
     );
   if (isMisdirectedRequest) {
-    return "Apple sign-in is required. Click Sign in with Apple to continue.";
+    return CloudKitAuthErrorTranslationKey.SignInRequired;
   }
   if (hasErrorToken(details, (value) => value.includes("UNKNOWN_ERROR"))) {
-    return "Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this container and that the current browser origin is allowed.";
+    return CloudKitAuthErrorTranslationKey.UnknownError;
   }
-  return (
-    details.reason ??
-    details.message ??
-    details.statusText ??
-    "iCloud sign-in failed."
-  );
+  return CloudKitAuthErrorTranslationKey.SignInFailed;
 }

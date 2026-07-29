@@ -2,6 +2,63 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookOAuthAccessTokenKind {
+    Missing,
+    Available,
+}
+
+enum NookOAuthAccessTokenValue {
+    Missing,
+    Available(String),
+}
+
+#[wasm_bindgen]
+pub struct NookOAuthAccessToken(NookOAuthAccessTokenValue);
+
+#[wasm_bindgen]
+impl NookOAuthAccessToken {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub const fn kind(&self) -> NookOAuthAccessTokenKind {
+        match self.0 {
+            NookOAuthAccessTokenValue::Missing => NookOAuthAccessTokenKind::Missing,
+            NookOAuthAccessTokenValue::Available(_) => NookOAuthAccessTokenKind::Available,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn token(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            NookOAuthAccessTokenValue::Missing => {
+                Err(wasm_bindgen::JsError::new("OAuth access token is missing"))
+            }
+            NookOAuthAccessTokenValue::Available(token) => Ok(token.clone()),
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = oauthAccessToken)]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAccessToken {
+    match config.usable_access_token() {
+        nook_core::OAuthAccessTokenRef::Missing => {
+            NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
+        }
+        nook_core::OAuthAccessTokenRef::Available(token) => {
+            NookOAuthAccessToken(NookOAuthAccessTokenValue::Available(token.to_owned()))
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = missingOAuthAccessToken)]
+#[must_use]
+pub const fn missing_oauth_access_token() -> NookOAuthAccessToken {
+    NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookProviderSelectionState {
     Missing,
     Selected,
