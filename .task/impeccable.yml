@@ -1,0 +1,111 @@
+version: '3'
+
+vars:
+  IMPECCABLE_VERSION: 3.4.0
+  IMPECCABLE_SKILL_VERSION: 4.0.2
+  IMPECCABLE_SKILL_DIGEST: 596c0b6949789a437968b4e9ee8feb126d5d9106afa13b190a8a20fa94b01418
+  IMPECCABLE_DOCKERFILE: .task/impeccable/Dockerfile
+  IMPECCABLE_IMAGE_FINGERPRINT:
+    sh: shasum -a 256 "{{.IMPECCABLE_DOCKERFILE}}" | cut -c 1-12
+  IMPECCABLE_IMAGE: 'nook-impeccable:{{.IMPECCABLE_VERSION}}-{{.IMPECCABLE_IMAGE_FINGERPRINT}}'
+  IMPECCABLE_SKILL: .agents/skills/impeccable/SKILL.md
+  DOCKER: '{{default "docker" .DOCKER}}'
+  DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
+
+tasks:
+  impeccable:image:
+    desc: Build the pinned Impeccable skill image.
+    status:
+      - '{{.DOCKER}} image inspect "{{.IMPECCABLE_IMAGE}}" >/dev/null 2>&1'
+    cmds:
+      - >-
+        {{.DOCKER}} build
+        --file "{{.IMPECCABLE_DOCKERFILE}}"
+        --build-arg "IMPECCABLE_VERSION={{.IMPECCABLE_VERSION}}"
+        --build-arg "IMPECCABLE_SKILL_DIGEST={{.IMPECCABLE_SKILL_DIGEST}}"
+        --tag "{{.IMPECCABLE_IMAGE}}"
+        .task/impeccable
+
+  impeccable:install:
+    desc: Materialize the pinned Codex skill into the ignored local skill directory.
+    deps: [impeccable:image]
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm --init
+        --network none
+        --ulimit "nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}"
+        --user "$(id -u):$(id -g)"
+        --env HOME=/tmp/impeccable-home
+        --volume "$PWD:/workspace"
+        --workdir /workspace
+        --entrypoint sh
+        "{{.IMPECCABLE_IMAGE}}"
+        -c 'rm -rf .agents/skills/impeccable
+        && mkdir -p .agents/skills
+        && cp -R /opt/impeccable-project/.agents/skills/impeccable .agents/skills/'
+      - test -f "{{.IMPECCABLE_SKILL}}"
+      - >-
+        test "$(sed -n 's/^version: //p' "{{.IMPECCABLE_SKILL}}")"
+        = "{{.IMPECCABLE_SKILL_VERSION}}"
+
+  impeccable:check:
+    desc: Verify that the generated Codex skill matches the pinned image.
+    deps: [impeccable:image]
+    preconditions:
+      - sh: test -f "{{.IMPECCABLE_SKILL}}"
+        msg: Run `task impeccable:install`, then restart Codex so it discovers the skill.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm --init
+        --network none
+        --ulimit "nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}"
+        --user "$(id -u):$(id -g)"
+        --env HOME=/tmp/impeccable-home
+        --volume "$PWD:/workspace"
+        --workdir /workspace
+        --entrypoint sh
+        "{{.IMPECCABLE_IMAGE}}"
+        -c 'actual_digest="$(find .agents/skills/impeccable -type f -print0
+        | LC_ALL=C sort -z
+        | xargs -0 sha256sum
+        | sha256sum
+        | cut -d " " -f 1)"
+        && test "$actual_digest" = "{{.IMPECCABLE_SKILL_DIGEST}}"'
+
+  impeccable:context:
+    desc: Load Impeccable project context in the pinned runtime (pass arguments after `--`).
+    deps: [impeccable:image]
+    preconditions:
+      - sh: test -f "{{.IMPECCABLE_SKILL}}"
+        msg: Run `task impeccable:install` first.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm --init
+        --network none
+        --ulimit "nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}"
+        --user "$(id -u):$(id -g)"
+        --env HOME=/tmp/impeccable-home
+        --volume "$PWD:/workspace"
+        --workdir /workspace
+        --entrypoint node
+        "{{.IMPECCABLE_IMAGE}}"
+        .agents/skills/impeccable/scripts/context.mjs {{.CLI_ARGS}}
+
+  impeccable:hook:
+    desc: Run the Impeccable detector hook in the pinned runtime.
+    deps: [impeccable:image]
+    preconditions:
+      - sh: test -f "{{.IMPECCABLE_SKILL}}"
+        msg: Run `task impeccable:install` first.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm --init
+        --network none
+        --ulimit "nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}"
+        --user "$(id -u):$(id -g)"
+        --env HOME=/tmp/impeccable-home
+        --volume "$PWD:/workspace"
+        --workdir /workspace
+        --entrypoint node
+        "{{.IMPECCABLE_IMAGE}}"
+        .agents/skills/impeccable/scripts/hook.mjs {{.CLI_ARGS}}
