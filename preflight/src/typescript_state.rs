@@ -715,7 +715,7 @@ fn svelte_raw_string_discriminant_lines(
         &mut lines,
         typescript_code_raw_string_discriminant_lines,
     )?;
-    collect_svelte_expression_fragments_with(
+    collect_svelte_raw_text_fragments_with(
         tree.root_node(),
         source,
         &mut lines,
@@ -726,13 +726,13 @@ fn svelte_raw_string_discriminant_lines(
     Ok(lines)
 }
 
-fn collect_svelte_expression_fragments_with(
+fn collect_svelte_raw_text_fragments_with(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
     scan: fn(&str, usize) -> Result<Vec<usize>, tree_sitter::LanguageError>,
 ) -> Result<(), tree_sitter::LanguageError> {
-    if node.kind() == "expression" {
+    if node.kind() == "svelte_raw_text" {
         if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
             lines.extend(scan(fragment, node.start_position().row + 1)?);
         }
@@ -740,7 +740,7 @@ fn collect_svelte_expression_fragments_with(
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_expression_fragments_with(child, source, lines, scan)?;
+        collect_svelte_raw_text_fragments_with(child, source, lines, scan)?;
     }
     Ok(())
 }

@@ -1,6 +1,6 @@
 //! Rollback-safe `nook_auth` storage projection.
 //!
-//! The Rust domain model uses semantic enums. IndexedDB keeps the original
+//! The Rust domain model uses semantic enums. `IndexedDB` keeps the original
 //! string-or-absent wire shape so an older deployed build can still read rows
 //! after a rollback. A future incompatible wire change must use a new schema
 //! version and an explicit forward/backward migration.
