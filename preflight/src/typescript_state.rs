@@ -363,10 +363,8 @@ fn collect_raw_string_discriminant_nodes(
         }
     }
     if node.kind() == "union_type"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "type_alias_declaration")
         && contains_string_literal_type(node, source)
+        && !is_type_utility_key_union(node, source)
     {
         lines.push(first_line + node.start_position().row);
         return;
@@ -472,6 +470,31 @@ fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bo
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .any(|child| contains_string_literal_type(child, source))
+}
+
+fn is_type_utility_key_union(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    let Some(type_arguments) = node.parent() else {
+        return false;
+    };
+    if type_arguments.kind() != "type_arguments" {
+        return false;
+    }
+    let Some(generic_type) = type_arguments.parent() else {
+        return false;
+    };
+    if generic_type.kind() != "generic_type" {
+        return false;
+    }
+    let utility_name = generic_type
+        .child_by_field_name("name")
+        .or_else(|| generic_type.named_child(0))
+        .and_then(|name| name.utf8_text(source.as_bytes()).ok());
+    utility_name.is_some_and(|name| {
+        matches!(
+            name.trim(),
+            "Exclude" | "Extract" | "Omit" | "Pick" | "Record"
+        )
+    })
 }
 
 fn is_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
@@ -944,6 +967,7 @@ type SessionState =
 type Message = { type: 'nook:open'; payload: string }
 type Description = { label: 'static copy' }
 type Panel = 'closed' | 'open'
+function choose(mode: 'closed' | 'open') { return mode }
 const state: SessionState = { kind: 'closed' }
 if (state.kind === 'closed') console.log('closed')
 if ('closed' !== state.kind) console.log('open')
@@ -951,11 +975,12 @@ if (provider.type === 'local') console.log('unrelated enum value')
 if (server.transport.type !== 'stdio') console.log('external protocol')
 const description = { label: 'static copy' }
 const externalKind = state.kind ?? 'external-value'
+type SelectedFields = Pick<SessionState, 'kind' | 'handle'>
 ";
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
-            vec![10, 14, 15, 16, 17]
+            vec![10, 14, 15, 16, 17, 18]
         );
         Ok(())
     }

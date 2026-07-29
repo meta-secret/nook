@@ -14,6 +14,11 @@ import type {
 } from './workflow-ui'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
+export enum PasskeyWidgetAction {
+  UsePasskey = 'use-passkey',
+  CreatePasskey = 'create-passkey',
+}
+
 export function sendRuntimeMessage<T>(message: unknown): Promise<T | void> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(message, (response: T | void) => {
@@ -278,7 +283,7 @@ export async function generatePasswordWithNook(
 export async function proposePasskeyWithNook(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
-  action: 'use-passkey' | 'create-passkey',
+  action: PasskeyWidgetAction,
 ): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
@@ -287,7 +292,7 @@ export async function proposePasskeyWithNook(
     description,
     continueButton,
     translatedMessage(
-      action === 'use-passkey'
+      action === PasskeyWidgetAction.UsePasskey
         ? 'widgetUsePasskeyWorking'
         : 'widgetCreatePasskeyWorking',
     ),

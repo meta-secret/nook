@@ -1,6 +1,7 @@
 <script lang="ts">
   import { JoinEnrollmentState } from '$app-wasm'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import { JoinEnrollmentDialogVariant } from '$lib/components/join-enrollment-dialog-state'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -23,8 +24,8 @@
   {vault}
   open={vault.joinEnrollmentPrompt !== JoinEnrollmentState.None}
   variant={vault.joinEnrollmentPrompt === JoinEnrollmentState.Pending
-    ? 'pending'
-    : 'needs_request'}
+    ? JoinEnrollmentDialogVariant.Pending
+    : JoinEnrollmentDialogVariant.NeedsRequest}
   deviceId={vault.deviceId}
   isBusy={vault.isVerifying}
   bind:enrollSecretsKey={vault.enrollSecretsKey}

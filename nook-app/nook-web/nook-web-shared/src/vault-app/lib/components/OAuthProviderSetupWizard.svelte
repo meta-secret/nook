@@ -10,7 +10,11 @@
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
-  import type { OAuthFilePreset } from '$lib/auth-providers'
+  import type {
+    GoogleDriveMode,
+    ICloudMode,
+    OAuthFilePreset,
+  } from '$lib/auth-providers'
   import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
   import { createLogger } from '$lib/log'
   import {
@@ -22,6 +26,7 @@
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
   import * as oauthActions from '$lib/vault/oauth'
+  import { SharedFolderAction } from './oauth-provider-setup-state'
 
   const log = createLogger('icloud-oauth')
 
@@ -95,19 +100,19 @@
   let sharedFolderStepOpen = $state(false)
   let syncStepOpen = $state(false)
   let icloudSignInPrepareStarted = $state(false)
-  let sharedFolderAction = $state<'create' | 'join'>('create')
+  let sharedFolderAction = $state(SharedFolderAction.Create)
   let collaboratorEmail = $state('')
   let sharedFolderRef = $state('')
   let sharedFolderBusy = $state(false)
 
-  function selectGoogleDriveMode(mode: 'private' | 'shared') {
+  function selectGoogleDriveMode(mode: GoogleDriveMode) {
     vault.selectGoogleDriveMode(mode)
     connectionStepOpen = true
     sharedFolderStepOpen = false
     syncStepOpen = false
   }
 
-  function selectICloudMode(mode: 'private' | 'shared') {
+  function selectICloudMode(mode: ICloudMode) {
     vault.selectICloudMode(mode)
     connectionStepOpen = true
     sharedFolderStepOpen = false
@@ -586,15 +591,15 @@
           <button
             type="button"
             role="radio"
-            aria-checked={sharedFolderAction === 'create'}
+            aria-checked={sharedFolderAction === SharedFolderAction.Create}
             class="flex items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors {sharedFolderAction ===
-            'create'
+            SharedFolderAction.Create
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isSharedICloud
               ? 'icloud-shared-create-mode'
               : 'google-shared-folder-create-mode'}
-            onclick={() => (sharedFolderAction = 'create')}
+            onclick={() => (sharedFolderAction = SharedFolderAction.Create)}
           >
             <FolderPlus class="size-4 shrink-0" />
             {vault.t(
@@ -606,15 +611,15 @@
           <button
             type="button"
             role="radio"
-            aria-checked={sharedFolderAction === 'join'}
+            aria-checked={sharedFolderAction === SharedFolderAction.Join}
             class="flex items-center gap-2.5 border-t border-border/40 px-3 py-2.5 text-left text-sm transition-colors sm:border-t-0 sm:border-l {sharedFolderAction ===
-            'join'
+            SharedFolderAction.Join
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isSharedICloud
               ? 'icloud-shared-join-mode'
               : 'google-shared-folder-join-mode'}
-            onclick={() => (sharedFolderAction = 'join')}
+            onclick={() => (sharedFolderAction = SharedFolderAction.Join)}
           >
             <FolderOpen class="size-4 shrink-0" />
             {vault.t(
@@ -625,7 +630,7 @@
           </button>
         </div>
 
-        {#if sharedFolderAction === 'create'}
+        {#if sharedFolderAction === SharedFolderAction.Create}
           {#if !isSharedICloud}
             <div class="space-y-1.5">
               <label

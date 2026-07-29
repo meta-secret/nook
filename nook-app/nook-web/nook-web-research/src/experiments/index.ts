@@ -36,9 +36,16 @@ export interface ExperimentCategory {
   description: string
 }
 
+enum ExperimentVersion {
+  V1 = 'v1',
+  V2 = 'v2',
+  V3 = 'v3',
+  V4 = 'v4',
+}
+
 export interface ExperimentSubcategory {
   categorySlug: string
-  slug: 'v1' | 'v2' | 'v3' | 'v4'
+  slug: ExperimentVersion
   title: string
   description: string
 }
@@ -67,41 +74,41 @@ export const categories: ExperimentCategory[] = [
 export const subcategories: ExperimentSubcategory[] = [
   {
     categorySlug: 'nook-auth',
-    slug: 'v1',
+    slug: ExperimentVersion.V1,
     title: 'V1 · Shortlist',
     description:
       'Four kept directions. Toggle Empty / Vault exists in each sketch.',
   },
   {
     categorySlug: 'vault-auth-workflow',
-    slug: 'v1',
+    slug: ExperimentVersion.V1,
     title: 'V1 · Auth → Sentinel',
     description:
       'Click Build Sentinel vault to enter the adopted full UI. Card stack is the default destination; terminal is the alternate.',
   },
   {
     categorySlug: 'vault',
-    slug: 'v1',
+    slug: ExperimentVersion.V1,
     title: 'V1 · Selected directions',
     description: 'The strongest visual directions for Sentinel genesis.',
   },
   {
     categorySlug: 'vault',
-    slug: 'v2',
+    slug: ExperimentVersion.V2,
     title: 'V2 · Selected directions',
     description:
       'The precision of Credential Airlock and the restraint of Black Monolith.',
   },
   {
     categorySlug: 'vault',
-    slug: 'v3',
+    slug: ExperimentVersion.V3,
     title: 'V3 · Selected directions',
     description:
       'Evidence Room, Kintsugi Recovery, Access Choreography, and the wallet-inspired card stack.',
   },
   {
     categorySlug: 'vault',
-    slug: 'v4',
+    slug: ExperimentVersion.V4,
     title: 'V4 · Reference studies',
     description:
       "External interaction and visual references translated into Nook's Sentinel genesis model.",

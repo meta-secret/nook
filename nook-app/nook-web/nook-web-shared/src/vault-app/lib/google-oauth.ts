@@ -27,6 +27,17 @@ export enum GoogleDriveOAuthScope {
   Shared = 'shared',
 }
 
+export enum GoogleOAuthPrompt {
+  /** @public Google Identity Services contract value. */
+  Default = '',
+  /** @public Google Identity Services contract value. */
+  None = 'none',
+  /** @public Google Identity Services contract value. */
+  Consent = 'consent',
+  /** @public Google Identity Services contract value. */
+  SelectAccount = 'select_account',
+}
+
 export type GoogleOAuthTokens = {
   accessToken: string
   expiresAt: string
@@ -207,7 +218,7 @@ function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
 }
 
 export async function requestGoogleAccessToken(options?: {
-  prompt?: '' | 'none' | 'consent' | 'select_account'
+  prompt?: GoogleOAuthPrompt
   scope?: GoogleDriveOAuthScope
 }): Promise<GoogleOAuthTokens> {
   const scope = options?.scope ?? GoogleDriveOAuthScope.AppData
@@ -234,10 +245,10 @@ export async function requestGoogleAccessToken(options?: {
 
 /** Request the scopes required for cross-account shared-folder replication. */
 export async function requestGoogleDriveSharedAccess(options?: {
-  prompt?: '' | 'none' | 'consent' | 'select_account'
+  prompt?: GoogleOAuthPrompt
 }): Promise<GoogleOAuthTokens> {
   return requestGoogleAccessToken({
-    prompt: options?.prompt ?? 'consent',
+    prompt: options?.prompt ?? GoogleOAuthPrompt.Consent,
     scope: GoogleDriveOAuthScope.Shared,
   })
 }
@@ -274,7 +285,10 @@ export async function ensureValidOAuthFileConfig(
   const scope = shared
     ? GoogleDriveOAuthScope.Shared
     : GoogleDriveOAuthScope.AppData
-  const refreshed = await requestGoogleAccessToken({ prompt: '', scope })
+  const refreshed = await requestGoogleAccessToken({
+    prompt: GoogleOAuthPrompt.Default,
+    scope,
+  })
   return oauthTokensToConfig(refreshed, config)
 }
 

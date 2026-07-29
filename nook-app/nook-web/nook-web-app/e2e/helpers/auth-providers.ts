@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import type { GoogleDriveMode, ICloudMode } from '$app-wasm'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 
@@ -12,8 +13,8 @@ export type SeededAuthProvider = {
     preset: string
     accessToken: string
     fileName: string
-    driveMode: 'private' | 'shared'
-    iCloudMode: 'private' | 'shared'
+    driveMode: GoogleDriveMode
+    iCloudMode: ICloudMode
     accountEmail?: string
     folderId?: string
   }

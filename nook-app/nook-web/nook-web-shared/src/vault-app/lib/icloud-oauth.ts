@@ -20,6 +20,12 @@ import {
 } from '$lib/icloud-oauth-config'
 import { createLogger } from '$lib/log'
 import {
+  CloudKitButtonTheme,
+  CloudKitParticipantStatus,
+  CloudKitShareAccess,
+  CloudKitSharePermission,
+} from '$lib/icloud-cloudkit-state'
+import {
   CLOUDKIT_SIGN_IN_BUTTON_ID,
   CLOUDKIT_SIGN_OUT_BUTTON_ID,
   cloudKitAuthTokenStore,
@@ -272,8 +278,14 @@ export async function initICloudAuth(): Promise<void> {
           apiTokenAuth: {
             apiToken: ICLOUD_API_TOKEN,
             persist: true,
-            signInButton: { id: CLOUDKIT_SIGN_IN_BUTTON_ID, theme: 'black' },
-            signOutButton: { id: CLOUDKIT_SIGN_OUT_BUTTON_ID, theme: 'black' },
+            signInButton: {
+              id: CLOUDKIT_SIGN_IN_BUTTON_ID,
+              theme: CloudKitButtonTheme.Black,
+            },
+            signOutButton: {
+              id: CLOUDKIT_SIGN_OUT_BUTTON_ID,
+              theme: CloudKitButtonTheme.Black,
+            },
           },
         },
       ],
@@ -565,8 +577,8 @@ export async function createICloudSharedVault(
     zoneID: zoneName,
     shareTitle: title.trim() || 'Nook',
     shareType: 'com.meta-secret.nook.vault',
-    supportedAccess: ['PRIVATE'],
-    supportedPermissions: ['READ_WRITE'],
+    supportedAccess: [CloudKitShareAccess.Private],
+    supportedPermissions: [CloudKitSharePermission.ReadWrite],
   })
   return {
     role: 'owner',
@@ -627,7 +639,8 @@ export async function acceptICloudSharedVault(
   }
   const current = await previewCloudKitRecord(container, shortGuid)
   const response =
-    current?.results[0]?.participantStatus === 'ACCEPTED'
+    current?.results[0]?.participantStatus ===
+    CloudKitParticipantStatus.Accepted
       ? current
       : await container.acceptShares([shortGuid])
   const { zoneID, rootRecordName } = requireCloudKitRecordInfo(response)

@@ -16,6 +16,7 @@ import {
   fetchGoogleAccountEmail,
   initGoogleAuth,
   isGoogleOAuthConfigured,
+  GoogleOAuthPrompt,
   oauthTokensToConfig,
   requestGoogleAccessToken,
   requestGoogleDriveSharedAccess,
@@ -123,10 +124,14 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
       state.oauthFile?.driveMode === 'shared' ||
       Boolean(state.oauthFile?.folderId?.trim())
     const tokens = shared
-      ? await requestGoogleDriveSharedAccess({ prompt: 'consent' })
+      ? await requestGoogleDriveSharedAccess({
+          prompt: GoogleOAuthPrompt.Consent,
+        })
       : await (async () => {
           await initGoogleAuth()
-          return requestGoogleAccessToken({ prompt: 'consent' })
+          return requestGoogleAccessToken({
+            prompt: GoogleOAuthPrompt.Consent,
+          })
         })()
     await applyGoogleOAuthTokens(state, tokens)
   } catch (error) {

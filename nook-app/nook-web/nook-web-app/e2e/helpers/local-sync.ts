@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
 import { fetchGithubVaultYaml } from '../github-api'
@@ -514,7 +515,7 @@ export async function reloadUnlockLocalVaultWithSync(
     timeout: UI_TIMEOUT_MS,
   })
   await ensureLoginLocalUnlockReady(page)
-  await selectLoginUnlockMethod(page, 'keys')
+  await selectLoginUnlockMethod(page, UnlockMethod.Keys)
   await page.getByTestId('unlock-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

@@ -4,6 +4,7 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
+  import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -102,7 +103,7 @@
         label="Nook"
         showSyncStatus={false}
         showStorageIcon={false}
-        variant="quiet"
+        variant={VaultStatusBarVariant.Quiet}
         onDismissSuccess={() => vault.dismissSuccess()}
         onDismissError={() => vault.dismissError()}
       />

@@ -2,6 +2,7 @@
   import { DeviceMode } from '$app-wasm'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
+  import { DeviceModeTranslationPart } from './device-mode-select-state'
 
   let {
     vault,
@@ -17,10 +18,9 @@
 
   function modeTranslationKey(
     mode: DeviceMode,
-    suffix: 'title' | 'description',
+    suffix: DeviceModeTranslationPart,
   ) {
-    const modeKey =
-      mode === DeviceMode.AntiHacker ? 'anti_hacker' : 'standard'
+    const modeKey = mode === DeviceMode.AntiHacker ? 'anti_hacker' : 'standard'
     return `device_protection.mode_${modeKey}_${suffix}`
   }
 
@@ -49,17 +49,27 @@
       data-testid="device-mode-select"
       aria-describedby={`${id}-description`}
     >
-      {vault.t(modeTranslationKey(vault.draftDeviceMode, 'title'))}
+      {vault.t(
+        modeTranslationKey(
+          vault.draftDeviceMode,
+          DeviceModeTranslationPart.Title,
+        ),
+      )}
     </Select.Trigger>
     <Select.Content portalProps={{ disabled: true }}>
       {#each deviceModes as mode (mode)}
         <Select.Item value={String(mode)}>
-          {vault.t(modeTranslationKey(mode, 'title'))}
+          {vault.t(modeTranslationKey(mode, DeviceModeTranslationPart.Title))}
         </Select.Item>
       {/each}
     </Select.Content>
   </Select.Root>
   <p id={`${id}-description`} class="text-xs text-pretty text-muted-foreground">
-    {vault.t(modeTranslationKey(vault.draftDeviceMode, 'description'))}
+    {vault.t(
+      modeTranslationKey(
+        vault.draftDeviceMode,
+        DeviceModeTranslationPart.Description,
+      ),
+    )}
   </p>
 </div>

@@ -26,11 +26,16 @@ export type SiteFixtureStep = {
 
 export type SiteFixture = {
   id: string
-  source: 'capture' | 'research'
+  source: SiteFixtureSource
   loginUrl: string
   quirks: string[]
   steps: SiteFixtureStep[]
   template: string
+}
+
+enum SiteFixtureSource {
+  Capture = 'capture',
+  Research = 'research',
 }
 
 export type PopularLoginSite = {
@@ -50,7 +55,7 @@ type ShellTemplate = {
 
 type SiteShellRef = {
   template: string
-  source: 'capture' | 'research'
+  source: SiteFixtureSource
   loginUrl: string
   quirks?: string[]
   steps?: SiteFixtureStep[]

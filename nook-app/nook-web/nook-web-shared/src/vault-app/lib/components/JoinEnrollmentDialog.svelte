@@ -16,6 +16,7 @@
   } from '$lib/components/ui/card'
 
   import type { VaultState } from '$lib/vault.svelte'
+  import { JoinEnrollmentDialogVariant } from './join-enrollment-dialog-state'
 
   let {
     vault,
@@ -32,7 +33,7 @@
   }: {
     vault: VaultState
     open: boolean
-    variant: 'needs_request' | 'pending'
+    variant: JoinEnrollmentDialogVariant
     deviceId?: string
     isBusy?: boolean
     enrollSecretsKey: string
@@ -76,7 +77,7 @@
               id="join-enrollment-title"
               class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
             >
-              {#if variant === 'needs_request'}
+              {#if variant === JoinEnrollmentDialogVariant.NeedsRequest}
                 <UserPlus class="size-4 shrink-0" />
                 {vault.t('join_enrollment.title_join')}
               {:else}
@@ -85,7 +86,7 @@
               {/if}
             </CardTitle>
             <CardDescription class="text-pretty">
-              {#if variant === 'needs_request'}
+              {#if variant === JoinEnrollmentDialogVariant.NeedsRequest}
                 {vault.t('join_enrollment.desc_join')}
               {:else}
                 {vault.t('join_enrollment.desc_pending')}

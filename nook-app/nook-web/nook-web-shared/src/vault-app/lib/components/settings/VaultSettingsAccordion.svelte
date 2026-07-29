@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
+  import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
@@ -112,7 +113,7 @@
         class="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
         value={vault.locale}
         onchange={(e) =>
-          vault.updateLocale(e.currentTarget.value as 'en' | 'ru')}
+          vault.updateLocale(e.currentTarget.value as NookAppLocale)}
       >
         <option value="en">English</option>
         <option value="ru">Русский</option>

@@ -5,10 +5,33 @@ import {
   simpleVaultMatchPattern,
 } from './lib/simple-vault-target'
 
-type ManifestIconSet = Record<'16' | '32' | '48' | '128', string>
+enum ManifestIconSize {
+  Small = '16',
+  Medium = '32',
+  Large = '48',
+  Store = '128',
+}
+
+type ManifestIconSet = Record<ManifestIconSize, string>
 
 export enum ExtensionManifestType {
   Module = 'module',
+}
+
+enum ContentScriptRunAt {
+  DocumentIdle = 'document_idle',
+  DocumentStart = 'document_start',
+}
+
+enum ContentScriptWorld {
+  Isolated = 'ISOLATED',
+  Main = 'MAIN',
+}
+
+enum ExtensionPermission {
+  ActiveTab = 'activeTab',
+  Offscreen = 'offscreen',
+  Storage = 'storage',
 }
 
 export type ExtensionManifest = {
@@ -36,14 +59,14 @@ export type ExtensionManifest = {
     matches: string[]
     exclude_matches: string[]
     js: string[]
-    run_at: 'document_idle' | 'document_start'
-    world?: 'ISOLATED' | 'MAIN'
+    run_at: ContentScriptRunAt
+    world?: ContentScriptWorld
   }>
   externally_connectable: {
     matches: string[]
   }
   icons: ManifestIconSet
-  permissions: Array<'activeTab' | 'offscreen' | 'storage'>
+  permissions: ExtensionPermission[]
   host_permissions: string[]
   web_accessible_resources: Array<{
     resources: string[]
@@ -52,10 +75,10 @@ export type ExtensionManifest = {
 }
 
 const iconSet: ManifestIconSet = {
-  '16': 'icons/nook.png',
-  '32': 'icons/nook.png',
-  '48': 'icons/nook.png',
-  '128': 'icons/nook.png',
+  [ManifestIconSize.Small]: 'icons/nook.png',
+  [ManifestIconSize.Medium]: 'icons/nook.png',
+  [ManifestIconSize.Large]: 'icons/nook.png',
+  [ManifestIconSize.Store]: 'icons/nook.png',
 }
 
 export function createManifest(
@@ -100,34 +123,38 @@ export function createManifest(
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/autofill.js'],
-        run_at: 'document_idle',
+        run_at: ContentScriptRunAt.DocumentIdle,
       },
       {
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-content.js'],
-        run_at: 'document_start',
-        world: 'ISOLATED',
+        run_at: ContentScriptRunAt.DocumentStart,
+        world: ContentScriptWorld.Isolated,
       },
       {
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-page.js'],
-        run_at: 'document_start',
-        world: 'MAIN',
+        run_at: ContentScriptRunAt.DocumentStart,
+        world: ContentScriptWorld.Main,
       },
       {
         matches: [simpleVaultMatch],
         exclude_matches: sentinelVaultMatchPatterns(simpleVaultBaseUrl),
         js: ['content/simple-vault-bridge.js'],
-        run_at: 'document_start',
+        run_at: ContentScriptRunAt.DocumentStart,
       },
     ],
     externally_connectable: {
       matches: [simpleVaultMatch],
     },
     icons: iconSet,
-    permissions: ['activeTab', 'offscreen', 'storage'],
+    permissions: [
+      ExtensionPermission.ActiveTab,
+      ExtensionPermission.Offscreen,
+      ExtensionPermission.Storage,
+    ],
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {

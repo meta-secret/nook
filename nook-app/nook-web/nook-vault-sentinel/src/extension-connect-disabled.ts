@@ -5,13 +5,22 @@ import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
 } from '$web-shared/extension/extension-connect-types'
-import {
-  ExtensionConnectScope,
-  ExtensionIdentityRequestSource,
-} from '$web-shared/extension/extension-connect-types'
+import { ExtensionIdentityRequestSource } from '$web-shared/extension/extension-connect-types'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
 
-export { ExtensionConnectScope, ExtensionIdentityRequestSource }
+export { ExtensionIdentityRequestSource }
+
+/**
+ * Compile-time compatibility for shared presentation that is unreachable in
+ * Sentinel. Values deliberately describe the disabled boundary and cannot be
+ * mistaken for extension protocol capabilities.
+ */
+export enum ExtensionConnectScope {
+  VaultAccess = 'sentinel-extension-vault-access-disabled',
+  PasswordFilling = 'sentinel-extension-password-filling-disabled',
+  PasskeyManagement = 'sentinel-extension-passkey-management-disabled',
+  SyncProviderCredentials = 'sentinel-extension-provider-secret-sharing-disabled',
+}
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>

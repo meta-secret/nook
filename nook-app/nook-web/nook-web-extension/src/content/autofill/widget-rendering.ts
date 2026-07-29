@@ -14,6 +14,7 @@ import {
   cancelPendingLoginPickerRequest,
   continueWithNook,
   generatePasswordWithNook,
+  PasskeyWidgetAction,
   proposePasskeyWithNook,
 } from './login-passkey-actions'
 import { WidgetWorkflowRootKind, widgetState } from './state'
@@ -115,16 +116,16 @@ export function renderWidget(
     snapshot.action === 'continue-with-nook' ||
     snapshot.action === 'fill-totp' ||
     snapshot.action === 'generate-password' ||
-    snapshot.action === 'use-passkey' ||
-    snapshot.action === 'create-passkey'
+    snapshot.action === PasskeyWidgetAction.UsePasskey ||
+    snapshot.action === PasskeyWidgetAction.CreatePasskey
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? 'widgetFillAuthenticator'
       : snapshot.action === 'generate-password'
         ? 'widgetGeneratePassword'
-        : snapshot.action === 'use-passkey'
+        : snapshot.action === PasskeyWidgetAction.UsePasskey
           ? 'widgetUsePasskey'
-          : snapshot.action === 'create-passkey'
+          : snapshot.action === PasskeyWidgetAction.CreatePasskey
             ? 'widgetCreatePasskey'
             : canContinueWithNook
               ? 'widgetContinue'
@@ -161,8 +162,8 @@ export function renderWidget(
         continueButton,
       )
     } else if (
-      snapshot.action === 'use-passkey' ||
-      snapshot.action === 'create-passkey'
+      snapshot.action === PasskeyWidgetAction.UsePasskey ||
+      snapshot.action === PasskeyWidgetAction.CreatePasskey
     ) {
       void proposePasskeyWithNook(description, continueButton, snapshot.action)
     } else {

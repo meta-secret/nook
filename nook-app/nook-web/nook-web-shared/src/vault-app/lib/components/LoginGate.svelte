@@ -32,6 +32,7 @@
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
+  import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
@@ -531,7 +532,7 @@
           {/if}
           <LoginProviderManagement
             {vault}
-            variant="setup"
+            variant={LoginProviderManagementVariant.Setup}
             {providers}
             {isVerifying}
             {isInitializing}

@@ -1,9 +1,16 @@
-import {
+import type {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
 } from '$lib/icloud-oauth-config'
 import { createLogger } from '$lib/log'
+import {
+  CloudKitButtonTheme,
+  CloudKitEnvironment,
+  CloudKitParticipantStatus,
+  CloudKitShareAccess,
+  CloudKitSharePermission,
+} from '$lib/icloud-cloudkit-state'
 
 const CLOUDKIT_SCRIPT_URL = 'https://cdn.apple-cloudkit.com/ck/2/cloudkit.js'
 export const CLOUDKIT_SIGN_IN_BUTTON_ID = 'apple-sign-in-button'
@@ -47,7 +54,7 @@ export type CloudKitRecordInfo = {
   zoneID?: CloudKitZoneID
   rootRecordName?: string
   rootRecord?: CloudKitRecord
-  participantStatus?: 'INVITED' | 'ACCEPTED' | 'REMOVED' | 'UNKNOWN'
+  participantStatus?: CloudKitParticipantStatus
 }
 
 export type CloudKitRecordInfosResponse = {
@@ -65,8 +72,8 @@ export type CloudKitDatabase = {
     zoneID: string | CloudKitZoneID
     shareTitle: string
     shareType: string
-    supportedAccess: Array<'PRIVATE' | 'PUBLIC'>
-    supportedPermissions: Array<'READ_WRITE' | 'READ_ONLY'>
+    supportedAccess: CloudKitShareAccess[]
+    supportedPermissions: CloudKitSharePermission[]
   }) => Promise<unknown>
 }
 
@@ -128,17 +135,17 @@ export type CloudKitGlobal = {
   configure: (config: {
     containers: Array<{
       containerIdentifier: string
-      environment: 'development' | 'production'
+      environment: CloudKitEnvironment
       apiTokenAuth: {
         apiToken: string
         persist: boolean
         signInButton: {
           id: string
-          theme?: 'black' | 'white' | 'white-with-outline'
+          theme?: CloudKitButtonTheme
         }
         signOutButton: {
           id: string
-          theme?: 'black' | 'white' | 'white-with-outline'
+          theme?: CloudKitButtonTheme
         }
       }
     }>

@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addSecret,
   addVaultPassword,
@@ -93,7 +94,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await selectLoginUnlockMethod(page, 'keys')
+    await selectLoginUnlockMethod(page, UnlockMethod.Keys)
     await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

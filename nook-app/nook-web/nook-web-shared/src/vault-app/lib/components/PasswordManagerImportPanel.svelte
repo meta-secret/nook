@@ -11,6 +11,8 @@
   } from '$lib/components/import-panel'
   import {
     ImportFileSelectionKind,
+    PasswordImportFormat,
+    PasswordImportIcon,
     PasswordImportOutcomeKind,
     type ImportFileSelection,
     type PasswordImportOutcome,
@@ -24,12 +26,14 @@
     errorTestId: string
     resultTestId: string
     accept: string
-    icon: 'archive' | 'spreadsheet'
+    icon: PasswordImportIcon
   }
   type Props = CommonProps &
     (
-      | (ImportPanelProps<string> & { format: 'text' })
-      | (ImportPanelProps<Uint8Array> & { format: 'binary' })
+      | (ImportPanelProps<string> & { format: PasswordImportFormat.Text })
+      | (ImportPanelProps<Uint8Array> & {
+          format: PasswordImportFormat.Binary
+        })
     )
 
   let props: Props = $props()
@@ -63,7 +67,7 @@
     error = ''
     isImporting = true
     try {
-      if (props.format === 'text') {
+      if (props.format === PasswordImportFormat.Text) {
         const imported = await importTextFile(file, false, props.onImport)
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
@@ -105,7 +109,7 @@
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        {#if props.icon === 'archive'}
+        {#if props.icon === PasswordImportIcon.Archive}
           <Archive class="mt-0.5 size-5 shrink-0 text-primary" />
         {:else}
           <FileSpreadsheet class="mt-0.5 size-5 shrink-0 text-primary" />

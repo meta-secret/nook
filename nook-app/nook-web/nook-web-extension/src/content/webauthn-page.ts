@@ -9,6 +9,11 @@ enum ExtensionResponseAction {
   Error = 'error',
 }
 
+enum WebsitePasskeyCeremony {
+  Create = 'create',
+  Get = 'get',
+}
+
 type ExtensionResponse = {
   source: typeof RESPONSE_SOURCE
   requestId: string
@@ -93,7 +98,7 @@ function serializeAssertion(
 }
 
 function publicCredential(
-  ceremony: 'create' | 'get',
+  ceremony: WebsitePasskeyCeremony,
   result: Record<string, unknown>,
 ): Credential {
   const id = result.credentialId
@@ -102,7 +107,7 @@ function publicCredential(
   const rawId = bytes(id)
   const clientDataJSON = bytes(result.clientDataJSON)
   const response =
-    ceremony === 'create'
+    ceremony === WebsitePasskeyCeremony.Create
       ? {
           clientDataJSON,
           attestationObject: bytes(result.attestationObject),
@@ -138,7 +143,7 @@ function publicCredential(
 }
 
 async function extensionCeremony(
-  ceremony: 'create' | 'get',
+  ceremony: WebsitePasskeyCeremony,
   options: CredentialCreationOptions | CredentialRequestOptions,
   fallback: () => ReturnType<CredentialsContainer['get']>,
 ): ReturnType<CredentialsContainer['get']> {
@@ -147,7 +152,7 @@ async function extensionCeremony(
     return fallback()
   const id = requestId()
   const request =
-    ceremony === 'create'
+    ceremony === WebsitePasskeyCeremony.Create
       ? serializeCreation(
           options.publicKey as PublicKeyCredentialCreationOptions,
         )
@@ -160,79 +165,81 @@ async function extensionCeremony(
   )
   const signal = options.signal
 
-  return new Promise<
-    Awaited<ReturnType<CredentialsContainer['get']>>
-  >((resolve, reject) => {
-    let settled = false
-    const finish = (callback: () => void) => {
-      if (settled) return
-      settled = true
-      window.removeEventListener('message', receive)
-      signal?.removeEventListener('abort', abort)
-      window.clearTimeout(timer)
-      callback()
-    }
-    const abort = () => {
-      window.postMessage(
-        { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
-        location.origin,
-      )
-      finish(() =>
-        reject(
-          signal?.reason ??
-            new DOMException('The operation was aborted.', 'AbortError'),
-        ),
-      )
-    }
-    const receive = (event: MessageEvent<ExtensionResponse>) => {
-      if (
-        event.source !== window ||
-        event.origin !== location.origin ||
-        event.data?.source !== RESPONSE_SOURCE ||
-        event.data.requestId !== id
-      )
-        return
-      if (event.data.action === ExtensionResponseAction.Fallback) {
-        finish(() => void fallback().then(resolve, reject))
-      } else if (
-        event.data.action === ExtensionResponseAction.Result &&
-        event.data.result
-      ) {
-        finish(() => resolve(publicCredential(ceremony, event.data.result!)))
-      } else {
+  return new Promise<Awaited<ReturnType<CredentialsContainer['get']>>>(
+    (resolve, reject) => {
+      let settled = false
+      const finish = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        window.removeEventListener('message', receive)
+        signal?.removeEventListener('abort', abort)
+        window.clearTimeout(timer)
+        callback()
+      }
+      const abort = () => {
+        window.postMessage(
+          { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
+          location.origin,
+        )
         finish(() =>
           reject(
-            new DOMException(
-              'Nook passkey request was not completed.',
-              event.data.reason ?? 'NotAllowedError',
-            ),
+            signal?.reason ??
+              new DOMException('The operation was aborted.', 'AbortError'),
           ),
         )
       }
-    }
-    const timer = window.setTimeout(() => {
+      const receive = (event: MessageEvent<ExtensionResponse>) => {
+        if (
+          event.source !== window ||
+          event.origin !== location.origin ||
+          event.data?.source !== RESPONSE_SOURCE ||
+          event.data.requestId !== id
+        )
+          return
+        if (event.data.action === ExtensionResponseAction.Fallback) {
+          finish(() => void fallback().then(resolve, reject))
+        } else if (
+          event.data.action === ExtensionResponseAction.Result &&
+          event.data.result
+        ) {
+          finish(() => resolve(publicCredential(ceremony, event.data.result!)))
+        } else {
+          finish(() =>
+            reject(
+              new DOMException(
+                'Nook passkey request was not completed.',
+                event.data.reason ?? 'NotAllowedError',
+              ),
+            ),
+          )
+        }
+      }
+      const timer = window.setTimeout(() => {
+        window.postMessage(
+          { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
+          location.origin,
+        )
+        finish(() =>
+          reject(
+            new DOMException('The operation timed out.', 'NotAllowedError'),
+          ),
+        )
+      }, timeout)
+      window.addEventListener('message', receive)
+      signal?.addEventListener('abort', abort, { once: true })
       window.postMessage(
-        { source: REQUEST_SOURCE, type: 'cancel', requestId: id },
+        {
+          source: REQUEST_SOURCE,
+          type: 'request',
+          requestId: id,
+          ceremony,
+          request,
+          expiresAt: Date.now() + timeout,
+        },
         location.origin,
       )
-      finish(() =>
-        reject(new DOMException('The operation timed out.', 'NotAllowedError')),
-      )
-    }, timeout)
-    window.addEventListener('message', receive)
-    signal?.addEventListener('abort', abort, { once: true })
-    window.postMessage(
-      {
-        source: REQUEST_SOURCE,
-        type: 'request',
-        requestId: id,
-        ceremony,
-        request,
-        expiresAt: Date.now() + timeout,
-      },
-      location.origin,
-    )
-  })
+    },
+  )
 }
 
 const credentials = navigator.credentials
@@ -244,7 +251,7 @@ Object.defineProperty(prototype, 'create', {
   configurable: true,
   writable: true,
   value(this: CredentialsContainer, options: CredentialCreationOptions) {
-    return extensionCeremony('create', options, () =>
+    return extensionCeremony(WebsitePasskeyCeremony.Create, options, () =>
       nativeCreate.call(this, options),
     )
   },
@@ -254,7 +261,7 @@ Object.defineProperty(prototype, 'get', {
   configurable: true,
   writable: true,
   value(this: CredentialsContainer, options: CredentialRequestOptions) {
-    return extensionCeremony('get', options, () =>
+    return extensionCeremony(WebsitePasskeyCeremony.Get, options, () =>
       nativeGet.call(this, options),
     )
   },

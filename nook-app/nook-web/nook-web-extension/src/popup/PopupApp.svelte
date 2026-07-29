@@ -2,7 +2,7 @@
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { ExtensionI18n } from '../lib/i18n'
-  import type { LoginDetectionStatus } from '../lib/login-detection-messages'
+  import { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
     createExtensionPasskey,
     createExtensionPin,
@@ -17,8 +17,11 @@
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
+    LoginDetectionViewKind,
     type PairingCandidate,
+    type LoginDetectionView,
   } from './popup-app-state'
+  import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
   let {
     i18n,
@@ -45,13 +48,15 @@
   let error = $state('')
   let passkeyLabel = $state('')
   let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
-  let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
+  let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
   let pin = $state('')
   let pinConfirm = $state('')
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
-  let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
+  let loginDetectionView = $state<LoginDetectionView>({
+    kind: LoginDetectionViewKind.Loading,
+  })
 
   const needsSetup = $derived(
     status === DeviceProtectionStatus.Missing ||
@@ -61,17 +66,19 @@
   const showExistingConnection = $derived(isConnected && !pairingRequested)
 
   const loginDetectionKey = $derived(
-    loginDetectionStatus === 'detected'
-      ? 'extension.companion.login_detected'
-      : loginDetectionStatus === 'not-detected'
-        ? 'extension.companion.login_not_detected'
-        : loginDetectionStatus === 'unavailable'
-          ? 'extension.companion.login_unavailable'
-          : 'extension.companion.login_checking',
+    loginDetectionView.kind === LoginDetectionViewKind.Loading
+      ? 'extension.companion.login_checking'
+      : loginDetectionView.status === LoginDetectionStatus.Detected
+        ? 'extension.companion.login_detected'
+        : loginDetectionView.status === LoginDetectionStatus.NotDetected
+          ? 'extension.companion.login_not_detected'
+          : loginDetectionView.status === LoginDetectionStatus.Unavailable
+            ? 'extension.companion.login_unavailable'
+            : 'extension.companion.login_checking',
   )
 
   function refreshLoginDetection(): void {
-    loginDetectionStatus = 'loading'
+    loginDetectionView = { kind: LoginDetectionViewKind.Loading }
     chrome.runtime.sendMessage(
       { type: 'nook:query-active-tab-login-detection' },
       (response: { ok?: boolean; status?: LoginDetectionStatus } | void) => {
@@ -80,10 +87,16 @@
           response?.ok !== true ||
           !response.status
         ) {
-          loginDetectionStatus = 'unavailable'
+          loginDetectionView = {
+            kind: LoginDetectionViewKind.Ready,
+            status: LoginDetectionStatus.Unavailable,
+          }
           return
         }
-        loginDetectionStatus = response.status
+        loginDetectionView = {
+          kind: LoginDetectionViewKind.Ready,
+          status: response.status,
+        }
       },
     )
   }
@@ -255,7 +268,9 @@
     <p
       class="login-detection"
       data-testid="companion-login-detection"
-      data-status={loginDetectionStatus}
+      data-status={loginDetectionView.kind === LoginDetectionViewKind.Ready
+        ? loginDetectionView.status
+        : LoginDetectionViewKind.Loading}
     >
       {i18n.t(loginDetectionKey)}
     </p>
@@ -374,7 +389,7 @@
           ? i18n.t('device_protection.authorizing')
           : i18n.t('device_protection.pin_setup_action')}
       </button>
-    {:else if needsSetup && setupWorkflow === 'authenticate'}
+    {:else if needsSetup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
       <p class="field-hint">
         {i18n.t('device_protection.existing_passkey_hint')}
       </p>
@@ -400,7 +415,7 @@
         disabled={busy}
         data-testid="device-protection-create-new-choice"
         onclick={() => {
-          setupWorkflow = 'create'
+          setupWorkflow = DeviceProtectionSetupWorkflow.Create
           error = ''
         }}
       >

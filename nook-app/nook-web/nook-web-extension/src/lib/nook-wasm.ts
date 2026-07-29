@@ -154,7 +154,12 @@ function prfOutput(credential: PublicKeyCredential): number[] {
   return bytes(prf.results.first)
 }
 
-function passkeyError(error: unknown, action: 'create' | 'get'): Error {
+enum PasskeyOperation {
+  Create = 'create',
+  Get = 'get',
+}
+
+function passkeyError(error: unknown, action: PasskeyOperation): Error {
   if (error instanceof DOMException && error.name === 'NotAllowedError') {
     return new Error(
       `PASSKEY_CEREMONY_NOT_ALLOWED: Passkey ${action} request did not finish.`,
@@ -186,7 +191,7 @@ async function getPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    throw passkeyError(error, 'get')
+    throw passkeyError(error, PasskeyOperation.Get)
   }
 }
 
@@ -211,7 +216,7 @@ async function createPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    throw passkeyError(error, 'create')
+    throw passkeyError(error, PasskeyOperation.Create)
   }
 }
 

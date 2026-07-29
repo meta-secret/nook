@@ -20,11 +20,12 @@
   import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
+  import { LoginProviderManagementVariant } from './login-provider-management-state'
 
   let {
     vault,
     providers,
-    variant = 'manage',
+    variant = LoginProviderManagementVariant.Manage,
     isVerifying,
     isInitializing,
     open = $bindable(false),
@@ -36,7 +37,7 @@
   }: {
     vault: VaultState
     providers: StorageProvider[]
-    variant?: 'setup' | 'manage'
+    variant?: LoginProviderManagementVariant
     isVerifying: boolean
     isInitializing: boolean
     open?: boolean
@@ -50,7 +51,7 @@
     onBeginAddProvider?: () => void
   } = $props()
 
-  const isSetup = $derived(variant === 'setup')
+  const isSetup = $derived(variant === LoginProviderManagementVariant.Setup)
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return

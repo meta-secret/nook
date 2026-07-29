@@ -1,10 +1,10 @@
 export {}
 
-import type {
-  WebsitePasskeyCancelMessage,
+import {
   WebsitePasskeyCeremony,
-  WebsitePasskeyOptionsMessage,
-  WebsitePasskeyPerformMessage,
+  type WebsitePasskeyCancelMessage,
+  type WebsitePasskeyOptionsMessage,
+  type WebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
 
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
@@ -13,6 +13,12 @@ const prompts = new Map<string, HTMLElement>()
 
 enum PageRequestType {
   Request = 'request',
+}
+
+enum PageResponseAction {
+  Fallback = 'fallback',
+  Result = 'result',
+  Error = 'error',
 }
 
 type PageRequest = {
@@ -40,7 +46,7 @@ function t(key: string, fallback: string): string {
 
 function respond(
   requestId: string,
-  action: 'fallback' | 'result' | 'error',
+  action: PageResponseAction,
   value?: unknown,
 ): void {
   window.postMessage(
@@ -48,8 +54,8 @@ function respond(
       source: RESPONSE_SOURCE,
       requestId,
       action,
-      ...(action === 'result' ? { result: value } : {}),
-      ...(action === 'error' ? { reason: value } : {}),
+      ...(action === PageResponseAction.Result ? { result: value } : {}),
+      ...(action === PageResponseAction.Error ? { reason: value } : {}),
     },
     location.origin,
   )
@@ -94,14 +100,16 @@ function chooseOption(
     panel.setAttribute('aria-modal', 'true')
     const heading = document.createElement('h2')
     heading.textContent = t(
-      request.ceremony === 'create' ? 'passkeySaveTitle' : 'passkeyUseTitle',
-      request.ceremony === 'create'
+      request.ceremony === WebsitePasskeyCeremony.Create
+        ? 'passkeySaveTitle'
+        : 'passkeyUseTitle',
+      request.ceremony === WebsitePasskeyCeremony.Create
         ? 'Save a passkey with Nook?'
         : 'Use a Nook passkey?',
     )
     const detail = document.createElement('p')
     const rp =
-      request.ceremony === 'create'
+      request.ceremony === WebsitePasskeyCeremony.Create
         ? (request.request.relyingParty as { name?: unknown } | void)?.name
         : request.request.rpId
     detail.textContent = typeof rp === 'string' ? rp : location.hostname
@@ -167,12 +175,12 @@ async function handleRequest(request: PageRequest): Promise<void> {
     optionsResponse.status !== 'ready' ||
     options.length === 0
   ) {
-    respond(request.requestId, 'fallback')
+    respond(request.requestId, PageResponseAction.Fallback)
     return
   }
   const selected = await chooseOption(request, options)
   if (!selected) {
-    respond(request.requestId, 'fallback')
+    respond(request.requestId, PageResponseAction.Fallback)
     return
   }
   const result = await runtimeMessage<Record<string, unknown>>({
@@ -186,8 +194,11 @@ async function handleRequest(request: PageRequest): Promise<void> {
       credentialId: selected.account?.credentialId,
     },
   } satisfies WebsitePasskeyPerformMessage)
-  if (result?.ok === true) respond(request.requestId, 'result', result)
-  else respond(request.requestId, 'error', 'NotAllowedError')
+  if (result?.ok === true) {
+    respond(request.requestId, PageResponseAction.Result, result)
+  } else {
+    respond(request.requestId, PageResponseAction.Error, 'NotAllowedError')
+  }
 }
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
@@ -214,7 +225,8 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   }
   if (
     message.type !== PageRequestType.Request ||
-    (message.ceremony !== 'create' && message.ceremony !== 'get') ||
+    (message.ceremony !== WebsitePasskeyCeremony.Create &&
+      message.ceremony !== WebsitePasskeyCeremony.Get) ||
     typeof message.expiresAt !== 'number' ||
     !Number.isFinite(message.expiresAt) ||
     message.expiresAt <= Date.now() ||
@@ -225,6 +237,6 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return
   void handleRequest(message as unknown as PageRequest).catch(() => {
     removePrompt(message.requestId as string)
-    respond(message.requestId as string, 'fallback')
+    respond(message.requestId as string, PageResponseAction.Fallback)
   })
 })

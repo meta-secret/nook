@@ -30,6 +30,7 @@ import {
   type StorageProvider,
 } from '$lib/auth-providers'
 import {
+  GoogleOAuthPrompt,
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
   requestGoogleDriveSharedAccess,
@@ -477,7 +478,7 @@ export async function connectWithEnrollmentCode(
           throw new Error(state.t('provider_setup.google_oauth_unconfigured'))
         }
         const tokens = await requestGoogleDriveSharedAccess({
-          prompt: 'consent',
+          prompt: GoogleOAuthPrompt.Consent,
         })
         const oauthFile = oauthTokensToConfig(tokens, {
           preset: 'google-drive',

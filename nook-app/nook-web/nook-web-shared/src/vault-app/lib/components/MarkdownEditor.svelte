@@ -2,6 +2,7 @@
   import { renderMarkdown } from '$lib/markdown'
   import MarkdownBody from './MarkdownBody.svelte'
   import {
+    MarkdownEditorTab,
     TextareaMountKind,
     type TextareaMount,
   } from './markdown-editor-state'
@@ -21,7 +22,7 @@
     fill?: boolean
   } = $props()
 
-  let tab = $state<'write' | 'preview'>('write')
+  let tab = $state(MarkdownEditorTab.Write)
 
   const previewHtml = $derived(renderMarkdown(value))
 
@@ -44,7 +45,7 @@
   }
 
   $effect(() => {
-    if (!fill && tab === 'write') {
+    if (!fill && tab === MarkdownEditorTab.Write) {
       setTimeout(adjustHeight, 0)
     }
   })
@@ -64,26 +65,26 @@
     <button
       type="button"
       role="tab"
-      aria-selected={tab === 'write'}
+      aria-selected={tab === MarkdownEditorTab.Write}
       data-testid="markdown-tab-write"
       class="rounded-md px-3 py-1 text-xs font-medium transition-colors {tab ===
-      'write'
+      MarkdownEditorTab.Write
         ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
         : 'text-muted-foreground hover:text-foreground'}"
-      onclick={() => (tab = 'write')}
+      onclick={() => (tab = MarkdownEditorTab.Write)}
     >
       Edit
     </button>
     <button
       type="button"
       role="tab"
-      aria-selected={tab === 'preview'}
+      aria-selected={tab === MarkdownEditorTab.Preview}
       data-testid="markdown-tab-preview"
       class="rounded-md px-3 py-1 text-xs font-medium transition-colors {tab ===
-      'preview'
+      MarkdownEditorTab.Preview
         ? 'bg-background text-foreground shadow-xs ring-1 ring-border/60'
         : 'text-muted-foreground hover:text-foreground'}"
-      onclick={() => (tab = 'preview')}
+      onclick={() => (tab = MarkdownEditorTab.Preview)}
     >
       Preview
     </button>
@@ -92,9 +93,9 @@
   <div
     class={fill ? 'flex min-h-0 flex-1 flex-col' : `${minHeight} flex flex-col`}
   >
-    {#if tab === 'write'}
+    {#if tab === MarkdownEditorTab.Write}
       <textarea
-    use:registerTextarea
+        use:registerTextarea
         id="secure-note-body"
         data-testid={testId}
         bind:value

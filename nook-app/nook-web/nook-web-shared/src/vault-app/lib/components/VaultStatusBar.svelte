@@ -10,6 +10,7 @@
   import type { StorageProviderType } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
   import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
+  import { VaultStatusBarVariant } from './vault-status-bar-state'
 
   let {
     vault,
@@ -23,7 +24,7 @@
     label,
     showSyncStatus = true,
     showStorageIcon = true,
-    variant = 'panel',
+    variant = VaultStatusBarVariant.Panel,
     syncConflictLabel = '',
     onOpenSyncConflict,
     onRefresh,
@@ -41,7 +42,7 @@
     label?: string
     showSyncStatus?: boolean
     showStorageIcon?: boolean
-    variant?: 'panel' | 'quiet'
+    variant?: VaultStatusBarVariant
     syncConflictLabel?: string
     onOpenSyncConflict?: () => void
     onRefresh?: () => void | Promise<void>
@@ -81,7 +82,7 @@
   }
 
   const isAuthenticatedVault = $derived(Boolean(vault?.isAuthenticated))
-  const isQuiet = $derived(variant === 'quiet')
+  const isQuiet = $derived(variant === VaultStatusBarVariant.Quiet)
 
   const statusLabel = $derived(
     label ??

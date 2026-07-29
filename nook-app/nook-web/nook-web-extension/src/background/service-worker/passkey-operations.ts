@@ -2,7 +2,7 @@ import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
-  type WebsitePasskeyCeremony,
+  WebsitePasskeyCeremony,
 } from '../../lib/webauthn-messages'
 import {
   isAuthorizedWebsiteSender,
@@ -128,7 +128,7 @@ export async function websitePasskeyOptions(
   ) {
     return { ok: true, status: 'locked', options: [] }
   }
-  if (message.payload.ceremony === 'create') {
+  if (message.payload.ceremony === WebsitePasskeyCeremony.Create) {
     return {
       ok: true,
       status: 'ready',
@@ -202,13 +202,16 @@ export async function performWebsitePasskey(
       (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
     )
     if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-    if (message.payload.ceremony === 'get' && message.payload.credentialId) {
+    if (
+      message.payload.ceremony === WebsitePasskeyCeremony.Get &&
+      message.payload.credentialId
+    ) {
       context.request.allowCredentials = [{ id: message.payload.credentialId }]
     }
     await ensureExtensionSessionDocument()
     return sendSessionMessage({
       type:
-        message.payload.ceremony === 'create'
+        message.payload.ceremony === WebsitePasskeyCeremony.Create
           ? 'nook:extension-session-register-passkey'
           : 'nook:extension-session-assert-passkey',
       payload: {

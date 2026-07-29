@@ -2,15 +2,16 @@
   import { Select as SelectPrimitive } from 'bits-ui'
   import { cn, type WithoutChild } from '$lib/utils.js'
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down'
+  import { SelectTriggerSize } from './select-trigger-state'
 
   let {
     ref = $bindable(),
     class: className,
     children,
-    size = 'default',
+    size = SelectTriggerSize.Default,
     ...restProps
   }: WithoutChild<SelectPrimitive.TriggerProps> & {
-    size?: 'sm' | 'default'
+    size?: SelectTriggerSize
   } = $props()
 </script>
 
