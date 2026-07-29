@@ -1,11 +1,16 @@
-import type {
-  BeginExtensionPairingMessage,
-  ExtensionIdentityHandoffRequestMessage,
-  ExtensionPairedVaultIdentityDiscoveryMessage,
-  ExtensionPairedVaultIdentityHandoffRequestMessage,
-  ExtensionPairedVaultIdentityStatusMessage,
-  ExtensionPairedVaultUnlockRequestMessage,
+import {
+  ExtensionIdentityHandoffRequestMessageType,
+  ExtensionPairedVaultIdentityHandoffRequestMessageType,
+  ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultIdentityStatusMessageType,
+  type BeginExtensionPairingMessage,
+  type ExtensionIdentityHandoffRequestMessage,
+  type ExtensionPairedVaultIdentityDiscoveryMessage,
+  type ExtensionPairedVaultIdentityHandoffRequestMessage,
+  type ExtensionPairedVaultIdentityStatusMessage,
+  type ExtensionPairedVaultUnlockRequestMessage,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-types'
 import {
   isRuntimeSimpleVaultUrl,
   runtimeSimpleVaultUrl,
@@ -156,7 +161,12 @@ export async function openExtensionPairing(
   url.searchParams.set('nonce', nonce)
   url.searchParams.set(
     'scopes',
-    'vault-access,password-filling,passkey-management,sync-provider-credentials',
+    [
+      ExtensionConnectScope.VaultAccess,
+      ExtensionConnectScope.PasswordFilling,
+      ExtensionConnectScope.PasskeyManagement,
+      ExtensionConnectScope.SyncProviderCredentials,
+    ].join(','),
   )
   chrome.tabs.create({ url: url.toString() })
 }
@@ -180,14 +190,10 @@ export function sendSessionMessage(message: unknown): Promise<unknown> {
   })
 }
 
-enum PairedVaultGrantIsCurrentPendingKind {
-  PairedVault = 'paired-vault',
-}
-
 async function pairedVaultGrantIsCurrent(
   pending: Extract<
     PendingIdentityHandoff,
-    { kind: PairedVaultGrantIsCurrentPendingKind.PairedVault }
+    { kind: PendingIdentityHandoffKind.PairedVault }
   >,
 ): Promise<boolean> {
   const key = pairingGrantStorageKey(pending.vaultStoreId)
@@ -223,10 +229,11 @@ export async function createIdentityHandoff(
     if (
       !isPendingIdentityHandoff(pending) ||
       (pending.kind === PendingIdentityHandoffKind.Pairing &&
-        message.type !== 'nook:extension-identity-handoff-request') ||
+        message.type !==
+          ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest) ||
       (pending.kind === PendingIdentityHandoffKind.PairedVault &&
         (message.type !==
-          'nook:extension-paired-vault-identity-handoff-request' ||
+          ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest ||
           pending.vaultStoreId !== message.payload.vaultStoreId)) ||
       pending.deviceId !== message.payload.expectedDeviceId ||
       pending.devicePublicKey !== message.payload.expectedDevicePublicKey ||
@@ -294,7 +301,7 @@ function unlockedSessionDevice(
     !('ok' in response) ||
     response.ok !== true ||
     !('status' in response) ||
-    response.status !== 'unlocked' ||
+    !isUnlockedSessionStatus(response.status) ||
     !('device' in response) ||
     !response.device ||
     typeof response.device !== 'object'
@@ -324,8 +331,12 @@ export async function discoverPairedVaultIdentity(
 ): Promise<ExtensionPairedVaultIdentityStatusMessage> {
   const { requestId, vaultStoreId } = message.payload
   const unavailable = {
-    type: 'nook:extension-paired-vault-identity-status',
-    payload: { requestId, vaultStoreId, status: 'unavailable' },
+    type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
+    payload: {
+      requestId,
+      vaultStoreId,
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+    },
   } satisfies ExtensionPairedVaultIdentityStatusMessage
   try {
     const key = pairingGrantStorageKey(vaultStoreId)
@@ -337,11 +348,12 @@ export async function discoverPairedVaultIdentity(
       selectedGrant.grant.vaultStoreId !== vaultStoreId
     ) {
       return {
-        type: 'nook:extension-paired-vault-identity-status',
+        type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
         payload: {
           requestId,
           vaultStoreId,
-          status: 'different-vault',
+          status:
+            ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
           connectedVaultStoreId: selectedGrant.grant.vaultStoreId,
           connectedVaultName: selectedGrant.grant.vaultName,
         },
@@ -357,11 +369,12 @@ export async function discoverPairedVaultIdentity(
         )?.[1]
       if (isStoredExtensionPairingGrant(connectedGrant)) {
         return {
-          type: 'nook:extension-paired-vault-identity-status',
+          type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
           payload: {
             requestId,
             vaultStoreId,
-            status: 'different-vault',
+            status:
+              ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
             connectedVaultStoreId: connectedGrant.vaultStoreId,
             connectedVaultName: connectedGrant.vaultName,
           },
@@ -375,10 +388,14 @@ export async function discoverPairedVaultIdentity(
       type: 'nook:extension-session-status',
       payload: { queueExpiresAt: message.payload.expiresAt },
     })) as ExtensionSessionStatusResponse
-    if (statusResponse.status !== 'unlocked') {
+    if (!isUnlockedSessionStatus(statusResponse.status)) {
       return {
-        type: 'nook:extension-paired-vault-identity-status',
-        payload: { requestId, vaultStoreId, status: 'locked' },
+        type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
+        payload: {
+          requestId,
+          vaultStoreId,
+          status: ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
+        },
       }
     }
     const sessionDevice = unlockedSessionDevice(statusResponse)
@@ -400,11 +417,11 @@ export async function discoverPairedVaultIdentity(
       deviceSigningPublicKey: grant.deviceSigningPublicKey,
     })
     return {
-      type: 'nook:extension-paired-vault-identity-status',
+      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
       payload: {
         requestId,
         vaultStoreId,
-        status: 'unlocked',
+        status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
         extensionRuntimeId: chrome.runtime.id,
         deviceId: grant.deviceId,
         devicePublicKey: grant.devicePublicKey,
@@ -440,7 +457,7 @@ export async function requestPairedVaultUnlock(
     type: 'nook:extension-session-status',
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
-  if (statusResponse.status !== 'unlocked') {
+  if (!isUnlockedSessionStatus(statusResponse.status)) {
     await openCompanionLauncher()
   }
   return { ok: true, requestId, vaultStoreId }
@@ -650,7 +667,7 @@ export async function passkeyPairingGrants(): Promise<
   const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
-      value.scopes.includes('passkey-management'),
+      value.scopes.includes(ExtensionConnectScope.PasskeyManagement),
   )
   return selectedPairingGrantFirst(stored, grants)
 }
@@ -662,7 +679,7 @@ export async function passwordPairingGrants(): Promise<
   const grants = Object.values(stored).filter(
     (value): value is StoredExtensionPairingGrant =>
       isStoredExtensionPairingGrant(value) &&
-      value.scopes.includes('password-filling'),
+      value.scopes.includes(ExtensionConnectScope.PasswordFilling),
   )
   return selectedPairingGrantFirst(stored, grants)
 }

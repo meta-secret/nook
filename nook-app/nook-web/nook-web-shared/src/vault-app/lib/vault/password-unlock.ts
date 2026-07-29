@@ -614,7 +614,11 @@ export async function connectWithEnrollmentCode(
       }
       state.storageMode = 'oauth-file'
       state.activateLoginSetup('oauth-file')
-      state.oauthFile = oauthProvider.oauthFile
+      const oauthFile = oauthProvider.oauthFile
+      if (!oauthFile) {
+        throw new Error('Enrollment OAuth provider configuration is required')
+      }
+      state.oauthFile = oauthFile
       state.githubPat = ''
       state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo
       state.clearLocalFolder()
@@ -771,7 +775,7 @@ export async function issueEnrollmentCode(
     const sharedJoinerIdentity = state.sharedJoinerIdentity.trim()
     const usesSharedProviderGrant =
       providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
-      'shared-provider-grant'
+      OnboardingType.SharedProviderGrant
     const usesSharedICloud =
       usesSharedProviderGrant && selectedProvider.oauthFile?.preset === 'icloud'
     log.info('enrollment provider selected', {

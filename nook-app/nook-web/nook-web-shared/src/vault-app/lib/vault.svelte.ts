@@ -241,10 +241,7 @@ export class VaultState extends VaultLifecycleState {
   }
 
   dismissSuccess() {
-    if (this.successDismissScheduled) {
-      clearTimeout(this.successDismissTimer)
-      this.clearSuccessDismissTimer()
-    }
+    this.cancelSuccessDismissTimer()
     this.successMsg = ''
   }
 

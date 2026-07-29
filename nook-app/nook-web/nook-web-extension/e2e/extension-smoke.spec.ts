@@ -25,6 +25,8 @@ import {
   writeExtensionStorage,
   type ExtensionPairingApprovedMessage,
 } from './helpers/extension-smoke-runtime'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -299,7 +301,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const forgedGrant = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: 'sentinel',
+        vaultType: ExtensionPairingVaultType.Sentinel,
         deviceId: 'sentinel-device-e2e',
         devicePublicKey: 'age1sentinel',
         deviceSigningPublicKey: 'sentinel-signing-key',
@@ -307,7 +309,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         vaultStoreId: 'sentinel-store-e2e',
         vaultName: 'Sentinel safe',
         approvedAt: '2026-07-07T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       eventLogRecords: syntheticEventLogRecords,
@@ -319,7 +321,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const approvedGrant: ExtensionPairingApprovedMessage = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',
@@ -327,7 +329,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         vaultStoreId: 'store-e2e',
         vaultName: 'Personal',
         approvedAt: '2026-07-07T00:00:00.000Z',
-        scopes: ['vault-access', 'password-filling'],
+        scopes: [
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.PasswordFilling,
+        ],
         providers: [],
       },
       eventLogRecords: syntheticEventLogRecords,

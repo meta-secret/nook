@@ -1,3 +1,13 @@
+import {
+  isExtensionConnectScope,
+  type ExtensionConnectScope,
+} from './extension-connect-scope'
+
+export enum ExtensionPairingVaultType {
+  Simple = 'simple',
+  Sentinel = 'sentinel',
+}
+
 export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = 'nook:open-simple-vault',
 }
@@ -32,7 +42,7 @@ export type BeginExtensionPairingMessage = {
 }
 
 export type ExtensionPairingApprovedGrant = {
-  vaultType: VaultType.Simple
+  vaultType: ExtensionPairingVaultType.Simple
   deviceId: string
   devicePublicKey: string
   deviceSigningPublicKey: string
@@ -40,7 +50,7 @@ export type ExtensionPairingApprovedGrant = {
   vaultStoreId: string
   vaultName: string
   approvedAt: string
-  scopes: string[]
+  scopes: ExtensionConnectScope[]
   providers: unknown[]
 }
 
@@ -155,7 +165,7 @@ export type ExtensionPairedVaultIdentityStatusMessage =
         deviceSigningPublicKey: string
         deviceLabel: string
         nonce: string
-        scopes: string[]
+        scopes: ExtensionConnectScope[]
       }
     }
 
@@ -463,7 +473,7 @@ export function isExtensionPairingApprovedGrant(
   if (!value || typeof value !== 'object') return false
   const payload = value as Record<string, unknown>
   return (
-    payload.vaultType === VaultType.Simple &&
+    payload.vaultType === ExtensionPairingVaultType.Simple &&
     typeof payload.deviceId === 'string' &&
     typeof payload.devicePublicKey === 'string' &&
     typeof payload.deviceSigningPublicKey === 'string' &&
@@ -472,7 +482,7 @@ export function isExtensionPairingApprovedGrant(
     typeof payload.vaultName === 'string' &&
     typeof payload.approvedAt === 'string' &&
     Array.isArray(payload.scopes) &&
-    payload.scopes.every((scope) => typeof scope === 'string') &&
+    payload.scopes.every(isExtensionConnectScope) &&
     Array.isArray(payload.providers)
   )
 }
@@ -496,4 +506,3 @@ export function isExtensionLocalEventLogUpdatedMessage(
     isExtensionEventLogRecords(payload.eventLogRecords)
   )
 }
-import { VaultType } from '$app-wasm'

@@ -224,7 +224,10 @@ export async function createGoogleSharedFolder(
   collaboratorEmail: string,
 ): Promise<string> {
   const oauthFile = state.oauthFile
-  const accessToken = oauthFile?.accessToken?.trim()
+  if (!oauthFile) {
+    throw new Error(state.t('provider_setup.google_shared_sign_in_first'))
+  }
+  const accessToken = oauthFile.accessToken.trim()
   if (!accessToken) {
     throw new Error(state.t('provider_setup.google_shared_sign_in_first'))
   }
@@ -495,7 +498,7 @@ async function applyGoogleOAuthTokens(
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
       DEFAULT_DRIVE_BACKUP_NAME,
-    accountEmail: email,
+    ...(email ? { accountEmail: email } : {}),
   })
   state.githubPat = ''
   const sharedGoogleDrive =

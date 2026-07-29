@@ -31,8 +31,11 @@ import {
   removeLocalFolderHandle,
   RemoteVaultAssessDecision,
   RemoteVaultRecoveryState,
-  stagedProviderLabel as stagedProviderLabelCore,
+  stagedConfiguredOauthProviderLabel,
+  stagedGithubProviderLabel,
+  stagedLocalProviderLabel,
   stagedRemoteStorageArgs as stagedRemoteStorageArgsCore,
+  stagedUnconfiguredOauthProviderLabel,
   syncProvidersForActiveVault,
   updateOauthRemoteRef,
   wasmStorageArgs as wasmStorageArgsCore,
@@ -200,13 +203,24 @@ export function stagedRemoteStorageArgs(
 }
 
 export function stagedProviderLabel(state: ProviderActionsContext): string {
-  return stagedProviderLabelCore(
-    stagedProviderType(state),
-    state.githubRepo,
-    state.oauthFile?.fileName,
-    state.oauthFile?.preset,
-    state.oauthSetupPreset,
-  )
+  const providerType = stagedProviderType(state)
+  if (providerType === 'github') {
+    return stagedGithubProviderLabel(state.githubRepo)
+  }
+  if (providerType === 'oauth-file') {
+    const oauthFile = state.oauthFile
+    if (oauthFile) {
+      return stagedConfiguredOauthProviderLabel(
+        oauthFile.fileName,
+        oauthFile.preset,
+      )
+    }
+    const setupPreset = state.oauthSetupPreset
+    return setupPreset
+      ? stagedConfiguredOauthProviderLabel('', setupPreset)
+      : stagedUnconfiguredOauthProviderLabel()
+  }
+  return stagedLocalProviderLabel(providerType)
 }
 
 export function hasRemoteProviderCredentials(
@@ -261,10 +275,12 @@ export function refreshLocalFolderBackupSupport(
 export function localProvider(
   state: ProviderActionsContext,
 ): LocalProviderLookup {
-  const id = localProviderIdForActiveVault(
-    providerSnapshot(state),
-    state.activeVaultStoreId,
-  )
+  const id = state.hasActiveVaultStore
+    ? localProviderIdForActiveVault(
+        providerSnapshot(state),
+        state.requireActiveVaultStoreId(),
+      )
+    : localProviderIdForActiveVault(providerSnapshot(state))
   const provider = id
     ? state.providers.find((candidate) => candidate.id === id)
     : false
@@ -276,16 +292,26 @@ export function localProvider(
 export function activeProviders(
   state: ProviderActionsContext,
 ): StorageProvider[] {
-  return activeVaultProviders(providerSnapshot(state), state.activeVaultStoreId)
-    .providers
+  return (
+    state.hasActiveVaultStore
+      ? activeVaultProviders(
+          providerSnapshot(state),
+          state.requireActiveVaultStoreId(),
+        )
+      : activeVaultProviders(providerSnapshot(state))
+  ).providers
 }
 
 export function syncProviders(
   state: ProviderActionsContext,
 ): StorageProvider[] {
-  return syncProvidersForActiveVault(
-    providerSnapshot(state),
-    state.activeVaultStoreId,
+  return (
+    state.hasActiveVaultStore
+      ? syncProvidersForActiveVault(
+          providerSnapshot(state),
+          state.requireActiveVaultStoreId(),
+        )
+      : syncProvidersForActiveVault(providerSnapshot(state))
   ).providers
 }
 
@@ -479,7 +505,9 @@ export async function persistProviders(
   await state.enqueueStorage(() =>
     saveAuthProviders(state.manager!, {
       providers: state.providers,
-      activeVaultStoreId: state.activeVaultStoreId,
+      ...(state.hasActiveVaultStore
+        ? { activeVaultStoreId: state.requireActiveVaultStoreId() }
+        : {}),
     }),
   )
 }
@@ -915,8 +943,9 @@ export async function connectAndSyncStagedProvider(
     const assessTimedOut =
       e instanceof Error && e.name === VAULT_ASSESS_TIMEOUT_ERROR_NAME
     const stagedConflict =
-      !assessTimedOut && stagedRemoteArgs
-        ? await state.stageStagedProviderSyncIssue(stagedRemoteArgs)
+      !assessTimedOut &&
+      stagedRemoteArgs.kind === StagedRemoteStorageKind.Available
+        ? await state.stageStagedProviderSyncIssue(stagedRemoteArgs.args)
         : false
     if (!stagedConflict) {
       state.errorMsg = state.localFolderMultipleVaultsIssue

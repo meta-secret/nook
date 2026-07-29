@@ -14,18 +14,16 @@ import {
   type ExtensionPairedVaultUnlockRequestMessage,
   type OpenCompanionLauncherMessage,
 } from '$web-shared/extension/runtime-messages'
-import type {
-  ExtensionConnectRequestFor,
-  PairedExtensionIdentityDiscoveryFor,
+import {
+  ExtensionConnectScope,
+  ExtensionIdentityRequestSource,
+  type ExtensionConnectRequestFor,
+  type PairedExtensionIdentityDiscoveryFor,
 } from '$web-shared/extension/extension-connect-types'
 
 export const EXTENSION_CONNECT_PATH = '/extension-connect'
 
-export type ExtensionConnectScope =
-  | 'vault-access'
-  | 'password-filling'
-  | 'passkey-management'
-  | 'sync-provider-credentials'
+export { ExtensionConnectScope, ExtensionIdentityRequestSource }
 
 export type ExtensionConnectRequest =
   ExtensionConnectRequestFor<ExtensionConnectScope>
@@ -57,10 +55,10 @@ export type InstalledExtensionRuntime =
     }
 
 const validScopes = new Set<ExtensionConnectScope>([
-  'vault-access',
-  'password-filling',
-  'passkey-management',
-  'sync-provider-credentials',
+  ExtensionConnectScope.VaultAccess,
+  ExtensionConnectScope.PasswordFilling,
+  ExtensionConnectScope.PasskeyManagement,
+  ExtensionConnectScope.SyncProviderCredentials,
 ])
 const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
 const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000
@@ -114,7 +112,7 @@ export function extensionConnectRequestFromLocation(
   return {
     kind: ExtensionConnectRequestStateKind.Requested,
     request: {
-      source: 'extension-connect',
+      source: ExtensionIdentityRequestSource.ExtensionConnect,
       deviceId,
       devicePublicKey,
       deviceSigningPublicKey,
@@ -309,7 +307,7 @@ async function discoverPairedExtensionIdentityOnce(
     discovery: {
       status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
       request: {
-        source: 'paired-vault',
+        source: ExtensionIdentityRequestSource.PairedVault,
         vaultStoreId,
         deviceId: statusMessage.payload.deviceId,
         devicePublicKey: statusMessage.payload.devicePublicKey,
@@ -448,7 +446,7 @@ export async function adoptExtensionIdentity(
   const message:
     | ExtensionIdentityHandoffRequestMessage
     | ExtensionPairedVaultIdentityHandoffRequestMessage =
-    request.source === 'paired-vault'
+    request.source === ExtensionIdentityRequestSource.PairedVault
       ? {
           type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload: {

@@ -23,6 +23,7 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
 } from './helpers/extension-smoke-runtime'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -178,8 +179,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     expect(pairedGrant).toEqual(
       expect.objectContaining({
         scopes: expect.arrayContaining([
-          'passkey-management',
-          'password-filling',
+          ExtensionConnectScope.PasskeyManagement,
+          ExtensionConnectScope.PasswordFilling,
         ]),
       }),
     )

@@ -2,6 +2,7 @@
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import {
     ExtensionPairingApprovedMessageType,
+    ExtensionPairingVaultType,
     type ExtensionEventLogRecord,
     type ExtensionPairingApprovedMessage,
   } from '$web-shared/extension/runtime-messages'
@@ -10,10 +11,12 @@
     type StorageProvider,
   } from '$lib/auth-providers'
   import { Button } from '$lib/components/ui/button'
-  import type { ExtensionConnectRequest } from '$lib/extension-connect'
+  import {
+    ExtensionConnectScope,
+    type ExtensionConnectRequest,
+  } from '$lib/extension-connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { approveExtensionDevice } from '$app-wasm'
-  import { VaultType } from '$lib/vault-architecture'
 
   let {
     vault,
@@ -83,7 +86,7 @@
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: VaultType.Simple,
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: request.deviceId,
         devicePublicKey: request.devicePublicKey,
         deviceSigningPublicKey: request.deviceSigningPublicKey,
@@ -183,7 +186,9 @@
         vault.activeVaultStoreId ??
         (await vault.enqueueStorage(() => vault.manager!.vaultStoreId))
       let grantedProviders: StorageProvider[] = []
-      if (request.scopes.includes('sync-provider-credentials')) {
+      if (
+        request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
+      ) {
         const authProviders = await vault.enqueueStorage(() =>
           vault.manager!.loadAuthProviders(),
         )

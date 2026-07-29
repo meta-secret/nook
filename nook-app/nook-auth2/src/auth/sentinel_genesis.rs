@@ -9,15 +9,15 @@ use super::multi_device::{
     create_sentinel_root_share_records_for_recipients, dec_auth_id_from_public_key,
     device_id_from_public_key, generate_id,
 };
+pub use super::sentinel_genesis_types::*;
 use super::sentinel_signing;
 use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
-    MultiDeviceResult, StoreId, StoredSecretRecord,
+    MultiDeviceResult, StoreId,
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signer, SigningKey};
 use percent_encoding::percent_decode_str;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const GENESIS_VERSION: u32 = 1;
@@ -25,117 +25,6 @@ const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 const SENTINEL_REQUEST_HASH_PREFIX: &str = "#sentinel-request=";
 const SENTINEL_RESPONSE_HASH_PREFIX: &str = "#sentinel-response=";
 const MAX_SENTINEL_LINK_PAYLOAD_BYTES: usize = 16 * 1024;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisPolicy {
-    pub participant_count: u8,
-    pub threshold: u8,
-}
-
-impl SentinelGenesisPolicy {
-    pub fn validate(self) -> MultiDeviceResult<()> {
-        if self.threshold < 2
-            || self.participant_count < 2
-            || self.participant_count > 16
-            || self.threshold > self.participant_count
-        {
-            return Err(MultiDeviceError::InvalidSentinelThreshold);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisRequest {
-    pub version: u32,
-    pub session_id: CompactToken,
-    pub policy: SentinelGenesisPolicy,
-    pub initiator_device_id: DeviceId,
-    pub initiator_signing_public_key: DeviceSigningPublicKey,
-    pub signature: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisParticipant {
-    pub device_id: DeviceId,
-    pub encryption_public_key: DevicePublicKey,
-    pub signing_public_key: DeviceSigningPublicKey,
-    pub label: String,
-    pub fingerprint: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisParticipantResponse {
-    pub version: u32,
-    pub session_id: CompactToken,
-    pub participant: SentinelGenesisParticipant,
-    pub signature: String,
-}
-
-/// Provider-free public key bundle a participant can share before any initiator
-/// request exists. The initiator binds it to the active genesis session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisPublicKeyAnnouncement {
-    pub kind: String,
-    pub version: u32,
-    pub device_id: DeviceId,
-    pub encryption_public_key: DevicePublicKey,
-    pub signing_public_key: DeviceSigningPublicKey,
-    pub label: String,
-    pub fingerprint: String,
-    pub signature: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisSession {
-    pub request: SentinelGenesisRequest,
-    /// Verified responses are intentionally session-only. Serializing a public
-    /// draft never turns unverified participant fields into a trusted roster;
-    /// deserialization yields an incomplete request-only draft that must be
-    /// restarted through `start_sentinel_genesis`.
-    #[serde(skip, default)]
-    participants: Vec<SentinelGenesisParticipant>,
-}
-
-impl SentinelGenesisSession {
-    #[must_use]
-    pub fn participants(&self) -> &[SentinelGenesisParticipant] {
-        &self.participants
-    }
-
-    #[must_use]
-    pub fn is_complete(&self) -> bool {
-        self.participants.len() == usize::from(self.request.policy.participant_count)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisShareDelivery {
-    pub version: u32,
-    pub session_id: CompactToken,
-    pub store_id: StoreId,
-    pub policy: SentinelGenesisPolicy,
-    pub device_id: DeviceId,
-    pub encryption_public_key: DevicePublicKey,
-    pub share: SentinelShareEnvelope,
-    pub initiator_signing_public_key: DeviceSigningPublicKey,
-    pub signature: String,
-}
-
-/// Atomic result of the key-generation step. Callers must serialize all
-/// records together; no API exposes a partially issued share set.
-pub struct SentinelGenesisIssued {
-    pub records: Vec<StoredSecretRecord>,
-    pub participants: Vec<SentinelGenesisParticipant>,
-    pub deliveries: Vec<SentinelGenesisShareDelivery>,
-}
 
 pub fn start_sentinel_genesis(
     identity: &DeviceIdentity,

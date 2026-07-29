@@ -114,6 +114,11 @@ export class VaultProviderState {
   get hasActiveVaultStore(): boolean {
     return this.activeVaultStoreState.kind === ActiveVaultKind.Open
   }
+  requireActiveVaultStoreId(): StoreId {
+    if (this.activeVaultStoreState.kind === ActiveVaultKind.Open)
+      return this.activeVaultStoreState.storeId
+    throw new Error('Active vault store is required')
+  }
   set activeVaultStoreId(value: StoreId) {
     this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value }
   }

@@ -7,10 +7,6 @@
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import {
-    saveAuthProviders,
-    type AuthProvidersSnapshot,
-  } from '$lib/auth-providers'
-  import {
     ColorMode,
     EnrollmentSubmitQueueKind,
     ExistingVaultProviderSnapshotKind,
@@ -41,18 +37,14 @@
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
-  import {
-    appPath,
-    getLegalPageFromPath,
-    isLogsPath,
-    legalPageForId,
-  } from '$lib/legal-content'
+  import { appPath, getLegalPageFromPath, isLogsPath } from '$lib/legal-content'
   import { isAppLogsPath } from '$lib/app-logs-api'
   import {
     adoptExtensionIdentity,
     discoverPairedExtensionIdentity,
     extensionConnectRequestFromLocation,
     ExtensionConnectRequestStateKind,
+    ExtensionIdentityRequestSource,
     isExtensionConnectPath,
     openInstalledExtension,
     requestPairedExtensionUnlock,
@@ -64,11 +56,7 @@
     resolveExtensionSetupState,
     shouldOfferExtensionSetup,
   } from '$lib/extension-install'
-  import {
-    assessVaultSecurity,
-    configuredVaultApplication,
-    VaultApplication,
-  } from '$app-wasm'
+  import { assessVaultSecurity, VaultApplication } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
   import { APP_KIND, IS_SENTINEL_APP, SUPPORTS_EXTENSION } from '$lib/app-kind'
   import {
@@ -81,14 +69,16 @@
   } from '$lib/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import { subscribeToLocalBrowserDataDeletion } from '$lib/browser-data'
+  import {
+    mountBrowserLifecycle,
+    updateApplicationDocument,
+  } from '$lib/app-browser-lifecycle'
   import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
   const vault = new VaultState()
   const vaultSecurityRecommendations = $derived(
     assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
   )
-  const THEME_STORAGE_KEY = 'nook_color_mode'
   let colorMode = $state<ColorMode>(systemColorMode())
   let followsSystemColorMode = $state(true)
   let legalPageState = $state(initialLegalRoute())
@@ -199,89 +189,27 @@
   }
 
   onMount(() => {
-    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
-    const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
-    if (savedMode === ColorMode.Light || savedMode === ColorMode.Dark) {
-      colorMode = savedMode
-      followsSystemColorMode = false
-    } else {
-      colorMode = colorScheme.matches ? ColorMode.Dark : ColorMode.Light
-    }
-    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
-      if (followsSystemColorMode) {
-        colorMode = event.matches ? ColorMode.Dark : ColorMode.Light
-      }
-    }
-    colorScheme.addEventListener('change', handleColorSchemeChange)
-    const unsubscribeLocalDataDeletion = subscribeToLocalBrowserDataDeletion(
-      () => vault.handleRemoteLocalBrowserDataDeletion(),
-    )
-    void vault.init()
-
-    if (vault.runtimeConfig.exposeDebugHooks()) {
-      ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
-      ;(
-        window as Window & {
-          __nookConfiguredVaultApplication?: VaultApplication
-        }
-      ).__nookConfiguredVaultApplication = configuredVaultApplication()
-      ;(
-        window as Window & {
-          __nookAuthProviders?: {
-            loadAuthProviders: () => Promise<AuthProvidersSnapshot>
-            saveAuthProviders: (
-              snapshot: Parameters<typeof saveAuthProviders>[1],
-            ) => ReturnType<typeof saveAuthProviders>
-          }
-        }
-      ).__nookAuthProviders = {
-        loadAuthProviders: () =>
-          vault.enqueueStorage(() => vault.manager!.loadAuthProviders()),
-        saveAuthProviders: (snapshot) =>
-          vault.enqueueStorage(() =>
-            saveAuthProviders(vault.manager!, snapshot),
-          ),
-      }
-    }
-
-    syncRoute()
-    window.addEventListener('popstate', syncRoute)
-    window.addEventListener('hashchange', syncRoute)
-
-    return () => {
-      vault.stopVaultSync()
-      vault.stopIdleSessionTracking()
-      void vault.lockDeviceProtection()
-      window.removeEventListener('popstate', syncRoute)
-      window.removeEventListener('hashchange', syncRoute)
-      colorScheme.removeEventListener('change', handleColorSchemeChange)
-      unsubscribeLocalDataDeletion()
-    }
+    return mountBrowserLifecycle({
+      vault,
+      followsSystemColorMode: () => followsSystemColorMode,
+      setColorMode: (mode) => {
+        colorMode = mode
+      },
+      stopFollowingSystemColorMode: () => {
+        followsSystemColorMode = false
+      },
+      syncRoute,
+    })
   })
 
   $effect(() => {
-    document.documentElement.classList.toggle(
-      'dark',
-      colorMode === ColorMode.Dark,
+    updateApplicationDocument(
+      colorMode,
+      legalPageState,
+      logsPage,
+      extensionConnectRoute,
+      IS_SENTINEL_APP,
     )
-  })
-
-  $effect(() => {
-    if (legalPageState.kind === LegalRouteKind.Legal) {
-      document.title = `${legalPageForId(legalPageState.page).title} · Nook`
-      return
-    }
-    if (logsPage) {
-      document.title = 'Application logs · Nook'
-      return
-    }
-    if (extensionConnectRoute) {
-      document.title = 'Approve extension · Nook'
-      return
-    }
-    document.title = IS_SENTINEL_APP
-      ? 'Nook Sentinel Vault'
-      : 'Nook Simple Vault'
   })
 
   async function handleUnlock(skipExtensionDiscovery = false) {
@@ -322,7 +250,8 @@
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
-      extensionIdentityRequestState.request.source === 'paired-vault' &&
+      extensionIdentityRequestState.request.source ===
+        ExtensionIdentityRequestSource.PairedVault &&
       extensionIdentityRequestState.request.vaultStoreId === activeStoreId
     ) {
       const connectRequest = extensionIdentityRequestState.request
@@ -359,9 +288,11 @@
       ) {
         const connectRequest = extensionIdentityRequestState.request
         const extensionIdentityCanUnlock =
-          (connectRequest.source !== 'paired-vault' ||
+          (connectRequest.source !==
+            ExtensionIdentityRequestSource.PairedVault ||
             connectRequest.vaultStoreId === activeStoreId) &&
-          (connectRequest.source === 'paired-vault' ||
+          (connectRequest.source ===
+            ExtensionIdentityRequestSource.PairedVault ||
             extensionBackedVaultSession ||
             vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
         if (extensionIdentityCanUnlock) {
@@ -879,7 +810,8 @@
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
-      extensionIdentityRequestState.request.source === 'paired-vault' &&
+      extensionIdentityRequestState.request.source ===
+        ExtensionIdentityRequestSource.PairedVault &&
       extensionIdentityRequestState.request.vaultStoreId !== storeId
     ) {
       extensionIdentityRequestState = {
@@ -992,7 +924,8 @@
           {existingVaultNeedsDeviceUnlock}
           usesExtensionDeviceIdentity={extensionIdentityRequestState.kind ===
             ExtensionConnectIntentKind.Requested &&
-            (extensionIdentityRequestState.request.source === 'paired-vault' ||
+            (extensionIdentityRequestState.request.source ===
+              ExtensionIdentityRequestSource.PairedVault ||
               !requiresPasskeyFirst ||
               extensionBackedVaultSession ||
               vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)}

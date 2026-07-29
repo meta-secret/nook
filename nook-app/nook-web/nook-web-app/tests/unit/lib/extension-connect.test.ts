@@ -4,6 +4,8 @@ import {
   extensionConnectIntent,
 } from '$lib/app-lifecycle-state'
 import {
+  ExtensionConnectScope,
+  ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
@@ -63,7 +65,7 @@ describe('extension connect route parsing', () => {
     expect(request).toEqual({
       kind: ExtensionConnectRequestStateKind.Requested,
       request: {
-        source: 'extension-connect',
+        source: ExtensionIdentityRequestSource.ExtensionConnect,
         deviceId: 'device-1',
         devicePublicKey: 'enc-pk',
         deviceSigningPublicKey: 'sign-pk',
@@ -71,9 +73,9 @@ describe('extension connect route parsing', () => {
         deviceLabel: 'Nook Extension',
         nonce: 'n-1',
         scopes: [
-          'vault-access',
-          'password-filling',
-          'sync-provider-credentials',
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.PasswordFilling,
+          ExtensionConnectScope.SyncProviderCredentials,
         ],
       },
     })
@@ -180,7 +182,7 @@ describe('extension pairing approved message', () => {
           vaultStoreId: 'store-1',
           vaultName: 'Personal',
           approvedAt: '2026-07-07T00:00:00.000Z',
-          scopes: ['vault-access'],
+          scopes: [ExtensionConnectScope.VaultAccess],
           providers: [{ id: 'local-1', type: 'local' }],
         },
         eventLogRecords,
@@ -201,7 +203,7 @@ describe('extension pairing approved message', () => {
           vaultStoreId: 'store-1',
           vaultName: 'Sentinel',
           approvedAt: '2026-07-07T00:00:00.000Z',
-          scopes: ['vault-access'],
+          scopes: [ExtensionConnectScope.VaultAccess],
           providers: [],
         },
         eventLogRecords,
@@ -241,7 +243,10 @@ describe('extension pairing approved message', () => {
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
         approvedAt: '2026-07-07T00:00:00.000Z',
-        scopes: ['vault-access', 'sync-provider-credentials'],
+        scopes: [
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.SyncProviderCredentials,
+        ],
         providers: [
           { id: 'local-1', type: 'local' },
           { id: 'gh-1', type: 'github' },
@@ -318,7 +323,7 @@ describe('extension pairing approved message', () => {
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
         approvedAt: '2026-07-25T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       {
@@ -362,7 +367,7 @@ describe('extension pairing approved message', () => {
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
         approvedAt: '2026-07-24T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       {
@@ -382,7 +387,7 @@ describe('extension pairing approved message', () => {
         vaultStoreId: 'store-2',
         vaultName: 'Work',
         approvedAt: '2026-07-25T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       {
@@ -426,7 +431,7 @@ describe('extension pairing approved message', () => {
         vaultStoreId: 'store-1',
         vaultName: 'Personal',
         approvedAt: '2026-07-25T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       {
@@ -568,7 +573,7 @@ describe('extension-owned pairing start', () => {
           deviceSigningPublicKey: 'signing-key',
           deviceLabel: 'Nook Extension',
           nonce: 'nonce-1',
-          scopes: ['vault-access'],
+          scopes: [ExtensionConnectScope.VaultAccess],
         },
       }),
     ).toBe(true)

@@ -11,7 +11,6 @@ import {
 } from '$lib/nook'
 import {
   importLocalVaultBlob,
-  isVaultSessionLocked,
   JoinEnrollmentState,
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
@@ -26,8 +25,6 @@ import {
   LOCAL_PROVIDER_TYPE,
   type StorageProvider,
 } from '$lib/auth-providers'
-import { publishExtensionEventLogUpdate } from '$web-shared/extension/event-log-bridge'
-import type { ExtensionEventLogRecord } from '$web-shared/extension/runtime-messages'
 import { intoWasmStringValue } from '$lib/wasm-string-value'
 import {
   ConflictProviderSaveKind,
@@ -46,6 +43,11 @@ import {
 } from '$lib/vault/state/ui.svelte'
 import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
 import { SyncConflictReviewKind } from '$lib/vault/state/sync.svelte'
+import {
+  scheduleAutoConnectAfterApproval,
+  syncError,
+} from '$lib/vault/sync-runtime'
+export { publishExtensionEventLogUpdateForVault } from '$lib/vault/sync-extension-bridge'
 
 export * from '$lib/vault/sync-resolution'
 export { syncConflictLabel } from '$lib/vault/sync-conflict-label'
@@ -53,32 +55,6 @@ export { syncConflictLabel } from '$lib/vault/sync-conflict-label'
 const log = createLogger('vault-sync')
 
 export type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync-operation-state'
-
-function syncError(context: string, error: unknown) {
-  log.warn(`${context} failed`, {
-    error: error instanceof Error ? error.message : String(error),
-    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-  })
-}
-
-function scheduleAutoConnectAfterApproval(state: SyncActionsContext): void {
-  if (
-    !state.clientPolicy.shouldAutoConnectAfterApproval(
-      state.isAuthenticated,
-      state.isVerifying,
-      state.loginPasswordPrompt,
-      state.sessionExpiredByIdle,
-      isVaultSessionLocked(),
-    )
-  ) {
-    return
-  }
-  log.info('scheduling auto-connect after join approval')
-  setTimeout(() => {
-    if (state.isAuthenticated || state.isVerifying) return
-    void state.loadDb()
-  }, 0)
-}
 
 export function applyVaultSyncResult(
   state: SyncActionsContext,
@@ -251,31 +227,6 @@ export async function runFanOutSyncAfterLocalSave(
   }
 }
 
-export async function publishExtensionEventLogUpdateForVault(
-  state: SyncActionsContext,
-): Promise<void> {
-  if (!state.manager) return
-  try {
-    const vaultStoreId =
-      state.activeVaultStoreId ??
-      (await state.enqueueStorage(() => state.manager!.vaultStoreId))
-    const eventLogRecords = await state.enqueueStorage(() =>
-      state.manager!.exportEventLogRecords(),
-    )
-    try {
-      publishExtensionEventLogUpdate(
-        vaultStoreId,
-        eventLogRecords.toArray() as ExtensionEventLogRecord[],
-      )
-    } finally {
-      eventLogRecords.free()
-    }
-  } catch {
-    // The extension bridge is optional and must never make a vault save fail.
-    log.warn('extension event-log notification failed')
-  }
-}
-
 export function eventOutboxTarget(
   state: SyncActionsContext,
   provider?: StorageProvider,
@@ -437,8 +388,10 @@ function localFolderMultipleVaultsIssueFromTypedIssue(
   provider: StorageProvider,
   storeIds: string[],
   message: string,
-): LocalFolderMultipleVaultsIssue | void {
-  if (provider.type !== 'local-folder') return
+): LocalFolderMultipleVaultsIssue {
+  if (provider.type !== 'local-folder') {
+    throw new Error('Multiple-vault storage issue requires a local folder')
+  }
   return {
     providerId: provider.id,
     providerLabel: provider.label,
