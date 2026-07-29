@@ -275,7 +275,13 @@ function resetSessionState(): void {
 async function handleMessage(message: unknown): Promise<unknown> {
   switch (messageType(message)) {
     case 'nook:extension-session-reset': {
-      resetSessionState()
+      for (const offer of Array.from(pendingLoginSaveOffers.values())) {
+        clearLoginSaveOffer(offer)
+      }
+      pendingLoginSaveOffers.clear()
+      canceledWebsitePasskeyRequests.clear()
+      const activeManager = await getManager()
+      activeManager.resetVaultSession()
       return { ok: true }
     }
     case 'nook:extension-session-migrate-auth-providers': {

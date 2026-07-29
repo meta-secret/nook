@@ -437,7 +437,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         const entries = await readPersistedAppLogs(reopenedVaultPage)
         return (entries ?? []).filter(
           (entry) =>
-            entry.scope === 'vault' &&
+            entry.scope === 'vault-lifecycle' &&
             entry.message === 'extension identity adopted' &&
             entry.data?.includes(extensionDeviceId ?? '') === true,
         ).length
@@ -579,15 +579,25 @@ test('reuses the offscreen session after the service worker restarts', async ({
         target.type === 'service_worker' && target.url === worker.url(),
     )
     expect(workerTarget).toBeDefined()
-    await cdp.send('Target.closeTarget', {
-      targetId: workerTarget!.targetId,
-    })
+    await expect(
+      cdp.send('Target.closeTarget', {
+        targetId: workerTarget!.targetId,
+      }),
+    ).resolves.toEqual({ success: true })
 
-    const restartedWorker = context.waitForEvent('serviceworker', {
-      timeout: 15_000,
-    })
     await popupPage.reload()
-    await restartedWorker
+    await expect
+      .poll(
+        async () => {
+          const restartedTargets = await cdp.send('Target.getTargets')
+          return restartedTargets.targetInfos.some(
+            (target) =>
+              target.type === 'service_worker' && target.url === worker.url(),
+          )
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true)
     await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible(
       { timeout: 15_000 },
     )
