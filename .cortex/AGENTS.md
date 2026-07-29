@@ -4,9 +4,12 @@ This is the system of record and entry point for all AI agents working in this r
 
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
-Authored source files MUST stay at or below **1,000 lines**, except Rust source
-files, which MUST stay at or below **1,500 lines**. Crossing either hard limit
-is a failed repository invariant and a P1 architecture finding.
+Every authored source file, including Rust, MUST stay at or below **1,000
+lines**. Crossing this uniform hard limit is a failed repository invariant and
+a P1 architecture finding. A Rust module that needs more than 1,000 lines
+signals an overcomplicated domain model or too many production
+responsibilities; the model must be decomposed rather than accommodated by a
+larger language-specific allowance.
 
 For Rust, moving `#[cfg(test)]` code or unit tests into another file is **not**
 an acceptable fix. Separate Rust unit-test files under `src` are prohibited:

@@ -5,10 +5,9 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{Attribute, Expr, Item, ItemMacro, ItemMod, Lit, LitStr, Meta, Token};
 
-pub const NON_RUST_LINE_LIMIT: usize = 1_000;
-pub const RUST_LINE_LIMIT: usize = 1_500;
+pub const AUTHORED_SOURCE_LINE_LIMIT: usize = 1_000;
 
-pub const SOURCE_SIZE_REMEDIATION: &str = "P1 source architecture violation: split production responsibilities along cohesive domain, capability, ownership, lifecycle, or dependency boundaries with narrow interfaces. For oversized Rust, extracting tests alone is prohibited. Arbitrary half-splits and numbered part modules are prohibited.";
+pub const SOURCE_SIZE_REMEDIATION: &str = "P1 source architecture violation: every authored source file is limited to 1,000 lines. An oversized Rust module indicates an overcomplicated domain model or too many production responsibilities; split it along cohesive domain, capability, ownership, lifecycle, or dependency boundaries with narrow interfaces. Extracting tests alone is prohibited. Arbitrary half-splits and numbered part modules are prohibited.";
 pub const UNIT_TEST_COLOCATION_REMEDIATION: &str = "P1 Rust test architecture violation: unit tests must be inline with the focused implementation module. Split production by domain or architectural responsibility and colocate each abstraction's tests. Separate crate-level tests are reserved for integration tests.";
 
 const SOURCE_EXTENSIONS: &[&str] = &[
@@ -312,11 +311,7 @@ fn source_line_limit(path: &Path) -> Option<usize> {
     let extension = path.extension()?.to_str()?;
     SOURCE_EXTENSIONS
         .contains(&extension)
-        .then_some(if extension == "rs" {
-            RUST_LINE_LIMIT
-        } else {
-            NON_RUST_LINE_LIMIT
-        })
+        .then_some(AUTHORED_SOURCE_LINE_LIMIT)
 }
 
 fn is_excluded_directory(path: &Path) -> bool {
@@ -353,7 +348,7 @@ fn is_excluded_path(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        ExternalUnitTestModuleViolation, NON_RUST_LINE_LIMIT, RUST_LINE_LIMIT, SourceSizeViolation,
+        AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceSizeViolation,
         external_rust_unit_test_modules, source_size_violations,
     };
     use std::fs;
@@ -364,37 +359,49 @@ mod tests {
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     #[test]
-    fn applies_language_specific_hard_limits() -> anyhow::Result<()> {
+    fn applies_one_hard_limit_to_every_authored_language() -> anyhow::Result<()> {
         let root = temporary_directory()?;
-        fs::write(root.join("at-limit.ts"), lines(NON_RUST_LINE_LIMIT))?;
-        fs::write(root.join("over-limit.ts"), lines(NON_RUST_LINE_LIMIT + 1))?;
-        fs::write(root.join("over-limit.html"), lines(NON_RUST_LINE_LIMIT + 1))?;
-        fs::write(root.join("over-limit.yml"), lines(NON_RUST_LINE_LIMIT + 1))?;
-        fs::write(root.join("at-limit.rs"), lines(RUST_LINE_LIMIT))?;
-        fs::write(root.join("over-limit.rs"), lines(RUST_LINE_LIMIT + 1))?;
+        fs::write(root.join("at-limit.ts"), lines(AUTHORED_SOURCE_LINE_LIMIT))?;
+        fs::write(
+            root.join("over-limit.ts"),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+        )?;
+        fs::write(
+            root.join("over-limit.html"),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+        )?;
+        fs::write(
+            root.join("over-limit.yml"),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+        )?;
+        fs::write(root.join("at-limit.rs"), lines(AUTHORED_SOURCE_LINE_LIMIT))?;
+        fs::write(
+            root.join("over-limit.rs"),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+        )?;
 
         assert_eq!(
             source_size_violations(&root)?,
             vec![
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.html"),
-                    lines: NON_RUST_LINE_LIMIT + 1,
-                    limit: NON_RUST_LINE_LIMIT,
+                    lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                    limit: AUTHORED_SOURCE_LINE_LIMIT,
                 },
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.rs"),
-                    lines: RUST_LINE_LIMIT + 1,
-                    limit: RUST_LINE_LIMIT,
+                    lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                    limit: AUTHORED_SOURCE_LINE_LIMIT,
                 },
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.ts"),
-                    lines: NON_RUST_LINE_LIMIT + 1,
-                    limit: NON_RUST_LINE_LIMIT,
+                    lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                    limit: AUTHORED_SOURCE_LINE_LIMIT,
                 },
                 SourceSizeViolation {
                     path: PathBuf::from("over-limit.yml"),
-                    lines: NON_RUST_LINE_LIMIT + 1,
-                    limit: NON_RUST_LINE_LIMIT,
+                    lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                    limit: AUTHORED_SOURCE_LINE_LIMIT,
                 },
             ]
         );
@@ -409,25 +416,25 @@ mod tests {
             fs::create_dir(root.join(directory))?;
             fs::write(
                 root.join(directory).join("oversized.ts"),
-                lines(NON_RUST_LINE_LIMIT + 1),
+                lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
             )?;
         }
         fs::write(
             root.join("large-fixture.json"),
-            lines(NON_RUST_LINE_LIMIT + 1),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
         )?;
         fs::create_dir_all(root.join("src/coverage"))?;
         fs::write(
             root.join("src/coverage/owned.ts"),
-            lines(NON_RUST_LINE_LIMIT + 1),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
         )?;
 
         assert_eq!(
             source_size_violations(&root)?,
             vec![SourceSizeViolation {
                 path: PathBuf::from("src/coverage/owned.ts"),
-                lines: NON_RUST_LINE_LIMIT + 1,
-                limit: NON_RUST_LINE_LIMIT,
+                lines: AUTHORED_SOURCE_LINE_LIMIT + 1,
+                limit: AUTHORED_SOURCE_LINE_LIMIT,
             }]
         );
         fs::remove_dir_all(root)?;
