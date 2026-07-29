@@ -4,19 +4,11 @@
   import {
     loadAppLogsResponse,
     parseAppLogsQuery,
-    type AppLogsResponse,
   } from '$lib/app-logs-api'
-
-  enum LogsPageStateKind {
-  Loading = "loading",
-  Loaded = "loaded",
-  Failed = "failed",
-}
-
-type LogsPageState =
-    | { kind: LogsPageStateKind.Loading }
-    | { kind: LogsPageStateKind.Loaded; payload: AppLogsResponse }
-    | { kind: LogsPageStateKind.Failed; message: string }
+  import {
+    LogsPageStateKind,
+    type LogsPageState,
+  } from './app-logs-api-page-state'
 
   let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
@@ -46,13 +38,13 @@ type LogsPageState =
 </svelte:head>
 
 <main class="app-logs-api-page">
-  {#if state.kind === 'failed'}
+  {#if state.kind === LogsPageStateKind.Failed}
     <pre data-testid="app-logs-error">{JSON.stringify(
         { error: state.message },
         omittedValue(),
         2,
       )}</pre>
-  {:else if state.kind === 'loaded'}
+  {:else if state.kind === LogsPageStateKind.Loaded}
     <pre data-testid="app-logs-json">{JSON.stringify(
         state.payload,
         omittedValue(),

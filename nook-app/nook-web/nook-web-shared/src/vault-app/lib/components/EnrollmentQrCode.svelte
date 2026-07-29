@@ -3,15 +3,10 @@
   import { RefreshCw } from '@lucide/svelte'
   import QRCodeStyling from 'qr-code-styling'
   import { createEnrollmentQrOptions } from '$lib/enrollment-qr'
-
-  enum QrCodeMountKind {
-  Unmounted = "unmounted",
-  Mounted = "mounted",
-}
-
-type QrCodeMount =
-    | { kind: QrCodeMountKind.Unmounted }
-    | { kind: QrCodeMountKind.Mounted; instance: QRCodeStyling }
+  import {
+    QrCodeMountKind,
+    type QrCodeMount,
+  } from './enrollment-qr-code-state'
 
   let {
     enrollmentLink,

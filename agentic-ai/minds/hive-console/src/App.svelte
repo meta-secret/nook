@@ -22,63 +22,23 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObservedActivity,
     ObservedAgent,
     ObservedAlert,
-    ObservedTask,
     ObserverCopy,
-    ObserverSnapshot,
   } from './types';
   import { emergencyCopy } from './emergency-copy';
-
-  enum ObserverFeedKind {
-    NotLoaded = 'not-loaded',
-    Loaded = 'loaded',
-  }
-
-  type ObserverFeed =
-    | { kind: ObserverFeedKind.NotLoaded }
-    | { kind: ObserverFeedKind.Loaded; snapshot: ObserverSnapshot };
-  enum TaskSelectionKind {
-    None = 'none',
-    Selected = 'selected',
-  }
-
-  type TaskSelection =
-    | { kind: TaskSelectionKind.None }
-    | { kind: TaskSelectionKind.Selected; taskId: string };
-  enum DurableTaskLookupKind {
-    NotFound = 'not-found',
-    Found = 'found',
-  }
-
-  type DurableTaskLookup =
-    | { kind: DurableTaskLookupKind.NotFound }
-    | { kind: DurableTaskLookupKind.Found; task: ObservedTask };
-  enum SelectedTaskKind {
-    Closed = 'closed',
-    Open = 'open',
-  }
-
-  type SelectedTask =
-    | { kind: SelectedTaskKind.Closed }
-    | { kind: SelectedTaskKind.Open; task: ObservedTask };
-  enum PollScheduleKind {
-    Stopped = 'stopped',
-    Scheduled = 'scheduled',
-  }
-
-  type PollSchedule =
-    | { kind: PollScheduleKind.Stopped }
-    | {
-        kind: PollScheduleKind.Scheduled;
-        timer: ReturnType<typeof setTimeout>;
-      };
-  enum SnapshotLoadRequestKind {
-    ScheduledRefresh = 'scheduled-refresh',
-    ManualRetry = 'manual-retry',
-  }
-
-  type SnapshotLoadRequest =
-    | { kind: SnapshotLoadRequestKind.ScheduledRefresh; signal: AbortSignal }
-    | { kind: SnapshotLoadRequestKind.ManualRetry };
+  import {
+    DurableTaskLookupKind,
+    ObserverFeedKind,
+    PollScheduleKind,
+    SelectedTaskKind,
+    SnapshotLoadRequestKind,
+    TaskSelectionKind,
+    type DurableTaskLookup,
+    type ObserverFeed,
+    type PollSchedule,
+    type SelectedTask,
+    type SnapshotLoadRequest,
+    type TaskSelection,
+  } from './app-state';
 
   function omittedValue(): void {}
 
@@ -364,14 +324,15 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="skeleton loading-detail"></div>
     </div>
   </main>
-{:else if unavailable && snapshotState.kind === 'not-loaded'}
+{:else if unavailable && snapshotState.kind === ObserverFeedKind.NotLoaded}
   <main class="unavailable-shell">
     <div class="unavailable-mark"><Hexagon size={28} strokeWidth={1.6} /></div>
     <h1>{copy.unavailable}</h1>
     <p>{copy.unavailable_description}</p>
     <button
       class="primary-button"
-      onclick={() => void loadSnapshot({ kind: 'manual-retry' })}
+      onclick={() =>
+        void loadSnapshot({ kind: SnapshotLoadRequestKind.ManualRetry })}
     >
       {copy.retry_connection}
     </button>
@@ -530,7 +491,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
       <aside
         bind:this={detailPanel}
-        class:detail-open={selectedState.kind === 'open'}
+        class:detail-open={selectedState.kind === SelectedTaskKind.Open}
         class="detail-panel"
         aria-live="polite"
         tabindex="-1"

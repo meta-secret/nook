@@ -43,22 +43,12 @@
     providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
-  enum ProviderSelectionKind {
-  Automatic = "automatic",
-  Selected = "selected",
-}
-
-type ProviderSelection =
-    | { kind: ProviderSelectionKind.Automatic }
-    | { kind: ProviderSelectionKind.Selected; providerId: string }
-  enum PasswordEntrySelectionKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-type PasswordEntrySelection =
-    | { kind: PasswordEntrySelectionKind.NotSelected }
-    | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId }
+  import {
+    PasswordEntrySelectionKind,
+    ProviderSelectionKind,
+    type PasswordEntrySelection,
+    type ProviderSelection,
+  } from './onboard-device-state'
 
   let {
     vault,
@@ -160,7 +150,7 @@ type PasswordEntrySelection =
       firstCompatibleProvider(
         syncProviders,
         vault.vaultArchitecture.replication_type,
-        selectedProviderIdState.kind === 'selected'
+        selectedProviderIdState.kind === ProviderSelectionKind.Selected
           ? selectedProviderIdState.providerId
           : omittedValue(),
       )?.id ?? ''
@@ -168,7 +158,7 @@ type PasswordEntrySelection =
   })
   const effectivePasswordEntryId = $derived.by(() => {
     if (
-      passwordEntry.kind === 'selected' &&
+      passwordEntry.kind === PasswordEntrySelectionKind.Selected &&
       passwordEntries.some((entry) => entry.id === passwordEntry.entryId)
     ) {
       return passwordEntry.entryId
@@ -474,7 +464,10 @@ type PasswordEntrySelection =
                   data-testid="onboard-password-entry-{entry.id}"
                   disabled={isBusy || isGenerating}
                   onclick={() => {
-                    passwordEntry = { kind: 'selected', entryId: entry.id }
+                    passwordEntry = {
+                      kind: PasswordEntrySelectionKind.Selected,
+                      entryId: entry.id,
+                    }
                     passwordInput = ''
                   }}
                 >
@@ -702,7 +695,7 @@ type PasswordEntrySelection =
                 onclick={() => {
                   if (compatible) {
                     selectedProviderIdState = {
-                      kind: 'selected',
+                      kind: ProviderSelectionKind.Selected,
                       providerId: provider.id,
                     }
                   }

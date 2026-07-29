@@ -7,22 +7,12 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
-  enum ImportFileSelectionKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-type ImportFileSelection =
-    | { kind: ImportFileSelectionKind.NotSelected }
-    | { kind: ImportFileSelectionKind.Selected; file: File }
-  enum ImportOutcomeKind {
-  NotRun = "not-run",
-  Completed = "completed",
-}
-
-type ImportOutcome =
-    | { kind: ImportOutcomeKind.NotRun }
-    | { kind: ImportOutcomeKind.Completed; result: NookImportResult }
+  import {
+    ImportFileSelectionKind,
+    ImportOutcomeKind,
+    type ImportFileSelection,
+    type ImportOutcome,
+  } from './bitwarden-import-state'
 
   let {
     vault,
@@ -149,7 +139,8 @@ type ImportOutcome =
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={selectedFile.kind === 'not-selected' || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -168,7 +159,7 @@ type ImportOutcome =
         </p>
       {/if}
 
-      {#if result.kind === 'completed'}
+      {#if result.kind === ImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="bitwarden-import-result"

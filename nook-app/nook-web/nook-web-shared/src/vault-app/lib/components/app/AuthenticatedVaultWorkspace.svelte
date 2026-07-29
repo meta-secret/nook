@@ -13,14 +13,10 @@
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import type { VaultItemType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
-  enum SecretEditorModeKind {
-  Closed = "closed",
-  Adding = "adding",
-}
-
-type SecretEditorMode =
-    | { kind: SecretEditorModeKind.Closed }
-    | { kind: SecretEditorModeKind.Adding; itemType: VaultItemType };
+  import {
+    SecretEditorModeKind,
+    type SecretEditorMode,
+  } from "./authenticated-vault-workspace-state";
 
   let {
     vault,

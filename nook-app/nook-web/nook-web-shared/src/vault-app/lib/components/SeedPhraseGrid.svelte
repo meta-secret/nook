@@ -2,22 +2,12 @@
   import { omittedValue } from '../../../explicit-state'
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  enum FocusedWordKind {
-  None = "none",
-  Focused = "focused",
-}
-
-type FocusedWord =
-    | { kind: FocusedWordKind.None }
-    | { kind: FocusedWordKind.Focused; index: number }
-  enum ChecksumStatusKind {
-  NotChecked = "not-checked",
-  Checked = "checked",
-}
-
-type ChecksumStatus =
-    | { kind: ChecksumStatusKind.NotChecked }
-    | { kind: ChecksumStatusKind.Checked; valid: boolean }
+  import {
+    ChecksumStatusKind,
+    FocusedWordKind,
+    type ChecksumStatus,
+    type FocusedWord,
+  } from './seed-phrase-grid-state'
   import {
     inferBip39MnemonicLength,
     isBip39WordSequenceValid,
@@ -300,10 +290,10 @@ type ChecksumStatus =
             inputmode="text"
             role="combobox"
             aria-autocomplete="list"
-            aria-expanded={focusedIndex.kind === 'focused' &&
+            aria-expanded={focusedIndex.kind === FocusedWordKind.Focused &&
               focusedIndex.index === index &&
               suggestions.length > 0}
-            aria-controls={focusedIndex.kind === 'focused' &&
+            aria-controls={focusedIndex.kind === FocusedWordKind.Focused &&
             focusedIndex.index === index &&
             suggestions.length > 0
               ? `seed-word-suggestions-${index + 1}`
@@ -321,7 +311,7 @@ type ChecksumStatus =
             oninput={(event) => onCellInput(index, event.currentTarget.value)}
             onpaste={(event) => onCellPaste(index, event)}
             onfocus={() => {
-              focusedIndex = { kind: 'focused', index }
+              focusedIndex = { kind: FocusedWordKind.Focused, index }
               suggestionIndex = 0
             }}
             onblur={() => {
@@ -334,15 +324,15 @@ type ChecksumStatus =
                   return
                 }
                 if (
-                  focusedIndex.kind === 'focused' &&
+                  focusedIndex.kind === FocusedWordKind.Focused &&
                   focusedIndex.index === index
                 )
-                  focusedIndex = { kind: 'none' }
+                  focusedIndex = { kind: FocusedWordKind.None }
               })
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}
           />
-          {#if focusedIndex.kind === 'focused' &&
+          {#if focusedIndex.kind === FocusedWordKind.Focused &&
           focusedIndex.index === index &&
           suggestions.length > 0}
             <ul
@@ -387,7 +377,7 @@ type ChecksumStatus =
   {#if !readonly &&
   perWordValid &&
   allWordsFilled &&
-  checksumValid.kind === 'checked' &&
+  checksumValid.kind === ChecksumStatusKind.Checked &&
   checksumValid.valid}
     <p
       class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"
@@ -399,7 +389,7 @@ type ChecksumStatus =
   {:else if !readonly &&
   perWordValid &&
   allWordsFilled &&
-  checksumValid.kind === 'checked' &&
+  checksumValid.kind === ChecksumStatusKind.Checked &&
   !checksumValid.valid}
     <p
       class="text-xs text-destructive"

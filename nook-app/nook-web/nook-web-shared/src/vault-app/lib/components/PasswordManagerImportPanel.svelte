@@ -10,22 +10,12 @@
     selectedImportFile,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
-  enum ImportFileSelectionKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-type ImportFileSelection =
-    | { kind: ImportFileSelectionKind.NotSelected }
-    | { kind: ImportFileSelectionKind.Selected; file: File }
-  enum PasswordImportOutcomeKind {
-  NotRun = "not-run",
-  Completed = "completed",
-}
-
-type PasswordImportOutcome =
-    | { kind: PasswordImportOutcomeKind.NotRun }
-    | { kind: PasswordImportOutcomeKind.Completed; result: NookImportResult }
+  import {
+    ImportFileSelectionKind,
+    PasswordImportOutcomeKind,
+    type ImportFileSelection,
+    type PasswordImportOutcome,
+  } from './password-manager-import-state'
 
   type CommonProps = {
     translationPrefix: string
@@ -146,7 +136,8 @@ type PasswordImportOutcome =
 
       <Button
         data-testid={props.submitTestId}
-        disabled={selectedFile.kind === 'not-selected' || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -168,7 +159,7 @@ type PasswordImportOutcome =
         </p>
       {/if}
 
-      {#if result.kind === 'completed'}
+      {#if result.kind === PasswordImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid={props.resultTestId}

@@ -1,14 +1,5 @@
 <script lang="ts">
   import { omittedValue } from '../../../explicit-state'
-
-  enum ActivePasswordEntryKind {
-  None = "none",
-  Selected = "selected",
-}
-
-type ActivePasswordEntry =
-    | { kind: ActivePasswordEntryKind.None }
-    | { kind: ActivePasswordEntryKind.Selected; entryId: PasswordEntryId }
   import {
     KeyRound,
     Lock,
@@ -31,8 +22,11 @@ type ActivePasswordEntry =
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
-
-  type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
+  import {
+    ActivePasswordEntryKind,
+    VaultPasswordPanel,
+    type ActivePasswordEntry,
+  } from './vault-password-card-state'
 
   let {
     vault,
@@ -47,7 +41,7 @@ type ActivePasswordEntry =
     onClearCode,
     embedded = false,
     allowIssueCode = true,
-    initialPanel = 'idle' as Panel,
+    initialPanel = VaultPasswordPanel.Idle,
     showWarningBanner = true,
   }: {
     vault: VaultState
@@ -68,7 +62,7 @@ type ActivePasswordEntry =
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
-    initialPanel?: Panel
+    initialPanel?: VaultPasswordPanel
     showWarningBanner?: boolean
   } = $props()
 
@@ -76,7 +70,7 @@ type ActivePasswordEntry =
     return initialPanel
   }
 
-  let panel = $state<Panel>(resolveInitialPanel())
+  let panel = $state<VaultPasswordPanel>(resolveInitialPanel())
   let activeEntryId = $state<ActivePasswordEntry>({ kind: ActivePasswordEntryKind.None })
 
   let labelInput = $state('')
@@ -114,7 +108,10 @@ type ActivePasswordEntry =
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
-  function openPanel(target: Panel, selection: ActivePasswordEntry) {
+  function openPanel(
+    target: VaultPasswordPanel,
+    selection: ActivePasswordEntry,
+  ) {
     panel = target
     activeEntryId = selection
     labelInput = ''
@@ -125,7 +122,7 @@ type ActivePasswordEntry =
   }
 
   function closePanel() {
-    panel = 'idle'
+    panel = VaultPasswordPanel.Idle
     activeEntryId = { kind: ActivePasswordEntryKind.None }
     labelInput = ''
     passwordInput = ''
@@ -260,7 +257,7 @@ type ActivePasswordEntry =
     </p>
   {/if}
 
-  {#if panel === 'idle'}
+  {#if panel === VaultPasswordPanel.Idle}
     {#if passwordEntries.length > 0}
       <ul class="mb-4 space-y-3" data-testid="vault-password-list">
         {#each passwordEntries as entry (entry.id)}
@@ -294,7 +291,10 @@ type ActivePasswordEntry =
                   ? 'rotate-vault-password-btn'
                   : omittedValue()}
                 onclick={() =>
-                  openPanel('rotate', { kind: 'selected', entryId: entry.id })}
+                  openPanel(VaultPasswordPanel.Rotate, {
+                    kind: ActivePasswordEntryKind.Selected,
+                    entryId: entry.id,
+                  })}
               >
                 <RefreshCw class="size-4" />
               </Button>
@@ -309,8 +309,8 @@ type ActivePasswordEntry =
                     ? 'issue-enrollment-code-btn'
                     : omittedValue()}
                   onclick={() =>
-                    openPanel('issue', {
-                      kind: 'selected',
+                    openPanel(VaultPasswordPanel.Issue, {
+                      kind: ActivePasswordEntryKind.Selected,
                       entryId: entry.id,
                     })}
                 >
@@ -330,7 +330,10 @@ type ActivePasswordEntry =
                   ? 'remove-vault-password-btn'
                   : omittedValue()}
                 onclick={() =>
-                  openPanel('remove', { kind: 'selected', entryId: entry.id })}
+                  openPanel(VaultPasswordPanel.Remove, {
+                    kind: ActivePasswordEntryKind.Selected,
+                    entryId: entry.id,
+                  })}
               >
                 <Trash2 class="size-4" />
               </Button>
@@ -345,7 +348,10 @@ type ActivePasswordEntry =
       size="sm"
       disabled={isBusy}
       data-testid="set-vault-password-btn"
-      onclick={() => openPanel('add', { kind: 'none' })}
+      onclick={() =>
+        openPanel(VaultPasswordPanel.Add, {
+          kind: ActivePasswordEntryKind.None,
+        })}
     >
       <Plus class="size-4" />
       {hasPasswords
@@ -354,15 +360,18 @@ type ActivePasswordEntry =
     </Button>
   {/if}
 
-  {#if panel === 'add' || panel === 'rotate'}
+  {#if panel === VaultPasswordPanel.Add ||
+    panel === VaultPasswordPanel.Rotate}
     <form
       class="space-y-4"
       onsubmit={(event) => {
         event.preventDefault()
-        void (panel === 'add' ? submitAddPassword() : submitRotatePassword())
+        void (panel === VaultPasswordPanel.Add
+          ? submitAddPassword()
+          : submitRotatePassword())
       }}
     >
-      {#if panel === 'add'}
+      {#if panel === VaultPasswordPanel.Add}
         <div class="space-y-1.5">
           <label
             for="vault-pw-label"
@@ -388,7 +397,7 @@ type ActivePasswordEntry =
       {/if}
       <div class="space-y-1.5">
         <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
-          {panel === 'add'
+          {panel === VaultPasswordPanel.Add
             ? vault.t('vault.fields.password')
             : vault.t('vault_passwords.new_password')}
         </label>
@@ -452,7 +461,7 @@ type ActivePasswordEntry =
             {vault.t('vault_passwords.working')}
           {:else}
             <ShieldCheck class="size-3.5" />
-            {panel === 'add'
+            {panel === VaultPasswordPanel.Add
               ? vault.t('vault_passwords.add_password')
               : vault.t('vault_passwords.rotate')}
           {/if}
@@ -461,7 +470,7 @@ type ActivePasswordEntry =
     </form>
   {/if}
 
-  {#if panel === 'remove' && activeEntry}
+  {#if panel === VaultPasswordPanel.Remove && activeEntry}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
         {vault.t('vault_passwords.remove_body_prefix')}<span
@@ -497,7 +506,7 @@ type ActivePasswordEntry =
     </div>
   {/if}
 
-  {#if panel === 'issue' && activeEntry}
+  {#if panel === VaultPasswordPanel.Issue && activeEntry}
     <div class="space-y-4">
       {#if !enrollmentCode}
         <form

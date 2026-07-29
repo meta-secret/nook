@@ -25,38 +25,16 @@
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultType } from '$lib/vault-architecture'
-  enum MemberDetailsKind {
-  Collapsed = "collapsed",
-  Expanded = "expanded",
-}
-
-type MemberDetails =
-    | { kind: MemberDetailsKind.Collapsed }
-    | { kind: MemberDetailsKind.Expanded; authId: string }
-  enum MemberRenameKind {
-  Idle = "idle",
-  Editing = "editing",
-}
-
-type MemberRename =
-    | { kind: MemberRenameKind.Idle }
-    | { kind: MemberRenameKind.Editing; authId: string }
-  enum MemberRevocationKind {
-  Idle = "idle",
-  Confirming = "confirming",
-}
-
-type MemberRevocation =
-    | { kind: MemberRevocationKind.Idle }
-    | { kind: MemberRevocationKind.Confirming; authId: string }
-  enum ExtensionSetupOfferKind {
-  Hidden = "hidden",
-  Visible = "visible",
-}
-
-type ExtensionSetupOffer =
-    | { kind: ExtensionSetupOfferKind.Hidden }
-    | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState }
+  import {
+    ExtensionSetupOfferKind,
+    MemberDetailsKind,
+    MemberRenameKind,
+    MemberRevocationKind,
+    type ExtensionSetupOffer,
+    type MemberDetails,
+    type MemberRename,
+    type MemberRevocation,
+  } from './vault-devices-card-state'
 
   let {
     vault,
@@ -85,9 +63,11 @@ type ExtensionSetupOffer =
   } = $props()
 
   let detailsAuthId = $state<MemberDetails>({ kind: MemberDetailsKind.Collapsed })
-  let renameAuthId = $state<MemberRename>({ kind: 'idle' })
+  let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle })
   let renameLabel = $state('')
-  let revokeAuthId = $state<MemberRevocation>({ kind: 'idle' })
+  let revokeAuthId = $state<MemberRevocation>({
+    kind: MemberRevocationKind.Idle,
+  })
   let extensionSetupState = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
@@ -229,12 +209,12 @@ type ExtensionSetupOffer =
   function beginRename(member: VaultMember) {
     renameAuthId = { kind: MemberRenameKind.Editing, authId: member.authId }
     renameLabel = member.label.trim()
-    revokeAuthId = { kind: 'idle' }
+    revokeAuthId = { kind: MemberRevocationKind.Idle }
   }
 
   async function saveRename(member: VaultMember) {
     await onRenameDevice(member.authId, renameLabel)
-    renameAuthId = { kind: 'idle' }
+    renameAuthId = { kind: MemberRenameKind.Idle }
     renameLabel = ''
   }
 
@@ -245,7 +225,8 @@ type ExtensionSetupOffer =
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === 'visible'}
+  {#if SUPPORTS_EXTENSION &&
+    extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
     {@const extensionSetup = extensionSetupState.setup}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
@@ -449,9 +430,10 @@ type ExtensionSetupOffer =
       <ul class="space-y-2" data-testid="vault-members-list">
         {#each sortedMembers as member (member.authId)}
           {@const isCurrent = member.deviceId === deviceId}
-          {@const isRenaming = renameAuthId.kind === 'editing' &&
+          {@const isRenaming = renameAuthId.kind === MemberRenameKind.Editing &&
             renameAuthId.authId === member.authId}
-          {@const isConfirmingRevoke = revokeAuthId.kind === 'confirming' &&
+          {@const isConfirmingRevoke = revokeAuthId.kind ===
+            MemberRevocationKind.Confirming &&
             revokeAuthId.authId === member.authId}
           {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
           <li
@@ -537,7 +519,7 @@ type ExtensionSetupOffer =
                     disabled={isBusy}
                     aria-label={vault.t('devices_card.cancel_rename')}
                     onclick={() => {
-                      renameAuthId = { kind: 'idle' }
+                      renameAuthId = { kind: MemberRenameKind.Idle }
                       renameLabel = ''
                     }}
                   >
@@ -566,10 +548,10 @@ type ExtensionSetupOffer =
                     aria-label={vault.t('devices_card.revoke_device')}
                     onclick={() => {
                       revokeAuthId = {
-                        kind: 'confirming',
+                        kind: MemberRevocationKind.Confirming,
                         authId: member.authId,
                       }
-                      renameAuthId = { kind: 'idle' }
+                      renameAuthId = { kind: MemberRenameKind.Idle }
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -581,15 +563,19 @@ type ExtensionSetupOffer =
                   variant="ghost"
                   class="px-2 text-muted-foreground"
                   aria-label={vault.t('devices_card.toggle_details')}
-                  aria-expanded={detailsAuthId.kind === 'expanded' &&
+                  aria-expanded={detailsAuthId.kind ===
+                    MemberDetailsKind.Expanded &&
                     detailsAuthId.authId === member.authId}
                   data-testid="device-details-toggle"
                   onclick={() =>
                     (detailsAuthId =
-                      detailsAuthId.kind === 'expanded' &&
+                      detailsAuthId.kind === MemberDetailsKind.Expanded &&
                       detailsAuthId.authId === member.authId
-                        ? { kind: 'collapsed' }
-                        : { kind: 'expanded', authId: member.authId })}
+                        ? { kind: MemberDetailsKind.Collapsed }
+                        : {
+                            kind: MemberDetailsKind.Expanded,
+                            authId: member.authId,
+                          })}
                 >
                   <ChevronDown
                     class="size-3.5 transition-transform {detailsAuthId.kind ===
@@ -622,7 +608,10 @@ type ExtensionSetupOffer =
                       class="h-8 border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
                       disabled={isBusy}
                       data-testid="device-revoke-cancel"
-                      onclick={() => (revokeAuthId = { kind: 'idle' })}
+                      onclick={() =>
+                        (revokeAuthId = {
+                          kind: MemberRevocationKind.Idle,
+                        })}
                     >
                       {vault.t('devices_card.cancel')}
                     </Button>
@@ -642,7 +631,7 @@ type ExtensionSetupOffer =
               </div>
             {/if}
 
-            {#if detailsAuthId.kind === 'expanded' &&
+            {#if detailsAuthId.kind === MemberDetailsKind.Expanded &&
             detailsAuthId.authId === member.authId}
               <dl
                 class="mt-3 space-y-2 border-t border-border/30 pt-3 text-xs"

@@ -6,14 +6,10 @@
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
-  enum GenesisDeliverySelectionKind {
-  NotSelected = "not-selected",
-  Selected = "selected",
-}
-
-type GenesisDeliverySelection =
-    | { kind: GenesisDeliverySelectionKind.NotSelected }
-    | { kind: GenesisDeliverySelectionKind.Selected; storeId: string }
+  import {
+    GenesisDeliverySelectionKind,
+    type GenesisDeliverySelection,
+  } from './sentinel-unlock-participant-state'
   import {
     createSentinelUnlockResponse,
     listSentinelStoredDeliveries,
@@ -169,14 +165,18 @@ type GenesisDeliverySelection =
             </label>
             <Select.Root
               type="single"
-              value={selectedDelivery.kind === 'selected'
+              value={selectedDelivery.kind ===
+              GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
                 : omittedValue()}
               onValueChange={(value) => {
                 selectedDelivery =
                   value === omittedValue()
-                    ? { kind: 'not-selected' }
-                    : { kind: 'selected', storeId: value }
+                    ? { kind: GenesisDeliverySelectionKind.NotSelected }
+                    : {
+                        kind: GenesisDeliverySelectionKind.Selected,
+                        storeId: value,
+                      }
               }}
             >
               <Select.Trigger
@@ -224,7 +224,8 @@ type GenesisDeliverySelection =
               data-testid="sentinel-unlock-create-response-btn"
               disabled={disabled ||
                 actionBusy ||
-                selectedDelivery.kind !== 'selected' ||
+                selectedDelivery.kind !==
+                  GenesisDeliverySelectionKind.Selected ||
                 !request.trim()}
               onclick={() => void createResponse()}
             >

@@ -6,22 +6,12 @@
   import type { NookImportResult } from "$lib/nook";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  enum ScannerLifecycleKind {
-  NotCreated = "not-created",
-  Created = "created",
-}
-
-type ScannerLifecycle =
-    | { kind: ScannerLifecycleKind.NotCreated }
-    | { kind: ScannerLifecycleKind.Created; scanner: QrScanner };
-  enum AuthenticatorImportOutcomeKind {
-  NotRun = "not-run",
-  Completed = "completed",
-}
-
-type AuthenticatorImportOutcome =
-    | { kind: AuthenticatorImportOutcomeKind.NotRun }
-    | { kind: AuthenticatorImportOutcomeKind.Completed; result: NookImportResult };
+  import {
+    AuthenticatorImportOutcomeKind,
+    ScannerLifecycleKind,
+    type AuthenticatorImportOutcome,
+    type ScannerLifecycle,
+  } from "./google-authenticator-import-state";
 
   let {
     vault,
@@ -254,7 +244,7 @@ type AuthenticatorImportOutcome =
         </p>
       {/if}
 
-      {#if result.kind === "completed"}
+      {#if result.kind === AuthenticatorImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="google-authenticator-import-result"

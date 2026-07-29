@@ -1,14 +1,10 @@
 <script lang="ts">
   import { renderMarkdown } from '$lib/markdown'
-  enum TextareaMountKind {
-  Unmounted = "unmounted",
-  Mounted = "mounted",
-}
-
-type TextareaMount =
-    | { kind: TextareaMountKind.Unmounted }
-    | { kind: TextareaMountKind.Mounted; element: HTMLTextAreaElement }
   import MarkdownBody from './MarkdownBody.svelte'
+  import {
+    TextareaMountKind,
+    type TextareaMount,
+  } from './markdown-editor-state'
 
   let {
     value = $bindable(''),

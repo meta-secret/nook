@@ -36,38 +36,16 @@
     StorageProvider,
     StorageProviderType,
   } from "$lib/auth-providers";
-  enum VaultLabelEditorKind {
-  Closed = "closed",
-  Editing = "editing",
-}
-
-type VaultLabelEditor =
-    | { kind: VaultLabelEditorKind.Closed }
-    | { kind: VaultLabelEditorKind.Editing; storeId: StoreId };
-  enum VaultRenameOperationKind {
-  Idle = "idle",
-  Renaming = "renaming",
-}
-
-type VaultRenameOperation =
-    | { kind: VaultRenameOperationKind.Idle }
-    | { kind: VaultRenameOperationKind.Renaming; storeId: StoreId };
-  enum VaultSwitchOperationKind {
-  Idle = "idle",
-  Switching = "switching",
-}
-
-type VaultSwitchOperation =
-    | { kind: VaultSwitchOperationKind.Idle }
-    | { kind: VaultSwitchOperationKind.Switching; storeId: StoreId };
-  enum ImportProviderSectionKind {
-  Closed = "closed",
-  Open = "open",
-}
-
-type ImportProviderSection =
-    | { kind: ImportProviderSectionKind.Closed }
-    | { kind: ImportProviderSectionKind.Open; providerId: string };
+  import {
+    ImportProviderSectionKind,
+    VaultLabelEditorKind,
+    VaultRenameOperationKind,
+    VaultSwitchOperationKind,
+    type ImportProviderSection,
+    type VaultLabelEditor,
+    type VaultRenameOperation,
+    type VaultSwitchOperation,
+  } from "./vault-admin-state";
 
   let {
     vault,
@@ -173,10 +151,18 @@ type ImportProviderSection =
   let drafts = $state<Record<string, string>>({});
   let draftSeed = $state("");
   let creating = $state(false);
-  let editingStoreId = $state<VaultLabelEditor>({ kind: "closed" });
-  let renamingStoreId = $state<VaultRenameOperation>({ kind: "idle" });
-  let switchingTo = $state<VaultSwitchOperation>({ kind: "idle" });
-  let activeImportProvider = $state<ImportProviderSection>({ kind: "closed" });
+  let editingStoreId = $state<VaultLabelEditor>({
+    kind: VaultLabelEditorKind.Closed,
+  });
+  let renamingStoreId = $state<VaultRenameOperation>({
+    kind: VaultRenameOperationKind.Idle,
+  });
+  let switchingTo = $state<VaultSwitchOperation>({
+    kind: VaultSwitchOperationKind.Idle,
+  });
+  let activeImportProvider = $state<ImportProviderSection>({
+    kind: ImportProviderSectionKind.Closed,
+  });
   const activeImportProviderBinding = {
     get value(): string | void {
       return activeImportProvider.kind === ImportProviderSectionKind.Open
@@ -185,7 +171,9 @@ type ImportProviderSection =
     },
     set value(value: string | void) {
       activeImportProvider =
-        value ? { kind: ImportProviderSectionKind.Open, providerId: value } : { kind: "closed" };
+        value
+          ? { kind: ImportProviderSectionKind.Open, providerId: value }
+          : { kind: ImportProviderSectionKind.Closed };
     },
   };
 
@@ -253,7 +241,7 @@ type ImportProviderSection =
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
       editingStoreId.storeId === entry.storeId
     ) {
-      editingStoreId = { kind: "closed" };
+      editingStoreId = { kind: VaultLabelEditorKind.Closed };
     }
   }
 
@@ -277,10 +265,10 @@ type ImportProviderSection =
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry));
       if (!vault.errorMsg) {
-        editingStoreId = { kind: "closed" };
+        editingStoreId = { kind: VaultLabelEditorKind.Closed };
       }
     } finally {
-      renamingStoreId = { kind: "idle" };
+      renamingStoreId = { kind: VaultRenameOperationKind.Idle };
     }
   }
 
@@ -290,7 +278,7 @@ type ImportProviderSection =
     try {
       await vault.switchToVault(entry.storeId);
     } finally {
-      switchingTo = { kind: "idle" };
+      switchingTo = { kind: VaultSwitchOperationKind.Idle };
     }
   }
 </script>
@@ -363,7 +351,7 @@ type ImportProviderSection =
       >
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
-          {@const isEditing = editingStoreId.kind === "editing" &&
+          {@const isEditing = editingStoreId.kind === VaultLabelEditorKind.Editing &&
             editingStoreId.storeId === entry.storeId}
           <li
             class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
@@ -434,7 +422,8 @@ type ImportProviderSection =
                   class="h-10 w-full"
                   data-testid="vault-admin-cancel-rename-btn"
                   data-store-id={entry.storeId}
-                  disabled={renamingStoreId.kind === "renaming" &&
+                  disabled={renamingStoreId.kind ===
+                    VaultRenameOperationKind.Renaming &&
                     renamingStoreId.storeId === entry.storeId}
                   onclick={() => cancelRename(entry)}
                 >
@@ -452,7 +441,8 @@ type ImportProviderSection =
                   disabled={isBusy}
                   onclick={() => void switchTo(entry)}
                 >
-                  {#if switchingTo.kind === "switching" &&
+                  {#if switchingTo.kind ===
+                    VaultSwitchOperationKind.Switching &&
                   switchingTo.storeId === entry.storeId}
                     <RefreshCw class="size-4 animate-spin" />
                   {/if}
@@ -479,7 +469,7 @@ type ImportProviderSection =
                   isEditing ? void renameVault(entry) : beginRename(entry)}
               >
                 {#if isEditing &&
-                renamingStoreId.kind === "renaming" &&
+                renamingStoreId.kind === VaultRenameOperationKind.Renaming &&
                 renamingStoreId.storeId === entry.storeId}
                   <RefreshCw class="size-4 animate-spin" />
                 {:else if !isEditing}

@@ -37,24 +37,16 @@
     type DecryptedSecrets,
   } from '$lib/vault/secret-exposure'
   import { onDestroy, untrack } from 'svelte'
-  import type { SecretTypeSelection } from '$lib/components/secret-form-state'
-
-  enum ClipboardNoticeKind {
-  Hidden = "hidden",
-  Visible = "visible",
-}
-
-type ClipboardNotice =
-    | { kind: ClipboardNoticeKind.Hidden }
-    | { kind: ClipboardNoticeKind.Visible; fieldKey: string }
-  enum SecretEditorKind {
-  Creating = "creating",
-  Editing = "editing",
-}
-
-type SecretEditor =
-    | { kind: SecretEditorKind.Creating }
-    | { kind: SecretEditorKind.Editing; record: NookSecretRecord }
+  import {
+    SecretTypeSelectionKind,
+    type SecretTypeSelection,
+  } from '$lib/components/secret-form-state'
+  import {
+    ClipboardNoticeKind,
+    SecretEditorKind,
+    type ClipboardNotice,
+    type SecretEditor,
+  } from './secret-vault-state'
 
   let {
     vault,
@@ -100,7 +92,7 @@ type SecretEditor =
   let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden })
   let addSecretOpen = $state(false)
   let formSelectedType = $state<SecretTypeSelection>({
-    kind: 'choosing-type',
+    kind: SecretTypeSelectionKind.ChoosingType,
   })
   let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
@@ -169,7 +161,7 @@ type SecretEditor =
   function notifyAddMode() {
     onAddModeChange?.(
       addSecretOpen,
-      formSelectedType.kind === 'editing-fields'
+      formSelectedType.kind === SecretTypeSelectionKind.EditingFields
         ? formSelectedType.itemType
         : omittedValue(),
     )
@@ -184,7 +176,7 @@ type SecretEditor =
   function openAddSecret() {
     editLoadSequence += 1
     releaseEditingItem()
-    formSelectedType = { kind: 'choosing-type' }
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
     addSecretOpen = true
     notifyAddMode()
   }
@@ -193,7 +185,7 @@ type SecretEditor =
     editLoadSequence += 1
     releaseEditingItem()
     addSecretOpen = false
-    formSelectedType = { kind: 'choosing-type' }
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
     notifyAddMode()
   }
 
@@ -213,7 +205,7 @@ type SecretEditor =
     releaseEditingItem()
     editingItem = { kind: SecretEditorKind.Editing, record }
     formSelectedType = {
-      kind: 'editing-fields',
+      kind: SecretTypeSelectionKind.EditingFields,
       itemType: item.type as VaultItemType,
     }
     addSecretOpen = true
@@ -238,7 +230,7 @@ type SecretEditor =
 
   const isSecureNoteEditor = $derived(
     addSecretOpen &&
-      formSelectedType.kind === 'editing-fields' &&
+      formSelectedType.kind === SecretTypeSelectionKind.EditingFields &&
       formSelectedType.itemType === 'secure-note',
   )
 
@@ -350,7 +342,7 @@ type SecretEditor =
         : ''}"
       data-testid="add-secret-panel"
     >
-      {#if formSelectedType.kind === 'choosing-type'}
+      {#if formSelectedType.kind === SecretTypeSelectionKind.ChoosingType}
         <div class="mb-3">
           <button
             type="button"
@@ -372,7 +364,7 @@ type SecretEditor =
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
-        initialItem={editingItem.kind === 'editing'
+        initialItem={editingItem.kind === SecretEditorKind.Editing
           ? editingItem.record
           : omittedValue()}
       />
@@ -533,7 +525,7 @@ type SecretEditor =
                     expanded={Boolean(expandedSecrets[item.id])}
                     decrypted={decryptedSecrets[item.id]}
                     authenticatorCode={authenticatorCodes[item.id]}
-                    copiedKey={copiedKey.kind === 'visible'
+                    copiedKey={copiedKey.kind === ClipboardNoticeKind.Visible
                       ? copiedKey.fieldKey
                       : omittedValue()}
                     onToggleExpand={toggleExpand}

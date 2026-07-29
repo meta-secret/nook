@@ -10,22 +10,14 @@
     unlockExtensionPasskey,
     unlockExtensionPin,
     type ExtensionDeviceMode,
-    type ExtensionDeviceProtectionResult,
     type ExtensionDeviceProtectionStatus,
   } from '../lib/nook-wasm'
-
-  type PopupProtectionStatus = ExtensionDeviceProtectionStatus | 'pin-setup'
-  enum PairingCandidateKind {
-    NotSelected = 'not-selected',
-    Selected = 'selected',
-  }
-
-  type PairingCandidate =
-    | { kind: PairingCandidateKind.NotSelected }
-    | {
-        kind: PairingCandidateKind.Selected
-        device: ExtensionDeviceProtectionResult
-      }
+  import {
+    PairingCandidateKind,
+    PopupProtectionStatus,
+    type PairingCandidate,
+    type ResolvedPopupProtectionStatus,
+  } from './popup-app-state'
 
   let {
     i18n,
@@ -43,11 +35,11 @@
     activeSessionDevice?: ExtensionDeviceProtectionResult
   } = $props()
 
-  function initialProtectionStatus(): PopupProtectionStatus {
+  function initialProtectionStatus(): ResolvedPopupProtectionStatus {
     return protectionStatus
   }
 
-  let status = $state<PopupProtectionStatus>(initialProtectionStatus())
+  let status = $state<ResolvedPopupProtectionStatus>(initialProtectionStatus())
   let busy = $state(false)
   let error = $state('')
   let passkeyLabel = $state('')
@@ -178,7 +170,7 @@
         (caught.message.includes('PASSKEY_UNAVAILABLE') ||
           caught.message.includes('PASSKEY_PRF_UNAVAILABLE'))
       ) {
-        status = 'pin-setup'
+        status = PopupProtectionStatus.PinSetup
         error = i18n.t(
           caught.message.includes('PASSKEY_UNAVAILABLE')
             ? 'device_protection.passkey_unavailable_pin_fallback_ready'
@@ -271,13 +263,13 @@
       >
         {i18n.t('extension.companion.stay_ready')}
       </button>
-    {:else if pairingCandidate.kind === 'selected'}
+    {:else if pairingCandidate.kind === PairingCandidateKind.Selected}
       <button
         type="button"
         disabled={busy}
         data-testid="connect-simple-vault-btn"
         onclick={() => {
-          if (pairingCandidate.kind === 'selected')
+          if (pairingCandidate.kind === PairingCandidateKind.Selected)
             beginPairing(pairingCandidate.device)
         }}
       >
@@ -315,7 +307,7 @@
   <main class="device-setup" data-testid="extension-device-setup">
     <p class="step-label">{i18n.t('device_protection.step_label')}</p>
     <div class="shield-icon" aria-hidden="true">
-      {#if needsSetup || status === 'pin-setup'}
+      {#if needsSetup || status === PopupProtectionStatus.PinSetup}
         <ShieldCheck size={26} />
       {:else}
         <KeyRound size={25} />
@@ -328,13 +320,13 @@
           ? 'device_protection.unlock_description'
           : status === 'pin'
             ? 'device_protection.pin_unlock_description'
-            : status === 'pin-setup'
+            : status === PopupProtectionStatus.PinSetup
               ? 'device_protection.pin_setup_description'
               : 'device_protection.setup_description',
       )}
     </p>
 
-    {#if status === 'pin-setup'}
+    {#if status === PopupProtectionStatus.PinSetup}
       <div class="field-group">
         <label for="device-protection-pin">
           {i18n.t('device_protection.pin_label')}

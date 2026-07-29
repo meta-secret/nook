@@ -7,17 +7,12 @@
     FolderKey,
     SlidersHorizontal,
   } from '@lucide/svelte'
-  import type { NookLocalVaultEntry, StoreId } from '$app-wasm'
+  import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-
-  enum VaultSwitchStateKind {
-  Idle = "idle",
-  Switching = "switching",
-}
-
-type VaultSwitchState =
-    | { kind: VaultSwitchStateKind.Idle }
-    | { kind: VaultSwitchStateKind.Switching; storeId: StoreId }
+  import {
+    VaultSwitchStateKind,
+    type VaultSwitchState,
+  } from './vault-switcher-state'
 
   let { vault }: { vault: VaultState } = $props()
 
