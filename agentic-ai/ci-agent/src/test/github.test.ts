@@ -20,6 +20,18 @@ test("requiredPrCheckNames maps changed paths to repository-owned gates", () => 
     ["Rust ecosystem checks", "Verify and preview"],
   );
   assert.deepEqual(
+    requiredPrCheckNames(["nook-app/.cargo/config.toml"]),
+    ["Rust ecosystem checks", "Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(["preflight/Cargo.lock"]),
+    ["Rust ecosystem checks", "Verify and preview"],
+  );
+  assert.deepEqual(
+    requiredPrCheckNames(["agentic-ai/minds/Cargo.lock"]),
+    ["Rust ecosystem checks"],
+  );
+  assert.deepEqual(
     requiredPrCheckNames(["nook-app/nook-web/nook-web-research/src/main.ts"]),
     ["Build and deploy research catalog"],
   );

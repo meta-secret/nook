@@ -235,7 +235,10 @@ function isRustEcosystemPath(path: string): boolean {
     path === "deny.toml" ||
     path === "nook-app/Cargo.lock" ||
     path === "nook-app/.insta.yaml" ||
+    path.startsWith("nook-app/.cargo/") ||
     path.startsWith("fuzz/") ||
+    path.startsWith("preflight/") ||
+    path.startsWith("agentic-ai/minds/") ||
     (path.startsWith("nook-app/") &&
       (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
   );
