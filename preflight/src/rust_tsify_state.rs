@@ -3,9 +3,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use proc_macro2::Span;
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{Attribute, Expr, Lit, Meta, Token};
+use syn::{Attribute, Expr, LitStr, Token};
 
 use crate::Violation;
 
@@ -131,27 +130,18 @@ fn tsify_type_override(attribute: &Attribute) -> Option<String> {
     if !attribute.path().is_ident("tsify") {
         return None;
     }
-    let Meta::List(list) = &attribute.meta else {
-        return None;
-    };
-    let nested = list
-        .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+    let mut type_override = None;
+    attribute
+        .parse_nested_meta(|meta| {
+            if meta.path.is_ident("type") {
+                type_override = Some(meta.value()?.parse::<LitStr>()?.value());
+            } else if meta.input.peek(Token![=]) {
+                let _ = meta.value()?.parse::<Expr>()?;
+            }
+            Ok(())
+        })
         .ok()?;
-    nested.into_iter().find_map(|meta| {
-        let Meta::NameValue(name_value) = meta else {
-            return None;
-        };
-        if !name_value.path.is_ident("type") {
-            return None;
-        }
-        let Expr::Lit(expression) = name_value.value else {
-            return None;
-        };
-        let Lit::Str(value) = expression.lit else {
-            return None;
-        };
-        Some(value.value())
-    })
+    type_override
 }
 
 fn contains_absence_sentinel(value: &str) -> bool {
