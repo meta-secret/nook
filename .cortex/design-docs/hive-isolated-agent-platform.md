@@ -89,8 +89,10 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
 under [`infra/k0s/`](../../infra/k0s/).
 
-Worker/coordinator, dispatcher, and observer Deployments use the Kubernetes
-`Recreate` strategy. A graph-schema rollout therefore drains every older binary
+Before applying a new worker/coordinator, dispatcher, or observer revision, the
+deployment task scales all three graph-client Deployments to zero and verifies
+their Pods are gone. Their manifests also use the Kubernetes `Recreate`
+strategy. A graph-schema rollout therefore drains every older binary globally
 before any new revision can migrate and serve the retained graph; temporary
 control-plane unavailability is preferred to mixed schema semantics.
 
@@ -207,12 +209,13 @@ schema-8 terminal result marks this exceptional path explicitly with
 `obsolete: true`, and Hive persists that marker on both the task and attempt.
 If a future task discovers or directly depends on the same stable blocker ID,
 Hive transactionally rearms the dependency subtree only when that requested
-root is itself obsolete. Edge attachment takes a write lock on that root before
-re-reading and rearming it, so a concurrent retirement cannot leave the new
-consumer treating it as satisfied. Rearming preserves the monotonic attempt
-number and extends the maximum by three attempts, then derives each task's state
-from its direct dependencies; a normally completed root remains satisfied even
-if historical obsolete descendants are still attached.
+root is itself obsolete. Both direct enqueue and discovered-blocker attachment
+create the owner edge and take a write lock on that root before re-reading and
+rearming it, so a concurrent retirement cannot leave the new consumer treating
+it as satisfied. Rearming preserves the monotonic attempt number and extends
+the maximum by three attempts, then derives each task's state from its direct
+dependencies; a normally completed root remains satisfied even if historical
+obsolete descendants are still attached.
 Normal completion, including a real patch produced while owners change,
 bypasses the retirement-only guard and persists normally. The shared-owner,
 mixed-owner, late-owner, future-owner, and genuine-completion race cases are
@@ -360,8 +363,10 @@ platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
 attempts and adds one bounded three-attempt budget per deployed Hive image. It
 atomically rearms obsolete dependency roots and then failed members from leaves
-toward the Main repair, recomputes readiness from the revived graph, refuses an
-active task, and cannot repeat a recovery for the same image digest.
+toward the Main repair. It write-locks the reachable graph before inspecting
+retirement state and holds those locks through owner reactivation, recomputes
+readiness from the revived graph, refuses an active task, and cannot repeat a
+recovery for the same image digest.
 
 ### GitHub delivery recovery
 

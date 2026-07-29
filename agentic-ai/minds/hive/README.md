@@ -152,8 +152,12 @@ boolean so obsolete dependency revival is durable and queryable.
 
 To roll version 8 back to a version-7 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
-only the version-8 `HiveSchemaMigration` node, remove `obsolete` from `Task` and
-`Attempt` nodes, and retain the version-7 marker and `latest_activity_at`.
+no schema marker or property until
+`MATCH (task:Task {obsolete: true}) RETURN count(task)` returns zero. A nonzero
+count prohibits rollback: restart schema-8 Hive and rearm or genuinely complete
+those retired prerequisites first. Once no retired task remains, delete only the
+version-8 `HiveSchemaMigration` node, remove `obsolete` from `Task` and `Attempt`
+nodes, and retain the version-7 marker and `latest_activity_at`.
 To roll version 7 back further, keep Hive stopped, delete only the version-7
 marker, and remove `latest_activity_at` from `Task` nodes. Keep
 `last_retry_release` so a later forward migration cannot repeat a recovery for

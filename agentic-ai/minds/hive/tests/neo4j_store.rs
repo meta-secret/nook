@@ -820,6 +820,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
 
     rearm::verify_completed_parent_gate(&store, &graph, &agent_a, &shared_blocker, &suffix).await?;
     rearm::verify_block_serializes_with_retirement(&store, &graph, &agent_a, &suffix).await?;
+    rearm::verify_enqueue_serializes_with_retirement(&store, &graph, &agent_a, &suffix).await?;
 
     graph
         .run(
@@ -1061,7 +1062,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         );
     }
 
-    rearm::verify_release_retry(&store, &agent_a, &suffix).await?;
+    rearm::verify_release_retry(&store, &graph, &agent_a, &suffix).await?;
 
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();

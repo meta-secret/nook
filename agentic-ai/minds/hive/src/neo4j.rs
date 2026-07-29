@@ -234,6 +234,23 @@ impl Neo4jTaskStore {
             transaction.rollback().await?;
             return Ok(false);
         }
+        let mut lock_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
+                     WITH DISTINCT member
+                     ORDER BY member.id
+                     SET member.version = coalesce(member.version, 0) + 1
+                     RETURN count(member) AS locked",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        anyhow::ensure!(
+            lock_rows.next(transaction.handle()).await?.is_some(),
+            "retryable Main repair graph disappeared while acquiring revival locks"
+        );
+        drop(lock_rows);
         let mut obsolete_rows = transaction
             .execute(
                 query(
@@ -504,6 +521,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.source_commit = $source_commit,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
+                                   task.status = 'BLOCKED',
                                    task.updated_at = timestamp()
                      RETURN task.enqueue_token = $enqueue_token AS created",
                 )
@@ -527,13 +545,13 @@ impl TaskStore for Neo4jTaskStore {
         }
 
         for dependency in &task.dependencies {
-            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
             let mut rows = transaction
                 .execute(
                     query(
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
                          WHERE dependency.source_commit = task.source_commit
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
+                         SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",
                     )
                     .param("id", task.id.as_str())
@@ -547,6 +565,8 @@ impl TaskStore for Neo4jTaskStore {
                     "dependency {dependency} does not exist or targets a different source commit"
                 ));
             }
+            drop(rows);
+            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
         }
 
         transaction

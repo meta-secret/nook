@@ -196,6 +196,7 @@ pub async fn verify_block_serializes_with_retirement(
 
 pub async fn verify_release_retry(
     store: &Neo4jTaskStore,
+    graph: &Graph,
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
@@ -215,8 +216,8 @@ pub async fn verify_release_retry(
         store,
         &blocker_claim,
         agent,
-        true,
-        "prerequisite retired for the original delivery",
+        false,
+        "prerequisite initially completed",
     )
     .await?;
     let owner_claim = store.claim(agent, 300).await?.into_claimed()?;
@@ -226,13 +227,33 @@ pub async fn verify_release_retry(
             .fail(&owner_claim, agent, "delivery failed after retirement")
             .await?
     );
-    assert!(
-        store
+    let mut retirement = graph.start_txn().await?;
+    retirement
+        .run(
+            query(
+                "MATCH (blocker:Task {id: $blocker_id})
+                 SET blocker.obsolete = true,
+                     blocker.version = blocker.version + 1",
+            )
+            .param("blocker_id", blocker.id.as_str()),
+        )
+        .await?;
+    let retry_store = store.clone();
+    let retry_owner = owner.id.clone();
+    let retried = tokio::spawn(async move {
+        retry_store
             .retry_failed_main_task(
-                &owner.id,
+                &retry_owner,
                 "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             )
-            .await?
+            .await
+    });
+    sleep(Duration::from_millis(100)).await;
+    retirement.commit().await?;
+    assert!(
+        timeout(Duration::from_secs(5), retried)
+            .await
+            .map_err(|_| anyhow::anyhow!("retry remained locked after retirement"))???
     );
     let rearmed_blocker = store.claim(agent, 300).await?.into_claimed()?;
     assert_eq!(
@@ -256,6 +277,71 @@ pub async fn verify_release_retry(
         agent,
         false,
         "release-scoped retry completed",
+    )
+    .await
+}
+
+pub async fn verify_enqueue_serializes_with_retirement(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    agent: &AgentId,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let mut blocker = task(format!("enqueue-retirement-blocker-{suffix}"), Vec::new());
+    blocker.kind = "blocker".to_owned();
+    store.enqueue(&blocker).await?;
+    let blocker_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(blocker_claim.id, blocker.id);
+    complete(
+        store,
+        &blocker_claim,
+        agent,
+        false,
+        "direct dependency initially completed",
+    )
+    .await?;
+    let consumer = task(
+        format!("enqueue-retirement-consumer-{suffix}"),
+        vec![blocker.id.clone()],
+    );
+    let mut retirement = graph.start_txn().await?;
+    retirement
+        .run(
+            query(
+                "MATCH (blocker:Task {id: $blocker_id})
+                 SET blocker.obsolete = true,
+                     blocker.version = blocker.version + 1",
+            )
+            .param("blocker_id", blocker.id.as_str()),
+        )
+        .await?;
+    let enqueue_store = store.clone();
+    let enqueued_consumer = consumer.clone();
+    let enqueued = tokio::spawn(async move { enqueue_store.enqueue(&enqueued_consumer).await });
+    sleep(Duration::from_millis(100)).await;
+    retirement.commit().await?;
+    timeout(Duration::from_secs(5), enqueued)
+        .await
+        .map_err(|_| anyhow::anyhow!("enqueue remained locked after retirement"))???;
+    let rearmed = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(rearmed.id, blocker.id);
+    assert_eq!(rearmed.attempt_number, 2);
+    complete(
+        store,
+        &rearmed,
+        agent,
+        false,
+        "concurrently retired direct dependency repaired",
+    )
+    .await?;
+    let resumed_consumer = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(resumed_consumer.id, consumer.id);
+    complete(
+        store,
+        &resumed_consumer,
+        agent,
+        false,
+        "direct consumer resumed after concurrent retirement",
     )
     .await
 }

@@ -183,6 +183,29 @@ fn hive_graph_clients_never_mix_schema_revisions() {
             "{manifest} must drain its prior graph-schema revision before starting a new one"
         );
     }
+    let deployment_tasks = read("infra/tasks/hive.yml");
+    for required in [
+        "for deployment in hive hive-workbench-dispatcher hive-observer",
+        "kubectl scale \"deployment/$deployment\"",
+        "--replicas=0",
+        "--selector \"app.kubernetes.io/name=$deployment\"",
+        "Timed out draining graph client deployment/$deployment",
+    ] {
+        assert!(
+            deployment_tasks.contains(required),
+            "Hive graph-client rollout is missing: {required}"
+        );
+    }
+    let drain = deployment_tasks
+        .find("kubectl scale \"deployment/$deployment\"")
+        .expect("graph-client drain");
+    let apply = deployment_tasks
+        .find("kubectl apply -f \"$rendered\"")
+        .expect("Hive manifest apply");
+    assert!(
+        drain < apply,
+        "every old graph client must stop before the new revision is applied"
+    );
 }
 
 fn assert_remote_compose_contract() {
