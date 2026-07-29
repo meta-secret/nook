@@ -437,9 +437,13 @@ impl NookVaultManager {
         let mode = self.sync_outbox.storage_mode.to_string();
         let pat = self.sync_outbox.access_token.clone();
         let repo = self.sync_outbox.repo_arg.clone();
-        self.prepare_storage(&mode, &pat, &repo).await?;
+        // Switching to the provider must not discard the active vault label
+        // (or password envelopes) while flushing its queued event log.
+        self.prepare_storage_preserving_vault_metadata(&mode, &pat, &repo)
+            .await?;
         self.flush_event_outbox().await?;
-        self.prepare_storage("local", "", "").await?;
+        self.prepare_storage_preserving_vault_metadata("local", "", "")
+            .await?;
         Ok(())
     }
 
