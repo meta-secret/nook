@@ -264,7 +264,6 @@ impl NookVaultClientPolicy {
     }
 
     #[wasm_bindgen(js_name = editBlockMessage)]
-    #[must_use]
     pub fn edit_block_message(
         &self,
         security_conflict_count: u32,

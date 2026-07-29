@@ -471,11 +471,14 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       verifiedPopupPage.getByTestId('companion-vault-status'),
     ).toContainText('Replacement vault')
-    const replacementGrant = repairedGrants.find(
+    const replacementGrantEntry = repairedGrants.find(
       ([, grant]) =>
-        (grant as { vaultName?: string }).vaultName === 'Replacement vault',
-    )?.[1]
-    expect(replacementGrant).toBeDefined()
+        (grant as { vaultName: string }).vaultName === 'Replacement vault',
+    )
+    if (!replacementGrantEntry) {
+      throw new Error('replacement vault grant must exist after repair')
+    }
+    const replacementGrant = replacementGrantEntry[1]
     const vaultBackedLookup = await verifiedPopupPage.evaluate(
       async (grant) => {
         await chrome.runtime.sendMessage({

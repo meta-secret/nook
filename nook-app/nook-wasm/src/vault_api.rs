@@ -228,6 +228,7 @@ impl NookDuplicateSyncProvider {
 /// Find an existing provider whose sync target matches `candidate`.
 #[wasm_bindgen(js_name = findDuplicateSyncProvider)]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
 pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
@@ -242,6 +243,7 @@ pub fn find_duplicate_sync_provider(
 /// Find a duplicate while editing an existing provider.
 #[wasm_bindgen(js_name = findDuplicateSyncProviderExcluding)]
 #[must_use]
+#[allow(clippy::needless_pass_by_value)]
 pub fn find_duplicate_sync_provider_excluding(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,

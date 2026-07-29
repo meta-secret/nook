@@ -6,8 +6,8 @@
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
 use nook_core::{
-    AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, StorageProviderType,
-    open_provider_credentials, provider_credentials_are_presealed, seal_provider_credentials,
+    AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
+    provider_credentials_are_presealed, seal_provider_credentials,
 };
 
 use crate::NookError;
@@ -234,7 +234,7 @@ mod wasm_idb_tests {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "gd-wasm".to_owned(),
-                provider_type: StorageProviderType::OauthFile,
+                provider_type: nook_core::StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
                 github_pat: nook_core::StoredGithubPat::Missing,
                 github_repo: nook_core::StoredGithubRepository::DefaultRepository,

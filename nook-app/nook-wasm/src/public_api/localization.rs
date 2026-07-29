@@ -125,7 +125,6 @@ pub fn get_translation_catalog(locale: &str) -> String {
 }
 
 #[wasm_bindgen(js_name = lookupTranslation)]
-#[must_use]
 pub fn lookup_translation(catalog_json: &str, key: &str) -> Result<String, wasm_bindgen::JsError> {
     nook_core::lookup_translation(catalog_json, key)
         .ok_or_else(|| wasm_bindgen::JsError::new(&format!("missing translation key: {key}")))

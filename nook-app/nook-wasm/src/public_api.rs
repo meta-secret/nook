@@ -611,6 +611,7 @@ pub fn provider_supports_replication(
 }
 
 #[wasm_bindgen(js_name = firstCompatibleProviderId)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,
@@ -623,6 +624,7 @@ pub fn first_compatible_provider_id(
 }
 
 #[wasm_bindgen(js_name = firstCompatibleProviderIdPreferred)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn first_compatible_provider_id_preferred(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,

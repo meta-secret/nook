@@ -4,24 +4,49 @@ import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
+  activeVaultScope,
+  configuredLocalFolder,
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
+  defaultGithubRepository,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   GITHUB_PROVIDER_TYPE,
+  githubPatValue,
+  githubRepositoryValue,
   LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   localFolderHandle,
+  localFolderDirectoryValue,
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
+  localFolderConfigurationNotApplicable,
+  missingGithubPat,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
   OAuthAccessTokenKind,
+  oauthRefreshCredentialNotIssued,
   oauthFileName,
   OAuthFileNameKind,
   oauthProviderConfiguration,
   OAuthProviderConfigurationKind,
   providerDefaultLabel,
+  providerPersistenceDefaults,
+  personalICloudShareTarget,
+  rootGoogleDriveFolder,
   saveAuthProviders,
+  signedOutOAuthCredential,
+  storedGithubPat,
+  storedGithubRepository,
+  storedOAuthCredential,
+  storedOAuthRemoteFileName,
+  scopedProviderVault,
+  unscopedProviderVault,
+  unselectedVaultScope,
+  unknownOAuthAccountIdentity,
+  unknownOAuthTokenExpiry,
+  unresolvedOAuthRemoteFileId,
   type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type LocalFolderHandle,
@@ -34,7 +59,11 @@ import {
 } from "$lib/auth-providers";
 import {
   activeVaultProviders,
+  authenticatedVaultStorageArgs,
   chooseLocalFolderBackupDirectory,
+  draftGithubStorageArgs,
+  draftLocalStorageArgs,
+  draftOauthStorageArgs,
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
   hasGithubCredentials,
   hasLocalVault,
@@ -44,8 +73,9 @@ import {
   isVaultSessionLocked,
   localProviderForActiveVault,
   NookManagerStoreScope,
+  NookOAuthRemoteConfigurationUpdateState,
   NookProviderSelectionState,
-  oauthRemoteStorageRef,
+  NookStagedStorageArgsState,
   providerWasmArgs as providerWasmArgsCore,
   removeLocalFolderHandle,
   RemoteVaultAssessDecision,
@@ -53,11 +83,13 @@ import {
   stagedConfiguredOauthProviderLabel,
   stagedGithubProviderLabel,
   stagedLocalProviderLabel,
-  stagedRemoteStorageArgs as stagedRemoteStorageArgsCore,
+  stagedGithubRemoteStorageArgs,
+  stagedLocalRemoteStorageArgs,
+  stagedOauthRemoteStorageArgs,
   stagedUnconfiguredOauthProviderLabel,
   syncProvidersForActiveVault,
   updateOauthRemoteRef,
-  wasmStorageArgs as wasmStorageArgsCore,
+  localVaultStorageArgs,
   type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
@@ -125,9 +157,10 @@ function stagedProviderType(
 function providerSnapshot(state: ProviderActionsContext) {
   return $state.snapshot({
     providers: state.providers,
-    ...(state.activeVault.kind === ActiveVaultKind.Open
-      ? { activeVaultStoreId: state.activeVault.storeId }
-      : {}),
+    activeVaultStoreId:
+      state.activeVault.kind === ActiveVaultKind.Open
+        ? activeVaultScope(state.activeVault.storeId)
+        : unselectedVaultScope(),
   });
 }
 
@@ -135,34 +168,28 @@ export function wasmStorageArgs(
   state: ProviderActionsContext,
 ): [string, string, string] {
   const syncProvider = syncProviders(state)[0];
-  const oauthFileDraft = state.oauthFileDraft;
-  const boundary = {
-    ...(syncProvider ? { syncProvider: $state.snapshot(syncProvider) } : {}),
-    ...(oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? {
-          oauthRemoteRef: oauthRemoteStorageRef(
-            $state.snapshot(oauthFileDraft.config),
-          ),
-          oauthPreset: oauthFileDraft.config.preset,
-          oauthAccessToken: oauthFileDraft.config.accessToken,
-          oauthFileName: oauthFileDraft.config.fileName,
-        }
-      : {}),
-  };
-  return takeStorageArgsTuple(
-    wasmStorageArgsCore(
-      state.localVaultPresent,
-      state.isAuthenticated,
-      boundary.syncProvider,
-      state.storageMode,
-      state.githubPat,
-      state.githubRepo,
-      boundary.oauthPreset,
-      boundary.oauthAccessToken,
-      boundary.oauthRemoteRef,
-      boundary.oauthFileName,
-    ),
-  );
+  if (state.localVaultPresent) {
+    return takeStorageArgsTuple(localVaultStorageArgs());
+  }
+  if (state.isAuthenticated && syncProvider) {
+    return takeStorageArgsTuple(
+      authenticatedVaultStorageArgs($state.snapshot(syncProvider)),
+    );
+  }
+  if (state.storageMode === GITHUB_PROVIDER_TYPE) {
+    return takeStorageArgsTuple(
+      draftGithubStorageArgs(state.githubPat, state.githubRepo),
+    );
+  }
+  if (
+    state.storageMode === OAUTH_FILE_PROVIDER_TYPE &&
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+  ) {
+    return takeStorageArgsTuple(
+      draftOauthStorageArgs($state.snapshot(state.oauthFileDraft.config)),
+    );
+  }
+  return takeStorageArgsTuple(draftLocalStorageArgs());
 }
 
 export function providerWasmArgs(
@@ -194,25 +221,25 @@ export function stagedRemoteStorageArgs(
   state: ProviderActionsContext,
 ): StagedRemoteStorage {
   const type = stagedProviderType(state);
-  const boundary = {
-    ...(state.githubPat ? { githubPat: state.githubPat } : {}),
-    ...(state.githubRepo ? { githubRepo: state.githubRepo } : {}),
-    ...(state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? { oauthFile: $state.snapshot(state.oauthFileDraft.config) }
-      : {}),
-  };
-  const args = stagedRemoteStorageArgsCore(
-    type,
-    boundary.githubPat,
-    boundary.githubRepo,
-    boundary.oauthFile,
-  );
-  return args
-    ? {
-        kind: StagedRemoteStorageKind.Available,
-        args: takeStorageArgsTuple(args),
-      }
-    : { kind: StagedRemoteStorageKind.Unavailable };
+  const staged =
+    type === GITHUB_PROVIDER_TYPE
+      ? stagedGithubRemoteStorageArgs(state.githubPat, state.githubRepo)
+      : type === OAUTH_FILE_PROVIDER_TYPE &&
+          state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+        ? stagedOauthRemoteStorageArgs(
+            $state.snapshot(state.oauthFileDraft.config),
+          )
+        : stagedLocalRemoteStorageArgs();
+  try {
+    return staged.state === NookStagedStorageArgsState.Ready
+      ? {
+          kind: StagedRemoteStorageKind.Available,
+          args: takeStorageArgsTuple(staged.args),
+        }
+      : { kind: StagedRemoteStorageKind.Unavailable };
+  } finally {
+    staged.free();
+  }
 }
 
 export function stagedProviderLabel(state: ProviderActionsContext): string {
@@ -281,7 +308,13 @@ export function syncOAuthRemoteRefFromManager(
     $state.snapshot(state.oauthFileDraft.config),
     state.requireManager().storage_remote_ref ?? "",
   );
-  if (updated) state.configureOauthFile(updated);
+  try {
+    if (updated.state === NookOAuthRemoteConfigurationUpdateState.Updated) {
+      state.configureOauthFile(updated.config);
+    }
+  } finally {
+    updated.free();
+  }
 }
 
 export async function chooseLocalFolder(
@@ -292,10 +325,7 @@ export async function chooseLocalFolder(
     throw new Error(state.t("provider_setup.local_folder_unsupported_browser"));
   }
   const folder = await chooseLocalFolderBackupDirectory();
-  state.configureLocalFolder({
-    directoryName: folder.directoryName,
-    handleId: folder.handleId,
-  });
+  state.configureLocalFolder(folder);
 }
 
 export function refreshLocalFolderBackupSupport(
@@ -456,8 +486,8 @@ export async function loadProviders(
   state.providers = snapshot.providers.map((p) =>
     p.label === "GitHub sync" ? { ...p, label: "GitHub" } : p,
   );
-  if (snapshot.activeVaultStoreId) {
-    state.openActiveVault(snapshot.activeVaultStoreId);
+  if (snapshot.activeVaultStoreId.state === "storeId") {
+    state.openActiveVault(snapshot.activeVaultStoreId.value);
   }
   state.providersLoaded = true;
   log.debug("providers loaded", {
@@ -473,6 +503,10 @@ export async function promoteSessionVaultToLocalIfNeeded(
     .requireManager()
     .ensureLocalAuthProviderSnapshot({
       providers: state.providers,
+      activeVaultStoreId:
+        state.activeVault.kind === ActiveVaultKind.Open
+          ? activeVaultScope(state.activeVault.storeId)
+          : unselectedVaultScope(),
     });
   if (snapshot.providers.length !== state.providers.length) {
     state.providers = snapshot.providers;
@@ -519,7 +553,7 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   }
 
   state.storageMode = syncProvider.type;
-  state.githubPat = syncProvider.githubPat ?? "";
+  state.githubPat = githubPatValue(syncProvider.githubPat);
   if (syncProvider.type === "oauth-file") {
     const oauthConfiguration = oauthProviderConfiguration(syncProvider);
     if (oauthConfiguration.kind === OAuthProviderConfigurationKind.Configured) {
@@ -550,7 +584,8 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
     state.githubRepo = DEFAULT_GITHUB_REPO;
     state.clearOauthFile();
   } else {
-    state.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO;
+    state.githubRepo =
+      githubRepositoryValue(syncProvider.githubRepo) || DEFAULT_GITHUB_REPO;
     state.clearOauthFile();
     state.clearLocalFolder();
   }
@@ -575,9 +610,9 @@ export async function persistProviders(
   await state.enqueueStorage(() =>
     saveAuthProviders(state.requireManager(), {
       providers: state.providers,
-      ...(state.hasActiveVaultStore
-        ? { activeVaultStoreId: state.requireActiveVaultStoreId() }
-        : {}),
+      activeVaultStoreId: state.hasActiveVaultStore
+        ? activeVaultScope(state.requireActiveVaultStoreId())
+        : unselectedVaultScope(),
     }),
   );
 }
@@ -603,10 +638,16 @@ export function beginProviderSetup(
     state.selectOauthSetupPreset(preset);
     state.configureOauthFile({
       preset,
-      accessToken: "",
-      fileName: DEFAULT_DRIVE_BACKUP_NAME,
+      accessToken: signedOutOAuthCredential(),
+      refreshToken: oauthRefreshCredentialNotIssued(),
+      expiresAt: unknownOAuthTokenExpiry(),
+      fileId: unresolvedOAuthRemoteFileId(),
+      fileName: storedOAuthRemoteFileName(DEFAULT_DRIVE_BACKUP_NAME),
+      accountEmail: unknownOAuthAccountIdentity(),
       driveMode: "private",
+      folderId: rootGoogleDriveFolder(),
       iCloudMode: "private",
+      iCloudShareTarget: personalICloudShareTarget(),
     });
   } else {
     state.clearOauthSetupPreset();
@@ -701,10 +742,14 @@ export async function ensureProviderSaved(
     oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
     oauthFileDraft.config.preset === "google-drive" &&
     (oauthFileDraft.config.driveMode === "shared" ||
-      Boolean(oauthFileDraft.config.folderId?.trim()));
+      oauthFileDraft.config.folderId.state === "folderId");
+  const configuredRemoteFileName =
+    oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? oauthFileName(oauthFileDraft.config)
+      : { kind: OAuthFileNameKind.Unresolved };
   const driveFile = sharedGoogleDrive
-    ? oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? oauthFileDraft.config.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+    ? configuredRemoteFileName.kind === OAuthFileNameKind.Resolved
+      ? configuredRemoteFileName.fileName
       : DEFAULT_DRIVE_BACKUP_NAME
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = stagedProviderType(state);
@@ -713,10 +758,10 @@ export async function ensureProviderSaved(
     kind: OAuthProviderUpdateKind.NotRequired,
   };
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
-  const providerStoreFields: { storeId?: string } =
+  const providerStoreId =
     vaultStoreId.kind === ProviderSaveStoreIdKind.Available
-      ? { storeId: vaultStoreId.storeId }
-      : {};
+      ? scopedProviderVault(vaultStoreId.storeId)
+      : unscopedProviderVault();
   const oauthPreset =
     oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? oauthFileDraft.config.preset
@@ -732,46 +777,37 @@ export async function ensureProviderSaved(
     let provider: StorageProvider;
     if (type === "github") {
       provider = {
+        ...providerPersistenceDefaults(),
         id: generateId(),
         type,
         label: providerDefaultLabel(type, {
           detail: repo,
           oauthPreset,
         }),
-        githubPat: pat,
-        githubRepo: repo,
-        ...providerStoreFields,
+        githubPat: storedGithubPat(pat),
+        githubRepo: storedGithubRepository(repo),
+        storeId: providerStoreId,
         createdAt: isoTimestamp(),
       };
     } else if (type === "oauth-file") {
-      const oauthFile: OAuthFileConfig = {
-        ...(oauthFileDraft.kind === OAuthFileDraftKind.Configured
-          ? oauthFileDraft.config
-          : {}),
-        preset: oauthPreset,
-        accessToken:
-          oauthFileDraft.kind === OAuthFileDraftKind.Configured
-            ? oauthFileDraft.config.accessToken
-            : "",
-        driveMode:
-          oauthFileDraft.kind === OAuthFileDraftKind.Configured
-            ? (oauthFileDraft.config.driveMode ?? "private")
-            : "private",
-        iCloudMode:
-          oauthFileDraft.kind === OAuthFileDraftKind.Configured
-            ? (oauthFileDraft.config.iCloudMode ?? "private")
-            : "private",
-        fileName: driveFile,
-      };
+      const oauthFile: OAuthFileConfig =
+        oauthFileDraft.kind === OAuthFileDraftKind.Configured
+          ? {
+              ...oauthFileDraft.config,
+              preset: oauthPreset,
+              fileName: storedOAuthRemoteFileName(driveFile),
+            }
+          : defaultOAuthFileConfig(oauthPreset, driveFile);
       provider = {
+        ...providerPersistenceDefaults(),
         id: generateId(),
         type,
         label: providerDefaultLabel(type, {
           detail: driveFile,
           oauthPreset,
         }),
-        oauthFile,
-        ...providerStoreFields,
+        oauthFile: configuredOAuthFile(oauthFile),
+        storeId: providerStoreId,
         createdAt: isoTimestamp(),
       };
     } else {
@@ -781,14 +817,15 @@ export async function ensureProviderSaved(
       }
       const localFolder: LocalFolderConfig = state.localFolderDraft.config;
       provider = {
+        ...providerPersistenceDefaults(),
         id: generateId(),
         type,
         label: providerDefaultLabel(type, {
-          detail: localFolder.directoryName,
+          detail: localFolderDirectoryValue(localFolder.directoryName),
           oauthPreset,
         }),
-        localFolder,
-        ...providerStoreFields,
+        localFolder: configuredLocalFolder(localFolder),
+        storeId: providerStoreId,
         createdAt: isoTimestamp(),
       };
     }
@@ -816,10 +853,11 @@ export async function ensureProviderSaved(
     state.localProvider.kind === LocalProviderLookupKind.Missing
   ) {
     const provider: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: generateId(),
       type: "local",
       label: providerDefaultLabel("local"),
-      ...providerStoreFields,
+      storeId: providerStoreId,
       createdAt: isoTimestamp(),
     };
     state.providers = [...state.providers, provider];
@@ -829,7 +867,7 @@ export async function ensureProviderSaved(
       provider.id === localProviderId
         ? {
             ...provider,
-            ...providerStoreFields,
+            storeId: providerStoreId,
           }
         : provider,
     );
@@ -837,9 +875,9 @@ export async function ensureProviderSaved(
     const snapshot = ensureLocalProviderRowWasm(
       {
         providers: state.providers,
-        activeVaultStoreId: state.requireActiveVaultStoreId(),
+        activeVaultStoreId: activeVaultScope(state.requireActiveVaultStoreId()),
       } as AuthProvidersSnapshot,
-      providerStoreFields.storeId,
+      state.requireActiveVaultStoreId(),
     );
     state.providers = snapshot.providers;
   }
@@ -847,16 +885,17 @@ export async function ensureProviderSaved(
   if (
     state.storageMode === "oauth-file" &&
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-    state.oauthFileDraft.config.fileId
+    state.oauthFileDraft.config.fileId.state === "fileId"
   ) {
     const activeOauthFile = state.oauthFileDraft.config;
     const activePreset = activeOauthFile.preset;
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
       const duplicate = findDuplicateSyncProvider(state.syncProviders, {
+        ...providerPersistenceDefaults(),
         id: "oauth-provider-update-target",
         type: "oauth-file",
         label: "",
-        oauthFile: activeOauthFile,
+        oauthFile: configuredOAuthFile(activeOauthFile),
         createdAt: "",
       });
       if (duplicate.kind === DuplicateSyncProviderKind.Duplicate) {
@@ -869,40 +908,64 @@ export async function ensureProviderSaved(
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required) {
       const oauthProviderToUpdateId = oauthProviderToUpdate.providerId;
       state.providers = state.providers.map((provider) => {
+        const providerOAuthConfiguration = oauthProviderConfiguration(provider);
         if (
           provider.type !== "oauth-file" ||
-          !provider.oauthFile ||
+          providerOAuthConfiguration.kind !==
+            OAuthProviderConfigurationKind.Configured ||
           provider.id !== oauthProviderToUpdateId
         ) {
           return provider;
         }
+        const providerOauthFile = providerOAuthConfiguration.config;
+        const activeAccessToken = oauthAccessToken(activeOauthFile);
+        const providerFileName = oauthFileName(providerOauthFile);
+        const activeFileName = oauthFileName(activeOauthFile);
         const merged: OAuthFileConfig = {
           preset: activePreset,
           accessToken:
-            activeOauthFile.accessToken || provider.oauthFile.accessToken,
-          refreshToken: provider.oauthFile.refreshToken,
-          expiresAt: provider.oauthFile.expiresAt ?? activeOauthFile.expiresAt,
+            activeAccessToken.kind === OAuthAccessTokenKind.Available
+              ? activeOauthFile.accessToken
+              : providerOauthFile.accessToken,
+          refreshToken: providerOauthFile.refreshToken,
+          expiresAt:
+            providerOauthFile.expiresAt.state === "expiresAt"
+              ? providerOauthFile.expiresAt
+              : activeOauthFile.expiresAt,
           fileId: activeOauthFile.fileId,
-          folderId: activeOauthFile.folderId ?? provider.oauthFile.folderId,
-          driveMode: activeOauthFile.driveMode ?? provider.oauthFile.driveMode,
-          iCloudMode:
-            activeOauthFile.iCloudMode ?? provider.oauthFile.iCloudMode,
+          folderId:
+            activeOauthFile.folderId.state === "folderId"
+              ? activeOauthFile.folderId
+              : providerOauthFile.folderId,
+          driveMode: activeOauthFile.driveMode,
+          iCloudMode: activeOauthFile.iCloudMode,
           iCloudShareTarget:
-            activeOauthFile.iCloudShareTarget ??
-            provider.oauthFile.iCloudShareTarget,
+            activeOauthFile.iCloudShareTarget.state === "sharedTarget"
+              ? activeOauthFile.iCloudShareTarget
+              : providerOauthFile.iCloudShareTarget,
           fileName:
-            provider.oauthFile.fileName?.trim() ||
-            activeOauthFile.fileName?.trim() ||
-            driveFile,
+            providerFileName.kind === OAuthFileNameKind.Resolved
+              ? providerOauthFile.fileName
+              : activeFileName.kind === OAuthFileNameKind.Resolved
+                ? activeOauthFile.fileName
+                : storedOAuthRemoteFileName(driveFile),
           accountEmail:
-            provider.oauthFile.accountEmail ?? activeOauthFile.accountEmail,
+            providerOauthFile.accountEmail.state === "email"
+              ? providerOauthFile.accountEmail
+              : activeOauthFile.accountEmail,
         };
-        return { ...provider, oauthFile: merged };
+        return { ...provider, oauthFile: configuredOAuthFile(merged) };
       });
+      const updatedProvider = state.providers.find(
+        (provider) => provider.id === oauthProviderToUpdateId,
+      );
+      const updatedConfiguration = updatedProvider
+        ? oauthProviderConfiguration(updatedProvider)
+        : { kind: OAuthProviderConfigurationKind.Missing };
       state.configureOauthFile(
-        state.providers.find(
-          (provider) => provider.id === oauthProviderToUpdateId,
-        )?.oauthFile ?? activeOauthFile,
+        updatedConfiguration.kind === OAuthProviderConfigurationKind.Configured
+          ? updatedConfiguration.config
+          : activeOauthFile,
       );
     }
   }
