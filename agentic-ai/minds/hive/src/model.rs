@@ -136,6 +136,8 @@ pub struct ClaimedTask {
     pub attempt_id: AttemptId,
     pub attempt_number: i64,
     pub lease_token: LeaseToken,
+    #[serde(default)]
+    pub owning_repairs: Vec<TaskId>,
     pub dependency_context: Vec<DependencyResult>,
     pub dependency_artifacts: Vec<Artifact>,
 }

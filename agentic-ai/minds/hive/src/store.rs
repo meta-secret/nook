@@ -294,20 +294,31 @@ mod tests {
                 .filter(|(_, task)| task.status == "COMPLETED")
                 .map(|(id, _)| id.clone())
                 .collect::<Vec<_>>();
-            let Some(task) = tasks.values_mut().find(|task| {
+            let Some(task_id) = tasks.iter().find_map(|(id, task)| {
                 let lease_expired = task
                     .lease_until
                     .is_some_and(|lease| lease <= Instant::now());
-                (task.status == "READY" || (task.status == "RUNNING" && lease_expired))
+                ((task.status == "READY" || (task.status == "RUNNING" && lease_expired))
                     && task.attempt_count < task.definition.max_attempts
                     && task
                         .definition
                         .dependencies
                         .iter()
-                        .all(|dependency| completed.contains(&dependency.as_str().to_owned()))
+                        .all(|dependency| completed.contains(&dependency.as_str().to_owned())))
+                .then(|| id.clone())
             }) else {
                 return Ok(ClaimOutcome::NoTask);
             };
+            let owning_repairs = tasks
+                .iter()
+                .filter(|(id, owner)| {
+                    owner.definition.kind == "main-repair"
+                        && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
+                        && Self::reaches(&tasks, id, &task_id)
+                })
+                .map(|(_, owner)| owner.definition.id.clone())
+                .collect::<Vec<_>>();
+            let task = tasks.get_mut(&task_id).expect("claimable task");
             task.status = "RUNNING";
             task.attempt_count += 1;
             let lease_token = LeaseToken::new(Uuid::new_v4().to_string())?;
@@ -322,6 +333,7 @@ mod tests {
                 attempt_id: AttemptId::new(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
+                owning_repairs,
                 dependency_context: Vec::new(),
                 dependency_artifacts: Vec::new(),
             }))

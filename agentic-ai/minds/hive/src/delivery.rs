@@ -344,7 +344,13 @@ fn validate_repository_checks(
         }
     }
     for (name, checks) in repository_checks {
-        if successful_or_merge_cancelled(&checks, successful_main_contains_merge) {
+        if matches!(
+            name,
+            "Verify and preview" | "Full browser e2e (main fix)" | "Full extension e2e (main fix)"
+        ) {
+            continue;
+        }
+        if checks.iter().any(|check| successful_check(check)) {
             continue;
         }
         if checks.iter().any(|check| check.status != "COMPLETED") {
@@ -872,6 +878,22 @@ mod tests {
         let error = validate_full_e2e_checks(&pull_request, true)
             .expect_err("a failed exact-head e2e run remains a delivery failure");
         assert!(error.to_string().contains("Full browser e2e"));
+    }
+
+    #[test]
+    fn successful_main_does_not_replace_cancelled_hive_verification() {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        pull_request.status_check_rollup.push(DeliveryCheck {
+            name: "Hive Rust and infrastructure verification".to_owned(),
+            status: "COMPLETED".to_owned(),
+            conclusion: "CANCELLED".to_owned(),
+            started_at: "2026-07-28T02:00:00Z".to_owned(),
+            workflow_name: "Hive".to_owned(),
+        });
+
+        let error = validate_repository_checks(&pull_request, true)
+            .expect_err("Main does not exercise Hive-only verification");
+        assert!(error.to_string().contains("Hive Rust"));
     }
 
     fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {

@@ -836,6 +836,21 @@ async fn persistable_patch(
 }
 
 fn task_prompt(task: &ClaimedTask) -> String {
+    let owning_repairs = if task.owning_repairs.is_empty() {
+        "No active owning Main repairs.".to_owned()
+    } else {
+        task.owning_repairs
+            .iter()
+            .map(|owner| {
+                format!(
+                    "- {} (delivery branch `{}`)",
+                    owner,
+                    repair_branch_name(owner.as_str())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
     let dependencies = if task.dependency_context.is_empty() {
         "No dependency results.".to_owned()
     } else {
@@ -870,13 +885,15 @@ fn task_prompt(task: &ClaimedTask) -> String {
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
          belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
          replacement exact-head run, and follow it to a terminal result. Before doing work or \
-         reporting another blocker, re-check whether the repair that created this prerequisite \
-         has already been merged and has a successful Main run containing its merge. If so, this \
-         prerequisite is obsolete: report completed with no changes and explain that it no longer \
-         blocks delivery, even when the requested capability remains unavailable. Never extend an \
-         obsolete blocker chain. Never report this task's own id as its blocker and never create a \
-         duplicate repair PR. Report blocked only for a genuinely separate prerequisite, using a \
-         distinct stable blocker id and an actionable prompt that another worker can complete."
+         reporting another blocker, inspect every active owning Main repair listed below. Only when \
+         every listed repair has already been merged and has a successful Main run containing its \
+         merge is this prerequisite obsolete: report completed with no changes and explain that it \
+         no longer blocks delivery, even when the requested capability remains unavailable. When \
+         no owning repair is listed, or any listed repair is still live, do not use this \
+         obsolescence rule. Never extend an obsolete blocker chain. Never report this task's own id \
+         as its blocker and never create a duplicate repair PR. Report blocked only for a genuinely \
+         separate prerequisite, using a distinct stable blocker id and an actionable prompt that \
+         another worker can complete."
             .to_owned()
     } else {
         String::new()
@@ -887,8 +904,15 @@ fn task_prompt(task: &ClaimedTask) -> String {
          Complete the task and return the required structured terminal result.\n\n\
          Task kind: {}\n\
          Task:\n{}\n\n\
+         Active owning Main repairs:\n{}\n\n\
          Completed dependency context:\n{}{}",
-        task.attempt_number, task.id, task.kind, task.prompt, dependencies, delivery
+        task.attempt_number,
+        task.id,
+        task.kind,
+        task.prompt,
+        owning_repairs,
+        dependencies,
+        delivery
     )
 }
 
@@ -963,6 +987,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -989,6 +1014,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: vec![TaskId::new("main-failure-abc-run-42-attempt-1")?],
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -997,8 +1023,10 @@ mod tests {
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("Never report this task's own id as its blocker"));
-        assert!(prompt.contains("this prerequisite is obsolete"));
+        assert!(prompt.contains("this prerequisite obsolete"));
         assert!(prompt.contains("Never extend an obsolete blocker chain"));
+        assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
+        assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
         Ok(())
     }
 
@@ -1029,6 +1057,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-recovery")?,
             attempt_number: 2,
             lease_token: LeaseToken::new("lease-recovery")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1135,6 +1164,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1196,6 +1226,7 @@ mod tests {
             attempt_id: AttemptId::new("resumed-attempt")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("resumed-lease")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1325,6 +1356,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-2")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-2")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };

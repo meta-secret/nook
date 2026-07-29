@@ -185,6 +185,12 @@ impl Neo4jTaskStore {
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let owning_repair_ids: Vec<String> = row.get("owning_repair_ids")?;
+        let owning_repairs = owning_repair_ids
+            .into_iter()
+            .map(TaskId::new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::msg)?;
         let artifact_ids: Vec<String> = row.get("artifact_ids")?;
         let artifact_kinds: Vec<String> = row.get("artifact_kinds")?;
         let artifact_uris: Vec<String> = row.get("artifact_uris")?;
@@ -213,6 +219,7 @@ impl Neo4jTaskStore {
             attempt_number: row.get("attempt_number")?,
             attempt_id,
             lease_token,
+            owning_repairs,
             dependency_context,
             dependency_artifacts,
         })
@@ -697,6 +704,18 @@ impl TaskStore for Neo4jTaskStore {
                           [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
                           [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
                           [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
+                     OPTIONAL MATCH (owning_repair:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE owning_repair.kind = 'main-repair'
+                       AND owning_repair.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH DISTINCT task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents, owning_repair
+                     ORDER BY owning_repair.id
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          [value IN collect(owning_repair.id) WHERE value IS NOT NULL]
+                            AS owning_repair_ids
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
                      WHERE expired_attempt.lease_token = task.lease_token
                      OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
@@ -721,7 +740,7 @@ impl TaskStore for Neo4jTaskStore {
                      })
                      WITH task, attempt, dependency_ids, dependency_summaries,
                           artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents
+                          artifact_contents, owning_repair_ids
                      MATCH (agent:Agent {id: $agent_id})
                      MERGE (agent)-[:EXECUTED]->(attempt)
                      MERGE (attempt)-[:FOR_TASK]->(task)
@@ -731,6 +750,7 @@ impl TaskStore for Neo4jTaskStore {
                             task.prompt AS prompt,
                             task.source_commit AS source_commit,
                             attempt.number AS attempt_number,
+                            owning_repair_ids,
                             dependency_ids,
                             dependency_summaries,
                             artifact_ids,

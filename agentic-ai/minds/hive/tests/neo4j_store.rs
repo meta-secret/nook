@@ -711,6 +711,53 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .ok_or_else(|| anyhow::anyhow!("late dependency alert was missing"))?;
     assert_eq!(late_dependency_alert.kind, AlertKind::DependencyFailed);
 
+    let mut shared_blocker = task(format!("shared-blocker-{suffix}"), Vec::new());
+    shared_blocker.kind = "blocker".to_owned();
+    let mut owner_a = task(
+        format!("main-failure-owner-a-{suffix}"),
+        vec![shared_blocker.id.clone()],
+    );
+    owner_a.kind = "main-repair".to_owned();
+    let mut owner_b = task(
+        format!("main-failure-owner-b-{suffix}"),
+        vec![shared_blocker.id.clone()],
+    );
+    owner_b.kind = "main-repair".to_owned();
+    store.enqueue(&shared_blocker).await?;
+    store.enqueue(&owner_b).await?;
+    store.enqueue(&owner_a).await?;
+    let shared_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(shared_claim.id, shared_blocker.id);
+    assert_eq!(
+        shared_claim.owning_repairs,
+        vec![owner_a.id.clone(), owner_b.id.clone()],
+        "a shared blocker must receive every active owning Main repair"
+    );
+    assert!(
+        store
+            .complete(
+                &shared_claim,
+                &agent_a,
+                "shared prerequisite complete",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    for owner in [&owner_b, &owner_a] {
+        let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert_eq!(owner_claim.id, owner.id);
+        assert!(
+            store
+                .complete(
+                    &owner_claim,
+                    &agent_a,
+                    "owning repair complete",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+    }
+
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();
     repair.max_attempts = 1;
