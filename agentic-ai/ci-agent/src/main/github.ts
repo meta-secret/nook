@@ -234,7 +234,7 @@ function isRustEcosystemPath(path: string): boolean {
     path === ".github/workflows/rust-ecosystem.yml" ||
     path === "deny.toml" ||
     path === "nook-app/Cargo.lock" ||
-    path === "nook-app/insta.yaml" ||
+    path === "nook-app/.insta.yaml" ||
     path.startsWith("fuzz/") ||
     (path.startsWith("nook-app/") &&
       (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
