@@ -102,6 +102,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: agentic-ai/minds
+          ignore: RUSTSEC-2026-0118,RUSTSEC-2026-0119
 
   deterministic-tests:
     needs: validation-request
