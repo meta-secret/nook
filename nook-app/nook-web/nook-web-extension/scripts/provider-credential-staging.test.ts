@@ -38,9 +38,11 @@ describe('provider credential staging', () => {
         },
       },
     ])
-    expect(source[0]?.githubPat).toBeUndefined()
+    expect(Object.hasOwn(source[0] ?? {}, 'githubPat')).toBe(false)
     expect(source[1]?.oauthFile?.accessToken).toBe('')
-    expect(source[1]?.oauthFile?.refreshToken).toBeUndefined()
+    expect(Object.hasOwn(source[1]?.oauthFile ?? {}, 'refreshToken')).toBe(
+      false,
+    )
   })
 
   test('scrubs a staged copy when queued import work expires', () => {

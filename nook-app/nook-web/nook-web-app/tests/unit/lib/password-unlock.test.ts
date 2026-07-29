@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   findSharedGrantProvider,
+  SharedGrantProviderKind,
   shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
 
@@ -33,7 +34,7 @@ describe('shared enrollment provider selection', () => {
         'google-drive',
         'folder-required',
       ),
-    ).toBeUndefined()
+    ).toEqual({ kind: SharedGrantProviderKind.AuthorizationRequired })
   })
 
   test('reuses only the provider saved for the granted target', () => {
@@ -44,8 +45,11 @@ describe('shared enrollment provider selection', () => {
         [driveProvider('other', 'folder-other'), matchingDrive],
         'google-drive',
         'folder-required',
-      )?.id,
-    ).toBe('matching')
+      ),
+    ).toEqual({
+      kind: SharedGrantProviderKind.Existing,
+      provider: matchingDrive,
+    })
   })
 
   test('flushes every created Drive target when the owner token is usable', () => {

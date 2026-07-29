@@ -3,6 +3,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import {
   bindGoogleDriveSharedFolder,
   DEFAULT_DRIVE_BACKUP_NAME,
+  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   setGoogleDriveProviderMode,
   setICloudProviderMode,
@@ -57,7 +58,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
           oauthFile: state.oauthFile,
           createdAt: "",
         })
-      : omittedValue();
+      : { kind: DuplicateSyncProviderKind.Unique };
   const refreshed =
     state.oauthFile.preset === "icloud"
       ? await ensureValidICloudOAuthFileConfig(state.oauthFile)
@@ -73,9 +74,9 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     return;
   }
   state.oauthFile = refreshed;
-  if (providerToRefresh) {
+  if (providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate) {
     state.providers = state.providers.map((provider) =>
-      provider.id === providerToRefresh.id
+      provider.id === providerToRefresh.provider.id
         ? { ...provider, oauthFile: refreshed }
         : provider,
     );
@@ -84,7 +85,10 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   log.info("oauth token freshness check refreshed provider", {
     preset: refreshed.preset,
     expiresAt: refreshed.expiresAt,
-    providerId: providerToRefresh?.id,
+    providerId:
+      providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate
+        ? providerToRefresh.provider.id
+        : omittedValue(),
   });
 }
 

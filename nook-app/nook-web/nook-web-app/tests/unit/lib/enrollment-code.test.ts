@@ -3,6 +3,7 @@ import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
+  NookValueState,
   default as initNookWasm,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
@@ -144,8 +145,11 @@ describe('enrollment payloads', () => {
     expect(() => decryptEnrollmentPayload(malformed, 'pw')).toThrow(
       'Invalid enrollment code.',
     )
-    expect(
-      takeWasmStringValue(peekEnrollmentEntryId(malformed)),
-    ).toBeUndefined()
+    const entryId = peekEnrollmentEntryId(malformed)
+    try {
+      expect(entryId.state).toBe(NookValueState.Unavailable)
+    } finally {
+      entryId.free()
+    }
   })
 })

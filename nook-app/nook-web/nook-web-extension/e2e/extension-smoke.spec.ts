@@ -338,8 +338,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toEqual({ ok: false, reason: 'event-log-import-failed' })
 
     const storage = await readExtensionStorage(context)
-    expect(storage[pairingGrantStorageKey]).toBeUndefined()
-    expect(storage[setupStorageKey]).toBeUndefined()
+    expect(Object.hasOwn(storage, pairingGrantStorageKey)).toBe(false)
+    expect(Object.hasOwn(storage, setupStorageKey)).toBe(false)
   } finally {
     await context.close()
     await loginServer.close()

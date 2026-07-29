@@ -5,6 +5,7 @@ import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
+  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
@@ -593,7 +594,11 @@ export async function ensureProviderSaved(
       storeId: vaultStoreId,
       createdAt: isoTimestamp(),
     };
-    if (findDuplicateSyncProvider(state.activeVaultProviders, provider)) {
+    const duplicateProvider = findDuplicateSyncProvider(
+      state.activeVaultProviders,
+      provider,
+    );
+    if (duplicateProvider.kind === DuplicateSyncProviderKind.Duplicate) {
       if (isExplicitAdd) {
         state.errorMsg = state.t("auth_storage.duplicate_sync_provider");
         return false;
@@ -646,10 +651,10 @@ export async function ensureProviderSaved(
         oauthFile: state.oauthFile,
         createdAt: "",
       });
-      if (duplicate) {
+      if (duplicate.kind === DuplicateSyncProviderKind.Duplicate) {
         oauthProviderToUpdate = {
           kind: OAuthProviderUpdateKind.Required,
-          providerId: duplicate.id,
+          providerId: duplicate.provider.id,
         };
       }
     }

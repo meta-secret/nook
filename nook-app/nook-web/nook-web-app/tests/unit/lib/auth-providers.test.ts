@@ -2,6 +2,7 @@ import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
+  DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   formatDriveStorageRef,
   maskGithubPat,
@@ -174,9 +175,10 @@ describe('findDuplicateSyncProvider', () => {
       githubRepo: 'nook-crdt-test-1',
       githubPat: 'github_pat_11AAAAAAAAAA',
     })
-    expect(findDuplicateSyncProvider([existing], candidate)?.id).toBe(
-      'gh-existing',
-    )
+    expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
+      kind: DuplicateSyncProviderKind.Duplicate,
+      provider: existing,
+    })
   })
 
   test('ignores the excluded provider id', () => {
@@ -185,10 +187,10 @@ describe('findDuplicateSyncProvider', () => {
       findDuplicateSyncProvider([existing], existing, {
         excludeId: 'gh-self',
       }),
-    ).toBeUndefined()
+    ).toEqual({ kind: DuplicateSyncProviderKind.Unique })
   })
 
-  test('returns undefined when no duplicate exists', () => {
+  test('returns the unique state when no duplicate exists', () => {
     const existing = githubProvider({
       githubRepo: 'alpha',
       githubPat: 'github_pat_11AAAA',
@@ -197,6 +199,8 @@ describe('findDuplicateSyncProvider', () => {
       githubRepo: 'beta',
       githubPat: 'github_pat_11AAAA',
     })
-    expect(findDuplicateSyncProvider([existing], candidate)).toBeUndefined()
+    expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
+      kind: DuplicateSyncProviderKind.Unique,
+    })
   })
 })

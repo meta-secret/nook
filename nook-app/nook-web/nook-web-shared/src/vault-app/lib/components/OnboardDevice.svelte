@@ -37,6 +37,7 @@
   import { OnboardingType, VaultType } from '$lib/vault-architecture'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
+    CompatibleProviderSelectionKind,
     firstCompatibleProvider,
     onboardingType,
     providerCapabilityLabelKey,
@@ -146,15 +147,16 @@
   let generateStepOpen = $state(false)
 
   const effectiveProviderId = $derived.by(() => {
-    return (
-      firstCompatibleProvider(
-        syncProviders,
-        vault.vaultArchitecture.replication_type,
-        selectedProviderIdState.kind === ProviderSelectionKind.Selected
-          ? selectedProviderIdState.providerId
-          : omittedValue(),
-      )?.id ?? ''
+    const selection = firstCompatibleProvider(
+      syncProviders,
+      vault.vaultArchitecture.replication_type,
+      selectedProviderIdState.kind === ProviderSelectionKind.Selected
+        ? selectedProviderIdState.providerId
+        : omittedValue(),
     )
+    return selection.kind === CompatibleProviderSelectionKind.Selected
+      ? selection.provider.id
+      : ''
   })
   const effectivePasswordEntryId = $derived.by(() => {
     if (
@@ -183,8 +185,7 @@
       : 'personal-credential-transfer',
   )
   const requiresSharedJoinerIdentity = $derived(
-    usesSharedProviderGrant &&
-      selectedProvider?.oauthFile?.preset !== 'icloud',
+    usesSharedProviderGrant && selectedProvider?.oauthFile?.preset !== 'icloud',
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??

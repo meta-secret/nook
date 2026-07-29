@@ -28,7 +28,7 @@ describe('createEnrollmentQrOptions', () => {
     )
 
     expect(options.qrOptions?.errorCorrectionLevel).toBe('L')
-    expect(options.image).toBeUndefined()
+    expect(Object.hasOwn(options, 'image')).toBe(false)
     expect(options.imageOptions?.imageSize).toBe(0)
   })
 })

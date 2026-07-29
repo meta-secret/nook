@@ -234,8 +234,8 @@ test.describe('vault password envelope (local)', () => {
       state: 'labeled',
     })
     expect(outer.ct).toBeTruthy()
-    expect(outer.password).toBeUndefined()
-    expect(outer.provider).toBeUndefined()
+    expect(Object.hasOwn(outer, 'password')).toBe(false)
+    expect(Object.hasOwn(outer, 'provider')).toBe(false)
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
     const srLink = (await page.getByTestId('onboard-link').textContent())!

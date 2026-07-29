@@ -67,7 +67,9 @@ describe('LastPass import panel', () => {
 
     finishImport(importResult())
     await waitFor(() => {
-      expect(view.queryByTestId('lastpass-import-panel-progress')).toBeNull()
+      expect(
+        view.queryAllByTestId('lastpass-import-panel-progress'),
+      ).toHaveLength(0)
     })
   })
 

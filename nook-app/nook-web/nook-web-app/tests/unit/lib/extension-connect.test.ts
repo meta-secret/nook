@@ -1,6 +1,10 @@
 import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  ExtensionConnectIntentKind,
+  extensionConnectIntent,
+} from '$lib/app-lifecycle-state'
+import {
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
   openInstalledExtension,
@@ -72,17 +76,21 @@ describe('extension connect route parsing', () => {
       ),
     )
 
-    expect(request).toBeUndefined()
+    expect(extensionConnectIntent(request)).toEqual({
+      kind: ExtensionConnectIntentKind.Absent,
+    })
   })
 
   test('rejects the removed website-first setup link', () => {
     expect(
-      extensionConnectRequestFromLocation(
-        locationFromUrl(
-          'https://simple.nokey.sh/extension-connect?extension_id=ext-123',
+      extensionConnectIntent(
+        extensionConnectRequestFromLocation(
+          locationFromUrl(
+            'https://simple.nokey.sh/extension-connect?extension_id=ext-123',
+          ),
         ),
       ),
-    ).toBeUndefined()
+    ).toEqual({ kind: ExtensionConnectIntentKind.Absent })
   })
 })
 
@@ -311,10 +319,10 @@ describe('extension pairing approved message', () => {
       },
     )
     const grant = approved[pairingGrantStorageKey('store-1')]
-    expect(grant).toBeDefined()
+    if (!grant) throw new Error('expected the approved pairing grant')
 
     const passive = extensionStoredPairingGrantStorageItems(
-      grant as Parameters<typeof extensionStoredPairingGrantStorageItems>[0],
+      grant,
       {
         vaultStoreId: 'store-1',
         eventCount: 3,
@@ -328,7 +336,7 @@ describe('extension pairing approved message', () => {
       eventCount: 3,
       eventLogHeads: ['event-3'],
     })
-    expect(passive[setupStorageKey]).toBeUndefined()
+    expect(Object.hasOwn(passive, setupStorageKey)).toBe(false)
   })
 
   test('restores the newest surviving grant when the selected vault is removed', () => {

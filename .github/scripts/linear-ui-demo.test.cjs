@@ -11,6 +11,7 @@ const {
   stateByType,
   syncUiDemoIssue,
   transitionUiDemoIssue,
+  UiDemoIssueTransitionKind,
 } = require('./linear-ui-demo.cjs')
 
 const config = {
@@ -194,7 +195,9 @@ test('moves an existing issue to completed or canceled and ignores absent issues
     merged: true,
     prNumber: 999,
   })
-  assert.equal(typeof missing, 'undefined')
+  assert.deepEqual(missing, {
+    kind: UiDemoIssueTransitionKind.IssueAbsent,
+  })
 })
 
 test('requires the requested workflow state type', () => {

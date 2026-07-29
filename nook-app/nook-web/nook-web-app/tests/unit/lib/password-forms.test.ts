@@ -528,7 +528,6 @@ describe('passkey control detection', () => {
       </form>
     `
 
-    expect(findPasskeyControl()).toBeUndefined()
     expect(pageHasPasskeyControl()).toBe(false)
     expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
       passkeyControlPresent: false,

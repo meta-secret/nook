@@ -351,7 +351,10 @@ test.describe('passkey device-key protection', () => {
 
     const wrapped = await readPersistedDeviceIdentity(page)
 
-    expect(wrapped).toBeDefined()
+    expect(wrapped).toBeTypeOf('string')
+    if (typeof wrapped !== 'string') {
+      throw new Error('expected persisted passkey-protected device identity')
+    }
     expect(wrapped).toContain('"protection":"passkey-derived"')
     expect(wrapped).not.toContain('"ciphertext"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
@@ -448,7 +451,10 @@ test.describe('passkey device-key protection', () => {
     })
 
     const wrapped = await readPersistedDeviceIdentity(page)
-    expect(wrapped).toBeDefined()
+    expect(wrapped).toBeTypeOf('string')
+    if (typeof wrapped !== 'string') {
+      throw new Error('expected persisted PIN-protected device identity')
+    }
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
@@ -647,7 +653,7 @@ test.describe('passkey device-key protection', () => {
           },
         ),
     )
-    expect(persisted.wrapped).toBeUndefined()
+    expect(Object.hasOwn(persisted, 'wrapped')).toBe(false)
     expect(persisted.registry).toBeTruthy()
   })
 })

@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use crate::Violation;
 
-/// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`.
+/// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`
+/// or an assertion matcher that encodes the same implicit absence contract.
 ///
 /// Authored code must model absence explicitly. Optional object shape may use
 /// `?`, callbacks with no value return `void`, and external/browser absence is
@@ -572,6 +573,14 @@ fn collect_undefined_nodes(
         lines.push(first_line + node.start_position().row);
         return;
     }
+    if node.kind() == "property_identifier"
+        && node
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|text| matches!(text, "toBeDefined" | "toBeNull" | "toBeUndefined"))
+    {
+        lines.push(first_line + node.start_position().row);
+        return;
+    }
     if node.kind() == "binary_expression" && is_typeof_undefined_comparison(node, source) {
         lines.push(first_line + node.start_position().row);
         return;
@@ -839,11 +848,14 @@ const word = 'undefined'
 const hidden = typeof value === 'undefined'
 const reversed = "undefined" != typeof another
 const parenthesized = typeof(value)===`undefined`
+expect(value).toBeUndefined()
+expect(value).not.toBeDefined()
+expect(value).toBeNull()
 "#;
 
         assert_eq!(
             typescript_code_undefined_token_lines(source, 1)?,
-            vec![5, 6, 8, 9, 10]
+            vec![5, 6, 8, 9, 10, 11, 12, 13]
         );
         Ok(())
     }

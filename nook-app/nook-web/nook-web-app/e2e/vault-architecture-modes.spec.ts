@@ -118,18 +118,18 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
       const locator = page.getByTestId(testId)
       await expect(locator).toBeVisible()
       const box = await locator.boundingBox()
-      expect(box, `${testId} should have a layout box`).not.toBeNull()
-      return { testId, box: box! }
+      if (!box) throw new Error(`${testId} should have a layout box`)
+      return { testId, box }
     }),
   )
   const viewport = page.viewportSize()
-  expect(viewport).not.toBeNull()
+  if (!viewport) throw new Error('The test page must expose a viewport')
   for (const { testId, box } of boxes) {
     expect(box.x, `${testId} starts inside viewport`).toBeGreaterThanOrEqual(0)
     expect(
       box.x + box.width,
       `${testId} stays inside viewport width`,
-    ).toBeLessThanOrEqual(viewport!.width + 1)
+    ).toBeLessThanOrEqual(viewport.width + 1)
   }
   for (let left = 0; left < boxes.length; left += 1) {
     for (let right = left + 1; right < boxes.length; right += 1) {
@@ -701,8 +701,8 @@ test.describe('vault architecture modes', () => {
     }
 
     expect(envelope.ct).toBeTruthy()
-    expect(envelope.password).toBeUndefined()
-    expect(envelope.provider).toBeUndefined()
+    expect(Object.hasOwn(envelope, 'password')).toBe(false)
+    expect(Object.hasOwn(envelope, 'provider')).toBe(false)
     expect(JSON.stringify(envelope)).not.toContain(SHARED_PROVIDER.accessToken)
     expect(JSON.stringify(envelope)).not.toContain(ONBOARD_PASSWORD)
     await assertAppLogsDoNotLeak(page, [

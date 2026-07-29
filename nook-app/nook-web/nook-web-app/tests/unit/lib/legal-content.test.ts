@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { LegalRouteKind, legalRoute } from '$lib/app-lifecycle-state'
 import {
   LEGAL_PAGES,
   LegalPageId,
@@ -10,8 +11,12 @@ describe('legal-content', () => {
     expect(getLegalPageFromPath('/privacy')).toBe(LegalPageId.Privacy)
     expect(getLegalPageFromPath('/privacy/')).toBe(LegalPageId.Privacy)
     expect(getLegalPageFromPath('/terms')).toBe(LegalPageId.Terms)
-    expect(getLegalPageFromPath('/')).toBeUndefined()
-    expect(getLegalPageFromPath('/vault')).toBeUndefined()
+    expect(legalRoute(getLegalPageFromPath('/'))).toEqual({
+      kind: LegalRouteKind.Application,
+    })
+    expect(legalRoute(getLegalPageFromPath('/vault'))).toEqual({
+      kind: LegalRouteKind.Application,
+    })
   })
 
   test('loads markdown sources from docs/', () => {

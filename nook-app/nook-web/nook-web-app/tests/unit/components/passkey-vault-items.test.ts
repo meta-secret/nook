@@ -29,7 +29,7 @@ describe('passkey item discovery', () => {
 
     expect(view.getByTestId('passkey-creation-guidance')).toBeTruthy()
     expect(view.getByText('add_secret.passkey_creation_title')).toBeTruthy()
-    expect(view.queryByTestId('save-secret-btn')).toBeNull()
+    expect(view.queryAllByTestId('save-secret-btn')).toHaveLength(0)
     expect(onAddSecret).not.toHaveBeenCalled()
   })
 
@@ -58,8 +58,8 @@ describe('passkey item discovery', () => {
     expect(view.getByText('login.example.com')).toBeTruthy()
     expect(view.getByText('Alice')).toBeTruthy()
     expect(view.getByText('alice@example.com')).toBeTruthy()
-    expect(view.queryByTestId('reveal-secret-btn')).toBeNull()
-    expect(view.queryByTestId('edit-secret-btn')).toBeNull()
+    expect(view.queryAllByTestId('reveal-secret-btn')).toHaveLength(0)
+    expect(view.queryAllByTestId('edit-secret-btn')).toHaveLength(0)
     expect(view.getByTestId('delete-secret-btn')).toBeTruthy()
   })
 })

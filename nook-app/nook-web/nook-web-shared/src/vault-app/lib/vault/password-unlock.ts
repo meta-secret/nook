@@ -284,11 +284,20 @@ function applySavedEnrollmentProvider(
   state.clearOauthFile();
 }
 
+export enum SharedGrantProviderKind {
+  Existing = "existing",
+  AuthorizationRequired = "authorization-required",
+}
+
+export type SharedGrantProvider =
+  | { kind: SharedGrantProviderKind.Existing; provider: StorageProvider }
+  | { kind: SharedGrantProviderKind.AuthorizationRequired };
+
 export function findSharedGrantProvider(
   providers: StorageProvider[],
   preset: string,
   storageTargetId?: string,
-): StorageProvider | void {
+): SharedGrantProvider {
   const withToken = providers.filter(
     (provider) =>
       provider.type === "oauth-file" &&
@@ -296,13 +305,19 @@ export function findSharedGrantProvider(
       Boolean(provider.oauthFile.accessToken?.trim()),
   );
   if (storageTargetId) {
-    return withToken.find(
+    const provider = withToken.find(
       (provider) =>
         provider.oauthFile?.folderId === storageTargetId ||
         provider.oauthFile?.iCloudShareTarget === storageTargetId,
     );
+    return provider
+      ? { kind: SharedGrantProviderKind.Existing, provider }
+      : { kind: SharedGrantProviderKind.AuthorizationRequired };
   }
-  return withToken[0];
+  const provider = withToken[0];
+  return provider
+    ? { kind: SharedGrantProviderKind.Existing, provider }
+    : { kind: SharedGrantProviderKind.AuthorizationRequired };
 }
 
 export function shouldFlushSharedDriveGrant(
@@ -367,11 +382,15 @@ export async function connectWithEnrollmentCode(
         payload.provider.sharedStorageTargetId,
       )?.trim();
       await state.loadProviders();
-      let provider = findSharedGrantProvider(
+      const providerSelection = findSharedGrantProvider(
         state.providers,
         preset,
         storageTargetId,
       );
+      let provider =
+        providerSelection.kind === SharedGrantProviderKind.Existing
+          ? providerSelection.provider
+          : omittedValue();
       let sharedProviderNeedsSave = false;
       if (!provider && preset === "google-drive") {
         if (!isGoogleOAuthConfigured()) {

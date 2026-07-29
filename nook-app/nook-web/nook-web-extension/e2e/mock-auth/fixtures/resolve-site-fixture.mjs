@@ -38,7 +38,7 @@ for (const name of readdirSync(templatesDir).filter((n) =>
  *   quirks: string[],
  *   steps: Array<{ fields: Array<{ type?: string }>, submit: { label: string } }>,
  *   template: string,
- * } | undefined}
+ * } | void}
  */
 export function resolveSiteFixture(id) {
   const ref = siteShells[id]

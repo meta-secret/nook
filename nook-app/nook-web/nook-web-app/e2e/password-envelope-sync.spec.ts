@@ -109,8 +109,8 @@ test.describe('vault password envelope with sync provider', () => {
       ct?: string
     }
     expect(outer.entry_id).toBeTruthy()
-    expect(outer.provider).toBeUndefined()
-    expect(outer.password).toBeUndefined()
+    expect(Object.hasOwn(outer, 'provider')).toBe(false)
+    expect(Object.hasOwn(outer, 'password')).toBe(false)
     expect(outer.ct).toBeTruthy()
     expect(typeof outer.issued_at).toBe('string')
     expect(Date.parse(outer.issued_at)).not.toBeNaN()
@@ -200,7 +200,7 @@ test.describe('vault password envelope with sync provider', () => {
       (snapshot) => snapshot.hasPasswordEnvelope,
     )
     const oldEnvelope = before.passwordEnvelopeCiphertext
-    expect(oldEnvelope).not.toBeUndefined()
+    expect(typeof oldEnvelope).toBe('string')
 
     await openStorageSettings(deviceA)
     await rotateVaultPassword(deviceA, 'rotated-pw-9')
@@ -214,7 +214,7 @@ test.describe('vault password envelope with sync provider', () => {
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
     )
     expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
-    expect(after.passwordEnvelopeCiphertext).not.toBeUndefined()
+    expect(typeof after.passwordEnvelopeCiphertext).toBe('string')
   })
 
   test('removing the backup password leaves device-key unlock intact', async () => {

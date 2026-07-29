@@ -153,18 +153,20 @@ test.describe('local folder backup provider', () => {
     ).toBeVisible()
     await expect
       .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookVault?: {
-                  existingVaultRecoverySummary?: unknown
-                }
+        page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                existingVaultRecoverySummary?: unknown
               }
-            ).__nookVault?.existingVaultRecoverySummary,
-        ),
+            }
+          ).__nookVault
+          return vault
+            ? Object.hasOwn(vault, 'existingVaultRecoverySummary')
+            : false
+        }),
       )
-      .toBeUndefined()
+      .toBe(false)
   })
 
   test('explains the AI-debug browser directory-picker boundary', async ({

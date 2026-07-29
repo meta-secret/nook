@@ -73,7 +73,10 @@ describe.sequential(
 
       const raw = await readRawAuthProvidersFromIdb()
       const storedPat = raw.providers[0]?.githubPat
-      expect(storedPat).toBeDefined()
+      expect(storedPat).toBeTypeOf('string')
+      if (typeof storedPat !== 'string') {
+        throw new Error('expected a persisted sealed GitHub token')
+      }
       expect(storedPat).toContain(AGE_ARMOR_MARKER)
       expect(storedPat).not.toContain('UNITtestSECRET')
     })

@@ -140,7 +140,9 @@ is permitted for function and callback return types, `Promise<void>`, and the
 unary `void` operator when a result is intentionally discarded. This is
 equivalent to Rust `()`, not `Option<T>`. A mutable application-state slot such
 as `let result: T | void` is still forbidden because that union uses `void` as
-unnamed absence rather than effect completion. Full contract:
+unnamed absence rather than effect completion. Tests assert semantic variants
+or structural property contracts, never `toBeUndefined`, `toBeNull`,
+`toBeDefined`, or equivalent absence matchers. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 
 Authored Rust must not call `.unwrap()` or `.expect(...)`. Production paths

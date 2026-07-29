@@ -2,6 +2,8 @@ import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookBrowserLocale,
+  NookStringValue,
+  NookValueState,
   get_translation_catalog as getTranslationCatalog,
   lookupTranslation,
   mergeTranslationCatalogs,
@@ -19,6 +21,14 @@ import {
 beforeAll(async () => {
   await initNookWasm()
 })
+
+function expectUnavailableWasmString(value: NookStringValue): void {
+  try {
+    expect(value.state).toBe(NookValueState.Unavailable)
+  } finally {
+    value.free()
+  }
+}
 
 describe('locale', () => {
   test('English and Russian catalogs expose the same translation keys', () => {
@@ -53,21 +63,17 @@ describe('locale', () => {
     expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('ru')))).toBe(
       'ru',
     )
-    expect(
-      takeWasmStringValue(parseAppLocale(intoWasmStringValue('de'))),
-    ).toBeUndefined()
-    expect(
-      takeWasmStringValue(parseAppLocale(intoWasmStringValue(omittedValue()))),
-    ).toBeUndefined()
+    expectUnavailableWasmString(parseAppLocale(intoWasmStringValue('de')))
+    expectUnavailableWasmString(
+      parseAppLocale(intoWasmStringValue(omittedValue())),
+    )
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
     expect(takeWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
     expect(takeWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
     expect(takeWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
-    expect(
-      takeWasmStringValue(resolveAppLocaleFromTag('de-DE')),
-    ).toBeUndefined()
+    expectUnavailableWasmString(resolveAppLocaleFromTag('de-DE'))
   })
 
   test('resolveAppLocaleFromTags respects preference order', () => {

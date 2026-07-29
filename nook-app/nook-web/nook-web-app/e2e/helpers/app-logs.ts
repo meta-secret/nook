@@ -44,7 +44,7 @@ type AppLogsResponse = {
   entries: NookLogEntry[]
 }
 
-export /** Read persisted app log entries (`window.__nookLog`) from the page, or undefined. */
+export /** Read persisted app log entries when the runtime hook is available. */
 async function readNookLogEntries(
   page: Page,
   limit: number,
@@ -168,7 +168,7 @@ export async function fetchAppLogs(
   return payload
 }
 
-/** Read persisted app log entries (`window.__nookLog`) from the page, or undefined. */
+/** Read persisted app log entries when the runtime hook is available. */
 export async function readPersistedAppLogs(
   page: Page,
   limit = 500,
@@ -213,11 +213,11 @@ export async function waitForPersistedAppLog(
         searchState = !found
           ? { kind: LogSearchStateKind.Searching }
           : { kind: LogSearchStateKind.Matched, entry: found }
-        return found
+        return searchState.kind === LogSearchStateKind.Matched
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
-    .not.toBeUndefined()
+    .toBe(true)
   if (searchState.kind === LogSearchStateKind.Searching) {
     throw new Error('persisted app log poll completed without a matching entry')
   }
@@ -322,13 +322,14 @@ export function expectAppLogEntry(
   },
 ): NookLogEntry {
   const entry = findAppLogEntry(entries, filter)
-  expect(
-    entry,
-    `expected app log matching ${JSON.stringify(filter)}; got scopes: ${[
-      ...new Set(entries.map((e) => e.scope)),
-    ].join(', ')}`,
-  ).toBeDefined()
-  return entry!
+  if (!entry) {
+    throw new Error(
+      `expected app log matching ${JSON.stringify(filter)}; got scopes: ${[
+        ...new Set(entries.map((e) => e.scope)),
+      ].join(', ')}`,
+    )
+  }
+  return entry
 }
 
 export function parseLogsPageStoredCount(text: string | void): number {
@@ -351,11 +352,11 @@ export async function waitForLogsPageStoredCount(
           (await page.getByTestId('logs-count').textContent()) ??
             omittedValue(),
         )
-        return predicate(count) ? count : omittedValue()
+        return predicate(count)
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
-    .not.toBeUndefined()
+    .toBe(true)
   return count
 }
 

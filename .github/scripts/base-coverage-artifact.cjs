@@ -1,5 +1,9 @@
 const MAIN_WORKFLOW_NAME = 'Main'
 const MAIN_WORKFLOW_PATH = '.github/workflows/main.yml'
+const BaseCoverageArtifactKind = Object.freeze({
+  Found: 'found',
+  Unavailable: 'unavailable',
+})
 
 function coverageArtifactName(baseSha) {
   if (!/^[0-9a-f]{40}$/.test(baseSha)) {
@@ -49,16 +53,20 @@ async function findBaseCoverageArtifact({
       run.event === 'push'
     ) {
       return {
-        artifactId: artifact.id,
-        runId: run.id,
+        kind: BaseCoverageArtifactKind.Found,
+        artifact: {
+          artifactId: artifact.id,
+          runId: run.id,
+        },
       }
     }
   }
 
-  return
+  return { kind: BaseCoverageArtifactKind.Unavailable }
 }
 
 module.exports = {
+  BaseCoverageArtifactKind,
   coverageArtifactName,
   findBaseCoverageArtifact,
 }

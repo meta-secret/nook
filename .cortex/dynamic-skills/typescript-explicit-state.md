@@ -82,6 +82,10 @@ mutable flags create the same problem.
 - Never hide the sentinel behind a string comparison such as
   `typeof value === "undefined"`. Use a structural property/capability check
   for external shape, or normalize immediately into a semantic union.
+- Tests must assert the semantic variant, required value, or structural
+  property contract. `toBeUndefined`, `toBeNull`, `toBeDefined`, and equivalent
+  absence matchers preserve the forbidden implicit contract without spelling
+  the value token and are prohibited.
 
 ## Scope
 
@@ -145,9 +149,10 @@ type ImportState =
 
 The AST-backed preflight rejects every executable or type-level `undefined` and
 `null` token, every quoted-sentinel comparison, every mutable `T | void`
-absence slot, and every generic optional-state escape hatch in authored
-JavaScript, TypeScript, and Svelte. It accepts `void` in function and callback
-return types, `Promise<void>`, and unary discard expressions. It also rejects
+absence slot, every generic optional-state escape hatch, and assertion matchers
+that encode implicit absence in authored JavaScript, TypeScript, and Svelte. It
+accepts `void` in function and callback return types, `Promise<void>`, and unary
+discard expressions. It also rejects
 raw string literal types on closed unions and discriminant fields (`kind`,
 `type`, `status`, `phase`, `stage`, `mode`, `action`, and `operation`), plus raw
 runtime discriminant constructors and comparisons, while accepting enum member

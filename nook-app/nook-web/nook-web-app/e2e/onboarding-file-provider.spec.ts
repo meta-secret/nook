@@ -180,7 +180,6 @@ test.describe('Google Drive provider modes', () => {
       .toBe(true)
 
     const [sharedFolder] = driveStub.getSharedFolders()
-    expect(sharedFolder).toBeDefined()
     if (!sharedFolder) throw new Error('Drive stub did not create a folder')
     expect(sharedFolder.name).toBe('Team Vault')
     const connectButton = owner.getByTestId('connect-provider-btn')

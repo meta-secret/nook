@@ -28,15 +28,15 @@ test('open a new local vault without an empty-device sync error', async ({
 
   await flushNookLogPersistQueue(page)
   const logs = await readPersistedAppLogs(page)
-  expect(logs).toBeDefined()
+  if (!logs) throw new Error('expected persisted app logs after vault setup')
   expect(
-    logs?.some(
+    logs.some(
       (entry) =>
         entry.scope === 'wasm-connect' && entry.message === 'connect complete',
     ),
   ).toBe(true)
   expect(
-    logs!.some(
+    logs.some(
       (entry) =>
         entry.scope === 'vault-sync' &&
         entry.data?.includes('Vault crypto not initialized'),

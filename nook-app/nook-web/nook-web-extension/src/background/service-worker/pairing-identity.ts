@@ -13,6 +13,7 @@ import {
 } from '../../lib/simple-vault-runtime'
 import {
   parsedWebsitePasskeyRequest,
+  WebsitePasskeyRequestParseKind,
   type WebsitePasskeyCeremony,
 } from '../../lib/webauthn-messages'
 import type { StoredExtensionPairingGrant } from '../pairing-grants'
@@ -574,8 +575,10 @@ export function requestOriginAndRpId(
   ceremony: WebsitePasskeyCeremony,
   requestJson: string,
 ): { origin: string; rpId: string; request: Record<string, unknown> } | void {
-  const request = parsedWebsitePasskeyRequest(requestJson)
-  if (!request || typeof request.origin !== 'string') return
+  const parsed = parsedWebsitePasskeyRequest(requestJson)
+  if (parsed.kind === WebsitePasskeyRequestParseKind.Rejected) return
+  const { request } = parsed
+  if (typeof request.origin !== 'string') return
   if (ceremony === 'get') {
     return typeof request.rpId === 'string'
       ? { origin: request.origin, rpId: request.rpId, request }

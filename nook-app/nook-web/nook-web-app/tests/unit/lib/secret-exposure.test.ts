@@ -33,7 +33,7 @@ describe('secret exposure lifecycle', () => {
     )
 
     expect(record.free).toHaveBeenCalledOnce()
-    expect(records['secret-1']).toBeUndefined()
+    expect(Object.hasOwn(records, 'secret-1')).toBe(false)
   })
 
   test('copy decrypts a hidden record for one action then frees it', async () => {

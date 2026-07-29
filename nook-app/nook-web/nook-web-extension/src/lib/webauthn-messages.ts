@@ -114,15 +114,30 @@ export function isWebsitePasskeyCancelMessage(
   )
 }
 
+export enum WebsitePasskeyRequestParseKind {
+  Parsed = 'parsed',
+  Rejected = 'rejected',
+}
+
+export type WebsitePasskeyRequestParse =
+  | {
+      kind: WebsitePasskeyRequestParseKind.Parsed
+      request: Record<string, unknown>
+    }
+  | { kind: WebsitePasskeyRequestParseKind.Rejected }
+
 export function parsedWebsitePasskeyRequest(
   requestJson: string,
-): Record<string, unknown> | void {
+): WebsitePasskeyRequestParse {
   try {
     const parsed = JSON.parse(requestJson)
     return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, unknown>)
-      : omittedValue()
+      ? {
+          kind: WebsitePasskeyRequestParseKind.Parsed,
+          request: parsed as Record<string, unknown>,
+        }
+      : { kind: WebsitePasskeyRequestParseKind.Rejected }
   } catch {
-    return
+    return { kind: WebsitePasskeyRequestParseKind.Rejected }
   }
 }

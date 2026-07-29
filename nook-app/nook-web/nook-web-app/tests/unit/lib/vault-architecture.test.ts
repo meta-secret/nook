@@ -2,6 +2,8 @@ import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   DeviceMode,
+  NookStringValue,
+  NookValueState,
   NookVaultArchitecture,
   OnboardingType,
   ReplicationType,
@@ -12,6 +14,7 @@ import type { StorageProvider } from '$lib/auth-providers'
 import { takeWasmStringValue } from '$lib/wasm-string-value'
 import {
   canCreateSecret,
+  CompatibleProviderSelectionKind,
   defaultVaultArchitecture,
   firstCompatibleProvider,
   onboardingType,
@@ -27,6 +30,14 @@ import {
 beforeAll(async () => {
   await initNookWasm()
 })
+
+function expectUnavailableWasmString(value: NookStringValue): void {
+  try {
+    expect(value.state).toBe(NookValueState.Unavailable)
+  } finally {
+    value.free()
+  }
+}
 
 function googleDriveProvider(): StorageProvider {
   return {
@@ -249,13 +260,19 @@ describe('vault architecture adapter', () => {
     )
     expect(
       firstCompatibleProvider(providers, ReplicationType.Shared, github.id),
-    ).toBe(drive)
+    ).toEqual({
+      kind: CompatibleProviderSelectionKind.Selected,
+      provider: drive,
+    })
     expect(
       firstCompatibleProvider(providers, ReplicationType.Personal, github.id),
-    ).toBe(github)
+    ).toEqual({
+      kind: CompatibleProviderSelectionKind.Selected,
+      provider: github,
+    })
     expect(
       firstCompatibleProvider([github], ReplicationType.Shared, github.id),
-    ).toBeUndefined()
+    ).toEqual({ kind: CompatibleProviderSelectionKind.Unavailable })
   })
 
   test('private iCloud rows require shared setup before shared onboarding', () => {
@@ -276,8 +293,11 @@ describe('vault architecture adapter', () => {
         [privateICloud, sharedICloud],
         ReplicationType.Shared,
         privateICloud.id,
-      )?.id,
-    ).toBe(sharedICloud.id)
+      ),
+    ).toEqual({
+      kind: CompatibleProviderSelectionKind.Selected,
+      provider: sharedICloud,
+    })
   })
 
   test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
@@ -339,12 +359,8 @@ describe('vault architecture adapter', () => {
     expect(takeWasmStringValue(enrollmentProvider.sharedStorageTargetId)).toBe(
       'persisted-shared-folder',
     )
-    expect(
-      takeWasmStringValue(enrollmentProvider.oauthAccessToken),
-    ).toBeUndefined()
-    expect(
-      takeWasmStringValue(enrollmentProvider.oauthRefreshToken),
-    ).toBeUndefined()
+    expectUnavailableWasmString(enrollmentProvider.oauthAccessToken)
+    expectUnavailableWasmString(enrollmentProvider.oauthRefreshToken)
   })
 
   test('shared iCloud enrollment sends only the CloudKit target', () => {
@@ -369,14 +385,10 @@ describe('vault architecture adapter', () => {
       OnboardingType.SharedProviderGrant,
     )
     expect(takeWasmStringValue(enrollmentProvider.oauthPreset)).toBe('icloud')
-    expect(
-      takeWasmStringValue(enrollmentProvider.sharedJoinerIdentity),
-    ).toBeUndefined()
+    expectUnavailableWasmString(enrollmentProvider.sharedJoinerIdentity)
     expect(takeWasmStringValue(enrollmentProvider.sharedStorageTargetId)).toBe(
       provider.oauthFile?.iCloudShareTarget,
     )
-    expect(
-      takeWasmStringValue(enrollmentProvider.oauthAccessToken),
-    ).toBeUndefined()
+    expectUnavailableWasmString(enrollmentProvider.oauthAccessToken)
   })
 })

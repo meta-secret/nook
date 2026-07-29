@@ -309,7 +309,10 @@ export function expectSealedCredential(
   stored: string | void,
   plaintext: string,
 ) {
-  expect(stored).toBeDefined()
+  expect(stored).toBeTypeOf('string')
+  if (typeof stored !== 'string') {
+    throw new Error('expected a persisted sealed credential')
+  }
   expect(stored).toContain(AGE_ARMOR_MARKER)
   expect(stored).not.toContain(plaintext)
 }

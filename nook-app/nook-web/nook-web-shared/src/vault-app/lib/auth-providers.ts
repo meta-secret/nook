@@ -54,16 +54,28 @@ export const OAUTH_FILE_PROVIDER_TYPE =
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo();
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName();
 
+export enum DuplicateSyncProviderKind {
+  Duplicate = "duplicate",
+  Unique = "unique",
+}
+
+export type DuplicateSyncProvider =
+  | { kind: DuplicateSyncProviderKind.Duplicate; provider: StorageProvider }
+  | { kind: DuplicateSyncProviderKind.Unique };
+
 export function findDuplicateSyncProvider(
   providers: StorageProvider[],
   candidate: StorageProvider,
   options?: { excludeId?: string },
-): StorageProvider | void {
-  return findDuplicateSyncProviderWasm(
+): DuplicateSyncProvider {
+  const provider = findDuplicateSyncProviderWasm(
     { providers },
     candidate,
     options?.excludeId,
   );
+  return provider
+    ? { kind: DuplicateSyncProviderKind.Duplicate, provider }
+    : { kind: DuplicateSyncProviderKind.Unique };
 }
 
 export async function saveAuthProviders(

@@ -264,7 +264,7 @@ describe('icloud-oauth', () => {
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
 
-    it('waits for CloudKit sign-in when setUpAuth returns undefined', async () => {
+    it('waits for CloudKit sign-in when setUpAuth only completes its effect', async () => {
       let resolveSignIn: (value: unknown) => void = () => {}
       const signInPromise = new Promise((resolve) => {
         resolveSignIn = resolve
@@ -665,7 +665,7 @@ describe('icloud-oauth', () => {
       const { resolveSignIn, whenUserSignsIn } =
         mockPendingCloudKitSignIn(setUpAuth)
 
-      await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
+      await prepareICloudSignInControl()
       const pending = requestPreparedICloudWebAuthToken({
         clickSignInControl: false,
       })
@@ -688,7 +688,7 @@ describe('icloud-oauth', () => {
       const { resolveSignIn, whenUserSignsIn } =
         mockPendingCloudKitSignIn(setUpAuth)
 
-      await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
+      await prepareICloudSignInControl()
       const pending = requestPreparedICloudWebAuthToken({
         clickSignInControl: false,
       })

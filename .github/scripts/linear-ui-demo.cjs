@@ -2,6 +2,11 @@ const crypto = require('node:crypto')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 
+const UiDemoIssueTransitionKind = Object.freeze({
+  Updated: 'updated',
+  IssueAbsent: 'issue-absent',
+})
+
 const LINEAR_GRAPHQL_URL = 'https://api.linear.app/graphql'
 const VIDEO_CONTENT_TYPE = 'video/webm'
 
@@ -275,15 +280,24 @@ async function syncUiDemoIssue({ apiKey, config, demoDir, pullRequest, client, m
   return issue
 }
 
-async function transitionUiDemoIssue({ apiKey, config, merged, prNumber, client }) {
+async function transitionUiDemoIssue({
+  apiKey,
+  config,
+  merged,
+  prNumber,
+  client,
+}) {
   const linear = client || new LinearApi(apiKey)
   const issueId = deterministicIssueId(config.repository, prNumber)
   const issue = await linear.issue(issueId)
-  if (!issue) return
+  if (!issue) return { kind: UiDemoIssueTransitionKind.IssueAbsent }
 
   const states = await linear.teamStates(config.teamId)
   const target = stateByType(states, merged ? 'completed' : 'canceled')
-  return linear.updateIssue(issueId, { stateId: target.id })
+  return {
+    kind: UiDemoIssueTransitionKind.Updated,
+    issue: await linear.updateIssue(issueId, { stateId: target.id }),
+  }
 }
 
 module.exports = {
@@ -298,4 +312,5 @@ module.exports = {
   stateByType,
   syncUiDemoIssue,
   transitionUiDemoIssue,
+  UiDemoIssueTransitionKind,
 }

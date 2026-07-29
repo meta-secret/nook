@@ -95,15 +95,30 @@ export function providerCapabilityLabelKey(
  * Keep the user's compatible selection, otherwise choose the first provider
  * accepted by Rust. Incompatible rows remain visible for explanation/removal.
  */
+export enum CompatibleProviderSelectionKind {
+  Selected = "selected",
+  Unavailable = "unavailable",
+}
+
+export type CompatibleProviderSelection =
+  | {
+      kind: CompatibleProviderSelectionKind.Selected;
+      provider: StorageProvider;
+    }
+  | { kind: CompatibleProviderSelectionKind.Unavailable };
+
 export function firstCompatibleProvider(
   providers: StorageProvider[],
   replicationType: ReplicationType,
   preferredId?: string,
-): StorageProvider | void {
+): CompatibleProviderSelection {
   const selectedId = wasmFirstCompatibleProviderId(
     { providers },
     replicationType,
     preferredId,
   );
-  return providers.find((provider) => provider.id === selectedId);
+  const provider = providers.find((candidate) => candidate.id === selectedId);
+  return provider
+    ? { kind: CompatibleProviderSelectionKind.Selected, provider }
+    : { kind: CompatibleProviderSelectionKind.Unavailable };
 }

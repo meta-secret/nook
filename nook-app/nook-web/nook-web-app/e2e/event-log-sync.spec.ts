@@ -68,15 +68,15 @@ test.describe('event-log sync then add', () => {
   }) => {
     const target = createSyncTarget('', 'nook-stale-file', 'file')
     const { stub } = target
-    expect(stub).toBeDefined()
+    if (!stub) throw new Error('expected the file sync stub')
 
     await installSyncRemote(page, target)
     await connectSyncGenesisDevice(page, target)
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
-    expect(stub!.getVaultYaml()).toBe('')
-    const eventFilesBeforeSave = stub!.getEventFileCount()
+    expect(stub.getVaultYaml()).toBe('')
+    const eventFilesBeforeSave = stub.getEventFileCount()
     expect(eventFilesBeforeSave).toBeGreaterThan(0)
 
     const staleVaultYaml =
