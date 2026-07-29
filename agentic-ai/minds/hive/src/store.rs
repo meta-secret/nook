@@ -59,6 +59,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool>;
@@ -98,6 +99,7 @@ mod tests {
     struct TestTask {
         definition: EnqueueTask,
         status: &'static str,
+        obsolete: bool,
         attempt_count: i64,
         lease_token: Option<LeaseToken>,
         lease_until: Option<Instant>,
@@ -137,6 +139,39 @@ mod tests {
             }
             false
         }
+
+        fn rearm_obsolete(tasks: &mut BTreeMap<String, TestTask>, task_id: &TaskId) -> bool {
+            let Some(task) = tasks.get(task_id.as_str()) else {
+                return false;
+            };
+            if task.status != "COMPLETED" || !task.obsolete {
+                return false;
+            }
+            let dependencies = task.definition.dependencies.clone();
+            for dependency in &dependencies {
+                Self::rearm_obsolete(tasks, dependency);
+            }
+            let status = if dependencies.iter().any(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "FAILED")
+            }) {
+                "FAILED"
+            } else if dependencies.iter().all(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "COMPLETED")
+            }) {
+                "READY"
+            } else {
+                "BLOCKED"
+            };
+            let task = tasks.get_mut(task_id.as_str()).expect("obsolete task");
+            task.status = status;
+            task.obsolete = false;
+            task.definition.max_attempts = task.attempt_count + 3;
+            true
+        }
     }
 
     #[async_trait]
@@ -151,18 +186,32 @@ mod tests {
 
         async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
             task.validate()?;
-            let tasks = self.tasks.lock().expect("store lock");
+            let mut tasks = self.tasks.lock().expect("store lock");
+            for dependency in &task.dependencies {
+                Self::rearm_obsolete(&mut tasks, dependency);
+            }
+            let failed = task.dependencies.iter().any(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "FAILED")
+            });
             let ready = task.dependencies.iter().all(|dependency| {
                 tasks
                     .get(dependency.as_str())
                     .is_some_and(|dependency| dependency.status == "COMPLETED")
             });
-            drop(tasks);
-            self.tasks.lock().expect("store lock").insert(
+            tasks.insert(
                 task.id.as_str().to_owned(),
                 TestTask {
                     definition: task.clone(),
-                    status: if ready { "READY" } else { "BLOCKED" },
+                    status: if failed {
+                        "FAILED"
+                    } else if ready {
+                        "READY"
+                    } else {
+                        "BLOCKED"
+                    },
+                    obsolete: false,
                     attempt_count: 0,
                     lease_token: None,
                     lease_until: None,
@@ -294,27 +343,49 @@ mod tests {
                 .filter(|(_, task)| task.status == "COMPLETED")
                 .map(|(id, _)| id.clone())
                 .collect::<Vec<_>>();
-            let Some(task) = tasks.values_mut().find(|task| {
+            let Some(task_id) = tasks.iter().find_map(|(id, task)| {
                 let lease_expired = task
                     .lease_until
                     .is_some_and(|lease| lease <= Instant::now());
-                (task.status == "READY" || (task.status == "RUNNING" && lease_expired))
+                ((task.status == "READY" || (task.status == "RUNNING" && lease_expired))
                     && task.attempt_count < task.definition.max_attempts
                     && task
                         .definition
                         .dependencies
                         .iter()
-                        .all(|dependency| completed.contains(&dependency.as_str().to_owned()))
+                        .all(|dependency| completed.contains(&dependency.as_str().to_owned())))
+                .then(|| id.clone())
             }) else {
                 return Ok(ClaimOutcome::NoTask);
             };
+            let active_owners = tasks
+                .iter()
+                .filter(|(id, owner)| {
+                    owner.definition.kind != "blocker"
+                        && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
+                        && Self::reaches(&tasks, id, &task_id)
+                })
+                .map(|(_, owner)| owner)
+                .collect::<Vec<_>>();
+            let owning_repairs = if active_owners
+                .iter()
+                .all(|owner| owner.definition.kind == "main-repair")
+            {
+                active_owners
+                    .iter()
+                    .map(|owner| owner.definition.id.clone())
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            let task = tasks.get_mut(&task_id).expect("claimable task");
             task.status = "RUNNING";
             task.attempt_count += 1;
             let lease_token = LeaseToken::new(Uuid::new_v4().to_string())?;
             task.lease_token = Some(lease_token.clone());
             task.lease_until =
                 Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
-            Ok(ClaimOutcome::Claimed(ClaimedTask {
+            Ok(ClaimOutcome::Claimed(Box::new(ClaimedTask {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
@@ -322,9 +393,10 @@ mod tests {
                 attempt_id: AttemptId::new(Uuid::new_v4().to_string())?,
                 attempt_number: task.attempt_count,
                 lease_token,
+                owning_repairs,
                 dependency_context: Vec::new(),
                 dependency_artifacts: Vec::new(),
-            }))
+            })))
         }
 
         async fn heartbeat(
@@ -367,15 +439,34 @@ mod tests {
             &self,
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
+            obsolete: bool,
             _summary: &str,
             _artifact: &CompletionArtifact,
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
+            let active_owners = tasks
+                .iter()
+                .filter(|(id, owner)| {
+                    owner.definition.kind != "blocker"
+                        && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
+                        && Self::reaches(&tasks, id, claimed.id.as_str())
+                })
+                .map(|(_, owner)| owner)
+                .collect::<Vec<_>>();
+            let retirement_guard_matches = !obsolete
+                || (!claimed.owning_repairs.is_empty()
+                    && active_owners.len() == claimed.owning_repairs.len()
+                    && active_owners.iter().all(|owner| {
+                        owner.definition.kind == "main-repair"
+                            && claimed.owning_repairs.contains(&owner.definition.id)
+                    }));
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
             let accepted = task.lease_token.as_ref() == Some(&claimed.lease_token)
-                && task.lease_until.is_some_and(|lease| lease > Instant::now());
+                && task.lease_until.is_some_and(|lease| lease > Instant::now())
+                && retirement_guard_matches;
             if accepted {
                 task.status = "COMPLETED";
+                task.obsolete = obsolete;
                 task.lease_token = None;
                 task.lease_until = None;
             }
@@ -447,25 +538,48 @@ mod tests {
         ) -> anyhow::Result<bool> {
             blocker.validate()?;
             let mut tasks = self.tasks.lock().expect("store lock");
-            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
-            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+            let lease_valid = tasks
+                .get(claimed.id.as_str())
+                .is_some_and(|task| task.lease_token.as_ref() == Some(&claimed.lease_token));
+            if !lease_valid {
                 return Ok(false);
             }
-            task.status = "BLOCKED";
+            let blocker_was_obsolete = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|existing| existing.status == "COMPLETED" && existing.obsolete);
+            if blocker_was_obsolete {
+                Self::rearm_obsolete(&mut tasks, &blocker.id);
+            } else if !tasks.contains_key(blocker.id.as_str()) {
+                tasks.insert(
+                    blocker.id.as_str().to_owned(),
+                    TestTask {
+                        definition: blocker.clone(),
+                        status: "READY",
+                        obsolete: false,
+                        attempt_count: 0,
+                        lease_token: None,
+                        lease_until: None,
+                    },
+                );
+            }
+            let blocker_completed = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|stored| stored.status == "COMPLETED");
+            let blocker_failed = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|stored| stored.status == "FAILED");
+            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
+            task.status = if blocker_completed {
+                "READY"
+            } else if blocker_failed {
+                "FAILED"
+            } else {
+                "BLOCKED"
+            };
             task.attempt_count -= 1;
             task.lease_token = None;
             task.lease_until = None;
             task.definition.dependencies.push(blocker.id.clone());
-            tasks.insert(
-                blocker.id.as_str().to_owned(),
-                TestTask {
-                    definition: blocker.clone(),
-                    status: "READY",
-                    attempt_count: 0,
-                    lease_token: None,
-                    lease_until: None,
-                },
-            );
             Ok(true)
         }
     }
@@ -519,6 +633,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn direct_dependency_rearms_an_obsolete_subtree() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let child = task("obsolete-child", Vec::new());
+        let parent = task("obsolete-parent", vec![child.id.clone()]);
+        store.enqueue(&child).await?;
+        store.enqueue(&parent).await?;
+        {
+            let mut tasks = store.tasks.lock().expect("store lock");
+            for retired in [&child.id, &parent.id] {
+                let task = tasks.get_mut(retired.as_str()).expect("retired task");
+                task.status = "COMPLETED";
+                task.obsolete = true;
+                task.attempt_count = 2;
+            }
+        }
+        store
+            .enqueue(&task("future", vec![parent.id.clone()]))
+            .await?;
+        let agent = AgentId::new("agent")?;
+
+        let rearmed_child = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(rearmed_child.id, child.id);
+        assert_eq!(rearmed_child.attempt_number, 3);
+        assert!(
+            store
+                .complete(
+                    &rearmed_child,
+                    &agent,
+                    false,
+                    "child repaired",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+        let rearmed_parent = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(rearmed_parent.id, parent.id);
+        assert_eq!(rearmed_parent.attempt_number, 3);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn rollout_release_does_not_consume_an_attempt() -> anyhow::Result<()> {
         let store = MemoryStore::default();
         store.enqueue(&task("task-1", Vec::new())).await?;
@@ -553,6 +708,7 @@ mod tests {
                 .complete(
                     &blocker_claim,
                     &agent,
+                    false,
                     "blocker fixed",
                     &CompletionArtifact::NotProduced
                 )
@@ -584,12 +740,24 @@ mod tests {
         );
         assert!(
             !store
-                .complete(&stale, &agent_a, "late", &CompletionArtifact::NotProduced)
+                .complete(
+                    &stale,
+                    &agent_a,
+                    false,
+                    "late",
+                    &CompletionArtifact::NotProduced
+                )
                 .await?
         );
         assert!(
             store
-                .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
+                .complete(
+                    &current,
+                    &agent_b,
+                    false,
+                    "done",
+                    &CompletionArtifact::NotProduced
+                )
                 .await?
         );
         Ok(())
@@ -702,6 +870,7 @@ mod tests {
                 .complete(
                     &completed,
                     &agent,
+                    false,
                     "fixed",
                     &CompletionArtifact::NotProduced
                 )

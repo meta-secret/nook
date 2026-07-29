@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::delivery::verify_main_repair_delivery;
+use crate::delivery::{verify_main_repair_delivery, verify_main_repair_merge_and_main};
 use crate::model::{
     ActivityLease, AgentId, Artifact, BlockerRequest, ClaimOutcome, ClaimedTask,
     CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
@@ -238,6 +238,21 @@ impl<S: TaskStore> Worker<S> {
                     {
                         return Ok(blocked_disposition(task, summary, blocker));
                     }
+                    if result.is_obsolete() {
+                        anyhow::ensure!(
+                            task.kind == "blocker",
+                            "only a blocker task may retire as obsolete"
+                        );
+                        anyhow::ensure!(
+                            !task.owning_repairs.is_empty(),
+                            "obsolete blocker retirement requires active owning Main repairs"
+                        );
+                        anyhow::ensure!(
+                            result.changed_files().is_empty(),
+                            "obsolete blocker retirement cannot report changed files"
+                        );
+                        verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
+                    }
                     if task.kind == "main-repair" {
                         verify_main_repair_delivery(
                             &repository,
@@ -261,9 +276,16 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
+                    if result.is_obsolete() {
+                        anyhow::ensure!(
+                            matches!(artifact, CompletionArtifact::NotProduced),
+                            "obsolete blocker retirement cannot persist a patch artifact"
+                        );
+                    }
                     Ok::<TaskDisposition, anyhow::Error>(TaskDisposition::Completed {
                         summary,
                         artifact,
+                        obsolete: result.is_obsolete(),
                     })
                 }
                 .await;
@@ -272,12 +294,22 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .context("task activity persistence panicked")??;
                 let terminal_result: anyhow::Result<()> = match task_result? {
-                    TaskDisposition::Completed { summary, artifact } => {
-                        if !self
+                    TaskDisposition::Completed {
+                        summary,
+                        artifact,
+                        obsolete,
+                    } => {
+                        let accepted = self
                             .store
-                            .complete(task, &self.config.agent_id, &summary, &artifact)
-                            .await?
-                        {
+                            .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
+                            .await?;
+                        if !accepted && obsolete {
+                            if !self.store.release(task, &self.config.agent_id).await? {
+                                return Err(WorkerCancellationRequested.into());
+                            }
+                            return Err(WorkerBlocked.into());
+                        }
+                        if !accepted {
                             return Err(WorkerCancellationRequested.into());
                         }
                         Ok(())
@@ -388,6 +420,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
+        obsolete: bool,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -836,6 +869,21 @@ async fn persistable_patch(
 }
 
 fn task_prompt(task: &ClaimedTask) -> String {
+    let owning_repairs = if task.owning_repairs.is_empty() {
+        "No active owning Main repairs.".to_owned()
+    } else {
+        task.owning_repairs
+            .iter()
+            .map(|owner| {
+                format!(
+                    "- {} (delivery branch `{}`)",
+                    owner,
+                    repair_branch_name(owner.as_str())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
     let dependencies = if task.dependency_context.is_empty() {
         "No dependency results.".to_owned()
     } else {
@@ -869,10 +917,18 @@ fn task_prompt(task: &ClaimedTask) -> String {
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
          belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Never report this task's \
-         own id as its blocker and never create a duplicate repair PR. Report blocked only for a \
-         genuinely separate prerequisite, using a distinct stable blocker id and an actionable \
-         prompt that another worker can complete."
+         replacement exact-head run, and follow it to a terminal result. Before doing work or \
+         reporting another blocker, inspect every active owning Main repair listed below. Only when \
+         every listed repair has already been merged and has a successful Main run containing its \
+         merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
+         changes, and explain that it no longer blocks delivery, even when the requested capability \
+         remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
+         set `obsolete` to false. When \
+         no owning repair is listed, or any listed repair is still live, do not use this \
+         obsolescence rule. Never extend an obsolete blocker chain. Never report this task's own id \
+         as its blocker and never create a duplicate repair PR. Report blocked only for a genuinely \
+         separate prerequisite, using a distinct stable blocker id and an actionable prompt that \
+         another worker can complete."
             .to_owned()
     } else {
         String::new()
@@ -883,8 +939,15 @@ fn task_prompt(task: &ClaimedTask) -> String {
          Complete the task and return the required structured terminal result.\n\n\
          Task kind: {}\n\
          Task:\n{}\n\n\
+         Active owning Main repairs:\n{}\n\n\
          Completed dependency context:\n{}{}",
-        task.attempt_number, task.id, task.kind, task.prompt, dependencies, delivery
+        task.attempt_number,
+        task.id,
+        task.kind,
+        task.prompt,
+        owning_repairs,
+        dependencies,
+        delivery
     )
 }
 
@@ -900,6 +963,32 @@ fn repair_branch_name(task_id: &str) -> String {
         })
         .collect::<String>();
     format!("codex/hive-{}", slug.trim_matches('-'))
+}
+
+async fn verify_obsolete_owner_deliveries(
+    repository: &Path,
+    owning_repairs: &[crate::model::TaskId],
+) -> anyhow::Result<()> {
+    for (owner, branch) in obsolete_owner_delivery_targets(owning_repairs) {
+        verify_main_repair_merge_and_main(repository, &branch)
+            .await
+            .with_context(|| {
+                format!(
+                    "obsolete blocker retirement requires a merged repair and green Main for owner \
+                     {owner}"
+                )
+            })?;
+    }
+    Ok(())
+}
+
+fn obsolete_owner_delivery_targets(
+    owning_repairs: &[crate::model::TaskId],
+) -> Vec<(crate::model::TaskId, String)> {
+    owning_repairs
+        .iter()
+        .map(|owner| (owner.clone(), repair_branch_name(owner.as_str())))
+        .collect()
 }
 
 fn bounded(value: &str) -> String {
@@ -930,8 +1019,8 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        establish_worker_lifecycle, persistable_patch, prepare_workspace, task_prompt,
-        validate_dependency_artifacts,
+        establish_worker_lifecycle, obsolete_owner_delivery_targets, persistable_patch,
+        prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -959,6 +1048,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -985,6 +1075,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: vec![TaskId::new("main-failure-abc-run-42-attempt-1")?],
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -993,6 +1084,16 @@ mod tests {
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("Never report this task's own id as its blocker"));
+        assert!(prompt.contains("this prerequisite obsolete"));
+        assert!(prompt.contains("Never extend an obsolete blocker chain"));
+        assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
+        assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
+        let targets = obsolete_owner_delivery_targets(&[
+            task.owning_repairs[0].clone(),
+            TaskId::new("main-failure-def-run-43-attempt-1")?,
+        ]);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
         Ok(())
     }
 
@@ -1023,6 +1124,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-recovery")?,
             attempt_number: 2,
             lease_token: LeaseToken::new("lease-recovery")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1129,6 +1231,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-1")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1136,6 +1239,7 @@ mod tests {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         let artifact =
@@ -1190,6 +1294,7 @@ mod tests {
             attempt_id: AttemptId::new("resumed-attempt")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("resumed-lease")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1197,6 +1302,7 @@ mod tests {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         assert!(matches!(
@@ -1319,6 +1425,7 @@ mod tests {
             attempt_id: AttemptId::new("attempt-2")?,
             attempt_number: 1,
             lease_token: LeaseToken::new("lease-2")?,
+            owning_repairs: Vec::new(),
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
@@ -1326,6 +1433,7 @@ mod tests {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {

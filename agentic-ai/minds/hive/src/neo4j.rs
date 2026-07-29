@@ -1,6 +1,6 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use neo4rs::{ConfigBuilder, Graph, Row, query};
+use neo4rs::{ConfigBuilder, Graph, Row, Txn, query};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ const CONSTRAINTS: &[&str] = &[
     "CREATE INDEX hive_task_claim IF NOT EXISTS FOR (node:Task) ON (node.status, node.priority, node.created_at)",
     "CREATE INDEX hive_activity_timeline IF NOT EXISTS FOR (node:TaskActivity) ON (node.created_at)",
 ];
-const LATEST_SCHEMA_VERSION: i64 = 7;
+const LATEST_SCHEMA_VERSION: i64 = 8;
 #[derive(Clone)]
 pub struct Neo4jTaskStore {
     pub(crate) graph: Graph,
@@ -57,6 +57,89 @@ impl Neo4jTaskStore {
             .await
             .context("failed to connect to Neo4j")?;
         Ok(Self { graph })
+    }
+
+    async fn rearm_obsolete_subtree(
+        transaction: &mut Txn,
+        root_id: &TaskId,
+    ) -> anyhow::Result<bool> {
+        let mut root_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $root_id})
+                     RETURN coalesce(root.obsolete, false) AS obsolete",
+                )
+                .param("root_id", root_id.as_str()),
+            )
+            .await?;
+        let root_was_obsolete = match root_rows.next(transaction.handle()).await? {
+            Some(row) => row.get::<bool>("obsolete")?,
+            None => false,
+        };
+        drop(root_rows);
+        if !root_was_obsolete {
+            return Ok(false);
+        }
+        let mut rows = transaction
+            .execute(
+                query(
+                    "MATCH path =
+                       (root:Task {id: $root_id})-[:DEPENDS_ON*0..]->(retired:Task)
+                     WHERE retired.obsolete = true
+                     WITH retired, max(length(path)) AS depth
+                     RETURN retired.id AS id, depth
+                     ORDER BY depth DESC",
+                )
+                .param("root_id", root_id.as_str()),
+            )
+            .await?;
+        let mut retired_ids = Vec::new();
+        while let Some(row) = rows.next(transaction.handle()).await? {
+            retired_ids.push(TaskId::new(row.get::<String>("id")?)?);
+        }
+        drop(rows);
+        for retired_id in retired_ids {
+            transaction
+                .run(
+                    query(
+                        "MATCH (retired:Task {id: $retired_id})
+                         WHERE retired.obsolete = true
+                         OPTIONAL MATCH (retired)-[:DEPENDS_ON]->(dependency:Task)
+                         WITH retired, count(dependency) AS dependency_count,
+                              count(
+                                CASE WHEN dependency.status = 'COMPLETED' THEN 1 END
+                              ) AS completed_count,
+                              count(
+                                CASE WHEN dependency.status = 'FAILED' THEN 1 END
+                              ) AS failed_count
+                         SET retired.status = CASE
+                               WHEN failed_count > 0 THEN 'FAILED'
+                               WHEN dependency_count = completed_count THEN 'READY'
+                               ELSE 'BLOCKED'
+                             END,
+                             retired.obsolete = false,
+                             retired.max_attempts =
+                               coalesce(retired.attempt_count, 0) + 3,
+                             retired.result_summary = null,
+                             retired.blocked_reason = CASE
+                               WHEN failed_count = 0
+                                 AND dependency_count <> completed_count
+                                 THEN 'obsolete task has incomplete prerequisites'
+                               ELSE null
+                             END,
+                             retired.failure_reason = CASE
+                               WHEN failed_count > 0
+                                 THEN 'dependency failed before obsolete task rearm'
+                               ELSE null
+                             END,
+                             retired.updated_at = timestamp(),
+                             retired.version = coalesce(retired.version, 0) + 1",
+                    )
+                    .param("retired_id", retired_id.as_str()),
+                )
+                .await?;
+        }
+        Ok(root_was_obsolete)
     }
 
     pub async fn queue_status(&self, limit: i64) -> anyhow::Result<Vec<QueueTaskStatus>> {
@@ -126,8 +209,9 @@ impl Neo4jTaskStore {
                 digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
             })
             .context("release id must be a sha256 digest")?;
-        let mut rows = self
-            .graph
+        let release_id = format!("sha256:{digest}");
+        let mut transaction = self.graph.start_txn().await?;
+        let mut eligible_rows = transaction
             .execute(
                 query(
                     "MATCH (root:Task {id: $id})
@@ -138,6 +222,63 @@ impl Neo4jTaskStore {
                          MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
                                <-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
                        }
+                     RETURN root.id AS id",
+                )
+                .param("id", task_id.as_str())
+                .param("release_id", release_id.as_str()),
+            )
+            .await?;
+        let eligible = eligible_rows.next(transaction.handle()).await?.is_some();
+        drop(eligible_rows);
+        if !eligible {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+        let mut lock_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
+                     WITH DISTINCT member
+                     ORDER BY member.id
+                     SET member.version = coalesce(member.version, 0) + 1
+                     RETURN count(member) AS locked",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        anyhow::ensure!(
+            lock_rows.next(transaction.handle()).await?.is_some(),
+            "retryable Main repair graph disappeared while acquiring revival locks"
+        );
+        drop(lock_rows);
+        let mut obsolete_rows = transaction
+            .execute(
+                query(
+                    "MATCH path =
+                       (root:Task {id: $id})-[:DEPENDS_ON*1..]->(retired:Task)
+                     WHERE retired.obsolete = true
+                     WITH retired, min(length(path)) AS depth
+                     RETURN retired.id AS id
+                     ORDER BY depth ASC",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        let mut obsolete_ids = Vec::new();
+        while let Some(row) = obsolete_rows.next(transaction.handle()).await? {
+            obsolete_ids.push(TaskId::new(row.get::<String>("id")?)?);
+        }
+        drop(obsolete_rows);
+        for obsolete_id in &obsolete_ids {
+            Self::rearm_obsolete_subtree(&mut transaction, obsolete_id).await?;
+        }
+        let mut rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})
+                     WHERE root.kind = 'main-repair'
+                       AND root.status = 'FAILED'
+                       AND coalesce(root.last_retry_release, '') <> $release_id
                      MATCH (root)-[:DEPENDS_ON*0..]->(member:Task)
                      WITH root, collect(DISTINCT member) AS members
                      UNWIND members AS member
@@ -162,10 +303,17 @@ impl Neo4jTaskStore {
                      RETURN DISTINCT root.id AS id",
                 )
                 .param("id", task_id.as_str())
-                .param("release_id", format!("sha256:{digest}")),
+                .param("release_id", release_id),
             )
             .await?;
-        Ok(rows.next().await?.is_some())
+        let retried = rows.next(transaction.handle()).await?.is_some();
+        drop(rows);
+        if retried {
+            transaction.commit().await?;
+        } else {
+            transaction.rollback().await?;
+        }
+        Ok(retried)
     }
 
     fn claimed_task(
@@ -185,6 +333,12 @@ impl Neo4jTaskStore {
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let owning_repair_ids: Vec<String> = row.get("owning_repair_ids")?;
+        let owning_repairs = owning_repair_ids
+            .into_iter()
+            .map(TaskId::new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::msg)?;
         let artifact_ids: Vec<String> = row.get("artifact_ids")?;
         let artifact_kinds: Vec<String> = row.get("artifact_kinds")?;
         let artifact_uris: Vec<String> = row.get("artifact_uris")?;
@@ -213,6 +367,7 @@ impl Neo4jTaskStore {
             attempt_number: row.get("attempt_number")?,
             attempt_id,
             lease_token,
+            owning_repairs,
             dependency_context,
             dependency_artifacts,
         })
@@ -293,6 +448,24 @@ impl TaskStore for Neo4jTaskStore {
                 .await
                 .context("failed to backfill schema-7 latest activity state")?;
         }
+        if installed_version < 8 {
+            self.graph
+                .run(query(
+                    "MATCH (task:Task)
+                     WHERE task.obsolete IS NULL
+                     SET task.obsolete = false",
+                ))
+                .await
+                .context("failed to backfill schema-8 task retirement state")?;
+            self.graph
+                .run(query(
+                    "MATCH (attempt:Attempt)
+                     WHERE attempt.obsolete IS NULL
+                     SET attempt.obsolete = false",
+                ))
+                .await
+                .context("failed to backfill schema-8 attempt retirement state")?;
+        }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
@@ -340,6 +513,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.attempt_count = 0,
                                    task.last_retry_release = '',
                                    task.version = 0,
+                                   task.obsolete = false,
                                    task.enqueue_token = $enqueue_token,
                                    task.kind = $kind,
                                    task.trigger_kind = $trigger_kind,
@@ -347,6 +521,7 @@ impl TaskStore for Neo4jTaskStore {
                                    task.source_commit = $source_commit,
                                    task.priority = $priority,
                                    task.max_attempts = $max_attempts,
+                                   task.status = 'BLOCKED',
                                    task.updated_at = timestamp()
                      RETURN task.enqueue_token = $enqueue_token AS created",
                 )
@@ -376,6 +551,7 @@ impl TaskStore for Neo4jTaskStore {
                         "MATCH (task:Task {id: $id}), (dependency:Task {id: $dependency})
                          WHERE dependency.source_commit = task.source_commit
                          MERGE (task)-[:DEPENDS_ON]->(dependency)
+                         SET dependency.version = coalesce(dependency.version, 0) + 1
                          RETURN dependency.id AS id",
                     )
                     .param("id", task.id.as_str())
@@ -389,6 +565,8 @@ impl TaskStore for Neo4jTaskStore {
                     "dependency {dependency} does not exist or targets a different source commit"
                 ));
             }
+            drop(rows);
+            Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
         }
 
         transaction
@@ -697,6 +875,26 @@ impl TaskStore for Neo4jTaskStore {
                           [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
                           [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
                           [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH DISTINCT task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents, active_owner
+                     ORDER BY active_owner.id
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          collect(active_owner) AS active_owners
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          CASE
+                            WHEN size(active_owners) > 0
+                              AND all(owner IN active_owners WHERE owner.kind = 'main-repair')
+                            THEN [owner IN active_owners | owner.id]
+                            ELSE []
+                          END AS owning_repair_ids
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
                      WHERE expired_attempt.lease_token = task.lease_token
                      OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
@@ -716,12 +914,13 @@ impl TaskStore for Neo4jTaskStore {
                        id: $attempt_id,
                        number: task.attempt_count,
                        status: 'RUNNING',
+                       obsolete: false,
                        started_at: timestamp(),
                        lease_token: $lease_token
                      })
                      WITH task, attempt, dependency_ids, dependency_summaries,
                           artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents
+                          artifact_contents, owning_repair_ids
                      MATCH (agent:Agent {id: $agent_id})
                      MERGE (agent)-[:EXECUTED]->(attempt)
                      MERGE (attempt)-[:FOR_TASK]->(task)
@@ -731,6 +930,7 @@ impl TaskStore for Neo4jTaskStore {
                             task.prompt AS prompt,
                             task.source_commit AS source_commit,
                             attempt.number AS attempt_number,
+                            owning_repair_ids,
                             dependency_ids,
                             dependency_summaries,
                             artifact_ids,
@@ -752,7 +952,7 @@ impl TaskStore for Neo4jTaskStore {
                 };
                 let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
                 transaction.commit().await?;
-                Ok(ClaimOutcome::Claimed(claimed))
+                Ok(ClaimOutcome::Claimed(Box::new(claimed)))
             }
             .await;
 
@@ -888,6 +1088,7 @@ impl TaskStore for Neo4jTaskStore {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool> {
@@ -901,13 +1102,30 @@ impl TaskStore for Neo4jTaskStore {
                        AND task.lease_token = $lease_token
                        AND task.lease_until > timestamp()
                        AND attempt.lease_token = $lease_token
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH task, attempt, collect(DISTINCT active_owner) AS active_owners
+                     WHERE NOT $obsolete
+                        OR (
+                          size($owning_repair_ids) > 0
+                          AND
+                          size(active_owners) = size($owning_repair_ids)
+                          AND all(
+                            owner IN active_owners
+                            WHERE owner.kind = 'main-repair'
+                              AND owner.id IN $owning_repair_ids
+                          )
+                        )
                      SET task.status = 'COMPLETED',
+                         task.obsolete = $obsolete,
                          task.result_summary = $summary,
                          task.updated_at = timestamp(),
                          task.lease_owner = null,
                          task.lease_token = null,
                          task.lease_until = null,
                          attempt.status = 'COMPLETED',
+                         attempt.obsolete = $obsolete,
                          attempt.summary = $summary,
                          attempt.completed_at = timestamp()
                      WITH task
@@ -919,6 +1137,14 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
+                .param("obsolete", obsolete)
+                .param(
+                    "owning_repair_ids",
+                    task.owning_repairs
+                        .iter()
+                        .map(|owner| owner.as_str())
+                        .collect::<Vec<_>>(),
+                )
                 .param("summary", summary),
             )
             .await?;
@@ -1049,11 +1275,12 @@ impl TaskStore for Neo4jTaskStore {
         if !blocker.dependencies.is_empty() {
             anyhow::bail!("a newly discovered blocker must not have undeclared dependencies");
         }
-        let mut rows = self
-            .graph
+        let mut transaction = self.graph.start_txn().await?;
+        let mut edge_rows = transaction
             .execute(
                 query(
-                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                    "MATCH (task:Task {id: $task_id})
+                       <-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
                      WHERE task.status = 'RUNNING'
                        AND task.lease_owner = $agent_id
                        AND task.lease_token = $lease_token
@@ -1070,22 +1297,62 @@ impl TaskStore for Neo4jTaskStore {
                                    blocker.priority = $blocker_priority,
                                    blocker.max_attempts = $blocker_max_attempts,
                                    blocker.status = 'READY',
+                                   blocker.obsolete = false,
                                    blocker.updated_at = timestamp()
-                     WITH task, attempt, blocker
+                     WITH task, blocker
                      WHERE blocker.source_commit = $source_commit
                        AND blocker.id <> task.id
                        AND NOT EXISTS {
                          MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
                        }
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
+                     SET blocker.version = coalesce(blocker.version, 0) + 1
+                     RETURN blocker.id AS id",
+                )
+                .param("task_id", task.id.as_str())
+                .param("attempt_id", task.attempt_id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str())
+                .param("blocker_id", blocker.id.as_str())
+                .param("blocker_kind", blocker.kind.as_str())
+                .param("blocker_trigger_kind", blocker.trigger.as_str())
+                .param("blocker_prompt", blocker.prompt.as_str())
+                .param("source_commit", blocker.source_commit.as_str())
+                .param("blocker_priority", blocker.priority)
+                .param("blocker_max_attempts", blocker.max_attempts),
+            )
+            .await?;
+        let edge_attached = edge_rows.next(transaction.handle()).await?.is_some();
+        drop(edge_rows);
+        if !edge_attached {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+        let blocker_was_obsolete =
+            Self::rearm_obsolete_subtree(&mut transaction, &blocker.id).await?;
+        let mut rows = transaction
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})-[:DEPENDS_ON]->
+                       (blocker:Task {id: $blocker_id})
+                     MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                     WHERE task.status = 'RUNNING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND task.lease_until > timestamp()
+                       AND attempt.lease_token = $lease_token
+                     WITH task, attempt, blocker,
+                          $blocker_was_obsolete AS blocker_was_obsolete
                      SET task.status = CASE
-                             WHEN blocker.status = 'COMPLETED' THEN 'READY'
                              WHEN blocker.status = 'FAILED' THEN 'FAILED'
+                             WHEN blocker_was_obsolete THEN 'BLOCKED'
+                             WHEN blocker.status = 'COMPLETED' THEN 'READY'
                              ELSE 'BLOCKED'
                          END,
                          task.attempt_count = task.attempt_count - 1,
                          task.blocked_reason = CASE
-                           WHEN blocker.status = 'COMPLETED' THEN null
+                           WHEN NOT blocker_was_obsolete
+                             AND blocker.status = 'COMPLETED' THEN null
                            ELSE $reason
                          END,
                          task.failure_reason = CASE
@@ -1122,15 +1389,16 @@ impl TaskStore for Neo4jTaskStore {
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
                 .param("blocker_id", blocker.id.as_str())
-                .param("blocker_kind", blocker.kind.as_str())
-                .param("blocker_trigger_kind", blocker.trigger.as_str())
-                .param("blocker_prompt", blocker.prompt.as_str())
-                .param("source_commit", blocker.source_commit.as_str())
-                .param("blocker_priority", blocker.priority)
-                .param("blocker_max_attempts", blocker.max_attempts)
+                .param("blocker_was_obsolete", blocker_was_obsolete)
                 .param("reason", reason),
             )
             .await?;
-        Ok(rows.next().await?.is_some())
+        let accepted = rows.next(transaction.handle()).await?.is_some();
+        if accepted {
+            transaction.commit().await?;
+        } else {
+            transaction.rollback().await?;
+        }
+        Ok(accepted)
     }
 }
