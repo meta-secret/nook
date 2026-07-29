@@ -237,7 +237,7 @@ mod tests {
                 .as_ref()
                 .ok_or_else(|| std::io::Error::other("provider OAuth fixture must exist"))?
                 .access_token,
-            "member-secret-token"
+            crate::StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
         );
         Ok(())
     }

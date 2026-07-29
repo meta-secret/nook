@@ -203,16 +203,18 @@ mod tests {
         let pat = "github_pat_11AAAAbbbbCCCC";
         let mut snapshot = github_snapshot(pat);
         seal_provider_credentials(&identity, &mut snapshot)?;
-        let stored = snapshot.providers[0]
-            .github_pat
-            .as_ref()
-            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
+        let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
+            return Err(std::io::Error::other("sealed GitHub PAT must be present").into());
+        };
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
         open_provider_credentials(&identity, &mut opened)?;
-        assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        assert_eq!(
+            opened.providers[0].github_pat,
+            StoredGithubPat::Token(pat.to_owned())
+        );
         Ok(())
     }
 
@@ -227,21 +229,16 @@ mod tests {
             .oauth_file
             .as_ref()
             .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
-        assert!(is_sealed_credential(&oauth.access_token));
-        assert!(
-            oauth
-                .refresh_token
-                .as_ref()
-                .is_some_and(|value| is_sealed_credential(value))
-        );
-        assert!(!oauth.access_token.contains(access));
-        assert!(
-            !oauth
-                .refresh_token
-                .as_ref()
-                .ok_or_else(|| std::io::Error::other("sealed refresh token must exist"))?
-                .contains(refresh)
-        );
+        let StoredOAuthAccessCredential::AccessToken(stored_access) = &oauth.access_token else {
+            return Err(std::io::Error::other("sealed access token must be present").into());
+        };
+        let StoredOAuthRefreshCredential::Token(stored_refresh) = &oauth.refresh_token else {
+            return Err(std::io::Error::other("sealed refresh token must be present").into());
+        };
+        assert!(is_sealed_credential(stored_access));
+        assert!(is_sealed_credential(stored_refresh));
+        assert!(!stored_access.contains(access));
+        assert!(!stored_refresh.contains(refresh));
 
         let mut opened = snapshot;
         open_provider_credentials(&identity, &mut opened)?;
@@ -249,8 +246,14 @@ mod tests {
             .oauth_file
             .as_ref()
             .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
-        assert_eq!(opened_oauth.access_token, access);
-        assert_eq!(opened_oauth.refresh_token.as_deref(), Some(refresh));
+        assert_eq!(
+            opened_oauth.access_token,
+            StoredOAuthAccessCredential::AccessToken(access.to_owned())
+        );
+        assert_eq!(
+            opened_oauth.refresh_token,
+            StoredOAuthRefreshCredential::Token(refresh.to_owned())
+        );
         Ok(())
     }
 
@@ -297,7 +300,10 @@ mod tests {
             .oauth_file
             .as_mut()
             .ok_or_else(|| std::io::Error::other("test as_mut value must exist"))?;
-        seal_required(&identity, &mut oauth.access_token)?;
+        let StoredOAuthAccessCredential::AccessToken(access_token) = &mut oauth.access_token else {
+            return Err(std::io::Error::other("plaintext access token must be present").into());
+        };
+        seal_credential(&identity, access_token)?;
         let sealed = snapshot.clone();
 
         assert!(matches!(
@@ -314,16 +320,18 @@ mod tests {
         let pat = "github_pat_11EXTENSIONgrant";
         let mut snapshot = github_snapshot(pat);
         seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)?;
-        let stored = snapshot.providers[0]
-            .github_pat
-            .as_ref()
-            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
+        let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
+            return Err(std::io::Error::other("sealed GitHub PAT must be present").into());
+        };
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
 
         let mut opened = snapshot;
         open_provider_credentials(&extension, &mut opened)?;
-        assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
+        assert_eq!(
+            opened.providers[0].github_pat,
+            StoredGithubPat::Token(pat.to_owned())
+        );
         Ok(())
     }
 

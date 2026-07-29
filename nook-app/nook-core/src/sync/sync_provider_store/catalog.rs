@@ -353,6 +353,7 @@ mod tests {
         AuthProvidersSnapshotData, DEFAULT_DRIVE_BACKUP_NAME, GoogleDriveMode,
         LocalFolderConfigData, OAuthFileConfigData, OauthFilePreset, ProviderLabelLabels,
         ProviderStorageDetailLabels, ProviderSyncCheckpoint, StorageProviderData,
+        StorageProviderType,
     };
 
     use super::{
@@ -631,7 +632,7 @@ mod tests {
             ensure_local_provider_row(&snapshot, None, "local-1", "2026-06-24T00:00:00.000Z");
         assert!(changed);
         assert_eq!(next.providers.len(), 2);
-        assert_eq!(next.providers[0].provider_type, "local");
+        assert_eq!(next.providers[0].provider_type, StorageProviderType::Local);
         assert_eq!(next.providers[0].label, "This device");
 
         let existing = AuthProvidersSnapshotData {

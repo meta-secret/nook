@@ -174,12 +174,21 @@ mod tests {
         };
         let switched = set_google_drive_provider_mode(&config, GoogleDriveMode::Shared);
         assert_eq!(switched.drive_mode, GoogleDriveMode::Shared);
-        assert!(switched.access_token.is_empty());
-        assert_eq!(switched.refresh_token, None);
-        assert_eq!(switched.expires_at, None);
-        assert_eq!(switched.account_email, None);
-        assert_eq!(switched.file_id, None);
-        assert_eq!(switched.folder_id, None);
+        assert_eq!(
+            switched.access_token,
+            crate::StoredOAuthAccessCredential::SignedOut
+        );
+        assert_eq!(
+            switched.refresh_token,
+            crate::StoredOAuthRefreshCredential::NotIssued
+        );
+        assert_eq!(switched.expires_at, crate::StoredOAuthTokenExpiry::Unknown);
+        assert_eq!(
+            switched.account_email,
+            crate::StoredOAuthAccountIdentity::Unknown
+        );
+        assert_eq!(switched.file_id, crate::StoredOAuthRemoteFileId::Unresolved);
+        assert_eq!(switched.folder_id, crate::StoredGoogleDriveFolder::Root);
         assert_eq!(switched.file_name.as_deref(), Some("nook-events"));
     }
 
@@ -202,7 +211,10 @@ mod tests {
             "2026-07-20T00:00:00Z",
             Some(&google_existing),
         );
-        assert_eq!(google.access_token, "new-google-token");
+        assert_eq!(
+            google.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken("new-google-token".to_owned())
+        );
         assert_eq!(google.expires_at.as_deref(), Some("2026-07-20T00:00:00Z"));
         assert_eq!(google.drive_mode, GoogleDriveMode::Shared);
         assert_eq!(google.folder_id.as_deref(), Some("folder"));
@@ -227,7 +239,10 @@ mod tests {
             Some("new@example.com"),
             Some(&icloud_existing),
         );
-        assert_eq!(icloud.access_token, "new-icloud-token");
+        assert_eq!(
+            icloud.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken("new-icloud-token".to_owned())
+        );
         assert_eq!(icloud.account_email.as_deref(), Some("new@example.com"));
         assert_eq!(icloud.icloud_mode, ICloudMode::Shared);
         assert_eq!(
@@ -235,7 +250,7 @@ mod tests {
             icloud_existing.icloud_share_target
         );
         assert_eq!(icloud.drive_mode, GoogleDriveMode::Private);
-        assert!(icloud.folder_id.is_none());
+        assert_eq!(icloud.folder_id, crate::StoredGoogleDriveFolder::Root);
     }
 
     #[test]
@@ -256,8 +271,11 @@ mod tests {
         )?;
         assert_eq!(bound.drive_mode, GoogleDriveMode::Shared);
         assert_eq!(bound.folder_id.as_deref(), Some("folder-team"));
-        assert_eq!(bound.file_id, None);
-        assert_eq!(bound.access_token, "shared-token");
+        assert_eq!(bound.file_id, crate::StoredOAuthRemoteFileId::Unresolved);
+        assert_eq!(
+            bound.access_token,
+            crate::StoredOAuthAccessCredential::AccessToken("shared-token".to_owned())
+        );
         assert_eq!(bound.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(bound.file_name.as_deref(), Some("nook-events"));
         Ok(())
