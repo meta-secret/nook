@@ -743,14 +743,17 @@ mod wasm_tests {
     use super::*;
     use wasm_bindgen_test::*;
 
-    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsValue> {
-        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))?.unchecked_into())
+    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(wasm_bindgen::JsError::from)?
+            .unchecked_into())
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsValue> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))?
+    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(wasm_bindgen::JsError::from)?
             .as_string()
-            .ok_or_else(|| wasm_bindgen::JsValue::from_str("field is not a string"))
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
     }
 
     fn assert_uint8_array(value: &js_sys::Object, expected_len: u32) {
@@ -761,9 +764,8 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn creation_options_serialize_webauthn_bytes_as_uint8_arrays()
-    -> Result<(), wasm_bindgen::JsValue> {
-        let options = creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32])
-            .map_err(wasm_bindgen::JsValue::from)?;
+    -> Result<(), wasm_bindgen::JsError> {
+        let options = creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32])?;
         let public_key = get(&options, "publicKey")?;
         let user = get(&public_key, "user")?;
         let extensions = get(&public_key, "extensions")?;
@@ -782,10 +784,9 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn request_options_serialize_webauthn_bytes_as_uint8_arrays()
-    -> Result<(), wasm_bindgen::JsValue> {
+    -> Result<(), wasm_bindgen::JsError> {
         let credential_id = [7u8; 32];
-        let options = request_options("localhost", &credential_id, &[9; 32])
-            .map_err(wasm_bindgen::JsValue::from)?;
+        let options = request_options("localhost", &credential_id, &[9; 32])?;
         let public_key = get(&options, "publicKey")?;
         let credentials: js_sys::Array = get(&public_key, "allowCredentials")?.unchecked_into();
         let first_credential: js_sys::Object = credentials.get(0).unchecked_into();
@@ -802,8 +803,8 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn recovery_options_serialize_webauthn_bytes_as_uint8_arrays()
-    -> Result<(), wasm_bindgen::JsValue> {
-        let options = recovery_options("localhost").map_err(wasm_bindgen::JsValue::from)?;
+    -> Result<(), wasm_bindgen::JsError> {
+        let options = recovery_options("localhost")?;
         let public_key = get(&options, "publicKey")?;
         let extensions = get(&public_key, "extensions")?;
         let prf = get(&extensions, "prf")?;

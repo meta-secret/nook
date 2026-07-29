@@ -603,7 +603,7 @@ mod wasm_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn extension_pairing_state_round_trips_as_a_plain_object() -> Result<(), wasm_bindgen::JsValue>
+    fn extension_pairing_state_round_trips_as_a_plain_object() -> Result<(), wasm_bindgen::JsError>
     {
         let key = "nook:extension-pairing-grant:store-test";
         let input = serde_json::json!({
@@ -627,66 +627,56 @@ mod wasm_tests {
             &input,
             &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
         )
-        .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
         .unchecked_into::<js_sys::Object>();
-        let state =
-            NookExtensionPairingState::from_object(&input).map_err(wasm_bindgen::JsValue::from)?;
-        let output = state.to_object().map_err(wasm_bindgen::JsValue::from)?;
+        let state = NookExtensionPairingState::from_object(&input)?;
+        let output = state.to_object()?;
 
-        assert!(js_sys::Reflect::has(&output, &key.into())?);
+        assert!(js_sys::Reflect::has(&output, &key.into()).map_err(wasm_bindgen::JsError::from)?);
         assert!(!output.is_instance_of::<js_sys::Map>());
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsValue> {
+    fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
                 Some(nook_core::OauthFilePreset::GoogleDrive),
-            )
-            .map_err(wasm_bindgen::JsValue::from)?,
+            )?,
             "google-drive"
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
                 Some(nook_core::OauthFilePreset::ICloud),
-            )
-            .map_err(wasm_bindgen::JsValue::from)?,
+            )?,
             "icloud"
         );
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsValue>
+    fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsError>
     {
         let secret = "JBSWY3DPEHPK3PXP";
         let unix_seconds = 1_721_520_000_u64;
-        let code = generate_totp_code(secret, unix_seconds).map_err(wasm_bindgen::JsValue::from)?;
+        let code = generate_totp_code(secret, unix_seconds)?;
         assert_eq!(code.len(), 6);
         assert!(code.bytes().all(|b| b.is_ascii_digit()));
-        assert!(
-            verify_totp_code(secret, &code, unix_seconds).map_err(wasm_bindgen::JsValue::from)?
-        );
-        assert!(
-            !verify_totp_code(secret, "000000", unix_seconds)
-                .map_err(wasm_bindgen::JsValue::from)?
-        );
+        assert!(verify_totp_code(secret, &code, unix_seconds)?);
+        assert!(!verify_totp_code(secret, "000000", unix_seconds)?);
         Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsValue>
+    fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsError>
     {
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
-        let snapshot = authentication_workflow_snapshot(&observations)
-            .snapshot()
-            .map_err(wasm_bindgen::JsValue::from)?;
+        let snapshot = authentication_workflow_snapshot(&observations).snapshot()?;
 
         assert_eq!(snapshot.kind_name(), "login");
         assert_eq!(snapshot.stage_name(), "credentials");

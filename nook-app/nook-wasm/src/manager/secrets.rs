@@ -990,25 +990,29 @@ mod wasm_tests {
         event: SignedEvent,
     }
 
-    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsValue> {
-        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))?.unchecked_into())
+    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(wasm_bindgen::JsError::from)?
+            .unchecked_into())
     }
 
-    fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsValue> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))?
+    fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsError> {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(wasm_bindgen::JsError::from)?
             .as_f64()
-            .ok_or_else(|| wasm_bindgen::JsValue::from_str("field is not a number"))
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a number"))
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsValue> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))?
+    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(wasm_bindgen::JsError::from)?
             .as_string()
-            .ok_or_else(|| wasm_bindgen::JsValue::from_str("field is not a string"))
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
     }
 
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
-    -> Result<(), wasm_bindgen::JsValue> {
+    -> Result<(), wasm_bindgen::JsError> {
         let value = serialize_js_array(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
@@ -1016,7 +1020,7 @@ mod wasm_tests {
                 signature: "ed25519:test-signature".to_owned(),
             },
         }])
-        .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
         let record: js_sys::Object = value.get(0).unchecked_into();
         let event = get(&record, "event")?;
 
