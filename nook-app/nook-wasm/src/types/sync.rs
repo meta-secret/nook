@@ -272,17 +272,6 @@ impl NookSyncProviderTarget {
         Self(nook_core::SyncProviderTarget::Local)
     }
 
-    #[wasm_bindgen(js_name = localFolder)]
-    #[must_use]
-    pub fn local_folder(directory_name: Option<String>, handle_id: Option<String>) -> Self {
-        Self(nook_core::SyncProviderTarget::LocalFolder(
-            nook_core::LocalFolderSyncTarget {
-                directory_name,
-                handle_id,
-            },
-        ))
-    }
-
     #[wasm_bindgen(js_name = github)]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
@@ -295,33 +284,6 @@ impl NookSyncProviderTarget {
     #[must_use]
     pub fn empty() -> Self {
         Self(nook_core::SyncProviderTarget::Empty)
-    }
-
-    #[wasm_bindgen(js_name = oauthFile)]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn oauth_file(
-        preset: Option<String>,
-        file_id: Option<String>,
-        file_name: Option<String>,
-        account_email: Option<String>,
-        access_token: Option<String>,
-        folder_id: Option<String>,
-    ) -> Result<NookSyncProviderTarget, wasm_bindgen::JsError> {
-        let preset = preset
-            .as_deref()
-            .map(nook_core::OauthFilePreset::parse)
-            .transpose()?
-            .unwrap_or(nook_core::OauthFilePreset::GoogleDrive);
-        Ok(Self(nook_core::SyncProviderTarget::OauthFile(
-            nook_core::OauthFileSyncTarget {
-                preset,
-                file_id,
-                folder_id,
-                file_name,
-                account_email,
-                access_token,
-            },
-        )))
     }
 
     #[wasm_bindgen(js_name = isLocal)]
