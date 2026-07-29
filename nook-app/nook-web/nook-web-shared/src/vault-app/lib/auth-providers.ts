@@ -448,12 +448,18 @@ export function findDuplicateSyncProvider(
     { providers, activeVaultStoreId: unselectedVaultScope() },
     candidate,
   );
-  return result.state === NookDuplicateSyncProviderState.Duplicate
-    ? {
+  try {
+    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
+      const provider = result.provider;
+      return {
         kind: DuplicateSyncProviderKind.Duplicate,
-        provider: result.provider,
-      }
-    : { kind: DuplicateSyncProviderKind.Unique };
+        provider,
+      };
+    }
+    return { kind: DuplicateSyncProviderKind.Unique };
+  } finally {
+    result.free();
+  }
 }
 
 export function findDuplicateSyncProviderExcluding(
@@ -466,12 +472,18 @@ export function findDuplicateSyncProviderExcluding(
     candidate,
     excludeId,
   );
-  return result.state === NookDuplicateSyncProviderState.Duplicate
-    ? {
+  try {
+    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
+      const provider = result.provider;
+      return {
         kind: DuplicateSyncProviderKind.Duplicate,
-        provider: result.provider,
-      }
-    : { kind: DuplicateSyncProviderKind.Unique };
+        provider,
+      };
+    }
+    return { kind: DuplicateSyncProviderKind.Unique };
+  } finally {
+    result.free();
+  }
 }
 
 export async function saveAuthProviders(

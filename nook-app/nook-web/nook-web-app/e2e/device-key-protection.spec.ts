@@ -629,7 +629,7 @@ test.describe('passkey device-key protection', () => {
 
     const persisted = await page.evaluate(
       () =>
-        new Promise<{ wrapped: unknown; registry: unknown }>(
+        new Promise<{ wrappedIdentityStored: boolean; registry: unknown }>(
           (resolve, reject) => {
             const request = indexedDB.open('nook_db')
             request.onerror = () => reject(request.error)
@@ -643,7 +643,7 @@ test.describe('passkey device-key protection', () => {
               transaction.oncomplete = () => {
                 db.close()
                 resolve({
-                  wrapped: wrappedRequest.result,
+                  wrappedIdentityStored: Boolean(wrappedRequest.result),
                   registry: registryRequest.result,
                 })
               }
@@ -651,7 +651,7 @@ test.describe('passkey device-key protection', () => {
           },
         ),
     )
-    expect(Object.hasOwn(persisted, 'wrapped')).toBe(false)
+    expect(persisted.wrappedIdentityStored).toBe(false)
     expect(persisted.registry).toBeTruthy()
   })
 })
