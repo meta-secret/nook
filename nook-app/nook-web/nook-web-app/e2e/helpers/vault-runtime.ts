@@ -39,7 +39,11 @@ export async function clearBrowserVault(page: Page) {
     (vaultAlreadyCleared) =>
       new Promise<void>((resolve, reject) => {
         localStorage.clear()
-        let pending = vaultAlreadyCleared ? 1 : 2
+        if (vaultAlreadyCleared) {
+          resolve()
+          return
+        }
+        let pending = 2
         const done = () => {
           pending -= 1
           if (pending === 0) resolve()
@@ -47,12 +51,10 @@ export async function clearBrowserVault(page: Page) {
         const onError = (err: DOMException | undefined) =>
           reject(err ?? new Error('IndexedDB delete failed'))
 
-        if (!vaultAlreadyCleared) {
-          const vaultDb = indexedDB.deleteDatabase('nook_db')
-          vaultDb.onsuccess = done
-          vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
-          vaultDb.onblocked = done
-        }
+        const vaultDb = indexedDB.deleteDatabase('nook_db')
+        vaultDb.onsuccess = done
+        vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
+        vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
