@@ -1,4 +1,3 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 /** Parsed shape of nook-events (matches nook-core StoredVaultYaml). */
@@ -95,6 +94,18 @@ type VaultEventYaml = {
   operations?: VaultEventOperation[]
 }
 
+export enum PasswordEnvelopeCiphertextStateKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+export type PasswordEnvelopeCiphertextState =
+  | { kind: PasswordEnvelopeCiphertextStateKind.Absent }
+  | {
+      kind: PasswordEnvelopeCiphertextStateKind.Present
+      ciphertext: string
+    }
+
 export type VaultYamlSnapshot = {
   raw: string
   secretIds: string[]
@@ -111,7 +122,7 @@ export type VaultYamlSnapshot = {
    * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
    * against a previously-captured value is a reliable "rotated yet?" check.
    */
-  passwordEnvelopeCiphertext: string | void
+  passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState
 }
 
 function parseJoinValue(
@@ -155,8 +166,11 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const activeEnvelope = passwordEntries[0]?.envelope
   const passwordEnvelopeCiphertext =
     typeof activeEnvelope?.ciphertext === 'string'
-      ? activeEnvelope.ciphertext.trim()
-      : omittedValue()
+      ? {
+          kind: PasswordEnvelopeCiphertextStateKind.Present,
+          ciphertext: activeEnvelope.ciphertext.trim(),
+        }
+      : { kind: PasswordEnvelopeCiphertextStateKind.Absent }
 
   return {
     raw: yaml,

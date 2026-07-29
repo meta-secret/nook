@@ -1,12 +1,20 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'bun:test'
-import { ExtensionSessionMessageDispatcher } from '../src/offscreen/session-message-dispatch'
+import {
+  ExtensionSessionMessageDispatcher,
+  SessionMessageTypeParseKind,
+  type SessionMessageTypeParse,
+} from '../src/offscreen/session-message-dispatch'
 
-function messageType(message: unknown): string | void {
+function messageType(message: unknown): SessionMessageTypeParse {
   if (!message || typeof message !== 'object' || !('type' in message)) {
-    return
+    return { kind: SessionMessageTypeParseKind.Invalid }
   }
-  return typeof message.type === 'string' ? message.type : omittedValue()
+  return typeof message.type === 'string'
+    ? {
+        kind: SessionMessageTypeParseKind.Parsed,
+        messageType: message.type,
+      }
+    : { kind: SessionMessageTypeParseKind.Invalid }
 }
 
 function messagePayload(message: unknown): Record<string, unknown> {

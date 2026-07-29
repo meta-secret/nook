@@ -3,6 +3,7 @@ import {
   createSharedVaultFolder,
   getFileMetadata,
   hasLiveDriveSharedGrantCredentials,
+  LiveDriveCredentialsStateKind,
   readLiveDriveSharedGrantCredentials,
   shareFolderWithEmail,
   trashDriveFile,
@@ -48,17 +49,18 @@ describeLive('live Google Drive shared-folder grant', () => {
 
   test.beforeAll(() => {
     const credentials = readLiveDriveSharedGrantCredentials()
-    if (!credentials) {
+    if (credentials.kind === LiveDriveCredentialsStateKind.Missing) {
       throw new Error('live Drive shared-grant credentials missing')
     }
     ownerToken = credentials.ownerAccessToken
     joinerEmail = credentials.joinerEmail
-    joinerCredentials = !('joinerAccessToken' in credentials)
-      ? { kind: JoinerCredentialsKind.OwnerOnly }
-      : {
-          kind: JoinerCredentialsKind.OwnerAndJoiner,
-          accessToken: credentials.joinerAccessToken,
-        }
+    joinerCredentials =
+      credentials.kind === LiveDriveCredentialsStateKind.OwnerOnly
+        ? { kind: JoinerCredentialsKind.OwnerOnly }
+        : {
+            kind: JoinerCredentialsKind.OwnerAndJoiner,
+            accessToken: credentials.joinerAccessToken,
+          }
   })
 
   test.afterAll(async () => {

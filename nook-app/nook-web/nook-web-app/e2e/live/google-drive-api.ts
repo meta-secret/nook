@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 /**
  * Live Google Drive REST helpers for opt-in shared-folder grant smoke.
  * Calls the real Drive API — never the Playwright `drive-stub.ts` routes.
@@ -7,23 +6,53 @@ import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
-export type LiveDriveCredentials = {
-  ownerAccessToken: string
-  joinerEmail: string
-  joinerAccessToken?: string
+export enum LiveDriveCredentialsStateKind {
+  Missing = 'missing',
+  OwnerOnly = 'owner-only',
+  OwnerAndJoiner = 'owner-and-joiner',
 }
 
-export function readLiveDriveSharedGrantCredentials(): LiveDriveCredentials | void {
+export type LiveDriveCredentialsState =
+  | { kind: LiveDriveCredentialsStateKind.Missing }
+  | {
+      kind: LiveDriveCredentialsStateKind.OwnerOnly
+      ownerAccessToken: string
+      joinerEmail: string
+    }
+  | {
+      kind: LiveDriveCredentialsStateKind.OwnerAndJoiner
+      ownerAccessToken: string
+      joinerEmail: string
+      joinerAccessToken: string
+    }
+
+export function readLiveDriveSharedGrantCredentials(): LiveDriveCredentialsState {
   const ownerAccessToken = process.env.NOOK_GOOGLE_E2E_ACCESS_TOKEN?.trim()
   const joinerEmail = process.env.NOOK_GOOGLE_E2E_JOINER_EMAIL?.trim()
-  if (!ownerAccessToken || !joinerEmail) return
+  if (!ownerAccessToken || !joinerEmail) {
+    return { kind: LiveDriveCredentialsStateKind.Missing }
+  }
   const joinerAccessToken =
-    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim() || omittedValue()
-  return { ownerAccessToken, joinerEmail, joinerAccessToken }
+    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim()
+  return joinerAccessToken
+    ? {
+        kind: LiveDriveCredentialsStateKind.OwnerAndJoiner,
+        ownerAccessToken,
+        joinerEmail,
+        joinerAccessToken,
+      }
+    : {
+        kind: LiveDriveCredentialsStateKind.OwnerOnly,
+        ownerAccessToken,
+        joinerEmail,
+      }
 }
 
 export function hasLiveDriveSharedGrantCredentials(): boolean {
-  return Boolean(readLiveDriveSharedGrantCredentials())
+  return (
+    readLiveDriveSharedGrantCredentials().kind !==
+    LiveDriveCredentialsStateKind.Missing
+  )
 }
 
 async function driveJson<T>(

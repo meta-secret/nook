@@ -1,12 +1,10 @@
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 /** Deterministic WebAuthn PRF mock used by browser-flow tests. */
 export function installMockPasskeyRuntime() {
   const credentialId = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
-  const saved = window.name.startsWith('nook-e2e-passkey:')
-    ? window.name.slice('nook-e2e-passkey:'.length)
-    : omittedValue()
-  let userHandle = saved
-    ? Uint8Array.from(JSON.parse(saved) as number[])
+  let userHandle = window.name.startsWith('nook-e2e-passkey:')
+    ? Uint8Array.from(
+        JSON.parse(window.name.slice('nook-e2e-passkey:'.length)) as number[],
+      )
     : Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
   const saveUserHandle = () => {
     window.name = `nook-e2e-passkey:${JSON.stringify(Array.from(userHandle))}`
@@ -69,13 +67,14 @@ export function installMockPasskeyRuntime() {
       }
     },
   }
-  Object.defineProperty(window, 'PublicKeyCredential', {
-    configurable: true,
-    get: () =>
-      localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable'
-        ? omittedValue()
-        : publicKeyCredential,
-  })
+  if (localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable') {
+    Reflect.deleteProperty(window, 'PublicKeyCredential')
+  } else {
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      value: publicKeyCredential,
+    })
+  }
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
     value: {

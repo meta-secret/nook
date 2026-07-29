@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   scrubProviderCredentials,
   stageProviderCredentials,
@@ -25,8 +24,17 @@ type SensitivePayloadResidency =
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
   messagePayload: (message: unknown) => Record<string, unknown>
-  messageType: (message: unknown) => string | void
+  messageType: (message: unknown) => SessionMessageTypeParse
 }
+
+export enum SessionMessageTypeParseKind {
+  Invalid = 'invalid',
+  Parsed = 'parsed',
+}
+
+export type SessionMessageTypeParse =
+  | { kind: SessionMessageTypeParseKind.Invalid }
+  | { kind: SessionMessageTypeParseKind.Parsed; messageType: string }
 
 function sessionMessagePriority(type: string): SessionOperationPriority {
   switch (type) {
@@ -54,17 +62,29 @@ function sessionMessagePriority(type: string): SessionOperationPriority {
   }
 }
 
-function requestedQueueExpiry(payload: Record<string, unknown>): number | void {
-  const value = payload.queueExpiresAt
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return
-  }
-  return Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS)
+enum RequestedQueueExpiryKind {
+  NotRequested = 'not-requested',
+  Requested = 'requested',
 }
 
-const sensitiveSessionFields: Readonly<
-  Record<string, readonly string[] | void>
-> = {
+type RequestedQueueExpiry =
+  | { kind: RequestedQueueExpiryKind.NotRequested }
+  | { kind: RequestedQueueExpiryKind.Requested; expiresAt: number }
+
+function requestedQueueExpiry(
+  payload: Record<string, unknown>,
+): RequestedQueueExpiry {
+  const value = payload.queueExpiresAt
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return { kind: RequestedQueueExpiryKind.NotRequested }
+  }
+  return {
+    kind: RequestedQueueExpiryKind.Requested,
+    expiresAt: Math.min(value, Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS),
+  }
+}
+
+const sensitiveSessionFields: Readonly<Record<string, readonly string[]>> = {
   'nook:extension-session-finish-passkey-setup': [
     'credentialId',
     'userHandle',
@@ -219,8 +239,11 @@ export class ExtensionSessionMessageDispatcher {
   }
 
   enqueue(message: unknown): Promise<unknown> {
-    const type = this.context.messageType(message)
-    if (!type) return Promise.resolve()
+    const parsedType = this.context.messageType(message)
+    if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
+      return Promise.resolve()
+    }
+    const type = parsedType.messageType
     const payload = this.context.messagePayload(message)
     if (type === 'nook:extension-session-import-vault') {
       return this.enqueueVaultImport(
@@ -229,11 +252,12 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
     const requestedExpiry = requestedQueueExpiry(payload)
-    const priority = requestedExpiry
-      ? payload.queuePriority === 'interactive'
-        ? 'interactive'
-        : 'probe'
-      : sessionMessagePriority(type)
+    const priority =
+      requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+        ? payload.queuePriority === 'interactive'
+          ? 'interactive'
+          : 'probe'
+        : sessionMessagePriority(type)
     const sensitiveFields = sensitiveSessionFields[type]
     if (sensitiveFields) {
       return this.enqueueSensitiveMessage(
@@ -243,20 +267,21 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
 
-    const expiresAt =
-      requestedExpiry ??
-      (priority === 'interactive'
-        ? Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS
-        : omittedValue())
     return this.operations.enqueue(() => this.context.handleMessage(message), {
       priority,
-      expiresAt,
+      ...(requestedExpiry.kind === RequestedQueueExpiryKind.Requested
+        ? { expiresAt: requestedExpiry.expiresAt }
+        : priority === 'interactive'
+          ? { expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS }
+          : {}),
     })
   }
 
   registerRuntimeListener(): void {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      const type = this.context.messageType(message)
+      const parsedType = this.context.messageType(message)
+      if (parsedType.kind === SessionMessageTypeParseKind.Invalid) return false
+      const type = parsedType.messageType
       if (type === 'nook:extension-session-lock') return false
       const serviceWorkerOnly =
         type === 'nook:extension-session-seal-identity-handoff' ||
@@ -268,7 +293,7 @@ export class ExtensionSessionMessageDispatcher {
       if (
         sender.id !== chrome.runtime.id ||
         (serviceWorkerOnly && !serviceWorkerSender) ||
-        !type?.startsWith('nook:extension-session-')
+        !type.startsWith('nook:extension-session-')
       ) {
         return false
       }

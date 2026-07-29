@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import initNookWasm, {
   configureVaultApplication,
   currentCodeFromOtpauthUri,
@@ -12,7 +11,11 @@ import initNookWasm, {
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
+import {
+  ExtensionSessionMessageDispatcher,
+  SessionMessageTypeParseKind,
+  type SessionMessageTypeParse,
+} from './session-message-dispatch'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -219,11 +222,16 @@ function renewSessionExpiry(generation: number): void {
   scheduleSessionExpiry(generation)
 }
 
-function messageType(message: unknown): string | void {
+function messageType(message: unknown): SessionMessageTypeParse {
   if (!message || typeof message !== 'object' || !('type' in message)) {
-    return
+    return { kind: SessionMessageTypeParseKind.Invalid }
   }
-  return typeof message.type === 'string' ? message.type : omittedValue()
+  return typeof message.type === 'string'
+    ? {
+        kind: SessionMessageTypeParseKind.Parsed,
+        messageType: message.type,
+      }
+    : { kind: SessionMessageTypeParseKind.Invalid }
 }
 
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -298,7 +306,11 @@ async function flushPasskeyEventToProviders(
 }
 
 async function handleMessage(message: unknown): Promise<unknown> {
-  switch (messageType(message)) {
+  const parsedType = messageType(message)
+  if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
+    return { ok: false, error: 'Invalid extension session message.' }
+  }
+  switch (parsedType.messageType) {
     case 'nook:extension-session-reset': {
       for (const offer of Array.from(pendingLoginSaveOffers.values())) {
         clearLoginSaveOffer(offer)
