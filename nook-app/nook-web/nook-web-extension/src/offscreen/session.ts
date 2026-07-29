@@ -280,6 +280,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       pendingLoginSaveOffers.clear()
       canceledWebsitePasskeyRequests.clear()
+      sessionMessageDispatcher?.replaceOperations(
+        new Error('Extension session reset.'),
+      )
       const activeManager = await getManager()
       activeManager.resetVaultSession()
       return { ok: true }

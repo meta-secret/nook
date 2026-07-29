@@ -235,6 +235,9 @@ export async function renameLocalVaultLabel(
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
+  const previousLabel = state.localVaults.find(
+    (vault) => vault.storeId.trim() === trimmedStoreId,
+  )?.label;
 
   try {
     await setLocalVaultLabel(trimmedStoreId, trimmedLabel);
@@ -246,6 +249,19 @@ export async function renameLocalVaultLabel(
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));
   } catch (e: unknown) {
+    if (previousLabel !== undefined) {
+      try {
+        await setLocalVaultLabel(trimmedStoreId, previousLabel);
+        await refreshLocalVaultCatalog(state);
+      } catch (rollbackError: unknown) {
+        log.warn("local vault rename rollback failed", {
+          error:
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+        });
+      }
+    }
     state.errorMsg =
       e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
   } finally {
