@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
+  import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
@@ -48,7 +48,7 @@
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.devices')}
     subtitle={vault.t('settings.devices_desc')}
     open={accordionSection === SettingsAccordionSection.Devices}
@@ -83,9 +83,9 @@
       {onRenameDevice}
       {onRevokeDevice}
     />
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.language')}
     subtitle={vault.t('settings.select_language')}
     open={accordionSection === SettingsAccordionSection.Language}
@@ -118,9 +118,9 @@
         <option value="ru">Русский</option>
       </select>
     </div>
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.delete_local_title')}
     subtitle={vault.t('settings.delete_local_desc')}
     open={accordionSection === SettingsAccordionSection.Danger}
@@ -186,5 +186,5 @@
         </Button>
       {/if}
     </div>
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 </div>
