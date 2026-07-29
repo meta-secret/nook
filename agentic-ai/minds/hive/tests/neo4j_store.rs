@@ -822,9 +822,19 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                  SET blocker.status = 'COMPLETED', blocker.obsolete = true
                  CREATE (failed:Task {
                    id: $failed_id,
+                   kind: 'integration',
+                   trigger_kind: 'manual-cli',
+                   prompt: 'Failed nested prerequisite fixture',
                    status: 'FAILED',
                    obsolete: false,
-                   source_commit: blocker.source_commit
+                   source_commit: blocker.source_commit,
+                   priority: 0,
+                   attempt_count: 1,
+                   max_attempts: 1,
+                   last_retry_release: '',
+                   version: 0,
+                   created_at: timestamp(),
+                   updated_at: timestamp()
                  })
                  MERGE (blocker)-[:DEPENDS_ON]->(failed)",
             )
