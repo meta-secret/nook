@@ -99,6 +99,7 @@ mod tests {
     struct TestTask {
         definition: EnqueueTask,
         status: &'static str,
+        obsolete: bool,
         attempt_count: i64,
         lease_token: Option<LeaseToken>,
         lease_until: Option<Instant>,
@@ -164,6 +165,7 @@ mod tests {
                 TestTask {
                     definition: task.clone(),
                     status: if ready { "READY" } else { "BLOCKED" },
+                    obsolete: false,
                     attempt_count: 0,
                     lease_token: None,
                     lease_until: None,
@@ -418,6 +420,7 @@ mod tests {
                 && retirement_guard_matches;
             if accepted {
                 task.status = "COMPLETED";
+                task.obsolete = obsolete;
                 task.lease_token = None;
                 task.lease_until = None;
             }
@@ -489,25 +492,48 @@ mod tests {
         ) -> anyhow::Result<bool> {
             blocker.validate()?;
             let mut tasks = self.tasks.lock().expect("store lock");
-            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
-            if task.lease_token.as_ref() != Some(&claimed.lease_token) {
+            let lease_valid = tasks
+                .get(claimed.id.as_str())
+                .is_some_and(|task| task.lease_token.as_ref() == Some(&claimed.lease_token));
+            if !lease_valid {
                 return Ok(false);
             }
-            task.status = "BLOCKED";
+            let blocker_was_obsolete = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|existing| existing.status == "COMPLETED" && existing.obsolete);
+            if blocker_was_obsolete {
+                let existing = tasks.get_mut(blocker.id.as_str()).expect("blocker");
+                existing.status = "READY";
+                existing.obsolete = false;
+                existing.attempt_count = 0;
+            } else if !tasks.contains_key(blocker.id.as_str()) {
+                tasks.insert(
+                    blocker.id.as_str().to_owned(),
+                    TestTask {
+                        definition: blocker.clone(),
+                        status: "READY",
+                        obsolete: false,
+                        attempt_count: 0,
+                        lease_token: None,
+                        lease_until: None,
+                    },
+                );
+            }
+            let blocker_completed = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|stored| stored.status == "COMPLETED");
+            let task = tasks.get_mut(claimed.id.as_str()).expect("task");
+            task.status = if blocker_was_obsolete {
+                "BLOCKED"
+            } else if blocker_completed {
+                "READY"
+            } else {
+                "BLOCKED"
+            };
             task.attempt_count -= 1;
             task.lease_token = None;
             task.lease_until = None;
             task.definition.dependencies.push(blocker.id.clone());
-            tasks.insert(
-                blocker.id.as_str().to_owned(),
-                TestTask {
-                    definition: blocker.clone(),
-                    status: "READY",
-                    attempt_count: 0,
-                    lease_token: None,
-                    lease_until: None,
-                },
-            );
             Ok(true)
         }
     }

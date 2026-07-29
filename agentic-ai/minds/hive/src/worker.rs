@@ -298,11 +298,17 @@ impl<S: TaskStore> Worker<S> {
                         artifact,
                         obsolete,
                     } => {
-                        if !self
+                        let accepted = self
                             .store
                             .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
-                            .await?
-                        {
+                            .await?;
+                        if !accepted && obsolete {
+                            if !self.store.release(task, &self.config.agent_id).await? {
+                                return Err(WorkerCancellationRequested.into());
+                            }
+                            return Err(WorkerBlocked.into());
+                        }
+                        if !accepted {
                             return Err(WorkerCancellationRequested.into());
                         }
                         Ok(())

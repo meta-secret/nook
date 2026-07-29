@@ -772,6 +772,52 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         );
     }
 
+    let mut future_owner = task(format!("main-failure-future-owner-{suffix}"), Vec::new());
+    future_owner.kind = "main-repair".to_owned();
+    store.enqueue(&future_owner).await?;
+    let future_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(future_claim.id, future_owner.id);
+    assert!(
+        store
+            .block(
+                &future_claim,
+                &agent_a,
+                &shared_blocker,
+                "stable prerequisite became relevant again",
+            )
+            .await?
+    );
+    let rearmed_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(
+        rearmed_claim.id, shared_blocker.id,
+        "a future repair must rearm an obsolete blocker with the same stable id"
+    );
+    assert_eq!(rearmed_claim.owning_repairs, vec![future_owner.id.clone()]);
+    assert!(
+        store
+            .complete(
+                &rearmed_claim,
+                &agent_a,
+                false,
+                "shared prerequisite repaired for the future owner",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    let resumed_future = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(resumed_future.id, future_owner.id);
+    assert!(
+        store
+            .complete(
+                &resumed_future,
+                &agent_a,
+                false,
+                "future owning repair complete",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+
     let mut mixed_blocker = task(format!("mixed-owner-blocker-{suffix}"), Vec::new());
     mixed_blocker.kind = "blocker".to_owned();
     let mut mixed_repair = task(

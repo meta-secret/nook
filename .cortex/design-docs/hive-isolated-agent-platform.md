@@ -190,10 +190,15 @@ containing Main run. Intermediate blocker nodes belong to the same prerequisite
 chain and are not independent consumers. Claiming snapshots the complete sorted
 owner set; completion transactionally rechecks that exact set and refuses
 retirement if a Main repair or any non-Main consumer was attached while the
-blocker was running. The terminal result marks this exceptional path explicitly
-with `obsolete: true`; normal completion, including a real patch produced while
-owners change, bypasses the retirement-only guard and persists normally. The
-shared-owner, mixed-owner, late-owner, and genuine-completion race cases are
+blocker was running. A refused retirement releases the lease and retry
+consumption so another worker can re-evaluate the updated ownership. The
+terminal result marks this exceptional path explicitly with `obsolete: true`,
+and Hive persists that marker on both the task and attempt. If a future repair
+discovers the same stable blocker ID, Hive rearms the retired blocker with a
+fresh attempt budget instead of treating it as a satisfied prerequisite.
+Normal completion, including a real patch produced while owners change,
+bypasses the retirement-only guard and persists normally. The shared-owner,
+mixed-owner, late-owner, future-owner, and genuine-completion race cases are
 behavior-tested in
 `agentic-ai/minds/hive/tests/neo4j_store.rs`.
 

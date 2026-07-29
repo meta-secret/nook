@@ -946,12 +946,14 @@ impl TaskStore for Neo4jTaskStore {
                           )
                         )
                      SET task.status = 'COMPLETED',
+                         task.obsolete = $obsolete,
                          task.result_summary = $summary,
                          task.updated_at = timestamp(),
                          task.lease_owner = null,
                          task.lease_token = null,
                          task.lease_until = null,
                          attempt.status = 'COMPLETED',
+                         attempt.obsolete = $obsolete,
                          attempt.summary = $summary,
                          attempt.completed_at = timestamp()
                      WITH task
@@ -1122,22 +1124,55 @@ impl TaskStore for Neo4jTaskStore {
                                    blocker.priority = $blocker_priority,
                                    blocker.max_attempts = $blocker_max_attempts,
                                    blocker.status = 'READY',
+                                   blocker.obsolete = false,
                                    blocker.updated_at = timestamp()
-                     WITH task, attempt, blocker
+                     WITH task, attempt, blocker,
+                          coalesce(blocker.obsolete, false) AS blocker_was_obsolete
                      WHERE blocker.source_commit = $source_commit
                        AND blocker.id <> task.id
                        AND NOT EXISTS {
                          MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
                        }
+                     SET blocker.status = CASE
+                           WHEN blocker_was_obsolete THEN 'READY'
+                           ELSE blocker.status
+                         END,
+                         blocker.obsolete = false,
+                         blocker.attempt_count = CASE
+                           WHEN blocker_was_obsolete THEN 0
+                           ELSE blocker.attempt_count
+                         END,
+                         blocker.result_summary = CASE
+                           WHEN blocker_was_obsolete THEN null
+                           ELSE blocker.result_summary
+                         END,
+                         blocker.blocked_reason = CASE
+                           WHEN blocker_was_obsolete THEN null
+                           ELSE blocker.blocked_reason
+                         END,
+                         blocker.failure_reason = CASE
+                           WHEN blocker_was_obsolete THEN null
+                           ELSE blocker.failure_reason
+                         END,
+                         blocker.updated_at = CASE
+                           WHEN blocker_was_obsolete THEN timestamp()
+                           ELSE blocker.updated_at
+                         END,
+                         blocker.version = CASE
+                           WHEN blocker_was_obsolete THEN coalesce(blocker.version, 0) + 1
+                           ELSE blocker.version
+                         END
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
                      SET task.status = CASE
+                             WHEN blocker_was_obsolete THEN 'BLOCKED'
                              WHEN blocker.status = 'COMPLETED' THEN 'READY'
                              WHEN blocker.status = 'FAILED' THEN 'FAILED'
                              ELSE 'BLOCKED'
                          END,
                          task.attempt_count = task.attempt_count - 1,
                          task.blocked_reason = CASE
-                           WHEN blocker.status = 'COMPLETED' THEN null
+                           WHEN NOT blocker_was_obsolete
+                             AND blocker.status = 'COMPLETED' THEN null
                            ELSE $reason
                          END,
                          task.failure_reason = CASE
