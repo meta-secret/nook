@@ -42,6 +42,12 @@ test.describe('vault connect flow', () => {
     ])
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
+    // A reload replaces the WASM manager while retaining the encrypted local
+    // projection. Unlocking must restore vault crypto from that cache before
+    // the default secret-page query runs.
+    await page.reload()
+    await authorizeDeviceProtection(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
     await flushNookLogPersistQueue(page)
     const logs = await readPersistedAppLogs(page)
     expect(

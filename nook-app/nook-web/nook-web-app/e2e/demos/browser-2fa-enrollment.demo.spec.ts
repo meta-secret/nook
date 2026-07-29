@@ -38,10 +38,24 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
+  let signalWasmBootstrapStarted: (() => void) | undefined
+  const wasmBootstrapStarted = new Promise<void>((resolve) => {
+    signalWasmBootstrapStarted = resolve
+  })
+  let releaseWasmBootstrap: (() => void) | undefined
+  const wasmBootstrapReleased = new Promise<void>((resolve) => {
+    releaseWasmBootstrap = resolve
+  })
+  await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
+    signalWasmBootstrapStarted?.()
+    await wasmBootstrapReleased
+    await route.continue().catch(() => undefined)
+  })
+
   // Replace the document while the real app bootstrap is active. This covers
   // the stale mount-target race while retaining a real origin for enrollment.
   await page.goto('/app/', { waitUntil: 'commit' })
-  await page.locator('#app').waitFor({ state: 'attached' })
+  await wasmBootstrapStarted
   await page.setContent(`<!doctype html>
     <html>
       <head>
@@ -106,6 +120,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
+  releaseWasmBootstrap?.()
   const replacementChildCount = await page
     .locator('[data-bootstrap-sentinel="replacement-root"]')
     .evaluate((root) => root.children.length)
