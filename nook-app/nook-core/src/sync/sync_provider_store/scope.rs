@@ -1,5 +1,5 @@
-use crate::errors::ValidationResult;
 use crate::StorageProviderType;
+use crate::errors::ValidationResult;
 
 use super::{AuthProvidersSnapshotData, StorageProviderData};
 
@@ -198,10 +198,12 @@ mod tests {
                 .and_then(|provider| provider.store_id.as_deref()),
             Some("store-a")
         );
-        assert!(replaced
-            .providers
-            .iter()
-            .all(|provider| provider.id != "removed-a"));
+        assert!(
+            replaced
+                .providers
+                .iter()
+                .all(|provider| provider.id != "removed-a")
+        );
     }
 
     #[test]

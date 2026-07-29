@@ -1,8 +1,8 @@
 use super::{
-    passkey_browser, storage, wasm_bindgen, NookDecryptedEnrollmentPayload,
-    NookEnrollmentIssueInput, NookEnrollmentProvider, NookGoogleDriveFolder, NookLocalFolderConfig,
-    NookProviderReplicationCapability, NookStorageConnectArgs, NookStringValue, NookStringValueRef,
-    NookVaultArchitecture,
+    NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
+    NookGoogleDriveFolder, NookLocalFolderConfig, NookProviderReplicationCapability,
+    NookStorageConnectArgs, NookStringValue, NookStringValueRef, NookVaultArchitecture,
+    passkey_browser, storage, wasm_bindgen,
 };
 
 mod localization;
@@ -30,8 +30,8 @@ pub fn is_local_folder_backup_supported() -> bool {
 }
 
 #[wasm_bindgen(js_name = chooseLocalFolderBackupDirectory)]
-pub async fn choose_local_folder_backup_directory(
-) -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
+pub async fn choose_local_folder_backup_directory()
+-> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
     storage::local_folder::choose_local_folder_backup_directory()
         .await
         .map_err(Into::into)
