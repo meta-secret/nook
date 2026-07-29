@@ -36,7 +36,10 @@ import {
   type BrowserOAuthProvider,
 } from "$lib/oauth-origin";
 import { createLogger } from "$lib/log";
-import { prepareSharedStorageGrant } from "$lib/vault-architecture";
+import {
+  prepareSharedStorageGrant,
+  providerOauthPresetForConfig,
+} from "$lib/vault-architecture";
 
 const log = createLogger("vault-oauth");
 
@@ -211,7 +214,8 @@ export async function createGoogleSharedFolder(
   state: VaultState,
   collaboratorEmail: string,
 ): Promise<string> {
-  const accessToken = state.oauthFile?.accessToken?.trim();
+  const oauthFile = state.oauthFile;
+  const accessToken = oauthFile?.accessToken?.trim();
   if (!accessToken) {
     throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
   }
@@ -221,7 +225,7 @@ export async function createGoogleSharedFolder(
     DEFAULT_DRIVE_BACKUP_NAME;
   const grant = await prepareSharedStorageGrant({
     providerType: "oauth-file",
-    oauthPreset: "google-drive",
+    oauthPreset: providerOauthPresetForConfig(oauthFile),
     joinerIdentityKind: "email",
     joinerIdentity: collaboratorEmail,
     storageTargetHint: folderName,

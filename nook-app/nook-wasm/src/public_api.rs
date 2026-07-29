@@ -772,6 +772,28 @@ pub fn provider_replication_capability(
     ))
 }
 
+#[wasm_bindgen(js_name = providerOauthPresetForProvider)]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn provider_oauth_preset_for_provider(
+    provider: nook_core::StorageProviderData,
+) -> nook_core::ProviderOauthPreset {
+    provider
+        .oauth_file
+        .map_or(nook_core::ProviderOauthPreset::NotApplicable, |oauth| {
+            nook_core::ProviderOauthPreset::Preset(oauth.preset)
+        })
+}
+
+#[wasm_bindgen(js_name = providerOauthPresetForConfig)]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn provider_oauth_preset_for_config(
+    config: nook_core::OAuthFileConfigData,
+) -> nook_core::ProviderOauthPreset {
+    nook_core::ProviderOauthPreset::Preset(config.preset)
+}
+
 #[wasm_bindgen(js_name = validateProviderReplication)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn validate_provider_replication(
@@ -915,10 +937,11 @@ async fn create_and_grant_drive_folder(
 /// `ManualGrantRequired` when the Drive API fails or no owner token is supplied.
 pub(crate) fn is_google_drive_shared_grant_request(
     provider_type: &str,
-    oauth_preset: Option<&str>,
+    oauth_preset: nook_core::ProviderOauthPreset,
 ) -> bool {
     provider_type.trim() == "oauth-file"
-        && oauth_preset.is_some_and(|preset| preset.trim() == "google-drive")
+        && oauth_preset
+            == nook_core::ProviderOauthPreset::Preset(nook_core::OauthFilePreset::GoogleDrive)
 }
 
 #[wasm_bindgen(js_name = prepareSharedStorageGrant)]
@@ -938,10 +961,8 @@ pub async fn prepare_shared_storage_grant(
                 .as_deref()
                 .map(str::trim)
                 .filter(|token| !token.is_empty());
-            let is_gdrive = is_google_drive_shared_grant_request(
-                &request.provider_type,
-                request.oauth_preset.as_deref(),
-            );
+            let is_gdrive =
+                is_google_drive_shared_grant_request(&request.provider_type, request.oauth_preset);
             match (token, is_gdrive) {
                 (Some(access_token), true) => {
                     if let Some(folder_id) = storage_target_id

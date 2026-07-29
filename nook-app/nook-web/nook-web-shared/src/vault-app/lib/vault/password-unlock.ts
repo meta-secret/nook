@@ -41,6 +41,7 @@ import {
 import {
   prepareSharedStorageGrant,
   providerOnboardingType,
+  providerOauthPresetForProvider,
   type SharedStorageGrantOutcome,
 } from "$lib/vault-architecture";
 import {
@@ -687,7 +688,7 @@ export async function issueEnrollmentCode(
         log.info("shared enrollment grant started", { providerId });
         const grant = await prepareSharedStorageGrant({
           providerType: selectedProvider.type,
-          oauthPreset: selectedProvider.oauthFile?.preset,
+          oauthPreset: providerOauthPresetForProvider(selectedProvider),
           joinerIdentityKind: "email",
           joinerIdentity: sharedJoinerIdentity,
           storageTargetHint:

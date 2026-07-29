@@ -875,21 +875,21 @@ mod wasm_tests {
 #[cfg(test)]
 mod tests {
     use crate::public_api::is_google_drive_shared_grant_request;
+    use nook_core::{OauthFilePreset, ProviderOauthPreset};
 
     #[test]
     fn google_drive_grant_requires_explicit_preset() {
-        assert!(!is_google_drive_shared_grant_request("oauth-file", None));
         assert!(!is_google_drive_shared_grant_request(
             "oauth-file",
-            Some("")
+            ProviderOauthPreset::NotApplicable,
         ));
         assert!(is_google_drive_shared_grant_request(
             "oauth-file",
-            Some("google-drive")
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
         ));
         assert!(!is_google_drive_shared_grant_request(
             "oauth-file",
-            Some("icloud")
+            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
         ));
     }
 }

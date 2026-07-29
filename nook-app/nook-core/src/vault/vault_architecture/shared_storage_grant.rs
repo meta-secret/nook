@@ -3,8 +3,8 @@
 use super::provider_replication::{
     ProviderOauthPreset, SharedJoinerIdentityKind, provider_replication_capability,
 };
+use crate::StorageProviderType;
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{OauthFilePreset, StorageProviderType};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -19,9 +19,7 @@ use tsify::Tsify;
 pub struct SharedStorageGrantRequest {
     #[tsify(type = "StorageProviderType")]
     pub provider_type: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(type = "OAuthFilePreset | undefined")]
-    pub oauth_preset: Option<String>,
+    pub oauth_preset: ProviderOauthPreset,
     pub joiner_identity_kind: SharedJoinerIdentityKind,
     pub joiner_identity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -96,17 +94,7 @@ pub fn prepare_shared_storage_grant(
     request: &SharedStorageGrantRequest,
 ) -> ValidationResult<SharedStorageGrantOutcome> {
     let provider_type = StorageProviderType::parse(&request.provider_type)?;
-    let oauth_preset = match request.oauth_preset.as_deref() {
-        Some(preset) if !preset.trim().is_empty() => Some(OauthFilePreset::parse(preset)?),
-        _ => None,
-    };
-    let capability = provider_replication_capability(
-        provider_type,
-        match oauth_preset {
-            Some(preset) => ProviderOauthPreset::Preset(preset),
-            None => ProviderOauthPreset::NotApplicable,
-        },
-    );
+    let capability = provider_replication_capability(provider_type, request.oauth_preset);
     let identity = request.joiner_identity.trim();
     if identity.is_empty() {
         return Err(ValidationError::SharedJoinerIdentityRequired);
@@ -145,7 +133,7 @@ mod tests {
     {
         let request = SharedStorageGrantRequest {
             provider_type: "oauth-file".to_owned(),
-            oauth_preset: Some("google-drive".to_owned()),
+            oauth_preset: ProviderOauthPreset::Preset(crate::OauthFilePreset::GoogleDrive),
             joiner_identity_kind: SharedJoinerIdentityKind::Email,
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_hint: None,
@@ -188,7 +176,7 @@ mod tests {
 
         let github = SharedStorageGrantRequest {
             provider_type: "github".to_owned(),
-            oauth_preset: None,
+            oauth_preset: ProviderOauthPreset::NotApplicable,
             ..request
         };
         assert_eq!(

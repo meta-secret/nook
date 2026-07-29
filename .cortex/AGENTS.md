@@ -99,6 +99,16 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
+Rust-owned `Tsify`/WASM domain contracts must not override a field type with
+TypeScript `undefined`, `null`, or `void`. In particular, an `Option<T>` field
+plus `#[tsify(type = "... | undefined")]` is two representations of the same
+unnamed absence and leaks it across the boundary. Replace that field with a
+named Rust enum whose variants explain the state and derive the generated
+boundary type from the enum. `void` remains valid only for TypeScript
+unit/effect returns, never as a serialized field state. The syntax-aware
+preflight rejects authored absence sentinels in `tsify(type = "...")`
+overrides.
+
 Tests of known JSON contracts must deserialize into the concrete Rust wire or
 domain type before asserting field values. Raw `serde_json::Value` indexing and
 `Value::is_null()` are prohibited for those assertions because indexing treats

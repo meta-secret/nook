@@ -96,11 +96,17 @@ When you see `Option<T>`, ask:
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
   `nook-app/nook-core/src`; place them in the owning group and re-export through
   `lib.rs` only when they are part of the stable public core API.
-- Optional TypeScript/Svelte boundary contracts use `undefined`, never `null`.
-  Mutable application state converts that structural absence to an explicit
-  discriminated variant. Rust and WASM helpers should make it easy for TS to
-  pass plain objects or omitted values instead of forcing TS to construct
-  nullable shim objects.
+- Rust-owned `Tsify`/WASM domain contracts never author `undefined`, `null`, or
+  `void` field states. Do not pair `Option<T>` with a
+  `#[tsify(type = "... | undefined")]` override: that merely exports the same
+  unnamed absence twice. When absence means not-applicable, unconfigured,
+  pending, manual, or another domain state, use a named Rust enum and derive
+  the generated boundary type from it.
+- Truthful structural omission in external or persisted wire formats may still
+  use `Option<T>` without a handwritten absence override. Normalize it into a
+  named domain state at the first owned boundary.
+- `void` remains TypeScript's unit/effect return type, equivalent to Rust `()`;
+  it is not a serialized field-state escape hatch.
 
 ## Examples
 
@@ -214,8 +220,13 @@ impl NookRuntimeConfig {
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
-    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: Option<String>) -> u32 {
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         // Use immutable instance state directly.
+        300_000
+    }
+
+    #[wasm_bindgen(js_name = defaultVaultIdleTimeoutMs)]
+    pub fn default_vault_idle_timeout_ms(&self) -> u32 {
         300_000
     }
 }
@@ -229,9 +240,10 @@ class VaultState {
   )
 }
 
-vault.runtimeConfig.resolveVaultIdleTimeoutMs(
-  import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
-)
+const rawIdleTimeout = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS
+const idleTimeout = rawIdleTimeout
+  ? vault.runtimeConfig.resolveVaultIdleTimeoutMs(rawIdleTimeout)
+  : vault.runtimeConfig.defaultVaultIdleTimeoutMs()
 ```
 
 ## Scope
@@ -261,6 +273,9 @@ whether a value exists.
   intentionally combines unrelated error types.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
+- Search Rust-owned `Tsify` DTOs for authored `type =` overrides. The
+  repository preflight must report zero `undefined`, `null`, or `void`
+  sentinels in those overrides.
 - Search known-contract tests for `serde_json::Value`, `json["..."]`, and
   `.is_null()`. Replace field-value checks with typed round trips and enum/value
   assertions. Keep raw values only where malformed/unknown JSON or exact

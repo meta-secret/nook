@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 use nook_preflight::{
     portable_core_browser_dependencies, rust_test_untyped_json_assertions,
-    rust_wasm_domain_boundary_escape_hatches, typescript_domain_boundary_boilerplate,
-    typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_json_round_trip_clones, typescript_mutable_void_state,
-    typescript_null_absence_sentinels, typescript_raw_string_discriminants,
-    typescript_svelte_state_modeling_violations,
+    rust_tsify_implicit_absence_overrides, rust_wasm_domain_boundary_escape_hatches,
+    typescript_domain_boundary_boilerplate, typescript_generic_optional_state,
+    typescript_implicit_application_state, typescript_json_round_trip_clones,
+    typescript_mutable_void_state, typescript_null_absence_sentinels,
+    typescript_raw_string_discriminants, typescript_svelte_state_modeling_violations,
 };
 
 #[test]
@@ -16,6 +16,17 @@ fn rust_tests_assert_known_json_through_typed_contracts() -> anyhow::Result<()> 
     assert!(
         violations.is_empty(),
         "known JSON test contracts must round-trip through concrete Rust types; raw Value indexing and is_null assertions are forbidden: {violations:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_tsify_boundaries_never_override_domain_state_with_absence_sentinels() -> anyhow::Result<()>
+{
+    let violations = rust_tsify_implicit_absence_overrides(&repository_root())?;
+    assert!(
+        violations.is_empty(),
+        "Rust-owned Tsify contracts must use named state enums instead of undefined, null, or void type overrides: {violations:#?}"
     );
     Ok(())
 }
