@@ -287,6 +287,7 @@ mod import_tests {
 #[cfg(test)]
 mod prepared_page_tests {
     use super::*;
+    use crate::NookSecretTypeFilter;
     use crate::manager::VaultCryptoState;
     use wasm_bindgen_test::wasm_bindgen_test;
 
