@@ -1,10 +1,13 @@
 /** Canonical production host for nokey.sh (override with VITE_SITE_URL at build time). */
 export const DEFAULT_SITE_URL = 'https://nokey.sh'
 
-enum SitemapChangeFrequency {
-  Weekly = 'weekly',
-  Monthly = 'monthly',
-}
+const SitemapChangeFrequency = {
+  Weekly: 'weekly',
+  Monthly: 'monthly',
+} as const
+
+type SitemapChangeFrequency =
+  (typeof SitemapChangeFrequency)[keyof typeof SitemapChangeFrequency]
 
 export type SitemapEntry = {
   path: string
