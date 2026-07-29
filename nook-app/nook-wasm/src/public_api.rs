@@ -13,6 +13,8 @@ mod mnemonic;
 pub use mnemonic::*;
 mod provider_labels;
 pub use provider_labels::*;
+mod provider_state;
+pub use provider_state::*;
 
 #[wasm_bindgen(js_name = isVaultSessionLocked)]
 #[must_use]
@@ -299,36 +301,6 @@ pub fn sync_providers_for_active_vault(
     Ok(snapshot)
 }
 
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookProviderSelectionState {
-    Missing,
-    Selected,
-}
-
-#[wasm_bindgen]
-pub struct NookProviderSelection(Option<String>);
-
-#[wasm_bindgen]
-impl NookProviderSelection {
-    #[wasm_bindgen(getter)]
-    #[must_use]
-    pub fn state(&self) -> NookProviderSelectionState {
-        if self.0.is_some() {
-            NookProviderSelectionState::Selected
-        } else {
-            NookProviderSelectionState::Missing
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = providerId)]
-    pub fn provider_id(&self) -> Result<String, wasm_bindgen::JsError> {
-        self.0
-            .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("provider selection is missing"))
-    }
-}
-
 #[wasm_bindgen(js_name = localProviderForActiveVault)]
 pub fn local_provider_for_active_vault(
     snapshot: nook_core::AuthProvidersSnapshotData,
@@ -367,8 +339,10 @@ pub fn providers_visible_while_device_locked(
 
 #[wasm_bindgen(js_name = oauthRemoteStorageRef)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn oauth_remote_storage_ref(config: nook_core::OAuthFileConfigData) -> Option<String> {
-    nook_core::oauth_remote_storage_ref(&config)
+pub fn oauth_remote_storage_ref(
+    config: nook_core::OAuthFileConfigData,
+) -> NookOAuthRemoteStorageReference {
+    NookOAuthRemoteStorageReference::new(nook_core::oauth_remote_storage_ref(&config))
 }
 
 #[wasm_bindgen(js_name = updateOauthRemoteRef)]
@@ -376,25 +350,50 @@ pub fn oauth_remote_storage_ref(config: nook_core::OAuthFileConfigData) -> Optio
 pub fn update_oauth_remote_ref(
     config: nook_core::OAuthFileConfigData,
     remote_ref: &str,
-) -> Option<nook_core::OAuthFileConfigData> {
-    nook_core::update_oauth_remote_ref(&config, remote_ref)
+) -> NookOAuthRemoteConfigurationUpdate {
+    NookOAuthRemoteConfigurationUpdate::new(nook_core::update_oauth_remote_ref(&config, remote_ref))
 }
 
-#[wasm_bindgen(js_name = stagedRemoteStorageArgs)]
+#[wasm_bindgen(js_name = stagedGithubRemoteStorageArgs)]
+pub fn staged_github_remote_storage_args(
+    github_pat: &str,
+    github_repo: &str,
+) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
+    Ok(NookStagedStorageArgs::new(
+        nook_core::staged_remote_storage_args(
+            nook_core::StorageProviderType::Github,
+            Some(github_pat),
+            Some(github_repo),
+            None,
+        )?,
+    ))
+}
+
+#[wasm_bindgen(js_name = stagedOauthRemoteStorageArgs)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn staged_remote_storage_args(
-    provider_type: nook_core::StorageProviderType,
-    github_pat: Option<String>,
-    github_repo: Option<String>,
-    oauth_file: Option<nook_core::OAuthFileConfigData>,
-) -> Result<Option<NookStorageConnectArgs>, wasm_bindgen::JsError> {
-    Ok(nook_core::staged_remote_storage_args(
-        provider_type,
-        github_pat.as_deref(),
-        github_repo.as_deref(),
-        oauth_file.as_ref(),
-    )?
-    .map(Into::into))
+pub fn staged_oauth_remote_storage_args(
+    oauth_file: nook_core::OAuthFileConfigData,
+) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
+    Ok(NookStagedStorageArgs::new(
+        nook_core::staged_remote_storage_args(
+            nook_core::StorageProviderType::OauthFile,
+            None,
+            None,
+            Some(&oauth_file),
+        )?,
+    ))
+}
+
+#[wasm_bindgen(js_name = stagedLocalRemoteStorageArgs)]
+pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
+    Ok(NookStagedStorageArgs::new(
+        nook_core::staged_remote_storage_args(
+            nook_core::StorageProviderType::Local,
+            None,
+            None,
+            None,
+        )?,
+    ))
 }
 
 #[wasm_bindgen(js_name = updateProviderSyncMetadata)]
@@ -488,7 +487,7 @@ pub fn bind_google_drive_shared_folder(
 pub fn google_oauth_tokens_to_config(
     access_token: &str,
     expires_at: &str,
-    existing: Option<nook_core::OAuthFileConfigData>,
+    existing: nook_core::StoredOAuthFileConfiguration,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
     Ok(nook_core::google_oauth_tokens_to_config(
         access_token,
@@ -501,12 +500,12 @@ pub fn google_oauth_tokens_to_config(
 #[allow(clippy::needless_pass_by_value)]
 pub fn icloud_oauth_tokens_to_config(
     access_token: &str,
-    account_name: Option<String>,
-    existing: Option<nook_core::OAuthFileConfigData>,
+    account_identity: nook_core::StoredOAuthAccountIdentity,
+    existing: nook_core::StoredOAuthFileConfiguration,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
     Ok(nook_core::icloud_oauth_tokens_to_config(
         access_token,
-        account_name.as_deref(),
+        account_identity.as_deref(),
         existing.as_ref(),
     ))
 }
@@ -855,58 +854,28 @@ pub async fn verify_shared_google_drive_folder(
     Ok(NookGoogleDriveFolder::new(id, name))
 }
 
-#[wasm_bindgen(js_name = wasmStorageArgs)]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
-pub fn wasm_storage_args(
-    local_vault_present: bool,
-    is_authenticated: bool,
-    sync_provider: Option<nook_core::StorageProviderData>,
-    provider_type: nook_core::StorageProviderType,
-    github_pat: Option<String>,
-    github_repo: Option<String>,
-    oauth_preset: Option<nook_core::OauthFilePreset>,
-    oauth_access_token: Option<String>,
-    oauth_file_id: Option<String>,
-    oauth_file_name: Option<String>,
-) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(nook_core::vault_storage_args(
-        local_vault_present,
-        is_authenticated,
-        sync_provider.as_ref(),
-        provider_type,
-        github_pat.as_deref(),
-        github_repo.as_deref(),
-        oauth_preset,
-        oauth_access_token.as_deref(),
-        oauth_file_id.as_deref(),
-        oauth_file_name.as_deref(),
-    )?
-    .into())
-}
-
-/// Masked GitHub PAT hint for provider lists. `None` means no token is saved;
-/// the JS layer supplies the localized "no token" copy. `Some` is a truncated
-/// hint that never contains the full secret.
-#[wasm_bindgen(js_name = maskGithubPatHint)]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn mask_github_pat_hint(pat: Option<String>) -> Option<String> {
-    match nook_core::mask_github_pat(pat.as_deref().unwrap_or_default()) {
-        nook_core::GithubPatMask::NoToken => None,
-        nook_core::GithubPatMask::Hint(hint) => Some(hint),
-    }
-}
-
-#[wasm_bindgen(js_name = encryptEnrollmentPayload)]
-pub fn encrypt_enrollment_payload(
+#[wasm_bindgen(js_name = encryptUnlabeledEnrollmentPayload)]
+pub fn encrypt_unlabeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
-    entry_label: Option<String>,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::encrypt_enrollment_payload(
         &input.to_core()?,
         password,
-        entry_label.unwrap_or_default().as_str(),
+        "",
+    )?)
+}
+
+#[wasm_bindgen(js_name = encryptLabeledEnrollmentPayload)]
+pub fn encrypt_labeled_enrollment_payload(
+    input: &NookEnrollmentIssueInput,
+    password: &str,
+    entry_label: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::encrypt_enrollment_payload(
+        &input.to_core()?,
+        password,
+        entry_label,
     )?)
 }
 
