@@ -1193,6 +1193,11 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the contract records a typed sync issue before rejecting the remote store"
+    )]
     fn rejected_event_log_classification_is_available_as_a_typed_issue() {
         let mut manager = NookVaultManager::new();
         let classification = RemoteEventLogClassification::DifferentStore {
