@@ -31,11 +31,21 @@ export function scrubProviderCredentials(providers: unknown): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
-    if ('githubPat' in provider) provider.githubPat = { state: 'missing' }
+    if (typeof provider.githubPat === 'string') {
+      delete provider.githubPat
+    } else if ('githubPat' in provider) {
+      provider.githubPat = { state: 'missing' }
+    }
     if (isRecord(provider.oauthFile)) {
       if (isRecord(provider.oauthFile.config)) {
         provider.oauthFile.config.accessToken = { state: 'signedOut' }
         provider.oauthFile.config.refreshToken = { state: 'notIssued' }
+      }
+      if (typeof provider.oauthFile.accessToken === 'string') {
+        provider.oauthFile.accessToken = ''
+      }
+      if ('refreshToken' in provider.oauthFile) {
+        delete provider.oauthFile.refreshToken
       }
     }
   }

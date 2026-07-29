@@ -33,7 +33,10 @@ describe('outcome evidence messages', () => {
     expect(
       isAuthenticationOutcomeClassifyMessage({
         type: 'nook:authentication-outcome-classify',
-        payload: { observation: { ...validObservation, password: 'x' } },
+        payload: {
+          observation: { ...validObservation, password: 'x' },
+          timeoutMs: 8_000,
+        },
       }),
     ).toBe(true)
   })
