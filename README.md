@@ -342,15 +342,20 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ## Development
 
-Agent workflow: run **`task format`** before every push; product gates
-(`check`, lint, tests, coverage, builds, e2e) run on **GitHub Actions**. Local
-Task mirrors below remain available for humans and optional debugging.
-PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label;
-the PR workflow then requires the Main-equivalent local-provider, app-isolation,
-and extension browser suites before merge.
+Agent workflow: run **`task format`**, commit, and push the exact branch head;
+run focused builds/tests with **`task remote TASK_NAME=<name>`** on
+GitHub-hosted workers; then explicitly start complete PR validation with
+**`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
+not start the complete pipeline. Local Task mirrors below remain available for
+humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
+suites.
 
 ```sh
 task format                # required local agent action (host-applied)
+task remote:list           # allowlisted focused GitHub-hosted task catalog
+task remote TASK_NAME=rust:test # run one focused task against exact pushed HEAD
+task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
+task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build

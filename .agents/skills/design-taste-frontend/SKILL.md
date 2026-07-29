@@ -276,14 +276,14 @@ For every visible UI change:
 5. Add or update focused Playwright UI-demo coverage for the visible behavior.
 6. Run `task format` before every push.
 7. Run the repository UI demo contract against current `origin/main`.
-8. Push the coherent change and let repository-owned GitHub Actions run product
-   checks.
+8. Push the coherent change, use focused hosted tasks as useful, then run
+   `task pr:validate` for complete product checks.
 9. On Playwright or UI CI failure, inspect the attached app logs before changing
    code.
 
 Do not replace the repository workflow with raw host Playwright, Vitest,
-Lighthouse, or generic framework commands. Focused local debugging is optional;
-GitHub Actions owns product validation.
+Lighthouse, or generic framework commands. Agents use the hosted remote catalog
+and explicit complete validation.
 
 ## 11. Final Pre-flight
 

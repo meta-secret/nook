@@ -39,7 +39,6 @@ Does not apply to:
 
 ## Validation
 
-Run the smallest relevant checks first. For implementation tasks, run
-`task format`, push/open or update the PR when the iteration is ready for final
-validation, then monitor GitHub Actions. Do not require local `task check` /
-`task ci:pr` for merge.
+Run the smallest relevant hosted tasks first. For implementation tasks, run
+`task format`, commit and push, use `task remote` for focused execution, then
+explicitly trigger complete validation with `task pr:validate`.

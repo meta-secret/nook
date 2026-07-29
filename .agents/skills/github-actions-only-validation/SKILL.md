@@ -1,9 +1,9 @@
 ---
 name: github-actions-only-validation
-description: Format locally with task format; run every product gate on GitHub Actions. Do not require local task check or ci:pr for merge.
+description: Format locally, run focused builds and tests through task remote on GitHub-hosted workers, and explicitly trigger complete PR validation with task pr:validate.
 ---
 
-# GitHub Actions-Only Validation
+# GitHub-Hosted Execution and Validation
 
 Read and follow the canonical project skill at
 [`.cortex/dynamic-skills/github-actions-only-validation.md`](../../../.cortex/dynamic-skills/github-actions-only-validation.md).

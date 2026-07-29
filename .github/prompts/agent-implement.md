@@ -20,12 +20,12 @@ The job runs `task setup` before you start (sealed **nook-web:local**). You run 
 **nook-ci-agent** container with the repo bind-mounted and the host Docker socket mounted
 (`/var/run/docker.sock` — sibling containers, not Docker-in-Docker).
 
-**Product validation is GitHub Actions `pr.yml` after the harness opens the PR.**
-Your required local action is host-applied formatting only. Do not require
-`task check` / `task ci:pr` before finishing — a continuing task-owning agent
-monitors the PR workflows. Optional focused debug commands are allowed when
-reproducing a specific failure. Use repository Task targets; do not replace them
-with hand-written `docker run` commands.
+**Product validation runs on GitHub-hosted workers after the harness opens the
+PR.** Your required local action is host-applied formatting only. Do not run
+`task check` / `task ci:pr` before finishing. A continuing task-owning agent
+uses `task remote` for focused execution, then explicitly triggers complete PR
+validation with `task pr:validate`. Use repository Task targets; do not replace
+them with hand-written `docker run` commands.
 
 ## Steps
 
@@ -35,9 +35,9 @@ with hand-written `docker run` commands.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo
    contract against the base ref when practical.
-4. Do **not** require `task check`, `task ci:pr`, full suites, builds, or e2e
-   before finishing. Optional `E2E_SPEC=… task web:test:e2e:file` is allowed for
-   focused debug only.
+4. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e in this
+   bounded worker. The continuing agent owns focused and complete hosted
+   execution after the harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.

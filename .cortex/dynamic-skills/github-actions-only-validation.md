@@ -1,26 +1,27 @@
-# GitHub Actions-Only Validation
+# GitHub-Hosted Execution and Validation
 
 ## Purpose
 
-Keep agent machines on the lightest possible local work — host-applied
-formatting — and let GitHub Actions own every product gate.
+Keep agent machines on the lightest possible local work and use GitHub-hosted
+runners for both iterative builds/tests and complete merge validation.
 
 ## Problem Pattern
 
-Agents burn wall-clock running `task check`, `task ci:pr`, full e2e, or other
-Docker product mirrors locally in parallel with (or before) PR CI. That
-duplicates the repository-owned gate, delays pushes, and still leaves merge
-blocked until GitHub Actions is green.
+Agents burn wall-clock and contend with other worktrees by running Docker builds
+and tests locally. Automatically starting the complete PR pipeline on every
+experimental push also wastes hosted concurrency before the branch is ready.
 
 ## Preferred Pattern
 
 **Required locally:** only `task format` (host-applied), plus the light UI demo
 contract when UI-facing paths change.
 
-**Required remotely:** applicable repository-owned GitHub Actions workflows
-(`PR / Verify and preview`, and path-applicable `Web research`).
-For a PR fixing a failure observed on `main`, add `ci:full-e2e`; the same `PR`
-workflow then runs the Main-equivalent full browser suite before merge.
+**Iterative execution:** after committing and pushing an exact branch head, run
+allowlisted focused jobs with `task remote TASK_NAME=<name>`.
+
+**Required remotely:** explicitly trigger the complete exact-head PR workflow
+with `task pr:validate PR=<number>`. For a Main-fix PR, use
+`task pr:validate PR=<number> FULL_E2E=1`.
 
 ```bash
 task format
@@ -30,13 +31,14 @@ git add -u
 #   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 git commit …
 git push -u origin HEAD
-# monitor PR workflows; do not start task check / task ci:pr
+task remote TASK_NAME=rust:test       # repeat focused hosted tasks as useful
+task pr:validate PR=<number>          # spend the full PR pipeline when ready
 ```
 
 On a red remote run: read `gh run view <id> --log-failed` (and app logs for
-web/e2e) → fix → `task format` → push → wait for the refreshed Actions run.
-Optional single-spec local repro is allowed; required local product gates are
-not.
+web/e2e) → fix → `task format` → commit → push → dispatch focused remote work
+or complete validation again. Ordinary pushes do not refresh complete PR
+checks.
 
 ## Scope
 
@@ -52,23 +54,29 @@ Does not apply to:
 - Workbench issue, worklog, and statistics commits, which are not Nook product
   changes or Nook PRs.
 - Read-only / question-only sessions with no commits.
-- Optional focused debug commands while investigating a specific red finding.
+- Interactive development servers and browser sessions that require retained
+  local state.
 
 ## Examples
 
-- Before: format → push → `task check` ‖ PR CI → merge only after both green.
-- After: format → push → PR CI green → `task pr:ready` → squash merge.
+- Before: format → push → local `task check` while automatic PR CI consumes
+  hosted workers.
+- After: format → commit → push → focused `task remote` jobs → explicit
+  `task pr:validate` → `task pr:ready`.
 - Before: remote Verify fails → run full local `task ci:pr` before re-push.
-- After: remote Verify fails → fix from CI logs → `task format` → push → wait.
+- After: remote Verify fails → fix from logs → format → push → focused remote
+  proof as useful → explicitly re-trigger complete validation.
 
 ## Application Checklist
 
 - [ ] Run `task format` unconditionally before every push.
 - [ ] Pass the UI demo contract when UI-facing paths changed.
 - [ ] Do not require `task check`, `task ci:pr`, full suites, builds, or e2e
-      locally for merge or handoff.
-- [ ] Treat optional local Task commands as debug-only.
-- [ ] Add `ci:full-e2e` when the PR repairs a Main failure.
+      on the agent machine.
+- [ ] Commit and push the exact source before `task remote`.
+- [ ] Use `task pr:validate` only when the head is ready for the complete gate.
+- [ ] Use `FULL_E2E=1` when the PR repairs a Main failure.
+- [ ] After every later push, trigger complete validation again.
 - [ ] Merge only after green applicable Actions checks and `task pr:ready`.
 
 ## Validation
@@ -77,4 +85,4 @@ A first Verify attempt should not fail solely on Prettier/rustfmt/demo-contract
 misses. Product correctness is proven by green applicable GitHub Actions on the
 exact head, not by a local Docker mirror. See
 [coding-bro.md](../workflows/coding-bro.md) and
-[ci-pipeline.md § Local vs remote CI](../workflows/ci-pipeline.md#local-vs-remote-ci).
+[remote-execution.md](../workflows/remote-execution.md).

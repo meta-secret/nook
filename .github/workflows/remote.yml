@@ -1,0 +1,268 @@
+# Focused, manually dispatched development tasks on GitHub-hosted runners.
+#
+# This workflow is an allowlisted remote execution surface, not an arbitrary
+# credential-bearing shell. Complete merge validation remains in pr.yml and is
+# explicitly requested with task pr:validate.
+
+name: Remote task
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Allowlisted Taskfile command
+        required: true
+        type: choice
+        options:
+          - preflight
+          - rust:test
+          - rust:lint
+          - rust:coverage
+          - wasm:build
+          - wasm:test
+          - wasm:test:browser
+          - web:check
+          - web:test
+          - web:build
+          - web:e2e
+          - extension:check
+          - extension:e2e
+          - hive:verify
+          - check
+          - ci:pr
+          - ci:pr:e2e
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: remote-${{ github.ref }}-${{ inputs.task }}
+  cancel-in-progress: false
+
+env:
+  CI: true
+  DOCKER_IMAGE: nook-web:remote-${{ github.run_id }}-${{ github.run_attempt }}
+  DOCKER_E2E_IMAGE: nook-web-e2e:remote-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  preflight:
+    if: inputs.task == 'preflight'
+    name: Remote / preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task preflight
+
+  rust-test:
+    if: inputs.task == 'rust:test'
+    name: Remote / rust:test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task rust:test
+
+  rust-lint:
+    if: inputs.task == 'rust:lint'
+    name: Remote / rust:lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task rust:lint
+
+  rust-coverage:
+    if: inputs.task == 'rust:coverage'
+    name: Remote / rust:coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task rust:coverage
+
+  wasm-build:
+    if: inputs.task == 'wasm:build'
+    name: Remote / wasm:build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task wasm:build
+
+  wasm-test:
+    if: inputs.task == 'wasm:test'
+    name: Remote / wasm:test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task wasm:test
+
+  wasm-test-browser:
+    if: inputs.task == 'wasm:test:browser'
+    name: Remote / wasm:test:browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task wasm:test:browser
+
+  web-check:
+    if: inputs.task == 'web:check'
+    name: Remote / web:check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task web:check
+
+  web-test:
+    if: inputs.task == 'web:test'
+    name: Remote / web:test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task web:test
+
+  web-build:
+    if: inputs.task == 'web:build'
+    name: Remote / web:build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task web:build
+
+  web-e2e:
+    if: inputs.task == 'web:e2e'
+    name: Remote / web:e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task web:test:e2e
+
+  extension-check:
+    if: inputs.task == 'extension:check'
+    name: Remote / extension:check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task extension:check
+
+  extension-e2e:
+    if: inputs.task == 'extension:e2e'
+    name: Remote / extension:e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task extension:test:e2e
+
+  hive-verify:
+    if: inputs.task == 'hive:verify'
+    name: Remote / hive:verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task hive:verify
+
+  check:
+    if: inputs.task == 'check'
+    name: Remote / check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task check
+
+  ci-pr:
+    if: inputs.task == 'ci:pr'
+    name: Remote / ci:pr
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task ci:pr
+
+  ci-pr-e2e:
+    if: inputs.task == 'ci:pr:e2e'
+    name: Remote / ci:pr:e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task ci:pr:e2e

@@ -78,8 +78,8 @@ Does not apply to:
 - [ ] Verify each finding against current code before editing.
 - [ ] Use reviewer-provided agent prompts as context, not as blind patches.
 - [ ] Make the minimal correct fix, or prepare a concise no-change rationale.
-- [ ] Run `task format` when files changed; optional focused debug only. Do not
-      require local `task check` / `task ci:pr` — GitHub Actions is the product gate.
+- [ ] Run `task format` when files changed; use focused `task remote` jobs as
+      useful, then explicitly trigger complete PR validation.
 - [ ] Push the fix or rationale commit when code/docs changed.
 - [ ] Leave a GitHub reply explaining the fix, validation, or no-change
       rationale on the original review thread/comment when GitHub supports one.

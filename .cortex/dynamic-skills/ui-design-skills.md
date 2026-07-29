@@ -66,9 +66,9 @@ Repository rules remain authoritative, especially:
 - accessibility and existing product behavior must not regress;
 - changed domain behavior needs Rust tests, and changed user flows need focused
   web coverage;
-- the repository's GitHub-Actions-only validation and pre-push UI demo
-  workflow overrides generic commands such as unconditional local Lighthouse
-  or full-suite runs.
+- the repository's hosted remote execution, explicit complete validation, and
+  pre-push UI demo workflow override generic commands such as unconditional
+  local Lighthouse or full-suite runs.
 
 ## Review And Validation
 

@@ -58,7 +58,7 @@ Delete or wire unused code; extract shared helpers for clones. Do not raise
 thresholds, add authored-code ignores, or leave the task done while either gate
 is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
-- **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
+- **Human interactive single-spec debug:** `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file`. Agents use the hosted remote catalog.
 - Full stub Playwright: `task web:test:e2e` — runs the `stable` IndexedDB group at 6 workers, then the provider/sync `unstable` group at 4; runs on main CI and explicitly for PR validation.
 - Stable subset Playwright (`stable` project): `task web:test:e2e:pr` — 6-worker manual/debug subset for vault CRUD, login, and legal pages (no sync HTTP).
 - Mounted dev servers publish container port `5173` on `WEB_DEV_PORT` (default
@@ -68,7 +68,7 @@ is red. See [quality.md § Fix check findings](../workflows/quality.md#fix-check
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Optional local Docker e2e (`E2E_SPEC=… task web:test:e2e:file`) is for
-  focused debug only. Product validation after a coherent iteration is
-  GitHub Actions — format, push/open/update the PR, then monitor remote CI.
-  See [workflows/coding-bro.md](../workflows/coding-bro.md).
+- Agent e2e runs on GitHub-hosted workers through `task remote`; humans may use
+  local single-spec Docker e2e for interactive debugging. Complete agent
+  validation is explicit: format, commit, push, then `task pr:validate`.
+  See [workflows/remote-execution.md](../workflows/remote-execution.md).

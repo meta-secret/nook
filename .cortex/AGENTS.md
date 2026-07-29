@@ -178,29 +178,34 @@ git fetch origin main
 .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 ```
 
-Only after that commit → push → monitor GitHub Actions. Do **not** run
-`task check`, `task ci:pr`, full suites, builds, or e2e as a required local gate.
+Only after that commit → push. Use `task remote TASK_NAME=<name>` for focused
+build/test feedback, then explicitly trigger complete PR validation with
+`task pr:validate PR=<number>` when the head is ready. Do **not** run
+`task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
 Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#pre-push-hygiene--always-format)
-and [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
+and [workflows/remote-execution.md](workflows/remote-execution.md).
 
-## ⛔ Non-negotiable: GitHub Actions is the only product gate
+## ⛔ Non-negotiable: heavy agent work runs remotely
 
 **The only required local action is `task format`** (plus the light UI demo
 contract when UI paths change). Every product check — lint, clippy, unit tests,
 coverage, web build, Knip, jscpd, e2e, and the full PR mirror — runs on
 **GitHub Actions**, not on the agent machine.
 
-As soon as a change is coherent enough to validate: **pre-push hygiene → commit
-→ push/open or update PR → monitor repository-owned PR workflows**. Never run
-`task check`, `task ci:pr`, a full test suite, build, or e2e as a merge or
-handoff requirement. Never serialize a local product gate before the push.
+The normal loop is **pre-push hygiene → commit → push → focused
+`task remote` runs as useful → explicit `task pr:validate` at the complete
+validation boundary**. Ordinary PR pushes do not start the full PR workflow.
+A later push makes prior checks stale, so the agent must explicitly validate
+the new exact head before readiness can succeed.
 
-Optional local Task commands remain available for focused debugging when an
-agent chooses them, but they must not delay the push and must not replace green
-GitHub Actions. On a red remote run: read the failed job logs (and app logs for
-web/e2e) → fix → `task format` → push → wait for the refreshed Actions run.
-Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--github-actions-only)
-and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
+Heavy focused debugging also runs through the allowlisted remote task catalog.
+Local execution is reserved for formatting, the UI demo contract, repository
+inspection, and interactive development sessions that require a persistent
+local server/browser. On a red remote run: read the failed logs (and app logs
+for web/e2e) → fix → `task format` → commit → push → dispatch focused remote
+work or complete validation again. Full policy:
+[workflows/remote-execution.md](workflows/remote-execution.md) and
+[dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
 
 ## ⛔ Non-negotiable: fix every failing check finding
 
@@ -248,8 +253,8 @@ implementation worker. Full policy:
 
 ## ⛔ Non-negotiable: record and analyze AI-agent PR statistics
 
-Task-owning AI agents must measure every normal PR's local check/test runs,
-GitHub Actions runs and retriggers, merge attempts, elapsed time, and the
+Task-owning AI agents must measure every normal PR's lightweight local runs,
+focused/complete GitHub Actions runs and retriggers, merge attempts, elapsed time, and the
 repository test inventory (counts by type plus absolute total) on the merged
 head. After the implementation PR merges, write
 `stats/ai-agent/<pr-number>.yaml` to Nook Workbench, compare it with one or two
@@ -290,16 +295,17 @@ build-performance PR. Full policy:
 * [references/cloudflare-operations.md](references/cloudflare-operations.md) — **Privileged Cloudflare operations** through the OAuth-authenticated `cloudflare-api` MCP connection in the local AI-agent environment.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → **GitHub Actions only** for product checks → fix loop → address comments and conflicts → readiness audit → automatic agent-owned squash merge).
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 * [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
-* [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; every product gate runs on GitHub Actions**.
+* [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
 * [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
-* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / manual e2e split; local-provider vs sync-live).
+* [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
+* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
 * [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
@@ -336,7 +342,8 @@ build-performance PR. Full policy:
   Playwright DOM assertions.
 * When debugging Playwright/e2e, vault UI flows, or red CI, **always consult app logs**
   (`nook-app-logs.json` is attached to every Playwright result; `fetchAppLogs`
-  and `/app-logs` are available for local repro) before changing code.
+  and `/app-logs` are available during interactive browser sessions) before
+  changing code.
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ### PR review comments
