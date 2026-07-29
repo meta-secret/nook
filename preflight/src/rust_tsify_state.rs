@@ -4,17 +4,21 @@ use std::path::{Path, PathBuf};
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
-use syn::{Attribute, Expr, LitStr, Token};
+use syn::visit::Visit;
+use syn::{
+    Attribute, Expr, Fields, FnArg, ImplItemFn, ItemFn, LitStr, ReturnType, Signature, Token, Type,
+    Visibility,
+};
 
 use crate::Violation;
 
-/// Finds authored `tsify(type = "...")` overrides that smuggle an absence
-/// sentinel into a Rust-owned WASM contract.
+/// Finds Rust-owned WASM contracts that generate implicit JavaScript absence.
 ///
 /// `undefined`, `null`, and `void` are not domain states. A Rust boundary DTO
-/// must expose a named enum when the field distinguishes states such as
-/// configured/not-applicable, while truthful wire-format omission remains an
-/// ordinary `Option<T>` without a handwritten TypeScript type override.
+/// must expose a named enum when a field or function parameter distinguishes
+/// states such as configured/not-applicable. `Option<T>` remains idiomatic
+/// inside Rust, but a `Tsify` field or `wasm_bindgen` function signature would
+/// compile that unnamed absence into the generated TypeScript contract.
 ///
 /// # Errors
 ///
@@ -65,19 +69,37 @@ fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Ve
             syn::Item::Const(item) => collect_attribute_violations(&item.attrs, path, violations),
             syn::Item::Enum(item) => {
                 collect_attribute_violations(&item.attrs, path, violations);
+                let exported_by_tsify = derives_tsify(&item.attrs);
                 for variant in &item.variants {
                     collect_attribute_violations(&variant.attrs, path, violations);
                     for field in &variant.fields {
                         collect_attribute_violations(&field.attrs, path, violations);
+                        if exported_by_tsify && type_contains_option(&field.ty) {
+                            violations.push(Violation {
+                                path: path.to_path_buf(),
+                                line: span_line(field.ty.span()),
+                            });
+                        }
                     }
                 }
             }
-            syn::Item::Fn(item) => collect_attribute_violations(&item.attrs, path, violations),
+            syn::Item::Fn(item) => {
+                collect_attribute_violations(&item.attrs, path, violations);
+                if has_wasm_bindgen(&item.attrs) {
+                    collect_function_signature_violations(item, path, violations);
+                }
+            }
             syn::Item::Impl(item) => {
                 collect_attribute_violations(&item.attrs, path, violations);
+                let exported_by_wasm_bindgen = has_wasm_bindgen(&item.attrs);
                 for impl_item in &item.items {
                     if let syn::ImplItem::Fn(function) = impl_item {
                         collect_attribute_violations(&function.attrs, path, violations);
+                        if (exported_by_wasm_bindgen || has_wasm_bindgen(&function.attrs))
+                            && matches!(function.vis, Visibility::Public(_))
+                        {
+                            collect_method_signature_violations(function, path, violations);
+                        }
                     }
                 }
             }
@@ -90,8 +112,15 @@ fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Ve
             syn::Item::Static(item) => collect_attribute_violations(&item.attrs, path, violations),
             syn::Item::Struct(item) => {
                 collect_attribute_violations(&item.attrs, path, violations);
+                let exported_by_tsify = derives_tsify(&item.attrs);
                 for field in &item.fields {
                     collect_attribute_violations(&field.attrs, path, violations);
+                    if exported_by_tsify && type_contains_option(&field.ty) {
+                        violations.push(Violation {
+                            path: path.to_path_buf(),
+                            line: span_line(field.ty.span()),
+                        });
+                    }
                 }
             }
             syn::Item::Trait(item) => {
@@ -106,6 +135,99 @@ fn collect_item_violations(items: &[syn::Item], path: &Path, violations: &mut Ve
             _ => {}
         }
     }
+}
+
+fn collect_function_signature_violations(
+    function: &ItemFn,
+    path: &Path,
+    violations: &mut Vec<Violation>,
+) {
+    collect_signature_violations(&function.sig, path, violations);
+}
+
+fn collect_method_signature_violations(
+    function: &ImplItemFn,
+    path: &Path,
+    violations: &mut Vec<Violation>,
+) {
+    collect_signature_violations(&function.sig, path, violations);
+}
+
+fn collect_signature_violations(
+    signature: &Signature,
+    path: &Path,
+    violations: &mut Vec<Violation>,
+) {
+    for input in &signature.inputs {
+        if let FnArg::Typed(argument) = input
+            && type_contains_option(&argument.ty)
+        {
+            violations.push(Violation {
+                path: path.to_path_buf(),
+                line: span_line(argument.ty.span()),
+            });
+        }
+    }
+    if let ReturnType::Type(_, output) = &signature.output
+        && type_contains_option(output)
+    {
+        violations.push(Violation {
+            path: path.to_path_buf(),
+            line: span_line(output.span()),
+        });
+    }
+}
+
+fn derives_tsify(attributes: &[Attribute]) -> bool {
+    attributes.iter().any(|attribute| {
+        if !attribute.path().is_ident("derive") {
+            return false;
+        }
+        let mut derives_tsify = false;
+        let parsed = attribute.parse_nested_meta(|meta| {
+            if meta
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "Tsify")
+            {
+                derives_tsify = true;
+            }
+            Ok(())
+        });
+        parsed.is_ok() && derives_tsify
+    })
+}
+
+fn has_wasm_bindgen(attributes: &[Attribute]) -> bool {
+    attributes
+        .iter()
+        .any(|attribute| attribute.path().is_ident("wasm_bindgen"))
+}
+
+fn type_contains_option(value: &Type) -> bool {
+    struct OptionVisitor {
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for OptionVisitor {
+        fn visit_type_path(&mut self, path: &'ast syn::TypePath) {
+            if path
+                .path
+                .segments
+                .iter()
+                .any(|segment| segment.ident == "Option")
+            {
+                self.found = true;
+                return;
+            }
+            syn::visit::visit_type_path(self, path);
+        }
+    }
+
+    let mut visitor = OptionVisitor { found: false };
+    visitor.visit_type(value);
+    visitor.found
 }
 
 fn collect_attribute_violations(
@@ -159,7 +281,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reports_tsify_absence_overrides_but_allows_named_types() -> anyhow::Result<()> {
+    fn reports_implicit_boundary_absence_but_allows_named_types() -> anyhow::Result<()> {
         let root =
             std::env::temp_dir().join(format!("nook-rust-tsify-state-{}", std::process::id()));
         let source_root = root.join("nook-app/nook-core/src");
@@ -178,6 +300,26 @@ pub account_email: Option<String>,
 #[tsify(type = "StorageProviderType")]
 pub provider_type: String,
 }
+
+#[derive(Tsify)]
+pub struct ExportedState {
+pub lifecycle: Option<String>,
+}
+
+#[wasm_bindgen]
+pub fn optional_input(value: Option<String>) -> Result<Option<String>, String> {
+Ok(value)
+}
+
+#[wasm_bindgen]
+impl Boundary {
+pub fn optional_method(&self, value: Option<String>) -> Option<String> {
+value
+}
+pub fn named_method(&self, value: LifecycleState) -> LifecycleState {
+value
+}
+}
 "#,
         )?;
 
@@ -192,6 +334,18 @@ pub provider_type: String,
                 Violation {
                     path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
                     line: 5,
+                },
+                Violation {
+                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    line: 12,
+                },
+                Violation {
+                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    line: 16,
+                },
+                Violation {
+                    path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
+                    line: 22,
                 },
             ]
         );

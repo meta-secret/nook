@@ -56,16 +56,16 @@ This document defines the strict development standards, architectural boundaries
 
 - **No `null` in authored TypeScript/Svelte:** Authored `nook-app/nook-web/src` code must
   not use `null` as a value, state sentinel, return type, parameter type, or
-  default prop value. Normalize truthful external absence to `undefined` at the
-  boundary, but do not store that value as a named application state. Product,
-  workflow, lifecycle, resource, and UI state use discriminated unions or
-  Rust/WASM-owned enums. Browser APIs that return `null` must be normalized at
-  the boundary with `?? undefined`; do not let nullable values flow through app code. Generated
+  default prop value. Convert truthful external absence directly into a
+  domain-specific discriminated union at the boundary. Product, workflow,
+  lifecycle, resource, and UI state use discriminated unions or Rust/WASM-owned
+  enums. Browser APIs that return `null` must be classified at the call site;
+  neither `null` nor `undefined` may flow through authored app code. Generated
   WASM bindings and ambient declarations may mention `null` because they mirror
-  external contracts. Browser callbacks and third-party component adapters
-  whose signatures require `null` may retain it only at that explicit boundary;
-  normalize before values enter application state. Do not hand-edit generated
-  files or spread nullable types into internal helpers.
+  external contracts. Put unavoidable browser or third-party signatures behind
+  generated declarations or a narrow untyped boundary and return a named state.
+  Do not hand-edit generated files or spread nullable types into internal
+  helpers.
 - **Explicit JavaScript/TypeScript/Svelte absence:** Authored code contains no
   `undefined` value or type tokens, including tests, build scripts, `.agents`,
   and `.github`. Use optional syntax only for external input shape, `void` for

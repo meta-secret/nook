@@ -103,8 +103,10 @@ When you see `Option<T>`, ask:
   pending, manual, or another domain state, use a named Rust enum and derive
   the generated boundary type from it.
 - Truthful structural omission in external or persisted wire formats may still
-  use `Option<T>` without a handwritten absence override. Normalize it into a
-  named domain state at the first owned boundary.
+  use `Option<T>` internally without a handwritten absence override. A
+  `Tsify`-derived field or `wasm_bindgen` parameter/return must not expose
+  `Option<T>` because generated TypeScript recreates unnamed absence. Normalize
+  it into a named domain state before the exported boundary.
 - `void` remains TypeScript's unit/effect return type, equivalent to Rust `()`;
   it is not a serialized field-state escape hatch.
 

@@ -22,11 +22,16 @@ remember what absence means and which other flags or fields are valid with it.
 Use a discriminated union with named variants:
 
 ```ts
-type SelectionState =
-  | { kind: "not-selected" }
-  | { kind: "selected"; item: Item }
+enum SelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
 
-let selection = $state<SelectionState>({ kind: "not-selected" })
+type SelectionState =
+  | { kind: SelectionKind.NotSelected }
+  | { kind: SelectionKind.Selected; item: Item }
+
+let selection = $state<SelectionState>({ kind: SelectionKind.NotSelected })
 ```
 
 Put data only on the variant that owns it. Group fields that transition
@@ -40,16 +45,15 @@ explicit variant, never widen them to `string`, when Rust owns that identifier.
 
 Do not encode closed domain workflows as string-literal rune state. Use
 generated Rust/WASM enums for authentication, unlock, recovery, Sentinel,
-provider, and session phases. Keep string unions only for visual component
-state such as panel, tab, accordion, or form-view selection.
+provider, and session phases. Use meaningfully named TypeScript enums for
+visual component state such as panel, tab, accordion, or form-view selection.
 
 Do not use zero-argument `$state<T>()` for modeled state. DOM element bindings
-are structural browser references and may remain optional when Svelte owns
-their assignment contract.
+also use a named `unmounted/mounted` state when authored code reads or mutates
+the reference.
 
-Do not write `value ?? undefined` when `value` is already typed as possibly
-`undefined`. Keep `?? undefined` only at a boundary that converts a possible
-`null` from a browser or generated API into Nook's `undefined` convention.
+Convert browser or generated API absence directly into a semantic state; do
+not normalize one forbidden absence sentinel into another.
 
 Use an explicit initializer when the state has a concrete initial value:
 
@@ -70,17 +74,17 @@ Does not apply to:
 - Generated TypeScript declarations.
 - Optional Rust/WASM DTO fields or domain workflows that should be modeled as
   Rust enums.
-- DOM references, external inputs, generated/browser contracts, lookup/parser
-  results, caches, and optional callbacks where absence is structural.
+- Generated external contracts. Authored adapters still convert their result
+  into a named state immediately.
 
 ## Examples
 
 - Before: `let result = $state<NookImportResult>()`
-- After: `let result = $state<ImportState>({ kind: "idle" })`
+- After: `let result = $state<ImportState>({ kind: ImportKind.Idle })`
 - Before: `let selectedFile = $state<File>()`
-- After: `let selection = $state<FileSelection>({ kind: "empty" })`
+- After: `let selection = $state<FileSelection>({ kind: FileSelectionKind.Empty })`
 - Before: `selectedVaultStoreId = $state<string>()`
-- After: `selection = $state<ValueState<StoreId>>({ kind: "empty" })`
+- After: `vaultSelection = $state<VaultSelection>({ kind: VaultSelectionKind.NotSelected })`
 
 ## Application Checklist
 
@@ -93,10 +97,8 @@ Does not apply to:
       `string`.
 - [ ] Replace domain string-literal unions with generated Rust/WASM enums;
       retain only visual string unions in Svelte.
-- [ ] Preserve structural DOM and external-boundary absence only where the
-      contract genuinely requires it.
-- [ ] Remove redundant `?? undefined` while preserving `null` normalization at
-      external boundaries.
+- [ ] Convert DOM, lookup, parser, cache, and external-boundary absence into
+      meaningfully named states at the narrowest authored boundary.
 - [ ] Escalate closed domain-state modeling to Rust/WASM rather than hiding it
       behind optional TypeScript fields.
 

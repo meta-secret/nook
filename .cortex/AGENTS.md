@@ -107,7 +107,9 @@ named Rust enum whose variants explain the state and derive the generated
 boundary type from the enum. `void` remains valid only for TypeScript
 unit/effect returns, never as a serialized field state. The syntax-aware
 preflight rejects authored absence sentinels in `tsify(type = "...")`
-overrides.
+overrides, `Option<T>` fields on `Tsify` exports, and `Option<T>` parameters or
+returns on `wasm_bindgen` exports. `Option<T>` may remain inside Rust, but it
+must be converted to a named boundary state before TypeScript generation.
 
 Tests of known JSON contracts must deserialize into the concrete Rust wire or
 domain type before asserting field values. Raw `serde_json::Value` indexing and

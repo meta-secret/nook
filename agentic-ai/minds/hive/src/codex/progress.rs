@@ -15,7 +15,7 @@ impl<W: Write> TurnProgress<W> {
 }
 
 pub(super) struct TaskProgressReporter<W> {
-    writer: W,
+    pub(super) writer: W,
     decorate: bool,
     task_id: String,
     step: usize,
@@ -175,12 +175,12 @@ pub(super) fn is_verification_command(command: &[String]) -> bool {
 }
 
 pub(super) struct ProgressReporter<W> {
-    writer: W,
+    pub(super) writer: W,
     decorate: bool,
     inspection_step: usize,
     reasoning_open: bool,
     saw_reasoning_delta: bool,
-    plan_output_announced: bool,
+    pub(super) plan_output_announced: bool,
 }
 
 impl<W: Write> ProgressReporter<W> {

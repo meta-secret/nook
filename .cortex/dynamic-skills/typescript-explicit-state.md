@@ -154,8 +154,9 @@ that encode implicit absence in authored JavaScript, TypeScript, and Svelte. It
 accepts `void` in function and callback return types, `Promise<void>`, and unary
 discard expressions. The Rust-boundary preflight also rejects
 `#[tsify(type = "...")]` field overrides containing `undefined`, `null`, or
-`void`; Rust-owned domain absence must be a named Rust enum before code
-generation. It also rejects
+`void`, `Option<T>` fields on `Tsify` exports, and `Option<T>` parameters or
+returns on `wasm_bindgen` exports. Rust-owned domain absence must be a named
+Rust enum before code generation. It also rejects
 raw string literal types on closed unions and discriminant fields (`kind`,
 `type`, `status`, `phase`, `stage`, `mode`, `action`, and `operation`), plus raw
 runtime discriminant constructors and comparisons, while accepting enum member
