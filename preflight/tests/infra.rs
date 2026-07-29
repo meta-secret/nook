@@ -183,6 +183,34 @@ fn hive_graph_clients_never_mix_schema_revisions() {
             "{manifest} must drain its prior graph-schema revision before starting a new one"
         );
     }
+    let worker_manifest = read("infra/k0s/manifests/hive/deployment.yaml");
+    for required in [
+        "terminationGracePeriodSeconds: 75",
+        "while [ ! -e /workspace/.hive-task-finished ]",
+        "/workspace/.hive-task-finished",
+        "&& [ -e /workspace/.hive-worker-ready ]",
+    ] {
+        assert!(
+            worker_manifest.contains(required),
+            "Hive rollout must preserve worker lease release through coordinator shutdown: \
+             missing {required}"
+        );
+    }
+    let coordinator_start = worker_manifest
+        .find("        - name: coordinator\n")
+        .expect("Hive coordinator container");
+    let coordinator = &worker_manifest[coordinator_start..];
+    let coordinator_end = coordinator
+        .find("        - name: auth-broker\n")
+        .expect("container after Hive coordinator");
+    let coordinator = &coordinator[..coordinator_end];
+    assert!(
+        coordinator.contains(
+            "            - name: workspace\n              mountPath: /workspace\n              \
+             readOnly: true"
+        ),
+        "Hive coordinator must mount the worker workspace read-only to observe lifecycle markers"
+    );
     let deployment_tasks = read("infra/tasks/hive.yml");
     for required in [
         "for deployment in hive hive-workbench-dispatcher hive-observer",
