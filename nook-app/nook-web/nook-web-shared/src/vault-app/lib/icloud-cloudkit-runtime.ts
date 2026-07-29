@@ -221,7 +221,7 @@ export function webAuthTokenStorageDiagnostics(): {
     }
   }
   const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`;
-  const expectedValue = sessionStorage.getItem(expectedKey) ?? omittedValue();
+  const expectedValue = sessionStorage.getItem(expectedKey)?.valueOf();
   return {
     expectedKeyPresent: Boolean(expectedValue),
     storedKeyCount: storedKeys.length,
@@ -263,7 +263,7 @@ function elementDiagnostics(element: Element | void): {
       typeof element.className === "string" && element.className
         ? element.className
         : omittedValue(),
-    role: element.getAttribute("role") ?? omittedValue(),
+    role: element.getAttribute("role")?.valueOf(),
     childElementCount: element.childElementCount,
     textLength: element.textContent?.trim().length ?? 0,
   };

@@ -112,9 +112,7 @@ export enum IsExtensionSessionExpiryMessageResultType {
   NookExtensionSessionExpired = 'nook:extension-session-expired',
 }
 
-export function isExtensionSessionExpiryMessage(
-  message: unknown,
-): message is {
+export function isExtensionSessionExpiryMessage(message: unknown): message is {
   type: IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
 } {
   return (
@@ -130,9 +128,7 @@ export enum IsExtensionSessionLockMessageResultType {
   NookExtensionSessionLock = 'nook:extension-session-lock',
 }
 
-export function isExtensionSessionLockMessage(
-  message: unknown,
-): message is {
+export function isExtensionSessionLockMessage(message: unknown): message is {
   type: IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
 } {
   return (
@@ -148,9 +144,7 @@ export enum IsExtensionSessionEnsureMessageResultType {
   NookEnsureExtensionSessionRuntime = 'nook:ensure-extension-session-runtime',
 }
 
-export function isExtensionSessionEnsureMessage(
-  message: unknown,
-): message is {
+export function isExtensionSessionEnsureMessage(message: unknown): message is {
   type: IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
 } {
   return (

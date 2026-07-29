@@ -1,4 +1,7 @@
-export type SentinelDashboard = "card-stack" | "terminal";
+export enum SentinelDashboard {
+  CardStack = "card-stack",
+  Terminal = "terminal",
+}
 enum FocusReturnKind {
   Body = "body",
   Element = "element",
@@ -75,7 +78,7 @@ export function sentinelDashboardPortal(
 
   function activate(dashboard: SentinelDashboard | void) {
     returnFocusTestId =
-      dashboard === "terminal"
+      dashboard === SentinelDashboard.Terminal
         ? "sentinel-dashboard-terminal"
         : "sentinel-dashboard-card-stack";
     previousFocus =

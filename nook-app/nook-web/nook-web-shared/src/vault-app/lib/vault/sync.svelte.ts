@@ -536,9 +536,7 @@ export function startVaultSync(state: SyncActionsContext) {
     return;
   }
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
-    intoWasmStringValue(
-      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? omittedValue(),
-    ),
+    intoWasmStringValue(import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS),
   );
   const needsRemoteUpdates =
     state.isAuthenticated ||
@@ -791,7 +789,7 @@ export async function resolveSyncConflictImportRemote(
     if (conflict.remoteYaml.trim()) {
       importedStoreId = await importLocalVaultBlob(
         conflict.remoteYaml,
-        conflict.providerLabel ?? omittedValue(),
+        conflict.providerLabel,
       );
     } else {
       if (!state.manager) {

@@ -23,7 +23,10 @@ export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
-export type GoogleDriveOAuthScope = "appdata" | "shared";
+export enum GoogleDriveOAuthScope {
+  AppData = "appdata",
+  Shared = "shared",
+}
 
 export type GoogleOAuthTokens = {
   accessToken: string;
@@ -102,9 +105,9 @@ function googleClientId(): string {
 
 function scopeString(scope: GoogleDriveOAuthScope): string {
   switch (scope) {
-    case "shared":
+    case GoogleDriveOAuthScope.Shared:
       return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
-    case "appdata":
+    case GoogleDriveOAuthScope.AppData:
     default:
       return DRIVE_APPDATA_SCOPE;
   }
@@ -180,12 +183,12 @@ async function tokenClientForScope(
 
 /** Private mode: initialize the default `drive.appdata` token client. */
 export async function initGoogleAuth(): Promise<void> {
-  await tokenClientForScope("appdata");
+  await tokenClientForScope(GoogleDriveOAuthScope.AppData);
 }
 
 /** Shared mode: initialize the per-file write + Drive read token client. */
 export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope("shared");
+  await tokenClientForScope(GoogleDriveOAuthScope.Shared);
 }
 
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
@@ -208,7 +211,7 @@ export async function requestGoogleAccessToken(options?: {
   prompt?: "" | "none" | "consent" | "select_account";
   scope?: GoogleDriveOAuthScope;
 }): Promise<GoogleOAuthTokens> {
-  const scope = options?.scope ?? "appdata";
+  const scope = options?.scope ?? GoogleDriveOAuthScope.AppData;
   const slot = await tokenClientForScope(scope);
 
   return new Promise((resolve, reject) => {
@@ -236,7 +239,7 @@ export async function requestGoogleDriveSharedAccess(options?: {
 }): Promise<GoogleOAuthTokens> {
   return requestGoogleAccessToken({
     prompt: options?.prompt ?? "consent",
-    scope: "shared",
+    scope: GoogleDriveOAuthScope.Shared,
   });
 }
 
@@ -269,7 +272,9 @@ export async function ensureValidOAuthFileConfig(
   }
   const shared =
     config.driveMode === "shared" || Boolean(config.folderId?.trim());
-  const scope: GoogleDriveOAuthScope = shared ? "shared" : "appdata";
+  const scope = shared
+    ? GoogleDriveOAuthScope.Shared
+    : GoogleDriveOAuthScope.AppData;
   const refreshed = await requestGoogleAccessToken({ prompt: "", scope });
   return oauthTokensToConfig(refreshed, config);
 }

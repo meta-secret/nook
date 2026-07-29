@@ -1,15 +1,30 @@
-export type SettingsSection = "storage" | "onboard" | "admin";
-export type SettingsAccordionSection = "devices" | "language" | "danger";
-export type AdminAccordionSection =
-  | "vaults"
-  | "storage"
-  | "passwords"
-  | "import-export";
+export enum SettingsSection {
+  Storage = "storage",
+  Onboard = "onboard",
+  Admin = "admin",
+}
+
+export enum SettingsAccordionSection {
+  Devices = "devices",
+  Language = "language",
+  Danger = "danger",
+}
+
+export enum AdminAccordionSection {
+  Vaults = "vaults",
+  Storage = "storage",
+  Passwords = "passwords",
+  ImportExport = "import-export",
+}
 
 export class VaultUiState {
   settingsOpen = $state(false);
-  settingsSection = $state<SettingsSection>("storage");
-  settingsAccordionSection = $state<SettingsAccordionSection>("devices");
-  adminAccordionSection = $state<AdminAccordionSection>("vaults");
+  settingsSection = $state<SettingsSection>(SettingsSection.Storage);
+  settingsAccordionSection = $state<SettingsAccordionSection>(
+    SettingsAccordionSection.Devices,
+  );
+  adminAccordionSection = $state<AdminAccordionSection>(
+    AdminAccordionSection.Vaults,
+  );
   helpOpen = $state(false);
 }

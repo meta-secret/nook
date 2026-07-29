@@ -36,7 +36,7 @@
   let {
     vault,
     syncProviders,
-    syncingProviderId = omittedValue(),
+    syncingProviderId,
     isVerifying,
     isInitializing,
     addProviderOpen = false,

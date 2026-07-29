@@ -7,7 +7,7 @@
   import {
     importBinaryFile,
     importTextFile,
-    selectedImportFile,
+    ImportAttemptKind,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
   import {
@@ -44,7 +44,7 @@
     `${props.translationPrefix}.${suffix}`
 
   function selectFile(event: Event) {
-    const file = selectedImportFile(event)
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
     selectedFile = file
       ? { kind: ImportFileSelectionKind.Selected, file }
       : { kind: ImportFileSelectionKind.NotSelected }
@@ -65,11 +65,14 @@
           false,
           props.onImport,
         )
-        result =
-          !("result" in imported)
-            ? { kind: PasswordImportOutcomeKind.NotRun }
-            : { kind: PasswordImportOutcomeKind.Completed, result: imported.result }
-        error = imported.error
+        if (imported.kind === ImportAttemptKind.Completed) {
+          result = {
+            kind: PasswordImportOutcomeKind.Completed,
+            result: imported.result,
+          }
+        } else if (imported.kind === ImportAttemptKind.Failed) {
+          error = imported.error
+        }
         return
       }
       const imported = await importBinaryFile(
@@ -77,11 +80,14 @@
         false,
         props.onImport,
       )
-      result =
-        !("result" in imported)
-          ? { kind: PasswordImportOutcomeKind.NotRun }
-          : { kind: PasswordImportOutcomeKind.Completed, result: imported.result }
-      error = imported.error
+      if (imported.kind === ImportAttemptKind.Completed) {
+        result = {
+          kind: PasswordImportOutcomeKind.Completed,
+          result: imported.result,
+        }
+      } else if (imported.kind === ImportAttemptKind.Failed) {
+        error = imported.error
+      }
     } finally {
       isImporting = false
     }

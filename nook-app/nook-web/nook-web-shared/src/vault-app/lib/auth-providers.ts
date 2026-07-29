@@ -1,4 +1,3 @@
-import { omittedValue } from "../../explicit-state";
 import {
   bindGoogleDriveSharedFolder,
   deleteAuthProvidersDb,
@@ -63,7 +62,7 @@ export function findDuplicateSyncProvider(
   return findDuplicateSyncProviderWasm(
     { providers },
     candidate,
-    options?.excludeId ?? omittedValue(),
+    options?.excludeId,
   );
 }
 
@@ -79,7 +78,7 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = "google-drive",
 ): string {
-  return providerDefaultLabelCore(type, detail ?? omittedValue(), oauthPreset);
+  return providerDefaultLabelCore(type, detail, oauthPreset);
 }
 
 export function localizeProviderLabel(
@@ -101,7 +100,7 @@ export function maskGithubPat(
   pat: string | void,
   t?: (key: string) => string,
 ): string {
-  const hint = maskGithubPatHintCore(pat ?? omittedValue());
+  const hint = maskGithubPatHintCore(pat);
   if (!hint) {
     return t ? t("auth_storage.no_token_saved") : "No token saved";
   }

@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import { expect, type Page } from '@playwright/test'
 import { assertEnrolledVaultYaml, assertGenesisVaultYaml } from '../vault-yaml'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
@@ -102,13 +101,13 @@ export async function addSecret(
         }
       })
       return {
-        secrets: vault?.secrets?.length ?? omittedValue(),
-        storageMode: vault?.storageMode ?? omittedValue(),
-        localVaultPresent: vault?.localVaultPresent ?? omittedValue(),
-        syncProviders: vault?.syncProviders?.length ?? omittedValue(),
-        isSaving: vault?.isSaving ?? omittedValue(),
-        isSyncing: vault?.isSyncing ?? omittedValue(),
-        errorMsg: vault?.errorMsg ?? omittedValue(),
+        secrets: vault?.secrets?.length,
+        storageMode: vault?.storageMode,
+        localVaultPresent: vault?.localVaultPresent,
+        syncProviders: vault?.syncProviders?.length,
+        isSaving: vault?.isSaving,
+        isSyncing: vault?.isSyncing,
+        errorMsg: vault?.errorMsg,
         localYamlHasKey: idbYaml.includes(expectedKey),
         localYamlSecretCount:
           idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length ?? 0,

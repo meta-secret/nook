@@ -272,14 +272,14 @@ function applySavedEnrollmentProvider(
     return;
   }
   if (provider.type === "oauth-file") {
-    state.oauthFile = provider.oauthFile ?? omittedValue();
+    state.oauthFile = provider.oauthFile;
     state.githubPat = "";
     state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo;
     state.clearLocalFolder();
     return;
   }
 
-  state.localFolder = provider.localFolder ?? omittedValue();
+  state.localFolder = provider.localFolder;
   state.githubPat = "";
   state.clearOauthFile();
 }

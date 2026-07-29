@@ -42,8 +42,6 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     type TaskSelection,
   } from './app-state';
 
-  function omittedValue(): void {}
-
   let snapshotState = $state<ObserverFeed>({
     kind: ObserverFeedKind.NotLoaded,
   });
@@ -58,45 +56,43 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   });
   let nowMs = $state(Date.now());
 
-  const snapshot = $derived(
-    snapshotState.kind === ObserverFeedKind.Loaded
-      ? snapshotState.snapshot
-      : omittedValue(),
-  );
-  const selectedId = $derived(
-    selectedIdState.kind === TaskSelectionKind.Selected
-      ? selectedIdState.taskId
-      : omittedValue(),
-  );
-  const durableMatch = $derived(
-    durableMatchState.kind === DurableTaskLookupKind.Found
-      ? durableMatchState.task
-      : omittedValue(),
-  );
   const copy = $derived(
-    snapshot?.copy ?? emergencyCopy(navigator.language || 'en'),
+    snapshotState.kind === ObserverFeedKind.Loaded
+      ? snapshotState.snapshot.copy
+      : emergencyCopy(navigator.language || 'en'),
   );
   const selectedState = $derived.by<SelectedTask>(() => {
-    const task =
-      snapshot?.tasks.find((candidate) => candidate.id === selectedId) ??
-      (durableMatch?.id === selectedId ? durableMatch : omittedValue());
-    return task
-      ? { kind: SelectedTaskKind.Open, task }
-      : { kind: SelectedTaskKind.Closed };
+    if (selectedIdState.kind === TaskSelectionKind.None) {
+      return { kind: SelectedTaskKind.Closed };
+    }
+    if (snapshotState.kind === ObserverFeedKind.Loaded) {
+      const task = snapshotState.snapshot.tasks.find(
+        (candidate) => candidate.id === selectedIdState.taskId,
+      );
+      if (task) return { kind: SelectedTaskKind.Open, task };
+    }
+    if (
+      durableMatchState.kind === DurableTaskLookupKind.Found &&
+      durableMatchState.task.id === selectedIdState.taskId
+    ) {
+      return {
+        kind: SelectedTaskKind.Open,
+        task: durableMatchState.task,
+      };
+    }
+    return { kind: SelectedTaskKind.Closed };
   });
-  const selected = $derived(
-    selectedState.kind === SelectedTaskKind.Open
-      ? selectedState.task
-      : omittedValue(),
-  );
-  const filteredTasks = $derived(
-    [
-      ...(durableMatch &&
-      !(snapshot?.tasks ?? []).some((task) => task.id === durableMatch?.id)
-        ? [durableMatch]
-        : []),
-      ...(snapshot?.tasks ?? []),
-    ].filter((task) => {
+  const filteredTasks = $derived.by(() => {
+    const snapshotTasks =
+      snapshotState.kind === ObserverFeedKind.Loaded
+        ? snapshotState.snapshot.tasks
+        : [];
+    const durableTasks =
+      durableMatchState.kind === DurableTaskLookupKind.Found &&
+      !snapshotTasks.some((task) => task.id === durableMatchState.task.id)
+        ? [durableMatchState.task]
+        : [];
+    return [...durableTasks, ...snapshotTasks].filter((task) => {
       const query = search.trim().toLocaleLowerCase();
       return (
         query.length === 0 ||
@@ -104,28 +100,40 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         task.kind.toLocaleLowerCase().includes(query) ||
         task.status.toLocaleLowerCase().includes(query)
       );
-    }),
-  );
+    });
+  });
   const normalizedSearch = $derived(search.trim());
   const attentionEntries = $derived(
-    (snapshot?.alerts ?? []).flatMap((alert) => {
-      const task = snapshot?.tasks.find(
-        (candidate) => candidate.id === alert.task_id,
-      );
-      return task ? [{ alert, task }] : [];
-    }),
+    snapshotState.kind === ObserverFeedKind.Loaded
+      ? snapshotState.snapshot.alerts.flatMap((alert) => {
+          const task = snapshotState.snapshot.tasks.find(
+            (candidate) => candidate.id === alert.task_id,
+          );
+          return task ? [{ alert, task }] : [];
+        })
+      : [],
   );
   const attentionTaskIds = $derived(
     new Set(attentionEntries.map(({ task }) => task.id)),
   );
   const recentActivity = $derived(
-    (snapshot?.tasks ?? [])
+    (snapshotState.kind === ObserverFeedKind.Loaded
+      ? snapshotState.snapshot.tasks
+      : []
+    )
       .flatMap((task) =>
         task.activity.map((entry) => ({ entry, taskId: task.id })),
       )
       .sort((left, right) => right.entry.created_at - left.entry.created_at)
       .slice(0, 8),
   );
+
+  function isSelectedTaskId(taskId: string): boolean {
+    return (
+      selectedIdState.kind === TaskSelectionKind.Selected &&
+      selectedIdState.taskId === taskId
+    );
+  }
 
   $effect(() => {
     const controller = new AbortController();
@@ -202,7 +210,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     if (
       search.trim().length > 0 &&
       !detailsClosed &&
-      !filteredTasks.some((task) => task.id === selectedId)
+      !filteredTasks.some((task) => isSelectedTaskId(task.id))
     ) {
       const firstTask = filteredTasks[0];
       selectedIdState = firstTask
@@ -231,10 +239,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       const next = (await response.json()) as ObserverSnapshot;
       snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
       unavailable = false;
+      const selectedTaskStillAvailable =
+        selectedIdState.kind === TaskSelectionKind.Selected &&
+        (next.tasks.some((task) => task.id === selectedIdState.taskId) ||
+          (durableMatchState.kind === DurableTaskLookupKind.Found &&
+            durableMatchState.task.id === selectedIdState.taskId));
       if (
         (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
-        (!next.tasks.some((task) => task.id === selectedId) &&
-          durableMatch?.id !== selectedId)
+        !selectedTaskStillAvailable
       ) {
         if (!detailsClosed) {
           const firstTask = next.tasks[0];
@@ -359,11 +371,15 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
     <section class="pulse-bar" aria-label={copy.overview}>
       <div class="pulse-summary">
-        <strong>{snapshot?.active_task_count ?? 0}</strong>
+        <strong
+          >{snapshotState.kind === ObserverFeedKind.Loaded
+            ? snapshotState.snapshot.active_task_count
+            : 0}</strong
+        >
         <span>{copy.queue.toLocaleLowerCase()}</span>
       </div>
       <div class="worker-capacity" aria-label={copy.workers}>
-        {#each snapshot?.agents ?? [] as agent (agent.id)}
+        {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
           <span
             class:worker-running={agent.status === 'RUNNING'}
             class:worker-stale={!isAgentHealthy(agent)}
@@ -378,7 +394,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       >
         <AlertTriangle size={16} />
         <strong
-          >{attentionEntries.length}{snapshot?.alerts_truncated
+          >{attentionEntries.length}{snapshotState.kind ===
+            ObserverFeedKind.Loaded && snapshotState.snapshot.alerts_truncated
             ? '+'
             : ''}</strong
         >
@@ -390,10 +407,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <aside class="worker-rail" aria-labelledby="workers-heading">
         <div class="section-heading">
           <h2 id="workers-heading">{copy.workers}</h2>
-          <span>{snapshot?.agents.length ?? 0}</span>
+          <span
+            >{snapshotState.kind === ObserverFeedKind.Loaded
+              ? snapshotState.snapshot.agents.length
+              : 0}</span
+          >
         </div>
         <div class="worker-list">
-          {#each snapshot?.agents ?? [] as agent (agent.id)}
+          {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
             <div class="worker-row">
               <div
                 class:state-running={agent.status === 'RUNNING'}
@@ -452,7 +473,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
               {@render AlertRow(
                 entry.alert,
                 entry.task,
-                selectedId === entry.task.id,
+                isSelectedTaskId(entry.task.id),
                 copy,
                 relativeTime,
                 () => selectTask(entry.task.id),
@@ -465,7 +486,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {#each filteredTasks.filter((task) => normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
             {@render TaskRow(
               task,
-              selectedId === task.id,
+              isSelectedTaskId(task.id),
               copy,
               statusLabel,
               relativeTime,
@@ -498,7 +519,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         aria-live="polite"
         tabindex="-1"
       >
-        {#if selected}
+        {#if selectedState.kind === SelectedTaskKind.Open}
+          {@const selected = selectedState.task}
           <div class="detail-header">
             <div>
               <span class="detail-kicker">{copy.task_details}</span>

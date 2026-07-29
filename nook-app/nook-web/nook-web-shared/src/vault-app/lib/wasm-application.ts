@@ -1,4 +1,8 @@
-export type WasmApplication = "unified-development" | "simple" | "sentinel";
+export enum WasmApplication {
+  UnifiedDevelopment = "unified-development",
+  Simple = "simple",
+  Sentinel = "sentinel",
+}
 
 declare const __NOOK_WASM_APPLICATION__: WasmApplication;
 

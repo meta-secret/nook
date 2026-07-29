@@ -1,11 +1,11 @@
 import { mount } from 'svelte'
 import '$vault-shared/app.css'
 import { ensureAppWasm } from '$lib/wasm-bootstrap'
-import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 
 // Keep the initial root identity: a replacement page can supply a new #app
 // while the asynchronous WASM bootstrap is pending.
-const target = document.getElementById('app') ?? omittedValue()
+const target = document.getElementById('app')
+if (!target) throw new Error('Vault app mount target is missing')
 
 await ensureAppWasm()
 const { default: App } = await import('$vault-shared/App.svelte')

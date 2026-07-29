@@ -92,12 +92,13 @@ pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violatio
     Ok(violations)
 }
 
-/// Finds authored string-literal discriminants that should be owned by enums.
+/// Finds authored closed string vocabularies and runtime discriminants that
+/// should be owned by enums.
 ///
 /// Closed state and protocol vocabularies must have a named enum declaration.
 /// The serialized values may remain strings for compatibility, but union
-/// variants and message shapes refer to enum members instead of repeating raw
-/// literals.
+/// variants, message shapes, constructors, and comparisons refer to enum
+/// members instead of repeating raw literals.
 ///
 /// # Errors
 ///
@@ -287,8 +288,41 @@ fn collect_raw_string_discriminant_nodes(
             .map(str::trim);
         let declared_type = node.child_by_field_name("type");
         if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
-            && declared_type.is_some_and(|value| contains_string_literal_type(value, source))
+            && declared_type.is_some_and(|value| is_string_literal_type(value, source))
         {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+    }
+    if node.kind() == "union_type"
+        && node
+            .parent()
+            .is_some_and(|parent| parent.kind() == "type_alias_declaration")
+        && contains_string_literal_type(node, source)
+    {
+        lines.push(first_line + node.start_position().row);
+        return;
+    }
+    if node.kind() == "pair" {
+        let name = node
+            .child_by_field_name("key")
+            .and_then(|value| value.utf8_text(source.as_bytes()).ok())
+            .map(str::trim);
+        let value = node.child_by_field_name("value");
+        if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
+            && value.is_some_and(is_string_literal_expression)
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+    }
+    if node.kind() == "binary_expression" {
+        let left = node.child_by_field_name("left");
+        let right = node.child_by_field_name("right");
+        if left.zip(right).is_some_and(|(left, right)| {
+            (is_discriminant_member(left, source) && is_string_literal_expression(right))
+                || (is_string_literal_expression(left) && is_discriminant_member(right, source))
+        }) {
             lines.push(first_line + node.start_position().row);
             return;
         }
@@ -299,17 +333,43 @@ fn collect_raw_string_discriminant_nodes(
     }
 }
 
+fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
+    matches!(node.kind(), "string" | "template_string")
+}
+
+fn is_discriminant_member(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    const DISCRIMINANT_SUFFIXES: [&str; 8] = [
+        ".action",
+        ".kind",
+        ".mode",
+        ".operation",
+        ".phase",
+        ".stage",
+        ".status",
+        ".type",
+    ];
+    node.kind() == "member_expression"
+        && node.utf8_text(source.as_bytes()).is_ok_and(|text| {
+            DISCRIMINANT_SUFFIXES
+                .iter()
+                .any(|suffix| text.ends_with(suffix))
+        })
+}
+
 fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
-    if node.kind() == "literal_type"
-        && node
-            .utf8_text(source.as_bytes())
-            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')))
-    {
+    if is_string_literal_type(node, source) {
         return true;
     }
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .any(|child| contains_string_literal_type(child, source))
+}
+
+fn is_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    node.kind() == "literal_type"
+        && node
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')))
 }
 
 fn typescript_code_generic_optional_state_lines(
@@ -674,7 +734,7 @@ const state = presentValue(value)
     }
 
     #[test]
-    fn reports_raw_string_discriminants_but_accepts_enum_members()
+    fn reports_raw_string_vocabularies_and_runtime_discriminants()
     -> Result<(), tree_sitter::LanguageError> {
         let source = r"
 enum SessionKind {
@@ -686,11 +746,16 @@ type SessionState =
   | { kind: SessionKind.Open; handle: number }
 type Message = { type: 'nook:open'; payload: string }
 type Description = { label: 'static copy' }
+type Panel = 'closed' | 'open'
+const state: SessionState = { kind: 'closed' }
+if (state.kind === 'closed') console.log('closed')
+if ('closed' !== state.kind) console.log('open')
+const description = { label: 'static copy' }
 ";
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
-            vec![7, 9]
+            vec![7, 9, 11, 12, 13, 14]
         );
         Ok(())
     }

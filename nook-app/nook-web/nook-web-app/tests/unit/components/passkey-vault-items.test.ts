@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
 import type { NookSecretListItem } from '$lib/nook'
@@ -46,8 +45,6 @@ describe('passkey item discovery', () => {
       item,
       index: 0,
       expanded: true,
-      decrypted: omittedValue(),
-      copiedKey: omittedValue(),
       onToggleExpand: vi.fn(),
       onToggleReveal: vi.fn(async () => {}),
       onEditItem: vi.fn(async () => {}),

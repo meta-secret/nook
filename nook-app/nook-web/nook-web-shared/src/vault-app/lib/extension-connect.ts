@@ -67,7 +67,7 @@ export function extensionConnectRequestFromLocation(
     params.get("device_label")?.trim() ??
     "Nook Extension - this browser profile";
   const nonce = params.get("nonce")?.trim() ?? "";
-  const scopes = parseScopes(params.get("scopes") ?? omittedValue());
+  const scopes = parseScopes(params.get("scopes")?.valueOf());
 
   if (
     !deviceId ||

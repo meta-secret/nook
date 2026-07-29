@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
 import type { NookSecretListItem, NookSecretRecord } from '$lib/nook'
@@ -28,13 +27,12 @@ const decryptedAuthenticator = {
   backupCodes: ['recovery-one', 'recovery-two'],
 } as unknown as NookSecretRecord
 
-function authenticatorProps(revealed: NookSecretRecord | void) {
+function authenticatorProps(revealed?: NookSecretRecord) {
   return {
     item: authenticatorItem,
     index: 0,
     expanded: true,
-    decrypted: revealed,
-    copiedKey: omittedValue(),
+    ...(revealed ? { decrypted: revealed } : {}),
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
@@ -67,8 +65,6 @@ function renderLogin(item: NookSecretListItem) {
     item,
     index: 0,
     expanded: false,
-    decrypted: omittedValue(),
-    copiedKey: omittedValue(),
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
@@ -82,7 +78,7 @@ function renderLogin(item: NookSecretListItem) {
 
 describe('SecretDetailRow authenticator recovery codes', () => {
   test('keeps legacy recovery codes masked until reveal, then displays them', async () => {
-    const view = render(SecretDetailRow, authenticatorProps(omittedValue()))
+    const view = render(SecretDetailRow, authenticatorProps())
 
     expect(
       view.getByTestId('authenticator-backup-codes').textContent,

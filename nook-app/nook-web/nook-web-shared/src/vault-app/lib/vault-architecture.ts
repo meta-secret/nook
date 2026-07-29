@@ -1,4 +1,3 @@
-import { omittedValue } from "../../explicit-state";
 import {
   NookVaultArchitecture,
   VaultType,
@@ -101,7 +100,7 @@ export function firstCompatibleProvider(
   const selectedId = wasmFirstCompatibleProviderId(
     { providers },
     replicationType,
-    preferredId ?? omittedValue(),
+    preferredId,
   );
   return providers.find((provider) => provider.id === selectedId);
 }

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import type { ExtensionSetupState } from "$lib/extension-install";
+  import {
+    ExtensionSetupOfferKind,
+    type ExtensionSetupOffer,
+  } from "$lib/app-lifecycle-state";
   import { SUPPORTS_EXTENSION } from "$lib/app-kind";
   import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
   import OnboardDevice from "$lib/components/OnboardDevice.svelte";
@@ -32,7 +35,7 @@
     onEditorOpenChange,
   }: {
     vault: VaultState;
-    extensionSetupState: ExtensionSetupState | void;
+    extensionSetupState: ExtensionSetupOffer;
     extensionInstallBusy: boolean;
     extensionConnectError: boolean;
     hasSecurityRecommendations: boolean;
@@ -90,10 +93,14 @@
         ? 'space-y-4'
         : 'flex min-h-0 flex-1 flex-col gap-4'}"
     >
-      {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState && extensionSetupState.status !== "paired"}
+      {#if !vault.settingsOpen &&
+      !secretsAddOpen &&
+      SUPPORTS_EXTENSION &&
+      extensionSetupState.kind === ExtensionSetupOfferKind.Visible &&
+      extensionSetupState.setup.status !== "paired"}
         <ExtensionInstallSetupCard
           {vault}
-          state={extensionSetupState}
+          state={extensionSetupState.setup}
           installBusy={extensionInstallBusy}
           onInstall={onExtensionInstall}
           onConnect={onExtensionConnect}

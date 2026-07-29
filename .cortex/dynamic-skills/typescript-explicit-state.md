@@ -36,6 +36,12 @@ SessionKind.Closed`), never raw string literal types (`kind: "closed"`).
   `status`, `phase`, `stage`, `mode`, `action`, and `operation`. A wire format
   is a reason for string-valued enum members, not a reason to repeat raw string
   literals throughout authored code.
+- Use enum members in constructors, comparisons, switch cases, and fixtures,
+  not only in the union declaration. Any authored closed string-literal union
+  has the same requirement even when its field is not named `kind` or `type`.
+- Keep runtime enum declarations in cohesive adjacent `.ts` state modules and
+  import them into `.svelte` components. The repository's Svelte compilation
+  boundary does not preprocess runtime TypeScript enum syntax.
 - Prefer one enum per cohesive state machine or protocol vocabulary. Do not
   create a repository-wide `StateKind`, `MessageType`, or other generic enum
   that merely centralizes unrelated strings.
@@ -128,9 +134,10 @@ type ImportState =
 The AST-backed preflight rejects every executable or type-level `undefined`
 token, every `typeof` comparison against the string `"undefined"`, and every
 generic optional-state escape hatch in authored JavaScript, TypeScript, and
-Svelte. It also rejects raw string literal types on closed discriminant fields
-(`kind`, `type`, `status`, `phase`, `stage`, `mode`, `action`, and
-`operation`) while accepting enum member types and ignoring comments and
+Svelte. It also rejects raw string literal types on closed unions and
+discriminant fields (`kind`, `type`, `status`, `phase`, `stage`, `mode`,
+`action`, and `operation`), plus raw runtime discriminant constructors and
+comparisons, while accepting enum member types and ignoring comments and
 unrelated prose strings. Add positive and negative fixtures whenever the rule
 is sharpened. Run `task format` before pushing and use GitHub Actions as the
 product validation gate.

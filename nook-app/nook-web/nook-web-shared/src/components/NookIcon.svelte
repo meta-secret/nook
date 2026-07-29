@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { omittedValue } from '../explicit-state'
 
   let {
     src,
     alt = 'Nook logo',
-    filter = omittedValue(),
+    filter,
     class: className = '',
   }: {
     src: string

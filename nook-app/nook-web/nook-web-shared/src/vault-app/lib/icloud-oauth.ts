@@ -495,7 +495,7 @@ function clickCloudKitSignInButton(): void {
   log.info("CloudKit sign-in control click forwarded", {
     mountTag: mount?.tagName,
     controlTag: control.tagName,
-    controlRole: control.getAttribute("role") ?? omittedValue(),
+    controlRole: control.getAttribute("role")?.valueOf(),
     control: cloudKitSignInControlDiagnostics(),
   });
   control.click();
@@ -971,7 +971,7 @@ export function oauthTokensToICloudConfig(
 ): OAuthFileConfig {
   return iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
-    tokens.accountName ?? omittedValue(),
+    tokens.accountName,
     existing,
   );
 }

@@ -54,12 +54,14 @@ export async function clearBrowserVault(page: Page) {
 
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
-        vaultDb.onerror = () => onError(vaultDb.error ?? omittedValue())
+        vaultDb.onerror = () =>
+          onError(vaultDb.error ?? new Error('Vault database failed to open'))
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
-        authDb.onerror = () => onError(authDb.error ?? omittedValue())
+        authDb.onerror = () =>
+          onError(authDb.error ?? new Error('Auth database failed to open'))
         authDb.onblocked = done
       }),
     clearedThroughManager,

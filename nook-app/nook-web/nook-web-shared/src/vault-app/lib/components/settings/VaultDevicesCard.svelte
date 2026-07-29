@@ -281,7 +281,7 @@
             : 'outline'}
           class={extensionSetup.status !== 'not_installed'
             ? 'border-border'
-            : omittedValue()}
+            : false}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
           onclick={() => void handleExtensionSetupAction()}

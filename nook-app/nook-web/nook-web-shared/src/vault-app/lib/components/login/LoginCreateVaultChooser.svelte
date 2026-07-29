@@ -31,7 +31,7 @@
     type SentinelDashboardChoice,
   } from './login-create-vault-chooser-state'
   import { VaultType } from '$lib/vault-architecture'
-  import type { AppKind } from '$lib/app-kind'
+  import { AppKind } from '$lib/app-kind'
   import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
   import {
     SentinelGenesisPhase,
@@ -196,16 +196,16 @@
     buildSentinelGenesisRequestLink(sentinelGenesisRequest),
   )
   const landingSupporting = $derived(
-    appKind === 'simple'
+    appKind === AppKind.Simple
       ? vault.t('login.landing_supporting_simple')
-      : appKind === 'sentinel'
+      : appKind === AppKind.Sentinel
         ? vault.t('login.landing_supporting_sentinel')
         : vault.t('login.landing_supporting'),
   )
   const existingVaultDescription = $derived(
-    appKind === 'simple'
+    appKind === AppKind.Simple
       ? vault.t('login.path_cloud_description_simple')
-      : appKind === 'sentinel'
+      : appKind === AppKind.Sentinel
         ? vault.t('login.path_cloud_description_sentinel')
         : vault.t('login.path_cloud_description'),
   )
@@ -570,7 +570,7 @@
                             class="grid gap-2"
                             data-testid="get-started-path-list"
                           >
-                            {#if appKind !== 'sentinel'}
+                            {#if appKind !== AppKind.Sentinel}
                               <button
                                 type="button"
                                 class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
@@ -602,7 +602,7 @@
                                 />
                               </button>
                             {/if}
-                            {#if appKind !== 'simple'}
+                            {#if appKind !== AppKind.Simple}
                               <button
                                 type="button"
                                 class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"

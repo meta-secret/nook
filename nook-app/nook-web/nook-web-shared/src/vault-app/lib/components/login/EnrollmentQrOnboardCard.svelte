@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
 
   import { KeyRound, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
@@ -17,8 +16,8 @@
   let {
     vault,
     code,
-    passwordEntryId = omittedValue(),
-    passwordEntryLabel = omittedValue(),
+    passwordEntryId,
+    passwordEntryLabel,
     isVerifying,
     onSubmit,
   }: {

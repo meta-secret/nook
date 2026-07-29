@@ -106,6 +106,19 @@ domain policy. Do not spread optional-value unions, zero-argument `$state<T>()`
 runes, optional-field bags, and parallel booleans across a controller and then
 reconstruct the real state through condition chains.
 
+Every authored closed TypeScript/Svelte discriminant vocabulary uses a
+meaningfully named string enum. Union variants and protocol shapes reference
+enum members instead of raw string literal types for `kind`, `type`, `status`,
+`phase`, `stage`, `mode`, `action`, and `operation`. Serialized strings remain
+stable through enum values where wire or persistence compatibility requires
+them; unrelated state machines must not be collapsed into one generic enum.
+Constructors, comparisons, switch branches, and fixtures use those same enum
+members rather than repeating serialized strings. Any other authored closed
+string-literal union is also an enum; a field name outside the common
+discriminant list is not an escape hatch. Svelte components import runtime
+enums from a cohesive adjacent TypeScript state module because the Svelte
+compilation boundary does not preprocess runtime TypeScript enum syntax.
+
 External and browser contracts may still produce JavaScript's missing value at
 runtime. Express optional input shape with `?`, express no callback result as
 `void`, and normalize lookup/parser/browser results immediately into an

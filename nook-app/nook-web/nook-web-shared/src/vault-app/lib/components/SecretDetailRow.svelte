@@ -33,7 +33,7 @@
     index,
     expanded,
     decrypted,
-    authenticatorCode = omittedValue(),
+    authenticatorCode,
     copiedKey,
     onToggleExpand,
     onToggleReveal,
@@ -43,7 +43,7 @@
     onCopySecret,
     vault,
     editDisabled = false,
-    editDisabledReason = omittedValue(),
+    editDisabledReason,
     titleAsHeader = false,
   }: {
     item: NookSecretListItem;
@@ -293,7 +293,7 @@
             aria-label={vault.t("common.edit")}
             data-testid="edit-secret-btn"
             disabled={editDisabled}
-            title={editDisabled ? editDisabledReason : omittedValue()}
+            {...(editDisabled ? { title: editDisabledReason } : {})}
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <Pencil class="size-3.5" />

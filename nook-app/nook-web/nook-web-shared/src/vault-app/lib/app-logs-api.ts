@@ -1,4 +1,3 @@
-import { omittedValue } from "../../explicit-state";
 import {
   dumpLogs,
   getLogLevel,
@@ -66,10 +65,10 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith("?") ? search.slice(1) : search,
   );
   return {
-    minLevel: parseLevel(params.get("minLevel") ?? omittedValue(), "trace"),
-    limit: parsePositiveInt(params.get("limit") ?? omittedValue(), 500, 5000),
+    minLevel: parseLevel(params.get("minLevel")?.valueOf(), "trace"),
+    limit: parsePositiveInt(params.get("limit")?.valueOf(), 500, 5000),
     offset: parsePositiveInt(
-      params.get("offset") ?? omittedValue(),
+      params.get("offset")?.valueOf(),
       0,
       Number.MAX_SAFE_INTEGER,
     ),

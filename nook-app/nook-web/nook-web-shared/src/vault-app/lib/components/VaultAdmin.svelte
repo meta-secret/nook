@@ -52,7 +52,7 @@
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId = omittedValue(),
+    syncingProviderId,
     isAuthenticated,
     isSaving,
     addProviderOpen = false,

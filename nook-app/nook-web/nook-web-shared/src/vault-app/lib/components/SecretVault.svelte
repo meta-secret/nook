@@ -52,7 +52,7 @@
     vault,
     isSaving,
     editsBlocked = false,
-    editBlockMessage = omittedValue(),
+    editBlockMessage,
     secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,

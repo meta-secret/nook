@@ -293,16 +293,16 @@
             aria-expanded={focusedIndex.kind === FocusedWordKind.Focused &&
               focusedIndex.index === index &&
               suggestions.length > 0}
-            aria-controls={focusedIndex.kind === FocusedWordKind.Focused &&
+            {...(focusedIndex.kind === FocusedWordKind.Focused &&
             focusedIndex.index === index &&
             suggestions.length > 0
-              ? `seed-word-suggestions-${index + 1}`
-              : omittedValue()}
+              ? { "aria-controls": `seed-word-suggestions-${index + 1}` }
+              : {})}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
-            aria-describedby={cellInvalid(index)
-              ? `seed-word-error-${index + 1}`
-              : omittedValue()}
+            {...(cellInvalid(index)
+              ? { "aria-describedby": `seed-word-error-${index + 1}` }
+              : {})}
             class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
               index,
             )

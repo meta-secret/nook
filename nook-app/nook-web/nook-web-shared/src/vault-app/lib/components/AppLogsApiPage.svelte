@@ -12,6 +12,10 @@
 
   let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
+  function preserveJsonValue(_key: string, value: unknown): unknown {
+    return value
+  }
+
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
 
@@ -41,13 +45,13 @@
   {#if state.kind === LogsPageStateKind.Failed}
     <pre data-testid="app-logs-error">{JSON.stringify(
         { error: state.message },
-        omittedValue(),
+        preserveJsonValue,
         2,
       )}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
     <pre data-testid="app-logs-json">{JSON.stringify(
         state.payload,
-        omittedValue(),
+        preserveJsonValue,
         2,
       )}</pre>
   {:else}

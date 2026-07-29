@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 type UnknownRecord = Record<string, unknown>
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -18,7 +17,7 @@ export function scrubProviderCredentials(providers: unknown): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
-    if ('githubPat' in provider) provider.githubPat = omittedValue()
+    if ('githubPat' in provider) delete provider.githubPat
     if (isRecord(provider.oauthFile)) {
       provider.oauthFile.accessToken = ''
       if ('refreshToken' in provider.oauthFile) {

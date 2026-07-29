@@ -14,7 +14,11 @@ export type QueryLoginDetectionMessage = {
   type: QueryLoginDetectionMessageType.NookQueryLoginDetection
 }
 
-export type LoginDetectionStatus = 'detected' | 'not-detected' | 'unavailable'
+export enum LoginDetectionStatus {
+  Detected = 'detected',
+  NotDetected = 'not-detected',
+  Unavailable = 'unavailable',
+}
 
 export type LoginDetectionResponse = {
   ok: true

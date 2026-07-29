@@ -251,7 +251,7 @@
                 ? 'text-[#63eaa1]'
                 : 'text-[#66737e]',
           ]}
-          data-current={index === onboardingStep ? 'step' : omittedValue()}
+          data-current={index === onboardingStep ? 'step' : false}
         >
           <span
             class={[

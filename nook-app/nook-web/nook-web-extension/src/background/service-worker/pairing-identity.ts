@@ -446,9 +446,7 @@ export enum HasPairingApprovedTypeResultType {
   NookExtensionPairingApproved = 'nook:extension-pairing-approved',
 }
 
-export function hasPairingApprovedType(
-  message: unknown,
-): message is {
+export function hasPairingApprovedType(message: unknown): message is {
   type: HasPairingApprovedTypeResultType.NookExtensionPairingApproved
 } {
   return (

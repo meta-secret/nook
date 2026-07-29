@@ -36,9 +36,7 @@ export async function initOnce(state: VaultState): Promise<void> {
   try {
     const savedLocale = takeWasmStringValue(
       parseAppLocale(
-        intoWasmStringValue(
-          localStorage.getItem("nook_locale") ?? omittedValue(),
-        ),
+        intoWasmStringValue(localStorage.getItem("nook_locale")?.valueOf()),
       ),
     ) as NookAppLocale | void;
     const browserLocale = state.browserLocale.appLocale() as NookAppLocale;

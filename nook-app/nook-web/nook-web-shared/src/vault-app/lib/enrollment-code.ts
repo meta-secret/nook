@@ -3,7 +3,7 @@ import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
 } from "$app-wasm";
-import { APP_KIND, type AppKind } from "$lib/app-kind";
+import { APP_KIND, AppKind } from "$lib/app-kind";
 
 const ENROLLMENT_HASH_PREFIX = "#enroll=";
 
@@ -12,7 +12,7 @@ export function enrollmentAppRootUrl(
   appKind: AppKind = APP_KIND,
 ): string {
   const normalized = siteRoot.replace(/\/$/, "");
-  if (appKind === "simple" || appKind === "sentinel") {
+  if (appKind === AppKind.Simple || appKind === AppKind.Sentinel) {
     return `${normalized}/`;
   }
   return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;
@@ -71,7 +71,7 @@ function enrollmentCodeFromUrl(url: URL): string | void {
     url.hash = "";
     return code;
   }
-  const code = url.searchParams.get("enroll") ?? omittedValue();
+  const code = url.searchParams.get("enroll")?.valueOf();
   if (code) {
     url.searchParams.delete("enroll");
   }

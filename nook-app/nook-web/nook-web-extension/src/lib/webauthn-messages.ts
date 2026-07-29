@@ -1,5 +1,8 @@
 import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
-export type WebsitePasskeyCeremony = 'create' | 'get'
+export enum WebsitePasskeyCeremony {
+  Create = 'create',
+  Get = 'get',
+}
 
 export enum WebsitePasskeyOptionsMessageType {
   NookWebsitePasskeyOptions = 'nook:website-passkey-options',
@@ -53,7 +56,8 @@ function validBase(message: unknown): message is {
     payload.requestId.length >= 16 &&
     payload.requestId.length <= 128 &&
     'ceremony' in payload &&
-    (payload.ceremony === 'create' || payload.ceremony === 'get') &&
+    (payload.ceremony === WebsitePasskeyCeremony.Create ||
+      payload.ceremony === WebsitePasskeyCeremony.Get) &&
     'requestJson' in payload &&
     typeof payload.requestJson === 'string' &&
     payload.requestJson.length > 0 &&

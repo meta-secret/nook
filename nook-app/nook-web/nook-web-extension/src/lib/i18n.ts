@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 import {
   getResolvedTranslationCatalog,
   parseStoredAppLocale,
@@ -16,7 +15,7 @@ export type ExtensionI18n = {
 
 function readSavedLocale(): string | void {
   try {
-    return localStorage.getItem(NOOK_LOCALE_STORAGE_KEY) ?? omittedValue()
+    return localStorage.getItem(NOOK_LOCALE_STORAGE_KEY)?.valueOf()
   } catch {
     return
   }

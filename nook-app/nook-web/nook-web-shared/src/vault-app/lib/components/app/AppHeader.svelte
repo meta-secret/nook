@@ -5,9 +5,8 @@
   import NookLogo from "$lib/components/NookLogo.svelte";
   import VaultSwitcher from "$lib/components/VaultSwitcher.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { ColorMode } from "$lib/app-lifecycle-state";
   import type { VaultState } from "$lib/vault.svelte";
-
-  type ColorMode = "light" | "dark";
 
   let {
     vault,
@@ -86,16 +85,16 @@
       <button
         type="button"
         class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
-        aria-label={colorMode === "dark"
+        aria-label={colorMode === ColorMode.Dark
           ? vault.t("app.switch_light")
           : vault.t("app.switch_dark")}
-        title={colorMode === "dark"
+        title={colorMode === ColorMode.Dark
           ? vault.t("app.switch_light")
           : vault.t("app.switch_dark")}
         data-testid="theme-toggle-btn"
         onclick={onToggleColorMode}
       >
-        {#if colorMode === "dark"}
+        {#if colorMode === ColorMode.Dark}
           <Sun class="size-4" />
         {:else}
           <Moon class="size-4" />

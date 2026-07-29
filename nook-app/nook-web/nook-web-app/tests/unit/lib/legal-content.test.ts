@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import { getLegalPageFromPath, LEGAL_PAGES } from '$lib/legal-content'
+import {
+  LEGAL_PAGES,
+  LegalPageId,
+  getLegalPageFromPath,
+} from '$lib/legal-content'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {
-    expect(getLegalPageFromPath('/privacy')).toBe('privacy')
-    expect(getLegalPageFromPath('/privacy/')).toBe('privacy')
-    expect(getLegalPageFromPath('/terms')).toBe('terms')
+    expect(getLegalPageFromPath('/privacy')).toBe(LegalPageId.Privacy)
+    expect(getLegalPageFromPath('/privacy/')).toBe(LegalPageId.Privacy)
+    expect(getLegalPageFromPath('/terms')).toBe(LegalPageId.Terms)
     expect(getLegalPageFromPath('/')).toBeUndefined()
     expect(getLegalPageFromPath('/vault')).toBeUndefined()
   })

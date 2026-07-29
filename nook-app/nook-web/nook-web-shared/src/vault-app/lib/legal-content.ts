@@ -1,9 +1,11 @@
-import { omittedValue } from "../../explicit-state";
 import privacyPolicyMd from "../../../../../../docs/privacy-policy.md?raw";
 import termsOfServiceMd from "../../../../../../docs/terms-of-service.md?raw";
 import { stripBasePath } from "$lib/routes";
 
-export type LegalPageId = "privacy" | "terms";
+export enum LegalPageId {
+  Privacy = "privacy",
+  Terms = "terms",
+}
 
 export type LegalPage = {
   id: LegalPageId;
@@ -14,13 +16,13 @@ export type LegalPage = {
 
 export const LEGAL_PAGES: Record<LegalPageId, LegalPage> = {
   privacy: {
-    id: "privacy",
+    id: LegalPageId.Privacy,
     title: "Privacy Policy",
     path: "/privacy",
     source: privacyPolicyMd,
   },
   terms: {
-    id: "terms",
+    id: LegalPageId.Terms,
     title: "Terms of Service",
     path: "/terms",
     source: termsOfServiceMd,
@@ -46,7 +48,7 @@ export { stripBasePath } from "$lib/routes";
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
 export function getLegalPageFromPath(pathname: string): LegalPageId | void {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
-  return LEGAL_PATHS.get(normalized) ?? omittedValue();
+  return LEGAL_PATHS.get(normalized);
 }
 
 export function legalPageForId(id: LegalPageId): LegalPage {

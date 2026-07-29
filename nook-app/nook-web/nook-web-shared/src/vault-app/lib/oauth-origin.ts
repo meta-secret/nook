@@ -1,5 +1,8 @@
 import { omittedValue } from "../../explicit-state";
-export type BrowserOAuthProvider = "google-drive" | "icloud";
+export enum BrowserOAuthProvider {
+  GoogleDrive = "google-drive",
+  ICloud = "icloud",
+}
 
 export type OAuthOriginSupport = {
   supported: boolean;
@@ -39,7 +42,7 @@ function isAuthorizedOrigin(
   origin: string,
 ): boolean {
   const origins =
-    provider === "icloud"
+    provider === BrowserOAuthProvider.ICloud
       ? ICLOUD_AUTHORIZED_ORIGINS
       : GOOGLE_AUTHORIZED_ORIGINS;
   return origins.has(origin);

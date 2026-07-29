@@ -383,12 +383,12 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   state.storageMode = syncProvider.type;
   state.githubPat = syncProvider.githubPat ?? "";
   if (syncProvider.type === "oauth-file") {
-    state.oauthFile = syncProvider.oauthFile ?? omittedValue();
+    state.oauthFile = syncProvider.oauthFile;
     state.clearLocalFolder();
     state.githubRepo =
       syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   } else if (syncProvider.type === "local-folder") {
-    state.localFolder = syncProvider.localFolder ?? omittedValue();
+    state.localFolder = syncProvider.localFolder;
     state.githubRepo = DEFAULT_GITHUB_REPO;
     state.clearOauthFile();
   } else {
@@ -417,7 +417,7 @@ export async function persistProviders(
   await state.enqueueStorage(() =>
     saveAuthProviders(state.manager!, {
       providers: state.providers,
-      activeVaultStoreId: state.activeVaultStoreId ?? omittedValue(),
+      activeVaultStoreId: state.activeVaultStoreId,
     }),
   );
 }
@@ -629,9 +629,9 @@ export async function ensureProviderSaved(
     const snapshot = ensureLocalProviderRowWasm(
       {
         providers: state.providers,
-        activeVaultStoreId: state.activeVaultStoreId ?? omittedValue(),
+        activeVaultStoreId: state.activeVaultStoreId,
       } as AuthProvidersSnapshot,
-      vaultStoreId ?? omittedValue(),
+      vaultStoreId,
     );
     state.providers = snapshot.providers;
   }

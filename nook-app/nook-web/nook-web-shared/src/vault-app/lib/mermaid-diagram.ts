@@ -1,6 +1,9 @@
 /** Lazy-loaded Mermaid rendering for in-app help diagrams. */
 
-export type MermaidTheme = "light" | "dark";
+export enum MermaidTheme {
+  Light = "light",
+  Dark = "dark",
+}
 
 enum MermaidModuleCacheKind {
   NotLoaded = "not-loaded",
@@ -31,7 +34,7 @@ export async function renderMermaidDiagram(
   const mermaid = await loadMermaid();
   mermaid.initialize({
     startOnLoad: false,
-    theme: theme === "dark" ? "dark" : "default",
+    theme: theme === MermaidTheme.Dark ? "dark" : "default",
     securityLevel: "strict",
     fontFamily: "inherit",
   });

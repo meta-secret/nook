@@ -23,7 +23,7 @@
     onReplaceSecret,
     onGeneratePassword,
     onCancel,
-    initialItem = omittedValue(),
+    initialItem,
     selectedTypeState = $bindable<SecretTypeSelection>({
       kind: "choosing-type",
     }),
@@ -171,7 +171,7 @@
     class={isSecureNoteForm
       ? "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-4 overflow-y-auto overscroll-y-contain"
       : "space-y-4"}
-    data-testid={isEditMode ? "edit-secret-form" : omittedValue()}
+    {...(isEditMode ? { "data-testid": "edit-secret-form" } : {})}
   >
     <div
       class="flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"

@@ -1,4 +1,3 @@
-import { omittedValue } from "../../../explicit-state";
 import type { VaultState } from "$lib/vault.svelte";
 import { setVaultSessionLocked } from "$app-wasm";
 import { createLogger } from "$lib/log";
@@ -11,14 +10,10 @@ export function ensureIdleSessionTracker(state: VaultState): void {
   if (state.idleSessionTracker) return;
   state.idleSessionTracker = createVaultIdleSessionTracker({
     timeoutMs: state.runtimeConfig.resolveVaultIdleTimeoutMs(
-      intoWasmStringValue(
-        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? omittedValue(),
-      ),
+      intoWasmStringValue(import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS),
     ),
     warningMs: state.runtimeConfig.resolveVaultIdleWarningMs(
-      intoWasmStringValue(
-        import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? omittedValue(),
-      ),
+      intoWasmStringValue(import.meta.env.VITE_VAULT_IDLE_WARNING_MS),
     ),
     onExpire: () => lockVaultDueToIdle(state),
     onWarning: () => showIdleLockWarning(state),

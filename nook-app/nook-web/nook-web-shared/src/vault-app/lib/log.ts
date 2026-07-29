@@ -34,7 +34,13 @@ import {
   nookLogInit,
   nookLogSetLevel,
 } from "$app-wasm";
-export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
+export enum LogLevel {
+  Error = "error",
+  Warn = "warn",
+  Info = "info",
+  Debug = "debug",
+  Trace = "trace",
+}
 
 export type LogEntry = {
   ts: string;
@@ -45,11 +51,11 @@ export type LogEntry = {
 };
 
 const LOG_LEVELS: readonly LogLevel[] = [
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
+  LogLevel.Error,
+  LogLevel.Warn,
+  LogLevel.Info,
+  LogLevel.Debug,
+  LogLevel.Trace,
 ];
 
 /** How long to run the write-behind flush loop between IndexedDB writes. */
@@ -119,12 +125,12 @@ function parseLevel(raw: string | void): LogLevel | void {
 function initialLevel(): LogLevel {
   if ("localStorage" in globalThis) {
     const stored = parseLevel(
-      localStorage.getItem("nook_log_level") ?? omittedValue(),
+      localStorage.getItem("nook_log_level")?.valueOf(),
     );
     if (stored) return stored;
   }
   const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | void);
-  return env ?? "info";
+  return env ?? LogLevel.Info;
 }
 
 enum LogPayloadKind {
@@ -193,14 +199,14 @@ function isEnabled(level: LogLevel): boolean {
 function echo(level: LogLevel, text: string) {
   const line = `${formatTimestamp()} ${text}`;
   switch (level) {
-    case "error":
+    case LogLevel.Error:
       originalConsole.error(line);
       break;
-    case "warn":
+    case LogLevel.Warn:
       originalConsole.warn(line);
       break;
-    case "debug":
-    case "trace":
+    case LogLevel.Debug:
+    case LogLevel.Trace:
       originalConsole.debug(line);
       break;
     default:
@@ -222,7 +228,7 @@ function persist(
     return;
   }
   try {
-    nookLog(level, scope, message, serialized ?? omittedValue());
+    nookLog(level, scope, message, serialized);
   } catch {
     // Logging must never break the app.
   }
@@ -292,14 +298,19 @@ function installGlobalErrorHandlers() {
 
   window.addEventListener("error", (event) => {
     if (isIgnoredErrorSource(event.filename)) return;
-    captureDiagnostic("error", "window", event.message || "Uncaught error", {
-      source: event.filename,
-      line: event.lineno,
-      column: event.colno,
-      ...(event.error instanceof Error && event.error.stack
-        ? { stack: event.error.stack }
-        : {}),
-    });
+    captureDiagnostic(
+      LogLevel.Error,
+      "window",
+      event.message || "Uncaught error",
+      {
+        source: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        ...(event.error instanceof Error && event.error.stack
+          ? { stack: event.error.stack }
+          : {}),
+      },
+    );
   });
 
   window.addEventListener("unhandledrejection", (event) => {
@@ -312,7 +323,7 @@ function installGlobalErrorHandlers() {
         : stringifyArgs([reason]);
     if (isIgnoredErrorSource(message)) return;
     captureDiagnostic(
-      "error",
+      LogLevel.Error,
       "unhandledrejection",
       message,
       stack ? { stack } : omittedValue(),
@@ -334,7 +345,7 @@ function installFetchInstrumentation() {
       const url = sanitizeLogUrl(resolveFetchUrl(input));
       if (!isIgnoredErrorSource(url)) {
         captureDiagnostic(
-          "warn",
+          LogLevel.Warn,
           "fetch",
           `HTTP ${response.status} ${response.statusText}`,
           {
@@ -384,11 +395,14 @@ function logPayload(
 
 export function createLogger(scope: string): ScopedLogger {
   return {
-    error: (...args) => record("error", scope, args[0], logPayload(args)),
-    warn: (...args) => record("warn", scope, args[0], logPayload(args)),
-    info: (...args) => record("info", scope, args[0], logPayload(args)),
-    debug: (...args) => record("debug", scope, args[0], logPayload(args)),
-    trace: (...args) => record("trace", scope, args[0], logPayload(args)),
+    error: (...args) =>
+      record(LogLevel.Error, scope, args[0], logPayload(args)),
+    warn: (...args) => record(LogLevel.Warn, scope, args[0], logPayload(args)),
+    info: (...args) => record(LogLevel.Info, scope, args[0], logPayload(args)),
+    debug: (...args) =>
+      record(LogLevel.Debug, scope, args[0], logPayload(args)),
+    trace: (...args) =>
+      record(LogLevel.Trace, scope, args[0], logPayload(args)),
   };
 }
 
@@ -405,7 +419,7 @@ export function setLogLevel(level: LogLevel) {
 
 export function getLogLevel(): LogLevel {
   if (wasmReady) {
-    return parseLevel(nookLogGetLevel()) ?? "info";
+    return parseLevel(nookLogGetLevel()) ?? LogLevel.Info;
   }
   return initialLevel();
 }
@@ -418,9 +432,9 @@ export async function dumpLogs(options?: {
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
   const entries = await nookLogDump(
-    options?.minLevel ?? omittedValue(),
-    options?.limit ?? omittedValue(),
-    options?.offset ?? omittedValue(),
+    options?.minLevel,
+    options?.limit,
+    options?.offset,
   );
   try {
     return entries.toArray() as LogEntry[];
@@ -508,12 +522,7 @@ export function initWasmLogging() {
     const queued = preInitQueue.splice(0, preInitQueue.length);
     for (const entry of queued) {
       try {
-        nookLog(
-          entry.level,
-          entry.scope,
-          entry.message,
-          entry.data ?? omittedValue(),
-        );
+        nookLog(entry.level, entry.scope, entry.message, entry.data);
       } catch {
         // Ignore — a broken early log must not block startup.
       }

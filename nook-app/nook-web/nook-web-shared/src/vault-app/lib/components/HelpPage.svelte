@@ -11,13 +11,13 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { MermaidTheme } from '$lib/mermaid-diagram'
+  import { MermaidTheme } from '$lib/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     onClose,
-    colorMode = 'dark',
+    colorMode = MermaidTheme.Dark,
   }: {
     vault: VaultState
     onClose: () => void

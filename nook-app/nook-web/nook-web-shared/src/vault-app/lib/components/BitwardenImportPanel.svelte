@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
 
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -18,7 +17,7 @@
     vault,
     isSaving,
     onImport,
-    onClose = omittedValue(),
+    onClose,
     embedded = false,
   }: {
     vault: VaultState

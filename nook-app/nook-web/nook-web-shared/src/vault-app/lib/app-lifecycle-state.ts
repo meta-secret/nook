@@ -8,20 +8,24 @@ import type { ExtensionConnectRequest } from "$lib/extension-connect";
 import type { ExtensionSetupState } from "$lib/extension-install";
 import type { LegalPageId } from "$lib/legal-content";
 
-export type ColorMode = "light" | "dark";
+export enum ColorMode {
+  Light = "light",
+  Dark = "dark",
+}
 
 export function systemColorMode(): ColorMode {
   return "window" in globalThis &&
     window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+    ? ColorMode.Dark
+    : ColorMode.Light;
 }
 
 export function manualColorMode(
   current: ColorMode,
   storageKey: string,
 ): ColorMode {
-  const selected = current === "dark" ? "light" : "dark";
+  const selected =
+    current === ColorMode.Dark ? ColorMode.Light : ColorMode.Dark;
   localStorage.setItem(storageKey, selected);
   return selected;
 }

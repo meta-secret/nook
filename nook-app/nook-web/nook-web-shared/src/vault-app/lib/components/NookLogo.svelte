@@ -1,12 +1,11 @@
 <script lang="ts">
   import NookIcon from '$web-shared/components/NookIcon.svelte'
-
-  type ColorMode = 'light' | 'dark'
-  type LogoSize = 'sm' | 'md' | 'lg'
+  import { ColorMode } from '$lib/app-lifecycle-state'
+  import { LogoSize } from './nook-logo-state'
 
   let {
-    colorMode = 'dark' as ColorMode,
-    size = 'sm' as LogoSize,
+    colorMode = ColorMode.Dark,
+    size = LogoSize.Small,
     class: className = '',
   }: {
     colorMode?: ColorMode
@@ -15,13 +14,17 @@
   } = $props()
 
   const src = $derived(
-    colorMode === 'dark'
+    colorMode === ColorMode.Dark
       ? '/nook-logo-dark-transparent.png'
       : '/nook-logo-light.png',
   )
 
   const sizeClass = $derived(
-    size === 'lg' ? 'size-24' : size === 'md' ? 'size-14' : 'size-10',
+    size === LogoSize.Large
+      ? 'size-24'
+      : size === LogoSize.Medium
+        ? 'size-14'
+        : 'size-10',
   )
 </script>
 
@@ -107,7 +110,7 @@
     </defs>
   </svg>
 
-  {#if colorMode === 'dark'}
+  {#if colorMode === ColorMode.Dark}
     <div
       class="pointer-events-none absolute inset-[-20%] rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(62,233,214,0.14),transparent_68%)]"
       aria-hidden="true"
@@ -118,7 +121,7 @@
     {src}
     alt="Nook logo"
     class="relative z-10 size-full object-contain"
-    filter={colorMode === 'dark'
+    filter={colorMode === ColorMode.Dark
       ? 'url(#nook-logo-dark-filter)'
       : 'url(#nook-logo-light-filter)'}
   />
