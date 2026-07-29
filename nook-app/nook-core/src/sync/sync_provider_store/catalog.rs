@@ -1,10 +1,10 @@
 use crate::errors::ValidationResult;
 use crate::{
-    ActiveVaultScope, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask,
-    GithubSyncTarget, ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
-    ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
-    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, SyncProviderTarget,
-    mask_github_pat, sync_provider_default_label, sync_provider_target_key,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
+    ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, ProviderVaultScope,
+    StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
+    StoredOAuthFileConfiguration, SyncProviderTarget, mask_github_pat, sync_provider_default_label,
+    sync_provider_target_key,
 };
 
 use super::{
