@@ -864,6 +864,16 @@ fn task_prompt(task: &ClaimedTask) -> String {
          before the squash merge and green Main verification. If blocked by another change, report \
          structured blocked status and identify the blocker precisely."
         )
+    } else if task.kind == "blocker" {
+        "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
+         prerequisite yourself using the available repository and GitHub access. When the task \
+         names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
+         belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
+         replacement exact-head run, and follow it to a terminal result. Never report this task's \
+         own id as its blocker and never create a duplicate repair PR. Report blocked only for a \
+         genuinely separate prerequisite, using a distinct stable blocker id and an actionable \
+         prompt that another worker can complete."
+            .to_owned()
     } else {
         String::new()
     };
@@ -962,6 +972,27 @@ mod tests {
             blocked_disposition(&task, "workflow pending", &blocker),
             TaskDisposition::Deferred { reason } if reason == "workflow pending"
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
+        let task = ClaimedTask {
+            id: TaskId::new("github-actions-pr-42")?,
+            kind: "blocker".to_owned(),
+            prompt: "Resolve failed workflow 42".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-1")?,
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+
+        let prompt = task_prompt(&task);
+        assert!(prompt.contains("prerequisite-ownership task"));
+        assert!(prompt.contains("check out that existing PR branch"));
+        assert!(prompt.contains("Never report this task's own id as its blocker"));
         Ok(())
     }
 
