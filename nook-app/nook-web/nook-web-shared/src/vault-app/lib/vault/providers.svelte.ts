@@ -6,7 +6,9 @@ import {
   DEFAULT_GITHUB_REPO,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
+  GITHUB_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
+  LOCAL_FOLDER_PROVIDER_TYPE,
   localFolderHandle,
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
@@ -34,11 +36,15 @@ import {
   activeVaultProviders,
   chooseLocalFolderBackupDirectory,
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  hasGithubCredentials,
   hasLocalVault,
-  hasRemoteCredentials,
+  hasLocalFolderCredentials,
+  hasOAuthCredentials,
   isLocalFolderBackupSupported,
   isVaultSessionLocked,
-  localProviderIdForActiveVault,
+  localProviderForActiveVault,
+  NookManagerStoreScope,
+  NookProviderSelectionState,
   oauthRemoteStorageRef,
   providerWasmArgs as providerWasmArgsCore,
   removeLocalFolderHandle,
@@ -243,16 +249,22 @@ export function hasRemoteProviderCredentials(
     state.localFolderDraft.kind === LocalFolderDraftKind.Configured
       ? localFolderHandle(state.localFolderDraft.config)
       : { kind: LocalFolderHandleKind.Unselected };
-  return hasRemoteCredentials(
-    state.storageMode,
-    state.githubPat,
+  if (state.storageMode === GITHUB_PROVIDER_TYPE) {
+    return hasGithubCredentials(state.githubPat);
+  }
+  if (
+    state.storageMode === OAUTH_FILE_PROVIDER_TYPE &&
     oauthCredential.kind === OAuthAccessTokenKind.Available
-      ? oauthCredential.token
-      : "",
+  ) {
+    return hasOAuthCredentials(oauthCredential.token);
+  }
+  if (
+    state.storageMode === LOCAL_FOLDER_PROVIDER_TYPE &&
     folderHandle.kind === LocalFolderHandleKind.Selected
-      ? folderHandle.handleId
-      : "",
-  );
+  ) {
+    return hasLocalFolderCredentials(folderHandle.handleId);
+  }
+  return state.storageMode === LOCAL_PROVIDER_TYPE;
 }
 
 export function syncOAuthRemoteRefFromManager(
@@ -296,44 +308,50 @@ export function refreshLocalFolderBackupSupport(
 export function localProvider(
   state: ProviderActionsContext,
 ): LocalProviderLookup {
-  const id = state.hasActiveVaultStore
-    ? localProviderIdForActiveVault(
-        providerSnapshot(state),
-        state.requireActiveVaultStoreId(),
-      )
-    : localProviderIdForActiveVault(providerSnapshot(state));
-  const provider = id
-    ? state.providers.find((candidate) => candidate.id === id)
-    : false;
-  return provider
-    ? { kind: LocalProviderLookupKind.Found, provider }
-    : { kind: LocalProviderLookupKind.Missing };
+  const scope = state.hasActiveVaultStore
+    ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
+    : NookManagerStoreScope.unscoped();
+  const selection = localProviderForActiveVault(providerSnapshot(state), scope);
+  scope.free();
+  if (selection.state === NookProviderSelectionState.Selected) {
+    const provider = state.providers.find(
+      (candidate) => candidate.id === selection.providerId,
+    );
+    selection.free();
+    return provider
+      ? { kind: LocalProviderLookupKind.Found, provider }
+      : { kind: LocalProviderLookupKind.Missing };
+  }
+  selection.free();
+  return { kind: LocalProviderLookupKind.Missing };
 }
 
 export function activeProviders(
   state: ProviderActionsContext,
 ): StorageProvider[] {
-  return (
-    state.hasActiveVaultStore
-      ? activeVaultProviders(
-          providerSnapshot(state),
-          state.requireActiveVaultStoreId(),
-        )
-      : activeVaultProviders(providerSnapshot(state))
+  const scope = state.hasActiveVaultStore
+    ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
+    : NookManagerStoreScope.unscoped();
+  const providers = activeVaultProviders(
+    providerSnapshot(state),
+    scope,
   ).providers;
+  scope.free();
+  return providers;
 }
 
 export function syncProviders(
   state: ProviderActionsContext,
 ): StorageProvider[] {
-  return (
-    state.hasActiveVaultStore
-      ? syncProvidersForActiveVault(
-          providerSnapshot(state),
-          state.requireActiveVaultStoreId(),
-        )
-      : syncProvidersForActiveVault(providerSnapshot(state))
+  const scope = state.hasActiveVaultStore
+    ? NookManagerStoreScope.scoped(state.requireActiveVaultStoreId())
+    : NookManagerStoreScope.unscoped();
+  const providers = syncProvidersForActiveVault(
+    providerSnapshot(state),
+    scope,
   ).providers;
+  scope.free();
+  return providers;
 }
 
 export function showLoginVaultPicker(state: ProviderActionsContext): boolean {
@@ -651,7 +669,15 @@ export async function removeProvider(
   const target = state.providers.find((p) => p.id === id);
   if (!target || target.type === "local") return;
 
-  await removeLocalFolderHandle(target.localFolder?.handleId);
+  const folderConfiguration = localFolderProviderConfiguration(target);
+  if (
+    folderConfiguration.kind === LocalFolderProviderConfigurationKind.Configured
+  ) {
+    const folderHandle = localFolderHandle(folderConfiguration.config);
+    if (folderHandle.kind === LocalFolderHandleKind.Selected) {
+      await removeLocalFolderHandle(folderHandle.handleId);
+    }
+  }
   state.providers = state.providers.filter((p) => p.id !== id);
 
   if (state.providers.length === 0 && state.isAuthenticated) {

@@ -6,6 +6,8 @@ import {
   VaultType,
   defaultVaultArchitecture,
   firstCompatibleProviderId as wasmFirstCompatibleProviderId,
+  firstCompatibleProviderIdPreferred as wasmFirstCompatibleProviderIdPreferred,
+  NookProviderSelectionState,
   providerOauthPresetForConfig,
   providerOauthPresetForProvider,
   providerReplicationCapability,
@@ -129,16 +131,23 @@ export function firstCompatibleProvider(
   replicationType: ReplicationType,
   preference: CompatibleProviderPreference,
 ): CompatibleProviderSelection {
-  const selectedId =
+  const selection =
     preference.kind === CompatibleProviderPreferenceKind.Selected
-      ? wasmFirstCompatibleProviderId(
+      ? wasmFirstCompatibleProviderIdPreferred(
           { providers },
           replicationType,
           preference.providerId,
         )
       : wasmFirstCompatibleProviderId({ providers }, replicationType);
-  const provider = providers.find((candidate) => candidate.id === selectedId);
-  return provider
-    ? { kind: CompatibleProviderSelectionKind.Selected, provider }
-    : { kind: CompatibleProviderSelectionKind.Unavailable };
+  if (selection.state === NookProviderSelectionState.Selected) {
+    const provider = providers.find(
+      (candidate) => candidate.id === selection.providerId,
+    );
+    selection.free();
+    return provider
+      ? { kind: CompatibleProviderSelectionKind.Selected, provider }
+      : { kind: CompatibleProviderSelectionKind.Unavailable };
+  }
+  selection.free();
+  return { kind: CompatibleProviderSelectionKind.Unavailable };
 }

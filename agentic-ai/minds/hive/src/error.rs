@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use thiserror::Error;
 
 pub type HiveResult<T> = Result<T, HiveError>;
@@ -12,7 +10,7 @@ pub enum HiveError {
     Context {
         context: String,
         #[source]
-        source: Box<dyn Error + Send + Sync>,
+        source: Box<HiveError>,
     },
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -62,12 +60,12 @@ pub trait HiveContext<T> {
 
 impl<T, E> HiveContext<T> for Result<T, E>
 where
-    E: Error + Send + Sync + 'static,
+    HiveError: From<E>,
 {
     fn hive_context(self, context: impl Into<String>) -> HiveResult<T> {
         self.map_err(|source| HiveError::Context {
             context: context.into(),
-            source: Box::new(source),
+            source: Box::new(HiveError::from(source)),
         })
     }
 
@@ -77,7 +75,7 @@ where
     {
         self.map_err(|source| HiveError::Context {
             context: context(),
-            source: Box::new(source),
+            source: Box::new(HiveError::from(source)),
         })
     }
 }

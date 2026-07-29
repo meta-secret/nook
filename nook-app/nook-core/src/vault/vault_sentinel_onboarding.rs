@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, MultiDeviceError,
-    SentinelGenesisRequest, SentinelGenesisShareDelivery, StoredSecretRecord,
+    SentinelGenesisRequest, SentinelGenesisShareDelivery, StorageProviderType, StoredSecretRecord,
     accept_sentinel_genesis_share_delivery, encrypt_for_recipient,
 };
 
@@ -66,7 +66,8 @@ pub fn accept_sentinel_onboarding_package(
     let mut provider_snapshot: AuthProvidersSnapshotData = serde_json::from_str(&provider_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     validate_provider_snapshot(&provider_snapshot, package.delivery.store_id.as_str())?;
-    provider_snapshot.active_vault_store_id = Some(package.delivery.store_id.to_string());
+    provider_snapshot.active_vault_store_id =
+        crate::ActiveVaultScope::StoreId(package.delivery.store_id.to_string());
     Ok(AcceptedSentinelOnboarding {
         share_record,
         provider_snapshot,
@@ -132,8 +133,10 @@ fn validate_provider_snapshot(
         return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
     let provider = &snapshot.providers[0];
-    if matches!(provider.provider_type.as_str(), "local" | "local-folder")
-        || provider.store_id.as_deref() != Some(store_id)
+    if matches!(
+        provider.provider_type,
+        StorageProviderType::Local | StorageProviderType::LocalFolder
+    ) || provider.store_id.as_deref() != Some(store_id)
     {
         return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
@@ -145,29 +148,31 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
-        finalize_sentinel_genesis_shares, start_sentinel_genesis,
+        StorageProviderType, finalize_sentinel_genesis_shares, start_sentinel_genesis,
     };
 
     fn provider_snapshot(store_id: &str) -> AuthProvidersSnapshotData {
         AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "drive-1".to_owned(),
-                provider_type: "oauth-file".to_owned(),
+                provider_type: StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(OAuthFileConfigData {
+                github_pat: crate::StoredGithubPat::Missing,
+                github_repo: crate::StoredGithubRepository::DefaultRepository,
+                oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset: OauthFilePreset::GoogleDrive,
-                    access_token: "member-secret-token".to_owned(),
-                    file_name: Some("nook-events".to_owned()),
+                    access_token: crate::StoredOAuthAccessCredential::AccessToken(
+                        "member-secret-token".to_owned(),
+                    ),
+                    file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
-                local_folder: None,
-                store_id: Some(store_id.to_owned()),
+                local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+                store_id: crate::ProviderVaultScope::StoreId(store_id.to_owned()),
                 sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-07-12T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: Some(store_id.to_owned()),
+            active_vault_store_id: crate::ActiveVaultScope::StoreId(store_id.to_owned()),
         }
     }
 

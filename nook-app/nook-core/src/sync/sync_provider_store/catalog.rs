@@ -1,8 +1,10 @@
 use crate::errors::ValidationResult;
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
-    ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, StorageProviderType,
-    SyncProviderTarget, mask_github_pat, sync_provider_default_label, sync_provider_target_key,
+    ActiveVaultScope, DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask,
+    GithubSyncTarget, ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
+    ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, SyncProviderTarget,
+    mask_github_pat, sync_provider_default_label, sync_provider_target_key,
 };
 
 use super::{
@@ -14,7 +16,7 @@ pub fn provider_storage_detail(
     provider: &StorageProviderData,
     labels: &ProviderStorageDetailLabels,
 ) -> ValidationResult<String> {
-    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    let provider_type = provider.provider_type;
     match provider_type {
         StorageProviderType::Local => Ok(labels.this_device_desc.clone()),
         StorageProviderType::LocalFolder => Ok(provider
@@ -31,12 +33,10 @@ pub fn provider_storage_detail(
             let account = match oauth {
                 Some(oauth) => match non_empty(oauth.account_email.as_deref()) {
                     Some(email) => email,
-                    None if non_empty(Some(oauth.access_token.as_str())).is_some() => {
-                        match preset {
-                            OauthFilePreset::ICloud => labels.icloud_signed_in.clone(),
-                            OauthFilePreset::GoogleDrive => labels.google_signed_in.clone(),
-                        }
-                    }
+                    None if non_empty(oauth.access_token.as_deref()).is_some() => match preset {
+                        OauthFilePreset::ICloud => labels.icloud_signed_in.clone(),
+                        OauthFilePreset::GoogleDrive => labels.google_signed_in.clone(),
+                    },
                     None => match preset {
                         OauthFilePreset::ICloud => labels.icloud_not_signed_in.clone(),
                         OauthFilePreset::GoogleDrive => labels.google_not_signed_in.clone(),
@@ -91,19 +91,21 @@ pub fn localize_provider_label(label: &str, labels: &ProviderLabelLabels) -> Str
 }
 
 fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
-    match provider.provider_type.as_str() {
-        "local" => SyncProviderTarget::Local,
-        "local-folder" => SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
-            directory_name: provider
-                .local_folder
-                .as_ref()
-                .and_then(|folder| folder.directory_name.clone()),
-            handle_id: provider
-                .local_folder
-                .as_ref()
-                .and_then(|folder| folder.handle_id.clone()),
-        }),
-        "github" => SyncProviderTarget::Github(GithubSyncTarget {
+    match provider.provider_type {
+        StorageProviderType::Local => SyncProviderTarget::Local,
+        StorageProviderType::LocalFolder => {
+            SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
+                directory_name: provider
+                    .local_folder
+                    .as_ref()
+                    .and_then(|folder| folder.directory_name.as_deref().map(str::to_owned)),
+                handle_id: provider
+                    .local_folder
+                    .as_ref()
+                    .and_then(|folder| folder.handle_id.as_deref().map(str::to_owned)),
+            })
+        }
+        StorageProviderType::Github => SyncProviderTarget::Github(GithubSyncTarget {
             repo: non_empty(provider.github_repo.as_deref())
                 .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
             pat: match non_empty(provider.github_pat.as_deref()) {
@@ -111,7 +113,7 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
                 None => return SyncProviderTarget::Empty,
             },
         }),
-        _ => match &provider.oauth_file {
+        StorageProviderType::OauthFile => match provider.oauth_file.as_ref() {
             Some(oauth) => {
                 let preset = oauth.preset;
                 SyncProviderTarget::OauthFile(OauthFileSyncTarget {
@@ -119,14 +121,14 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
                     file_id: if preset == OauthFilePreset::ICloud
                         && oauth.resolved_icloud_mode() == ICloudMode::Shared
                     {
-                        oauth.icloud_share_target.clone()
+                        oauth.icloud_share_target.as_deref().map(str::to_owned)
                     } else {
-                        oauth.file_id.clone()
+                        oauth.file_id.as_deref().map(str::to_owned)
                     },
-                    folder_id: oauth.folder_id.clone(),
-                    file_name: oauth.file_name.clone(),
-                    account_email: oauth.account_email.clone(),
-                    access_token: Some(oauth.access_token.clone()),
+                    folder_id: oauth.folder_id.as_deref().map(str::to_owned),
+                    file_name: oauth.file_name.as_deref().map(str::to_owned),
+                    account_email: oauth.account_email.as_deref().map(str::to_owned),
+                    access_token: oauth.access_token.as_deref().map(str::to_owned),
                 })
             }
             None => SyncProviderTarget::Empty,
@@ -159,7 +161,9 @@ pub fn find_duplicate_sync_provider(
 
 #[must_use]
 pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapshot {
-    let object = raw.as_object();
+    let mut normalized = raw.clone();
+    normalize_auth_snapshot_state(&mut normalized);
+    let object = normalized.as_object();
     let providers = object
         .and_then(|object| object.get("providers"))
         .and_then(serde_json::Value::as_array)
@@ -172,15 +176,123 @@ pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapsho
         .unwrap_or_default();
     let active_vault_store_id = object
         .and_then(|object| object.get("activeVaultStoreId"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
+        .cloned()
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
     NormalizedAuthSnapshot {
         snapshot: AuthProvidersSnapshotData {
             providers,
             active_vault_store_id,
         },
-        changed: false,
+        changed: normalized != *raw,
     }
+}
+
+fn semantic_string_value(
+    value: Option<serde_json::Value>,
+    missing_state: &str,
+    present_state: &str,
+) -> serde_json::Value {
+    match value {
+        Some(serde_json::Value::Object(object)) if object.contains_key("state") => {
+            serde_json::Value::Object(object)
+        }
+        Some(serde_json::Value::String(value)) if !value.trim().is_empty() => {
+            serde_json::json!({ "state": present_state, "value": value })
+        }
+        _ => serde_json::json!({ "state": missing_state }),
+    }
+}
+
+fn normalize_oauth_config(config: &mut serde_json::Map<String, serde_json::Value>) {
+    for (field, missing, present) in [
+        ("accessToken", "signedOut", "accessToken"),
+        ("refreshToken", "notIssued", "token"),
+        ("expiresAt", "unknown", "expiresAt"),
+        ("fileId", "unresolved", "fileId"),
+        ("fileName", "unresolved", "fileName"),
+        ("accountEmail", "unknown", "email"),
+        ("folderId", "root", "folderId"),
+        ("iCloudShareTarget", "personal", "sharedTarget"),
+    ] {
+        let value = semantic_string_value(config.remove(field), missing, present);
+        config.insert(field.to_owned(), value);
+    }
+}
+
+fn normalize_provider_state(provider: &mut serde_json::Map<String, serde_json::Value>) {
+    for (field, missing, present) in [
+        ("githubPat", "missing", "token"),
+        ("githubRepo", "defaultRepository", "repository"),
+        ("storeId", "unscoped", "storeId"),
+    ] {
+        let value = semantic_string_value(provider.remove(field), missing, present);
+        provider.insert(field.to_owned(), value);
+    }
+
+    let oauth_file = match provider.remove("oauthFile") {
+        Some(serde_json::Value::Object(mut object)) if object.contains_key("state") => {
+            if let Some(serde_json::Value::Object(config)) = object.get_mut("config") {
+                normalize_oauth_config(config);
+            }
+            serde_json::Value::Object(object)
+        }
+        Some(serde_json::Value::Object(mut config)) => {
+            normalize_oauth_config(&mut config);
+            serde_json::json!({ "state": "configured", "config": config })
+        }
+        _ => serde_json::json!({ "state": "notApplicable" }),
+    };
+    provider.insert("oauthFile".to_owned(), oauth_file);
+
+    let local_folder = match provider.remove("localFolder") {
+        Some(serde_json::Value::Object(mut object)) if object.contains_key("state") => {
+            if let Some(serde_json::Value::Object(config)) = object.get_mut("config") {
+                let directory = semantic_string_value(
+                    config.remove("directoryName"),
+                    "unnamed",
+                    "directoryName",
+                );
+                let handle =
+                    semantic_string_value(config.remove("handleId"), "unbound", "handleId");
+                config.insert("directoryName".to_owned(), directory);
+                config.insert("handleId".to_owned(), handle);
+            }
+            serde_json::Value::Object(object)
+        }
+        Some(serde_json::Value::Object(mut config)) => {
+            let directory =
+                semantic_string_value(config.remove("directoryName"), "unnamed", "directoryName");
+            let handle = semantic_string_value(config.remove("handleId"), "unbound", "handleId");
+            config.insert("directoryName".to_owned(), directory);
+            config.insert("handleId".to_owned(), handle);
+            serde_json::json!({ "state": "configured", "config": config })
+        }
+        _ => serde_json::json!({ "state": "notApplicable" }),
+    };
+    provider.insert("localFolder".to_owned(), local_folder);
+}
+
+fn normalize_auth_snapshot_state(raw: &mut serde_json::Value) {
+    let Some(object) = raw.as_object_mut() else {
+        *raw = serde_json::json!({
+            "providers": [],
+            "activeVaultStoreId": { "state": "unselected" }
+        });
+        return;
+    };
+    if let Some(serde_json::Value::Array(providers)) = object.get_mut("providers") {
+        for provider in providers {
+            if let Some(provider) = provider.as_object_mut() {
+                normalize_provider_state(provider);
+            }
+        }
+    } else {
+        object.insert("providers".to_owned(), serde_json::Value::Array(Vec::new()));
+    }
+    let active =
+        semantic_string_value(object.remove("activeVaultStoreId"), "unselected", "storeId");
+    object.insert("activeVaultStoreId".to_owned(), active);
 }
 
 #[must_use]
@@ -193,7 +305,7 @@ pub fn ensure_local_provider_row(
     let store_id =
         non_empty(active_store_id).or_else(|| non_empty(snapshot.active_vault_store_id.as_deref()));
     let has_local_for_vault = snapshot.providers.iter().any(|provider| {
-        provider.provider_type == "local"
+        provider.provider_type == StorageProviderType::Local
             && match (&store_id, non_empty(provider.store_id.as_deref())) {
                 (None, _) | (Some(_), None) => true,
                 (Some(active), Some(existing)) => *active == existing,
@@ -204,13 +316,13 @@ pub fn ensure_local_provider_row(
     }
     let local = StorageProviderData {
         id: new_id.to_owned(),
-        provider_type: StorageProviderType::Local.as_str().to_owned(),
+        provider_type: StorageProviderType::Local,
         label: sync_provider_default_label(StorageProviderType::Local, None, None),
-        github_pat: None,
-        github_repo: None,
-        oauth_file: None,
-        local_folder: None,
-        store_id,
+        github_pat: StoredGithubPat::Missing,
+        github_repo: StoredGithubRepository::DefaultRepository,
+        oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+        local_folder: StoredLocalFolderConfiguration::NotApplicable,
+        store_id: ProviderVaultScope::from_option(store_id),
         sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
         created_at: created_at.to_owned(),
     };
@@ -251,13 +363,13 @@ mod tests {
     fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
         StorageProviderData {
             id: id.to_owned(),
-            provider_type: "github".to_owned(),
+            provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: Some(pat.to_owned()),
-            github_repo: Some(repo.to_owned()),
-            oauth_file: None,
-            local_folder: None,
-            store_id: None,
+            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
+            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+            store_id: crate::ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -266,16 +378,20 @@ mod tests {
     fn local_folder_provider(id: &str, handle_id: &str) -> StorageProviderData {
         StorageProviderData {
             id: id.to_owned(),
-            provider_type: "local-folder".to_owned(),
+            provider_type: StorageProviderType::LocalFolder,
             label: "Local backup".to_owned(),
-            github_pat: None,
-            github_repo: None,
-            oauth_file: None,
-            local_folder: Some(LocalFolderConfigData {
-                directory_name: Some("Nook Backup".to_owned()),
-                handle_id: Some(handle_id.to_owned()),
-            }),
-            store_id: None,
+            github_pat: crate::StoredGithubPat::Missing,
+            github_repo: crate::StoredGithubRepository::DefaultRepository,
+            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: crate::StoredLocalFolderConfiguration::configured(
+                LocalFolderConfigData {
+                    directory_name: crate::StoredLocalFolderDirectory::DirectoryName(
+                        "Nook Backup".to_owned(),
+                    ),
+                    handle_id: crate::StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
+                },
+            ),
+            store_id: crate::ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -289,19 +405,19 @@ mod tests {
     ) -> StorageProviderData {
         StorageProviderData {
             id: id.to_owned(),
-            provider_type: "oauth-file".to_owned(),
+            provider_type: StorageProviderType::OauthFile,
             label: "Google Drive".to_owned(),
-            github_pat: None,
-            github_repo: None,
-            oauth_file: Some(OAuthFileConfigData {
+            github_pat: crate::StoredGithubPat::Missing,
+            github_repo: crate::StoredGithubRepository::DefaultRepository,
+            oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset,
-                access_token: " token ".to_owned(),
+                access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
                 file_id: file_id.map(str::to_owned),
-                file_name: Some(file_name.to_owned()),
+                file_name: crate::StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                 ..OAuthFileConfigData::default()
             }),
-            local_folder: None,
-            store_id: None,
+            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+            store_id: crate::ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -356,7 +472,7 @@ mod tests {
         );
 
         let no_pat = StorageProviderData {
-            github_pat: None,
+            github_pat: crate::StoredGithubPat::Missing,
             ..github_provider("gh-draft", "nook", "github_pat_11AAAA")
         };
         assert_eq!(provider_target_key(&no_pat), None);
@@ -409,7 +525,7 @@ mod tests {
             .as_mut()
             .ok_or_else(|| std::io::Error::other("shared OAuth config must exist"))?;
         shared_oauth.drive_mode = GoogleDriveMode::Shared;
-        shared_oauth.folder_id = Some("folder-team".to_owned());
+        shared_oauth.folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];
         assert_eq!(
             find_duplicate_sync_provider(&providers, &private, None)
@@ -431,13 +547,13 @@ mod tests {
         let labels = detail_labels();
         let local = StorageProviderData {
             id: "local".to_owned(),
-            provider_type: "local".to_owned(),
+            provider_type: StorageProviderType::Local,
             label: "This device".to_owned(),
-            github_pat: None,
-            github_repo: None,
-            oauth_file: None,
-            local_folder: None,
-            store_id: None,
+            github_pat: crate::StoredGithubPat::Missing,
+            github_repo: crate::StoredGithubRepository::DefaultRepository,
+            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+            store_id: crate::ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         };
@@ -459,7 +575,7 @@ mod tests {
         assert_eq!(
             provider_storage_detail(
                 &StorageProviderData {
-                    local_folder: None,
+                    local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
                     ..local_folder_provider("folder", "handle-1")
                 },
                 &labels,
@@ -509,7 +625,7 @@ mod tests {
     fn local_row_is_seeded_once_per_vault() {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![github_provider("gh", "nook", "pat")],
-            active_vault_store_id: None,
+            active_vault_store_id: crate::ActiveVaultScope::Unselected,
         };
         let (next, changed) =
             ensure_local_provider_row(&snapshot, None, "local-1", "2026-06-24T00:00:00.000Z");
@@ -520,10 +636,10 @@ mod tests {
 
         let existing = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
-                store_id: Some("vault-1".to_owned()),
+                store_id: crate::ProviderVaultScope::StoreId("vault-1".to_owned()),
                 ..next.providers[0].clone()
             }],
-            active_vault_store_id: Some("vault-1".to_owned()),
+            active_vault_store_id: crate::ActiveVaultScope::StoreId("vault-1".to_owned()),
         };
         let (unchanged, changed) =
             ensure_local_provider_row(&existing, Some("vault-1"), "local-2", "x");

@@ -3,6 +3,7 @@
 
 use crate::{
     AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey,
+    StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
     encrypt_for_recipient,
     errors::{MultiDeviceError, MultiDeviceResult},
 };
@@ -16,37 +17,14 @@ pub fn is_sealed_credential(value: &str) -> bool {
     value.contains(AGE_ARMOR_MARKER)
 }
 
-fn seal_optional(identity: &DeviceIdentity, field: &mut Option<String>) -> MultiDeviceResult<()> {
-    let Some(text) = field.clone() else {
-        return Ok(());
-    };
-    if !text.is_empty() && !is_sealed_credential(&text) {
-        *field = Some(identity.seal_utf8(&text)?.into_inner());
-    }
-    Ok(())
-}
-
-fn seal_required(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
+fn seal_credential(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
     if !field.is_empty() && !is_sealed_credential(field) {
         *field = identity.seal_utf8(field)?.into_inner();
     }
     Ok(())
 }
 
-fn seal_optional_for_public_key(
-    public_key: &DevicePublicKey,
-    field: &mut Option<String>,
-) -> MultiDeviceResult<()> {
-    let Some(text) = field.clone() else {
-        return Ok(());
-    };
-    if !text.is_empty() && !is_sealed_credential(&text) {
-        *field = Some(encrypt_for_recipient(text.as_bytes(), public_key)?.into_inner());
-    }
-    Ok(())
-}
-
-fn seal_required_for_public_key(
+fn seal_credential_for_public_key(
     public_key: &DevicePublicKey,
     field: &mut String,
 ) -> MultiDeviceResult<()> {
@@ -62,10 +40,16 @@ pub fn seal_provider_credentials(
     snapshot: &mut AuthProvidersSnapshotData,
 ) -> MultiDeviceResult<()> {
     for provider in &mut snapshot.providers {
-        seal_optional(identity, &mut provider.github_pat)?;
+        if let StoredGithubPat::Token(token) = &mut provider.github_pat {
+            seal_credential(identity, token)?;
+        }
         if let Some(oauth) = provider.oauth_file.as_mut() {
-            seal_required(identity, &mut oauth.access_token)?;
-            seal_optional(identity, &mut oauth.refresh_token)?;
+            if let StoredOAuthAccessCredential::AccessToken(token) = &mut oauth.access_token {
+                seal_credential(identity, token)?;
+            }
+            if let StoredOAuthRefreshCredential::Token(token) = &mut oauth.refresh_token {
+                seal_credential(identity, token)?;
+            }
         }
     }
     Ok(())
@@ -78,31 +62,22 @@ pub fn seal_provider_credentials_for_public_key(
     snapshot: &mut AuthProvidersSnapshotData,
 ) -> MultiDeviceResult<()> {
     for provider in &mut snapshot.providers {
-        seal_optional_for_public_key(public_key, &mut provider.github_pat)?;
+        if let StoredGithubPat::Token(token) = &mut provider.github_pat {
+            seal_credential_for_public_key(public_key, token)?;
+        }
         if let Some(oauth) = provider.oauth_file.as_mut() {
-            seal_required_for_public_key(public_key, &mut oauth.access_token)?;
-            seal_optional_for_public_key(public_key, &mut oauth.refresh_token)?;
+            if let StoredOAuthAccessCredential::AccessToken(token) = &mut oauth.access_token {
+                seal_credential_for_public_key(public_key, token)?;
+            }
+            if let StoredOAuthRefreshCredential::Token(token) = &mut oauth.refresh_token {
+                seal_credential_for_public_key(public_key, token)?;
+            }
         }
     }
     Ok(())
 }
 
-fn open_optional(identity: &DeviceIdentity, field: &mut Option<String>) -> MultiDeviceResult<()> {
-    let Some(text) = field.clone() else {
-        return Ok(());
-    };
-    if text.is_empty() {
-        return Ok(());
-    }
-    if is_sealed_credential(&text) {
-        *field = Some(identity.open_utf8(&AgeArmoredCiphertext::parse(&text)?)?);
-    } else {
-        return Err(MultiDeviceError::UnsealedProviderCredential);
-    }
-    Ok(())
-}
-
-fn open_required(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
+fn open_credential(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceResult<()> {
     if field.is_empty() {
         return Ok(());
     }
@@ -124,10 +99,16 @@ pub fn open_provider_credentials(
 ) -> MultiDeviceResult<()> {
     let mut opened = snapshot.clone();
     for provider in &mut opened.providers {
-        open_optional(identity, &mut provider.github_pat)?;
+        if let StoredGithubPat::Token(token) = &mut provider.github_pat {
+            open_credential(identity, token)?;
+        }
         if let Some(oauth) = provider.oauth_file.as_mut() {
-            open_required(identity, &mut oauth.access_token)?;
-            open_optional(identity, &mut oauth.refresh_token)?;
+            if let StoredOAuthAccessCredential::AccessToken(token) = &mut oauth.access_token {
+                open_credential(identity, token)?;
+            }
+            if let StoredOAuthRefreshCredential::Token(token) = &mut oauth.refresh_token {
+                open_credential(identity, token)?;
+            }
         }
     }
     *snapshot = opened;
@@ -150,7 +131,7 @@ pub fn provider_credentials_are_presealed(snapshot: &AuthProvidersSnapshotData) 
             .as_deref()
             .is_none_or(field_is_presealed)
             && provider.oauth_file.as_ref().is_none_or(|oauth| {
-                field_is_presealed(&oauth.access_token)
+                oauth.access_token.as_deref().is_none_or(field_is_presealed)
                     && oauth
                         .refresh_token
                         .as_deref()
@@ -164,6 +145,7 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
+        StorageProviderType,
     };
 
     fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
@@ -175,7 +157,7 @@ mod tests {
                 "nook",
                 "2026-06-24T00:00:00.000Z",
             )],
-            active_vault_store_id: None,
+            active_vault_store_id: crate::ActiveVaultScope::Unselected,
         }
     }
 
@@ -183,29 +165,35 @@ mod tests {
         AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "gd-1".to_owned(),
-                provider_type: "oauth-file".to_owned(),
+                provider_type: StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(OAuthFileConfigData {
+                github_pat: crate::StoredGithubPat::Missing,
+                github_repo: crate::StoredGithubRepository::DefaultRepository,
+                oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset: OauthFilePreset::GoogleDrive,
-                    access_token: access.to_owned(),
-                    refresh_token: refresh.map(str::to_owned),
-                    expires_at: None,
-                    file_id: None,
-                    folder_id: None,
+                    access_token: crate::StoredOAuthAccessCredential::AccessToken(
+                        access.to_owned(),
+                    ),
+                    refresh_token: crate::StoredOAuthRefreshCredential::from_option(
+                        refresh.map(str::to_owned),
+                    ),
+                    expires_at: crate::StoredOAuthTokenExpiry::Unknown,
+                    file_id: crate::StoredOAuthRemoteFileId::Unresolved,
+                    folder_id: crate::StoredGoogleDriveFolder::Root,
                     drive_mode: crate::GoogleDriveMode::Private,
                     icloud_mode: ICloudMode::Private,
-                    icloud_share_target: None,
-                    file_name: Some("nook-events".to_owned()),
-                    account_email: Some("me@example.com".to_owned()),
+                    icloud_share_target: crate::StoredICloudShareTarget::Personal,
+                    file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+                    account_email: crate::StoredOAuthAccountIdentity::Email(
+                        "me@example.com".to_owned(),
+                    ),
                 }),
-                local_folder: None,
-                store_id: None,
+                local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+                store_id: crate::ProviderVaultScope::Unscoped,
                 sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: None,
+            active_vault_store_id: crate::ActiveVaultScope::Unselected,
         }
     }
 
@@ -349,7 +337,7 @@ mod tests {
         assert!(provider_credentials_are_presealed(
             &AuthProvidersSnapshotData {
                 providers: Vec::new(),
-                active_vault_store_id: Some("store-1".to_owned()),
+                active_vault_store_id: crate::ActiveVaultScope::StoreId("store-1".to_owned()),
             }
         ));
         Ok(())

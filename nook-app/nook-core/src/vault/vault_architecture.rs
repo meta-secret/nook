@@ -20,7 +20,9 @@ pub use provider_replication::{
     validate_provider_replication,
 };
 pub use shared_storage_grant::{
-    SharedStorageGrantOutcome, SharedStorageGrantRequest, prepare_shared_storage_grant,
+    SharedStorageGrantCredential, SharedStorageGrantOutcome, SharedStorageGrantRequest,
+    SharedStorageGrantTarget, SharedStorageTargetHint, SharedStorageTargetSelection,
+    prepare_shared_storage_grant,
 };
 
 #[wasm_bindgen]

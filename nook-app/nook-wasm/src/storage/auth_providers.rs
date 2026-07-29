@@ -6,8 +6,8 @@
 //! transforms live in `nook_core`; this module adds the `IndexedDB` I/O and sealing.
 
 use nook_core::{
-    AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
-    provider_credentials_are_presealed, seal_provider_credentials,
+    AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, StorageProviderType,
+    open_provider_credentials, provider_credentials_are_presealed, seal_provider_credentials,
 };
 
 use crate::NookError;
@@ -171,7 +171,7 @@ mod wasm_idb_tests {
                 "nook",
                 "2026-06-24T00:00:00.000Z",
             )],
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         }
     }
 
@@ -182,7 +182,7 @@ mod wasm_idb_tests {
     async fn clear_auth_snapshot() -> anyhow::Result<()> {
         write_snapshot(&AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         })
         .await?;
         Ok(())
@@ -234,29 +234,37 @@ mod wasm_idb_tests {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "gd-wasm".to_owned(),
-                provider_type: "oauth-file".to_owned(),
+                provider_type: StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(OAuthFileConfigData {
-                    preset: OauthFilePreset::GoogleDrive,
-                    access_token: access.to_owned(),
-                    refresh_token: Some(refresh.to_owned()),
-                    expires_at: None,
-                    file_id: None,
-                    file_name: Some("nook-events".to_owned()),
-                    account_email: None,
-                    drive_mode: nook_core::GoogleDriveMode::Private,
-                    folder_id: None,
-                    icloud_mode: ICloudMode::Private,
-                    icloud_share_target: None,
-                }),
-                local_folder: None,
-                store_id: None,
+                github_pat: nook_core::StoredGithubPat::Missing,
+                github_repo: nook_core::StoredGithubRepository::DefaultRepository,
+                oauth_file: nook_core::StoredOAuthFileConfiguration::configured(
+                    OAuthFileConfigData {
+                        preset: OauthFilePreset::GoogleDrive,
+                        access_token: nook_core::StoredOAuthAccessCredential::AccessToken(
+                            access.to_owned(),
+                        ),
+                        refresh_token: nook_core::StoredOAuthRefreshCredential::Token(
+                            refresh.to_owned(),
+                        ),
+                        expires_at: nook_core::StoredOAuthTokenExpiry::Unknown,
+                        file_id: nook_core::StoredOAuthRemoteFileId::Unresolved,
+                        file_name: nook_core::StoredOAuthRemoteFileName::FileName(
+                            "nook-events".to_owned(),
+                        ),
+                        account_email: nook_core::StoredOAuthAccountIdentity::Unknown,
+                        drive_mode: nook_core::GoogleDriveMode::Private,
+                        folder_id: nook_core::StoredGoogleDriveFolder::Root,
+                        icloud_mode: ICloudMode::Private,
+                        icloud_share_target: nook_core::StoredICloudShareTarget::Personal,
+                    },
+                ),
+                local_folder: nook_core::StoredLocalFolderConfiguration::NotApplicable,
+                store_id: nook_core::ProviderVaultScope::Unscoped,
                 sync_checkpoint: nook_core::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         };
         save_auth_providers(&identity, &snapshot).await?;
         let raw = read_raw_snapshot().await?;
@@ -281,17 +289,20 @@ mod wasm_idb_tests {
         clear_auth_snapshot().await;
         let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_existing");
-        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        existing.providers[0].store_id =
+            nook_core::ProviderVaultScope::StoreId("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
             .providers
             .remove(0);
-        retained.store_id = Some("store-other".to_owned());
+        retained.store_id = nook_core::ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
-        existing.active_vault_store_id = Some("store-incoming".to_owned());
+        existing.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
         save_auth_providers(&identity, &existing).await?;
 
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
-        incoming.active_vault_store_id = Some("store-incoming".to_owned());
+        incoming.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
         seal_provider_credentials(&identity, &mut incoming)?;
         save_presealed_auth_providers(&incoming).await?;
 
@@ -344,18 +355,22 @@ mod wasm_idb_tests {
         clear_auth_snapshot().await;
         let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_removed");
-        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        existing.providers[0].store_id =
+            nook_core::ProviderVaultScope::StoreId("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
             .providers
             .remove(0);
-        retained.store_id = Some("store-other".to_owned());
+        retained.store_id = nook_core::ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
-        existing.active_vault_store_id = Some("store-incoming".to_owned());
+        existing.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
         save_auth_providers(&identity, &existing).await?;
 
         save_presealed_auth_providers(&AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: Some("store-incoming".to_owned()),
+            active_vault_store_id: nook_core::ActiveVaultScope::StoreId(
+                "store-incoming".to_owned(),
+            ),
         })
         .await?;
 

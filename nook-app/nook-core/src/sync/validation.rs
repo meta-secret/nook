@@ -80,10 +80,11 @@ pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 /// wasm connect `github_repo` argument for `google-drive` mode.
 pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum StorageProviderType {
+    #[default]
     Local,
     LocalFolder,
     Github,

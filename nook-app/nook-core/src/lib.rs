@@ -234,10 +234,15 @@ pub use sync_provider_credentials::{
     seal_provider_credentials_for_public_key,
 };
 pub use sync_provider_store::{
-    AuthProvidersSnapshotData, LocalFolderConfigData, ManagerStoreScopeRef, NormalizedAuthSnapshot,
-    OAuthFileConfigData, ProviderLabelLabels, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
-    ProviderSyncRevision, ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageConnectArgs,
-    StorageProviderData, active_vault_providers, bind_google_drive_shared_folder,
+    ActiveVaultScope, AuthProvidersSnapshotData, LocalFolderConfigData, ManagerStoreScopeRef,
+    NormalizedAuthSnapshot, OAuthFileConfigData, ProviderLabelLabels, ProviderStorageDetailLabels,
+    ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
+    ProviderSyncedVaultVersion, ProviderVaultScope, StorageConnectArgs, StorageProviderData,
+    StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+    StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
+    StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+    StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    StoredOAuthTokenExpiry, active_vault_providers, bind_google_drive_shared_folder,
     draft_storage_args, enrollment_provider_for_architecture,
     enrollment_provider_for_architecture_with_storage_target, enrollment_provider_onboarding_type,
     ensure_local_provider_row, find_duplicate_sync_provider, first_compatible_provider_id,
@@ -276,9 +281,10 @@ pub use vault_access_diagnostics::{
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
     ProviderReplicationCapability, ReplicationType, SentinelConfiguration, SentinelPolicy,
-    SharedJoinerIdentityKind, SharedStorageGrantOutcome, SharedStorageGrantRequest,
-    VaultApplication, VaultArchitecture, VaultConnectIntent, VaultType,
-    prepare_shared_storage_grant, provider_replication_capability,
+    SharedJoinerIdentityKind, SharedStorageGrantCredential, SharedStorageGrantOutcome,
+    SharedStorageGrantRequest, SharedStorageGrantTarget, SharedStorageTargetHint,
+    SharedStorageTargetSelection, VaultApplication, VaultArchitecture, VaultConnectIntent,
+    VaultType, prepare_shared_storage_grant, provider_replication_capability,
     validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_client_policy::{

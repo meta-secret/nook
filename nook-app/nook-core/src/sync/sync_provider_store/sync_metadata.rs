@@ -54,7 +54,8 @@ pub fn update_provider_sync_metadata(
                 if let ManagerStoreScopeRef::Store(store_id) = manager_store_id
                     && !store_id.trim().is_empty()
                 {
-                    provider.store_id = Some(store_id.trim().to_owned());
+                    provider.store_id =
+                        crate::ProviderVaultScope::StoreId(store_id.trim().to_owned());
                 }
             }
             provider
@@ -67,6 +68,7 @@ mod tests {
     use crate::{
         ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision,
         ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageProviderData,
+        StorageProviderType,
     };
 
     use super::update_provider_sync_metadata;
@@ -74,13 +76,13 @@ mod tests {
     fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
         StorageProviderData {
             id: id.to_owned(),
-            provider_type: "github".to_owned(),
+            provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: Some(pat.to_owned()),
-            github_repo: Some(repo.to_owned()),
-            oauth_file: None,
-            local_folder: None,
-            store_id: None,
+            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
+            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
+            store_id: crate::ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
