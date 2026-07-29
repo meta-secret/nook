@@ -9,17 +9,11 @@
   } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
+  import { EvidenceStatus } from './evidence-status'
 
   interface ParticipantDevice {
     name: string
     publicKey: string
-  }
-
-  enum EvidenceStatus {
-    Held = 'HELD',
-    Pending = 'PENDING',
-    Recorded = 'RECORDED',
-    Sealed = 'SEALED',
   }
 
   let { navigate }: ExperimentProps = $props()
