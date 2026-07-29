@@ -21,11 +21,13 @@
   } from '$lib/auth-providers'
   import {
     DEFAULT_GITHUB_REPO,
+    GITHUB_PROVIDER_TYPE,
     localFolderHandle,
     LocalFolderHandleKind,
     localizeProviderLabel,
     oauthAccessToken,
     OAuthAccessTokenKind,
+    OAUTH_FILE_PROVIDER_TYPE,
     providerStorageDetail,
   } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
@@ -278,7 +280,7 @@
                     class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
                     data-testid="settings-provider-{provider.type}"
                   >
-                    {#if provider.type === 'github' || provider.type === 'oauth-file'}
+                    {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
                       <Cloud class="size-4 shrink-0 text-primary" />
                     {:else}
                       <HardDrive class="size-4 shrink-0 text-primary" />

@@ -14,6 +14,7 @@
     StorageProviderType,
   } from '$lib/auth-providers'
   import {
+    GITHUB_PROVIDER_TYPE,
     localizeProviderLabel,
     providerStorageDetail,
   } from '$lib/auth-providers'
@@ -159,7 +160,7 @@
         >
           {#each providers as provider (provider.id)}
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if provider.type === 'github'}
+              {#if provider.type === GITHUB_PROVIDER_TYPE}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               {:else}
                 <HardDrive

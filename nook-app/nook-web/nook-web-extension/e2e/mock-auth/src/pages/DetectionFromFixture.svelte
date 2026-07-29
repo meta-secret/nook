@@ -8,6 +8,7 @@
     getSiteFixture,
     getTemplateFixture,
     SiteFixtureLookupKind,
+    SiteFixtureSubmitType,
     type SiteFixtureField,
   } from '../lib/site-fixtures'
 
@@ -141,7 +142,7 @@
             data-testid={field['data-testid']}
           />
         {/each}
-        {#if step.submit.type === 'button'}
+        {#if step.submit.type === SiteFixtureSubmitType.Button}
           <button
             type="button"
             name={step.submit.name}
@@ -185,7 +186,7 @@
           data-testid={field['data-testid']}
         />
       {/each}
-      {#if step.submit.type === 'button'}
+      {#if step.submit.type === SiteFixtureSubmitType.Button}
         <button
           type="button"
           name={step.submit.name}

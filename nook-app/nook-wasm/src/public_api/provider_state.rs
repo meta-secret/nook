@@ -19,7 +19,7 @@ pub struct NookOAuthAccessToken(NookOAuthAccessTokenValue);
 impl NookOAuthAccessToken {
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub const fn kind(&self) -> NookOAuthAccessTokenKind {
+    pub fn kind(&self) -> NookOAuthAccessTokenKind {
         match self.0 {
             NookOAuthAccessTokenValue::Missing => NookOAuthAccessTokenKind::Missing,
             NookOAuthAccessTokenValue::Available(_) => NookOAuthAccessTokenKind::Available,
@@ -53,7 +53,7 @@ pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAc
 
 #[wasm_bindgen(js_name = missingOAuthAccessToken)]
 #[must_use]
-pub const fn missing_oauth_access_token() -> NookOAuthAccessToken {
+pub fn missing_oauth_access_token() -> NookOAuthAccessToken {
     NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
 }
 

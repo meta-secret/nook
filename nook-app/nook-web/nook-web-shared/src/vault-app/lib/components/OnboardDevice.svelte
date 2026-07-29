@@ -19,6 +19,7 @@
   import { Button } from '$lib/components/ui/button'
   import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
+    GITHUB_PROVIDER_TYPE,
     isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
@@ -762,7 +763,7 @@
                     <span class="size-2 rounded-full bg-primary"></span>
                   {/if}
                 </span>
-                {#if provider.type === 'github'}
+                {#if provider.type === GITHUB_PROVIDER_TYPE}
                   <Cloud class="size-4 shrink-0 opacity-80" />
                 {:else}
                   <HardDrive class="size-4 shrink-0 opacity-80" />

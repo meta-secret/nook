@@ -26,7 +26,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObserverCopy,
     ObserverSnapshot,
   } from './types';
-  import { ObservedAlertSeverity } from './types';
+  import { ObservedAlertSeverity, ObservedExecutionStatus } from './types';
   import { emergencyCopy } from './emergency-copy';
   import {
     DurableTaskLookupKind,
@@ -279,16 +279,24 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function statusLabel(status: string) {
     const labels: Record<string, string> = {
-      BLOCKED: copy.blocked,
-      CANCELLED: copy.cancelled,
-      CANCELLING: copy.cancelling,
-      COMPLETED: copy.completed,
-      FAILED: copy.failed,
-      IDLE: copy.idle,
-      READY: copy.ready,
-      RUNNING: copy.running,
+      [ObservedExecutionStatus.Blocked]: copy.blocked,
+      [ObservedExecutionStatus.Cancelled]: copy.cancelled,
+      [ObservedExecutionStatus.Cancelling]: copy.cancelling,
+      [ObservedExecutionStatus.Completed]: copy.completed,
+      [ObservedExecutionStatus.Failed]: copy.failed,
+      [ObservedExecutionStatus.Idle]: copy.idle,
+      [ObservedExecutionStatus.Ready]: copy.ready,
+      [ObservedExecutionStatus.Running]: copy.running,
     };
     return labels[status] ?? status;
+  }
+
+  function isAttentionStatus(status: string): boolean {
+    return (
+      status === ObservedExecutionStatus.Blocked ||
+      status === ObservedExecutionStatus.Failed ||
+      status === ObservedExecutionStatus.Cancelling
+    );
   }
 
   function relativeTime(timestamp: number) {
@@ -391,7 +399,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="worker-capacity" aria-label={copy.workers}>
         {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
           <span
-            class:worker-running={agent.status === 'RUNNING'}
+            class:worker-running={agent.status ===
+              ObservedExecutionStatus.Running}
             class:worker-stale={!isAgentHealthy(agent)}
             title={`${agent.pod_name}: ${statusLabel(agent.status)}`}
           ></span>
@@ -427,7 +436,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           {#each snapshotState.kind === ObserverFeedKind.Loaded ? snapshotState.snapshot.agents : [] as agent (agent.id)}
             <div class="worker-row">
               <div
-                class:state-running={agent.status === 'RUNNING'}
+                class:state-running={agent.status ===
+                  ObservedExecutionStatus.Running}
                 class:state-stale={!isAgentHealthy(agent)}
                 class="worker-state"
               >
@@ -699,11 +709,11 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     class={`status-mark status-mark-${status.toLocaleLowerCase()}`}
     aria-hidden="true"
   >
-    {#if status === 'COMPLETED'}
+    {#if status === ObservedExecutionStatus.Completed}
       <CheckCircle2 size={compact ? 13 : 16} />
-    {:else if ['BLOCKED', 'FAILED', 'CANCELLING'].includes(status)}
+    {:else if isAttentionStatus(status)}
       <AlertTriangle size={compact ? 13 : 16} />
-    {:else if status === 'RUNNING'}
+    {:else if status === ObservedExecutionStatus.Running}
       <Activity size={compact ? 13 : 16} />
     {:else}
       <Clock3 size={compact ? 13 : 16} />

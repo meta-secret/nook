@@ -11,8 +11,13 @@ export type SiteFixtureField = {
   'data-testid'?: string
 }
 
+export enum SiteFixtureSubmitType {
+  Button = 'button',
+  Submit = 'submit',
+}
+
 export type SiteFixtureSubmit = {
-  type?: string
+  type: SiteFixtureSubmitType
   name?: string
   id?: string
   label: string
@@ -220,7 +225,10 @@ export function renderFixtureHtml(
       return `<input ${attrs} />`
     })
     .join('\n')
-  const submitType = step.submit.type === 'button' ? 'button' : 'submit'
+  const submitType =
+    step.submit.type === SiteFixtureSubmitType.Button
+      ? SiteFixtureSubmitType.Button
+      : SiteFixtureSubmitType.Submit
   const submitAttrs = [
     `type="${submitType}"`,
     step.submit.name ? `name="${escapeAttr(step.submit.name)}"` : '',

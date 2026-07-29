@@ -48,6 +48,17 @@ export type ObserverCopy = {
   close_details: string;
 };
 
+export enum ObservedExecutionStatus {
+  Blocked = 'BLOCKED',
+  Cancelled = 'CANCELLED',
+  Cancelling = 'CANCELLING',
+  Completed = 'COMPLETED',
+  Failed = 'FAILED',
+  Idle = 'IDLE',
+  Ready = 'READY',
+  Running = 'RUNNING',
+}
+
 export type ObservedAgent = {
   id: string;
   pod_name: string;
