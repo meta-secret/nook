@@ -459,6 +459,18 @@ mod metadata_tests {
             entries: vec![entry.clone()],
         };
         manager.vault.password_entries = vec![entry.clone()];
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.last_synced_content =
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &manager.vault.meta.to_stored_records(),
+                &manager.vault.unlock,
+                &manager.vault.password_entries,
+                nook_core::VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
+                nook_core::VaultNameRef::Named("Personal"),
+                nook_core::VaultVersionWrite::Initial,
+                &manager.vault.architecture,
+            )?
+            .into_inner();
 
         manager
             .prepare_storage_preserving_vault_metadata(
@@ -492,6 +504,10 @@ mod metadata_tests {
             &manager.vault.vault_name,
             super::super::VaultNameState::Named(name) if name == "Personal"
         ));
+        assert_eq!(
+            nook_core::read_vault_name(&manager.vault.last_synced_content)?,
+            nook_core::VaultName::Named("Personal".to_owned())
+        );
         assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
         Ok(())
     }

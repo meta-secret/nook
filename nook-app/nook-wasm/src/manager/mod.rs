@@ -42,7 +42,7 @@ use crate::conversion::{pending_joins_to_vec, vault_members_to_vec};
 use crate::storage::{
     drive::verify_drive_access,
     github::{ensure_github_repo_exists, fetch_github_username},
-    indexed_db::load_from_indexed_db,
+    indexed_db::{load_from_indexed_db, save_to_indexed_db},
 };
 use crate::types::records_to_vec;
 use crate::{
@@ -626,9 +626,23 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = setVaultName)]
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
         let previous_name = self.vault.vault_name.clone();
+        let previous_projection = if self.vault.last_synced_content.trim().is_empty() {
+            load_from_indexed_db()
+                .await
+                .map_err(|error| JsError::new(&error.to_string()))?
+                .ok_or_else(|| JsError::new("Vault projection is not initialized."))?
+        } else {
+            self.vault.last_synced_content.clone()
+        };
         self.assign_vault_name(name);
         if let Err(error) = self.persist_vault_change(Vec::new()).await {
             self.vault.vault_name = previous_name;
+            self.vault.last_synced_content = previous_projection.clone();
+            if let Err(rollback_error) = save_to_indexed_db(&previous_projection).await {
+                return Err(JsError::new(&format!(
+                    "{error}; vault-name rollback failed: {rollback_error}"
+                )));
+            }
             return Err(JsError::new(&error.to_string()));
         }
         Ok(())

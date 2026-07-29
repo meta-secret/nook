@@ -68,6 +68,7 @@ export function clearUnlockedSession(
   state.secrets = [];
   state.secretTotal = 0;
   state.secretPageOffset = 0;
+  state.secretPageRequestOffset = 0;
   state.secretQuery = "";
   state.secretTypeFilter = undefined;
   state.pendingJoins = [];

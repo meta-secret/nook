@@ -46,6 +46,7 @@ describe('loadSecretPage', () => {
       secrets: [previousRecord],
       secretTotal: 1,
       secretPageOffset: 0,
+      secretPageRequestOffset: 0,
       secretQuery: '',
     } as unknown as VaultState
 
@@ -82,10 +83,13 @@ describe('loadSecretPage', () => {
       secrets: [],
       secretTotal: 50,
       secretPageOffset: 0,
+      secretPageRequestOffset: 0,
       secretQuery: 'vault',
     } as unknown as VaultState
 
     const paginationRequest = loadSecretPage(state, 'vault', 25)
+    expect(state.secretPageOffset).toBe(0)
+    expect(state.secretPageRequestOffset).toBe(25)
     const maintenanceRefresh = refreshSecretsFromSession(state)
     maintenance.resolve(refreshedPage.page)
     await maintenanceRefresh

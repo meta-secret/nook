@@ -238,6 +238,7 @@ export async function renameLocalVaultLabel(
   const previousLabel = state.localVaults.find(
     (vault) => vault.storeId.trim() === trimmedStoreId,
   )?.label;
+  let renameCommitted = false;
 
   try {
     await setLocalVaultLabel(trimmedStoreId, trimmedLabel);
@@ -246,10 +247,11 @@ export async function renameLocalVaultLabel(
         state.manager!.setVaultName(trimmedLabel),
       );
     }
+    renameCommitted = true;
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));
   } catch (e: unknown) {
-    if (previousLabel !== undefined) {
+    if (!renameCommitted && previousLabel !== undefined) {
       try {
         await setLocalVaultLabel(trimmedStoreId, previousLabel);
         await refreshLocalVaultCatalog(state);

@@ -53,6 +53,7 @@ import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 
 export class VaultState extends VaultStateSlices {
   secretPageGeneration = 0;
+  secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
