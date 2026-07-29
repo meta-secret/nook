@@ -387,8 +387,10 @@ fn collect_raw_string_discriminant_nodes(
         let left = node.child_by_field_name("left");
         let right = node.child_by_field_name("right");
         if left.zip(right).is_some_and(|(left, right)| {
-            (is_discriminant_member(left, source) && is_string_literal_expression(right))
-                || (is_string_literal_expression(left) && is_discriminant_member(right, source))
+            is_equality_comparison(node, left, right, source)
+                && ((is_discriminant_member(left, source) && is_string_literal_expression(right))
+                    || (is_string_literal_expression(left)
+                        && is_discriminant_member(right, source)))
         }) {
             lines.push(first_line + node.start_position().row);
             return;
@@ -398,6 +400,20 @@ fn collect_raw_string_discriminant_nodes(
     for child in node.children(&mut cursor) {
         collect_raw_string_discriminant_nodes(child, source, first_line, enum_values, lines);
     }
+}
+
+fn is_equality_comparison(
+    expression: tree_sitter::Node<'_>,
+    left: tree_sitter::Node<'_>,
+    right: tree_sitter::Node<'_>,
+    source: &str,
+) -> bool {
+    if expression.kind() != "binary_expression" {
+        return false;
+    }
+    source
+        .get(left.end_byte()..right.start_byte())
+        .is_some_and(|operator| matches!(operator.trim(), "==" | "===" | "!=" | "!=="))
 }
 
 fn collect_enum_string_values(
@@ -929,6 +945,7 @@ const state: SessionState = { kind: 'closed' }
 if (state.kind === 'closed') console.log('closed')
 if ('closed' !== state.kind) console.log('open')
 const description = { label: 'static copy' }
+const externalKind = state.kind ?? 'external-value'
 ";
 
         assert_eq!(

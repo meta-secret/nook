@@ -337,15 +337,15 @@ value
                 },
                 Violation {
                     path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
-                    line: 12,
+                    line: 13,
                 },
                 Violation {
                     path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
-                    line: 16,
+                    line: 17,
                 },
                 Violation {
                     path: PathBuf::from("nook-app/nook-core/src/boundary.rs"),
-                    line: 22,
+                    line: 23,
                 },
             ]
         );

@@ -7,7 +7,9 @@ use crate::{
 };
 
 mod vault_yaml;
-use vault_yaml::*;
+use vault_yaml::{
+    StoredVaultYaml, auth_to_stored_record, members_to_stored_record, partition_yaml_records,
+};
 
 /// On-disk vault serialization format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

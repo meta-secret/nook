@@ -151,9 +151,6 @@ impl SecretFormFields {
     }
 }
 
-/// Normalize a website URL or origin to a comparable host (no leading `www.`).
-#[must_use]
-
 /// Build a validated YAML payload for `add_secret` / `replace_secret` from form fields.
 pub fn build_secret_yaml(
     secret_type: SecretType,

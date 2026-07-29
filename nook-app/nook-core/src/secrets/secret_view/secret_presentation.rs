@@ -1,5 +1,7 @@
-use super::*;
+use super::{SecretListItem, SecretListItemData, SecretRecord, SecretType, SecretValue, Url};
 
+/// Normalize a website URL or origin to a comparable host (no leading `www.`).
+#[must_use]
 pub fn hostname_from_url(raw: &str) -> String {
     let value = raw.trim();
     if value.is_empty() {
