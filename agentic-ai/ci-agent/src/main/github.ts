@@ -220,6 +220,7 @@ export async function requestCodexReview(
 
 const MAIN_PR_CHECK = "Verify and preview";
 const WEB_RESEARCH_PR_CHECK = "Build and deploy research catalog";
+const RUST_ECOSYSTEM_PR_CHECK = "Rust ecosystem checks";
 
 export type RequiredPrWorkflow = {
   checkName: string;
@@ -239,11 +240,35 @@ const WEB_RESEARCH_PR_WORKFLOW: RequiredPrWorkflow = {
   workflowName: "Web research",
 };
 
+const RUST_ECOSYSTEM_PR_WORKFLOW: RequiredPrWorkflow = {
+  checkName: RUST_ECOSYSTEM_PR_CHECK,
+  workflowFile: "rust-ecosystem.yml",
+  workflowName: "Rust ecosystem checks",
+};
+
+function isRustEcosystemPath(path: string): boolean {
+  return (
+    path === ".github/workflows/rust-ecosystem.yml" ||
+    path === "deny.toml" ||
+    path === "nook-app/Cargo.lock" ||
+    path === "nook-app/.insta.yaml" ||
+    path.startsWith("nook-app/.cargo/") ||
+    path.startsWith("fuzz/") ||
+    path.startsWith("preflight/") ||
+    path.startsWith("agentic-ai/minds/") ||
+    (path.startsWith("nook-app/") &&
+      (path.endsWith(".rs") || path.endsWith("/Cargo.toml")))
+  );
+}
+
 export function requiredPrWorkflows(paths: string[]): RequiredPrWorkflow[] {
   const required: RequiredPrWorkflow[] = [];
 
   if (paths.some(isWebResearchPath)) {
     required.push(WEB_RESEARCH_PR_WORKFLOW);
+  }
+  if (paths.some(isRustEcosystemPath)) {
+    required.push(RUST_ECOSYSTEM_PR_WORKFLOW);
   }
   if (paths.some((path) => !isMainPrIgnoredPath(path))) {
     required.push(MAIN_PR_WORKFLOW);

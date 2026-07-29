@@ -2,8 +2,8 @@
 
 Use this workflow for quality, CI, and deployment changes.
 
-1. Keep Taskfile as the source of truth for build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
-2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for repo behavior.
+1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling. The pinned `rust-ecosystem.yml` workflow is the source of truth for compiler-coupled or sanitizer-backed tools whose official runners provision a specialized toolchain (Kani, cargo-fuzz, and Dylint); do not duplicate those commands in bespoke preflight scanners.
+2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior. The Rust ecosystem workflow may use pinned official actions and GitHub-hosted native toolchains for advisory database access, sanitizers, model checking, and rustc-private lint libraries that are intentionally outside the stable sealed project images. Keep those jobs exact-head merge gates and pin every compiler-coupled version.
 3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`. Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs; the Rust dep cache and warm `target/` are baked into normal image layers, and workspace source is copied into the nook-web image (sealed image, no runtime mount). The optional remote Redis sccache is a compiler-output optimization below Docker/cargo-chef and never a correctness input. See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
@@ -29,6 +29,35 @@ Use this workflow for quality, CI, and deployment changes.
    - `vitest run`
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
+   - `Rust ecosystem checks / Dependency policy and RustSec` —
+     [`cargo-deny`](https://embarkstudios.github.io/cargo-deny/) checks
+     advisories, licenses, duplicate/forbidden crates, and trusted sources for
+     the complete Cargo graph; [`rustsec/audit-check`](https://github.com/rustsec/audit-check)
+     independently audits the lockfile against the RustSec advisory database
+     Advisory exceptions must name the RustSec IDs, identify the exact pinned
+     upstream graph, and state the dependency upgrade that removes them in both
+     `deny.toml` and the affected workspace's `.cargo/audit.toml`. The current
+     `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
+     RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove
+     it when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
+   - `Rust ecosystem checks / Proptest, Insta, and Loom` —
+     [`proptest`](https://proptest-rs.github.io/proptest/) generates and shrinks
+     domain inputs so invariants cover more than hand-picked examples;
+     [`insta`](https://insta.rs/) stores reviewable snapshots for stable,
+     non-secret structured output; and [`loom`](https://github.com/tokio-rs/loom)
+     explores permitted thread interleavings for bounded concurrency models
+   - `Rust ecosystem checks / Cargo fuzz smoke` —
+     [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html) drives
+     libFuzzer targets and retains minimized crash inputs for parser and
+     boundary hardening
+   - `Rust ecosystem checks / Kani bounded proofs` —
+     [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
+     bounded proof harnesses, including panics, overflow, unsafe behavior, and
+     authored assertions, and produces counterexamples when a property fails
+   - `Rust ecosystem checks / Dylint repository lints` —
+     [`Dylint`](https://trailofbits.github.io/dylint/) runs pinned,
+     repository-selected Rust lints when Clippy cannot express a Nook-specific
+     source rule
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
@@ -83,6 +112,23 @@ Use this workflow for quality, CI, and deployment changes.
     `cargo llvm-cov nextest --no-report` Docker invocation. Subsequent
     source-level coverage commands must use `--no-clean` so they reuse and
     extend that instrumented target.
+21. **Ecosystem tools before bespoke preflight:** use a maintained Rust
+    ecosystem tool when it directly expresses the invariant. Dependency
+    advisories, licenses, crate bans/duplicates, and sources belong in
+    `deny.toml`; lockfile vulnerability auditing belongs to RustSec; randomized
+    domain invariants belong in Proptest; stable structured renderings belong
+    in Insta; concurrent state machines belong in Loom; hostile byte inputs
+    belong in cargo-fuzz; bounded exhaustive properties belong in Kani; and
+    reusable AST/type-aware Rust source rules belong in Clippy or Dylint.
+    Keep `preflight` for Nook-specific cross-language architecture, repository
+    topology, delivery, and security contracts that those tools cannot
+    represent. Do not duplicate an ecosystem tool in a custom scanner.
+22. **Cost tiers:** cargo-deny, RustSec, Proptest, and committed Insta snapshots
+    are normal merge checks. Loom models must remain bounded. Cargo-fuzz uses a
+    short merge smoke and longer scheduled/manual campaigns. Kani proofs must
+    declare practical unwind bounds. Dylint libraries, versions, and their
+    dated nightly (`nightly-2026-04-16` for Dylint `6.0.1`) are pinned so
+    compiler-coupled lint behavior changes intentionally.
 
 ## Fix check findings — not silence them
 

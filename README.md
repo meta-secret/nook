@@ -401,6 +401,15 @@ task infra:status           # inspect the remote infrastructure stack
 task infra:redis:stats      # remote compiler-cache memory and hit statistics
 ```
 
+The explicitly triggered **Rust ecosystem checks** workflow adds dependency
+policy and RustSec auditing (`cargo-deny` plus `cargo-audit`), generated and
+snapshot tests (Proptest and Insta), bounded concurrency exploration (Loom),
+parser fuzzing (`cargo-fuzz`), model checking (Kani), and repository-selected
+Rust lints (Dylint). Fast deterministic tests remain part of ordinary Rust
+testing; fuzz, Loom, Kani, and compiler-coupled Dylint checks have bounded
+hosted jobs and scheduled/manual entry points. The selection and configuration
+policy lives in [`.cortex/workflows/quality.md`](.cortex/workflows/quality.md).
+
 See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
 

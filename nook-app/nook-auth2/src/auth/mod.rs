@@ -324,21 +324,24 @@ pub mod mock_passkey {
             validate_prf_input(&request.prf_input)?;
 
             let credential_id = self.match_credential_id(request)?;
-            let credential = self
+            let mut credential = self
                 .credentials
-                .get_mut(&credential_id)
+                .get(&credential_id)
+                .cloned()
                 .ok_or(MockPasskeyError::NoMatchingCredential)?;
             if credential.rp_id != request.rp_id {
                 return Err(MockPasskeyError::RpIdMismatch);
             }
             credential.sign_count = credential.sign_count.saturating_add(1);
 
-            Ok(MockPasskeyAssertion {
+            let assertion = MockPasskeyAssertion {
                 credential_id: credential.credential_id.clone(),
                 user_handle: credential.user_handle.clone(),
                 prf_output: evaluate_mock_prf(&credential.secret, &request.prf_input).to_vec(),
                 sign_count: credential.sign_count,
-            })
+            };
+            self.credentials.insert(credential_id, credential);
+            Ok(assertion)
         }
 
         #[must_use]

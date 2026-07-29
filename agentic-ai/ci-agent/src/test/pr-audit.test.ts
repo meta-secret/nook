@@ -18,7 +18,7 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
   );
   assert.deepEqual(
     audit.requiredWorkflows.map((workflow) => workflow.workflowName),
-    ["PR"],
+    ["Rust ecosystem checks", "PR"],
   );
   assert.equal(audit.exactHeadDeployment?.state, "success");
 });

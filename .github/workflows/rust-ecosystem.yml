@@ -1,0 +1,220 @@
+name: Rust ecosystem checks
+
+on:
+  pull_request:
+    types: [labeled]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rust-ecosystem.yml
+      - deny.toml
+      - nook-app/.insta.yaml
+      - nook-app/.cargo/**
+      - fuzz/**
+      - preflight/**
+      - agentic-ai/minds/**
+      - nook-app/**/*.rs
+      - nook-app/**/Cargo.toml
+      - nook-app/Cargo.lock
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    rust-ecosystem-${{ github.event_name }}-
+    ${{ github.event.pull_request.number || github.ref }}-
+    ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
+  cancel-in-progress: true
+
+jobs:
+  validation-request:
+    name: Validate explicit ecosystem request
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject unsupported label events
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_LABEL: ${{ github.event.label.name }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            exit 0
+          fi
+          case "$REQUESTED_LABEL" in
+            ci:validate|ci:full-e2e) ;;
+            *)
+              echo "Unsupported Rust ecosystem validation label: $REQUESTED_LABEL" >&2
+              exit 1
+              ;;
+          esac
+
+  dependency-policy:
+    needs: validation-request
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Dependency policy and RustSec
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      checks: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: nook-app/Cargo.toml
+          command: check
+          log-level: error
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: fuzz/Cargo.toml
+          command: check
+          log-level: error
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: preflight/Cargo.toml
+          command: check
+          log-level: error
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: agentic-ai/minds/Cargo.toml
+          command: check
+          log-level: error
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: nook-app
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: fuzz
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: preflight
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: agentic-ai/minds
+          ignore: RUSTSEC-2026-0118,RUSTSEC-2026-0119
+
+  deterministic-tests:
+    needs: validation-request
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Proptest, Insta, and Loom
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install workspace linker
+        run: sudo apt-get update && sudo apt-get install --yes mold
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nook-app
+      - name: Property and snapshot tests
+        working-directory: nook-app
+        env:
+          INSTA_UPDATE: no
+        run: cargo test --locked -p nook-replication
+      - name: Concurrency permutation model
+        working-directory: nook-app
+        env:
+          RUSTFLAGS: --cfg loom
+        run: cargo test --locked -p nook-replication loom_tests --release
+
+  fuzz-smoke:
+    needs: validation-request
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Cargo fuzz smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-04-16
+          components: clippy
+      - name: Install workspace linker
+        run: sudo apt-get update && sudo apt-get install --yes mold
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz@0.13.2
+      - name: Enforce fuzz-target lints
+        working-directory: nook-app
+        run: >-
+          cargo clippy --manifest-path ../fuzz/Cargo.toml
+          --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+      - name: Verify fuzz lockfile
+        working-directory: fuzz
+        run: cargo metadata --locked --format-version 1 --no-deps > /dev/null
+      - name: Exercise wire parsers
+        working-directory: nook-app
+        env:
+          FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
+        run: >-
+          cargo fuzz run --fuzz-dir ../fuzz
+          --target x86_64-unknown-linux-gnu
+          wire-parsers -- -max_total_time=${FUZZ_SECONDS}
+      - name: Preserve fuzz corpus and crash inputs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wire-parsers-fuzz-${{ github.run_id }}
+          path: |
+            fuzz/artifacts
+            fuzz/corpus
+          if-no-files-found: ignore
+
+  kani:
+    needs: validation-request
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Kani bounded proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: model-checking/kani-github-action@v1.1
+        with:
+          working-directory: nook-app
+          args: --package nook-replication
+
+  dylint:
+    needs: validation-request
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e'
+    name: Dylint repository lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-04-16
+          components: llvm-tools-preview,rustc-dev
+      - name: Install workspace linker
+        run: sudo apt-get update && sudo apt-get install --yes mold
+      - name: Install Dylint
+        run: cargo install cargo-dylint dylint-link --version 6.0.1 --locked
+      - name: Run configured lint libraries
+        working-directory: nook-app
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo dylint --all -- --all-targets

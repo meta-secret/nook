@@ -3,6 +3,7 @@ name = "nook-preflight"
 version = "1.0.0"
 edition = "2024"
 publish = false
+license = "MIT"
 
 [dependencies]
 proc-macro2 = { version = "1.0.106", features = ["span-locations"] }

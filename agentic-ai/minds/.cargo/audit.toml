@@ -1,0 +1,8 @@
+[advisories]
+# Pinned openai/codex -> rama-dns still carries hickory-proto 0.25.2.
+# Upstream main has no fixed 0.25 release; remove both exceptions when Codex
+# moves to hickory 0.26.1 or later.
+ignore = [
+  "RUSTSEC-2026-0118",
+  "RUSTSEC-2026-0119",
+]
