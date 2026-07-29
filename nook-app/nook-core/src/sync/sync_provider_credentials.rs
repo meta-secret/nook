@@ -122,13 +122,15 @@ pub fn open_provider_credentials(
     identity: &DeviceIdentity,
     snapshot: &mut AuthProvidersSnapshotData,
 ) -> MultiDeviceResult<()> {
-    for provider in &mut snapshot.providers {
+    let mut opened = snapshot.clone();
+    for provider in &mut opened.providers {
         open_optional(identity, &mut provider.github_pat)?;
         if let Some(oauth) = provider.oauth_file.as_mut() {
             open_required(identity, &mut oauth.access_token)?;
             open_optional(identity, &mut oauth.refresh_token)?;
         }
     }
+    *snapshot = opened;
     Ok(())
 }
 
@@ -293,7 +295,28 @@ mod tests {
         let other = DeviceIdentity::generate()?;
         let mut snapshot = github_snapshot("github_pat_11SECRET");
         seal_provider_credentials(&owner, &mut snapshot)?;
+        let sealed = snapshot.clone();
         assert!(open_provider_credentials(&other, &mut snapshot).is_err());
+        assert_eq!(snapshot, sealed);
+        Ok(())
+    }
+
+    #[test]
+    fn open_failure_does_not_partially_decrypt_snapshot() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let mut snapshot = oauth_snapshot("ya29.valid-access", Some("invalid plaintext refresh"));
+        let oauth = snapshot.providers[0]
+            .oauth_file
+            .as_mut()
+            .ok_or_else(|| std::io::Error::other("test as_mut value must exist"))?;
+        seal_required(&identity, &mut oauth.access_token)?;
+        let sealed = snapshot.clone();
+
+        assert!(matches!(
+            open_provider_credentials(&identity, &mut snapshot),
+            Err(MultiDeviceError::UnsealedProviderCredential)
+        ));
+        assert_eq!(snapshot, sealed);
         Ok(())
     }
 
