@@ -1,4 +1,4 @@
-use super::{NookStringValue, NookStringValueRef, wasm_bindgen, window};
+use super::{wasm_bindgen, window};
 
 #[wasm_bindgen(typescript_custom_section)]
 const WEB_TYPES: &'static str = r#"
@@ -272,7 +272,7 @@ impl NookVaultClientPolicy {
         architecture_allows_secret_creation: bool,
         catalog_json: &str,
         locale: &str,
-    ) -> Option<String> {
+    ) -> Result<String, wasm_bindgen::JsError> {
         nook_core::VaultClientPolicy::edit_block_message(
             security_conflict_count as usize,
             has_sync_conflict,
@@ -280,6 +280,7 @@ impl NookVaultClientPolicy {
             catalog_json,
             locale,
         )
+        .ok_or_else(|| wasm_bindgen::JsError::new("blocked vault edit decision requires a message"))
     }
 
     #[wasm_bindgen(js_name = isSyncActivityVisible)]
@@ -579,35 +580,44 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
     #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: NookStringValue) -> u32 {
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         self.policy
-            .resolve_vault_idle_timeout_ms(match raw_timeout_ms.as_ref() {
-                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
-                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
-            })
+            .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Set(raw_timeout_ms))
+    }
+
+    #[wasm_bindgen(js_name = resolveDefaultVaultIdleTimeoutMs)]
+    #[must_use]
+    pub fn resolve_default_vault_idle_timeout_ms(&self) -> u32 {
+        self.policy
+            .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Unset)
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleWarningMs)]
     #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: NookStringValue) -> u32 {
+    pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: &str) -> u32 {
         self.policy
-            .resolve_vault_idle_warning_ms(match raw_warning_ms.as_ref() {
-                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
-                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
-            })
+            .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Set(raw_warning_ms))
+    }
+
+    #[wasm_bindgen(js_name = resolveDefaultVaultIdleWarningMs)]
+    #[must_use]
+    pub fn resolve_default_vault_idle_warning_ms(&self) -> u32 {
+        self.policy
+            .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Unset)
     }
 
     #[wasm_bindgen(js_name = resolveVaultSyncIntervalMs)]
     #[must_use]
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: NookStringValue) -> u32 {
+    pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: &str) -> u32 {
         self.policy
-            .resolve_vault_sync_interval_ms(match raw_interval_ms.as_ref() {
-                NookStringValueRef::Value(value) => nook_core::RuntimeConfigValue::Set(value),
-                NookStringValueRef::Unavailable => nook_core::RuntimeConfigValue::Unset,
-            })
+            .resolve_vault_sync_interval_ms(nook_core::RuntimeConfigValue::Set(raw_interval_ms))
+    }
+
+    #[wasm_bindgen(js_name = resolveDefaultVaultSyncIntervalMs)]
+    #[must_use]
+    pub fn resolve_default_vault_sync_interval_ms(&self) -> u32 {
+        self.policy
+            .resolve_vault_sync_interval_ms(nook_core::RuntimeConfigValue::Unset)
     }
 }
 

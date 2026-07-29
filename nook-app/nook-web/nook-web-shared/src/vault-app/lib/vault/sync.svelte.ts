@@ -11,9 +11,11 @@ import {
 } from "$lib/nook";
 import {
   JoinEnrollmentState,
+  NookManagerStoreScope,
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
-  NookStringValue,
+  NookProviderSyncRevision,
+  NookVaultSyncAccessState,
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
@@ -23,7 +25,6 @@ import {
   LOCAL_PROVIDER_TYPE,
   type StorageProvider,
 } from "$lib/auth-providers";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 import {
   EventOutboxTargetKind,
   LocalFolderInspectionKind,
@@ -66,23 +67,29 @@ export function applyVaultSyncResult(
     return;
   }
 
+  const accessAssessed =
+    result.accessState === NookVaultSyncAccessState.Assessed;
+  const accessStatus = accessAssessed
+    ? result.accessStatus
+    : VaultAccessStatus.NewVault;
   log.debug("sync result (unauthenticated)", {
     changed: result.changed,
-    accessStatus: result.accessStatus,
+    accessAssessed,
+    accessStatus,
     joinEnrollmentPrompt: state.joinEnrollmentPrompt,
   });
 
-  if ("accessStatus" in result) {
+  if (accessAssessed) {
     log.info("sync state changed (login gate)", {
-      accessStatus: result.accessStatus,
+      accessStatus,
       pendingJoins: result.pendingJoins.length,
     });
   }
 
   const decision = state.clientPolicy.unauthenticatedSyncDecision(
     result.changed,
-    "accessStatus" in result,
-    result.accessStatus ?? VaultAccessStatus.NewVault,
+    accessAssessed,
+    accessStatus,
     state.joinEnrollmentPrompt,
     state.awaitingJoinApproval,
   );
@@ -309,11 +316,11 @@ export async function updateProviderSyncMetadata(
     providerId,
     yaml,
     revision.kind === ProviderSyncRevisionKind.Tracked
-      ? intoWasmStringValue(revision.revision)
-      : NookStringValue.unavailable(),
+      ? NookProviderSyncRevision.tracked(revision.revision)
+      : NookProviderSyncRevision.untracked(),
     managerStoreId
-      ? intoWasmStringValue(managerStoreId)
-      : NookStringValue.unavailable(),
+      ? NookManagerStoreScope.scoped(managerStoreId)
+      : NookManagerStoreScope.unscoped(),
     isoTimestamp(),
   ).providers;
   await state.persistProviders();
@@ -421,7 +428,7 @@ async function stageProviderStoreMismatchConflict(
       args[0],
       args[1],
       args[2],
-      NookStringValue.unavailable(),
+      NookProviderSyncRevision.untracked(),
       localStoreId,
       remoteStoreId,
     ),
@@ -452,7 +459,6 @@ export async function stageStagedProviderSyncIssue(
     if (!issue.isStoreMismatch) return false;
     const localStoreId = issue.localStoreId;
     const remoteStoreId = issue.remoteStoreId;
-    if (!localStoreId || !remoteStoreId) return false;
 
     const localYaml = await readLocalVaultYaml().catch(() => "");
     await state.enqueueStorage(() =>
@@ -466,7 +472,7 @@ export async function stageStagedProviderSyncIssue(
         args[0],
         args[1],
         args[2],
-        NookStringValue.unavailable(),
+        NookProviderSyncRevision.untracked(),
         localStoreId,
         remoteStoreId,
       ),
@@ -511,11 +517,10 @@ export function startVaultSync(state: SyncActionsContext) {
     return;
   }
   const syncIntervalConfig = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS;
-  const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
+  const intervalMs =
     typeof syncIntervalConfig === "string"
-      ? intoWasmStringValue(syncIntervalConfig)
-      : NookStringValue.unavailable(),
-  );
+      ? state.runtimeConfig.resolveVaultSyncIntervalMs(syncIntervalConfig)
+      : state.runtimeConfig.resolveDefaultVaultSyncIntervalMs();
   const needsRemoteUpdates =
     state.isAuthenticated ||
     state.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
@@ -797,14 +802,12 @@ export async function syncProviderById(
         if (eventLogIssue.isStoreMismatch) {
           const localStoreId = eventLogIssue.localStoreId;
           const remoteStoreId = eventLogIssue.remoteStoreId;
-          if (localStoreId && remoteStoreId) {
-            stagedStoreMismatch = await stageProviderStoreMismatchConflict(
-              state,
-              provider,
-              localStoreId,
-              remoteStoreId,
-            );
-          }
+          stagedStoreMismatch = await stageProviderStoreMismatchConflict(
+            state,
+            provider,
+            localStoreId,
+            remoteStoreId,
+          );
         } else if (eventLogIssue.isMultipleStores) {
           localFolderInspection = {
             kind: LocalFolderInspectionKind.MultipleVaults,

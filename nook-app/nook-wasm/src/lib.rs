@@ -30,11 +30,10 @@ pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 pub use logger::NookLogEntries;
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
-    NookExternalEventLogRecords, NookVaultManager,
+    NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
-use types::NookStringValueRef;
 pub use types::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
     NookAuthenticationPageObservation, NookAuthenticationPageObservations,
@@ -50,10 +49,10 @@ pub use types::{
     NookSentinelGenesisDelivery, NookSentinelGenesisFinalizeResult,
     NookSentinelGenesisParticipantStatus, NookSentinelGenesisStatus,
     NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus, NookStorageConnectArgs,
-    NookStringValue, NookTotpCode, NookValueState, NookVaultAccessReport, NookVaultArchitecture,
-    NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
-    NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult, NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
+    NookTotpCode, NookVaultAccessReport, NookVaultArchitecture, NookVaultClientPolicy,
+    NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic, NookVaultMember,
+    NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
+    NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 

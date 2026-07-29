@@ -300,7 +300,12 @@ pub enum NookWebsiteLoginSaveDecision {
 #[wasm_bindgen]
 pub struct NookWebsiteLoginSavePlan {
     decision: NookWebsiteLoginSaveDecision,
-    secret_id: Option<String>,
+    target: WebsiteLoginSaveTarget,
+}
+
+enum WebsiteLoginSaveTarget {
+    NoExistingSecret,
+    ExistingSecret(String),
 }
 
 #[wasm_bindgen]
@@ -309,19 +314,19 @@ impl NookWebsiteLoginSavePlan {
         match decision {
             nook_core::WebsiteLoginSaveDecision::Create => Self {
                 decision: NookWebsiteLoginSaveDecision::Create,
-                secret_id: None,
+                target: WebsiteLoginSaveTarget::NoExistingSecret,
             },
             nook_core::WebsiteLoginSaveDecision::Invalid => Self {
                 decision: NookWebsiteLoginSaveDecision::Invalid,
-                secret_id: None,
+                target: WebsiteLoginSaveTarget::NoExistingSecret,
             },
             nook_core::WebsiteLoginSaveDecision::Update { secret_id } => Self {
                 decision: NookWebsiteLoginSaveDecision::Update,
-                secret_id: Some(secret_id.to_string()),
+                target: WebsiteLoginSaveTarget::ExistingSecret(secret_id.to_string()),
             },
             nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
                 decision: NookWebsiteLoginSaveDecision::AlreadySaved,
-                secret_id: Some(secret_id.to_string()),
+                target: WebsiteLoginSaveTarget::ExistingSecret(secret_id.to_string()),
             },
         }
     }
@@ -332,7 +337,12 @@ impl NookWebsiteLoginSavePlan {
     }
 
     #[wasm_bindgen(getter, js_name = secretId)]
-    pub fn secret_id(&self) -> Option<String> {
-        self.secret_id.clone()
+    pub fn secret_id(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.target {
+            WebsiteLoginSaveTarget::NoExistingSecret => Err(wasm_bindgen::JsError::new(
+                "login save decision does not target an existing secret",
+            )),
+            WebsiteLoginSaveTarget::ExistingSecret(secret_id) => Ok(secret_id.clone()),
+        }
     }
 }

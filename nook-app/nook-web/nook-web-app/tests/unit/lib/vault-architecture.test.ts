@@ -1,19 +1,15 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   DeviceMode,
-  NookStringValue,
-  NookValueState,
   NookVaultArchitecture,
   OnboardingType,
   ReplicationType,
   VaultType,
+  enrollmentICloudSharedProviderForArchitecture,
   enrollmentProviderForArchitecture,
+  enrollmentSharedProviderForArchitecture,
 } from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
-import {
-  intoWasmStringValue,
-  requireWasmStringValue,
-} from '$lib/wasm-string-value'
 import {
   canCreateSecret,
   CompatibleProviderPreferenceKind,
@@ -34,14 +30,6 @@ import {
 beforeAll(async () => {
   await initNookWasm()
 })
-
-function expectUnavailableWasmString(value: NookStringValue): void {
-  try {
-    expect(value.state).toBe(NookValueState.Unavailable)
-  } finally {
-    value.free()
-  }
-}
 
 function googleDriveProvider(): StorageProvider {
   return {
@@ -149,16 +137,12 @@ describe('vault architecture adapter', () => {
     const enrollmentProvider = enrollmentProviderForArchitecture(
       googleDriveProvider(),
       defaultVaultArchitecture(),
-      NookStringValue.unavailable(),
-      NookStringValue.unavailable(),
     )
 
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.PersonalCredentialTransfer,
     )
-    expect(requireWasmStringValue(enrollmentProvider.oauthAccessToken)).toBe(
-      'ya29.test',
-    )
+    expect(enrollmentProvider.oauthAccessToken).toBe('ya29.test')
   })
 
   test('sentinel vaults are gated until their policy is ready', () => {
@@ -216,27 +200,19 @@ describe('vault architecture adapter', () => {
   test('provider matrix allows shared Google Drive and rejects shared GitHub', () => {
     const driveCapability = providerReplicationCapability(googleDriveProvider())
     expect(driveCapability.providerType).toBe('oauth-file')
-    expect(requireWasmStringValue(driveCapability.oauthPreset)).toBe(
-      'google-drive',
-    )
+    expect(driveCapability.oauthPreset).toBe('google-drive')
     expect(driveCapability.supportsPersonal).toBe(true)
     expect(driveCapability.supportsShared).toBe(true)
-    expect(requireWasmStringValue(driveCapability.sharedJoinerIdentity)).toBe(
-      'email',
-    )
+    expect(driveCapability.sharedJoinerIdentity).toBe('email')
     const validatedCapability = validateProviderReplication(
       googleDriveProvider(),
       ReplicationType.Shared,
     )
     expect(validatedCapability.providerType).toBe(driveCapability.providerType)
-    expect(requireWasmStringValue(validatedCapability.oauthPreset)).toBe(
-      'google-drive',
-    )
+    expect(validatedCapability.oauthPreset).toBe('google-drive')
     expect(validatedCapability.supportsPersonal).toBe(true)
     expect(validatedCapability.supportsShared).toBe(true)
-    expect(
-      requireWasmStringValue(validatedCapability.sharedJoinerIdentity),
-    ).toBe('email')
+    expect(validatedCapability.sharedJoinerIdentity).toBe('email')
 
     expect(() =>
       validateProviderReplication(githubProvider(), ReplicationType.Shared),
@@ -325,27 +301,25 @@ describe('vault architecture adapter', () => {
     const provider = googleDriveProvider()
 
     expect(() =>
-      enrollmentProviderForArchitecture(
+      enrollmentSharedProviderForArchitecture(
         provider,
         architecture,
-        intoWasmStringValue('joiner@example.com'),
-        NookStringValue.unavailable(),
+        'joiner@example.com',
+        '',
       ),
     ).toThrow(/shared_storage_target_required/)
 
-    const enrollmentProvider = enrollmentProviderForArchitecture(
+    const enrollmentProvider = enrollmentSharedProviderForArchitecture(
       provider,
       architecture,
-      intoWasmStringValue('joiner@example.com'),
-      intoWasmStringValue('shared-folder-abc'),
+      'joiner@example.com',
+      'shared-folder-abc',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    expect(
-      requireWasmStringValue(enrollmentProvider.sharedStorageTargetId),
-    ).toBe('shared-folder-abc')
+    expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
   })
 
   test('shared Drive provider mode overrides personal credential transfer', () => {
@@ -362,21 +336,21 @@ describe('vault architecture adapter', () => {
     expect(providerOnboardingType(provider, architecture)).toBe(
       'shared-provider-grant',
     )
-    const enrollmentProvider = enrollmentProviderForArchitecture(
+    const enrollmentProvider = enrollmentSharedProviderForArchitecture(
       provider,
       architecture,
-      intoWasmStringValue('joiner@example.com'),
-      NookStringValue.unavailable(),
+      'joiner@example.com',
+      'persisted-shared-folder',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    expect(
-      requireWasmStringValue(enrollmentProvider.sharedStorageTargetId),
-    ).toBe('persisted-shared-folder')
-    expectUnavailableWasmString(enrollmentProvider.oauthAccessToken)
-    expectUnavailableWasmString(enrollmentProvider.oauthRefreshToken)
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      'persisted-shared-folder',
+    )
+    expect(() => enrollmentProvider.oauthAccessToken).toThrow()
+    expect(() => enrollmentProvider.oauthRefresh).toThrow()
   })
 
   test('shared iCloud enrollment sends only the CloudKit target', () => {
@@ -384,29 +358,26 @@ describe('vault architecture adapter', () => {
     const architecture = defaultVaultArchitecture()
     const capability = providerReplicationCapability(provider)
     expect(capability.providerType).toBe('oauth-file')
-    expect(requireWasmStringValue(capability.oauthPreset)).toBe('icloud')
+    expect(capability.oauthPreset).toBe('icloud')
     expect(capability.supportsPersonal).toBe(true)
     expect(capability.supportsShared).toBe(true)
     expect(providerOnboardingType(provider, architecture)).toBe(
       'shared-provider-grant',
     )
-    const enrollmentProvider = enrollmentProviderForArchitecture(
+    const enrollmentProvider = enrollmentICloudSharedProviderForArchitecture(
       provider,
       architecture,
-      NookStringValue.unavailable(),
-      NookStringValue.unavailable(),
+      provider.oauthFile?.iCloudShareTarget ?? '',
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
       OnboardingType.SharedProviderGrant,
     )
-    expect(requireWasmStringValue(enrollmentProvider.oauthPreset)).toBe(
-      'icloud',
+    expect(enrollmentProvider.oauthPreset).toBe('icloud')
+    expect(() => enrollmentProvider.sharedJoinerIdentity).toThrow()
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(
+      provider.oauthFile?.iCloudShareTarget,
     )
-    expectUnavailableWasmString(enrollmentProvider.sharedJoinerIdentity)
-    expect(
-      requireWasmStringValue(enrollmentProvider.sharedStorageTargetId),
-    ).toBe(provider.oauthFile?.iCloudShareTarget)
-    expectUnavailableWasmString(enrollmentProvider.oauthAccessToken)
+    expect(() => enrollmentProvider.oauthAccessToken).toThrow()
   })
 })

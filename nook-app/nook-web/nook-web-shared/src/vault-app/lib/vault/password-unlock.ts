@@ -22,11 +22,16 @@ type CatalogVaultLabel =
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
-  NookStringValue,
-  NookValueState,
+  NookOAuthAccountIdentityState,
+  NookOAuthRefreshCredentialState,
+  NookOAuthRemoteFileState,
+  NookOAuthTokenExpiryState,
+  NookVaultNameState,
   OnboardingType,
   decryptEnrollmentPayload,
+  enrollmentICloudSharedProviderForArchitecture,
   enrollmentProviderForArchitecture,
+  enrollmentSharedProviderForArchitecture,
   encryptEnrollmentPayload,
   hasActiveLocalVault,
   setLocalVaultLabel,
@@ -60,10 +65,6 @@ import {
   isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,
 } from "$lib/vault/sentinel-unlock";
-import {
-  intoWasmStringValue,
-  requireWasmStringValue,
-} from "$lib/wasm-string-value";
 
 const log = createLogger("vault-password");
 
@@ -371,21 +372,6 @@ export function shouldFlushSharedDriveGrant(
   return grant.kind !== "unsupported" && Boolean(accessToken?.trim());
 }
 
-function enrollmentSharedStorageTarget(
-  value: NookStringValue,
-): SharedStorageTarget {
-  try {
-    return value.state === NookValueState.Value
-      ? {
-          kind: SharedStorageTargetKind.Bound,
-          storageTargetId: value.string.trim(),
-        }
-      : { kind: SharedStorageTargetKind.NotBound };
-  } finally {
-    value.free();
-  }
-}
-
 function enrollmentOauthOptionalFields(provider: NookEnrollmentProvider): {
   refreshToken?: string;
   expiresAt?: string;
@@ -393,35 +379,35 @@ function enrollmentOauthOptionalFields(provider: NookEnrollmentProvider): {
   fileName?: string;
   accountEmail?: string;
 } {
-  const refreshToken = provider.oauthRefreshToken;
-  const expiresAt = provider.oauthExpiresAt;
-  const fileId = provider.oauthFileId;
-  const fileName = provider.oauthFileName;
-  const accountEmail = provider.oauthAccountEmail;
+  const refresh = provider.oauthRefresh;
+  const expiry = provider.oauthExpiry;
+  const remoteFile = provider.oauthRemoteFile;
+  const account = provider.oauthAccount;
   try {
     return {
-      ...(refreshToken.state === NookValueState.Value
-        ? { refreshToken: refreshToken.string }
+      ...(refresh.state === NookOAuthRefreshCredentialState.Token
+        ? { refreshToken: refresh.value }
         : {}),
-      ...(expiresAt.state === NookValueState.Value
-        ? { expiresAt: expiresAt.string }
+      ...(expiry.state === NookOAuthTokenExpiryState.ExpiresAt
+        ? { expiresAt: expiry.value }
         : {}),
-      ...(fileId.state === NookValueState.Value
-        ? { fileId: fileId.string }
+      ...(remoteFile.state === NookOAuthRemoteFileState.FileId ||
+      remoteFile.state === NookOAuthRemoteFileState.Identified
+        ? { fileId: remoteFile.fileIdValue }
         : {}),
-      ...(fileName.state === NookValueState.Value
-        ? { fileName: fileName.string }
+      ...(remoteFile.state === NookOAuthRemoteFileState.FileName ||
+      remoteFile.state === NookOAuthRemoteFileState.Identified
+        ? { fileName: remoteFile.fileNameValue }
         : {}),
-      ...(accountEmail.state === NookValueState.Value
-        ? { accountEmail: accountEmail.string }
+      ...(account.state === NookOAuthAccountIdentityState.Email
+        ? { accountEmail: account.value }
         : {}),
     };
   } finally {
-    refreshToken.free();
-    expiresAt.free();
-    fileId.free();
-    fileName.free();
-    accountEmail.free();
+    refresh.free();
+    expiry.free();
+    remoteFile.free();
+    account.free();
   }
 }
 
@@ -467,20 +453,19 @@ export async function connectWithEnrollmentCode(
 
     let enrollmentStorageArgs: [string, string, string];
     if (enrollmentProvider.type === GITHUB_PROVIDER_TYPE) {
-      const githubPat = requireWasmStringValue(enrollmentProvider.githubPat);
-      const githubRepo = requireWasmStringValue(enrollmentProvider.githubRepo);
+      const githubPat = enrollmentProvider.githubPat;
+      const githubRepo = enrollmentProvider.githubRepo;
       state.storageMode = "github";
       state.githubPat = githubPat;
       state.githubRepo = githubRepo;
       state.activateLoginSetup("github");
       enrollmentStorageArgs = ["github", githubPat, githubRepo];
     } else if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
-      const preset = requireWasmStringValue(
-        enrollmentProvider.oauthPreset,
-      ) as OAuthFilePreset;
-      const storageTarget = enrollmentSharedStorageTarget(
-        enrollmentProvider.sharedStorageTargetId,
-      );
+      const preset = enrollmentProvider.oauthPreset as OAuthFilePreset;
+      const storageTarget: SharedStorageTarget = {
+        kind: SharedStorageTargetKind.Bound,
+        storageTargetId: enrollmentProvider.sharedStorageTargetId,
+      };
       await state.loadProviders();
       const providerSelection = findSharedGrantProvider(
         state.providers,
@@ -620,12 +605,8 @@ export async function connectWithEnrollmentCode(
         type: "oauth-file",
         label: "Enrollment OAuth provider",
         oauthFile: {
-          preset: requireWasmStringValue(
-            enrollmentProvider.oauthPreset,
-          ) as OAuthFilePreset,
-          accessToken: requireWasmStringValue(
-            enrollmentProvider.oauthAccessToken,
-          ),
+          preset: enrollmentProvider.oauthPreset as OAuthFilePreset,
+          accessToken: enrollmentProvider.oauthAccessToken,
           ...optionalOauthFields,
           driveMode: "private",
           iCloudMode: "private",
@@ -920,20 +901,26 @@ export async function issueEnrollmentCode(
         );
       }
     }
-    const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
-      enrollmentProviderRow,
-      state.vaultArchitecture,
-      usesSharedProviderGrant && !usesSharedICloud
-        ? intoWasmStringValue(sharedJoinerIdentity)
-        : NookStringValue.unavailable(),
+    const provider: NookEnrollmentProvider =
+      usesSharedProviderGrant &&
       sharedStorageTarget.kind === SharedStorageTargetKind.Bound
-        ? intoWasmStringValue(sharedStorageTarget.storageTargetId)
-        : NookStringValue.unavailable(),
-    );
+        ? usesSharedICloud
+          ? enrollmentICloudSharedProviderForArchitecture(
+              enrollmentProviderRow,
+              state.vaultArchitecture,
+              sharedStorageTarget.storageTargetId,
+            )
+          : enrollmentSharedProviderForArchitecture(
+              enrollmentProviderRow,
+              state.vaultArchitecture,
+              sharedJoinerIdentity,
+              sharedStorageTarget.storageTargetId,
+            )
+        : enrollmentProviderForArchitecture(
+            enrollmentProviderRow,
+            state.vaultArchitecture,
+          );
     log.info("enrollment provider payload prepared", { providerId });
-    const managerVaultName = await state.enqueueStorage(
-      () => state.requireManager().vaultName,
-    );
     let catalogVaultName: CatalogVaultLabel = {
       kind: CatalogVaultLabelKind.Missing,
     };
@@ -952,33 +939,27 @@ export async function issueEnrollmentCode(
     // The local catalog is the durable browser-level label index. Keep it as
     // the enrollment fallback while older/synced projections without
     // `vault_name` are still supported.
-    const vaultName = (() => {
-      try {
-        return managerVaultName.state === NookValueState.Value
-          ? NookStringValue.value(managerVaultName.string)
-          : catalogVaultName.kind === CatalogVaultLabelKind.Present
-            ? NookStringValue.value(catalogVaultName.label)
-            : NookStringValue.unavailable();
-      } finally {
-        managerVaultName.free();
-      }
-    })();
-    const payload = (() => {
-      try {
-        log.info("enrollment vault name loaded", {
-          providerId,
-          hasVaultName: vaultName.state === NookValueState.Value,
-        });
-        return new NookEnrollmentIssueInput(
-          provider,
-          vaultName,
-          entryId,
-          isoTimestamp(),
-        );
-      } finally {
-        vaultName.free();
-      }
-    })();
+    const manager = state.requireManager();
+    const vaultName: CatalogVaultLabel =
+      manager.vaultNameState === NookVaultNameState.Named
+        ? {
+            kind: CatalogVaultLabelKind.Present,
+            label: manager.vaultName,
+          }
+        : catalogVaultName;
+    log.info("enrollment vault name loaded", {
+      providerId,
+      hasVaultName: vaultName.kind === CatalogVaultLabelKind.Present,
+    });
+    const payload =
+      vaultName.kind === CatalogVaultLabelKind.Present
+        ? NookEnrollmentIssueInput.named(
+            provider,
+            vaultName.label,
+            entryId,
+            isoTimestamp(),
+          )
+        : NookEnrollmentIssueInput.unnamed(provider, entryId, isoTimestamp());
     const selectedPassword = state.passwordEntries.find(
       (e) => e.id === entryId,
     );

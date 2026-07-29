@@ -5,15 +5,19 @@ import {
   defaultDriveBackupName,
   defaultGithubRepo,
   findDuplicateSyncProvider as findDuplicateSyncProviderWasm,
+  findDuplicateSyncProviderExcluding as findDuplicateSyncProviderExcludingWasm,
   formatDriveStorageRef as formatDriveStorageRefCore,
+  formatNewDriveStorageRef,
   maskGithubPatHint as maskGithubPatHintCore,
   localizeProviderLabel as localizeProviderLabelCore,
   providerDefaultLabel as providerDefaultLabelCore,
+  providerDefaultLabelWithoutDetail,
   providerStorageDetail as providerStorageDetailCore,
   sealAuthProvidersForDevicePublicKey,
   setGoogleDriveProviderMode,
   setICloudProviderMode,
   wasmStorageModeForProvider,
+  NookDuplicateSyncProviderState,
   type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type OAuthFileConfig,
@@ -58,11 +62,9 @@ export function formatDriveStorageRef(
   identity: DriveFileIdentity,
   fileName: string,
 ): string {
-  const boundary: { fileId?: string } =
-    identity.kind === DriveFileIdentityKind.Existing
-      ? { fileId: identity.fileId }
-      : {};
-  return formatDriveStorageRefCore(boundary.fileId, fileName);
+  return identity.kind === DriveFileIdentityKind.Existing
+    ? formatDriveStorageRefCore(identity.fileId, fileName)
+    : formatNewDriveStorageRef(fileName);
 }
 
 export const LOCAL_PROVIDER_TYPE = "local" satisfies StorageProviderType;
@@ -183,15 +185,31 @@ export type DuplicateSyncProvider =
 export function findDuplicateSyncProvider(
   providers: StorageProvider[],
   candidate: StorageProvider,
-  options?: { excludeId?: string },
 ): DuplicateSyncProvider {
-  const provider = findDuplicateSyncProviderWasm(
+  const result = findDuplicateSyncProviderWasm({ providers }, candidate);
+  return result.state === NookDuplicateSyncProviderState.Duplicate
+    ? {
+        kind: DuplicateSyncProviderKind.Duplicate,
+        provider: result.provider,
+      }
+    : { kind: DuplicateSyncProviderKind.Unique };
+}
+
+export function findDuplicateSyncProviderExcluding(
+  providers: StorageProvider[],
+  candidate: StorageProvider,
+  excludeId: string,
+): DuplicateSyncProvider {
+  const result = findDuplicateSyncProviderExcludingWasm(
     { providers },
     candidate,
-    options?.excludeId,
+    excludeId,
   );
-  return provider
-    ? { kind: DuplicateSyncProviderKind.Duplicate, provider }
+  return result.state === NookDuplicateSyncProviderState.Duplicate
+    ? {
+        kind: DuplicateSyncProviderKind.Duplicate,
+        provider: result.provider,
+      }
     : { kind: DuplicateSyncProviderKind.Unique };
 }
 
@@ -209,11 +227,10 @@ export function providerDefaultLabel(
     oauthPreset?: OAuthFilePreset;
   } = {},
 ): string {
-  return providerDefaultLabelCore(
-    type,
-    options.detail,
-    options.oauthPreset ?? "google-drive",
-  );
+  const oauthPreset = options.oauthPreset ?? "google-drive";
+  return typeof options.detail === "string"
+    ? providerDefaultLabelCore(type, options.detail, oauthPreset)
+    : providerDefaultLabelWithoutDetail(type, oauthPreset);
 }
 
 export function localizeProviderLabel(

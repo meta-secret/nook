@@ -27,11 +27,12 @@ import {
   nookLog,
   nookLogClear,
   nookLogCount,
-  nookLogDump,
+  nookLogDumpPage,
   nookLogFlush,
   nookLogGetLevel,
   nookLogInit,
   nookLogSetLevel,
+  nookLogWithData,
 } from "$app-wasm";
 export enum LogLevel {
   Error = "error",
@@ -281,7 +282,7 @@ function persistStructured(
     return;
   }
   try {
-    nookLog(level, scope, message, serialized);
+    nookLogWithData(level, scope, message, serialized);
   } catch {
     // Logging must never break the app.
   }
@@ -482,16 +483,16 @@ export function getLogLevel(): LogLevel {
 }
 
 /** Read persisted entries (oldest first), optionally filtered/paginated. */
-export async function dumpLogs(options?: {
-  minLevel?: LogLevel;
-  limit?: number;
-  offset?: number;
+export async function dumpLogs(options: {
+  minLevel: LogLevel;
+  limit: number;
+  offset: number;
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
-  const entries = await nookLogDump(
-    options?.minLevel,
-    options?.limit,
-    options?.offset,
+  const entries = await nookLogDumpPage(
+    options.minLevel,
+    options.limit,
+    options.offset,
   );
   try {
     return entries.toArray() as LogEntry[];
@@ -577,7 +578,7 @@ export function initWasmLogging() {
     for (const entry of queued) {
       try {
         if (entry.kind === PendingRecordKind.Structured) {
-          nookLog(entry.level, entry.scope, entry.message, entry.data);
+          nookLogWithData(entry.level, entry.scope, entry.message, entry.data);
         } else {
           nookLog(entry.level, entry.scope, entry.message);
         }

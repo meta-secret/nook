@@ -13,18 +13,23 @@ pub fn default_drive_backup_name() -> String {
 }
 
 #[wasm_bindgen(js_name = formatDriveStorageRef)]
-pub fn format_drive_storage_ref(file_id: Option<String>, file_name: &str) -> String {
-    nook_core::format_drive_storage_ref_raw(file_id.unwrap_or_default().as_str(), file_name)
+pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
+    nook_core::format_drive_storage_ref_raw(file_id, file_name)
+}
+
+#[wasm_bindgen(js_name = formatNewDriveStorageRef)]
+pub fn format_new_drive_storage_ref(file_name: &str) -> String {
+    nook_core::format_drive_storage_ref_raw("", file_name)
 }
 
 #[wasm_bindgen(js_name = wasmStorageModeForProvider)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn wasm_storage_mode_for_provider(
     provider_type: nook_core::StorageProviderType,
-    oauth_preset: Option<nook_core::OauthFilePreset>,
+    oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(
-        nook_core::storage_mode_for_provider(provider_type, oauth_preset)
+        nook_core::storage_mode_for_provider(provider_type, Some(oauth_preset))
             .as_str()
             .to_owned(),
     )
@@ -34,13 +39,26 @@ pub fn wasm_storage_mode_for_provider(
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_default_label(
     provider_type: nook_core::StorageProviderType,
-    detail: Option<String>,
-    oauth_preset: Option<nook_core::OauthFilePreset>,
+    detail: &str,
+    oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
         provider_type,
-        detail.as_deref(),
-        oauth_preset,
+        Some(detail),
+        Some(oauth_preset),
+    ))
+}
+
+#[wasm_bindgen(js_name = providerDefaultLabelWithoutDetail)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn provider_default_label_without_detail(
+    provider_type: nook_core::StorageProviderType,
+    oauth_preset: nook_core::OauthFilePreset,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::sync_provider_default_label(
+        provider_type,
+        None,
+        Some(oauth_preset),
     ))
 }
 

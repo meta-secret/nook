@@ -2,12 +2,11 @@ import { describe, expect, test } from 'vitest'
 import {
   NookClientRunModeUtil,
   NookPendingSyncConflict,
+  NookProviderSyncRevision,
   NookRuntimeConfig,
-  NookStringValue,
   type NookPendingSyncConflict as PendingSyncConflict,
 } from '$app-wasm'
 import { syncConflictLabel } from '$lib/vault/sync.svelte'
-import { intoWasmStringValue } from '$lib/wasm-string-value'
 import {
   SyncConflictReviewKind,
   type SyncConflictReview,
@@ -23,7 +22,7 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        NookStringValue.unavailable(),
+        NookProviderSyncRevision.untracked(),
         'store-local',
         'store-remote',
       )
@@ -37,7 +36,7 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        NookStringValue.unavailable(),
+        NookProviderSyncRevision.untracked(),
       )
 }
 
@@ -54,9 +53,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('1000'))).toBe(
-      60_000,
-    )
+    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(60_000)
   })
 
   test('e2e build honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -64,9 +61,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('1000'))).toBe(
-      1000,
-    )
+    expect(config.resolveVaultSyncIntervalMs('1000')).toBe(1000)
   })
 
   test('dev mode honors VITE_VAULT_SYNC_INTERVAL_MS', () => {
@@ -74,9 +69,7 @@ describe('resolveVaultSyncIntervalMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultSyncIntervalMs(intoWasmStringValue('500'))).toBe(
-      500,
-    )
+    expect(config.resolveVaultSyncIntervalMs('500')).toBe(500)
   })
 })
 

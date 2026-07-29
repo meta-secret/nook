@@ -1,8 +1,8 @@
 use super::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
-    NookGoogleDriveFolder, NookLocalFolderConfig, NookProviderReplicationCapability,
-    NookStorageConnectArgs, NookStringValue, NookStringValueRef, NookVaultArchitecture,
-    passkey_browser, storage, wasm_bindgen,
+    NookGoogleDriveFolder, NookLocalFolderConfig, NookManagerStoreScope,
+    NookProviderReplicationCapability, NookProviderSyncRevision, NookStorageConnectArgs,
+    NookVaultArchitecture, passkey_browser, storage, wasm_bindgen,
 };
 
 mod localization;
@@ -351,22 +351,16 @@ pub fn update_provider_sync_metadata(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
     provider_id: &str,
     vault_yaml: &str,
-    revision: NookStringValue,
-    manager_store_id: NookStringValue,
+    revision: &NookProviderSyncRevision,
+    manager_store_scope: &NookManagerStoreScope,
     synced_at: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     snapshot.providers = nook_core::update_provider_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
-        match revision.as_ref() {
-            NookStringValueRef::Value(value) => nook_core::ProviderSyncRevisionRef::Revision(value),
-            NookStringValueRef::Unavailable => nook_core::ProviderSyncRevisionRef::Unreported,
-        },
-        match manager_store_id.as_ref() {
-            NookStringValueRef::Value(value) => nook_core::ManagerStoreScopeRef::Store(value),
-            NookStringValueRef::Unavailable => nook_core::ManagerStoreScopeRef::Unscoped,
-        },
+        revision.as_core(),
+        manager_store_scope.as_core(),
         synced_at,
     );
     Ok(snapshot)
@@ -584,24 +578,51 @@ pub fn first_compatible_provider_id(
 pub fn enrollment_provider_for_architecture(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
-    shared_joiner_identity: &NookStringValue,
-    shared_storage_target_id: &NookStringValue,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
-    let shared_joiner_identity = match shared_joiner_identity.as_ref() {
-        NookStringValueRef::Unavailable => None,
-        NookStringValueRef::Value(identity) => Some(identity),
-    };
-    let shared_storage_target_id = match shared_storage_target_id.as_ref() {
-        NookStringValueRef::Unavailable => None,
-        NookStringValueRef::Value(target_id) => Some(target_id),
-    };
     Ok(NookEnrollmentProvider::from_core(
         nook_core::enrollment_provider_for_architecture_with_storage_target(
             &provider,
             &architecture,
-            shared_joiner_identity,
-            shared_storage_target_id,
+            None,
+            None,
+        )?,
+    ))
+}
+
+#[wasm_bindgen(js_name = enrollmentSharedProviderForArchitecture)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn enrollment_shared_provider_for_architecture(
+    provider: nook_core::StorageProviderData,
+    architecture: &NookVaultArchitecture,
+    shared_joiner_identity: &str,
+    shared_storage_target_id: &str,
+) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
+    let architecture = architecture.to_core();
+    Ok(NookEnrollmentProvider::from_core(
+        nook_core::enrollment_provider_for_architecture_with_storage_target(
+            &provider,
+            &architecture,
+            Some(shared_joiner_identity),
+            Some(shared_storage_target_id),
+        )?,
+    ))
+}
+
+#[wasm_bindgen(js_name = enrollmentICloudSharedProviderForArchitecture)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn enrollment_icloud_shared_provider_for_architecture(
+    provider: nook_core::StorageProviderData,
+    architecture: &NookVaultArchitecture,
+    shared_storage_target_id: &str,
+) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
+    let architecture = architecture.to_core();
+    Ok(NookEnrollmentProvider::from_core(
+        nook_core::enrollment_provider_for_architecture_with_storage_target(
+            &provider,
+            &architecture,
+            None,
+            Some(shared_storage_target_id),
         )?,
     ))
 }
@@ -896,32 +917,56 @@ pub fn normalize_enrollment_code(code: &str) -> String {
     nook_core::normalize_enrollment_code(code)
 }
 
-#[wasm_bindgen(js_name = peekEnrollmentEntryId)]
-#[must_use]
-pub fn peek_enrollment_entry_id(code: &str) -> NookStringValue {
-    let code = nook_core::normalize_enrollment_code(code);
-    match nook_core::peek_enrollment_entry_id(&code) {
-        Ok(value) => NookStringValue::from_value(value),
-        Err(_) => NookStringValue::unavailable(),
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookEnrollmentEntryLabelState {
+    Unlabeled,
+    Labeled,
+}
+
+#[wasm_bindgen]
+pub struct NookEnrollmentEntryLabel(nook_core::EnrollmentEntryLabel);
+
+#[wasm_bindgen]
+impl NookEnrollmentEntryLabel {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookEnrollmentEntryLabelState {
+        match &self.0 {
+            nook_core::EnrollmentEntryLabel::Unlabeled => NookEnrollmentEntryLabelState::Unlabeled,
+            nook_core::EnrollmentEntryLabel::Labeled(_) => NookEnrollmentEntryLabelState::Labeled,
+        }
     }
+
+    #[wasm_bindgen(getter)]
+    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            nook_core::EnrollmentEntryLabel::Unlabeled => Err(wasm_bindgen::JsError::new(
+                "enrollment entry does not have a label",
+            )),
+            nook_core::EnrollmentEntryLabel::Labeled(label) => Ok(label.clone()),
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = peekEnrollmentEntryId)]
+pub fn peek_enrollment_entry_id(code: &str) -> Result<String, wasm_bindgen::JsError> {
+    let code = nook_core::normalize_enrollment_code(code);
+    Ok(nook_core::peek_enrollment_entry_id(&code)?)
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
-#[must_use]
-pub fn peek_enrollment_entry_label(code: &str) -> NookStringValue {
+pub fn peek_enrollment_entry_label(
+    code: &str,
+) -> Result<NookEnrollmentEntryLabel, wasm_bindgen::JsError> {
     let code = nook_core::normalize_enrollment_code(code);
-    match nook_core::peek_enrollment_entry_label(&code) {
-        Ok(nook_core::EnrollmentEntryLabel::Labeled(label)) => NookStringValue::from_value(label),
-        Ok(nook_core::EnrollmentEntryLabel::Unlabeled) | Err(_) => NookStringValue::unavailable(),
-    }
+    Ok(NookEnrollmentEntryLabel(
+        nook_core::peek_enrollment_entry_label(&code)?,
+    ))
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
-#[must_use]
-pub fn peek_enrollment_issued_at(code: &str) -> NookStringValue {
+pub fn peek_enrollment_issued_at(code: &str) -> Result<String, wasm_bindgen::JsError> {
     let code = nook_core::normalize_enrollment_code(code);
-    match nook_core::peek_enrollment_issued_at(&code) {
-        Ok(value) => NookStringValue::from_value(value),
-        Err(_) => NookStringValue::unavailable(),
-    }
+    Ok(nook_core::peek_enrollment_issued_at(&code)?)
 }

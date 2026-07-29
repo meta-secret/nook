@@ -47,10 +47,10 @@
   import {
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
+    NookEnrollmentEntryLabelState,
     SentinelGenesisPhase,
     type VaultApplication,
   } from '$app-wasm'
-  import { requireWasmStringValue } from '$lib/wasm-string-value'
   import {
     ActiveVaultKind,
     LocalFolderDraftKind,
@@ -147,6 +147,18 @@
 
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
+
+  const prefillEnrollmentEntryLabel = $derived.by(() => {
+    if (!prefillEnrollmentCode) return ''
+    const label = peekEnrollmentEntryLabel(prefillEnrollmentCode)
+    try {
+      return label.state === NookEnrollmentEntryLabelState.Labeled
+        ? label.value
+        : ''
+    } finally {
+      label.free()
+    }
+  })
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
@@ -295,12 +307,8 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={requireWasmStringValue(
-        peekEnrollmentEntryId(prefillEnrollmentCode),
-      )}
-      passwordEntryLabel={requireWasmStringValue(
-        peekEnrollmentEntryLabel(prefillEnrollmentCode),
-      )}
+      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
+      passwordEntryLabel={prefillEnrollmentEntryLabel}
       {isVerifying}
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}

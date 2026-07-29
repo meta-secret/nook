@@ -126,9 +126,6 @@ export class VaultState extends VaultLifecycleState {
       this.translations,
       this.locale,
     );
-    if (!reason) {
-      throw new Error("Blocked vault edit decision requires a reason");
-    }
     return { decision, reason };
   }
 

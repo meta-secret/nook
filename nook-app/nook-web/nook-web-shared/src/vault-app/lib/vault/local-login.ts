@@ -2,7 +2,7 @@ import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
-  getActiveVaultId,
+  getActiveVaultSelection,
   hasActiveLocalVault,
   listLocalVaults,
   prepareNewLocalVaultSlot,
@@ -10,6 +10,7 @@ import {
   setLocalVaultLabel,
   setVaultSessionLocked,
   NookVaultSwitchState,
+  NookActiveVaultSelectionState,
   type NookVaultManager,
 } from "$app-wasm";
 import { saveAuthProviders } from "$lib/auth-providers";
@@ -97,9 +98,9 @@ export async function refreshLocalVaultCatalog(
 ): Promise<void> {
   state.localVaults = await listLocalVaults();
   state.localVaultPresent = await hasActiveLocalVault();
-  const activeFromWasm = await getActiveVaultId();
-  if (activeFromWasm) {
-    state.openActiveVault(activeFromWasm);
+  const activeSelection = await getActiveVaultSelection();
+  if (activeSelection.state === NookActiveVaultSelectionState.Selected) {
+    state.openActiveVault(activeSelection.storeId);
   }
 }
 

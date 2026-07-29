@@ -403,7 +403,16 @@ pub fn log_get_level() -> String {
 /// the active level; the web layer owns console echo, so nothing is printed
 /// here. Otherwise queued for the next [`log_flush`].
 #[wasm_bindgen(js_name = nookLog)]
-pub fn log_record(level: &str, scope: &str, message: &str, data: Option<String>) {
+pub fn log_record(level: &str, scope: &str, message: &str) {
+    log_record_entry(level, scope, message, None);
+}
+
+#[wasm_bindgen(js_name = nookLogWithData)]
+pub fn log_record_with_data(level: &str, scope: &str, message: &str, data: String) {
+    log_record_entry(level, scope, message, Some(data));
+}
+
+fn log_record_entry(level: &str, scope: &str, message: &str, data: Option<String>) {
     let level = LogLevel::parse(level).unwrap_or(LogLevel::Info);
     let active = LOGGER.with(|logger| logger.borrow().level);
     if level.rank() > active.rank() {
@@ -430,12 +439,18 @@ pub async fn log_flush() -> Result<(), wasm_bindgen::JsError> {
 /// paginated from the newest end. Returns an array of
 /// `{ ts, level, scope, message, data? }`.
 #[wasm_bindgen(js_name = nookLogDump)]
-pub async fn log_dump(
-    min_level: Option<String>,
-    limit: Option<u32>,
-    offset: Option<u32>,
+pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
+    let entries = dump_entries(None, None, None).await?;
+    Ok(NookLogEntries(entries))
+}
+
+#[wasm_bindgen(js_name = nookLogDumpPage)]
+pub async fn log_dump_page(
+    min_level: String,
+    limit: u32,
+    offset: u32,
 ) -> Result<NookLogEntries, wasm_bindgen::JsError> {
-    let entries = dump_entries(min_level, limit, offset).await?;
+    let entries = dump_entries(Some(min_level), Some(limit), Some(offset)).await?;
     Ok(NookLogEntries(entries))
 }
 

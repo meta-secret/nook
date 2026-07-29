@@ -1,10 +1,27 @@
-use crate::types::NookStringValueRef;
 use crate::{
     NookAuthenticationOutcomeObservation, NookAuthenticationOutcomeVerdict,
-    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch, NookStringValue,
+    NookAuthenticationPageObservations, NookAuthenticationWorkflowMatch,
     NookVaultSecurityRecommendations,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookAppLocaleParse {
+    Unsupported,
+    English,
+    Russian,
+}
+
+impl From<nook_core::AppLocale> for NookAppLocaleParse {
+    fn from(locale: nook_core::AppLocale) -> Self {
+        match locale {
+            nook_core::AppLocale::English => Self::English,
+            nook_core::AppLocale::Russian => Self::Russian,
+            nook_core::AppLocale::Unsupported => Self::Unsupported,
+        }
+    }
+}
 
 #[wasm_bindgen(js_name = translate)]
 #[must_use]
@@ -70,20 +87,15 @@ pub fn classify_authentication_outcome_with_default_timeout(
 }
 
 #[wasm_bindgen(js_name = parseAppLocale)]
-#[allow(clippy::needless_pass_by_value)]
 #[must_use]
-pub fn parse_app_locale(value: NookStringValue) -> NookStringValue {
-    let locale = match value.as_ref() {
-        NookStringValueRef::Value(value) => nook_core::parse_app_locale(value),
-        NookStringValueRef::Unavailable => nook_core::AppLocale::Unsupported,
-    };
-    app_locale_value(locale)
+pub fn parse_app_locale(value: &str) -> NookAppLocaleParse {
+    nook_core::parse_app_locale(value).into()
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTag)]
 #[must_use]
-pub fn resolve_app_locale_from_tag(tag: &str) -> NookStringValue {
-    app_locale_value(nook_core::resolve_app_locale_from_tag(tag))
+pub fn resolve_app_locale_from_tag(tag: &str) -> NookAppLocaleParse {
+    nook_core::resolve_app_locale_from_tag(tag).into()
 }
 
 #[wasm_bindgen(js_name = resolveAppLocaleFromTags)]
@@ -93,12 +105,16 @@ pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
     nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
 }
 
-fn app_locale_value(locale: nook_core::AppLocale) -> NookStringValue {
+#[wasm_bindgen(js_name = supportedAppLocaleCode)]
+pub fn supported_app_locale_code(
+    locale: NookAppLocaleParse,
+) -> Result<String, wasm_bindgen::JsError> {
     match locale {
-        nook_core::AppLocale::English | nook_core::AppLocale::Russian => {
-            NookStringValue::from_value(locale.code())
-        }
-        nook_core::AppLocale::Unsupported => NookStringValue::unavailable(),
+        NookAppLocaleParse::English => Ok("en".to_owned()),
+        NookAppLocaleParse::Russian => Ok("ru".to_owned()),
+        NookAppLocaleParse::Unsupported => Err(wasm_bindgen::JsError::new(
+            "unsupported locale does not have an application locale code",
+        )),
     }
 }
 

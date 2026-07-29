@@ -3,7 +3,6 @@ import {
   generatePasswordWithOptions,
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
-import { intoWasmStringValue } from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
 import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
@@ -15,11 +14,11 @@ import {
   DeviceProtectionStatus,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
+  NookAppLocaleParse,
   parseAppLocale as wasmParseAppLocale,
-  NookStringValue,
-  NookValueState,
   resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
+  supportedAppLocaleCode,
   VaultApplication,
   type NookAppLocale,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -388,21 +387,16 @@ export async function parseStoredAppLocale(
   input: StoredAppLocaleInput,
 ): Promise<StoredAppLocaleParse> {
   await ensureNookWasm()
-  const parsed = wasmParseAppLocale(
-    input.kind === StoredAppLocaleInputKind.Stored
-      ? intoWasmStringValue(input.value)
-      : NookStringValue.unavailable(),
-  )
-  try {
-    return parsed.state === NookValueState.Value
-      ? {
-          kind: StoredAppLocaleParseKind.Supported,
-          locale: parsed.string as NookAppLocale,
-        }
-      : { kind: StoredAppLocaleParseKind.Unsupported }
-  } finally {
-    parsed.free()
+  if (input.kind === StoredAppLocaleInputKind.Missing) {
+    return { kind: StoredAppLocaleParseKind.Unsupported }
   }
+  const parsed = wasmParseAppLocale(input.value)
+  return parsed === NookAppLocaleParse.Unsupported
+    ? { kind: StoredAppLocaleParseKind.Unsupported }
+    : {
+        kind: StoredAppLocaleParseKind.Supported,
+        locale: supportedAppLocaleCode(parsed) as NookAppLocale,
+      }
 }
 
 export async function resolveAppLocaleFromTags(

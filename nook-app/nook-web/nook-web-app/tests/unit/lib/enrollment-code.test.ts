@@ -2,8 +2,8 @@ import { describe, expect, test } from 'vitest'
 import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
+  NookEnrollmentEntryLabelState,
   NookEnrollmentProvider,
-  NookValueState,
   default as initNookWasm,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
@@ -13,29 +13,35 @@ import {
   peekEnrollmentIssuedAt,
   VaultApplication,
 } from '$app-wasm'
-import {
-  intoWasmStringValue,
-  requireWasmStringValue,
-} from '$lib/wasm-string-value'
 
 await initNookWasm()
 
 function samplePayload(): NookEnrollmentIssueInput {
-  return new NookEnrollmentIssueInput(
+  return NookEnrollmentIssueInput.named(
     NookEnrollmentProvider.local(),
-    intoWasmStringValue('Local vault'),
+    'Local vault',
     'entry-local',
     '2026-06-23T12:00:00Z',
   )
 }
 
 function githubPayload(): NookEnrollmentIssueInput {
-  return new NookEnrollmentIssueInput(
+  return NookEnrollmentIssueInput.named(
     NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
-    intoWasmStringValue('Team vault'),
+    'Team vault',
     'entry-1',
     '2026-06-23T12:00:00Z',
   )
+}
+
+function enrollmentEntryLabel(code: string): string {
+  const label = peekEnrollmentEntryLabel(code)
+  try {
+    expect(label.state).toBe(NookEnrollmentEntryLabelState.Labeled)
+    return label.value
+  } finally {
+    label.free()
+  }
 }
 
 function decodeOuterJson(code: string): Record<string, unknown> {
@@ -89,13 +95,9 @@ describe('enrollment-code links', () => {
   test('wasm peek helpers accept full enrollment links', async () => {
     const code = encryptEnrollmentPayload(samplePayload(), 'hunter2', 'Desk')
     const link = buildEnrollmentLink(code, 'https://nook.example')
-    expect(requireWasmStringValue(peekEnrollmentEntryId(link))).toBe(
-      'entry-local',
-    )
-    expect(requireWasmStringValue(peekEnrollmentEntryLabel(link))).toBe('Desk')
-    expect(requireWasmStringValue(peekEnrollmentIssuedAt(link))).toBe(
-      '2026-06-23T12:00:00Z',
-    )
+    expect(peekEnrollmentEntryId(link)).toBe('entry-local')
+    expect(enrollmentEntryLabel(link)).toBe('Desk')
+    expect(peekEnrollmentIssuedAt(link)).toBe('2026-06-23T12:00:00Z')
   })
 })
 
@@ -106,13 +108,9 @@ describe('enrollment payloads', () => {
       'vault-pass-99',
       'Work laptop',
     )
-    expect(requireWasmStringValue(peekEnrollmentEntryId(code))).toBe('entry-1')
-    expect(requireWasmStringValue(peekEnrollmentEntryLabel(code))).toBe(
-      'Work laptop',
-    )
-    expect(requireWasmStringValue(peekEnrollmentIssuedAt(code))).toBe(
-      '2026-06-23T12:00:00Z',
-    )
+    expect(peekEnrollmentEntryId(code)).toBe('entry-1')
+    expect(enrollmentEntryLabel(code)).toBe('Work laptop')
+    expect(peekEnrollmentIssuedAt(code)).toBe('2026-06-23T12:00:00Z')
 
     const outer = decodeOuterJson(code)
     const serialized = JSON.stringify(outer)
@@ -127,12 +125,8 @@ describe('enrollment payloads', () => {
     expect(decrypted.vaultName).toBe('Team vault')
     expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
     expect(decrypted.provider.type).toBe('github')
-    expect(requireWasmStringValue(decrypted.provider.githubPat)).toBe(
-      'github_pat_11AAAAbbbbCCCC',
-    )
-    expect(requireWasmStringValue(decrypted.provider.githubRepo)).toBe(
-      'team-vault',
-    )
+    expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')
+    expect(decrypted.provider.githubRepo).toBe('team-vault')
   })
 
   test('rejects wrong vault passwords', async () => {
@@ -150,11 +144,6 @@ describe('enrollment payloads', () => {
     expect(() => decryptEnrollmentPayload(malformed, 'pw')).toThrow(
       'Invalid enrollment code.',
     )
-    const entryId = peekEnrollmentEntryId(malformed)
-    try {
-      expect(entryId.state).toBe(NookValueState.Unavailable)
-    } finally {
-      entryId.free()
-    }
+    expect(() => peekEnrollmentEntryId(malformed)).toThrow()
   })
 })

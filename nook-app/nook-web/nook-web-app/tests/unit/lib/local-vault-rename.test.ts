@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const wasmMocks = vi.hoisted(() => ({
-  getActiveVaultId: vi.fn(),
+  getActiveVaultSelection: vi.fn(),
   hasActiveLocalVault: vi.fn(),
   listLocalVaults: vi.fn(),
   prepareNewLocalVaultSlot: vi.fn(),

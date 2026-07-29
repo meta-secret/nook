@@ -20,7 +20,6 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import { requireWasmStringValue } from '$lib/wasm-string-value'
   import {
     ActivePasswordEntryKind,
     ResolvedPasswordEntryKind,
@@ -95,7 +94,7 @@
 
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return requireWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode))
+    return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',

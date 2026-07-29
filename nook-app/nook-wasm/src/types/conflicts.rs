@@ -1,4 +1,4 @@
-use super::{NookError, NookStringValue, NookStringValueRef, wasm_bindgen};
+use super::{NookError, NookProviderSyncRevision, wasm_bindgen};
 
 /// Pending browser sync resolution state.
 ///
@@ -14,7 +14,7 @@ pub struct NookPendingSyncConflict {
     mode: String,
     pat: String,
     repo: String,
-    remote_revision: Option<String>,
+    remote_revision: NookProviderSyncRevision,
     conflict: nook_core::VaultSyncConflict,
 }
 
@@ -34,7 +34,7 @@ impl NookPendingSyncConflict {
         mode: String,
         pat: String,
         repo: String,
-        remote_revision: &NookStringValue,
+        remote_revision: &NookProviderSyncRevision,
     ) -> Self {
         Self {
             provider_id,
@@ -44,10 +44,7 @@ impl NookPendingSyncConflict {
             mode,
             pat,
             repo,
-            remote_revision: match remote_revision.as_ref() {
-                NookStringValueRef::Unavailable => None,
-                NookStringValueRef::Value(revision) => Some(revision.to_owned()),
-            },
+            remote_revision: remote_revision.clone(),
             conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version: u64::from(local_version),
                 remote_version: u64::from(remote_version),
@@ -65,7 +62,7 @@ impl NookPendingSyncConflict {
         mode: String,
         pat: String,
         repo: String,
-        remote_revision: &NookStringValue,
+        remote_revision: &NookProviderSyncRevision,
     ) -> Self {
         let local_version = nook_core::read_vault_version(&local_yaml).unwrap_or(0);
         let remote_version = nook_core::read_vault_version(&remote_yaml).unwrap_or(0);
@@ -77,10 +74,7 @@ impl NookPendingSyncConflict {
             mode,
             pat,
             repo,
-            remote_revision: match remote_revision.as_ref() {
-                NookStringValueRef::Unavailable => None,
-                NookStringValueRef::Value(revision) => Some(revision.to_owned()),
-            },
+            remote_revision: remote_revision.clone(),
             conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version,
                 remote_version,
@@ -98,7 +92,7 @@ impl NookPendingSyncConflict {
         mode: String,
         pat: String,
         repo: String,
-        remote_revision: &NookStringValue,
+        remote_revision: &NookProviderSyncRevision,
         local_store_id: String,
         remote_store_id: String,
     ) -> Self {
@@ -110,10 +104,7 @@ impl NookPendingSyncConflict {
             mode,
             pat,
             repo,
-            remote_revision: match remote_revision.as_ref() {
-                NookStringValueRef::Unavailable => None,
-                NookStringValueRef::Value(revision) => Some(revision.to_owned()),
-            },
+            remote_revision: remote_revision.clone(),
             conflict: nook_core::VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
                 local_store_id,
                 remote_store_id,
@@ -135,7 +126,7 @@ impl NookPendingSyncConflict {
         mode: String,
         pat: String,
         repo: String,
-        remote_revision: &NookStringValue,
+        remote_revision: &NookProviderSyncRevision,
         local_store_id: String,
         remote_store_id: String,
     ) -> Self {
@@ -195,7 +186,7 @@ impl NookPendingSyncConflict {
     }
 
     #[wasm_bindgen(getter, js_name = remoteRevision)]
-    pub fn remote_revision(&self) -> Option<String> {
+    pub fn remote_revision(&self) -> NookProviderSyncRevision {
         self.remote_revision.clone()
     }
 
@@ -262,7 +253,7 @@ mod pending_sync_conflict_tests {
             "github".to_owned(),
             "token".to_owned(),
             "owner/repo".to_owned(),
-            &NookStringValue::unavailable(),
+            &NookProviderSyncRevision::untracked(),
             "store_local12345".to_owned(),
             "store_remote1234".to_owned(),
         );

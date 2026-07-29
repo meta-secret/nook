@@ -46,9 +46,7 @@ use crate::storage::{
     indexed_db::{load_from_indexed_db, save_to_indexed_db},
 };
 use crate::types::records_to_vec;
-use crate::{
-    NookJoinRequest, NookSecretRecord, NookStringValue, NookVaultArchitecture, NookVaultMember,
-};
+use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -109,6 +107,13 @@ impl VaultCryptoState {
 enum VaultNameState {
     Unnamed,
     Named(String),
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookVaultNameState {
+    Unnamed,
+    Named,
 }
 
 enum SearchCatalogState {
@@ -474,11 +479,19 @@ impl NookVaultManager {
             .can_create_secret_with_records(&self.stored_records_snapshot())
     }
 
-    #[wasm_bindgen(getter, js_name = vaultName)]
-    pub fn vault_name(&self) -> NookStringValue {
+    #[wasm_bindgen(getter, js_name = vaultNameState)]
+    pub fn vault_name_state(&self) -> NookVaultNameState {
         match &self.vault.vault_name {
-            VaultNameState::Unnamed => NookStringValue::unavailable(),
-            VaultNameState::Named(name) => NookStringValue::from_value(name),
+            VaultNameState::Unnamed => NookVaultNameState::Unnamed,
+            VaultNameState::Named(_) => NookVaultNameState::Named,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultName)]
+    pub fn vault_name(&self) -> Result<String, JsError> {
+        match &self.vault.vault_name {
+            VaultNameState::Unnamed => Err(JsError::new("vault is unnamed")),
+            VaultNameState::Named(name) => Ok(name.clone()),
         }
     }
 

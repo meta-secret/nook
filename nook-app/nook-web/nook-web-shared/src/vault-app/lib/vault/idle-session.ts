@@ -1,8 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
-import { NookStringValue, setVaultSessionLocked } from "$app-wasm";
+import { setVaultSessionLocked } from "$app-wasm";
 import { createLogger } from "$lib/log";
 import { createVaultIdleSessionTracker } from "$lib/vault-idle-session";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-session");
 
@@ -12,16 +11,14 @@ export function ensureIdleSessionTracker(state: VaultState): void {
   const idleWarningConfig = import.meta.env.VITE_VAULT_IDLE_WARNING_MS;
   state.setIdleSessionTracker(
     createVaultIdleSessionTracker({
-      timeoutMs: state.runtimeConfig.resolveVaultIdleTimeoutMs(
+      timeoutMs:
         typeof idleTimeoutConfig === "string"
-          ? intoWasmStringValue(idleTimeoutConfig)
-          : NookStringValue.unavailable(),
-      ),
-      warningMs: state.runtimeConfig.resolveVaultIdleWarningMs(
+          ? state.runtimeConfig.resolveVaultIdleTimeoutMs(idleTimeoutConfig)
+          : state.runtimeConfig.resolveDefaultVaultIdleTimeoutMs(),
+      warningMs:
         typeof idleWarningConfig === "string"
-          ? intoWasmStringValue(idleWarningConfig)
-          : NookStringValue.unavailable(),
-      ),
+          ? state.runtimeConfig.resolveVaultIdleWarningMs(idleWarningConfig)
+          : state.runtimeConfig.resolveDefaultVaultIdleWarningMs(),
       onExpire: () => lockVaultDueToIdle(state),
       onWarning: () => showIdleLockWarning(state),
     }),

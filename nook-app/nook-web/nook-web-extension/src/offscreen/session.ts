@@ -737,7 +737,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
           decision !== NookWebsiteLoginSaveDecision.Update
         ) {
           payload.password = ''
-          return { ok: true, decision, secretId: plan.secretId }
+          return decision === NookWebsiteLoginSaveDecision.AlreadySaved
+            ? { ok: true, decision, secretId: plan.secretId }
+            : { ok: true, decision }
         }
         pendingLoginSaveOfferStore.clearForOrigin(payload.origin)
         const offerId = crypto.randomUUID()
@@ -755,9 +757,6 @@ async function handleMessage(message: unknown): Promise<unknown> {
         let offer: PendingLoginSaveOffer
         if (decision === NookWebsiteLoginSaveDecision.Update) {
           const replaceSecretId = plan.secretId
-          if (typeof replaceSecretId !== 'string') {
-            throw new Error('Login save update is missing its target secret.')
-          }
           offer = {
             ...commonOffer,
             decision: NookWebsiteLoginSaveDecision.Update,

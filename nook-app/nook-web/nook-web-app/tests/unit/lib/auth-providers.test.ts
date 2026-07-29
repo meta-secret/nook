@@ -4,6 +4,7 @@ import {
   DriveFileIdentityKind,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
+  findDuplicateSyncProviderExcluding,
   formatDriveStorageRef,
   GithubPatDisplayKind,
   maskGithubPat,
@@ -211,9 +212,7 @@ describe('findDuplicateSyncProvider', () => {
   test('ignores the excluded provider id', () => {
     const existing = githubProvider({ id: 'gh-self' })
     expect(
-      findDuplicateSyncProvider([existing], existing, {
-        excludeId: 'gh-self',
-      }),
+      findDuplicateSyncProviderExcluding([existing], existing, 'gh-self'),
     ).toEqual({ kind: DuplicateSyncProviderKind.Unique })
   })
 

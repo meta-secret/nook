@@ -1,33 +1,21 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
+  NookAppLocaleParse,
   NookBrowserLocale,
-  NookStringValue,
-  NookValueState,
   get_translation_catalog as getTranslationCatalog,
   lookupTranslation,
   mergeTranslationCatalogs,
   parseAppLocale,
   resolveAppLocaleFromTag,
   resolveAppLocaleFromTags,
+  supportedAppLocaleCode,
   translateFromCatalog,
 } from '$app-wasm'
 import { HELP_SECTIONS } from '$lib/help-content'
-import {
-  intoWasmStringValue,
-  requireWasmStringValue,
-} from '$lib/wasm-string-value'
 
 beforeAll(async () => {
   await initNookWasm()
 })
-
-function expectUnavailableWasmString(value: NookStringValue): void {
-  try {
-    expect(value.state).toBe(NookValueState.Unavailable)
-  } finally {
-    value.free()
-  }
-}
 
 describe('locale', () => {
   test('English and Russian catalogs expose the same translation keys', () => {
@@ -56,21 +44,18 @@ describe('locale', () => {
   })
 
   test('parseAppLocale accepts only supported values', () => {
-    expect(
-      requireWasmStringValue(parseAppLocale(intoWasmStringValue('en'))),
-    ).toBe('en')
-    expect(
-      requireWasmStringValue(parseAppLocale(intoWasmStringValue('ru'))),
-    ).toBe('ru')
-    expectUnavailableWasmString(parseAppLocale(intoWasmStringValue('de')))
-    expectUnavailableWasmString(parseAppLocale(NookStringValue.unavailable()))
+    expect(supportedAppLocaleCode(parseAppLocale('en'))).toBe('en')
+    expect(supportedAppLocaleCode(parseAppLocale('ru'))).toBe('ru')
+    expect(parseAppLocale('de')).toBe(NookAppLocaleParse.Unsupported)
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
-    expect(requireWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
-    expect(requireWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
-    expect(requireWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
-    expectUnavailableWasmString(resolveAppLocaleFromTag('de-DE'))
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('en-GB'))).toBe('en')
+    expect(resolveAppLocaleFromTag('de-DE')).toBe(
+      NookAppLocaleParse.Unsupported,
+    )
   })
 
   test('resolveAppLocaleFromTags respects preference order', () => {

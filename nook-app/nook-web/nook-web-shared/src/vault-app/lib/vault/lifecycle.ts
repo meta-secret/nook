@@ -7,11 +7,11 @@ import {
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
   hasActiveLocalVault,
-  NookStringValue,
-  NookValueState,
+  NookAppLocaleParse,
   parseAppLocale,
   prepareNewLocalVaultSlot,
   setActiveVault,
+  supportedAppLocaleCode,
   type NookAppLocale,
   type NookVaultManager,
 } from "$app-wasm";
@@ -21,7 +21,6 @@ import {
   setupDeviceProtection,
   unlockDeviceProtection,
 } from "$lib/passkey-device-protection";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 import { JoinEnrollmentState } from "$app-wasm";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
@@ -48,19 +47,16 @@ type SavedAppLocale =
 
 function savedAppLocale(): SavedAppLocale {
   const stored = localStorage.getItem("nook_locale");
-  const parsed = parseAppLocale(
-    stored ? intoWasmStringValue(stored) : NookStringValue.unavailable(),
-  );
-  try {
-    return parsed.state === NookValueState.Value
-      ? {
-          kind: SavedAppLocaleKind.Supported,
-          locale: parsed.string as NookAppLocale,
-        }
-      : { kind: SavedAppLocaleKind.Missing };
-  } finally {
-    parsed.free();
+  if (!stored) {
+    return { kind: SavedAppLocaleKind.Missing };
   }
+  const parsed = parseAppLocale(stored);
+  return parsed === NookAppLocaleParse.Unsupported
+    ? { kind: SavedAppLocaleKind.Missing }
+    : {
+        kind: SavedAppLocaleKind.Supported,
+        locale: supportedAppLocaleCode(parsed) as NookAppLocale,
+      };
 }
 
 export async function initOnce(state: VaultState): Promise<void> {
