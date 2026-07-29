@@ -1,9 +1,9 @@
 use super::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
-    NookGoogleDriveFolder, NookLocalFolderConfig, NookManagerStoreScope,
-    NookProviderReplicationCapability, NookProviderSyncRevision, NookStorageConnectArgs,
-    NookVaultArchitecture, passkey_browser, storage, wasm_bindgen,
+    NookGoogleDriveFolder, NookLocalFolderConfig, NookProviderReplicationCapability,
+    NookStorageConnectArgs, NookVaultArchitecture, passkey_browser, storage, wasm_bindgen,
 };
+use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 
 mod localization;
 pub use localization::*;

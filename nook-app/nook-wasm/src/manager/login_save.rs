@@ -80,8 +80,10 @@ impl NookVaultManager {
                 ));
             }
             NookWebsiteLoginSaveDecision::Update => {
-                let expected = planned_replace.ok_or_else(|| {
-                    NookError::Database("Login update is missing the existing secret.".to_owned())
+                let expected = planned_replace.map_err(|error| {
+                    NookError::Database(format!(
+                        "Login update is missing the existing secret: {error}"
+                    ))
                 })?;
                 let provided = replace_secret_id.unwrap_or_default();
                 if provided != expected {
