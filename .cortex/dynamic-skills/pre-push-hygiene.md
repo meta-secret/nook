@@ -18,7 +18,7 @@ Agents push a coherent change, then burn a full remote cycle on:
 - Treating format as optional ("I barely changed anything") even though Verify
   always runs `format:check`
 - Running heavy local product gates (`task check`, `task ci:pr`) instead of
-  pushing and letting GitHub Actions validate
+  pushing and using the GitHub-hosted remote catalog
 
 These show up in Nook Workbench `stats/ai-agent` records as waste-flagged PRs
 with early cancelled or failed Verify runs, or as duplicated local+remote
@@ -42,8 +42,9 @@ git fetch origin main
 # then re-run task format && git add -u
 ```
 
-Then commit → push → monitor GitHub Actions. See
-[github-actions-only-validation.md](github-actions-only-validation.md).
+Then commit → push → use focused `task remote` jobs as useful → explicitly
+trigger complete validation with `task pr:validate` when ready. See
+[remote-execution.md](../workflows/remote-execution.md).
 
 ### Sealed-image rule
 
@@ -95,8 +96,8 @@ Does not apply to:
 - [ ] If UI-facing paths changed, pass `.github/scripts/ui-demo-contract.sh`
       against `origin/main` before push.
 - [ ] Do not use `task extension:format` as the sole format step.
-- [ ] Do not require `task check` / e2e / `task ci:pr` after the push; monitor
-      GitHub Actions instead.
+- [ ] Do not run `task check` / e2e / `task ci:pr` locally after the push; use
+      the focused hosted catalog and explicit complete PR validation.
 
 ## Validation
 

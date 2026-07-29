@@ -16,6 +16,9 @@ includes:
   ai-debug:
     taskfile: .task/ai-debug.yml
     flatten: true
+  remote-execution:
+    taskfile: .task/remote-execution.yml
+    flatten: true
   impeccable:
     taskfile: .task/impeccable.yml
     flatten: true

@@ -1,0 +1,134 @@
+version: '3'
+
+tasks:
+  remote:
+    desc: Run one allowlisted task on a GitHub-hosted runner (TASK_NAME=<name>).
+    requires:
+      vars: [TASK_NAME]
+    env:
+      REQUESTED_REMOTE_TASK: '{{.TASK_NAME}}'
+    preconditions:
+      - sh: command -v gh >/dev/null 2>&1
+        msg: GitHub CLI is required.
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - |
+        set -eu
+
+        requested_task="$REQUESTED_REMOTE_TASK"
+        case "$requested_task" in
+          preflight|rust:test|rust:lint|rust:coverage|wasm:build|wasm:test|wasm:test:browser|web:check|web:test|web:build|web:e2e|extension:check|extension:e2e|hive:verify|check|ci:pr|ci:pr:e2e) ;;
+          *)
+            echo "Unknown remote task: $requested_task" >&2
+            echo "Run 'task remote:list' to see the allowlisted catalog." >&2
+            exit 2
+            ;;
+        esac
+
+        branch="$(git branch --show-current)"
+        if [ -z "$branch" ] || [ "$branch" = "main" ]; then
+          echo "Remote execution requires a pushed non-main branch." >&2
+          exit 2
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Remote execution requires a clean worktree; commit the exact experiment first." >&2
+          exit 2
+        fi
+
+        local_sha="$(git rev-parse HEAD)"
+        remote_refs="$(git ls-remote --refs origin "refs/heads/$branch")"
+        remote_sha="$(printf '%s\n' "$remote_refs" | awk 'NR == 1 { print $1 }')"
+        if [ -z "$remote_sha" ]; then
+          echo "Push $branch before requesting remote execution." >&2
+          exit 2
+        fi
+        if [ "$remote_sha" != "$local_sha" ]; then
+          echo "Remote branch is not at local HEAD." >&2
+          echo "local:  $local_sha" >&2
+          echo "remote: $remote_sha" >&2
+          exit 2
+        fi
+
+        gh workflow run remote.yml \
+          --ref "$branch" \
+          --raw-field "task=$requested_task"
+
+        echo "Dispatched '$requested_task' for $branch at $local_sha."
+        echo "Inspect it with:"
+        echo "gh run list --workflow=remote.yml --branch=\"$branch\" --commit=\"$local_sha\" --event=workflow_dispatch"
+
+  remote:list:
+    desc: Print the allowlisted GitHub-hosted remote task catalog.
+    silent: true
+    cmds:
+      - |
+        echo "preflight"
+        echo "rust:test"
+        echo "rust:lint"
+        echo "rust:coverage"
+        echo "wasm:build"
+        echo "wasm:test"
+        echo "wasm:test:browser"
+        echo "web:check"
+        echo "web:test"
+        echo "web:build"
+        echo "web:e2e"
+        echo "extension:check"
+        echo "extension:e2e"
+        echo "hive:verify"
+        echo "check"
+        echo "ci:pr"
+        echo "ci:pr:e2e"
+
+  pr:validate:
+    desc: Trigger required PR validation by re-applying its one-shot label (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    requires:
+      vars: [PR]
+    env:
+      REQUESTED_PR: '{{.PR}}'
+      REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+    preconditions:
+      - sh: command -v gh >/dev/null 2>&1
+        msg: GitHub CLI is required.
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - |
+        set -eu
+
+        case "$REQUESTED_PR" in
+          ''|*[!0-9]*|0)
+            echo "PR must be a positive pull-request number." >&2
+            exit 2
+            ;;
+        esac
+        if [ "$REQUEST_FULL_E2E" != "0" ] && [ "$REQUEST_FULL_E2E" != "1" ]; then
+          echo "FULL_E2E must be 0 or 1." >&2
+          exit 2
+        fi
+
+        local_sha="$(git rev-parse HEAD)"
+        pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
+        if [ "$local_sha" != "$pr_sha" ]; then
+          echo "Local HEAD is not PR #$REQUESTED_PR's current head." >&2
+          echo "local: $local_sha" >&2
+          echo "PR:    $pr_sha" >&2
+          exit 2
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Commit and push the complete change before requesting PR validation." >&2
+          exit 2
+        fi
+
+        validation_label="ci:validate"
+        if [ "$REQUEST_FULL_E2E" = "1" ]; then
+          validation_label="ci:full-e2e"
+        fi
+
+        current_labels="$(gh pr view "$REQUESTED_PR" --json labels --jq '.labels[].name')"
+        if printf '%s\n' "$current_labels" | grep -Fxq "$validation_label"; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
+        fi
+        gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
+        echo "Triggered PR validation for $pr_sha with label $validation_label."

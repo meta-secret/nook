@@ -78,6 +78,6 @@ When applying a skill to code:
 4. Preserve package boundaries in [`.cortex/ARCHITECTURE.md`](../ARCHITECTURE.md).
 5. Add or update tests when the refactor changes behavior or protects a durable
    invariant.
-6. Run `task format` before pushing. For implementation tasks, push the
-   coherent iteration and let repository-owned GitHub Actions own product
-   validation; do not require a local `task check` / `task ci:pr` gate.
+6. Run `task format` before pushing. For implementation tasks, commit and push
+   the coherent iteration, run focused hosted tasks as useful, and explicitly
+   trigger complete validation with `task pr:validate`.

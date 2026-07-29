@@ -26,8 +26,9 @@ Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
 2. Make the minimal correct fix or document why no change is needed.
-3. Run `task format` when files changed; optional focused debug only.
-4. Push the completed fix when files changed so GitHub Actions re-validates.
+3. Run `task format` when files changed; use focused hosted tasks as useful.
+4. Commit and push the completed fix, then explicitly trigger complete PR
+   validation for the replacement head.
 5. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 6. Resolve only after the targeted reply is visible and the finding is fixed or

@@ -111,9 +111,10 @@ An exclusion must describe data provenance, not excuse authored source.
       never in separate files under `src`.
 - [ ] Preserve or add behavior-focused unit and integration tests at their
       correct boundaries.
-- [ ] Run the repository source-size scanner and inspect every violation.
-- [ ] Run `task format`, push, and use exact-head GitHub Actions for product
-      validation.
+- [ ] Run the repository source-size scanner through the hosted remote preflight
+      task and inspect every violation.
+- [ ] Run `task format`, commit and push, then explicitly trigger exact-head
+      GitHub Actions validation.
 
 ## Static Enforcement
 
@@ -128,5 +129,5 @@ and scanner diagnostics; code review must verify the actual architectural seam.
 
 ## Validation
 
-Run the focused preflight source-size tests while developing the gate. Before
-every push, run `task format`. GitHub Actions owns the complete product gate.
+Use the hosted remote preflight task while developing the gate. Before every
+push, run `task format`; explicitly trigger the complete PR gate when ready.

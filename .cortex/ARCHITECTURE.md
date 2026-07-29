@@ -411,10 +411,10 @@ PR auto-merger: workflows do not merge blindly from check events. Instead, the
 task-owning agent runs the readiness audit and squash-merges immediately when it
 passes. Local ci-agent Docker tags are worktree-scoped so another checkout cannot
 replace the audit binary between build and readiness execution. Extension
-iteration has a host-cached `task extension:check:fast` gate for optional debug.
-Required product validation runs on GitHub Actions after the coherent iteration
-is formatted and pushed; agents must not require a local `task check` /
-`task ci:pr` merge gate.
+iteration and all other heavy agent feedback run through the allowlisted
+GitHub-hosted remote task catalog. Required product validation runs on GitHub
+Actions only after the coherent pushed iteration is explicitly selected with a
+validation label; agents do not run local `task check` / `task ci:pr` gates.
 
 ### Split Rust/WASM and web images
 

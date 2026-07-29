@@ -57,11 +57,12 @@ Does not apply to:
 - [ ] Verify injection exclusions for every vault boundary.
 - [ ] Verify archive and redirect safety before activation.
 - [ ] Keep profiles isolated by channel/PR.
-- [ ] Run `task format`, push, and let GitHub Actions own product validation.
+- [ ] Run `task format`, commit and push, use focused hosted tasks as useful,
+      then explicitly trigger complete GitHub Actions validation.
 
 ## Validation
 
-Run `task extension:check:fast` only when debugging extension packaging. For
-implementation tasks, run `task format`, push, and monitor the repository-owned
-PR workflow. Deployment verification must prove the exact head SHA, selected
+For implementation tasks, run `task format`, commit and push, dispatch the
+allowlisted extension task as useful, then run `task pr:validate` and monitor
+the repository-owned PR workflow. Deployment verification must prove the exact head SHA, selected
 channel, selected origins, checksum, and packaged manifest.

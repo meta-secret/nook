@@ -21,5 +21,6 @@ git fetch origin main
 ```
 
 Do not use `task extension:format` alone — it does not write the host tree.
-After format, push and let GitHub Actions own product validation; do not require
-`task check` / `task ci:pr` locally.
+After format, commit and push. Use `task remote` for focused hosted execution
+and `task pr:validate` for the explicit complete gate; do not run heavy agent
+builds/tests locally.

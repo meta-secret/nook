@@ -9,9 +9,9 @@ free-form task diary.
 
 1. Start an out-of-tree scratch record when work on a PR-bound task begins.
    Do not add a partial statistics file to the implementation PR.
-2. Append every local check/test execution, applicable GitHub Actions run, PR
-   retrigger, and merge attempt as it happens. Record failed and cancelled work,
-   not only successful work.
+2. Append every local lightweight execution, focused remote-task run, complete
+   PR validation run, retrigger, and merge attempt as it happens. Record failed
+   and cancelled work, not only successful work.
 3. Squash-merge the implementation PR through the normal readiness workflow.
 4. Create `stats/ai-agent/<pr-number>.yaml` for
    [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench)
@@ -36,11 +36,9 @@ another Nook statistics record.
 Use UTC timestamps and integer durations in seconds. Measure wall-clock time,
 including time spent waiting for CI or review when the agent owns that wait.
 
-- **Local executions:** every command that checks, tests, lints, formats,
-  builds, deploys, or validates. Store the exact command, category, start and
-  finish timestamps, duration, outcome, and reason. A command that performs
-  both checks and tests is one execution with category `combined`; do not
-  double-count it.
+- **Local executions:** every lightweight host command that formats or validates
+  a required local invariant. Agents normally record `task format` and the UI
+  demo contract; heavy checks/tests/builds belong in GitHub Actions.
 - **GitHub Actions:** every repository-owned workflow run applicable to the PR,
   including run id, run attempt, head SHA, trigger, timestamps, duration, and
   conclusion. The post-merge Main run is outside the implementation PR lifecycle
@@ -49,10 +47,11 @@ including time spent waiting for CI or review when the agent owns that wait.
   `cache-telemetry-*` artifact, record whether sccache used the persistent remote
   Redis service or direct compilation without sccache, compiler cache hits and
   misses, and BuildKit cached/completed target-record steps.
-- **PR retriggers:** count every new repository-owned validation cycle after
-  the first. Distinguish `head_push`, `manual_rerun`, `base_update`, and
-  `reopen`. A GitHub `run_attempt` greater than one is a manual rerun; a new run
-  id caused by a pushed head is a head-push retrigger.
+- **PR retriggers:** count every new complete validation cycle after the first.
+  Distinguish `validation_label`, `full_e2e_label`, `manual_rerun`, and
+  `base_update`. A GitHub `run_attempt` greater than one is a manual rerun;
+  focused `remote.yml` dispatches are recorded as Actions runs but are not
+  complete PR retriggers.
 - **Merge attempts:** count every executed merge command/API call, including
   blocked or failed attempts. A readiness query is not a merge attempt.
 - **PR elapsed time:** from the first agent investigation/implementation action
@@ -241,7 +240,7 @@ waste_assessment:
 
 `summary` values must be derivable from the detailed lists. Prefer recording
 `task format` as the normal local execution; do not invent required local
-`task check` / `task ci:pr` runs under the GitHub Actions-only policy.
+`task check` / `task ci:pr` local runs under the hosted-execution policy.
 `test_inventory.total`
 must equal the sum of `test_inventory.by_type`, and `test_inventory.head_sha`
 must match `source_pr.head_sha`. Parallel local and remote durations may overlap,

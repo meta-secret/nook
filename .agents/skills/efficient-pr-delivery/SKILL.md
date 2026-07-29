@@ -1,6 +1,6 @@
 ---
 name: efficient-pr-delivery
-description: Ship Nook PRs efficiently with preflight/readiness audits, format-then-push, GitHub Actions-only product validation, and repository-only event watching without waiting for external review.
+description: Ship Nook PRs efficiently with focused hosted tasks, label-gated complete validation, exact-head readiness audits, and no waiting for external review.
 ---
 
 # Efficient PR Delivery

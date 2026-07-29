@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Minimize agent wall time by formatting locally, pushing immediately, letting
-GitHub Actions own product validation, carrying ready PRs directly through
-squash merge, and stopping implementation monitoring at that merge boundary.
+Minimize agent wall time by formatting locally, using focused GitHub-hosted
+tasks while iterating, explicitly spending the complete PR pipeline only on a
+ready head, and carrying ready PRs directly through squash merge.
 
 ## Problem Pattern
 
@@ -17,9 +17,10 @@ time.
 ## Preferred Pattern
 
 Run `task format` (and the UI demo contract when UI paths change), then commit
-and push. Run `task pr:preflight PR=<number>` as soon as a PR exists. Inspect
-repository-owned checks directly. Do **not** require `task check` /
-`task ci:pr` as a parallel local product gate. The read-only
+and push. Use `task remote TASK_NAME=<name>` for focused feedback. When the head
+is ready, run `task pr:preflight PR=<number>` and
+`task pr:validate PR=<number>`, then inspect repository-owned checks directly.
+Do not run `task check` / `task ci:pr` as a local product gate. The read-only
 `task pr:ready PR=<number>` audit may summarize exact-head state, but it never
 performs a merge by itself.
 
@@ -46,7 +47,8 @@ Does not apply to:
 ## Examples
 
 - Before: format → push → `task check` ‖ PR CI → merge after both green.
-- After: format → push → PR CI → `task pr:ready PR=410` → squash merge.
+- After: format → push → focused remote tasks → `task pr:validate PR=410` →
+  `task pr:ready PR=410` → squash merge.
 - Before: discover conversation-resolution and stale-base requirements after a
   failed merge command.
 - After: `task pr:preflight PR=410` reports policy, base divergence, runs,
@@ -56,7 +58,8 @@ Does not apply to:
 
 - [ ] Establish the branch and PR path from current `origin/main`.
 - [ ] Run `task format` unconditionally (host-applied) before every push; pass the UI demo contract when UI paths change.
-- [ ] Commit and push; do not require a local product gate.
+- [ ] Commit and push; use focused hosted tasks instead of a local product gate.
+- [ ] Trigger complete PR validation explicitly on the ready head.
 - [ ] Inspect and address all feedback already present without waiting for reviewers.
 - [ ] Run `task pr:ready` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.

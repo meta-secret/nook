@@ -58,6 +58,6 @@ Does not apply to:
 ## Validation
 
 For documentation-only captures, verify links and skill metadata. For code
-refactors using a dynamic skill, run `task format`, push or update the PR when
-the iteration is ready for final validation, and monitor GitHub Actions. Do not
-require local `task check` / `task ci:pr` for merge.
+refactors using a dynamic skill, run `task format`, commit and push, use focused
+hosted tasks as useful, then explicitly trigger complete validation with
+`task pr:validate`.

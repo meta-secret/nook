@@ -248,22 +248,21 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 > ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
 >
-> Once a change or fix is coherent enough to check, the mandatory sequence is:
-> **`task format` → commit → push/open or update the PR → monitor the applicable
-> repository-owned PR workflows**. Never finish `task check`, a full test suite,
-> build, e2e, or another product gate as a required local step before or after
-> the push. GitHub Actions PR checks are the sole product validation pipeline
-> and are attached to the pushed head SHA. Push the coherent formatted commit
-> first so those checks start; optional local Docker commands are debug-only and
-> must not delay that event or replace a green Actions run for merge/handoff.
+> Once a change or experiment is coherent enough to check, the mandatory
+> sequence is **`task format` → commit → push → allowlisted
+> `task remote TASK_NAME=<name>` as useful**. Heavy builds/tests do not run on
+> the agent machine. Ordinary pushes deliberately do not start the complete PR
+> workflow.
 >
-> Fast focused commands needed during implementation are allowed before the
-> commit. Required product validation and post-fix validation run on GitHub
-> Actions. After a red remote run, fix, `task format`, commit, and push before
-> waiting for the refreshed PR checks.
+> At the final validation boundary, run `task pr:validate PR=<number>` (or add
+> `FULL_E2E=1` for a Main-fix PR), then monitor the repository-owned exact-head
+> checks. A later push invalidates prior results and requires another explicit
+> validation. After any red remote run, fix, `task format`, commit, push, and
+> dispatch the useful focused or complete remote validation again. See
+> [workflows/remote-execution.md](workflows/remote-execution.md).
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, monitor Nook's applicable PR test checks on GitHub Actions, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically when ready. Do not stop at a ready-PR handoff or ask for separate merge permission. Do not require local `task check` / `task ci:pr` for merge.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks while iterating, explicitly trigger complete PR validation when ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically. Do not stop at a ready-PR handoff or ask for separate merge permission. Do not run heavy product checks locally.
 - **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery. Do not wait for or monitor the post-merge Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure. Main remains an independently observable repository signal, not a task completion gate.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open and land a pull request.** After pushing a branch, create a PR with a summary and test plan, own it through validation and conflict/comment resolution, then squash-merge it after the readiness audit succeeds. Never push directly to `main`.
