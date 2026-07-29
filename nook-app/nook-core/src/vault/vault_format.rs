@@ -419,6 +419,7 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use super::vault_yaml::AuthYamlRecord;
     use super::*;
     use crate::SecretId;
 
