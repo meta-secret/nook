@@ -8,7 +8,12 @@ use crate::typescript_discriminants::{
     discriminant_member_name, enclosing_enum_name, enum_value_matches_discriminant,
 };
 
+mod language_dispatch;
 mod source_files;
+use language_dispatch::{
+    generic_optional_state_lines, mutable_void_state_lines, null_token_lines,
+    raw_string_discriminant_lines, undefined_token_lines,
+};
 use source_files::collect_authored_source_files;
 
 /// Finds every authored JavaScript, TypeScript, and Svelte use of `undefined`
@@ -162,26 +167,6 @@ pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violat
     Ok(violations)
 }
 
-fn undefined_token_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_undefined_token_lines(source);
-    }
-    typescript_code_undefined_token_lines(source, 1)
-}
-
-fn null_token_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_null_token_lines(source);
-    }
-    typescript_code_null_token_lines(source, 1)
-}
-
 fn typescript_code_undefined_token_lines(
     source: &str,
     first_line: usize,
@@ -214,16 +199,6 @@ fn typescript_code_null_token_lines(
     Ok(lines)
 }
 
-fn mutable_void_state_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_mutable_void_state_lines(source);
-    }
-    typescript_code_mutable_void_state_lines(source, 1)
-}
-
 fn typescript_code_mutable_void_state_lines(
     source: &str,
     first_line: usize,
@@ -240,29 +215,24 @@ fn typescript_code_mutable_void_state_lines(
     Ok(lines)
 }
 
-fn generic_optional_state_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_generic_optional_state_lines(source);
-    }
-    typescript_code_generic_optional_state_lines(source, 1)
-}
-
-fn raw_string_discriminant_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_raw_string_discriminant_lines(source);
-    }
-    typescript_code_raw_string_discriminant_lines(source, 1)
-}
-
 fn typescript_code_raw_string_discriminant_lines(
     source: &str,
     first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+    typescript_code_raw_string_discriminant_lines_with_policy(source, first_line, false)
+}
+
+fn typescript_template_raw_string_discriminant_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+    typescript_code_raw_string_discriminant_lines_with_policy(source, first_line, true)
+}
+
+fn typescript_code_raw_string_discriminant_lines_with_policy(
+    source: &str,
+    first_line: usize,
+    flag_unregistered_values: bool,
 ) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
@@ -277,6 +247,7 @@ fn typescript_code_raw_string_discriminant_lines(
         source,
         first_line,
         &enum_values,
+        flag_unregistered_values,
         &mut lines,
     );
     lines.sort_unstable();
@@ -289,6 +260,7 @@ fn collect_raw_string_discriminant_nodes(
     source: &str,
     first_line: usize,
     enum_values: &HashMap<String, HashSet<String>>,
+    flag_unregistered_values: bool,
     lines: &mut Vec<usize>,
 ) {
     const DISCRIMINANT_NAMES: [&str; 8] = [
@@ -331,9 +303,10 @@ fn collect_raw_string_discriminant_nodes(
             && value
                 .and_then(|literal| string_literal_value(literal, source))
                 .is_some_and(|literal| {
-                    name.is_some_and(|name| {
-                        enum_value_matches_discriminant(enum_values, literal, name)
-                    })
+                    flag_unregistered_values
+                        || name.is_some_and(|name| {
+                            enum_value_matches_discriminant(enum_values, literal, name)
+                        })
                 })
         {
             lines.push(first_line + node.start_position().row);
@@ -354,7 +327,8 @@ fn collect_raw_string_discriminant_nodes(
                 };
             is_equality_comparison(node, left, right, source)
                 && literal.zip(discriminant).is_some_and(|(value, name)| {
-                    enum_value_matches_discriminant(enum_values, value, name)
+                    flag_unregistered_values
+                        || enum_value_matches_discriminant(enum_values, value, name)
                 })
         }) {
             lines.push(first_line + node.start_position().row);
@@ -363,7 +337,14 @@ fn collect_raw_string_discriminant_nodes(
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_raw_string_discriminant_nodes(child, source, first_line, enum_values, lines);
+        collect_raw_string_discriminant_nodes(
+            child,
+            source,
+            first_line,
+            enum_values,
+            flag_unregistered_values,
+            lines,
+        );
     }
 }
 
@@ -719,7 +700,7 @@ fn svelte_raw_string_discriminant_lines(
         tree.root_node(),
         source,
         &mut lines,
-        typescript_code_raw_string_discriminant_lines,
+        typescript_template_raw_string_discriminant_lines,
     )?;
     lines.sort_unstable();
     lines.dedup();
