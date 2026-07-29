@@ -676,7 +676,7 @@ const state = presentValue(value)
     #[test]
     fn reports_raw_string_discriminants_but_accepts_enum_members()
     -> Result<(), tree_sitter::LanguageError> {
-        let source = r#"
+        let source = r"
 enum SessionKind {
   Closed = 'closed',
   Open = 'open',
@@ -686,7 +686,7 @@ type SessionState =
   | { kind: SessionKind.Open; handle: number }
 type Message = { type: 'nook:open'; payload: string }
 type Description = { label: 'static copy' }
-"#;
+";
 
         assert_eq!(
             typescript_code_raw_string_discriminant_lines(source, 1)?,
