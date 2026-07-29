@@ -7,7 +7,9 @@ import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/va
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
+  WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
+  type WebsiteLoginSavePendingResponse,
 } from '../../lib/login-save-messages'
 import type {
   AuthenticationOutcomeObservationView,
@@ -39,11 +41,6 @@ type LoginSaveOfferResponse = {
     | LoginSaveOfferResponseStatus.Locked
     | LoginSaveOfferResponseStatus.Unavailable
   decision?: NookWebsiteLoginSaveDecision
-  offer?: WebsiteLoginSaveOfferView
-}
-
-type LoginSavePendingResponse = {
-  ok?: boolean
   offer?: WebsiteLoginSaveOfferView
 }
 
@@ -216,14 +213,29 @@ export function captureSubmittedLogin(event: Event): void {
   void stageSaveForCredentials(credentials)
 }
 
-export async function loadPendingSaveOffer(): Promise<WebsiteLoginSaveOfferView | void> {
-  const response = await sendRuntimeMessage<LoginSavePendingResponse>({
+export enum PendingSaveOfferLoadKind {
+  Absent = 'absent',
+  Loaded = 'loaded',
+}
+
+export type PendingSaveOfferLoad =
+  | { kind: PendingSaveOfferLoadKind.Absent }
+  | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
+
+export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
+  const response = await sendRuntimeMessage<WebsiteLoginSavePendingResponse>({
     type: 'nook:website-login-save-pending',
     payload: { origin: location.origin },
   })
-  if (!response?.ok || !response.offer) return
-  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) return
-  return response.offer
+  if (
+    !response?.ok ||
+    response.state !== WebsiteLoginSavePendingState.Available
+  )
+    return { kind: PendingSaveOfferLoadKind.Absent }
+  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
+    return { kind: PendingSaveOfferLoadKind.Absent }
+  }
+  return { kind: PendingSaveOfferLoadKind.Loaded, offer: response.offer }
 }
 
 export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {

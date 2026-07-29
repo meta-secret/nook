@@ -89,12 +89,19 @@ type PendingLoginSaveOffer = {
   username: string
   password: string
   vaultStoreId: string
-  decision:
-    | NookWebsiteLoginSaveDecision.Create
-    | NookWebsiteLoginSaveDecision.Update
-  replaceSecretId?: string
   expiresAt: number
   expiryTimer: ReturnType<typeof setTimeout>
+} & (
+  | { decision: NookWebsiteLoginSaveDecision.Create }
+  | {
+      decision: NookWebsiteLoginSaveDecision.Update
+      replaceSecretId: string
+    }
+)
+
+enum PendingLoginSaveLookupState {
+  Unavailable = 'unavailable',
+  Available = 'available',
 }
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
@@ -786,31 +793,40 @@ async function handleMessage(message: unknown): Promise<unknown> {
           }
         }
         const offerId = crypto.randomUUID()
-        const replaceSecretId =
+        if (
           decision === NookWebsiteLoginSaveDecision.Update &&
-          typeof plan.secretId === 'string'
-            ? plan.secretId
-            : omittedValue()
-        const offer: PendingLoginSaveOffer = {
+          typeof plan.secretId !== 'string'
+        ) {
+          throw new Error('Login save update is missing its target secret.')
+        }
+        const commonOffer = {
           offerId,
           origin: payload.origin,
           username: payload.username,
           password: payload.password,
           vaultStoreId: grant.vaultStoreId,
-          decision,
-          replaceSecretId,
           expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
           expiryTimer: setTimeout(() => {
             clearLoginSaveOffer(pendingLoginSaveOffers.get(offerId))
           }, LOGIN_SAVE_OFFER_TTL_MS),
         }
+        const offer: PendingLoginSaveOffer =
+          decision === NookWebsiteLoginSaveDecision.Update
+            ? {
+                ...commonOffer,
+                decision,
+                replaceSecretId: plan.secretId,
+              }
+            : { ...commonOffer, decision }
         pendingLoginSaveOffers.set(offerId, offer)
         payload.password = ''
         return {
           ok: true,
           decision,
           offerId,
-          secretId: replaceSecretId,
+          ...(offer.decision === NookWebsiteLoginSaveDecision.Update
+            ? { secretId: offer.replaceSecretId }
+            : {}),
           vaultStoreId: grant.vaultStoreId,
         }
       } finally {
@@ -826,10 +842,11 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       const offer = findPendingLoginSaveOffer(payload.origin)
       if (!offer) {
-        return { ok: true, offer: omittedValue() }
+        return { ok: true, state: PendingLoginSaveLookupState.Unavailable }
       }
       return {
         ok: true,
+        state: PendingLoginSaveLookupState.Available,
         offer: {
           offerId: offer.offerId,
           decision: offer.decision,
@@ -865,7 +882,9 @@ async function handleMessage(message: unknown): Promise<unknown> {
           committedOffer.origin,
           committedOffer.username,
           committedOffer.password,
-          committedOffer.replaceSecretId ?? '',
+          committedOffer.decision === NookWebsiteLoginSaveDecision.Update
+            ? committedOffer.replaceSecretId
+            : '',
         )
         await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
         return { ok: true, decision: committedOffer.decision }

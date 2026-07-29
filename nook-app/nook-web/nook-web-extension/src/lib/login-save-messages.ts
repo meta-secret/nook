@@ -12,6 +12,20 @@ export type WebsiteLoginSaveOfferView = {
   vaultName: string
 }
 
+export enum WebsiteLoginSavePendingState {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+export type WebsiteLoginSavePendingResponse =
+  | { ok: true; state: WebsiteLoginSavePendingState.Unavailable }
+  | {
+      ok: true
+      state: WebsiteLoginSavePendingState.Available
+      offer: WebsiteLoginSaveOfferView
+    }
+  | { ok: false; reason: string }
+
 export enum WebsiteLoginSaveOfferMessageType {
   NookWebsiteLoginSaveOffer = 'nook:website-login-save-offer',
 }

@@ -10,6 +10,7 @@ import {
   captureSubmittedLogin,
   evaluatePendingSaveEvidence,
   loadPendingSaveOffer,
+  PendingSaveOfferLoadKind,
   renderSaveOfferWidget,
 } from './autofill/login-save'
 import { removeScannedWidget } from './autofill/message-router'
@@ -48,8 +49,8 @@ async function scanAndRender(): Promise<void> {
   }
   const pendingOffer = await loadPendingSaveOffer()
   if (sequence !== scanState.sequence) return
-  if (pendingOffer) {
-    beginPendingSaveWatch(pendingOffer)
+  if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
+    beginPendingSaveWatch(pendingOffer.offer)
     return
   }
   const enrollmentHints = detectEnrollmentHints()

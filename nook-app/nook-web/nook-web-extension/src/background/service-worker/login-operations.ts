@@ -1,6 +1,6 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import {
   NookWebsiteLoginSaveDecision,
+  WebsiteLoginSavePendingState,
   type WebsiteLoginSaveOfferView,
 } from '../../lib/login-save-messages'
 import { classifyAuthenticationOutcome } from '../vault-runtime'
@@ -270,7 +270,7 @@ export async function websiteLoginSavePending(
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: true, offer: omittedValue() }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   await ensureExtensionSessionDocument()
   const response = await sendSessionMessage({
@@ -286,11 +286,12 @@ export async function websiteLoginSavePending(
     return { ok: false, reason: 'login-save-pending-failed' }
   }
   if (
+    !('state' in response) ||
+    response.state !== WebsiteLoginSavePendingState.Available ||
     !('offer' in response) ||
-    !response.offer ||
     typeof response.offer !== 'object'
   ) {
-    return { ok: true, offer: omittedValue() }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   const staged = response.offer as {
     offerId?: string
@@ -306,7 +307,7 @@ export async function websiteLoginSavePending(
     (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
       staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
-    return { ok: true, offer: omittedValue() }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   const offer: WebsiteLoginSaveOfferView = {
     offerId: staged.offerId,
@@ -314,7 +315,7 @@ export async function websiteLoginSavePending(
     vaultStoreId: grant.vaultStoreId,
     vaultName: grant.vaultName,
   }
-  return { ok: true, offer }
+  return { ok: true, state: WebsiteLoginSavePendingState.Available, offer }
 }
 
 export async function websiteLoginSaveCommit(
@@ -355,19 +356,23 @@ export async function websiteLoginSaveCommit(
     type: 'nook:extension-session-pending-login-save',
     payload: { origin: message.payload.origin },
   })
-  const stagedVaultStoreId =
+  let grant = grants[0]!
+  if (
     pending &&
     typeof pending === 'object' &&
+    'state' in pending &&
+    pending.state === WebsiteLoginSavePendingState.Available &&
     'offer' in pending &&
     pending.offer &&
     typeof pending.offer === 'object' &&
     'vaultStoreId' in pending.offer &&
     typeof pending.offer.vaultStoreId === 'string'
-      ? pending.offer.vaultStoreId
-      : omittedValue()
-  const grant =
-    grants.find((candidate) => candidate.vaultStoreId === stagedVaultStoreId) ??
-    grants[0]
+  ) {
+    const matchingGrant = grants.find(
+      (candidate) => candidate.vaultStoreId === pending.offer.vaultStoreId,
+    )
+    if (matchingGrant) grant = matchingGrant
+  }
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
   })
