@@ -300,7 +300,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
       <div class="skeleton loading-detail"></div>
     </div>
   </main>
-{:else if unavailable && snapshotState.kind === 'empty'}
+{:else if unavailable && snapshotState.kind === 'not-loaded'}
   <main class="unavailable-shell">
     <div class="unavailable-mark"><Hexagon size={28} strokeWidth={1.6} /></div>
     <h1>{copy.unavailable}</h1>
@@ -463,7 +463,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
       <aside
         bind:this={detailPanel}
-        class:detail-open={selectedState.kind === 'present'}
+        class:detail-open={selectedState.kind === 'open'}
         class="detail-panel"
         aria-live="polite"
         tabindex="-1"
