@@ -108,6 +108,7 @@ const sessionKeys = [
   'enrollmentFromUrlPending',
   'loginEnrollmentCode',
   'passwordEntries',
+  'selectedPasswordEntry',
   'selectedPasswordEntryId',
   'clearSelectedPasswordEntry',
   'activeEnrollmentEntryId',
@@ -141,9 +142,11 @@ const sentinelKeys = [
 ] as const satisfies readonly (keyof VaultSentinelState)[]
 
 const syncKeys = [
+  'lastSync',
   'lastSyncedAt',
   'isSyncing',
   'syncingProviderId',
+  'manualProviderSync',
   'manualProviderSyncRunning',
   'clearSyncingProvider',
   'isFanOutSyncing',

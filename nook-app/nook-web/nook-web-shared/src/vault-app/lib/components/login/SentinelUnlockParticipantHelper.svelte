@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
   import { onMount } from 'svelte'
   import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
@@ -179,10 +178,10 @@
               value={selectedDelivery.kind ===
               GenesisDeliverySelectionKind.Selected
                 ? selectedDelivery.storeId
-                : omittedValue()}
+                : GenesisDeliverySelectionKind.NotSelected}
               onValueChange={(value) => {
                 selectedDelivery =
-                  value === omittedValue()
+                  value === GenesisDeliverySelectionKind.NotSelected
                     ? { kind: GenesisDeliverySelectionKind.NotSelected }
                     : {
                         kind: GenesisDeliverySelectionKind.Selected,

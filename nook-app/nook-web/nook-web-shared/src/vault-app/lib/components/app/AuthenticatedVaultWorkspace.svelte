@@ -125,7 +125,7 @@
           {vault}
           bind:activeSection={vault.adminAccordionSection}
           syncProviders={vault.syncProviders}
-          syncingProviderId={vault.syncingProviderId}
+          manualProviderSync={vault.manualProviderSync}
           isAuthenticated={vault.isAuthenticated}
           isSaving={vault.isSaving}
           isVerifying={vault.isVerifying}
@@ -260,7 +260,7 @@
       {vault}
       storageMode={vault.storageMode}
       githubRepo={vault.githubRepo}
-      lastSyncedAt={vault.lastSyncedAt}
+      lastSync={vault.lastSync}
       isSyncing={vault.isSyncActivityVisible}
       successMsg={vault.successMsg}
       errorMsg={vault.errorMsg}

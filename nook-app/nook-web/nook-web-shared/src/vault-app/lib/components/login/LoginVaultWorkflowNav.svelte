@@ -2,6 +2,7 @@
   import { CloudDownload, FolderOpen, Plus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
+  import { LoginVaultWorkflow } from './login-unlock-state'
 
   let {
     vault,
@@ -9,14 +10,26 @@
     onSelect,
   }: {
     vault: VaultState
-    active: 'open' | 'create' | 'import'
-    onSelect: (workflow: 'open' | 'create' | 'import') => void
+    active: LoginVaultWorkflow
+    onSelect: (workflow: LoginVaultWorkflow) => void
   } = $props()
 
   const workflows = [
-    { id: 'open', icon: FolderOpen, label: 'login.vault_workflow_open' },
-    { id: 'create', icon: Plus, label: 'login.vault_workflow_create' },
-    { id: 'import', icon: CloudDownload, label: 'login.vault_workflow_import' },
+    {
+      id: LoginVaultWorkflow.Open,
+      icon: FolderOpen,
+      label: 'login.vault_workflow_open',
+    },
+    {
+      id: LoginVaultWorkflow.Create,
+      icon: Plus,
+      label: 'login.vault_workflow_create',
+    },
+    {
+      id: LoginVaultWorkflow.Import,
+      icon: CloudDownload,
+      label: 'login.vault_workflow_import',
+    },
   ] as const
 
   function handleTabKeydown(event: KeyboardEvent, index: number) {

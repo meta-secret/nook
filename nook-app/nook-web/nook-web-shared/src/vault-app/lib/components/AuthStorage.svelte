@@ -34,11 +34,15 @@
     LoginSetupKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
+  import {
+    ManualProviderSyncKind,
+    type ManualProviderSync,
+  } from '$lib/vault/state/sync.svelte'
 
   let {
     vault,
     syncProviders,
-    syncingProviderId,
+    manualProviderSync,
     isVerifying,
     isInitializing,
     addProviderOpen = false,
@@ -56,7 +60,7 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | void
+    manualProviderSync: ManualProviderSync
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
@@ -294,21 +298,30 @@
                     </span>
                   </div>
                   {#if onSyncProvider}
+                    {@const providerSyncing =
+                      manualProviderSync.kind ===
+                        ManualProviderSyncKind.Running &&
+                      manualProviderSync.providerId === provider.id}
                     <button
+                      {...!supportsVaultReplication
+                        ? {
+                            title: vault.t(
+                              'provider_picker.unsupported_current_vault',
+                            ),
+                          }
+                        : {}}
                       type="button"
                       class="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
                       data-testid="sync-provider-{provider.id}"
                       disabled={isVerifying ||
                         isInitializing ||
                         !supportsVaultReplication ||
-                        syncingProviderId !== omittedValue()}
-                      title={!supportsVaultReplication
-                        ? vault.t('provider_picker.unsupported_current_vault')
-                        : omittedValue()}
-                      aria-busy={syncingProviderId === provider.id}
+                        manualProviderSync.kind ===
+                          ManualProviderSyncKind.Running}
+                      aria-busy={providerSyncing}
                       onclick={() => void onSyncProvider(provider.id)}
                     >
-                      {#if syncingProviderId === provider.id}
+                      {#if providerSyncing}
                         <RefreshCw class="size-3.5 animate-spin" />
                       {:else}
                         <RefreshCw class="size-3.5" />

@@ -35,6 +35,7 @@
   } from '$lib/auth-providers'
   import type { LoginSetup } from '$lib/vault/state/provider.svelte'
   import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
+  import type { ManualProviderSync } from '$lib/vault/state/sync.svelte'
   import {
     ImportProviderSectionKind,
     VaultLabelEditorKind,
@@ -51,7 +52,7 @@
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId,
+    manualProviderSync,
     isAuthenticated,
     isSaving,
     addProviderOpen = false,
@@ -87,7 +88,7 @@
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | void
+    manualProviderSync: ManualProviderSync
     isAuthenticated: boolean
     isSaving: boolean
     addProviderOpen?: boolean
@@ -503,7 +504,7 @@
       {vault}
       embedded
       {syncProviders}
-      {syncingProviderId}
+      {manualProviderSync}
       {isVerifying}
       {isInitializing}
       {addProviderOpen}

@@ -26,7 +26,7 @@
     {vault}
     storageMode={vault.storageMode}
     githubRepo={vault.githubRepo}
-    lastSyncedAt={vault.lastSyncedAt}
+    lastSync={vault.lastSync}
     isSyncing={vault.isSyncActivityVisible}
     successMsg={vault.successMsg}
     errorMsg={vault.errorMsg}

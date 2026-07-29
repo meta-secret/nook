@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import { HardDrive, Cloud, RefreshCw, TriangleAlert } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -28,45 +26,62 @@
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
-    onImportAsNewVault?: () => void | Promise<void>
-    onCancel?: () => void | Promise<void>
+    onImportAsNewVault: () => void | Promise<void>
+    onCancel: () => void | Promise<void>
   } = $props()
 
+  type ConflictView =
+    | {
+        kind: VaultSyncConflictKind.StoreId
+        localStoreId: string
+        remoteStoreId: string
+        eventLogStoreMismatch: boolean
+      }
+    | {
+        kind: VaultSyncConflictKind.Content
+        localVersion: number
+        remoteVersion: number
+      }
+
+  const conflictView = $derived.by((): ConflictView => {
+    if (conflict.kind === VaultSyncConflictKind.StoreId) {
+      return {
+        kind: VaultSyncConflictKind.StoreId,
+        localStoreId: conflict.localStoreId(),
+        remoteStoreId: conflict.remoteStoreId(),
+        eventLogStoreMismatch: !conflict.remoteYaml.trim(),
+      }
+    }
+    return {
+      kind: VaultSyncConflictKind.Content,
+      localVersion: conflict.contentLocalVersion(),
+      remoteVersion: conflict.contentRemoteVersion(),
+    }
+  })
   const isStoreIdConflict = $derived(
-    conflict.kind === VaultSyncConflictKind.StoreId,
-  )
-  const localStoreId = $derived(
-    isStoreIdConflict ? conflict.localStoreId() : omittedValue(),
-  )
-  const remoteStoreId = $derived(
-    isStoreIdConflict ? conflict.remoteStoreId() : omittedValue(),
-  )
-  const localVersion = $derived(
-    isStoreIdConflict ? omittedValue() : conflict.contentLocalVersion(),
-  )
-  const remoteVersion = $derived(
-    isStoreIdConflict ? omittedValue() : conflict.contentRemoteVersion(),
+    conflictView.kind === VaultSyncConflictKind.StoreId,
   )
   const isEventLogStoreMismatch = $derived(
-    isStoreIdConflict && !conflict.remoteYaml.trim(),
+    conflictView.kind === VaultSyncConflictKind.StoreId &&
+      conflictView.eventLogStoreMismatch,
   )
   const versionLabel = $derived(
-    isStoreIdConflict
-      ? `${localStoreId ?? '?'} / ${remoteStoreId ?? '?'}`
-      : localVersion === remoteVersion
-        ? String(localVersion)
-        : `${localVersion} / ${remoteVersion}`,
+    conflictView.kind === VaultSyncConflictKind.StoreId
+      ? `${conflictView.localStoreId} / ${conflictView.remoteStoreId}`
+      : conflictView.localVersion === conflictView.remoteVersion
+        ? String(conflictView.localVersion)
+        : `${conflictView.localVersion} / ${conflictView.remoteVersion}`,
   )
   const conflictDescription = $derived(
-    isStoreIdConflict
+    conflictView.kind === VaultSyncConflictKind.StoreId
       ? vault.t(
           isEventLogStoreMismatch
             ? 'auth_storage.sync_conflict_store_id_event_desc'
             : 'auth_storage.sync_conflict_store_id_desc',
           {
             provider: conflict.providerLabel,
-            localStore: localStoreId ?? '?',
-            remoteStore: remoteStoreId ?? '?',
+            localStore: conflictView.localStoreId,
+            remoteStore: conflictView.remoteStoreId,
           },
         )
       : vault.t('auth_storage.sync_conflict_desc', {
@@ -125,13 +140,13 @@
               {vault.t('auth_storage.sync_conflict_local_copy')}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {#if isStoreIdConflict}
+              {#if conflictView.kind === VaultSyncConflictKind.StoreId}
                 {vault.t('auth_storage.sync_conflict_store_id_local', {
-                  store: localStoreId ?? '?',
+                  store: conflictView.localStoreId,
                 })}
               {:else}
                 {vault.t('auth_storage.sync_conflict_version', {
-                  version: String(localVersion),
+                  version: String(conflictView.localVersion),
                 })}
               {/if}
             </span>
@@ -149,13 +164,13 @@
               })}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {#if isStoreIdConflict}
+              {#if conflictView.kind === VaultSyncConflictKind.StoreId}
                 {vault.t('auth_storage.sync_conflict_store_id_remote', {
-                  store: remoteStoreId ?? '?',
+                  store: conflictView.remoteStoreId,
                 })}
               {:else}
                 {vault.t('auth_storage.sync_conflict_version', {
-                  version: String(remoteVersion),
+                  version: String(conflictView.remoteVersion),
                 })}
               {/if}
             </span>
@@ -164,7 +179,7 @@
       </ul>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-        {#if isStoreIdConflict && onImportAsNewVault}
+        {#if isStoreIdConflict}
           <Button
             type="button"
             variant="secondary"
@@ -186,7 +201,7 @@
             class="sm:min-w-[160px]"
             data-testid="sync-conflict-cancel-btn"
             disabled={isBusy}
-            onclick={() => void onCancel?.()}
+            onclick={() => void onCancel()}
           >
             {vault.t('auth_storage.sync_conflict_choose_different_provider')}
           </Button>

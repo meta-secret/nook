@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     Cloud,
     HardDrive,
@@ -11,12 +9,13 @@
   import { Button } from '$lib/components/ui/button'
   import type { StorageProviderType } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
+  import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
 
   let {
     vault,
     storageMode = 'local' as StorageProviderType,
     githubRepo = '',
-    lastSyncedAt = omittedValue() as Date | void,
+    lastSync,
     isSyncing = false,
     successMsg = '',
     errorMsg = '',
@@ -34,7 +33,7 @@
     vault?: VaultState
     storageMode?: StorageProviderType
     githubRepo?: string
-    lastSyncedAt?: Date | void
+    lastSync: LastSync
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
@@ -59,9 +58,11 @@
     return () => clearInterval(timer)
   })
 
-  function formatLastSync(at: Date | void): string {
-    if (!at) return vault ? vault.t('status_bar.not_yet') : 'not yet'
-    const secs = Math.max(0, Math.floor((now - at.getTime()) / 1000))
+  function formatLastSync(sync: LastSync): string {
+    if (sync.kind === LastSyncKind.NeverSynced) {
+      return vault ? vault.t('status_bar.not_yet') : 'not yet'
+    }
+    const secs = Math.max(0, Math.floor((now - sync.at.getTime()) / 1000))
     if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'
     if (secs < 60)
       return vault
@@ -193,7 +194,7 @@
             data-testid="vault-last-sync"
           >
             {vault!.t('status_bar.saved')}
-            {formatLastSync(lastSyncedAt)}
+            {formatLastSync(lastSync)}
           </span>
           {#if syncDetail}
             <span
@@ -224,7 +225,7 @@
               : vault
                 ? vault.t('status_bar.saved')
                 : 'Saved'}
-            {formatLastSync(lastSyncedAt)}
+            {formatLastSync(lastSync)}
           </span>
         {/if}
       </div>
@@ -313,7 +314,9 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary"
-            aria-label={vault ? vault.t('common.dismiss_success') : 'Dismiss success message'}
+            aria-label={vault
+              ? vault.t('common.dismiss_success')
+              : 'Dismiss success message'}
             data-testid="dismiss-success-btn"
             onclick={onDismissSuccess}
           >
@@ -335,7 +338,9 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive"
-            aria-label={vault ? vault.t('common.dismiss_error') : 'Dismiss error message'}
+            aria-label={vault
+              ? vault.t('common.dismiss_error')
+              : 'Dismiss error message'}
             data-testid="dismiss-error-btn"
             onclick={onDismissError}
           >

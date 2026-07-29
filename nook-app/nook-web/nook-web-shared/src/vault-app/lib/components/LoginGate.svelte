@@ -25,6 +25,10 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
+  import {
+    LoginVaultEntryKind,
+    type LoginVaultEntry,
+  } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
@@ -101,13 +105,13 @@
       code: string,
       password: string,
     ) => void | Promise<void>
-    onUnlockWithPassword?: (
+    onUnlockWithPassword: (
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onSwitchVault?: () => void | Promise<void>
+    onSwitchVault: () => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>
-    onCreateDeviceVault?: (label: string) => void | Promise<void>
+    onCreateDeviceVault: (label: string) => void | Promise<void>
     onStartSentinelGenesis?: (
       args: StartSentinelGenesisArgs,
     ) => boolean | void | Promise<boolean | void>
@@ -159,15 +163,17 @@
       !showProviderSetupLink &&
       !showVaultPicker,
   )
-  const activeLoginVault = $derived(
-    vault.localVaults.find(
-      (entry) =>
-        entry.storeId ===
-        (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
-    ) ??
-      vault.localVaults[0] ??
-      omittedValue(),
-  )
+  const activeLoginVault = $derived.by((): LoginVaultEntry => {
+    const entry =
+      vault.localVaults.find(
+        (entry) =>
+          entry.storeId ===
+          (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
+      ) ?? vault.localVaults[0]
+    return entry
+      ? { kind: LoginVaultEntryKind.Available, entry }
+      : { kind: LoginVaultEntryKind.Unavailable }
+  })
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
@@ -415,18 +421,13 @@
             passwordEntries={vault.passwordEntries.length > 0
               ? vault.passwordEntries
               : (vault.existingVaultRecoverySummary?.passwordEntries ?? [])}
-            bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
+            bind:selectedPasswordEntry={vault.selectedPasswordEntry}
             {isVerifying}
             {isInitializing}
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
-            onSwitchVault={() => {
-              if (onSwitchVault) {
-                return onSwitchVault()
-              }
-              vault.beginLoginVaultPicker()
-            }}
+            {onSwitchVault}
             onCreateAnotherVault={onCreateDeviceVault}
             onImportFromSync={() => {
               vault.beginExistingVaultOpen()

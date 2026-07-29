@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
-
   import { tick } from 'svelte'
   import {
     ArrowRight,
@@ -21,14 +19,14 @@
   import SentinelGenesisJoinFlow from '$lib/components/login/SentinelGenesisJoinFlow.svelte'
   import {
     SentinelDashboard,
+    SentinelDashboardChoiceKind,
     sentinelDashboardPortal,
+    type SentinelDashboardChoice,
   } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     ChosenVaultPath,
-    SentinelDashboardChoiceKind,
     VaultCreationWizardStep,
-    type SentinelDashboardChoice,
   } from './login-create-vault-chooser-state'
   import { VaultType } from '$lib/vault-architecture'
   import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
@@ -116,11 +114,12 @@
   let sentinelDashboardState = $state<SentinelDashboardChoice>({
     kind: SentinelDashboardChoiceKind.NotChosen,
   })
-  const sentinelDashboard = $derived(
-    sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen
-      ? sentinelDashboardState.dashboard
-      : omittedValue(),
-  )
+  function dashboardIs(dashboard: SentinelDashboard): boolean {
+    return (
+      sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
+      sentinelDashboardState.dashboard === dashboard
+    )
+  }
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
   let sentinelActionBusy = $state(false)
@@ -152,7 +151,7 @@
       !response ||
       response === importedParticipantResponse ||
       sentinelGenesisPhase !== SentinelGenesisPhase.CollectingParticipants ||
-      sentinelDashboard !== SentinelDashboard.Terminal ||
+      !dashboardIs(SentinelDashboard.Terminal) ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
@@ -192,7 +191,7 @@
       sentinelThreshold <= sentinelParticipantCount,
   )
   const sentinelDashboardActive = $derived(
-    Boolean(sentinelDashboard) &&
+    sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
       (wizardStep === VaultCreationWizardStep.SentinelPolicy ||
         wizardStep === VaultCreationWizardStep.SentinelCeremony),
   )
@@ -338,10 +337,12 @@
       return
     }
     if (wizardStep === VaultCreationWizardStep.SentinelPolicy) {
-      const dashboard = sentinelDashboard
+      const dashboardChoice = sentinelDashboardState
       sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       wizardStep = VaultCreationWizardStep.SentinelDashboard
-      if (dashboard) restoreDashboardChoiceFocus(dashboard)
+      if (dashboardChoice.kind === SentinelDashboardChoiceKind.Chosen) {
+        restoreDashboardChoiceFocus(dashboardChoice.dashboard)
+      }
     }
   }
 
@@ -384,23 +385,24 @@
     sentinelDashboardActive
       ? 'fixed inset-0 z-40 w-full overflow-y-auto bg-[#10141a] text-white'
       : 'w-full',
-    sentinelDashboard === SentinelDashboard.Terminal && sentinelDashboardActive
+    dashboardIs(SentinelDashboard.Terminal) && sentinelDashboardActive
       ? 'sentinel-terminal bg-[#090b09] font-mono text-[#b7ff95]'
       : '',
-    sentinelDashboard === SentinelDashboard.CardStack && sentinelDashboardActive
+    dashboardIs(SentinelDashboard.CardStack) && sentinelDashboardActive
       ? 'sentinel-card-stack'
       : '',
   ]}
+  {...sentinelDashboardActive &&
+  sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen
+    ? { 'data-sentinel-dashboard': sentinelDashboardState.dashboard }
+    : {}}
   data-testid="login-create-vault-chooser"
-  data-sentinel-dashboard={sentinelDashboardActive
-    ? sentinelDashboard
-    : omittedValue()}
   use:sentinelDashboardPortal={{
     active: sentinelDashboardActive,
-    dashboard: sentinelDashboard,
+    choice: sentinelDashboardState,
   }}
 >
-  {#if sentinelDashboardActive && sentinelDashboard === SentinelDashboard.CardStack}
+  {#if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
     <SentinelCardStackDashboard
       {vault}
       bind:name={sentinelName}
@@ -422,7 +424,7 @@
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
     />
-  {:else if sentinelDashboardActive && sentinelDashboard === SentinelDashboard.Terminal}
+  {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.Terminal)}
     <SentinelTerminalDashboard
       {vault}
       bind:name={sentinelName}
@@ -485,8 +487,7 @@
         <div
           class={[
             'relative',
-            sentinelDashboardActive &&
-            sentinelDashboard === SentinelDashboard.CardStack
+            sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)
               ? 'sentinel-card-stack-panel rounded-none border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-6 sm:p-10'
               : sentinelDashboardActive
                 ? 'rounded-none border border-[#294323] bg-black/40 p-5 shadow-[0_0_80px_rgb(94_255_112/0.05)] sm:p-8'
@@ -507,7 +508,7 @@
                 <h2
                   class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
                 >
-                  {sentinelDashboard === SentinelDashboard.Terminal
+                  {dashboardIs(SentinelDashboard.Terminal)
                     ? vault.t('login.sentinel_dashboard_terminal_title')
                     : vault.t('login.sentinel_dashboard_card_stack_title')}
                 </h2>

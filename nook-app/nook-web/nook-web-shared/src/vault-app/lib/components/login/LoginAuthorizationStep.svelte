@@ -1,11 +1,18 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
-
   import { KeyRound, RefreshCw, ShieldCheck, UserRound } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { NookPasswordEntrySummary } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    PasswordEntrySelectionKind,
+    type PasswordEntrySelection,
+  } from '$lib/vault/state/session.svelte'
+  import {
+    PasswordUnlockCapabilityKind,
+    UnlockMethod,
+    type PasswordUnlockCapability,
+  } from './login-unlock-state'
 
   type PasswordEntrySummary = Pick<
     NookPasswordEntrySummary,
@@ -15,79 +22,93 @@
   let {
     vault,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(omittedValue() as string | void),
+    selectedPasswordEntry = $bindable<PasswordEntrySelection>({
+      kind: PasswordEntrySelectionKind.NotSelected,
+    }),
     isVerifying,
     isInitializing,
     isUnlocking = false,
     loginPasswordPrompt = false,
     onUnlock,
-    onUnlockWithPassword,
+    passwordUnlock,
     onConsumeLoginPasswordPrompt,
   }: {
     vault: VaultState
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntryId?: string | void
+    selectedPasswordEntry?: PasswordEntrySelection
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean
     loginPasswordPrompt?: boolean
     onUnlock: () => void | Promise<void>
-    onUnlockWithPassword?: (
-      entryId: string,
-      password: string,
-    ) => void | Promise<void>
-    onConsumeLoginPasswordPrompt?: () => void
+    passwordUnlock: PasswordUnlockCapability
+    onConsumeLoginPasswordPrompt: () => void
   } = $props()
 
-  type UnlockMethod = 'keys' | 'password'
-
-  let unlockMethod = $state<UnlockMethod>('keys')
+  let unlockMethod = $state<UnlockMethod>(UnlockMethod.Keys)
   let passwordInput = $state('')
 
   const showPasswordUnlockOption = $derived(
-    Boolean(onUnlockWithPassword) && passwordEntries.length > 0,
+    passwordUnlock.kind === PasswordUnlockCapabilityKind.Available &&
+      passwordEntries.length > 0,
   )
   const isPasswordUnlock = $derived(
-    unlockMethod === 'password' && showPasswordUnlockOption,
+    unlockMethod === UnlockMethod.Password && showPasswordUnlockOption,
   )
   const canUnlock = $derived(
     !isPasswordUnlock ||
-      (Boolean(selectedPasswordEntryId) && passwordInput.trim().length > 0),
+      (selectedPasswordEntry.kind === PasswordEntrySelectionKind.Selected &&
+        passwordInput.trim().length > 0),
   )
 
   $effect(() => {
     if (loginPasswordPrompt) {
-      unlockMethod = 'password'
-      if (passwordEntries.length === 1 && !selectedPasswordEntryId) {
-        selectedPasswordEntryId = passwordEntries[0]!.id
+      unlockMethod = UnlockMethod.Password
+      if (
+        passwordEntries.length === 1 &&
+        selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
+      ) {
+        selectedPasswordEntry = {
+          kind: PasswordEntrySelectionKind.Selected,
+          entryId: passwordEntries[0]!.id,
+        }
       }
-      onConsumeLoginPasswordPrompt?.()
+      onConsumeLoginPasswordPrompt()
     }
   })
 
   $effect(() => {
     if (
-      unlockMethod === 'password' &&
+      unlockMethod === UnlockMethod.Password &&
       passwordEntries.length === 1 &&
-      !selectedPasswordEntryId
+      selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
     ) {
-      selectedPasswordEntryId = passwordEntries[0]!.id
+      selectedPasswordEntry = {
+        kind: PasswordEntrySelectionKind.Selected,
+        entryId: passwordEntries[0]!.id,
+      }
     }
   })
 
   $effect(() => {
-    if (unlockMethod === 'password' && passwordEntries.length === 0) {
-      unlockMethod = 'keys'
+    if (
+      unlockMethod === UnlockMethod.Password &&
+      passwordEntries.length === 0
+    ) {
+      unlockMethod = UnlockMethod.Keys
     }
   })
 
   function handleSubmit(e: Event) {
     e.preventDefault()
-    if (unlockMethod === 'password' && onUnlockWithPassword) {
-      if (!selectedPasswordEntryId) return
+    if (
+      unlockMethod === UnlockMethod.Password &&
+      passwordUnlock.kind === PasswordUnlockCapabilityKind.Available &&
+      selectedPasswordEntry.kind === PasswordEntrySelectionKind.Selected
+    ) {
       const trimmed = passwordInput.trim()
       if (!trimmed) return
-      void onUnlockWithPassword(selectedPasswordEntryId, trimmed)
+      void passwordUnlock.unlock(selectedPasswordEntry.entryId, trimmed)
       return
     }
     void onUnlock()
@@ -105,15 +126,15 @@
       <button
         type="button"
         role="radio"
-        aria-checked={unlockMethod === 'keys'}
+        aria-checked={unlockMethod === UnlockMethod.Keys}
         class="flex items-center gap-2.5 px-3 py-3 text-left text-sm transition-colors {unlockMethod ===
-        'keys'
+        UnlockMethod.Keys
           ? 'bg-primary/[0.06] text-foreground'
           : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
         data-testid="login-unlock-method-keys"
         disabled={isVerifying || isInitializing}
         onclick={() => {
-          unlockMethod = 'keys'
+          unlockMethod = UnlockMethod.Keys
           passwordInput = ''
         }}
       >
@@ -124,15 +145,15 @@
         <button
           type="button"
           role="radio"
-          aria-checked={unlockMethod === 'password'}
+          aria-checked={unlockMethod === UnlockMethod.Password}
           class="flex items-center gap-2.5 border-t border-border/40 px-3 py-3 text-left text-sm transition-colors sm:border-t-0 sm:border-l {unlockMethod ===
-          'password'
+          UnlockMethod.Password
             ? 'bg-primary/[0.06] text-foreground'
             : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
           data-testid="login-unlock-method-password"
           disabled={isVerifying || isInitializing}
           onclick={() => {
-            unlockMethod = 'password'
+            unlockMethod = UnlockMethod.Password
           }}
         >
           <KeyRound class="size-4 shrink-0" />
@@ -150,13 +171,17 @@
             <li>
               <button
                 type="button"
-                class="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors {selectedPasswordEntryId ===
-                entry.id
+                class="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors {selectedPasswordEntry.kind ===
+                  PasswordEntrySelectionKind.Selected &&
+                selectedPasswordEntry.entryId === entry.id
                   ? 'border-primary/40 bg-primary/5 text-foreground'
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                 data-testid="login-password-entry-{entry.id}"
                 onclick={() => {
-                  selectedPasswordEntryId = entry.id
+                  selectedPasswordEntry = {
+                    kind: PasswordEntrySelectionKind.Selected,
+                    entryId: entry.id,
+                  }
                 }}
               >
                 <UserRound class="size-4 shrink-0 text-primary" />

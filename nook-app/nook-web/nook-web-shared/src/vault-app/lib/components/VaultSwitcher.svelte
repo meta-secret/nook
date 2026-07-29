@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     Check,
     ChevronDown,
@@ -10,26 +8,37 @@
   import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    DisplayedVaultKind,
     VaultSwitchStateKind,
+    VaultSwitcherRootKind,
+    type DisplayedVault,
     type VaultSwitchState,
+    type VaultSwitcherRoot,
   } from './vault-switcher-state'
 
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let root = $state<HTMLDivElement>()
-  let switchState = $state<VaultSwitchState>({ kind: VaultSwitchStateKind.Idle })
+  let root = $state<VaultSwitcherRoot>({
+    kind: VaultSwitcherRootKind.Unmounted,
+  })
+  let switchState = $state<VaultSwitchState>({
+    kind: VaultSwitchStateKind.Idle,
+  })
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
-  const activeVault = $derived(
-    vaults.find((entry) => entry.storeId === activeStoreId) ??
-      vaults[0] ??
-      omittedValue(),
-  )
+  const activeVault = $derived.by((): DisplayedVault => {
+    const entry =
+      vaults.find((candidate) => candidate.storeId === activeStoreId) ??
+      vaults[0]
+    return entry
+      ? { kind: DisplayedVaultKind.Available, entry }
+      : { kind: DisplayedVaultKind.Unavailable }
+  })
   const activeLabel = $derived(
-    activeVault
-      ? activeVault.displayLabel(vault.t('login.vault_picker_unnamed'))
+    activeVault.kind === DisplayedVaultKind.Available
+      ? activeVault.entry.displayLabel(vault.t('login.vault_picker_unnamed'))
       : vault.t('nav.vault'),
   )
   const vaultCount = $derived(vaults.length)
@@ -43,8 +52,17 @@
     'inline-flex h-10 min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70'
 
   function handleDocumentClick(event: MouseEvent) {
-    if (!open || !root) return
-    if (!root.contains(event.target as Node)) open = false
+    if (!open || root.kind === VaultSwitcherRootKind.Unmounted) return
+    if (!root.element.contains(event.target as Node)) open = false
+  }
+
+  function captureRoot(element: HTMLDivElement) {
+    root = { kind: VaultSwitcherRootKind.Mounted, element }
+    return {
+      destroy() {
+        root = { kind: VaultSwitcherRootKind.Unmounted }
+      },
+    }
   }
 
   function handleDocumentKeydown(event: KeyboardEvent) {
@@ -81,7 +99,10 @@
   async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     open = false
-    switchState = { kind: VaultSwitchStateKind.Switching, storeId: entry.storeId }
+    switchState = {
+      kind: VaultSwitchStateKind.Switching,
+      storeId: entry.storeId,
+    }
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
@@ -96,7 +117,7 @@
 </script>
 
 {#if vaultCount > 0}
-  <div bind:this={root} class="relative min-w-0 max-w-[min(100%,14rem)]">
+  <div use:captureRoot class="relative min-w-0 max-w-[min(100%,14rem)]">
     <button
       type="button"
       class="{triggerClass} text-left"
