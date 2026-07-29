@@ -6,7 +6,7 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{
-    Attribute, Expr, Fields, FnArg, ImplItemFn, ItemFn, LitStr, ReturnType, Signature, Token, Type,
+    Attribute, Expr, FnArg, ImplItemFn, ItemFn, LitStr, ReturnType, Signature, Token, Type,
     Visibility,
 };
 
