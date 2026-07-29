@@ -115,7 +115,7 @@
   let extensionDiscoveryStoreId = $state("");
   let extensionSetupStateValue = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
-  );
+  });
   let extensionInstallBusy = $state(false);
   let extensionConnectError = $state(false);
   const EXTENSION_LOCKED_RETRY_MS = 3_000;

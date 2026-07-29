@@ -99,6 +99,15 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
+Tests of known JSON contracts must deserialize into the concrete Rust wire or
+domain type before asserting field values. Raw `serde_json::Value` indexing and
+`Value::is_null()` are prohibited for those assertions because indexing treats
+both an omitted property and explicit JSON `null` as `Value::Null`, hiding the
+contract distinction and bypassing typed enums. Raw values remain appropriate
+when malformed, unknown, or deliberately partial JSON is itself the test
+subject, or for a narrow `.get()` assertion that an exact wire property was
+omitted or renamed.
+
 ## ⛔ Non-negotiable: authored JavaScript/TypeScript state must be explicit
 
 Authored JavaScript, TypeScript, and Svelte must not contain the `undefined`

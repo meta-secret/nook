@@ -57,6 +57,15 @@ When you see `Option<T>`, ask:
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
+- Tests of a known JSON contract serialize and deserialize through the concrete
+  Rust wire or domain type, then assert typed fields and enum variants. Do not
+  index `serde_json::Value` or use `Value::is_null()` for field-value
+  assertions: indexing conflates an omitted property with JSON `null`, discards
+  enum exhaustiveness, and turns schema drift into a runtime assertion.
+- Raw `serde_json::Value` is reserved for tests whose actual subject is unknown,
+  malformed, or deliberately partial JSON. A narrow `Value::Object`/`.get()`
+  assertion may verify that a serializer omitted or renamed a property, but
+  domain values still require a typed round trip.
 - Do not expose WASM DTO fields named `yaml` for event/vault records when the
   real payload is a typed domain value. Use typed fields such as
   `event: VaultEvent` internally and across merge/sync APIs; add explicit
@@ -252,6 +261,10 @@ whether a value exists.
   intentionally combines unrelated error types.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
+- Search known-contract tests for `serde_json::Value`, `json["..."]`, and
+  `.is_null()`. Replace field-value checks with typed round trips and enum/value
+  assertions. Keep raw values only where malformed/unknown JSON or exact
+  property presence is the behavior under test.
 - Run Clippy for all targets with `clippy::expect_used` and
   `clippy::unwrap_used` denied, and verify a repository search has no authored
   `.expect(...)`, `.expect_err(...)`, or `.unwrap()` calls. Run the
