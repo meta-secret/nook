@@ -11,7 +11,6 @@ export const SUPPORTS_EXTENSION = APP_KIND !== VaultApplication.Sentinel;
 const SIMPLE_APP_URL =
   import.meta.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
-export function siblingAppUrl(): string | void {
-  if (IS_SENTINEL_APP) return `${SIMPLE_APP_URL.replace(/\/$/, "")}/`;
-  return;
+export function simpleVaultAppUrl(): string {
+  return `${SIMPLE_APP_URL.replace(/\/$/, "")}/`;
 }

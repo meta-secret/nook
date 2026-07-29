@@ -8,4 +8,8 @@ export class VaultSecretsState {
   secretPageSize = 50;
   secretQuery = $state("");
   secretTypeFilter = $state(NookSecretTypeFilter.All);
+
+  clearSecretTypeFilter(): void {
+    this.secretTypeFilter = NookSecretTypeFilter.All;
+  }
 }

@@ -8,14 +8,22 @@ import {
   deleteLocalBrowserData,
 } from "$lib/browser-data";
 import { setVaultSessionLocked } from "$app-wasm";
+import {
+  AdminAccordionSection,
+  SettingsAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
 
 export function openSettings(
   state: UiActionsContext,
-  { section = "storage", accordion = "devices" }: OpenSettingsArgs = {},
+  {
+    section = SettingsSection.Storage,
+    accordion = SettingsAccordionSection.Devices,
+  }: OpenSettingsArgs = {},
 ): void {
   state.helpOpen = false;
   state.settingsSection = section;
-  if (section === "storage") {
+  if (section === SettingsSection.Storage) {
     state.cancelProviderSetup();
     state.cancelAddProvider();
     state.settingsAccordionSection = accordion;
@@ -26,13 +34,13 @@ export function openSettings(
 
 export function openAdmin(
   state: UiActionsContext,
-  accordion: OpenAdminAccordion = "vaults",
+  accordion: OpenAdminAccordion = AdminAccordionSection.Vaults,
 ): void {
   state.helpOpen = false;
   state.cancelProviderSetup();
   state.cancelAddProvider();
   state.adminAccordionSection = accordion;
-  state.settingsSection = "admin";
+  state.settingsSection = SettingsSection.Admin;
   state.settingsOpen = true;
   void state.refreshLocalVaultCatalog();
   void state.refreshDeviceState();

@@ -15,6 +15,7 @@ import {
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
   type NookSecretPage,
+  type NookVaultManager,
 } from "$app-wasm";
 import { syncLocalFolderProvider } from "$lib/vault/sync.svelte";
 import {
@@ -236,16 +237,15 @@ export async function loadDb(state: VaultState) {
   }
 }
 
-type VaultManager = NonNullable<VaultState["manager"]>;
-
 async function runPasswordManagerImport(
   state: VaultState,
-  importFromManager: (manager: VaultManager) => Promise<NookImportResult>,
+  importFromManager: (manager: NookVaultManager) => Promise<NookImportResult>,
   sourceName: string,
   successKey: string,
   failureKey: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
+  const manager = state.manager;
+  if (!manager) throw new Error(state.t("errors.engine_unavailable"));
   const editBlockMessage = state.editBlockMessage;
   if (editBlockMessage) throw new Error(editBlockMessage);
   state.errorMsg = "";
@@ -255,9 +255,7 @@ async function runPasswordManagerImport(
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
   try {
-    const result = await state.enqueueStorage(() =>
-      importFromManager(state.manager!),
-    );
+    const result = await state.enqueueStorage(() => importFromManager(manager));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
     log.info(`${sourceName} import completed`, {

@@ -34,6 +34,11 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    AdminAccordionSection,
+    SettingsAccordionSection,
+    SettingsSection,
+  } from '$lib/vault/state/ui.svelte'
   import { OnboardingType, VaultType } from '$lib/vault-architecture'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
@@ -159,11 +164,11 @@
       : ''
   })
   const effectivePasswordEntryId = $derived.by(() => {
-    if (
-      passwordEntry.kind === PasswordEntrySelectionKind.Selected &&
-      passwordEntries.some((entry) => entry.id === passwordEntry.entryId)
-    ) {
-      return passwordEntry.entryId
+    if (passwordEntry.kind === PasswordEntrySelectionKind.Selected) {
+      const selectedEntryId = passwordEntry.entryId
+      if (passwordEntries.some((entry) => entry.id === selectedEntryId)) {
+        return selectedEntryId
+      }
     }
     return ''
   })
@@ -421,7 +426,7 @@
           variant="outline"
           size="sm"
           data-testid="sentinel-manage-providers"
-          onclick={() => vault.openAdmin('storage')}
+          onclick={() => vault.openAdmin(AdminAccordionSection.Storage)}
         >
           <Cloud class="size-4" />
           {vault.t('onboard_device.sentinel_manage_providers')}
@@ -430,7 +435,11 @@
           type="button"
           size="sm"
           data-testid="sentinel-review-joins"
-          onclick={() => vault.openSettings('storage', 'devices')}
+          onclick={() =>
+            vault.openSettings(
+              SettingsSection.Storage,
+              SettingsAccordionSection.Devices,
+            )}
         >
           <ShieldCheck class="size-4" />
           {vault.t('onboard_device.sentinel_review_joins')}

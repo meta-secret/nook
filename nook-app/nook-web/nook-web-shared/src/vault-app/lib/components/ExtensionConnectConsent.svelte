@@ -2,9 +2,10 @@
   import { omittedValue } from '../../../explicit-state'
 
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
-  import type {
-    ExtensionEventLogRecord,
-    ExtensionPairingApprovedMessage,
+  import {
+    ExtensionPairingApprovedMessageType,
+    type ExtensionEventLogRecord,
+    type ExtensionPairingApprovedMessage,
   } from '$web-shared/extension/runtime-messages'
   import {
     sealAuthProvidersForDevicePublicKey,
@@ -81,7 +82,7 @@
     }
 
     const message: ExtensionPairingApprovedMessage = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
         vaultType: 'simple',
         deviceId: request.deviceId,
@@ -358,14 +359,8 @@
   {/if}
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
-    <Button
-      type="button"
-      variant="outline"
-      onclick={() => onClose(approved)}
-    >
-      {approved
-        ? vault.t('common.done')
-        : vault.t('common.cancel')}
+    <Button type="button" variant="outline" onclick={() => onClose(approved)}>
+      {approved ? vault.t('common.done') : vault.t('common.cancel')}
     </Button>
     <Button
       type="button"

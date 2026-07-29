@@ -18,6 +18,7 @@ import {
   NookPendingSyncConflict,
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
+  VaultSyncConflictKind,
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
 } from "$app-wasm";
 import {
@@ -35,6 +36,10 @@ import {
   type LocalFolderInspection,
   type LocalFolderMultipleVaultsIssue,
 } from "$lib/vault/sync-operation-state";
+import {
+  AdminAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
 
 export * from "$lib/vault/sync-resolution";
 export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
@@ -372,8 +377,8 @@ export async function chooseReplacementLocalFolderForIssue(
   }
   state.errorMsg = "";
   state.settingsOpen = true;
-  state.settingsSection = "admin";
-  state.adminAccordionSection = "storage";
+  state.settingsSection = SettingsSection.Admin;
+  state.adminAccordionSection = AdminAccordionSection.Storage;
   state.beginAddProvider();
   state.beginProviderSetup(LOCAL_FOLDER_PROVIDER_TYPE);
 }
@@ -554,7 +559,7 @@ export function startVaultSync(state: SyncActionsContext) {
   if (state.isAuthenticated) {
     void state.syncFromStorage();
   }
-  state.syncTimer = setInterval(() => {
+  state.scheduleSync(() => {
     if (
       state.isVerifying ||
       state.isSaving ||
@@ -585,9 +590,7 @@ export function startVaultSync(state: SyncActionsContext) {
 }
 
 export function stopVaultSync(state: SyncActionsContext) {
-  if (state.syncScheduled) {
-    clearInterval(state.syncTimer);
-    state.clearSyncTimer();
+  if (state.stopScheduledSync()) {
     log.debug("vault sync timer stopped");
   }
 }

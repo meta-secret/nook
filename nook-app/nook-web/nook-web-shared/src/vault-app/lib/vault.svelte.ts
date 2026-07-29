@@ -48,6 +48,11 @@ import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { SerialOperationQueue } from "$lib/serial-operation-queue";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
+import {
+  AdminAccordionSection,
+  SettingsAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
 
 export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0;
@@ -666,15 +671,13 @@ export class VaultState extends VaultLifecycleState {
   }
 
   openSettings(
-    section: "storage" | "onboard" | "admin" = "storage",
-    accordion: "devices" | "language" | "danger" = "devices",
+    section: SettingsSection = SettingsSection.Storage,
+    accordion: SettingsAccordionSection = SettingsAccordionSection.Devices,
   ) {
     return uiActions.openSettings(this, { section, accordion });
   }
 
-  openAdmin(
-    accordion: "vaults" | "storage" | "passwords" | "import-export" = "vaults",
-  ) {
+  openAdmin(accordion: AdminAccordionSection = AdminAccordionSection.Vaults) {
     return uiActions.openAdmin(this, accordion);
   }
 

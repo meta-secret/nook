@@ -347,7 +347,7 @@ export function isExtensionPairedVaultIdentityDiscoveryMessage(
   return (
     isPairedVaultRequestMessage(
       message,
-      "nook:extension-paired-vault-identity-discovery",
+      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
     ) &&
     typeof (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
       .expiresAt === "number" &&
@@ -365,7 +365,7 @@ export function isExtensionPairedVaultUnlockRequestMessage(
 ): message is ExtensionPairedVaultUnlockRequestMessage {
   return isPairedVaultRequestMessage(
     message,
-    "nook:extension-paired-vault-unlock-request",
+    ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
   );
 }
 

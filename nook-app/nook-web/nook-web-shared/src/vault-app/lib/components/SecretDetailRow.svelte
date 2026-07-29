@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     Globe,
     Braces,
@@ -18,16 +16,16 @@
     Copy,
     Check,
     ChevronDown,
-  } from "@lucide/svelte";
+  } from '@lucide/svelte'
   import type {
     AuthenticatorCodeView,
     NookSecretListItem,
     NookSecretRecord,
-  } from "$lib/nook";
-  import { SecretType } from "$lib/nook";
-  import type { VaultState } from "$lib/vault.svelte";
-  import MarkdownContent from "./MarkdownContent.svelte";
-  import SeedPhraseGrid from "./SeedPhraseGrid.svelte";
+  } from '$lib/nook'
+  import { SecretType } from '$lib/nook'
+  import type { VaultState } from '$lib/vault.svelte'
+  import MarkdownContent from './MarkdownContent.svelte'
+  import SeedPhraseGrid from './SeedPhraseGrid.svelte'
 
   let {
     item,
@@ -47,128 +45,135 @@
     editDisabledReason,
     titleAsHeader = false,
   }: {
-    item: NookSecretListItem;
-    index: number;
-    expanded: boolean;
-    decrypted: NookSecretRecord | void;
-    authenticatorCode?: AuthenticatorCodeView | void;
-    copiedKey: string | void;
-    onToggleExpand: (id: string) => void;
-    onToggleReveal: (id: string) => Promise<void>;
-    onEditItem: (item: NookSecretListItem) => Promise<void>;
-    onDeleteSecret: (id: string) => Promise<void>;
+    item: NookSecretListItem
+    index: number
+    expanded: boolean
+    decrypted: NookSecretRecord | void
+    authenticatorCode?: AuthenticatorCodeView | void
+    copiedKey: string | void
+    onToggleExpand: (id: string) => void
+    onToggleReveal: (id: string) => Promise<void>
+    onEditItem: (item: NookSecretListItem) => Promise<void>
+    onDeleteSecret: (id: string) => Promise<void>
     onCopyToClipboard: (
       text: string,
       id: string,
       field: string,
-    ) => Promise<void>;
-    onCopySecret: (id: string) => Promise<void>;
-    vault: VaultState;
-    editDisabled?: boolean;
-    editDisabledReason?: string | void;
+    ) => Promise<void>
+    onCopySecret: (id: string) => Promise<void>
+    vault: VaultState
+    editDisabled?: boolean
+    editDisabledReason?: string | void
     /** Use the title row as the card header (no duplicate group header). */
-    titleAsHeader?: boolean;
-  } = $props();
+    titleAsHeader?: boolean
+  } = $props()
 
   const summary = $derived.by(() => {
     if (item.type === SecretType.Login) {
       return (
         item.username.trim() ||
         item.websiteUrl.trim() ||
-        vault.t("vault.types.login")
-      );
+        vault.t('vault.types.login')
+      )
     }
     if (item.type === SecretType.ApiKey) {
-      return item.websiteUrl.trim() || vault.t("vault.types.api_key");
+      return item.websiteUrl.trim() || vault.t('vault.types.api_key')
     }
     if (item.type === SecretType.SeedPhrase) {
-      const name = item.name.trim();
-      const words = item.seedWordCount;
-      const label = name || vault.t("vault.fields.unnamed_seed_phrase");
+      const name = item.name.trim()
+      const words = item.seedWordCount
+      const label = name || vault.t('vault.fields.unnamed_seed_phrase')
       if (words === 12 || words === 24) {
-        return `${label} · ${vault.t("vault.fields.words_count", { count: String(words) })}`;
+        return `${label} · ${vault.t('vault.fields.words_count', { count: String(words) })}`
       }
-      return label;
+      return label
     }
     if (item.type === SecretType.Authenticator) {
-      return item.account.trim() || item.issuer.trim();
+      return item.account.trim() || item.issuer.trim()
     }
     if (item.type === SecretType.Passkey) {
       return (
         item.passkeyUserDisplayName.trim() ||
         item.passkeyUserName.trim() ||
         item.rpId.trim() ||
-        vault.t("vault.types.passkey")
-      );
+        vault.t('vault.types.passkey')
+      )
     }
     if (item.type === SecretType.CreditCard) {
-      const last4 = item.last4.trim();
-      if (last4) return `•••• ${last4}`;
-      return item.title.trim() || vault.t("vault.fields.unnamed_card");
+      const last4 = item.last4.trim()
+      if (last4) return `•••• ${last4}`
+      return item.title.trim() || vault.t('vault.fields.unnamed_card')
     }
     if (item.type === SecretType.FileAttachment) {
-      return item.fileName.trim() || item.title.trim() || vault.t("vault.fields.no_title");
+      return (
+        item.fileName.trim() ||
+        item.title.trim() ||
+        vault.t('vault.fields.no_title')
+      )
     }
-    return item.title.trim() || vault.t("vault.fields.no_title");
-  });
+    return item.title.trim() || vault.t('vault.fields.no_title')
+  })
 
   const headerTitle = $derived.by(() => {
     if (item.type === SecretType.Login) {
-      return item.websiteHost || vault.t("vault.fields.no_website");
+      return item.websiteHost || vault.t('vault.fields.no_website')
     }
     if (item.type === SecretType.CreditCard) {
       return (
-        item.title.trim() ||
-        summary ||
-        vault.t("vault.fields.unnamed_card")
-      );
+        item.title.trim() || summary || vault.t('vault.fields.unnamed_card')
+      )
     }
     if (item.type === SecretType.FileAttachment) {
-      return item.title.trim() || item.fileName.trim() || vault.t("vault.fields.no_title");
+      return (
+        item.title.trim() ||
+        item.fileName.trim() ||
+        vault.t('vault.fields.no_title')
+      )
     }
-    return summary;
-  });
+    return summary
+  })
 
   const accountSubtitle = $derived(
     item.type === SecretType.Login
       ? item.username.trim()
-      : item.type === SecretType.CreditCard && item.title.trim() && item.last4.trim()
+      : item.type === SecretType.CreditCard &&
+          item.title.trim() &&
+          item.last4.trim()
         ? `•••• ${item.last4.trim()}`
-        : "",
-  );
+        : '',
+  )
 
   const cardExpiration = $derived.by(() => {
     const month =
-      decrypted?.expirationMonth?.trim() || item.expirationMonth.trim();
-    const year =
-      decrypted?.expirationYear?.trim() || item.expirationYear.trim();
-    if (!month && !year) return "";
-    if (month && year) return `${month.padStart(2, "0")}/${year}`;
-    return month || year;
-  });
+      decrypted?.expirationMonth?.trim() || item.expirationMonth.trim()
+    const year = decrypted?.expirationYear?.trim() || item.expirationYear.trim()
+    if (!month && !year) return ''
+    if (month && year) return `${month.padStart(2, '0')}/${year}`
+    return month || year
+  })
 
   function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   function downloadFileAttachment() {
-    if (!decrypted || item.type !== SecretType.FileAttachment) return;
-    const binary = atob(decrypted.contentBase64);
-    const bytes = new Uint8Array(binary.length);
+    if (!decrypted || item.type !== SecretType.FileAttachment) return
+    const binary = atob(decrypted.contentBase64)
+    const bytes = new Uint8Array(binary.length)
     for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
+      bytes[index] = binary.charCodeAt(index)
     }
     const blob = new Blob([bytes], {
-      type: decrypted.mimeType || "application/octet-stream",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = decrypted.fileName || item.fileName || "secret-file";
-    link.click();
-    URL.revokeObjectURL(url);
+      type: decrypted.mimeType || 'application/octet-stream',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = decrypted.fileName || item.fileName || 'secret-file'
+    link.click()
+    URL.revokeObjectURL(url)
   }
 </script>
 
@@ -192,8 +197,8 @@
           : 'py-1 hover:bg-accent/40'}"
         aria-expanded={expanded}
         aria-label={expanded
-          ? vault.t("vault.collapse_secret")
-          : vault.t("vault.expand_secret")}
+          ? vault.t('vault.collapse_secret')
+          : vault.t('vault.expand_secret')}
         data-testid="secret-row-toggle"
         onclick={() => onToggleExpand(item.id)}
       >
@@ -231,7 +236,8 @@
               <span
                 data-testid="secret-row-account"
                 class="block truncate text-xs text-muted-foreground"
-              >{accountSubtitle}</span>
+                >{accountSubtitle}</span
+              >
             {/if}
           </div>
         {:else}
@@ -240,28 +246,28 @@
           >
             {#if item.type === SecretType.Login}
               <Globe class="size-3 text-primary/70" />
-              {vault.t("vault.types.login")}
+              {vault.t('vault.types.login')}
             {:else if item.type === SecretType.ApiKey}
               <Braces class="size-3 text-primary/70" />
-              {vault.t("vault.types.api_key")}
+              {vault.t('vault.types.api_key')}
             {:else if item.type === SecretType.SeedPhrase}
               <Sprout class="size-3 text-primary/70" />
-              {vault.t("vault.types.seed_phrase")}
+              {vault.t('vault.types.seed_phrase')}
             {:else if item.type === SecretType.Authenticator}
               <ShieldCheck class="size-3 text-primary/70" />
-              {vault.t("vault.types.authenticator")}
+              {vault.t('vault.types.authenticator')}
             {:else if item.type === SecretType.Passkey}
               <KeyRound class="size-3 text-primary/70" />
-              {vault.t("vault.types.passkey")}
+              {vault.t('vault.types.passkey')}
             {:else if item.type === SecretType.CreditCard}
               <CreditCard class="size-3 text-primary/70" />
-              {vault.t("vault.types.credit_card")}
+              {vault.t('vault.types.credit_card')}
             {:else if item.type === SecretType.FileAttachment}
               <Paperclip class="size-3 text-primary/70" />
-              {vault.t("vault.types.file_attachment")}
+              {vault.t('vault.types.file_attachment')}
             {:else}
               <StickyNote class="size-3 text-primary/70" />
-              {vault.t("vault.types.secure_note")}
+              {vault.t('vault.types.secure_note')}
             {/if}
           </span>
           {#if !expanded}
@@ -278,8 +284,8 @@
             type="button"
             onclick={() => void onToggleReveal(item.id)}
             aria-label={decrypted
-              ? vault.t("vault.hide_value")
-              : vault.t("vault.show_value")}
+              ? vault.t('vault.hide_value')
+              : vault.t('vault.show_value')}
             aria-pressed={Boolean(decrypted)}
             data-testid="reveal-secret-btn"
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
@@ -291,10 +297,10 @@
           <button
             type="button"
             onclick={() => void onEditItem(item)}
-            aria-label={vault.t("common.edit")}
+            aria-label={vault.t('common.edit')}
             data-testid="edit-secret-btn"
             disabled={editDisabled}
-            {...(editDisabled ? { title: editDisabledReason } : {})}
+            {...editDisabled ? { title: editDisabledReason } : {}}
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <Pencil class="size-3.5" />
@@ -303,7 +309,7 @@
         <button
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
-          aria-label={vault.t("common.delete")}
+          aria-label={vault.t('common.delete')}
           data-testid="delete-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
@@ -318,20 +324,20 @@
         {#if item.type === SecretType.Login}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.website_label")}</span
+              >{vault.t('vault.fields.website_label')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t("vault.fields.no_website")}</span
+                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
               >
               {#if item.websiteUrl}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, "website")}
-                  aria-label={vault.t("vault.copy_website_url")}
+                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+                  aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -344,20 +350,20 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.username")}</span
+              >{vault.t('vault.fields.username')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.username || vault.t("vault.fields.no_username")}</span
+                >{item.username || vault.t('vault.fields.no_username')}</span
               >
               {#if item.username}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.username, item.id, "username")}
-                  aria-label={vault.t("vault.copy_username")}
+                    void onCopyToClipboard(item.username, item.id, 'username')}
+                  aria-label={vault.t('vault.copy_username')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-username`}<Check
@@ -370,7 +376,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.password")}</span
+              >{vault.t('vault.fields.password')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -379,12 +385,12 @@
                 class="truncate font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {decrypted ? decrypted.password : "••••••••••••••••"}
+                {decrypted ? decrypted.password : '••••••••••••••••'}
               </code>
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t("vault.copy_secret")}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -397,7 +403,7 @@
           {#if decrypted?.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
-                >{vault.t("vault.fields.notes")}</span
+                >{vault.t('vault.fields.notes')}</span
               >
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
@@ -409,20 +415,20 @@
         {:else if item.type === SecretType.ApiKey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.website_label")}</span
+              >{vault.t('vault.fields.website_label')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t("vault.fields.no_website")}</span
+                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
               >
               {#if item.websiteUrl}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, "website")}
-                  aria-label={vault.t("vault.copy_website_url")}
+                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+                  aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -435,7 +441,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.key")}</span
+              >{vault.t('vault.fields.key')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -444,12 +450,12 @@
                 class="break-all font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {decrypted ? decrypted.primaryCredential : "••••••••••••••••"}
+                {decrypted ? decrypted.primaryCredential : '••••••••••••••••'}
               </code>
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t("vault.copy_secret")}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -462,7 +468,7 @@
           {#if item.expiresAt}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t("vault.fields.expires")}</span
+                >{vault.t('vault.fields.expires')}</span
               >
               <div
                 class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -473,8 +479,8 @@
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.expiresAt, item.id, "expires")}
-                  aria-label={vault.t("vault.copy_expiration_date")}
+                    void onCopyToClipboard(item.expiresAt, item.id, 'expires')}
+                  aria-label={vault.t('vault.copy_expiration_date')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-expires`}<Check
@@ -487,20 +493,20 @@
         {:else if item.type === SecretType.SeedPhrase}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.account")}</span
+              >{vault.t('vault.fields.account')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.name || vault.t("vault.fields.no_account_name")}</span
+                >{item.name || vault.t('vault.fields.no_account_name')}</span
               >
               {#if item.name}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.name, item.id, "name")}
-                  aria-label={vault.t("vault.copy_account_name")}
+                    void onCopyToClipboard(item.name, item.id, 'name')}
+                  aria-label={vault.t('vault.copy_account_name')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-name`}<Check
@@ -514,12 +520,12 @@
           <div class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-2">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t("vault.types.seed_phrase")}</span
+                >{vault.t('vault.types.seed_phrase')}</span
               >
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t("vault.copy_secret")}
+                aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -529,7 +535,7 @@
             </div>
             <SeedPhraseGrid
               {vault}
-              value={decrypted?.seed ?? ""}
+              value={decrypted?.seed ?? ''}
               readonly
               revealed={Boolean(decrypted)}
             />
@@ -537,7 +543,7 @@
         {:else if item.type === SecretType.Authenticator}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.current_code")}</span
+              >{vault.t('vault.fields.current_code')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2"
@@ -547,11 +553,11 @@
                   class="font-mono text-xl font-semibold tracking-[0.2em] text-foreground"
                   data-testid="authenticator-current-code"
                   data-period={authenticatorCode?.period}
-                  >{authenticatorCode?.code ?? "••••••"}</code
+                  >{authenticatorCode?.code ?? '••••••'}</code
                 >
                 {#if authenticatorCode}
                   <p class="mt-0.5 text-[10px] text-muted-foreground">
-                    {vault.t("vault.fields.code_expires_in", {
+                    {vault.t('vault.fields.code_expires_in', {
                       count: String(authenticatorCode.secondsRemaining),
                     })}
                   </p>
@@ -564,9 +570,9 @@
                     void onCopyToClipboard(
                       authenticatorCode.code,
                       item.id,
-                      "current-code",
+                      'current-code',
                     )}
-                  aria-label={vault.t("vault.copy_current_code")}
+                  aria-label={vault.t('vault.copy_current_code')}
                   class="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
                 >
                   {#if copiedKey === `${item.id}-current-code`}<Check
@@ -579,13 +585,13 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.account")}</span
+              >{vault.t('vault.fields.account')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
             >
               <span class="truncate text-foreground"
-                >{item.account || vault.t("common.none")}</span
+                >{item.account || vault.t('common.none')}</span
               >
             </div>
           </div>
@@ -595,20 +601,20 @@
             data-testid="authenticator-website"
           >
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.website_label")}</span
+              >{vault.t('vault.fields.website_label')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t("vault.fields.no_website")}</span
+                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
               >
               {#if item.websiteUrl}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, "website")}
-                  aria-label={vault.t("vault.copy_website_url")}
+                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
+                  aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-website`}<Check
@@ -621,7 +627,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.authenticator_secret")}</span
+              >{vault.t('vault.fields.authenticator_secret')}</span
             >
             <div
               class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -629,12 +635,12 @@
               <code
                 class="break-all font-mono text-foreground"
                 data-testid="revealed-secret"
-                >{decrypted ? decrypted.totpSecret : "••••••••••••••••"}</code
+                >{decrypted ? decrypted.totpSecret : '••••••••••••••••'}</code
               >
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t("vault.copy_authenticator_secret")}
+                aria-label={vault.t('vault.copy_authenticator_secret')}
                 class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check
@@ -645,55 +651,53 @@
           </div>
 
           {#if item.backupCodeCount > 0}
-          <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
-            <span class="pt-1 text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.backup_codes")}</span
-            >
-            <div
-              class="space-y-1 rounded-md border border-border/20 bg-muted/20 px-2 py-1.5"
-              data-testid="authenticator-backup-codes"
-            >
-              {#if decrypted}
-                {#if decrypted.backupCodes.length > 0}
-                  {#each decrypted.backupCodes as backupCode, backupIndex (`${backupCode}-${backupIndex}`)}
-                    <div class="flex items-center justify-between gap-2">
-                      <code class="break-all font-mono text-foreground"
-                        >{backupCode}</code
-                      >
-                      <button
-                        type="button"
-                        onclick={() =>
-                          void onCopyToClipboard(
-                            backupCode,
-                            item.id,
-                            `backup-${backupIndex}`,
-                          )}
-                        aria-label={vault.t("vault.copy_backup_code")}
-                        class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {#if copiedKey === `${item.id}-backup-${backupIndex}`}<Check
-                            class="size-3 text-emerald-500"
-                          />{:else}<Copy class="size-3" />{/if}
-                      </button>
-                    </div>
-                  {/each}
+            <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
+              <span class="pt-1 text-muted-foreground/70 font-medium"
+                >{vault.t('vault.fields.backup_codes')}</span
+              >
+              <div
+                class="space-y-1 rounded-md border border-border/20 bg-muted/20 px-2 py-1.5"
+                data-testid="authenticator-backup-codes"
+              >
+                {#if decrypted}
+                  {#if decrypted.backupCodes.length > 0}
+                    {#each decrypted.backupCodes as backupCode, backupIndex (`${backupCode}-${backupIndex}`)}
+                      <div class="flex items-center justify-between gap-2">
+                        <code class="break-all font-mono text-foreground"
+                          >{backupCode}</code
+                        >
+                        <button
+                          type="button"
+                          onclick={() =>
+                            void onCopyToClipboard(
+                              backupCode,
+                              item.id,
+                              `backup-${backupIndex}`,
+                            )}
+                          aria-label={vault.t('vault.copy_backup_code')}
+                          class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {#if copiedKey === `${item.id}-backup-${backupIndex}`}<Check
+                              class="size-3 text-emerald-500"
+                            />{:else}<Copy class="size-3" />{/if}
+                        </button>
+                      </div>
+                    {/each}
+                  {:else}
+                    <span class="text-muted-foreground"
+                      >{vault.t('common.none')}</span
+                    >
+                  {/if}
                 {:else}
-                  <span class="text-muted-foreground"
-                    >{vault.t("common.none")}</span
-                  >
+                  <span class="font-mono text-foreground">••••••••</span>
                 {/if}
-              {:else}
-                <span class="font-mono text-foreground"
-                  >••••••••</span
-                >
-              {/if}
+              </div>
             </div>
-          </div>
           {/if}
         {:else if item.type === SecretType.Passkey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.relying_party")}</span
+              >{vault.t('vault.fields.relying_party')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -703,7 +707,7 @@
           </div>
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.account")}</span
+              >{vault.t('vault.fields.account')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -711,14 +715,14 @@
               <span class="truncate text-foreground"
                 >{item.passkeyUserDisplayName ||
                   item.passkeyUserName ||
-                  vault.t("common.none")}</span
+                  vault.t('common.none')}</span
               >
             </div>
           </div>
           {#if item.passkeyUserDisplayName && item.passkeyUserName}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t("vault.fields.username")}</span
+                >{vault.t('vault.fields.username')}</span
               >
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -730,33 +734,32 @@
             </div>
           {/if}
           <p class="text-[11px] leading-relaxed text-muted-foreground">
-            {vault.t("vault.fields.passkey_managed_hint")}
+            {vault.t('vault.fields.passkey_managed_hint')}
           </p>
         {:else if item.type === SecretType.CreditCard}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.title")}</span
+              >{vault.t('vault.fields.title')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
             >
               <span class="truncate text-foreground"
                 >{item.title.trim() ||
-                  vault.t("vault.fields.unnamed_card")}</span
+                  vault.t('vault.fields.unnamed_card')}</span
               >
             </div>
           </div>
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.cardholder_name")}</span
+              >{vault.t('vault.fields.cardholder_name')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.cardholderName.trim() ||
-                  vault.t("common.none")}</span
+                >{item.cardholderName.trim() || vault.t('common.none')}</span
               >
               {#if item.cardholderName.trim()}
                 <button
@@ -765,9 +768,9 @@
                     void onCopyToClipboard(
                       item.cardholderName,
                       item.id,
-                      "cardholder",
+                      'cardholder',
                     )}
-                  aria-label={vault.t("vault.copy_cardholder_name")}
+                  aria-label={vault.t('vault.copy_cardholder_name')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-cardholder`}<Check
@@ -780,7 +783,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.card_number")}</span
+              >{vault.t('vault.fields.card_number')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -793,7 +796,7 @@
                   ? decrypted.cardNumber
                   : item.last4.trim()
                     ? `•••• ${item.last4}`
-                    : "••••••••••••••••"}
+                    : '••••••••••••••••'}
               </code>
               {#if decrypted?.cardNumber}
                 <button
@@ -802,9 +805,9 @@
                     void onCopyToClipboard(
                       decrypted.cardNumber,
                       item.id,
-                      "card-number",
+                      'card-number',
                     )}
-                  aria-label={vault.t("vault.copy_card_number")}
+                  aria-label={vault.t('vault.copy_card_number')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
                   {#if copiedKey === `${item.id}-card-number`}<Check
@@ -818,7 +821,7 @@
           {#if cardExpiration}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t("vault.fields.expiration")}</span
+                >{vault.t('vault.fields.expiration')}</span
               >
               <div
                 class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -832,9 +835,9 @@
                     void onCopyToClipboard(
                       cardExpiration,
                       item.id,
-                      "expiration",
+                      'expiration',
                     )}
-                  aria-label={vault.t("vault.copy_expiration")}
+                  aria-label={vault.t('vault.copy_expiration')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if copiedKey === `${item.id}-expiration`}<Check
@@ -847,7 +850,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.cvv")}</span
+              >{vault.t('vault.fields.cvv')}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -856,14 +859,14 @@
                 class="truncate font-mono text-foreground"
                 data-testid="credit-card-cvv-value"
               >
-                {decrypted ? decrypted.cvv || vault.t("common.none") : "•••"}
+                {decrypted ? decrypted.cvv || vault.t('common.none') : '•••'}
               </code>
               {#if decrypted?.cvv}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(decrypted.cvv, item.id, "cvv")}
-                  aria-label={vault.t("vault.copy_cvv")}
+                    void onCopyToClipboard(decrypted.cvv, item.id, 'cvv')}
+                  aria-label={vault.t('vault.copy_cvv')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
                   {#if copiedKey === `${item.id}-cvv`}<Check
@@ -877,7 +880,7 @@
           {#if decrypted?.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
-                >{vault.t("vault.fields.notes")}</span
+                >{vault.t('vault.fields.notes')}</span
               >
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
@@ -889,24 +892,28 @@
         {:else if item.type === SecretType.FileAttachment}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.file_name")}</span
+              >{vault.t('vault.fields.file_name')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
             >
-              <span class="truncate text-foreground" data-testid="file-attachment-name"
-                >{item.fileName || vault.t("vault.fields.no_title")}</span
+              <span
+                class="truncate text-foreground"
+                data-testid="file-attachment-name"
+                >{item.fileName || vault.t('vault.fields.no_title')}</span
               >
             </div>
           </div>
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t("vault.fields.file_size")}</span
+              >{vault.t('vault.fields.file_size')}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
             >
-              <span class="truncate text-foreground" data-testid="file-attachment-size"
+              <span
+                class="truncate text-foreground"
+                data-testid="file-attachment-size"
                 >{formatFileSize(item.sizeBytes)}</span
               >
             </div>
@@ -914,7 +921,7 @@
           {#if item.mimeType}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t("vault.fields.mime_type")}</span
+                >{vault.t('vault.fields.mime_type')}</span
               >
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -932,18 +939,18 @@
               class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download class="size-3.5" />
-              {vault.t("vault.download_file")}
+              {vault.t('vault.download_file')}
             </button>
             {#if !decrypted}
               <p class="mt-1 text-[11px] text-muted-foreground">
-                {vault.t("vault.reveal_to_download")}
+                {vault.t('vault.reveal_to_download')}
               </p>
             {/if}
           </div>
         {:else}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"
-              >{vault.t("vault.fields.note")}</span
+              >{vault.t('vault.fields.note')}</span
             >
             <div
               class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
@@ -964,7 +971,7 @@
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t("vault.copy_note")}
+                aria-label={vault.t('vault.copy_note')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if copiedKey === `${item.id}-secret`}<Check

@@ -3,7 +3,6 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
-  import type { NookImportResult } from '$lib/nook'
   import {
     importBinaryFile,
     importTextFile,
@@ -34,8 +33,12 @@
     )
 
   let props: Props = $props()
-  let selectedFile = $state<ImportFileSelection>({ kind: ImportFileSelectionKind.NotSelected })
-  let result = $state<PasswordImportOutcome>({ kind: PasswordImportOutcomeKind.NotRun })
+  let selectedFile = $state<ImportFileSelection>({
+    kind: ImportFileSelectionKind.NotSelected,
+  })
+  let result = $state<PasswordImportOutcome>({
+    kind: PasswordImportOutcomeKind.NotRun,
+  })
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
@@ -53,18 +56,15 @@
   }
 
   async function importFile() {
-    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
     const file = selectedFile.file
     result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
     isImporting = true
     try {
       if (props.format === 'text') {
-        const imported = await importTextFile(
-          file,
-          false,
-          props.onImport,
-        )
+        const imported = await importTextFile(file, false, props.onImport)
         if (imported.kind === ImportAttemptKind.Completed) {
           result = {
             kind: PasswordImportOutcomeKind.Completed,
@@ -75,11 +75,7 @@
         }
         return
       }
-      const imported = await importBinaryFile(
-        file,
-        false,
-        props.onImport,
-      )
+      const imported = await importBinaryFile(file, false, props.onImport)
       if (imported.kind === ImportAttemptKind.Completed) {
         result = {
           kind: PasswordImportOutcomeKind.Completed,

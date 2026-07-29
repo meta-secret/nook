@@ -3,6 +3,7 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { SecretType, type NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
+import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
 
 const vault = {
   t(key: string): string {
@@ -38,7 +39,10 @@ function renderLegacyAuthenticatorEditor() {
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
     initialItem: legacyAuthenticator,
-    selectedType: SecretType.Authenticator,
+    selectedTypeState: {
+      kind: SecretTypeSelectionKind.EditingFields,
+      itemType: SecretType.Authenticator,
+    },
   })
   return { onReplaceSecret, view }
 }

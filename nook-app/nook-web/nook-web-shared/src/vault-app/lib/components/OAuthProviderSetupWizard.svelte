@@ -15,7 +15,10 @@
   import type { OAuthFilePreset } from '$lib/auth-providers'
   import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
   import { createLogger } from '$lib/log'
-  import { resolveOAuthOriginSupport } from '$lib/oauth-origin'
+  import {
+    BrowserOAuthProvider,
+    resolveOAuthOriginSupport,
+  } from '$lib/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
   import * as oauthActions from '$lib/vault/oauth'
@@ -55,14 +58,11 @@
     !isICloud && googleDriveMode === 'shared',
   )
   const isSharedICloud = $derived(isICloud && iCloudMode === 'shared')
-  const isSharedProvider = $derived(
-    isSharedGoogleDrive || isSharedICloud,
-  )
+  const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud)
   const oauthSignedIn = $derived(Boolean(vault.oauthFile?.accessToken?.trim()))
   const sharedTargetReady = $derived(
     (isSharedGoogleDrive && Boolean(vault.oauthFile?.folderId?.trim())) ||
-      (isSharedICloud &&
-        Boolean(vault.oauthFile?.iCloudShareTarget?.trim())),
+      (isSharedICloud && Boolean(vault.oauthFile?.iCloudShareTarget?.trim())),
   )
   const canConnect = $derived(
     oauthSignedIn && (!isSharedProvider || sharedTargetReady),
@@ -75,7 +75,9 @@
     isICloud && vault.icloudOAuthPreparing && !vault.icloudOAuthReady,
   )
   const oauthOriginSupport = $derived(
-    resolveOAuthOriginSupport(isICloud ? 'icloud' : 'google-drive'),
+    resolveOAuthOriginSupport(
+      isICloud ? BrowserOAuthProvider.ICloud : BrowserOAuthProvider.GoogleDrive,
+    ),
   )
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
   const oauthOriginUnsupportedMessage = $derived(
@@ -177,7 +179,9 @@
       log.info('CloudKit native sign-in click observed', {
         eventPhase: event.eventPhase,
         targetTag:
-          event.target instanceof Element ? event.target.tagName : omittedValue(),
+          event.target instanceof Element
+            ? event.target.tagName
+            : omittedValue(),
         currentTargetTag:
           event.currentTarget instanceof Element
             ? event.currentTarget.tagName
@@ -333,94 +337,94 @@
           : 'google-drive-mode-fieldset'}
       >
         <legend class="text-xs font-medium text-foreground">
-            {vault.t(
-              isICloud
-                ? 'provider_setup.icloud_mode'
-                : 'provider_setup.google_drive_mode',
-            )}
+          {vault.t(
+            isICloud
+              ? 'provider_setup.icloud_mode'
+              : 'provider_setup.google_drive_mode',
+          )}
         </legend>
         <div
-            class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
-            role="radiogroup"
-            aria-label={vault.t(
+          class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
+          role="radiogroup"
+          aria-label={vault.t(
+            isICloud
+              ? 'provider_setup.icloud_mode'
+              : 'provider_setup.google_drive_mode',
+          )}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
+              'private'}
+            class="flex gap-2.5 px-3 py-3 text-left transition-colors {(isICloud
+              ? iCloudMode
+              : googleDriveMode) === 'private'
+              ? 'bg-primary/[0.06] text-foreground'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+            data-testid={isICloud
+              ? 'icloud-mode-private'
+              : 'google-drive-mode-private'}
+            onclick={() =>
               isICloud
-                ? 'provider_setup.icloud_mode'
-                : 'provider_setup.google_drive_mode',
-            )}
+                ? selectICloudMode('private')
+                : selectGoogleDriveMode('private')}
           >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
-                'private'}
-              class="flex gap-2.5 px-3 py-3 text-left transition-colors {(isICloud
-                ? iCloudMode
-                : googleDriveMode) === 'private'
-                ? 'bg-primary/[0.06] text-foreground'
-                : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
-              data-testid={isICloud
-                ? 'icloud-mode-private'
-                : 'google-drive-mode-private'}
-              onclick={() =>
-                isICloud
-                  ? selectICloudMode('private')
-                  : selectGoogleDriveMode('private')}
-            >
-              <LockKeyhole class="mt-0.5 size-4 shrink-0" />
-              <span>
-                <span class="block text-sm font-medium"
-                  >{vault.t(
-                    isICloud
-                      ? 'provider_setup.icloud_private'
-                      : 'provider_setup.google_drive_private',
-                  )}</span
-                >
-                <span class="mt-0.5 block text-[11px] leading-snug"
-                  >{vault.t(
-                    isICloud
-                      ? 'provider_setup.icloud_private_desc'
-                      : 'provider_setup.google_drive_private_desc',
-                  )}</span
-                >
-              </span>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
-                'shared'}
-              class="flex gap-2.5 border-t border-border/40 px-3 py-3 text-left transition-colors sm:border-t-0 sm:border-l {(isICloud
-                ? iCloudMode
-                : googleDriveMode) === 'shared'
-                ? 'bg-primary/[0.06] text-foreground'
-                : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
-              data-testid={isICloud
-                ? 'icloud-mode-shared'
-                : 'google-drive-mode-shared'}
-              onclick={() =>
-                isICloud
-                  ? selectICloudMode('shared')
-                  : selectGoogleDriveMode('shared')}
-            >
-              <Users class="mt-0.5 size-4 shrink-0" />
-              <span>
-                <span class="block text-sm font-medium"
-                  >{vault.t(
-                    isICloud
-                      ? 'provider_setup.icloud_shared'
-                      : 'provider_setup.google_drive_shared',
-                  )}</span
-                >
-                <span class="mt-0.5 block text-[11px] leading-snug"
-                  >{vault.t(
-                    isICloud
-                      ? 'provider_setup.icloud_shared_mode_desc'
-                      : 'provider_setup.google_drive_shared_mode_desc',
-                  )}</span
-                >
-              </span>
-            </button>
-          </div>
+            <LockKeyhole class="mt-0.5 size-4 shrink-0" />
+            <span>
+              <span class="block text-sm font-medium"
+                >{vault.t(
+                  isICloud
+                    ? 'provider_setup.icloud_private'
+                    : 'provider_setup.google_drive_private',
+                )}</span
+              >
+              <span class="mt-0.5 block text-[11px] leading-snug"
+                >{vault.t(
+                  isICloud
+                    ? 'provider_setup.icloud_private_desc'
+                    : 'provider_setup.google_drive_private_desc',
+                )}</span
+              >
+            </span>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
+              'shared'}
+            class="flex gap-2.5 border-t border-border/40 px-3 py-3 text-left transition-colors sm:border-t-0 sm:border-l {(isICloud
+              ? iCloudMode
+              : googleDriveMode) === 'shared'
+              ? 'bg-primary/[0.06] text-foreground'
+              : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+            data-testid={isICloud
+              ? 'icloud-mode-shared'
+              : 'google-drive-mode-shared'}
+            onclick={() =>
+              isICloud
+                ? selectICloudMode('shared')
+                : selectGoogleDriveMode('shared')}
+          >
+            <Users class="mt-0.5 size-4 shrink-0" />
+            <span>
+              <span class="block text-sm font-medium"
+                >{vault.t(
+                  isICloud
+                    ? 'provider_setup.icloud_shared'
+                    : 'provider_setup.google_drive_shared',
+                )}</span
+              >
+              <span class="mt-0.5 block text-[11px] leading-snug"
+                >{vault.t(
+                  isICloud
+                    ? 'provider_setup.icloud_shared_mode_desc'
+                    : 'provider_setup.google_drive_shared_mode_desc',
+                )}</span
+              >
+            </span>
+          </button>
+        </div>
       </fieldset>
 
       <div class="space-y-1.5">
@@ -623,28 +627,28 @@
 
         {#if sharedFolderAction === 'create'}
           {#if !isSharedICloud}
-          <div class="space-y-1.5">
-            <label
-              class="text-xs font-medium text-foreground"
-              for="{idPrefix}-shared-email"
-            >
-              {vault.t('provider_setup.google_shared_account_email')}
-            </label>
-            <input
-              id="{idPrefix}-shared-email"
-              type="email"
-              bind:value={collaboratorEmail}
-              autocomplete="email"
-              data-testid="google-shared-account-email"
-              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-              placeholder={vault.t(
-                'provider_setup.google_shared_account_placeholder',
-              )}
-            />
-            <p class="text-[11px] text-muted-foreground text-pretty">
-              {vault.t('provider_setup.google_shared_account_desc')}
-            </p>
-          </div>
+            <div class="space-y-1.5">
+              <label
+                class="text-xs font-medium text-foreground"
+                for="{idPrefix}-shared-email"
+              >
+                {vault.t('provider_setup.google_shared_account_email')}
+              </label>
+              <input
+                id="{idPrefix}-shared-email"
+                type="email"
+                bind:value={collaboratorEmail}
+                autocomplete="email"
+                data-testid="google-shared-account-email"
+                class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                placeholder={vault.t(
+                  'provider_setup.google_shared_account_placeholder',
+                )}
+              />
+              <p class="text-[11px] text-muted-foreground text-pretty">
+                {vault.t('provider_setup.google_shared_account_desc')}
+              </p>
+            </div>
           {/if}
           {#if isSharedICloud}
             <p class="text-[11px] text-muted-foreground text-pretty">
@@ -756,7 +760,7 @@
                 ? 'provider_setup.icloud_shared_target_required'
                 : 'provider_setup.google_shared_folder_required',
             )
-        : vault.t('login_wizard.available_after_connect')}
+          : vault.t('login_wizard.available_after_connect')}
       disabled={!canConnect}
       bind:open={syncStepOpen}
       testId={isICloud ? 'icloud-setup-sync-step' : 'google-setup-sync-step'}

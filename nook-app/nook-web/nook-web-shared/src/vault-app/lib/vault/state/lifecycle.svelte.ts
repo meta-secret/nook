@@ -55,23 +55,34 @@ function initialEnrollmentLink(): EnrollmentLink {
 }
 
 export class VaultLifecycleState extends VaultStateSlices {
-  private successDismissSchedule: SuccessDismissSchedule = { kind: "stopped" };
+  private successDismissSchedule: SuccessDismissSchedule = {
+    kind: SuccessDismissScheduleKind.Stopped,
+  };
 
   get successDismissTimer(): ReturnType<typeof setTimeout> | void {
-    if (this.successDismissSchedule.kind === "scheduled")
+    if (
+      this.successDismissSchedule.kind === SuccessDismissScheduleKind.Scheduled
+    )
       return this.successDismissSchedule.timer;
     return;
   }
   get successDismissScheduled(): boolean {
-    return this.successDismissSchedule.kind === "scheduled";
+    return (
+      this.successDismissSchedule.kind === SuccessDismissScheduleKind.Scheduled
+    );
   }
 
   set successDismissTimer(value: ReturnType<typeof setTimeout>) {
-    this.successDismissSchedule = { kind: "scheduled", timer: value };
+    this.successDismissSchedule = {
+      kind: SuccessDismissScheduleKind.Scheduled,
+      timer: value,
+    };
   }
 
   clearSuccessDismissTimer(): void {
-    this.successDismissSchedule = { kind: "stopped" };
+    this.successDismissSchedule = {
+      kind: SuccessDismissScheduleKind.Stopped,
+    };
   }
 
   private idleSessionTracking: IdleSessionTracking = {
@@ -95,22 +106,25 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.idleSessionTracking = { kind: IdleSessionTrackingKind.Inactive };
   }
 
-  private syncSchedule: SyncSchedule = { kind: "stopped" };
+  private syncSchedule: SyncSchedule = { kind: SyncScheduleKind.Stopped };
 
-  get syncTimer(): ReturnType<typeof setInterval> | void {
-    if (this.syncSchedule.kind === "scheduled") return this.syncSchedule.timer;
-    return;
-  }
-  get syncScheduled(): boolean {
-    return this.syncSchedule.kind === "scheduled";
+  isSyncScheduled(): boolean {
+    return this.syncSchedule.kind === SyncScheduleKind.Scheduled;
   }
 
-  set syncTimer(value: ReturnType<typeof setInterval>) {
-    this.syncSchedule = { kind: "scheduled", timer: value };
+  scheduleSync(callback: () => void, intervalMs: number): void {
+    this.stopScheduledSync();
+    this.syncSchedule = {
+      kind: SyncScheduleKind.Scheduled,
+      timer: setInterval(callback, intervalMs),
+    };
   }
 
-  clearSyncTimer(): void {
-    this.syncSchedule = { kind: "stopped" };
+  stopScheduledSync(): boolean {
+    if (this.syncSchedule.kind === SyncScheduleKind.Stopped) return false;
+    clearInterval(this.syncSchedule.timer);
+    this.syncSchedule = { kind: SyncScheduleKind.Stopped };
+    return true;
   }
 
   private initialization: VaultInitialization = {

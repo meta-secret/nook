@@ -3,6 +3,7 @@ import {
   DRIVE_APPDATA_SCOPE,
   DRIVE_FILE_SCOPE,
   DRIVE_READONLY_SCOPE,
+  GoogleDriveOAuthScope,
   isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
@@ -57,9 +58,13 @@ describe('google-oauth', () => {
       },
     })
 
-    const appdataToken = requestGoogleAccessToken({ scope: 'appdata' })
+    const appdataToken = requestGoogleAccessToken({
+      scope: GoogleDriveOAuthScope.AppData,
+    })
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
-    const fileToken = requestGoogleAccessToken({ scope: 'shared' })
+    const fileToken = requestGoogleAccessToken({
+      scope: GoogleDriveOAuthScope.Shared,
+    })
 
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()

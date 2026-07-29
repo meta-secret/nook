@@ -71,7 +71,9 @@
   }
 
   let panel = $state<VaultPasswordPanel>(resolveInitialPanel())
-  let activeEntryId = $state<ActivePasswordEntry>({ kind: ActivePasswordEntryKind.None })
+  let activeEntryId = $state<ActivePasswordEntry>({
+    kind: ActivePasswordEntryKind.None,
+  })
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -80,11 +82,16 @@
   let localError = $state('')
 
   const hasPasswords = $derived(passwordEntries.length > 0)
-  const activeEntry = $derived(
-    activeEntryId.kind === ActivePasswordEntryKind.Selected
-      ? passwordEntries.find((entry) => entry.id === activeEntryId.entryId)
-      : omittedValue(),
-  )
+  const activeEntry = $derived.by(() => {
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) {
+      return omittedValue()
+    }
+    const selectedEntryId = activeEntryId.entryId
+    return (
+      passwordEntries.find((entry) => entry.id === selectedEntryId) ??
+      omittedValue()
+    )
+  })
 
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return
@@ -105,7 +112,9 @@
         mins: String(minutes),
       })
     const hours = Math.round(minutes / 60)
-    return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
+    return vault.t('vault_passwords.issued_hours_ago', {
+      hours: String(hours),
+    })
   })
 
   function openPanel(
@@ -360,8 +369,7 @@
     </Button>
   {/if}
 
-  {#if panel === VaultPasswordPanel.Add ||
-    panel === VaultPasswordPanel.Rotate}
+  {#if panel === VaultPasswordPanel.Add || panel === VaultPasswordPanel.Rotate}
     <form
       class="space-y-4"
       onsubmit={(event) => {

@@ -59,15 +59,26 @@
   async function refreshDeliveries() {
     try {
       const deliveries = await listSentinelStoredDeliveries(vault)
+      if (selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected) {
+        const firstDelivery = deliveries[0]
+        selectedDelivery = firstDelivery
+          ? {
+              kind: GenesisDeliverySelectionKind.Selected,
+              storeId: firstDelivery.storeId,
+            }
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
+        return
+      }
+      const selectedStoreId = selectedDelivery.storeId
       if (
-        selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected ||
-        !deliveries.some(
-          (delivery) => delivery.storeId === selectedDelivery.storeId,
-        )
+        !deliveries.some((delivery) => delivery.storeId === selectedStoreId)
       ) {
         const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
-          ? { kind: GenesisDeliverySelectionKind.Selected, storeId: firstDelivery.storeId }
+          ? {
+              kind: GenesisDeliverySelectionKind.Selected,
+              storeId: firstDelivery.storeId,
+            }
           : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
     } catch {

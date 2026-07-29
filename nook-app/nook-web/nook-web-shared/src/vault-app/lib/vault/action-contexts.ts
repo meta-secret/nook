@@ -154,8 +154,8 @@ interface SyncStateFields {
   }>;
   securityConflicts: Array<{ events: string[]; reasons: string[] }>;
   syncingProviderId: string | void;
-  syncTimer: ReturnType<typeof setInterval> | void;
-  syncScheduled: boolean;
+  isSyncScheduled(): boolean;
+  scheduleSync(callback: () => void, intervalMs: number): void;
 }
 
 interface SyncActionPorts extends SharedStorageActionsContext {
@@ -167,7 +167,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   clearPendingSyncConflict(): void;
   clearLocalFolderMultipleVaultsIssue(): void;
   clearSyncingProvider(): void;
-  clearSyncTimer(): void;
+  stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
   beginProviderSetup(type: "local-folder"): void;
@@ -248,6 +248,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSessionState,
     | "awaitingJoinApproval"
+    | "clearSelectedPasswordEntry"
     | "enrollmentCode"
     | "enrollMembersKey"
     | "enrollSecretsKey"
@@ -266,6 +267,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSecretsState,
     | "secretPageOffset"
+    | "clearSecretTypeFilter"
     | "secretQuery"
     | "secretTotal"
     | "secretTypeFilter"
@@ -274,6 +276,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSentinelState,
     | "sentinelCeremonyPrompt"
+    | "clearSentinelGenesisStore"
     | "sentinelGenesisDeliveries"
     | "sentinelGenesisParticipantCount"
     | "sentinelGenesisParticipants"

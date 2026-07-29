@@ -66,14 +66,18 @@ type ICloudWebAuthTokenRequestOptions = {
   clickSignInControl?: boolean;
 };
 
-let cloudKitInitialization: CloudKitInitialization = { kind: "not-started" };
-let cloudKitAuthSetup: CloudKitAuthSetup = { kind: "not-started" };
+let cloudKitInitialization: CloudKitInitialization = {
+  kind: CloudKitInitializationKind.NotStarted,
+};
+let cloudKitAuthSetup: CloudKitAuthSetup = {
+  kind: CloudKitAuthSetupKind.NotStarted,
+};
 let cloudKitIdentity: CloudKitIdentity = {
   kind: CloudKitIdentityKind.SignedOut,
 };
 
 function currentAuthSetup(): Promise<CloudKitUserIdentity | void> | void {
-  return cloudKitAuthSetup.kind === "initializing"
+  return cloudKitAuthSetup.kind === CloudKitAuthSetupKind.Initializing
     ? cloudKitAuthSetup.completion
     : omittedValue();
 }
@@ -92,8 +96,10 @@ function rememberCloudKitIdentity(identity: CloudKitUserIdentity | void): void {
 
 /** @internal Clears module singletons between unit tests. */
 export function resetICloudAuthStateForTests(): void {
-  cloudKitInitialization = { kind: "not-started" };
-  cloudKitAuthSetup = { kind: "not-started" };
+  cloudKitInitialization = {
+    kind: CloudKitInitializationKind.NotStarted,
+  };
+  cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
   cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
   webAuthTokenListeners.clear();
 }
@@ -364,7 +370,7 @@ function cloudKitSignInTimeoutError(): Error {
 }
 
 export async function initICloudAuth(): Promise<void> {
-  if (cloudKitInitialization.kind === "initializing") {
+  if (cloudKitInitialization.kind === CloudKitInitializationKind.Initializing) {
     log.info("CloudKit auth init reused existing promise");
     return cloudKitInitialization.completion;
   }
@@ -396,7 +402,10 @@ export async function initICloudAuth(): Promise<void> {
       hasCloudKitGlobal: Boolean(window.CloudKit),
     });
   })();
-  cloudKitInitialization = { kind: "initializing", completion: operation };
+  cloudKitInitialization = {
+    kind: CloudKitInitializationKind.Initializing,
+    completion: operation,
+  };
   return operation;
 }
 
@@ -440,11 +449,14 @@ function setUpCloudKitAuth(
         cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
         return;
       }
-      cloudKitAuthSetup = { kind: "not-started" };
+      cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
       cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
       throw error;
     });
-  cloudKitAuthSetup = { kind: "initializing", completion: operation };
+  cloudKitAuthSetup = {
+    kind: CloudKitAuthSetupKind.Initializing,
+    completion: operation,
+  };
   return operation;
 }
 
@@ -462,7 +474,7 @@ export async function prepareICloudSignInControl(): Promise<void> {
     !readStoredWebAuthToken() &&
     !existingControl
   ) {
-    cloudKitAuthSetup = { kind: "not-started" };
+    cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
   }
   try {
     await setUpCloudKitAuth(container);
@@ -902,7 +914,7 @@ async function waitForCloudKitSignIn(
   } catch (error) {
     // Allow a fresh setUpAuth attempt on the next user interaction so
     // retries do not reuse a stale cached promise.
-    cloudKitAuthSetup = { kind: "not-started" };
+    cloudKitAuthSetup = { kind: CloudKitAuthSetupKind.NotStarted };
     cloudKitIdentity = { kind: CloudKitIdentityKind.SignedOut };
     logCloudKitAuthFailure("CloudKit sign-in failed", error);
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error });

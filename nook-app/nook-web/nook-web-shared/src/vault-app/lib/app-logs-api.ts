@@ -1,9 +1,9 @@
 import {
   dumpLogs,
   getLogLevel,
+  LogLevel,
   logCount,
   type LogEntry,
-  type LogLevel,
 } from "$lib/log";
 import { stripBasePath } from "$lib/routes";
 
@@ -33,11 +33,11 @@ export type AppLogsResponse = {
 };
 
 const LOG_LEVELS: readonly LogLevel[] = [
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
+  LogLevel.Error,
+  LogLevel.Warn,
+  LogLevel.Info,
+  LogLevel.Debug,
+  LogLevel.Trace,
 ];
 
 function parseLevel(raw: string | void, fallback: LogLevel): LogLevel {
@@ -65,7 +65,7 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith("?") ? search.slice(1) : search,
   );
   return {
-    minLevel: parseLevel(params.get("minLevel")?.valueOf(), "trace"),
+    minLevel: parseLevel(params.get("minLevel")?.valueOf(), LogLevel.Trace),
     limit: parsePositiveInt(params.get("limit")?.valueOf(), 500, 5000),
     offset: parsePositiveInt(
       params.get("offset")?.valueOf(),

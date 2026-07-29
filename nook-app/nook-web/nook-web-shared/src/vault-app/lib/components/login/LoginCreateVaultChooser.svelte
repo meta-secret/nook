@@ -20,8 +20,8 @@
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
   import SentinelGenesisJoinFlow from '$lib/components/login/SentinelGenesisJoinFlow.svelte'
   import {
+    SentinelDashboard,
     sentinelDashboardPortal,
-    type SentinelDashboard,
   } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -152,7 +152,7 @@
       !response ||
       response === importedParticipantResponse ||
       sentinelGenesisPhase !== SentinelGenesisPhase.CollectingParticipants ||
-      sentinelDashboard !== 'terminal' ||
+      sentinelDashboard !== SentinelDashboard.Terminal ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
@@ -161,15 +161,19 @@
     void onAddSentinelGenesisParticipantResponse(response)
   })
 
-
   $effect(() => {
     if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
       sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       return
     }
     if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
-      if (sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen) {
-        sentinelDashboardState = { kind: SentinelDashboardChoiceKind.Chosen, dashboard: 'card-stack' }
+      if (
+        sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen
+      ) {
+        sentinelDashboardState = {
+          kind: SentinelDashboardChoiceKind.Chosen,
+          dashboard: SentinelDashboard.CardStack,
+        }
       }
       wizardStep = VaultCreationWizardStep.SentinelCeremony
       chosenPath = ChosenVaultPath.Sentinel
@@ -259,7 +263,6 @@
     return [choose]
   })
 
-
   function chooseSimplePath() {
     vault.draftVaultType = VaultType.Simple
     chosenPath = ChosenVaultPath.Simple
@@ -276,7 +279,10 @@
   }
 
   function chooseSentinelDashboard(dashboard: SentinelDashboard) {
-    sentinelDashboardState = { kind: SentinelDashboardChoiceKind.Chosen, dashboard }
+    sentinelDashboardState = {
+      kind: SentinelDashboardChoiceKind.Chosen,
+      dashboard,
+    }
     wizardStep = VaultCreationWizardStep.SentinelPolicy
   }
 
@@ -370,7 +376,6 @@
       sentinelActionBusy = false
     }
   }
-
 </script>
 
 <div
@@ -379,10 +384,10 @@
     sentinelDashboardActive
       ? 'fixed inset-0 z-40 w-full overflow-y-auto bg-[#10141a] text-white'
       : 'w-full',
-    sentinelDashboard === 'terminal' && sentinelDashboardActive
+    sentinelDashboard === SentinelDashboard.Terminal && sentinelDashboardActive
       ? 'sentinel-terminal bg-[#090b09] font-mono text-[#b7ff95]'
       : '',
-    sentinelDashboard === 'card-stack' && sentinelDashboardActive
+    sentinelDashboard === SentinelDashboard.CardStack && sentinelDashboardActive
       ? 'sentinel-card-stack'
       : '',
   ]}
@@ -395,7 +400,7 @@
     dashboard: sentinelDashboard,
   }}
 >
-  {#if sentinelDashboardActive && sentinelDashboard === 'card-stack'}
+  {#if sentinelDashboardActive && sentinelDashboard === SentinelDashboard.CardStack}
     <SentinelCardStackDashboard
       {vault}
       bind:name={sentinelName}
@@ -417,7 +422,7 @@
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
     />
-  {:else if sentinelDashboardActive && sentinelDashboard === 'terminal'}
+  {:else if sentinelDashboardActive && sentinelDashboard === SentinelDashboard.Terminal}
     <SentinelTerminalDashboard
       {vault}
       bind:name={sentinelName}
@@ -480,7 +485,8 @@
         <div
           class={[
             'relative',
-            sentinelDashboardActive && sentinelDashboard === 'card-stack'
+            sentinelDashboardActive &&
+            sentinelDashboard === SentinelDashboard.CardStack
               ? 'sentinel-card-stack-panel rounded-none border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-6 sm:p-10'
               : sentinelDashboardActive
                 ? 'rounded-none border border-[#294323] bg-black/40 p-5 shadow-[0_0_80px_rgb(94_255_112/0.05)] sm:p-8'
@@ -501,7 +507,7 @@
                 <h2
                   class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
                 >
-                  {sentinelDashboard === 'terminal'
+                  {sentinelDashboard === SentinelDashboard.Terminal
                     ? vault.t('login.sentinel_dashboard_terminal_title')
                     : vault.t('login.sentinel_dashboard_card_stack_title')}
                 </h2>
@@ -556,8 +562,7 @@
                       {label}
                     </p>
 
-                    {#if index === stepIndex &&
-                      wizardStep === VaultCreationWizardStep.Choose}
+                    {#if index === stepIndex && wizardStep === VaultCreationWizardStep.Choose}
                       <section
                         class="mt-3 space-y-3"
                         data-testid="landing-auth-step-choose"
@@ -673,8 +678,7 @@
                           </div>
                         </div>
                       </section>
-                    {:else if index === stepIndex &&
-                      wizardStep === VaultCreationWizardStep.SimpleCreate}
+                    {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SimpleCreate}
                       <section
                         class="mt-3 space-y-3"
                         data-testid="landing-auth-step-simple"
@@ -733,8 +737,7 @@
                           </Button>
                         </div>
                       </section>
-                    {:else if index === stepIndex &&
-                      wizardStep === VaultCreationWizardStep.SentinelDashboard}
+                    {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SentinelDashboard}
                       <section
                         class="mt-4 space-y-4"
                         data-testid="sentinel-dashboard-choice"
@@ -756,7 +759,9 @@
                             data-testid="sentinel-dashboard-card-stack"
                             disabled={isBusy}
                             onclick={() =>
-                              chooseSentinelDashboard('card-stack')}
+                              chooseSentinelDashboard(
+                                SentinelDashboard.CardStack,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg bg-foreground text-background"
@@ -783,7 +788,10 @@
                             class="group rounded-xl border border-border bg-[#090b09] p-4 text-left text-[#b7ff95] transition hover:border-[#b7ff95]/60 hover:shadow-md disabled:opacity-60"
                             data-testid="sentinel-dashboard-terminal"
                             disabled={isBusy}
-                            onclick={() => chooseSentinelDashboard('terminal')}
+                            onclick={() =>
+                              chooseSentinelDashboard(
+                                SentinelDashboard.Terminal,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg border border-[#b7ff95]/30 bg-[#b7ff95]/10"

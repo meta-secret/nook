@@ -15,25 +15,19 @@ type ExtensionIdentityRequestBase<Scope extends string> = {
   scopes: Scope[];
 };
 
-export enum PairedExtensionIdentityDiscoveryForStatus {
-  Unavailable = "unavailable",
-  Locked = "locked",
-  DifferentVault = "different-vault",
-  Unlocked = "unlocked",
-}
-
 export type PairedExtensionIdentityDiscoveryFor<Request> =
   | {
       status:
-        | PairedExtensionIdentityDiscoveryForStatus.Unavailable
-        | PairedExtensionIdentityDiscoveryForStatus.Locked;
+        | ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+        | ExtensionPairedVaultIdentityStatusMessageStatus.Locked;
     }
   | {
-      status: PairedExtensionIdentityDiscoveryForStatus.DifferentVault;
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault;
       connectedVaultStoreId: string;
       connectedVaultName: string;
     }
   | {
-      status: PairedExtensionIdentityDiscoveryForStatus.Unlocked;
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked;
       request: Request;
     };
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./runtime-messages";

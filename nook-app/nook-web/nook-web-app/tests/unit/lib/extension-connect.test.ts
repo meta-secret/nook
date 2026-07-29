@@ -24,6 +24,7 @@ import {
 import {
   extensionPairingGrantStorageItems,
   extensionStoredPairingGrantStorageItems,
+  isStoredExtensionPairingGrant,
   isExtensionReadySetupState,
   migratedLegacyPairingStorageItems,
   pairingGrantStorageKey,
@@ -319,7 +320,9 @@ describe('extension pairing approved message', () => {
       },
     )
     const grant = approved[pairingGrantStorageKey('store-1')]
-    if (!grant) throw new Error('expected the approved pairing grant')
+    if (!isStoredExtensionPairingGrant(grant)) {
+      throw new Error('expected the approved pairing grant')
+    }
 
     const passive = extensionStoredPairingGrantStorageItems(
       grant,

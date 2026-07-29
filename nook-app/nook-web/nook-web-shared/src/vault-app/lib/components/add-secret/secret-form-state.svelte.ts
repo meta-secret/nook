@@ -165,8 +165,15 @@ export class SecretFormState {
     };
   }
 
-  canSubmit(selectedType: SecretType | void, isSaving: boolean) {
-    if (isSaving || !selectedType) return false;
+  canSubmit(selectedType: SecretType, isSaving: boolean) {
+    if (isSaving) return false;
+    if (selectedType === SecretType.Login) {
+      return (
+        this.websiteUrl.trim().length > 0 &&
+        this.username.trim().length > 0 &&
+        this.password.length > 0
+      );
+    }
     if (selectedType === SecretType.SeedPhrase) return this.seedPhraseValid;
     if (selectedType === SecretType.SecureNote) {
       return this.noteBody.trim().length > 0;
@@ -183,13 +190,6 @@ export class SecretFormState {
         this.authenticatorSecret.trim().length > 0 &&
         (this.authenticatorIssuer.trim().length > 0 ||
           this.authenticatorSecret.trim().startsWith("otpauth://"))
-      );
-    }
-    if (selectedType === SecretType.Login) {
-      return (
-        this.websiteUrl.trim().length > 0 &&
-        this.username.trim().length > 0 &&
-        this.password.length > 0
       );
     }
     if (selectedType === SecretType.CreditCard) {

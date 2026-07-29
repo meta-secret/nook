@@ -101,21 +101,32 @@ export class VaultProviderState {
   }
   /** Login gate: user picked a vault but has not unlocked yet. */
   private selectedLoginVaultStoreState = $state<LoginVaultSelection>({
-    kind: "not-selected",
+    kind: LoginVaultSelectionKind.NotSelected,
   });
   get selectedLoginVaultStoreId(): StoreId | void {
-    if (this.selectedLoginVaultStoreState.kind === "selected")
+    if (
+      this.selectedLoginVaultStoreState.kind ===
+      LoginVaultSelectionKind.Selected
+    )
       return this.selectedLoginVaultStoreState.storeId;
     return;
   }
   get hasSelectedLoginVaultStore(): boolean {
-    return this.selectedLoginVaultStoreState.kind === "selected";
+    return (
+      this.selectedLoginVaultStoreState.kind ===
+      LoginVaultSelectionKind.Selected
+    );
   }
   set selectedLoginVaultStoreId(value: StoreId) {
-    this.selectedLoginVaultStoreState = { kind: "selected", storeId: value };
+    this.selectedLoginVaultStoreState = {
+      kind: LoginVaultSelectionKind.Selected,
+      storeId: value,
+    };
   }
   clearSelectedLoginVaultStore(): void {
-    this.selectedLoginVaultStoreState = { kind: "not-selected" };
+    this.selectedLoginVaultStoreState = {
+      kind: LoginVaultSelectionKind.NotSelected,
+    };
   }
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false);
@@ -161,32 +172,38 @@ export class VaultProviderState {
   githubPat = $state("");
   githubRepo = $state(DEFAULT_GITHUB_REPO);
   private oauthFileState = $state.raw<OAuthFileDraft>({
-    kind: "not-configured",
+    kind: OAuthFileDraftKind.NotConfigured,
   });
   get oauthFile(): OAuthFileConfig | void {
-    if (this.oauthFileState.kind === "configured")
+    if (this.oauthFileState.kind === OAuthFileDraftKind.Configured)
       return this.oauthFileState.config;
     return;
   }
   set oauthFile(value: OAuthFileConfig) {
-    this.oauthFileState = { kind: "configured", config: value };
+    this.oauthFileState = {
+      kind: OAuthFileDraftKind.Configured,
+      config: value,
+    };
   }
   clearOauthFile(): void {
-    this.oauthFileState = { kind: "not-configured" };
+    this.oauthFileState = { kind: OAuthFileDraftKind.NotConfigured };
   }
   private localFolderState = $state.raw<LocalFolderDraft>({
-    kind: "not-configured",
+    kind: LocalFolderDraftKind.NotConfigured,
   });
   get localFolder(): LocalFolderConfig | void {
-    if (this.localFolderState.kind === "configured")
+    if (this.localFolderState.kind === LocalFolderDraftKind.Configured)
       return this.localFolderState.config;
     return;
   }
   set localFolder(value: LocalFolderConfig) {
-    this.localFolderState = { kind: "configured", config: value };
+    this.localFolderState = {
+      kind: LocalFolderDraftKind.Configured,
+      config: value,
+    };
   }
   clearLocalFolder(): void {
-    this.localFolderState = { kind: "not-configured" };
+    this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
   }
   localFolderBackupSupported = $state(
     "window" in globalThis && isLocalFolderBackupSupported(),
@@ -196,18 +213,21 @@ export class VaultProviderState {
   draftVaultType = $state(VaultType.Simple);
   draftReplicationType = $state<ReplicationType>(ReplicationType.Personal);
   private oauthSetupPresetState = $state<OAuthSetupPreset>({
-    kind: "not-selected",
+    kind: OAuthSetupPresetKind.NotSelected,
   });
   get oauthSetupPreset(): OAuthFilePreset | void {
-    if (this.oauthSetupPresetState.kind === "selected")
+    if (this.oauthSetupPresetState.kind === OAuthSetupPresetKind.Selected)
       return this.oauthSetupPresetState.preset;
     return;
   }
   set oauthSetupPreset(value: OAuthFilePreset) {
-    this.oauthSetupPresetState = { kind: "selected", preset: value };
+    this.oauthSetupPresetState = {
+      kind: OAuthSetupPresetKind.Selected,
+      preset: value,
+    };
   }
   clearOauthSetupPreset(): void {
-    this.oauthSetupPresetState = { kind: "not-selected" };
+    this.oauthSetupPresetState = { kind: OAuthSetupPresetKind.NotSelected };
   }
   googleOAuthBusy = $state(false);
   icloudOAuthPreparing = $state(false);

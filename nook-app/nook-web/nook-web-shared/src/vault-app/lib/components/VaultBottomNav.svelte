@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
   import {
     KeyRound,
     QrCode,
@@ -7,11 +6,12 @@
     SlidersHorizontal,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import { SettingsSection } from '$lib/vault/state/ui.svelte'
 
   let {
     vault,
     settingsOpen = false,
-    settingsSection = 'storage' as 'storage' | 'onboard' | 'admin',
+    settingsSection = SettingsSection.Storage,
     onSelectSecrets,
     onSelectOnboard,
     onSelectAdmin,
@@ -19,7 +19,7 @@
   }: {
     vault: VaultState
     settingsOpen?: boolean
-    settingsSection?: 'storage' | 'onboard' | 'admin'
+    settingsSection?: SettingsSection
     onSelectSecrets?: () => void
     onSelectOnboard?: () => void
     onSelectAdmin?: () => void
@@ -27,10 +27,14 @@
   } = $props()
 
   const vaultOpen = $derived(!settingsOpen)
-  const onboardOpen = $derived(settingsOpen && settingsSection === 'onboard')
-  const adminOpen = $derived(settingsOpen && settingsSection === 'admin')
+  const onboardOpen = $derived(
+    settingsOpen && settingsSection === SettingsSection.Onboard,
+  )
+  const adminOpen = $derived(
+    settingsOpen && settingsSection === SettingsSection.Admin,
+  )
   const generalSettingsOpen = $derived(
-    settingsOpen && settingsSection === 'storage',
+    settingsOpen && settingsSection === SettingsSection.Storage,
   )
 </script>
 

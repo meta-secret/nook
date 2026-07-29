@@ -32,8 +32,8 @@ import {
   type ICloudOAuthTokens,
 } from "$lib/icloud-oauth";
 import {
+  BrowserOAuthProvider,
   resolveOAuthOriginSupport,
-  type BrowserOAuthProvider,
 } from "$lib/oauth-origin";
 import { createLogger } from "$lib/log";
 import {
@@ -52,7 +52,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     hasAccessToken: Boolean(state.oauthFile.accessToken?.trim()),
     expiresAt: state.oauthFile.expiresAt,
   });
-  const providerToRefresh =
+  const providerToRefresh: ReturnType<typeof findDuplicateSyncProvider> =
     !state.loginSetupActive && !state.addProviderOpen
       ? findDuplicateSyncProvider(state.syncProviders, {
           id: "oauth-refresh-target",
@@ -100,7 +100,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
     state.errorMsg = state.t("provider_setup.google_oauth_unconfigured");
     return;
   }
-  if (!ensureSupportedOAuthOrigin(state, "google-drive")) {
+  if (!ensureSupportedOAuthOrigin(state, BrowserOAuthProvider.GoogleDrive)) {
     return;
   }
   state.googleOAuthBusy = true;
@@ -304,7 +304,7 @@ export async function signInWithICloud(
     log.warn("iCloud sign-in blocked: not configured");
     return;
   }
-  if (!ensureSupportedOAuthOrigin(state, "icloud")) {
+  if (!ensureSupportedOAuthOrigin(state, BrowserOAuthProvider.ICloud)) {
     return;
   }
   state.icloudOAuthBusy = true;
@@ -376,7 +376,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
     });
     return;
   }
-  const support = resolveOAuthOriginSupport("icloud");
+  const support = resolveOAuthOriginSupport(BrowserOAuthProvider.ICloud);
   if (!support.supported) {
     log.warn("iCloud sign-in prepare blocked by origin", support);
     return;

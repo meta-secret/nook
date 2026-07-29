@@ -49,8 +49,8 @@ export async function initOnce(state: VaultState): Promise<void> {
     if (state.manager.vaultApplication !== APP_KIND) {
       throw new Error(
         state.t("app.capability_mismatch", {
-          app: APP_KIND,
-          wasm: state.manager.vaultApplication,
+          app: String(APP_KIND),
+          wasm: String(state.manager.vaultApplication),
         }),
       );
     }

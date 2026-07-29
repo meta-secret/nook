@@ -2,6 +2,12 @@ import { omittedValue } from "../../explicit-state";
 import { stripBasePath } from "$lib/routes";
 import type { NookVaultManager } from "$app-wasm";
 import {
+  ExtensionPairedVaultIdentityDiscoveryMessageType,
+  ExtensionPairedVaultIdentityHandoffRequestMessageType,
+  ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultUnlockRequestMessageType,
+  ExtensionIdentityHandoffRequestMessageType,
+  OpenCompanionLauncherMessageType,
   isExtensionPairedVaultIdentityStatusMessage,
   type ExtensionIdentityHandoffRequestMessage,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
@@ -159,7 +165,7 @@ export async function openInstalledExtension(): Promise<boolean> {
   if (!extensionRuntimeId) return false;
 
   const message: OpenCompanionLauncherMessage = {
-    type: "nook:open-companion-launcher",
+    type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
     payload: { intent: "pair" },
   };
   const response = await sendExtensionMessage(extensionRuntimeId, message);
@@ -179,7 +185,7 @@ async function discoverPairedExtensionIdentityOnce(
 
   const discoveryRequestId = requestId();
   const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
-    type: "nook:extension-paired-vault-identity-discovery",
+    type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
     payload: {
       requestId: discoveryRequestId,
       vaultStoreId,
@@ -195,10 +201,16 @@ async function discoverPairedExtensionIdentityOnce(
   ) {
     return;
   }
-  if (statusMessage.payload.status !== "unlocked") {
-    if (statusMessage.payload.status === "different-vault") {
+  if (
+    statusMessage.payload.status !==
+    ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  ) {
+    if (
+      statusMessage.payload.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+    ) {
       return {
-        status: "different-vault",
+        status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
         connectedVaultStoreId: statusMessage.payload.connectedVaultStoreId,
         connectedVaultName: statusMessage.payload.connectedVaultName,
       };
@@ -209,9 +221,13 @@ async function discoverPairedExtensionIdentityOnce(
     (scope): scope is ExtensionConnectScope =>
       validScopes.has(scope as ExtensionConnectScope),
   );
-  if (scopes.length === 0) return { status: "unavailable" };
+  if (scopes.length === 0) {
+    return {
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+    };
+  }
   return {
-    status: "unlocked",
+    status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
     request: {
       source: "paired-vault",
       vaultStoreId,
@@ -233,7 +249,9 @@ export async function discoverPairedExtensionIdentity(
     const result = await discoverPairedExtensionIdentityOnce(vaultStoreId);
     if (result) return result;
   }
-  return { status: "unavailable" };
+  return {
+    status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+  };
 }
 
 export async function requestPairedExtensionUnlock(
@@ -244,7 +262,7 @@ export async function requestPairedExtensionUnlock(
 
   const unlockRequestId = requestId();
   const message: ExtensionPairedVaultUnlockRequestMessage = {
-    type: "nook:extension-paired-vault-unlock-request",
+    type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
     payload: { requestId: unlockRequestId, vaultStoreId },
   };
   const response = await sendExtensionMessage(extensionId, message);
@@ -344,14 +362,14 @@ export async function adoptExtensionIdentity(
     | ExtensionPairedVaultIdentityHandoffRequestMessage =
     request.source === "paired-vault"
       ? {
-          type: "nook:extension-paired-vault-identity-handoff-request",
+          type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload: {
             ...handoffPayload,
             vaultStoreId: request.vaultStoreId,
           },
         }
       : {
-          type: "nook:extension-identity-handoff-request",
+          type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
           payload: handoffPayload,
         };
   const { envelope, nextNonce } = await requestIdentityEnvelope(

@@ -3,6 +3,7 @@ import {
   discoverPairedExtensionIdentity,
   readInstalledExtensionRuntimeId,
 } from "$lib/extension-connect";
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/runtime-messages";
 
 export type ExtensionInstallMethod = "chrome_web_store" | "manual_zip";
 
@@ -180,10 +181,18 @@ export async function resolveExtensionSetupState(
   if (!vaultStoreId) return { status: "installed_unpaired" };
 
   const discovery = await discoverPairedExtensionIdentity(vaultStoreId);
-  if (discovery.status === "locked" || discovery.status === "unlocked") {
+  if (
+    discovery.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
+    discovery.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  ) {
     return { status: "paired" };
   }
-  if (discovery.status === "different-vault") {
+  if (
+    discovery.status ===
+    ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+  ) {
     return {
       status: "paired_elsewhere",
       connectedVaultName: discovery.connectedVaultName,

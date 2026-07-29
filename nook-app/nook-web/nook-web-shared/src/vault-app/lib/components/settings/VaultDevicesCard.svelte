@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
   import {
     Check,
     ChevronDown,
@@ -19,7 +18,6 @@
     openExtensionInstallTarget,
     resolveExtensionSetupState,
     shouldOfferExtensionSetup,
-    type ExtensionSetupState,
     type ExtensionSetupStatus,
   } from '$lib/extension-install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
@@ -62,13 +60,17 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<MemberDetails>({ kind: MemberDetailsKind.Collapsed })
+  let detailsAuthId = $state<MemberDetails>({
+    kind: MemberDetailsKind.Collapsed,
+  })
   let renameAuthId = $state<MemberRename>({ kind: MemberRenameKind.Idle })
   let renameLabel = $state('')
   let revokeAuthId = $state<MemberRevocation>({
     kind: MemberRevocationKind.Idle,
   })
-  let extensionSetupState = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden })
+  let extensionSetupState = $state<ExtensionSetupOffer>({
+    kind: ExtensionSetupOfferKind.Hidden,
+  })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
@@ -77,9 +79,7 @@
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION) return
-    const state = await resolveExtensionSetupState(
-      vault.activeVaultStoreId,
-    )
+    const state = await resolveExtensionSetupState(vault.activeVaultStoreId)
     extensionSetupState = shouldOfferExtensionSetup(state.status)
       ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
       : { kind: ExtensionSetupOfferKind.Hidden }
@@ -162,7 +162,7 @@
   )
 
   function currentDeviceName(): string {
-    if (!("navigator" in globalThis))
+    if (!('navigator' in globalThis))
       return vault.t('devices_card.this_browser_os')
     const ua = navigator.userAgent
     let os = vault.t('devices_card.unknown_os')
@@ -225,8 +225,7 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION &&
-    extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
+  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible}
     {@const extensionSetup = extensionSetupState.setup}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
@@ -279,9 +278,7 @@
           variant={extensionSetup.status === 'not_installed'
             ? 'default'
             : 'outline'}
-          class={extensionSetup.status !== 'not_installed'
-            ? 'border-border'
-            : false}
+          class:border-border={extensionSetup.status !== 'not_installed'}
           disabled={extensionInstallBusy || isBusy}
           data-testid="extension-setup-settings-cta"
           onclick={() => void handleExtensionSetupAction()}
@@ -430,10 +427,11 @@
       <ul class="space-y-2" data-testid="vault-members-list">
         {#each sortedMembers as member (member.authId)}
           {@const isCurrent = member.deviceId === deviceId}
-          {@const isRenaming = renameAuthId.kind === MemberRenameKind.Editing &&
+          {@const isRenaming =
+            renameAuthId.kind === MemberRenameKind.Editing &&
             renameAuthId.authId === member.authId}
-          {@const isConfirmingRevoke = revokeAuthId.kind ===
-            MemberRevocationKind.Confirming &&
+          {@const isConfirmingRevoke =
+            revokeAuthId.kind === MemberRevocationKind.Confirming &&
             revokeAuthId.authId === member.authId}
           {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
           <li
@@ -579,7 +577,8 @@
                 >
                   <ChevronDown
                     class="size-3.5 transition-transform {detailsAuthId.kind ===
-                      MemberDetailsKind.Expanded && detailsAuthId.authId === member.authId
+                      MemberDetailsKind.Expanded &&
+                    detailsAuthId.authId === member.authId
                       ? 'rotate-180'
                       : ''}"
                   />
@@ -631,8 +630,7 @@
               </div>
             {/if}
 
-            {#if detailsAuthId.kind === MemberDetailsKind.Expanded &&
-            detailsAuthId.authId === member.authId}
+            {#if detailsAuthId.kind === MemberDetailsKind.Expanded && detailsAuthId.authId === member.authId}
               <dl
                 class="mt-3 space-y-2 border-t border-border/30 pt-3 text-xs"
                 data-testid="device-technical-details"

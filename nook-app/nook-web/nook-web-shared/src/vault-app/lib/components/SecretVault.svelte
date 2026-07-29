@@ -25,11 +25,7 @@
   import * as Select from '$lib/components/ui/select'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type {
-    AuthenticatorCodeView,
-    NookSecretListItem,
-    NookSecretRecord,
-  } from '$lib/nook'
+  import type { AuthenticatorCodeView, NookSecretListItem } from '$lib/nook'
   import { SecretType } from '$lib/nook'
   import {
     freeDecryptedSecrets,
@@ -66,11 +62,7 @@
     editsBlocked?: boolean
     editBlockMessage?: string | void
     secrets?: NookSecretListItem[]
-    onAddSecret: (
-      id: string,
-      type: SecretType,
-      data: string,
-    ) => Promise<void>
+    onAddSecret: (id: string, type: SecretType, data: string) => Promise<void>
     onReplaceSecret: (
       oldId: string,
       type: SecretType,
@@ -156,9 +148,7 @@
     const active = typeFilters.find(
       ({ filter }) => filter === vault.secretTypeFilter,
     )
-    return active
-      ? vault.t(active.labelKey)
-      : vault.t('vault.filter_all_types')
+    return active ? vault.t(active.labelKey) : vault.t('vault.filter_all_types')
   })
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
@@ -294,7 +284,10 @@
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
-    copiedKey = { kind: ClipboardNoticeKind.Visible, fieldKey: `${id}-${field}` }
+    copiedKey = {
+      kind: ClipboardNoticeKind.Visible,
+      fieldKey: `${id}-${field}`,
+    }
     setTimeout(() => {
       if (
         copiedKey.kind === ClipboardNoticeKind.Visible &&
@@ -351,10 +344,7 @@
       const now = Math.floor(Date.now() / 1000)
       const nextCodes = { ...authenticatorCodes }
       for (const [id, current] of Object.entries(authenticatorCodes)) {
-        const secondsRemaining = Math.max(
-          0,
-          current.expiresAtUnixSeconds - now,
-        )
+        const secondsRemaining = Math.max(0, current.expiresAtUnixSeconds - now)
         if (secondsRemaining === 0) {
           delete nextCodes[id]
           void refreshAuthenticatorCode(id)
@@ -490,8 +480,8 @@
             onValueChange={selectTypeFilter}
           >
             <Select.Trigger
-              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault
-                .secretTypeFilter !== NookSecretTypeFilter.All
+              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter !==
+              NookSecretTypeFilter.All
                 ? 'border-primary/40 bg-primary/10 text-foreground'
                 : 'text-muted-foreground'}"
               data-testid="secret-type-filter"

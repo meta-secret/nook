@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 export enum WebsitePasskeyCeremony {
   Create = 'create',
   Get = 'get',

@@ -136,29 +136,36 @@ function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
   return candidates
 }
 
-enum FinalizeOtpauthCandidatesResultStatus {
+export enum DecodeVisibleOtpauthCandidatesResultStatus {
   Ready = 'ready',
+  Unsupported = 'unsupported',
   Empty = 'empty',
   Ambiguous = 'ambiguous',
 }
 
 function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
   status:
-    | FinalizeOtpauthCandidatesResultStatus.Ready
-    | FinalizeOtpauthCandidatesResultStatus.Empty
-    | FinalizeOtpauthCandidatesResultStatus.Ambiguous
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
   candidates: DecodedOtpauthCandidate[]
 } {
-  if (candidates.length === 0) return { status: 'empty', candidates: [] }
-  if (candidates.length > 1) return { status: 'ambiguous', candidates }
-  return { status: 'ready', candidates }
-}
-
-export enum DecodeVisibleOtpauthCandidatesResultStatus {
-  Ready = 'ready',
-  Unsupported = 'unsupported',
-  Empty = 'empty',
-  Ambiguous = 'ambiguous',
+  if (candidates.length === 0) {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
+      candidates: [],
+    }
+  }
+  if (candidates.length > 1) {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+      candidates,
+    }
+  }
+  return {
+    status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
+    candidates,
+  }
 }
 
 export async function decodeVisibleOtpauthCandidates(): Promise<{

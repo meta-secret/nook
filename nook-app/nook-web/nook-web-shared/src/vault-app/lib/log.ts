@@ -1,4 +1,3 @@
-import { omittedValue } from "../../explicit-state";
 /**
  * Web-side console authority + shim over the WASM-owned logger
  * (`nook-wasm/src/logger.rs`).
@@ -63,12 +62,25 @@ const FLUSH_INTERVAL_MS = 250;
 /** Cap the pre-init replay queue so early crash loops can't grow unbounded. */
 const PRE_INIT_QUEUE_MAX = 1000;
 
-type PendingRecord = {
-  level: LogLevel;
-  scope: string;
-  message: string;
-  data?: string;
-};
+enum PendingRecordKind {
+  MessageOnly = "message-only",
+  Structured = "structured",
+}
+
+type PendingRecord =
+  | {
+      kind: PendingRecordKind.MessageOnly;
+      level: LogLevel;
+      scope: string;
+      message: string;
+    }
+  | {
+      kind: PendingRecordKind.Structured;
+      level: LogLevel;
+      scope: string;
+      message: string;
+      data: string;
+    };
 
 let wasmReady = false;
 enum LogFlushScheduleKind {
@@ -95,10 +107,15 @@ const preInitQueue: PendingRecord[] = [];
  * print through these so patching never causes recursion or double-persist.
  */
 type ConsoleMethod = (...args: unknown[]) => void;
-const originalConsole: Record<
-  "error" | "warn" | "info" | "debug" | "log",
-  ConsoleMethod
-> =
+enum ConsoleMethodKind {
+  Error = "error",
+  Warn = "warn",
+  Info = "info",
+  Debug = "debug",
+  Log = "log",
+}
+
+const originalConsole: Record<ConsoleMethodKind, ConsoleMethod> =
   "console" in globalThis
     ? {
         error: console.error.bind(console),
@@ -115,11 +132,21 @@ const originalConsole: Record<
         log: () => {},
       };
 
-function parseLevel(raw: string | void): LogLevel | void {
-  const value = raw?.trim().toLowerCase();
+enum LogLevelParseKind {
+  Invalid = "invalid",
+  Valid = "valid",
+}
+
+type LogLevelParse =
+  | { kind: LogLevelParseKind.Invalid }
+  | { kind: LogLevelParseKind.Valid; level: LogLevel };
+
+function parseLevel(raw: unknown): LogLevelParse {
+  if (typeof raw !== "string") return { kind: LogLevelParseKind.Invalid };
+  const value = raw.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
-    ? (value as LogLevel)
-    : omittedValue();
+    ? { kind: LogLevelParseKind.Valid, level: value as LogLevel }
+    : { kind: LogLevelParseKind.Invalid };
 }
 
 function initialLevel(): LogLevel {
@@ -127,10 +154,10 @@ function initialLevel(): LogLevel {
     const stored = parseLevel(
       localStorage.getItem("nook_log_level")?.valueOf(),
     );
-    if (stored) return stored;
+    if (stored.kind === LogLevelParseKind.Valid) return stored.level;
   }
-  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | void);
-  return env ?? LogLevel.Info;
+  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL);
+  return env.kind === LogLevelParseKind.Valid ? env.level : LogLevel.Info;
 }
 
 enum LogPayloadKind {
@@ -142,8 +169,9 @@ type LogPayload =
   | { kind: LogPayloadKind.MessageOnly }
   | { kind: LogPayloadKind.Structured; data: unknown };
 
-function serializeData(payload: LogPayload): string | void {
-  if (payload.kind === LogPayloadKind.MessageOnly) return;
+function serializeData(
+  payload: Extract<LogPayload, { data: unknown }>,
+): string {
   const { data } = payload;
   try {
     return typeof data === "string" ? data : JSON.stringify(data);
@@ -215,15 +243,40 @@ function echo(level: LogLevel, text: string) {
 }
 
 /** Persist one entry (no console echo). Queues until WASM is ready. */
-function persist(
+function persistMessage(level: LogLevel, scope: string, message: string) {
+  if (!wasmReady) {
+    if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
+      preInitQueue.push({
+        kind: PendingRecordKind.MessageOnly,
+        level,
+        scope,
+        message,
+      });
+    }
+    return;
+  }
+  try {
+    nookLog(level, scope, message);
+  } catch {
+    // Logging must never break the app.
+  }
+}
+
+function persistStructured(
   level: LogLevel,
   scope: string,
   message: string,
-  serialized?: string,
+  serialized: string,
 ) {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
-      preInitQueue.push({ level, scope, message, data: serialized });
+      preInitQueue.push({
+        kind: PendingRecordKind.Structured,
+        level,
+        scope,
+        message,
+        data: serialized,
+      });
     }
     return;
   }
@@ -242,17 +295,19 @@ function record(
   payload: LogPayload,
 ) {
   if (!isEnabled(level)) return;
+  if (payload.kind === LogPayloadKind.MessageOnly) {
+    echo(level, `[${scope}] ${message}`);
+    persistMessage(level, scope, message);
+    return;
+  }
   const serialized = serializeData(payload);
-  const text = serialized
-    ? `[${scope}] ${message} ${serialized}`
-    : `[${scope}] ${message}`;
-  echo(level, text);
-  persist(level, scope, message, serialized);
+  echo(level, `[${scope}] ${message} ${serialized}`);
+  persistStructured(level, scope, message, serialized);
 }
 
 /** True for browser-extension scripts we should not persist as app errors. */
-export function isIgnoredErrorSource(source: string | void): boolean {
-  if (!source) return false;
+export function isIgnoredErrorSource(source: unknown): boolean {
+  if (typeof source !== "string") return false;
   const value = source.trim();
   if (!value) return false;
   return (
@@ -264,10 +319,8 @@ export function isIgnoredErrorSource(source: string | void): boolean {
 /** Strip query strings from URLs before persisting (tokens may appear in params). */
 export function sanitizeLogUrl(url: string): string {
   try {
-    const parsed = new URL(
-      url,
-      "location" in globalThis ? location.href : omittedValue(),
-    );
+    const parsed =
+      "location" in globalThis ? new URL(url, location.href) : new URL(url);
     parsed.search = "";
     parsed.hash = "";
     return parsed.toString();
@@ -315,8 +368,7 @@ function installGlobalErrorHandlers() {
 
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
-    const stack = reason instanceof Error ? reason.stack : omittedValue();
-    if (isIgnoredErrorSource(stack)) return;
+    if (reason instanceof Error && isIgnoredErrorSource(reason.stack)) return;
     const message =
       reason instanceof Error
         ? `${reason.name}: ${reason.message}`
@@ -326,7 +378,9 @@ function installGlobalErrorHandlers() {
       LogLevel.Error,
       "unhandledrejection",
       message,
-      stack ? { stack } : omittedValue(),
+      reason instanceof Error && reason.stack
+        ? { stack: reason.stack }
+        : { reason: "stack-not-available" },
     );
   });
 }
@@ -419,7 +473,10 @@ export function setLogLevel(level: LogLevel) {
 
 export function getLogLevel(): LogLevel {
   if (wasmReady) {
-    return parseLevel(nookLogGetLevel()) ?? LogLevel.Info;
+    const parsed = parseLevel(nookLogGetLevel());
+    return parsed.kind === LogLevelParseKind.Valid
+      ? parsed.level
+      : LogLevel.Info;
   }
   return initialLevel();
 }
@@ -482,10 +539,7 @@ function patchConsole() {
   if (consolePatched || !("console" in globalThis)) return;
   consolePatched = true;
 
-  const wrap = (
-    method: "error" | "warn" | "info" | "debug" | "log",
-    level: LogLevel,
-  ) => {
+  const wrap = (method: ConsoleMethodKind, level: LogLevel) => {
     console[method] = (...args: unknown[]) => {
       originalConsole[method](...args);
       if (isEnabled(level)) {
@@ -494,11 +548,11 @@ function patchConsole() {
     };
   };
 
-  wrap("error", "error");
-  wrap("warn", "warn");
-  wrap("info", "info");
-  wrap("debug", "debug");
-  wrap("log", "info");
+  wrap(ConsoleMethodKind.Error, LogLevel.Error);
+  wrap(ConsoleMethodKind.Warn, LogLevel.Warn);
+  wrap(ConsoleMethodKind.Info, LogLevel.Info);
+  wrap(ConsoleMethodKind.Debug, LogLevel.Debug);
+  wrap(ConsoleMethodKind.Log, LogLevel.Info);
 }
 
 /**
@@ -522,7 +576,11 @@ export function initWasmLogging() {
     const queued = preInitQueue.splice(0, preInitQueue.length);
     for (const entry of queued) {
       try {
-        nookLog(entry.level, entry.scope, entry.message, entry.data);
+        if (entry.kind === PendingRecordKind.Structured) {
+          nookLog(entry.level, entry.scope, entry.message, entry.data);
+        } else {
+          nookLog(entry.level, entry.scope, entry.message);
+        }
       } catch {
         // Ignore — a broken early log must not block startup.
       }

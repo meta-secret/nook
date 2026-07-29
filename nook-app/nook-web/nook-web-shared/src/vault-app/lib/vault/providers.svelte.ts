@@ -53,6 +53,32 @@ export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
 
 const log = createLogger("vault-providers");
 
+type VaultDiscoveryTimeout = {
+  completion: Promise<never>;
+  cancel(): void;
+};
+
+function startVaultDiscoveryTimeout(
+  message: string,
+  timeoutMs: number,
+): VaultDiscoveryTimeout {
+  const controller = new AbortController();
+  const completion = new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => {
+      const timeoutError = new Error(message);
+      timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
+      reject(timeoutError);
+    }, timeoutMs);
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), {
+      once: true,
+    });
+  });
+  return {
+    completion,
+    cancel: () => controller.abort(),
+  };
+}
+
 function takeStorageArgsTuple(
   args: NookStorageConnectArgs,
 ): [string, string, string] {
@@ -234,18 +260,19 @@ export async function assessVaultConnectStatus(
   state: ProviderActionsContext,
   args: [string, string, string],
 ): Promise<VaultAccessStatus> {
+  const manager = state.manager;
+  if (!manager) throw new Error(state.t("errors.engine_unavailable"));
   return (await state.enqueueStorage(async () => {
-    const assessPromise = state.manager!.assess_vault_connect(...args);
-    const assessTimeout = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        const timeoutError = new Error(
-          "Connection timed out. Check your PAT, network, and try again.",
-        );
-        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
-        reject(timeoutError);
-      }, 30_000);
-    });
-    return await Promise.race([assessPromise, assessTimeout]);
+    const assessPromise = manager.assess_vault_connect(...args);
+    const timeout = startVaultDiscoveryTimeout(
+      "Connection timed out. Check your PAT, network, and try again.",
+      30_000,
+    );
+    try {
+      return await Promise.race([assessPromise, timeout.completion]);
+    } finally {
+      timeout.cancel();
+    }
   })) as VaultAccessStatus;
 }
 
@@ -752,16 +779,12 @@ export async function discoverStagedVaultStoreId(
         )
       ).trim();
     })();
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const timeoutError = new Error(state.t("auth_storage.sync_failed"));
-        timeoutError.name = VAULT_ASSESS_TIMEOUT_ERROR_NAME;
-        reject(timeoutError);
-      }, 30_000);
-    });
+    const timeout = startVaultDiscoveryTimeout(
+      state.t("auth_storage.sync_failed"),
+      30_000,
+    );
     try {
-      const storeId = await Promise.race([discovery, timeout]);
+      const storeId = await Promise.race([discovery, timeout.completion]);
       if (storeId && state.manager) {
         try {
           state.existingVaultRecoverySummary = await state.enqueueStorage(() =>
@@ -776,7 +799,7 @@ export async function discoverStagedVaultStoreId(
       }
       return storeId;
     } finally {
-      clearTimeout(timeoutId);
+      timeout.cancel();
     }
   } finally {
     state.isVerifying = false;

@@ -5,6 +5,7 @@ import {
   findOneTimeCodeFields,
   findPasskeyControl,
   pageHasPasskeyControl,
+  PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
@@ -470,7 +471,9 @@ describe('website one-time-code fields', () => {
       </section>
     `
 
-    expect(submitLoginForm(document, { kind: 'unowned' })).toBe(false)
+    expect(
+      submitLoginForm(document, { kind: PasswordFormScopeKind.Unowned }),
+    ).toBe(false)
   })
 
   test('does not claim a disabled submit control was activated', () => {

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -41,7 +40,9 @@
   let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None })
   let suggestionIndex = $state(0)
   let inputRefs = $state<HTMLInputElement[]>([])
-  let checksumValid = $state<ChecksumStatus>({ kind: ChecksumStatusKind.NotChecked })
+  let checksumValid = $state<ChecksumStatus>({
+    kind: ChecksumStatusKind.NotChecked,
+  })
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -293,16 +294,16 @@
             aria-expanded={focusedIndex.kind === FocusedWordKind.Focused &&
               focusedIndex.index === index &&
               suggestions.length > 0}
-            {...(focusedIndex.kind === FocusedWordKind.Focused &&
+            {...focusedIndex.kind === FocusedWordKind.Focused &&
             focusedIndex.index === index &&
             suggestions.length > 0
-              ? { "aria-controls": `seed-word-suggestions-${index + 1}` }
-              : {})}
+              ? { 'aria-controls': `seed-word-suggestions-${index + 1}` }
+              : {}}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
-            {...(cellInvalid(index)
-              ? { "aria-describedby": `seed-word-error-${index + 1}` }
-              : {})}
+            {...cellInvalid(index)
+              ? { 'aria-describedby': `seed-word-error-${index + 1}` }
+              : {}}
             class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
               index,
             )
@@ -332,9 +333,7 @@
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}
           />
-          {#if focusedIndex.kind === FocusedWordKind.Focused &&
-          focusedIndex.index === index &&
-          suggestions.length > 0}
+          {#if focusedIndex.kind === FocusedWordKind.Focused && focusedIndex.index === index && suggestions.length > 0}
             <ul
               id="seed-word-suggestions-{index + 1}"
               role="listbox"
@@ -374,11 +373,7 @@
     {/each}
   </div>
 
-  {#if !readonly &&
-  perWordValid &&
-  allWordsFilled &&
-  checksumValid.kind === ChecksumStatusKind.Checked &&
-  checksumValid.valid}
+  {#if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && checksumValid.valid}
     <p
       class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"
       data-testid="seed-phrase-valid"
@@ -386,11 +381,7 @@
       <Check class="size-3.5 shrink-0" aria-hidden="true" />
       {vault.t('add_secret.seed_phrase_valid')}
     </p>
-  {:else if !readonly &&
-  perWordValid &&
-  allWordsFilled &&
-  checksumValid.kind === ChecksumStatusKind.Checked &&
-  !checksumValid.valid}
+  {:else if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && !checksumValid.valid}
     <p
       class="text-xs text-destructive"
       data-testid="seed-phrase-checksum-error"
