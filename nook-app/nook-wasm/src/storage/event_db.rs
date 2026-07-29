@@ -85,6 +85,28 @@ async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookE
     Ok(())
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) async fn remove_event_fixture(store_id: &str, event_id: &str) -> Result<(), NookError> {
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Transaction error: {error:?}")))?;
+    let store = transaction
+        .store(STORE_EVENTS)
+        .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
+    let key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
+        .map_err(|error| NookError::IndexedDb(format!("Serialization error: {error:?}")))?;
+    store
+        .delete(key)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Delete error: {error:?}")))?;
+    transaction
+        .done()
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
+    Ok(())
+}
+
 pub(crate) async fn is_event_log_mode() -> Result<bool, NookError> {
     Ok(vault_get(EVENT_LOG_MODE_KEY)
         .await?

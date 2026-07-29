@@ -638,6 +638,9 @@ mod tests {
         assert!(prompt.contains("`hive`"));
         assert!(prompt.contains("ci:full-e2e"));
         assert!(prompt.contains("task hive:guest:pr:ready PR=<number>"));
+        assert!(prompt.contains("unresolved actionable review"));
+        assert!(prompt.contains("next `-gN` delivery branch"));
+        assert!(prompt.contains("Do not repeatedly audit an immutable merged branch"));
         Ok(())
     }
 

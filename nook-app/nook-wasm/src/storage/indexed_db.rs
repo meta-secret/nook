@@ -249,6 +249,10 @@ pub(crate) async fn set_active_vault_id(store_id: &str) -> Result<(), NookError>
     idb_put_string(ACTIVE_VAULT_KEY, store_id).await
 }
 
+pub(crate) async fn clear_active_vault_id() -> Result<(), NookError> {
+    idb_delete_key(ACTIVE_VAULT_KEY).await
+}
+
 async fn is_pending_new_local_vault() -> Result<bool, NookError> {
     Ok(idb_get_string(PENDING_NEW_LOCAL_VAULT_KEY).await?.is_some())
 }

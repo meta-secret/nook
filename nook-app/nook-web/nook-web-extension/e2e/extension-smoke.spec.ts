@@ -457,6 +457,38 @@ test('keeps the extension vault independent and switches after valid re-pairing'
         expect.objectContaining({ vaultName: 'Replacement vault' }),
       ]),
     )
+    // Exercise the extension-facing half of replacement import rather than
+    // accepting storage metadata alone. The browser-WASM regression covers
+    // the exact Sentinel-to-Simple architecture transition; this verifies the
+    // real pairing wiring adopts that replacement as the usable active vault.
+    const verifiedPopupPage = await context.newPage()
+    await verifiedPopupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html`,
+    )
+    await expect(
+      verifiedPopupPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
+    await expect(
+      verifiedPopupPage.getByTestId('companion-vault-status'),
+    ).toContainText('Replacement vault')
+    const replacementGrant = repairedGrants.find(
+      ([, grant]) =>
+        (grant as { vaultName?: string }).vaultName === 'Replacement vault',
+    )?.[1]
+    expect(replacementGrant).toBeDefined()
+    const vaultBackedLookup = await verifiedPopupPage.evaluate(
+      async (grant) => {
+        await chrome.runtime.sendMessage({
+          type: 'nook:ensure-extension-session-runtime',
+        })
+        return chrome.runtime.sendMessage({
+          type: 'nook:extension-session-list-logins',
+          payload: { ...(grant as object), origin: 'https://example.com' },
+        })
+      },
+      replacementGrant,
+    )
+    expect(vaultBackedLookup).toEqual({ ok: true, accounts: [] })
   } finally {
     await context.close()
   }
