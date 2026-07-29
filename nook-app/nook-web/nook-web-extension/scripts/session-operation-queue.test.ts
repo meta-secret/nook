@@ -1,25 +1,40 @@
 import { describe, expect, test } from 'bun:test'
 import { SessionOperationQueue } from '../src/lib/session-operation-queue'
 
+enum ReleaseGateKind {
+  Waiting = 'waiting',
+  Releasable = 'releasable',
+}
+
 type ReleaseGate =
-  | { kind: 'waiting' }
-  | { kind: 'releasable'; release: () => void }
+  | { kind: ReleaseGateKind.Waiting }
+  | { kind: ReleaseGateKind.Releasable; release: () => void }
+enum PasswordResidencyKind {
+  Resident = 'resident',
+  Cleared = 'cleared',
+}
+
 type PasswordResidency =
-  | { kind: 'resident'; password: string }
-  | { kind: 'cleared' }
+  | { kind: PasswordResidencyKind.Resident; password: string }
+  | { kind: PasswordResidencyKind.Cleared }
+enum SecretResidencyKind {
+  Resident = 'resident',
+  Cleared = 'cleared',
+}
+
 type SecretResidency =
-  | { kind: 'resident'; secret: string }
-  | { kind: 'cleared' }
+  | { kind: SecretResidencyKind.Resident; secret: string }
+  | { kind: SecretResidencyKind.Cleared }
 
 function deferred() {
-  let gate: ReleaseGate = { kind: 'waiting' }
+  let gate: ReleaseGate = { kind: ReleaseGateKind.Waiting }
   const promise = new Promise<void>((resolve) => {
-    gate = { kind: 'releasable', release: resolve }
+    gate = { kind: ReleaseGateKind.Releasable, release: resolve }
   })
   return {
     promise,
     release: () => {
-      if (gate.kind === 'releasable') gate.release()
+      if (gate.kind === ReleaseGateKind.Releasable) gate.release()
     },
   }
 }

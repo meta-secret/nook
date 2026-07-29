@@ -19,9 +19,18 @@ export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
 
+export enum LoginOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type LoginOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | LoginOptionsResponseStatus.Ready
+    | LoginOptionsResponseStatus.Locked
+    | LoginOptionsResponseStatus.Unavailable
   accounts?: WebsiteLoginAccountOption[]
   reason?: string
 }
@@ -109,9 +118,18 @@ export function setFlightProgress(
   }
 }
 
+export enum AuthenticatorOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type AuthenticatorOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | AuthenticatorOptionsResponseStatus.Ready
+    | AuthenticatorOptionsResponseStatus.Locked
+    | AuthenticatorOptionsResponseStatus.Unavailable
   requestId?: string
   expiresAt?: number
 }
@@ -121,9 +139,18 @@ export type AuthenticatorFillResponse = {
   code?: string
 }
 
+export enum LoginPickerOpenResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type LoginPickerOpenResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | LoginPickerOpenResponseStatus.Ready
+    | LoginPickerOpenResponseStatus.Locked
+    | LoginPickerOpenResponseStatus.Unavailable
   requestId?: string
   expiresAt?: number
 }

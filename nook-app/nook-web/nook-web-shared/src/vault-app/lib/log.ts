@@ -65,11 +65,19 @@ type PendingRecord = {
 };
 
 let wasmReady = false;
-type LogFlushSchedule =
-  | { kind: "stopped" }
-  | { kind: "scheduled"; timer: ReturnType<typeof setInterval> };
+enum LogFlushScheduleKind {
+  Stopped = "stopped",
+  Scheduled = "scheduled",
+}
 
-let logFlushSchedule: LogFlushSchedule = { kind: "stopped" };
+type LogFlushSchedule =
+  | { kind: LogFlushScheduleKind.Stopped }
+  | {
+      kind: LogFlushScheduleKind.Scheduled;
+      timer: ReturnType<typeof setInterval>;
+    };
+
+let logFlushSchedule: LogFlushSchedule = { kind: LogFlushScheduleKind.Stopped };
 let flushing = false;
 let consolePatched = false;
 let diagnosticsInstalled = false;
@@ -119,12 +127,17 @@ function initialLevel(): LogLevel {
   return env ?? "info";
 }
 
+enum LogPayloadKind {
+  MessageOnly = "message-only",
+  Structured = "structured",
+}
+
 type LogPayload =
-  | { kind: "message-only" }
-  | { kind: "structured"; data: unknown };
+  | { kind: LogPayloadKind.MessageOnly }
+  | { kind: LogPayloadKind.Structured; data: unknown };
 
 function serializeData(payload: LogPayload): string | void {
-  if (payload.kind === "message-only") return;
+  if (payload.kind === LogPayloadKind.MessageOnly) return;
   const { data } = payload;
   try {
     return typeof data === "string" ? data : JSON.stringify(data);
@@ -271,7 +284,7 @@ function captureDiagnostic(
   message: string,
   data: unknown,
 ) {
-  record(level, scope, message, { kind: "structured", data });
+  record(level, scope, message, { kind: LogPayloadKind.Structured, data });
 }
 
 function installGlobalErrorHandlers() {
@@ -365,8 +378,8 @@ function logPayload(
   args: [message: string] | [message: string, data: unknown],
 ): LogPayload {
   return args.length === 1
-    ? { kind: "message-only" }
-    : { kind: "structured", data: args[1] };
+    ? { kind: LogPayloadKind.MessageOnly }
+    : { kind: LogPayloadKind.Structured, data: args[1] };
 }
 
 export function createLogger(scope: string): ScopedLogger {
@@ -435,9 +448,9 @@ export async function flushLogs(): Promise<void> {
 
 /** Stop all persistence before the destructive local-browser cleanup runs. */
 export async function suspendWasmLogging(): Promise<void> {
-  if (logFlushSchedule.kind === "scheduled") {
+  if (logFlushSchedule.kind === LogFlushScheduleKind.Scheduled) {
     clearInterval(logFlushSchedule.timer);
-    logFlushSchedule = { kind: "stopped" };
+    logFlushSchedule = { kind: LogFlushScheduleKind.Stopped };
   }
   while (flushing) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -507,9 +520,9 @@ export function initWasmLogging() {
     }
   }
 
-  if (logFlushSchedule.kind === "stopped") {
+  if (logFlushSchedule.kind === LogFlushScheduleKind.Stopped) {
     logFlushSchedule = {
-      kind: "scheduled",
+      kind: LogFlushScheduleKind.Scheduled,
       timer: setInterval(() => {
         if (flushing) return;
         flushing = true;

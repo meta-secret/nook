@@ -212,10 +212,19 @@ export async function stubGithubVaultForLocalE2e(
   await stub.install(page, opts)
 }
 
+export enum ListGithubStubDirResultType {
+  File = 'file',
+  Dir = 'dir',
+}
+
 export function listGithubStubDir(
   eventFiles: Map<string, string>,
   relativePath: string,
-): Array<{ name: string; path: string; type: 'file' | 'dir' }> {
+): Array<{
+  name: string
+  path: string
+  type: ListGithubStubDirResultType.File | ListGithubStubDirResultType.Dir
+}> {
   const dirPrefix = relativePath.endsWith('/')
     ? relativePath
     : `${relativePath}/`
@@ -334,14 +343,14 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             files.push({
               name: 'nook-events',
               path: 'nook-events',
-              type: 'file',
+              type: ListGithubStubDirResultType.File,
             })
           }
           if (eventFiles.size > 0) {
             files.push({
               name: 'nook-log',
               path: 'nook-log',
-              type: 'dir',
+              type: ListGithubStubDirResultType.Dir,
             })
           }
           await route.fulfill({

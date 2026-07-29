@@ -10,9 +10,14 @@ import {
   type SentinelStoredDeliverySummary,
   type SentinelUnlockSessionStatus,
 } from "$lib/vault/sentinel-unlock";
+enum SentinelGenesisTargetKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
 type SentinelGenesisTarget =
-  | { kind: "not-selected" }
-  | { kind: "selected"; storeId: StoreId };
+  | { kind: SentinelGenesisTargetKind.NotSelected }
+  | { kind: SentinelGenesisTargetKind.Selected; storeId: StoreId };
 export class VaultSentinelState {
   sentinelGenesisPhase = $state<SentinelGenesisPhase>(
     SentinelGenesisPhase.Inactive,
@@ -24,18 +29,25 @@ export class VaultSentinelState {
   );
   sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
   private sentinelGenesisStoreState = $state<SentinelGenesisTarget>({
-    kind: "not-selected",
+    kind: SentinelGenesisTargetKind.NotSelected,
   });
   get sentinelGenesisStoreId(): StoreId | void {
-    if (this.sentinelGenesisStoreState.kind === "selected")
+    if (
+      this.sentinelGenesisStoreState.kind === SentinelGenesisTargetKind.Selected
+    )
       return this.sentinelGenesisStoreState.storeId;
     return;
   }
   set sentinelGenesisStoreId(value: StoreId) {
-    this.sentinelGenesisStoreState = { kind: "selected", storeId: value };
+    this.sentinelGenesisStoreState = {
+      kind: SentinelGenesisTargetKind.Selected,
+      storeId: value,
+    };
   }
   clearSentinelGenesisStore(): void {
-    this.sentinelGenesisStoreState = { kind: "not-selected" };
+    this.sentinelGenesisStoreState = {
+      kind: SentinelGenesisTargetKind.NotSelected,
+    };
   }
 
   sentinelCeremonyPrompt = $state(false);

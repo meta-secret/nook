@@ -38,19 +38,41 @@ type ExtensionVaultGrant = {
   deviceSigningPublicKey: string
 }
 
-type WasmStartup =
-  | { kind: 'not-started' }
-  | { kind: 'initializing'; operation: Promise<unknown> }
-type VaultManagerAvailability =
-  | { kind: 'locked' }
-  | { kind: 'active'; manager: NookVaultManager }
-type SessionExpirySchedule =
-  | { kind: 'stopped' }
-  | { kind: 'scheduled'; timer: ReturnType<typeof setTimeout> }
+enum WasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-let wasmStartup: WasmStartup = { kind: 'not-started' }
-let managerAvailability: VaultManagerAvailability = { kind: 'locked' }
-let sessionExpirySchedule: SessionExpirySchedule = { kind: 'stopped' }
+type WasmStartup =
+  | { kind: WasmStartupKind.NotStarted }
+  | { kind: WasmStartupKind.Initializing; operation: Promise<unknown> }
+enum VaultManagerAvailabilityKind {
+  Locked = 'locked',
+  Active = 'active',
+}
+
+type VaultManagerAvailability =
+  | { kind: VaultManagerAvailabilityKind.Locked }
+  | { kind: VaultManagerAvailabilityKind.Active; manager: NookVaultManager }
+enum SessionExpiryScheduleKind {
+  Stopped = 'stopped',
+  Scheduled = 'scheduled',
+}
+
+type SessionExpirySchedule =
+  | { kind: SessionExpiryScheduleKind.Stopped }
+  | {
+      kind: SessionExpiryScheduleKind.Scheduled
+      timer: ReturnType<typeof setTimeout>
+    }
+
+let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
+let managerAvailability: VaultManagerAvailability = {
+  kind: VaultManagerAvailabilityKind.Locked,
+}
+let sessionExpirySchedule: SessionExpirySchedule = {
+  kind: SessionExpiryScheduleKind.Stopped,
+}
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
@@ -98,7 +120,7 @@ function findPendingLoginSaveOffer(
 }
 
 function ensureWasm(): Promise<unknown> {
-  if (wasmStartup.kind === 'initializing') {
+  if (wasmStartup.kind === WasmStartupKind.Initializing) {
     return wasmStartup.operation
   }
   const operation = initNookWasm({
@@ -107,17 +129,17 @@ function ensureWasm(): Promise<unknown> {
     configureVaultApplication('extension')
     return value
   })
-  wasmStartup = { kind: 'initializing', operation }
+  wasmStartup = { kind: WasmStartupKind.Initializing, operation }
   return operation
 }
 
 async function getManager(): Promise<NookVaultManager> {
   await ensureWasm()
-  if (managerAvailability.kind === 'active') {
+  if (managerAvailability.kind === VaultManagerAvailabilityKind.Active) {
     return managerAvailability.manager
   }
   const manager = new NookVaultManager()
-  managerAvailability = { kind: 'active', manager }
+  managerAvailability = { kind: VaultManagerAvailabilityKind.Active, manager }
   return manager
 }
 
@@ -143,20 +165,20 @@ async function deviceResult(
 }
 
 function scheduleSessionExpiry(generation: number): void {
-  if (sessionExpirySchedule.kind === 'scheduled') {
+  if (sessionExpirySchedule.kind === SessionExpiryScheduleKind.Scheduled) {
     clearTimeout(sessionExpirySchedule.timer)
   }
   sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
   sessionExpirySchedule = {
-    kind: 'scheduled',
+    kind: SessionExpiryScheduleKind.Scheduled,
     timer: setTimeout(() => {
       if (generation !== sessionGeneration) return
-      sessionExpirySchedule = { kind: 'stopped' }
+      sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
       sessionDeadlineAt = 0
       sessionGeneration += 1
       const expiredManager = managerAvailability
-      managerAvailability = { kind: 'locked' }
-      if (expiredManager.kind === 'active') {
+      managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
+      if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
         try {
           expiredManager.manager.lockDeviceIdentity()
           expiredManager.manager.free()

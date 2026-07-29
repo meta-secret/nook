@@ -6,12 +6,22 @@
   import type { NookImportResult } from "$lib/nook";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  type ScannerLifecycle =
-    | { kind: "not-created" }
-    | { kind: "created"; scanner: QrScanner };
-  type AuthenticatorImportOutcome =
-    | { kind: "not-run" }
-    | { kind: "completed"; result: NookImportResult };
+  enum ScannerLifecycleKind {
+  NotCreated = "not-created",
+  Created = "created",
+}
+
+type ScannerLifecycle =
+    | { kind: ScannerLifecycleKind.NotCreated }
+    | { kind: ScannerLifecycleKind.Created; scanner: QrScanner };
+  enum AuthenticatorImportOutcomeKind {
+  NotRun = "not-run",
+  Completed = "completed",
+}
+
+type AuthenticatorImportOutcome =
+    | { kind: AuthenticatorImportOutcomeKind.NotRun }
+    | { kind: AuthenticatorImportOutcomeKind.Completed; result: NookImportResult };
 
   let {
     vault,
@@ -26,14 +36,14 @@
   } = $props();
 
   let videoElement: HTMLVideoElement;
-  let scannerState: ScannerLifecycle = { kind: "not-created" };
+  let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated };
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<AuthenticatorImportOutcome>({ kind: "not-run" });
+  let result = $state<AuthenticatorImportOutcome>({ kind: AuthenticatorImportOutcomeKind.NotRun });
   let error = $state("");
 
   function stopCamera() {
-    if (scannerState.kind === "created") scannerState.scanner.stop();
+    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.stop();
     scanning = false;
   }
 
@@ -49,7 +59,7 @@
       return;
     }
     migrationUris = [...migrationUris, uri];
-    result = { kind: "not-run" };
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     error = "";
     stopCamera();
   }
@@ -60,10 +70,10 @@
       return;
     }
     error = "";
-    result = { kind: "not-run" };
-    if (scannerState.kind === "not-created") {
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
+    if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
       scannerState = {
-        kind: "created",
+        kind: ScannerLifecycleKind.Created,
         scanner: new QrScanner(
           videoElement,
           (scanResult) => addMigrationUri(scanResult.data),
@@ -91,7 +101,7 @@
     input.value = "";
     if (!file) return;
     error = "";
-    result = { kind: "not-run" };
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
       const scanResult = await QrScanner.scanImage(file, {
         returnDetailedScanResult: true,
@@ -104,7 +114,7 @@
 
   function clearScans() {
     migrationUris = [];
-    result = { kind: "not-run" };
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     error = "";
     stopCamera();
   }
@@ -112,9 +122,9 @@
   async function importScans() {
     if (migrationUris.length === 0 || isSaving) return;
     error = "";
-    result = { kind: "not-run" };
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
-      result = { kind: "completed", result: await onImport(migrationUris) };
+      result = { kind: AuthenticatorImportOutcomeKind.Completed, result: await onImport(migrationUris) };
       migrationUris = [];
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause);
@@ -122,8 +132,8 @@
   }
 
   onDestroy(() => {
-    if (scannerState.kind === "created") scannerState.scanner.destroy();
-    scannerState = { kind: "not-created" };
+    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.destroy();
+    scannerState = { kind: ScannerLifecycleKind.NotCreated };
     migrationUris = [];
   });
 </script>

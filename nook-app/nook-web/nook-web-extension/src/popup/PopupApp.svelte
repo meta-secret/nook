@@ -15,9 +15,17 @@
   } from '../lib/nook-wasm'
 
   type PopupProtectionStatus = ExtensionDeviceProtectionStatus | 'pin-setup'
+  enum PairingCandidateKind {
+    NotSelected = 'not-selected',
+    Selected = 'selected',
+  }
+
   type PairingCandidate =
-    | { kind: 'not-selected' }
-    | { kind: 'selected'; device: ExtensionDeviceProtectionResult }
+    | { kind: PairingCandidateKind.NotSelected }
+    | {
+        kind: PairingCandidateKind.Selected
+        device: ExtensionDeviceProtectionResult
+      }
 
   let {
     i18n,
@@ -47,7 +55,9 @@
   let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
   let pin = $state('')
   let pinConfirm = $state('')
-  let pairingCandidate = $state<PairingCandidate>({ kind: 'not-selected' })
+  let pairingCandidate = $state<PairingCandidate>({
+    kind: PairingCandidateKind.NotSelected,
+  })
   let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
 
   const needsSetup = $derived(status === 'missing' || status === 'plaintext')
@@ -142,7 +152,7 @@
   }
 
   function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
-    pairingCandidate = { kind: 'selected', device }
+    pairingCandidate = { kind: PairingCandidateKind.Selected, device }
     status = 'unlocked'
     busy = false
     error = ''

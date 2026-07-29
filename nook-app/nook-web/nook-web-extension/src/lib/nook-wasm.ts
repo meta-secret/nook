@@ -23,11 +23,18 @@ import {
   type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-type ExtensionWasmStartup =
-  | { kind: 'not-started' }
-  | { kind: 'initializing'; operation: Promise<unknown> }
+enum ExtensionWasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-let extensionWasmStartup: ExtensionWasmStartup = { kind: 'not-started' }
+type ExtensionWasmStartup =
+  | { kind: ExtensionWasmStartupKind.NotStarted }
+  | { kind: ExtensionWasmStartupKind.Initializing; operation: Promise<unknown> }
+
+let extensionWasmStartup: ExtensionWasmStartup = {
+  kind: ExtensionWasmStartupKind.NotStarted,
+}
 
 export type {
   NookAppLocale,
@@ -35,14 +42,17 @@ export type {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export function ensureNookWasm() {
-  if (extensionWasmStartup.kind === 'initializing') {
+  if (extensionWasmStartup.kind === ExtensionWasmStartupKind.Initializing) {
     return extensionWasmStartup.operation
   }
   const operation = initNookWasm().then((value) => {
     configureVaultApplication('extension')
     return value
   })
-  extensionWasmStartup = { kind: 'initializing', operation }
+  extensionWasmStartup = {
+    kind: ExtensionWasmStartupKind.Initializing,
+    operation,
+  }
   return operation
 }
 

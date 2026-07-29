@@ -8,22 +8,45 @@ export const extensionSessionDocument = 'offscreen/session.html'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
+enum ExtensionSessionDocumentStateKind {
+  Closed = 'closed',
+  Creating = 'creating',
+  Open = 'open',
+  Closing = 'closing',
+}
+
 type ExtensionSessionDocumentState =
-  | { kind: 'closed' }
-  | { kind: 'creating'; operation: Promise<void> }
-  | { kind: 'open' }
-  | { kind: 'closing'; operation: Promise<void> }
+  | { kind: ExtensionSessionDocumentStateKind.Closed }
+  | {
+      kind: ExtensionSessionDocumentStateKind.Creating
+      operation: Promise<void>
+    }
+  | { kind: ExtensionSessionDocumentStateKind.Open }
+  | {
+      kind: ExtensionSessionDocumentStateKind.Closing
+      operation: Promise<void>
+    }
 
 let extensionSessionDocumentState: ExtensionSessionDocumentState = {
-  kind: 'closed',
+  kind: ExtensionSessionDocumentStateKind.Closed,
 }
 
 export async function ensureExtensionSessionDocument(): Promise<void> {
-  if (extensionSessionDocumentState.kind === 'closing') {
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Closing
+  ) {
     await extensionSessionDocumentState.operation
   }
-  if (extensionSessionDocumentState.kind === 'open') return
-  if (extensionSessionDocumentState.kind === 'creating') {
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Open
+  )
+    return
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Creating
+  ) {
     return extensionSessionDocumentState.operation
   }
   const operation = chrome.offscreen
@@ -44,62 +67,98 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
     })
     .then(() => {
       if (
-        extensionSessionDocumentState.kind === 'creating' &&
+        extensionSessionDocumentState.kind ===
+          ExtensionSessionDocumentStateKind.Creating &&
         extensionSessionDocumentState.operation === operation
       ) {
-        extensionSessionDocumentState = { kind: 'open' }
+        extensionSessionDocumentState = {
+          kind: ExtensionSessionDocumentStateKind.Open,
+        }
       }
     })
-  extensionSessionDocumentState = { kind: 'creating', operation }
+  extensionSessionDocumentState = {
+    kind: ExtensionSessionDocumentStateKind.Creating,
+    operation,
+  }
   return operation
 }
 
 export function closeExtensionSessionDocument(): Promise<void> {
-  if (extensionSessionDocumentState.kind === 'closing') {
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Closing
+  ) {
     return extensionSessionDocumentState.operation
   }
   const closure = chrome.offscreen.closeDocument().finally(() => {
     if (
-      extensionSessionDocumentState.kind === 'closing' &&
+      extensionSessionDocumentState.kind ===
+        ExtensionSessionDocumentStateKind.Closing &&
       extensionSessionDocumentState.operation === closure
     ) {
-      extensionSessionDocumentState = { kind: 'closed' }
+      extensionSessionDocumentState = {
+        kind: ExtensionSessionDocumentStateKind.Closed,
+      }
     }
   })
-  extensionSessionDocumentState = { kind: 'closing', operation: closure }
+  extensionSessionDocumentState = {
+    kind: ExtensionSessionDocumentStateKind.Closing,
+    operation: closure,
+  }
   return closure
+}
+
+export enum IsExtensionSessionExpiryMessageResultType {
+  NookExtensionSessionExpired = 'nook:extension-session-expired',
 }
 
 export function isExtensionSessionExpiryMessage(
   message: unknown,
-): message is { type: 'nook:extension-session-expired' } {
+): message is {
+  type: IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-session-expired'
+    message.type ===
+      IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
   )
+}
+
+export enum IsExtensionSessionLockMessageResultType {
+  NookExtensionSessionLock = 'nook:extension-session-lock',
 }
 
 export function isExtensionSessionLockMessage(
   message: unknown,
-): message is { type: 'nook:extension-session-lock' } {
+): message is {
+  type: IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-session-lock'
+    message.type ===
+      IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
   )
+}
+
+export enum IsExtensionSessionEnsureMessageResultType {
+  NookEnsureExtensionSessionRuntime = 'nook:ensure-extension-session-runtime',
 }
 
 export function isExtensionSessionEnsureMessage(
   message: unknown,
-): message is { type: 'nook:ensure-extension-session-runtime' } {
+): message is {
+  type: IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:ensure-extension-session-runtime'
+    message.type ===
+      IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
   )
 }
 

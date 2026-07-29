@@ -7,26 +7,44 @@ import {
   type NookVaultManager,
   type PasswordEntryId,
 } from "$app-wasm";
+enum ManagerSessionKind {
+  Locked = "locked",
+  Unlocked = "unlocked",
+}
+
 type ManagerSession =
-  | { kind: "locked" }
-  | { kind: "unlocked"; manager: NookVaultManager };
+  | { kind: ManagerSessionKind.Locked }
+  | { kind: ManagerSessionKind.Unlocked; manager: NookVaultManager };
+enum PasswordEntrySelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
 type PasswordEntrySelection =
-  | { kind: "not-selected" }
-  | { kind: "selected"; entryId: PasswordEntryId };
+  | { kind: PasswordEntrySelectionKind.NotSelected }
+  | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId };
+enum EnrollmentEntryKind {
+  Inactive = "inactive",
+  Active = "active",
+}
+
 type EnrollmentEntry =
-  | { kind: "inactive" }
-  | { kind: "active"; entryId: PasswordEntryId };
+  | { kind: EnrollmentEntryKind.Inactive }
+  | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId };
 export class VaultSessionState {
-  private managerState = $state<ManagerSession>({ kind: "locked" });
+  private managerState = $state<ManagerSession>({
+    kind: ManagerSessionKind.Locked,
+  });
   get manager(): NookVaultManager | void {
-    if (this.managerState.kind === "unlocked") return this.managerState.manager;
+    if (this.managerState.kind === ManagerSessionKind.Unlocked)
+      return this.managerState.manager;
     return;
   }
   set manager(value: NookVaultManager) {
-    this.managerState = { kind: "unlocked", manager: value };
+    this.managerState = { kind: ManagerSessionKind.Unlocked, manager: value };
   }
   clearManager(): void {
-    this.managerState = { kind: "locked" };
+    this.managerState = { kind: ManagerSessionKind.Locked };
   }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
@@ -66,32 +84,43 @@ export class VaultSessionState {
   loginEnrollmentCode = $state("");
   passwordEntries = $state<NookPasswordEntrySummary[]>([]);
   private selectedPasswordEntryState = $state<PasswordEntrySelection>({
-    kind: "not-selected",
+    kind: PasswordEntrySelectionKind.NotSelected,
   });
   get selectedPasswordEntryId(): PasswordEntryId | void {
-    if (this.selectedPasswordEntryState.kind === "selected")
+    if (
+      this.selectedPasswordEntryState.kind ===
+      PasswordEntrySelectionKind.Selected
+    )
       return this.selectedPasswordEntryState.entryId;
     return;
   }
   set selectedPasswordEntryId(value: PasswordEntryId) {
-    this.selectedPasswordEntryState = { kind: "selected", entryId: value };
+    this.selectedPasswordEntryState = {
+      kind: PasswordEntrySelectionKind.Selected,
+      entryId: value,
+    };
   }
   clearSelectedPasswordEntry(): void {
-    this.selectedPasswordEntryState = { kind: "not-selected" };
+    this.selectedPasswordEntryState = {
+      kind: PasswordEntrySelectionKind.NotSelected,
+    };
   }
 
   private activeEnrollmentEntryState = $state<EnrollmentEntry>({
-    kind: "inactive",
+    kind: EnrollmentEntryKind.Inactive,
   });
   get activeEnrollmentEntryId(): PasswordEntryId | void {
-    if (this.activeEnrollmentEntryState.kind === "active")
+    if (this.activeEnrollmentEntryState.kind === EnrollmentEntryKind.Active)
       return this.activeEnrollmentEntryState.entryId;
     return;
   }
   set activeEnrollmentEntryId(value: PasswordEntryId) {
-    this.activeEnrollmentEntryState = { kind: "active", entryId: value };
+    this.activeEnrollmentEntryState = {
+      kind: EnrollmentEntryKind.Active,
+      entryId: value,
+    };
   }
   clearActiveEnrollmentEntry(): void {
-    this.activeEnrollmentEntryState = { kind: "inactive" };
+    this.activeEnrollmentEntryState = { kind: EnrollmentEntryKind.Inactive };
   }
 }

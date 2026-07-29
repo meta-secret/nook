@@ -28,8 +28,12 @@ export type AuthenticationWorkflowSnapshotView = {
   observationIndex: number
 }
 
+export enum AuthenticationWorkflowSnapshotMessageType {
+  NookAuthenticationWorkflowSnapshot = 'nook:authentication-workflow-snapshot',
+}
+
 export type AuthenticationWorkflowSnapshotMessage = {
-  type: 'nook:authentication-workflow-snapshot'
+  type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
   payload: {
     origin: string
     observations: AuthenticationPageObservationView[]
@@ -52,7 +56,8 @@ export function isAuthenticationWorkflowSnapshotMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authentication-workflow-snapshot' ||
+    message.type !==
+      AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object' ||

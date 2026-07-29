@@ -10,12 +10,22 @@
     selectedImportFile,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
-  type ImportFileSelection =
-    | { kind: 'not-selected' }
-    | { kind: 'selected'; file: File }
-  type PasswordImportOutcome =
-    | { kind: 'not-run' }
-    | { kind: 'completed'; result: NookImportResult }
+  enum ImportFileSelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
+type ImportFileSelection =
+    | { kind: ImportFileSelectionKind.NotSelected }
+    | { kind: ImportFileSelectionKind.Selected; file: File }
+  enum PasswordImportOutcomeKind {
+  NotRun = "not-run",
+  Completed = "completed",
+}
+
+type PasswordImportOutcome =
+    | { kind: PasswordImportOutcomeKind.NotRun }
+    | { kind: PasswordImportOutcomeKind.Completed; result: NookImportResult }
 
   type CommonProps = {
     translationPrefix: string
@@ -34,8 +44,8 @@
     )
 
   let props: Props = $props()
-  let selectedFile = $state<ImportFileSelection>({ kind: 'not-selected' })
-  let result = $state<PasswordImportOutcome>({ kind: 'not-run' })
+  let selectedFile = $state<ImportFileSelection>({ kind: ImportFileSelectionKind.NotSelected })
+  let result = $state<PasswordImportOutcome>({ kind: PasswordImportOutcomeKind.NotRun })
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
@@ -46,16 +56,16 @@
   function selectFile(event: Event) {
     const file = selectedImportFile(event)
     selectedFile = file
-      ? { kind: 'selected', file }
-      : { kind: 'not-selected' }
-    result = { kind: 'not-run' }
+      ? { kind: ImportFileSelectionKind.Selected, file }
+      : { kind: ImportFileSelectionKind.NotSelected }
+    result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
   }
 
   async function importFile() {
-    if (selectedFile.kind === 'not-selected' || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
     const file = selectedFile.file
-    result = { kind: 'not-run' }
+    result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
     isImporting = true
     try {
@@ -67,8 +77,8 @@
         )
         result =
           !("result" in imported)
-            ? { kind: 'not-run' }
-            : { kind: 'completed', result: imported.result }
+            ? { kind: PasswordImportOutcomeKind.NotRun }
+            : { kind: PasswordImportOutcomeKind.Completed, result: imported.result }
         error = imported.error
         return
       }
@@ -79,8 +89,8 @@
       )
       result =
         !("result" in imported)
-          ? { kind: 'not-run' }
-          : { kind: 'completed', result: imported.result }
+          ? { kind: PasswordImportOutcomeKind.NotRun }
+          : { kind: PasswordImportOutcomeKind.Completed, result: imported.result }
       error = imported.error
     } finally {
       isImporting = false

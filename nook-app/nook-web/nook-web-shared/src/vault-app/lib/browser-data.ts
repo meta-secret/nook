@@ -4,8 +4,17 @@ import { suspendWasmLogging } from "$lib/log";
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
 const TAB_ID = crypto.randomUUID();
 
+enum LocalDataResetMessageType {
+  Request = "request",
+  Seen = "seen",
+  Ready = "ready",
+}
+
 type LocalDataResetMessage = {
-  type: "request" | "seen" | "ready";
+  type:
+    | LocalDataResetMessageType.Request
+    | LocalDataResetMessageType.Seen
+    | LocalDataResetMessageType.Ready;
   requestId: string;
   senderId: string;
   responderId?: string;
@@ -100,7 +109,7 @@ export function subscribeToLocalBrowserDataDeletion(
 
   const handleRequest = async (message: LocalDataResetMessage) => {
     if (
-      message.type !== "request" ||
+      message.type !== LocalDataResetMessageType.Request ||
       message.senderId === TAB_ID ||
       handledRequests.has(message.requestId)
     ) {
@@ -108,7 +117,7 @@ export function subscribeToLocalBrowserDataDeletion(
     }
     handledRequests.add(message.requestId);
     channel.postMessage({
-      type: "seen",
+      type: LocalDataResetMessageType.Seen,
       requestId: message.requestId,
       senderId: message.senderId,
       responderId: TAB_ID,
@@ -116,14 +125,14 @@ export function subscribeToLocalBrowserDataDeletion(
     try {
       await handler();
       channel.postMessage({
-        type: "ready",
+        type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
       } satisfies LocalDataResetMessage);
     } catch (error) {
       channel.postMessage({
-        type: "ready",
+        type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
@@ -145,7 +154,7 @@ async function quiesceOtherTabs(): Promise<void> {
     throw new Error("Safe cross-tab local data deletion is unavailable");
   }
   const request: LocalDataResetMessage = {
-    type: "request",
+    type: LocalDataResetMessageType.Request,
     requestId: crypto.randomUUID(),
     senderId: TAB_ID,
   };
@@ -161,8 +170,9 @@ async function quiesceOtherTabs(): Promise<void> {
     ) {
       return;
     }
-    if (message.type === "seen") seen.add(message.responderId);
-    if (message.type === "ready") {
+    if (message.type === LocalDataResetMessageType.Seen)
+      seen.add(message.responderId);
+    if (message.type === LocalDataResetMessageType.Ready) {
       ready.set(message.responderId, message.error);
     }
   };

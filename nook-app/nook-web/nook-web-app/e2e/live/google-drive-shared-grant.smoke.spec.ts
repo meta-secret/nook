@@ -32,10 +32,17 @@ describeLive('live Google Drive shared-folder grant', () => {
 
   let ownerToken = ''
   let joinerEmail = ''
+  enum JoinerCredentialsKind {
+    OwnerOnly = 'owner-only',
+    OwnerAndJoiner = 'owner-and-joiner',
+  }
+
   type JoinerCredentials =
-    | { kind: 'owner-only' }
-    | { kind: 'owner-and-joiner'; accessToken: string }
-  let joinerCredentials: JoinerCredentials = { kind: 'owner-only' }
+    | { kind: JoinerCredentialsKind.OwnerOnly }
+    | { kind: JoinerCredentialsKind.OwnerAndJoiner; accessToken: string }
+  let joinerCredentials: JoinerCredentials = {
+    kind: JoinerCredentialsKind.OwnerOnly,
+  }
   let folderId = ''
   let markerFileId = ''
 
@@ -47,9 +54,9 @@ describeLive('live Google Drive shared-folder grant', () => {
     ownerToken = credentials.ownerAccessToken
     joinerEmail = credentials.joinerEmail
     joinerCredentials = !('joinerAccessToken' in credentials)
-      ? { kind: 'owner-only' }
+      ? { kind: JoinerCredentialsKind.OwnerOnly }
       : {
-          kind: 'owner-and-joiner',
+          kind: JoinerCredentialsKind.OwnerAndJoiner,
           accessToken: credentials.joinerAccessToken,
         }
   })
@@ -92,7 +99,7 @@ describeLive('live Google Drive shared-folder grant', () => {
     )
     expect(markerFileId.length).toBeGreaterThan(0)
 
-    if (joinerCredentials.kind === 'owner-and-joiner') {
+    if (joinerCredentials.kind === JoinerCredentialsKind.OwnerAndJoiner) {
       const joinerToken = joinerCredentials.accessToken
       const joinerFolder = await verifySharedVaultFolder(joinerToken, folderId)
       expect(joinerFolder.canAddChildren).toBe(true)

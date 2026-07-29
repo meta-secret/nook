@@ -2,9 +2,14 @@ import { omittedValue } from "../../../explicit-state";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
+enum SharedStorageTargetKind {
+  NotBound = "not-bound",
+  Bound = "bound",
+}
+
 type SharedStorageTarget =
-  | { kind: "not-bound" }
-  | { kind: "bound"; storageTargetId: string };
+  | { kind: SharedStorageTargetKind.NotBound }
+  | { kind: SharedStorageTargetKind.Bound; storageTargetId: string };
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
@@ -642,7 +647,9 @@ export async function issueEnrollmentCode(
       );
     }
     state.sharedGrantInstructions = "";
-    let sharedStorageTarget: SharedStorageTarget = { kind: "not-bound" };
+    let sharedStorageTarget: SharedStorageTarget = {
+      kind: SharedStorageTargetKind.NotBound,
+    };
     let enrollmentProviderRow = selectedProvider;
     if (usesSharedProviderGrant) {
       if (usesSharedICloud) {
@@ -652,7 +659,10 @@ export async function issueEnrollmentCode(
             state.t("provider_setup.icloud_shared_target_required"),
           );
         }
-        sharedStorageTarget = { kind: "bound", storageTargetId: targetId };
+        sharedStorageTarget = {
+          kind: SharedStorageTargetKind.Bound,
+          storageTargetId: targetId,
+        };
       } else {
         const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
         log.info("shared enrollment grant started", { providerId });
@@ -677,7 +687,7 @@ export async function issueEnrollmentCode(
         }
         if (grant.kind === "granted") {
           sharedStorageTarget = {
-            kind: "bound",
+            kind: SharedStorageTargetKind.Bound,
             storageTargetId: grant.storageTargetId,
           };
           state.sharedGrantInstructions = state.t(grant.note, {
@@ -687,7 +697,7 @@ export async function issueEnrollmentCode(
         } else if (grant.kind === "manual-grant-required") {
           if (grant.storageTargetId) {
             sharedStorageTarget = {
-              kind: "bound",
+              kind: SharedStorageTargetKind.Bound,
               storageTargetId: grant.storageTargetId,
             };
           }
@@ -700,7 +710,7 @@ export async function issueEnrollmentCode(
           });
         }
         if (
-          sharedStorageTarget.kind === "bound" &&
+          sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
           selectedProvider.oauthFile
         ) {
           const updatedOauth = bindGoogleDriveSharedFolder(
@@ -736,7 +746,7 @@ export async function issueEnrollmentCode(
       }
     }
     const sharedStorageTargetId =
-      sharedStorageTarget.kind === "bound"
+      sharedStorageTarget.kind === SharedStorageTargetKind.Bound
         ? sharedStorageTarget.storageTargetId
         : omittedValue();
     const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(

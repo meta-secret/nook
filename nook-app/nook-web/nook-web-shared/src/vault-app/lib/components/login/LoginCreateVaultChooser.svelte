@@ -24,9 +24,14 @@
     type SentinelDashboard,
   } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
-  type SentinelDashboardChoice =
-    | { kind: 'not-chosen' }
-    | { kind: 'chosen'; dashboard: SentinelDashboard }
+  enum SentinelDashboardChoiceKind {
+  NotChosen = "not-chosen",
+  Chosen = "chosen",
+}
+
+type SentinelDashboardChoice =
+    | { kind: SentinelDashboardChoiceKind.NotChosen }
+    | { kind: SentinelDashboardChoiceKind.Chosen; dashboard: SentinelDashboard }
   import { VaultType } from '$lib/vault-architecture'
   import type { AppKind } from '$lib/app-kind'
   import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
@@ -119,10 +124,10 @@
   let vaultName = $state('')
   let sentinelName = $state('')
   let sentinelDashboardState = $state<SentinelDashboardChoice>({
-    kind: 'not-chosen',
+    kind: SentinelDashboardChoiceKind.NotChosen,
   })
   const sentinelDashboard = $derived(
-    sentinelDashboardState.kind === 'chosen'
+    sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen
       ? sentinelDashboardState.dashboard
       : omittedValue(),
   )
@@ -166,12 +171,12 @@
 
   $effect(() => {
     if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
-      sentinelDashboardState = { kind: 'not-chosen' }
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       return
     }
     if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
-      if (sentinelDashboardState.kind === 'not-chosen') {
-        sentinelDashboardState = { kind: 'chosen', dashboard: 'card-stack' }
+      if (sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen) {
+        sentinelDashboardState = { kind: SentinelDashboardChoiceKind.Chosen, dashboard: 'card-stack' }
       }
       wizardStep = 'sentinel-ceremony'
       chosenPath = 'sentinel'
@@ -271,12 +276,12 @@
     chosenPath = 'sentinel'
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
-    sentinelDashboardState = { kind: 'not-chosen' }
+    sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
     wizardStep = 'sentinel-dashboard'
   }
 
   function chooseSentinelDashboard(dashboard: SentinelDashboard) {
-    sentinelDashboardState = { kind: 'chosen', dashboard }
+    sentinelDashboardState = { kind: SentinelDashboardChoiceKind.Chosen, dashboard }
     wizardStep = 'sentinel-policy'
   }
 
@@ -323,14 +328,14 @@
       return
     }
     if (wizardStep === 'sentinel-dashboard') {
-      sentinelDashboardState = { kind: 'not-chosen' }
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       chosenPath = 'undecided'
       wizardStep = 'choose'
       return
     }
     if (wizardStep === 'sentinel-policy') {
       const dashboard = sentinelDashboard
-      sentinelDashboardState = { kind: 'not-chosen' }
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       wizardStep = 'sentinel-dashboard'
       if (dashboard) restoreDashboardChoiceFocus(dashboard)
     }

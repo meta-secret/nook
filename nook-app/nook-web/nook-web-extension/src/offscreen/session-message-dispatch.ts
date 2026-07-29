@@ -10,9 +10,17 @@ import {
 
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 
+enum SensitivePayloadResidencyKind {
+  Resident = 'resident',
+  Cleared = 'cleared',
+}
+
 type SensitivePayloadResidency =
-  | { kind: 'resident'; payload: Record<string, unknown> }
-  | { kind: 'cleared' }
+  | {
+      kind: SensitivePayloadResidencyKind.Resident
+      payload: Record<string, unknown>
+    }
+  | { kind: SensitivePayloadResidencyKind.Cleared }
 
 type SessionMessageDispatchContext = {
   handleMessage: (message: unknown) => Promise<unknown>
@@ -109,31 +117,32 @@ export class ExtensionSessionMessageDispatcher {
     fields: readonly string[],
   ): Promise<unknown> {
     let payloadResidency: SensitivePayloadResidency = {
-      kind: 'resident',
+      kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload },
     }
     for (const field of fields) {
-      if (payloadResidency.kind === 'resident') {
+      if (payloadResidency.kind === SensitivePayloadResidencyKind.Resident) {
         payloadResidency.payload[field] = copySensitiveValue(payload[field])
       }
       clearSensitiveValue(payload[field])
       payload[field] = typeof payload[field] === 'string' ? '' : []
     }
     const clearPending = () => {
-      if (payloadResidency.kind === 'cleared') return
+      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
+        return
       for (const field of fields) {
         clearSensitiveValue(payloadResidency.payload[field])
         delete payloadResidency.payload[field]
       }
-      payloadResidency = { kind: 'cleared' }
+      payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
     return this.operations.enqueue(
       async () => {
-        if (payloadResidency.kind === 'cleared') {
+        if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
         const operationPayload = payloadResidency.payload
-        payloadResidency = { kind: 'cleared' }
+        payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
         try {
           return await this.context.handleMessage({
             ...message,
@@ -176,21 +185,22 @@ export class ExtensionSessionMessageDispatcher {
     }
     payload.providers = []
     let payloadResidency: SensitivePayloadResidency = {
-      kind: 'resident',
+      kind: SensitivePayloadResidencyKind.Resident,
       payload: { ...payload, providers: stagedProviders },
     }
     const clearPending = () => {
-      if (payloadResidency.kind === 'cleared') return
+      if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared)
+        return
       scrubProviderCredentials(payloadResidency.payload.providers)
-      payloadResidency = { kind: 'cleared' }
+      payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
     }
     return this.operations.enqueue(
       async () => {
-        if (payloadResidency.kind === 'cleared') {
+        if (payloadResidency.kind === SensitivePayloadResidencyKind.Cleared) {
           throw new Error('Extension session request expired.')
         }
         const operationPayload = payloadResidency.payload
-        payloadResidency = { kind: 'cleared' }
+        payloadResidency = { kind: SensitivePayloadResidencyKind.Cleared }
         try {
           return await this.context.handleMessage({
             ...message,

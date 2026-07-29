@@ -39,9 +39,14 @@ import {
   type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
+enum OAuthProviderUpdateKind {
+  NotRequired = "not-required",
+  Required = "required",
+}
+
 type OAuthProviderUpdate =
-  | { kind: "not-required" }
-  | { kind: "required"; providerId: string };
+  | { kind: OAuthProviderUpdateKind.NotRequired }
+  | { kind: OAuthProviderUpdateKind.Required; providerId: string };
 
 export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
 
@@ -529,7 +534,9 @@ export async function ensureProviderSaved(
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
   const isNewSetup = state.loginSetupActive;
-  let oauthProviderToUpdate: OAuthProviderUpdate = { kind: "not-required" };
+  let oauthProviderToUpdate: OAuthProviderUpdate = {
+    kind: OAuthProviderUpdateKind.NotRequired,
+  };
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
@@ -594,7 +601,10 @@ export async function ensureProviderSaved(
     } else {
       state.providers = [...state.providers, provider];
       if (provider.type === "oauth-file") {
-        oauthProviderToUpdate = { kind: "required", providerId: provider.id };
+        oauthProviderToUpdate = {
+          kind: OAuthProviderUpdateKind.Required,
+          providerId: provider.id,
+        };
       }
     }
   } else if (isNewSetup && type === "local" && !state.localProvider) {
@@ -628,7 +638,7 @@ export async function ensureProviderSaved(
 
   if (state.storageMode === "oauth-file" && state.oauthFile?.fileId) {
     const activePreset = state.oauthFile.preset;
-    if (oauthProviderToUpdate.kind === "not-required") {
+    if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
       const duplicate = findDuplicateSyncProvider(state.syncProviders, {
         id: "oauth-provider-update-target",
         type: "oauth-file",
@@ -637,11 +647,14 @@ export async function ensureProviderSaved(
         createdAt: "",
       });
       if (duplicate) {
-        oauthProviderToUpdate = { kind: "required", providerId: duplicate.id };
+        oauthProviderToUpdate = {
+          kind: OAuthProviderUpdateKind.Required,
+          providerId: duplicate.id,
+        };
       }
     }
     const oauthProviderToUpdateId =
-      oauthProviderToUpdate.kind === "required"
+      oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required
         ? oauthProviderToUpdate.providerId
         : omittedValue();
     state.providers = state.providers.map((provider) => {

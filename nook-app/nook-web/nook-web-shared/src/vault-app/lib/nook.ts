@@ -129,19 +129,34 @@ function drainWasmStatusIntoLog(manager: NookVaultManager) {
   }, 500);
 }
 
+export enum SecretFormInputType {
+  Login = "login",
+  ApiKey = "api-key",
+  SeedPhrase = "seed-phrase",
+  SecureNote = "secure-note",
+  Authenticator = "authenticator",
+  CreditCard = "credit-card",
+  FileAttachment = "file-attachment",
+}
+
 export type SecretFormInput =
   | {
-      type: "login";
+      type: SecretFormInputType.Login;
       websiteUrl: string;
       username: string;
       password: string;
       notes: string;
     }
-  | { type: "api-key"; websiteUrl: string; key: string; expiresAt: string }
-  | { type: "seed-phrase"; name: string; seed: string }
-  | { type: "secure-note"; title: string; note: string }
   | {
-      type: "authenticator";
+      type: SecretFormInputType.ApiKey;
+      websiteUrl: string;
+      key: string;
+      expiresAt: string;
+    }
+  | { type: SecretFormInputType.SeedPhrase; name: string; seed: string }
+  | { type: SecretFormInputType.SecureNote; title: string; note: string }
+  | {
+      type: SecretFormInputType.Authenticator;
       issuer: string;
       account: string;
       websiteUrl: string;
@@ -152,7 +167,7 @@ export type SecretFormInput =
       backupCodes: string;
     }
   | {
-      type: "credit-card";
+      type: SecretFormInputType.CreditCard;
       title: string;
       cardholderName: string;
       number: string;
@@ -162,7 +177,7 @@ export type SecretFormInput =
       notes: string;
     }
   | {
-      type: "file-attachment";
+      type: SecretFormInputType.FileAttachment;
       title: string;
       fileName: string;
       mimeType: string;
@@ -174,7 +189,7 @@ export type SecretFormInput =
 export function buildSecretYaml(input: SecretFormInput): string {
   let fields: NookSecretFormFields;
   switch (input.type) {
-    case "login":
+    case SecretFormInputType.Login:
       fields = NookSecretFormFields.login(
         input.websiteUrl,
         input.username,
@@ -182,20 +197,20 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.notes,
       );
       break;
-    case "api-key":
+    case SecretFormInputType.ApiKey:
       fields = NookSecretFormFields.apiKey(
         input.websiteUrl,
         input.key,
         input.expiresAt,
       );
       break;
-    case "seed-phrase":
+    case SecretFormInputType.SeedPhrase:
       fields = NookSecretFormFields.seedPhrase(input.name, input.seed);
       break;
-    case "secure-note":
+    case SecretFormInputType.SecureNote:
       fields = NookSecretFormFields.secureNote(input.title, input.note);
       break;
-    case "authenticator":
+    case SecretFormInputType.Authenticator:
       fields = NookSecretFormFields.authenticator(
         input.issuer,
         input.account,
@@ -207,7 +222,7 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.backupCodes,
       );
       break;
-    case "credit-card":
+    case SecretFormInputType.CreditCard:
       fields = NookSecretFormFields.creditCard(
         input.title,
         input.cardholderName,
@@ -218,7 +233,7 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.notes,
       );
       break;
-    case "file-attachment":
+    case SecretFormInputType.FileAttachment:
       fields = NookSecretFormFields.fileAttachment(
         input.title,
         input.fileName,

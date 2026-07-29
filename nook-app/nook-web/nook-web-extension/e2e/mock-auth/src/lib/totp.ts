@@ -2,15 +2,23 @@ import init, {
   generateTotpCode as wasmGenerateTotpCode,
   verifyTotpCode as wasmVerifyTotpCode,
 } from 'nook-wasm'
-type WasmStartup =
-  | { kind: 'not-started' }
-  | { kind: 'initializing'; completion: Promise<void> }
+enum WasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-let wasmStartup: WasmStartup = { kind: 'not-started' }
+type WasmStartup =
+  | { kind: WasmStartupKind.NotStarted }
+  | { kind: WasmStartupKind.Initializing; completion: Promise<void> }
+
+let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 
 async function ensureWasm(): Promise<void> {
-  if (wasmStartup.kind === 'not-started') {
-    wasmStartup = { kind: 'initializing', completion: init().then(() => {}) }
+  if (wasmStartup.kind === WasmStartupKind.NotStarted) {
+    wasmStartup = {
+      kind: WasmStartupKind.Initializing,
+      completion: init().then(() => {}),
+    }
   }
   await wasmStartup.completion
 }

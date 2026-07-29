@@ -1,9 +1,14 @@
 <script lang="ts">
   import { omittedValue } from '../../../explicit-state'
 
-  type ActivePasswordEntry =
-    | { kind: 'none' }
-    | { kind: 'selected'; entryId: PasswordEntryId }
+  enum ActivePasswordEntryKind {
+  None = "none",
+  Selected = "selected",
+}
+
+type ActivePasswordEntry =
+    | { kind: ActivePasswordEntryKind.None }
+    | { kind: ActivePasswordEntryKind.Selected; entryId: PasswordEntryId }
   import {
     KeyRound,
     Lock,
@@ -72,7 +77,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<ActivePasswordEntry>({ kind: 'none' })
+  let activeEntryId = $state<ActivePasswordEntry>({ kind: ActivePasswordEntryKind.None })
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -82,7 +87,7 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry = $derived(
-    activeEntryId.kind === 'selected'
+    activeEntryId.kind === ActivePasswordEntryKind.Selected
       ? passwordEntries.find((entry) => entry.id === activeEntryId.entryId)
       : omittedValue(),
   )
@@ -121,7 +126,7 @@
 
   function closePanel() {
     panel = 'idle'
-    activeEntryId = { kind: 'none' }
+    activeEntryId = { kind: ActivePasswordEntryKind.None }
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -153,7 +158,7 @@
 
   async function submitRotatePassword() {
     localError = ''
-    if (activeEntryId.kind !== 'selected') return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
@@ -172,7 +177,7 @@
 
   async function submitRemove() {
     localError = ''
-    if (activeEntryId.kind !== 'selected') return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     try {
       await onRemovePassword(activeEntryId.entryId)
       closePanel()
@@ -183,7 +188,7 @@
 
   async function submitIssueCode() {
     localError = ''
-    if (activeEntryId.kind !== 'selected') return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!passwordInput) {
       localError = vault.t('vault_passwords.enter_pw_error')
       return

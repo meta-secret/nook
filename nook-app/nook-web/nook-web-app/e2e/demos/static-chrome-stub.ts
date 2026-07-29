@@ -48,9 +48,16 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
+  enum StagedOfferKind {
+    Empty = 'empty',
+    Present = 'present',
+  }
+
   let stagedOffer:
-    | { kind: 'empty' }
-    | { kind: 'present'; offer: StagedSaveOffer } = { kind: 'empty' }
+    | { kind: StagedOfferKind.Empty }
+    | { kind: StagedOfferKind.Present; offer: StagedSaveOffer } = {
+    kind: StagedOfferKind.Empty,
+  }
   let enrollStaged = false
   const demoExtensionSetup = {
     status: 'ready' as const,
@@ -280,7 +287,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         }
         case 'nook:website-login-save-offer':
           stagedOffer = {
-            kind: 'present',
+            kind: StagedOfferKind.Present,
             offer: {
               offerId: 'demo-save-offer',
               decision: 'create',
@@ -295,14 +302,14 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             offer: stagedOffer.offer,
           }
         case 'nook:website-login-save-pending':
-          return stagedOffer.kind === 'present'
+          return stagedOffer.kind === StagedOfferKind.Present
             ? { ok: true, offer: stagedOffer.offer }
             : { ok: true }
         case 'nook:website-login-save-commit':
-          stagedOffer = { kind: 'empty' }
+          stagedOffer = { kind: StagedOfferKind.Empty }
           return { ok: true, decision: 'create' }
         case 'nook:website-login-save-dismiss':
-          stagedOffer = { kind: 'empty' }
+          stagedOffer = { kind: StagedOfferKind.Empty }
           return { ok: true }
         default:
           return { ok: true }

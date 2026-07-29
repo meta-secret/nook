@@ -31,17 +31,24 @@ const priorityOrder: Record<SessionOperationPriority, number> = {
 
 const expiredError = () => new Error('EXTENSION_SESSION_REQUEST_EXPIRED')
 
-type QueueState = { kind: 'open' } | { kind: 'closed'; error: Error }
+enum QueueStateKind {
+  Open = 'open',
+  Closed = 'closed',
+}
+
+type QueueState =
+  | { kind: QueueStateKind.Open }
+  | { kind: QueueStateKind.Closed; error: Error }
 
 export class SessionOperationQueue {
   private entries: QueueEntry<unknown>[] = []
   private sequence = 0
   private running = false
-  private state: QueueState = { kind: 'open' }
+  private state: QueueState = { kind: QueueStateKind.Open }
 
   close(error = new Error('Extension session queue closed.')): void {
-    if (this.state.kind === 'closed') return
-    this.state = { kind: 'closed', error }
+    if (this.state.kind === QueueStateKind.Closed) return
+    this.state = { kind: QueueStateKind.Closed, error }
     const pending = this.entries
     this.entries = []
     for (const entry of pending) {
@@ -58,7 +65,7 @@ export class SessionOperationQueue {
     options: QueueOptions = {},
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (this.state.kind === 'closed') {
+      if (this.state.kind === QueueStateKind.Closed) {
         options.onExpire?.()
         reject(this.state.error)
         return

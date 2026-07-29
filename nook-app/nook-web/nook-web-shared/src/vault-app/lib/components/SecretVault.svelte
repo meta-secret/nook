@@ -39,12 +39,22 @@
   import { onDestroy, untrack } from 'svelte'
   import type { SecretTypeSelection } from '$lib/components/secret-form-state'
 
-  type ClipboardNotice =
-    | { kind: 'hidden' }
-    | { kind: 'visible'; fieldKey: string }
-  type SecretEditor =
-    | { kind: 'creating' }
-    | { kind: 'editing'; record: NookSecretRecord }
+  enum ClipboardNoticeKind {
+  Hidden = "hidden",
+  Visible = "visible",
+}
+
+type ClipboardNotice =
+    | { kind: ClipboardNoticeKind.Hidden }
+    | { kind: ClipboardNoticeKind.Visible; fieldKey: string }
+  enum SecretEditorKind {
+  Creating = "creating",
+  Editing = "editing",
+}
+
+type SecretEditor =
+    | { kind: SecretEditorKind.Creating }
+    | { kind: SecretEditorKind.Editing; record: NookSecretRecord }
 
   let {
     vault,
@@ -87,12 +97,12 @@
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<ClipboardNotice>({ kind: 'hidden' })
+  let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden })
   let addSecretOpen = $state(false)
   let formSelectedType = $state<SecretTypeSelection>({
     kind: 'choosing-type',
   })
-  let editingItem = $state<SecretEditor>({ kind: 'creating' })
+  let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
@@ -188,8 +198,8 @@
   }
 
   function releaseEditingItem() {
-    if (editingItem.kind === 'editing') editingItem.record.free()
-    editingItem = { kind: 'creating' }
+    if (editingItem.kind === SecretEditorKind.Editing) editingItem.record.free()
+    editingItem = { kind: SecretEditorKind.Creating }
   }
 
   async function openEditItem(item: NookSecretListItem) {
@@ -201,7 +211,7 @@
       return
     }
     releaseEditingItem()
-    editingItem = { kind: 'editing', record }
+    editingItem = { kind: SecretEditorKind.Editing, record }
     formSelectedType = {
       kind: 'editing-fields',
       itemType: item.type as VaultItemType,
@@ -234,13 +244,13 @@
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
-    copiedKey = { kind: 'visible', fieldKey: `${id}-${field}` }
+    copiedKey = { kind: ClipboardNoticeKind.Visible, fieldKey: `${id}-${field}` }
     setTimeout(() => {
       if (
-        copiedKey.kind === 'visible' &&
+        copiedKey.kind === ClipboardNoticeKind.Visible &&
         copiedKey.fieldKey === `${id}-${field}`
       )
-        copiedKey = { kind: 'hidden' }
+        copiedKey = { kind: ClipboardNoticeKind.Hidden }
     }, 2000)
   }
 

@@ -136,8 +136,17 @@ function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
   return candidates
 }
 
+enum FinalizeOtpauthCandidatesResultStatus {
+  Ready = 'ready',
+  Empty = 'empty',
+  Ambiguous = 'ambiguous',
+}
+
 function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
-  status: 'ready' | 'empty' | 'ambiguous'
+  status:
+    | FinalizeOtpauthCandidatesResultStatus.Ready
+    | FinalizeOtpauthCandidatesResultStatus.Empty
+    | FinalizeOtpauthCandidatesResultStatus.Ambiguous
   candidates: DecodedOtpauthCandidate[]
 } {
   if (candidates.length === 0) return { status: 'empty', candidates: [] }
@@ -145,8 +154,19 @@ function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
   return { status: 'ready', candidates }
 }
 
+export enum DecodeVisibleOtpauthCandidatesResultStatus {
+  Ready = 'ready',
+  Unsupported = 'unsupported',
+  Empty = 'empty',
+  Ambiguous = 'ambiguous',
+}
+
 export async function decodeVisibleOtpauthCandidates(): Promise<{
-  status: 'ready' | 'unsupported' | 'empty' | 'ambiguous'
+  status:
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+    | DecodeVisibleOtpauthCandidatesResultStatus.Unsupported
+    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
   candidates: DecodedOtpauthCandidate[]
 }> {
   // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
@@ -158,7 +178,10 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
 
   const Detector = barcodeDetectorConstructor()
   if (!Detector) {
-    return { status: 'unsupported', candidates: [] }
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
+      candidates: [],
+    }
   }
   const detector = new Detector({ formats: ['qr_code'] })
   const candidates: DecodedOtpauthCandidate[] = []

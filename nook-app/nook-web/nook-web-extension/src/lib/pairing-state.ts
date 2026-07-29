@@ -3,8 +3,12 @@ import {
   type ExtensionReadySetupState,
 } from '../background/pairing-grants'
 
+export enum ExtensionPairingStateQueryMessageType {
+  NookExtensionPairingStateQuery = 'nook:extension-pairing-state-query',
+}
+
 export type ExtensionPairingStateQueryMessage = {
-  type: 'nook:extension-pairing-state-query'
+  type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
 }
 
 export function isExtensionPairingStateQueryMessage(
@@ -14,14 +18,17 @@ export function isExtensionPairingStateQueryMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-pairing-state-query'
+    message.type ===
+      ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
   )
 }
 
 export function loadExtensionSetupState(): Promise<ExtensionReadySetupState | void> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { type: 'nook:extension-pairing-state-query' },
+      {
+        type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+      },
       (response: { ok?: boolean; setup?: unknown } | void) => {
         if (
           chrome.runtime.lastError ||

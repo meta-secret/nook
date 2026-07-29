@@ -3,10 +3,19 @@ export {}
 const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
 
+enum ExtensionResponseAction {
+  Fallback = 'fallback',
+  Result = 'result',
+  Error = 'error',
+}
+
 type ExtensionResponse = {
   source: typeof RESPONSE_SOURCE
   requestId: string
-  action: 'fallback' | 'result' | 'error'
+  action:
+    | ExtensionResponseAction.Fallback
+    | ExtensionResponseAction.Result
+    | ExtensionResponseAction.Error
   result?: Record<string, unknown>
   reason?: string
 }
@@ -182,9 +191,12 @@ async function extensionCeremony(
         event.data.requestId !== id
       )
         return
-      if (event.data.action === 'fallback') {
+      if (event.data.action === ExtensionResponseAction.Fallback) {
         finish(() => void fallback().then(resolve, reject))
-      } else if (event.data.action === 'result' && event.data.result) {
+      } else if (
+        event.data.action === ExtensionResponseAction.Result &&
+        event.data.result
+      ) {
         finish(() => resolve(publicCredential(ceremony, event.data.result!)))
       } else {
         finish(() =>

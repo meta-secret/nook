@@ -7,12 +7,22 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
-  type ImportFileSelection =
-    | { kind: 'not-selected' }
-    | { kind: 'selected'; file: File }
-  type ImportOutcome =
-    | { kind: 'not-run' }
-    | { kind: 'completed'; result: NookImportResult }
+  enum ImportFileSelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
+type ImportFileSelection =
+    | { kind: ImportFileSelectionKind.NotSelected }
+    | { kind: ImportFileSelectionKind.Selected; file: File }
+  enum ImportOutcomeKind {
+  NotRun = "not-run",
+  Completed = "completed",
+}
+
+type ImportOutcome =
+    | { kind: ImportOutcomeKind.NotRun }
+    | { kind: ImportOutcomeKind.Completed; result: NookImportResult }
 
   let {
     vault,
@@ -31,8 +41,8 @@
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<ImportFileSelection>({ kind: 'not-selected' })
-  let result = $state<ImportOutcome>({ kind: 'not-run' })
+  let selectedFile = $state<ImportFileSelection>({ kind: ImportFileSelectionKind.NotSelected })
+  let result = $state<ImportOutcome>({ kind: ImportOutcomeKind.NotRun })
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)
@@ -41,21 +51,21 @@
   function selectFile(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0]
     selectedFile = file
-      ? { kind: 'selected', file }
-      : { kind: 'not-selected' }
-    result = { kind: 'not-run' }
+      ? { kind: ImportFileSelectionKind.Selected, file }
+      : { kind: ImportFileSelectionKind.NotSelected }
+    result = { kind: ImportOutcomeKind.NotRun }
     error = ''
   }
 
   async function importFile() {
-    if (selectedFile.kind === 'not-selected' || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy) return
     const file = selectedFile.file
     error = ''
-    result = { kind: 'not-run' }
+    result = { kind: ImportOutcomeKind.NotRun }
     isImporting = true
     try {
       result = {
-        kind: 'completed',
+        kind: ImportOutcomeKind.Completed,
         result: await onImport(await file.text(), password),
       }
       password = ''

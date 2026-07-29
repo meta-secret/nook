@@ -6,9 +6,14 @@
   import { Button } from '$lib/components/ui/button'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
-  type GenesisDeliverySelection =
-    | { kind: 'not-selected' }
-    | { kind: 'selected'; storeId: string }
+  enum GenesisDeliverySelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
+type GenesisDeliverySelection =
+    | { kind: GenesisDeliverySelectionKind.NotSelected }
+    | { kind: GenesisDeliverySelectionKind.Selected; storeId: string }
   import {
     createSentinelUnlockResponse,
     listSentinelStoredDeliveries,
@@ -30,7 +35,7 @@
   let loaded = $state(false)
   let open = $state(false)
   let selectedDelivery = $state<GenesisDeliverySelection>({
-    kind: 'not-selected',
+    kind: GenesisDeliverySelectionKind.NotSelected,
   })
   let request = $state('')
   let response = $state('')
@@ -42,7 +47,7 @@
   const selectedSummary = $derived(
     vault.sentinelStoredDeliveries.find(
       (delivery) =>
-        selectedDelivery.kind === 'selected' &&
+        selectedDelivery.kind === GenesisDeliverySelectionKind.Selected &&
         delivery.storeId === selectedDelivery.storeId,
     ),
   )
@@ -59,15 +64,15 @@
     try {
       const deliveries = await listSentinelStoredDeliveries(vault)
       if (
-        selectedDelivery.kind !== 'selected' ||
+        selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected ||
         !deliveries.some(
           (delivery) => delivery.storeId === selectedDelivery.storeId,
         )
       ) {
         const firstDelivery = deliveries[0]
         selectedDelivery = firstDelivery
-          ? { kind: 'selected', storeId: firstDelivery.storeId }
-          : { kind: 'not-selected' }
+          ? { kind: GenesisDeliverySelectionKind.Selected, storeId: firstDelivery.storeId }
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
     } catch {
       // A missing device identity or empty list simply hides the first-vault helper.
@@ -78,7 +83,7 @@
 
   async function createResponse() {
     const storeId =
-      selectedDelivery.kind === 'selected'
+      selectedDelivery.kind === GenesisDeliverySelectionKind.Selected
         ? selectedDelivery.storeId.trim()
         : ''
     const payload = request.trim()

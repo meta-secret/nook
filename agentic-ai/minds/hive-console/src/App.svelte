@@ -28,43 +28,86 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   } from './types';
   import { emergencyCopy } from './emergency-copy';
 
+  enum ObserverFeedKind {
+    NotLoaded = 'not-loaded',
+    Loaded = 'loaded',
+  }
+
   type ObserverFeed =
-    | { kind: 'not-loaded' }
-    | { kind: 'loaded'; snapshot: ObserverSnapshot };
-  type TaskSelection = { kind: 'none' } | { kind: 'selected'; taskId: string };
+    | { kind: ObserverFeedKind.NotLoaded }
+    | { kind: ObserverFeedKind.Loaded; snapshot: ObserverSnapshot };
+  enum TaskSelectionKind {
+    None = 'none',
+    Selected = 'selected',
+  }
+
+  type TaskSelection =
+    | { kind: TaskSelectionKind.None }
+    | { kind: TaskSelectionKind.Selected; taskId: string };
+  enum DurableTaskLookupKind {
+    NotFound = 'not-found',
+    Found = 'found',
+  }
+
   type DurableTaskLookup =
-    | { kind: 'not-found' }
-    | { kind: 'found'; task: ObservedTask };
-  type SelectedTask = { kind: 'closed' } | { kind: 'open'; task: ObservedTask };
+    | { kind: DurableTaskLookupKind.NotFound }
+    | { kind: DurableTaskLookupKind.Found; task: ObservedTask };
+  enum SelectedTaskKind {
+    Closed = 'closed',
+    Open = 'open',
+  }
+
+  type SelectedTask =
+    | { kind: SelectedTaskKind.Closed }
+    | { kind: SelectedTaskKind.Open; task: ObservedTask };
+  enum PollScheduleKind {
+    Stopped = 'stopped',
+    Scheduled = 'scheduled',
+  }
+
   type PollSchedule =
-    | { kind: 'stopped' }
-    | { kind: 'scheduled'; timer: ReturnType<typeof setTimeout> };
+    | { kind: PollScheduleKind.Stopped }
+    | {
+        kind: PollScheduleKind.Scheduled;
+        timer: ReturnType<typeof setTimeout>;
+      };
+  enum SnapshotLoadRequestKind {
+    ScheduledRefresh = 'scheduled-refresh',
+    ManualRetry = 'manual-retry',
+  }
+
   type SnapshotLoadRequest =
-    | { kind: 'scheduled-refresh'; signal: AbortSignal }
-    | { kind: 'manual-retry' };
+    | { kind: SnapshotLoadRequestKind.ScheduledRefresh; signal: AbortSignal }
+    | { kind: SnapshotLoadRequestKind.ManualRetry };
 
   function omittedValue(): void {}
 
-  let snapshotState = $state<ObserverFeed>({ kind: 'not-loaded' });
-  let selectedIdState = $state<TaskSelection>({ kind: 'none' });
+  let snapshotState = $state<ObserverFeed>({
+    kind: ObserverFeedKind.NotLoaded,
+  });
+  let selectedIdState = $state<TaskSelection>({ kind: TaskSelectionKind.None });
   let search = $state('');
   let loading = $state(true);
   let unavailable = $state(false);
   let detailPanel!: HTMLElement;
   let detailsClosed = $state(false);
-  let durableMatchState = $state<DurableTaskLookup>({ kind: 'not-found' });
+  let durableMatchState = $state<DurableTaskLookup>({
+    kind: DurableTaskLookupKind.NotFound,
+  });
   let nowMs = $state(Date.now());
 
   const snapshot = $derived(
-    snapshotState.kind === 'loaded' ? snapshotState.snapshot : omittedValue(),
+    snapshotState.kind === ObserverFeedKind.Loaded
+      ? snapshotState.snapshot
+      : omittedValue(),
   );
   const selectedId = $derived(
-    selectedIdState.kind === 'selected'
+    selectedIdState.kind === TaskSelectionKind.Selected
       ? selectedIdState.taskId
       : omittedValue(),
   );
   const durableMatch = $derived(
-    durableMatchState.kind === 'found'
+    durableMatchState.kind === DurableTaskLookupKind.Found
       ? durableMatchState.task
       : omittedValue(),
   );
@@ -75,10 +118,14 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     const task =
       snapshot?.tasks.find((candidate) => candidate.id === selectedId) ??
       (durableMatch?.id === selectedId ? durableMatch : omittedValue());
-    return task ? { kind: 'open', task } : { kind: 'closed' };
+    return task
+      ? { kind: SelectedTaskKind.Open, task }
+      : { kind: SelectedTaskKind.Closed };
   });
   const selected = $derived(
-    selectedState.kind === 'open' ? selectedState.task : omittedValue(),
+    selectedState.kind === SelectedTaskKind.Open
+      ? selectedState.task
+      : omittedValue(),
   );
   const filteredTasks = $derived(
     [
@@ -120,22 +167,26 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   $effect(() => {
     const controller = new AbortController();
-    let pollSchedule: PollSchedule = { kind: 'stopped' };
+    let pollSchedule: PollSchedule = { kind: PollScheduleKind.Stopped };
 
     const poll = async () => {
       await loadSnapshot({
-        kind: 'scheduled-refresh',
+        kind: SnapshotLoadRequestKind.ScheduledRefresh,
         signal: controller.signal,
       });
       if (!controller.signal.aborted) {
-        pollSchedule = { kind: 'scheduled', timer: setTimeout(poll, 15_000) };
+        pollSchedule = {
+          kind: PollScheduleKind.Scheduled,
+          timer: setTimeout(poll, 15_000),
+        };
       }
     };
     void poll();
 
     return () => {
       controller.abort();
-      if (pollSchedule.kind === 'scheduled') clearTimeout(pollSchedule.timer);
+      if (pollSchedule.kind === PollScheduleKind.Scheduled)
+        clearTimeout(pollSchedule.timer);
     };
   });
 
@@ -151,7 +202,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       if (taskId.length === 0) {
-        durableMatchState = { kind: 'not-found' };
+        durableMatchState = { kind: DurableTaskLookupKind.NotFound };
         return;
       }
       try {
@@ -161,17 +212,20 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           { signal: controller.signal },
         );
         if (response.status === 404) {
-          durableMatchState = { kind: 'not-found' };
+          durableMatchState = { kind: DurableTaskLookupKind.NotFound };
           return;
         }
         if (!response.ok) return;
         const match = (await response.json()) as ObservedTask;
-        durableMatchState = { kind: 'found', task: match };
+        durableMatchState = { kind: DurableTaskLookupKind.Found, task: match };
         if (!detailsClosed)
-          selectedIdState = { kind: 'selected', taskId: match.id };
+          selectedIdState = {
+            kind: TaskSelectionKind.Selected,
+            taskId: match.id,
+          };
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          durableMatchState = { kind: 'not-found' };
+          durableMatchState = { kind: DurableTaskLookupKind.NotFound };
         }
       }
     }, 250);
@@ -190,8 +244,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ) {
       const firstTask = filteredTasks[0];
       selectedIdState = firstTask
-        ? { kind: 'selected', taskId: firstTask.id }
-        : { kind: 'none' };
+        ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
+        : { kind: TaskSelectionKind.None };
     }
   });
 
@@ -204,25 +258,27 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
         ? 'ru'
         : 'en';
       const requestInit: RequestInit =
-        request.kind === 'scheduled-refresh' ? { signal: request.signal } : {};
+        request.kind === SnapshotLoadRequestKind.ScheduledRefresh
+          ? { signal: request.signal }
+          : {};
       const response = await fetch(
         `/api/overview?locale=${encodeURIComponent(locale)}`,
         requestInit,
       );
       if (!response.ok) throw new Error(`observer returned ${response.status}`);
       const next = (await response.json()) as ObserverSnapshot;
-      snapshotState = { kind: 'loaded', snapshot: next };
+      snapshotState = { kind: ObserverFeedKind.Loaded, snapshot: next };
       unavailable = false;
       if (
-        (!detailsClosed && selectedIdState.kind === 'none') ||
+        (!detailsClosed && selectedIdState.kind === TaskSelectionKind.None) ||
         (!next.tasks.some((task) => task.id === selectedId) &&
           durableMatch?.id !== selectedId)
       ) {
         if (!detailsClosed) {
           const firstTask = next.tasks[0];
           selectedIdState = firstTask
-            ? { kind: 'selected', taskId: firstTask.id }
-            : { kind: 'none' };
+            ? { kind: TaskSelectionKind.Selected, taskId: firstTask.id }
+            : { kind: TaskSelectionKind.None };
         }
       }
     } catch (error) {
@@ -273,7 +329,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function selectTask(taskId: string) {
     detailsClosed = false;
-    selectedIdState = { kind: 'selected', taskId };
+    selectedIdState = { kind: TaskSelectionKind.Selected, taskId };
     if (!window.matchMedia('(width < 1080px)').matches) return;
     requestAnimationFrame(() => {
       const behavior = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -287,7 +343,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
   function closeDetails() {
     detailsClosed = true;
-    selectedIdState = { kind: 'none' };
+    selectedIdState = { kind: TaskSelectionKind.None };
   }
 </script>
 

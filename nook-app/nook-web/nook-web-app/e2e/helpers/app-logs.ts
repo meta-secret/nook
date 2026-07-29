@@ -195,10 +195,15 @@ export async function waitForPersistedAppLog(
   },
   options?: { limit?: number; timeoutMs?: number },
 ): Promise<NookLogEntry> {
+  enum LogSearchStateKind {
+    Searching = 'searching',
+    Matched = 'matched',
+  }
+
   type LogSearchState =
-    | { kind: 'searching' }
-    | { kind: 'matched'; entry: NookLogEntry }
-  let searchState: LogSearchState = { kind: 'searching' }
+    | { kind: LogSearchStateKind.Searching }
+    | { kind: LogSearchStateKind.Matched; entry: NookLogEntry }
+  let searchState: LogSearchState = { kind: LogSearchStateKind.Searching }
   await expect
     .poll(
       async () => {
@@ -206,14 +211,14 @@ export async function waitForPersistedAppLog(
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
         const found = findAppLogEntry(entries ?? [], filter)
         searchState = !found
-          ? { kind: 'searching' }
-          : { kind: 'matched', entry: found }
+          ? { kind: LogSearchStateKind.Searching }
+          : { kind: LogSearchStateKind.Matched, entry: found }
         return found
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
     .not.toBeUndefined()
-  if (searchState.kind === 'searching') {
+  if (searchState.kind === LogSearchStateKind.Searching) {
     throw new Error('persisted app log poll completed without a matching entry')
   }
   return searchState.entry

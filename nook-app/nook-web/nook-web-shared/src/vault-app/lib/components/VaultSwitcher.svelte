@@ -10,15 +10,20 @@
   import type { NookLocalVaultEntry, StoreId } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
-  type VaultSwitchState =
-    | { kind: 'idle' }
-    | { kind: 'switching'; storeId: StoreId }
+  enum VaultSwitchStateKind {
+  Idle = "idle",
+  Switching = "switching",
+}
+
+type VaultSwitchState =
+    | { kind: VaultSwitchStateKind.Idle }
+    | { kind: VaultSwitchStateKind.Switching; storeId: StoreId }
 
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
   let root = $state<HTMLDivElement>()
-  let switchState = $state<VaultSwitchState>({ kind: 'idle' })
+  let switchState = $state<VaultSwitchState>({ kind: VaultSwitchStateKind.Idle })
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
@@ -36,7 +41,7 @@
   const isBusy = $derived(
     vault.isVerifying ||
       vault.isInitializing ||
-      switchState.kind === 'switching',
+      switchState.kind === VaultSwitchStateKind.Switching,
   )
 
   const triggerClass =
@@ -81,11 +86,11 @@
   async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     open = false
-    switchState = { kind: 'switching', storeId: entry.storeId }
+    switchState = { kind: VaultSwitchStateKind.Switching, storeId: entry.storeId }
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
-      switchState = { kind: 'idle' }
+      switchState = { kind: VaultSwitchStateKind.Idle }
     }
   }
 

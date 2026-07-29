@@ -53,15 +53,31 @@ export type EnrollmentFlowHost = {
 
 const ENROLLMENT_SECTION_CLASS = 'enrollment-actions'
 
+enum AuthenticatorOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 type AuthenticatorOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | AuthenticatorOptionsResponseStatus.Ready
+    | AuthenticatorOptionsResponseStatus.Locked
+    | AuthenticatorOptionsResponseStatus.Unavailable
   accounts?: WebsiteAuthenticatorOption[]
+}
+
+enum EnrollPreviewResponseStatus {
+  Ready = 'ready',
+  Unavailable = 'unavailable',
 }
 
 type EnrollPreviewResponse = {
   ok?: boolean
-  status?: 'ready' | 'unavailable'
+  status?:
+    | EnrollPreviewResponseStatus.Ready
+    | EnrollPreviewResponseStatus.Unavailable
   preview?: OtpauthEnrollmentPreview
   vaultStoreId?: string
   reason?: string
@@ -641,7 +657,7 @@ async function continueBackupWithAuthenticatorOptions(
       return
     }
 
-    if (response.status === 'locked') {
+    if (response.status === AuthenticatorOptionsResponseStatus.Locked) {
       setHostDescription(host, lockedBackupMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)

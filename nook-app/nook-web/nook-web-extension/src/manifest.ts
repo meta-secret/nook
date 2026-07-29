@@ -7,6 +7,10 @@ import {
 
 type ManifestIconSet = Record<'16' | '32' | '48' | '128', string>
 
+export enum ExtensionManifestType {
+  Module = 'module',
+}
+
 export type ExtensionManifest = {
   manifest_version: 3
   default_locale: 'en'
@@ -23,7 +27,7 @@ export type ExtensionManifest = {
   }
   background: {
     service_worker: string
-    type: 'module'
+    type: ExtensionManifestType.Module
   }
   content_security_policy: {
     extension_pages: string
@@ -85,7 +89,7 @@ export function createManifest(
     },
     background: {
       service_worker: 'background/service-worker.js',
-      type: 'module',
+      type: ExtensionManifestType.Module,
     },
     content_security_policy: {
       extension_pages:

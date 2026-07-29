@@ -14,8 +14,8 @@ between a missing lookup, an idle workflow, a released resource, and a
 contract violation:
 
 ```ts
-let timer: ReturnType<typeof setTimeout> | undefined
-let started = false
+let timer: ReturnType<typeof setTimeout> | undefined;
+let started = false;
 ```
 
 This permits combinations such as `started === false` with a scheduled timer.
@@ -27,6 +27,18 @@ mutable flags create the same problem.
 
 - Use a discriminated union for named product, workflow, lifecycle, resource,
   and component states.
+- Back every authored closed discriminant vocabulary with a meaningfully named
+  string enum. Union variants reference enum members (`kind:
+SessionKind.Closed`), never raw string literal types (`kind: "closed"`).
+  Preserve the enum's serialized string values when browser messaging,
+  persistence, or external compatibility requires them.
+- Apply the same enum ownership to closed protocol fields such as `type`,
+  `status`, `phase`, `stage`, `mode`, `action`, and `operation`. A wire format
+  is a reason for string-valued enum members, not a reason to repeat raw string
+  literals throughout authored code.
+- Prefer one enum per cohesive state machine or protocol vocabulary. Do not
+  create a repository-wide `StateKind`, `MessageType`, or other generic enum
+  that merely centralizes unrelated strings.
 - Put state-specific values on the variant that owns them.
 - Group values that transition together; expose operations such as `start`,
   `cancel`, `succeed`, and `reset` instead of exposing mutable handles.
@@ -67,33 +79,33 @@ bindings are excluded because they mirror contracts Nook does not author.
 Before:
 
 ```ts
-let timer: ReturnType<typeof setTimeout> | undefined
-let started = false
+let timer: ReturnType<typeof setTimeout> | undefined;
+let started = false;
 ```
 
 After:
 
 ```ts
 type TrackerState =
-  | { kind: "stopped" }
-  | { kind: "tracking"; timer: ReturnType<typeof setTimeout> }
+  | { kind: TrackerKind.Stopped }
+  | { kind: TrackerKind.Tracking; timer: ReturnType<typeof setTimeout> };
 ```
 
 Before:
 
 ```ts
-let result = $state<NookImportResult>()
-let loading = $state(false)
+let result = $state<NookImportResult>();
+let loading = $state(false);
 ```
 
 After:
 
 ```ts
 type ImportState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "complete"; result: NookImportResult }
-  | { kind: "failed"; message: string }
+  | { kind: ImportKind.Idle }
+  | { kind: ImportKind.Loading }
+  | { kind: ImportKind.Complete; result: NookImportResult }
+  | { kind: ImportKind.Failed; message: string };
 ```
 
 ## Application Checklist
@@ -104,6 +116,8 @@ type ImportState =
       and coupled booleans with discriminated unions.
 - [ ] Reject generic optional-value wrappers and require semantic type and
       variant names at every application-state site.
+- [ ] Replace every raw string-literal discriminant with a member of a
+      cohesive, meaningfully named string enum.
 - [ ] Move portable policy and domain variants to Rust/WASM.
 - [ ] Keep boundary conversion narrow and documented by the surrounding type.
 - [ ] Add transition-focused tests and syntax-aware preflight fixtures.
@@ -114,6 +128,9 @@ type ImportState =
 The AST-backed preflight rejects every executable or type-level `undefined`
 token, every `typeof` comparison against the string `"undefined"`, and every
 generic optional-state escape hatch in authored JavaScript, TypeScript, and
-Svelte while ignoring comments and unrelated prose strings. Add positive and
-negative fixtures whenever the rule is sharpened. Run `task format` before
-pushing and use GitHub Actions as the product validation gate.
+Svelte. It also rejects raw string literal types on closed discriminant fields
+(`kind`, `type`, `status`, `phase`, `stage`, `mode`, `action`, and
+`operation`) while accepting enum member types and ignoring comments and
+unrelated prose strings. Add positive and negative fixtures whenever the rule
+is sharpened. Run `task format` before pushing and use GitHub Actions as the
+product validation gate.

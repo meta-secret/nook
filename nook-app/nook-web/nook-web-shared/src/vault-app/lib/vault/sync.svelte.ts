@@ -28,29 +28,20 @@ import {
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import { intoWasmStringValue } from "$lib/wasm-string-value";
-type ConflictProviderSave =
-  | { kind: "not-saved" }
-  | { kind: "saved"; providerId: string };
-type LocalFolderInspection =
-  | { kind: "single-vault" }
-  | { kind: "multiple-vaults"; issue: LocalFolderMultipleVaultsIssue };
+import {
+  ConflictProviderSaveKind,
+  LocalFolderInspectionKind,
+  type ConflictProviderSave,
+  type LocalFolderInspection,
+  type LocalFolderMultipleVaultsIssue,
+} from "$lib/vault/sync-operation-state";
 
 export * from "$lib/vault/sync-resolution";
 export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
 
 const log = createLogger("vault-sync");
 
-/** A local folder was chosen at a level that contains event logs for many vaults. */
-export type LocalFolderMultipleVaultsIssue = {
-  providerId: string;
-  providerLabel: string;
-  storeIds: string[];
-  message: string;
-};
-
-async function readLocalVaultBlob(): Promise<string> {
-  return readLocalVaultYaml();
-}
+export type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync-operation-state";
 
 function syncError(context: string, error: unknown) {
   log.warn(`${context} failed`, {
@@ -439,7 +430,7 @@ async function stageProviderStoreMismatchConflict(
   localStoreId: string,
   remoteStoreId: string,
 ): Promise<boolean> {
-  const localYaml = await readLocalVaultBlob().catch(() => "");
+  const localYaml = await readLocalVaultYaml().catch(() => "");
   const args =
     provider.type === "local-folder"
       ? (["local-folder", "", ""] as const)
@@ -486,7 +477,7 @@ export async function stageStagedProviderSyncIssue(
     const remoteStoreId = issue.remoteStoreId;
     if (!localStoreId || !remoteStoreId || !manager) return false;
 
-    const localYaml = await readLocalVaultBlob().catch(() => "");
+    const localYaml = await readLocalVaultYaml().catch(() => "");
     await state.enqueueStorage(() =>
       manager.restoreLocalAfterProviderAssessment(),
     );
@@ -791,7 +782,9 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true;
   state.errorMsg = "";
-  let providerSave: ConflictProviderSave = { kind: "not-saved" };
+  let providerSave: ConflictProviderSave = {
+    kind: ConflictProviderSaveKind.NotSaved,
+  };
   let importedAsSeparateVault = false;
   try {
     let importedStoreId: string;
@@ -833,7 +826,7 @@ export async function resolveSyncConflictImportRemote(
     state.localVaultPresent = true;
     await state.refreshLocalVaultCatalog();
     const providerId = await state.ensureProviderSavedAfterConflict(conflict);
-    providerSave = { kind: "saved", providerId };
+    providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
     if (conflict.remoteYaml.trim()) {
       await state.updateProviderSyncMetadata(
         providerId,
@@ -865,11 +858,14 @@ export async function resolveSyncConflictImportRemote(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t("auth_storage.sync_failed");
-    providerSave = { kind: "not-saved" };
+    providerSave = { kind: ConflictProviderSaveKind.NotSaved };
   } finally {
     state.isVerifying = false;
   }
-  if (providerSave.kind === "saved" && !importedAsSeparateVault) {
+  if (
+    providerSave.kind === ConflictProviderSaveKind.Saved &&
+    !importedAsSeparateVault
+  ) {
     await resumeConnectAfterSyncConflict(
       state,
       providerSave.providerId,
@@ -930,7 +926,7 @@ export async function syncProviderById(
     await state.refreshReplacementConflicts();
     await state.updateProviderSyncMetadata(
       providerId,
-      await readLocalVaultBlob(),
+      await readLocalVaultYaml(),
       omittedValue(),
     );
     log.debug("provider sync finished", { providerId, type: provider.type });
@@ -946,7 +942,7 @@ export async function syncProviderById(
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
     let localFolderInspection: LocalFolderInspection = {
-      kind: "single-vault",
+      kind: LocalFolderInspectionKind.SingleVault,
     };
     if (eventLogIssue?.isStoreMismatch) {
       const localStoreId = eventLogIssue.localStoreId;
@@ -961,7 +957,7 @@ export async function syncProviderById(
       }
     } else if (eventLogIssue?.isMultipleStores) {
       localFolderInspection = {
-        kind: "multiple-vaults",
+        kind: LocalFolderInspectionKind.MultipleVaults,
         issue: localFolderMultipleVaultsIssueFromTypedIssue(
           provider,
           eventLogIssue.storeIds,
@@ -970,7 +966,9 @@ export async function syncProviderById(
       };
     }
     eventLogIssue?.free();
-    if (localFolderInspection.kind === "multiple-vaults") {
+    if (
+      localFolderInspection.kind === LocalFolderInspectionKind.MultipleVaults
+    ) {
       stageLocalFolderMultipleVaultsIssue(state, localFolderInspection.issue);
     }
     if (!options?.quiet) {
@@ -978,7 +976,8 @@ export async function syncProviderById(
         ? state.t("auth_storage.sync_conflict_store_id_banner", {
             provider: provider.label,
           })
-        : localFolderInspection.kind === "multiple-vaults"
+        : localFolderInspection.kind ===
+            LocalFolderInspectionKind.MultipleVaults
           ? state.t("auth_storage.local_folder_multiple_vaults_short")
           : e instanceof Error
             ? e.message

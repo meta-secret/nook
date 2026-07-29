@@ -19,8 +19,12 @@ export type AuthenticationOutcomeVerdictView = {
   allowsCredentialCommit: boolean
 }
 
+export enum AuthenticationOutcomeClassifyMessageType {
+  NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',
+}
+
 export type AuthenticationOutcomeClassifyMessage = {
-  type: 'nook:authentication-outcome-classify'
+  type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
   payload: {
     observation: AuthenticationOutcomeObservationView
     timeoutMs?: number
@@ -34,7 +38,8 @@ export function isAuthenticationOutcomeClassifyMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authentication-outcome-classify' ||
+    message.type !==
+      AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object' ||

@@ -45,17 +45,27 @@ describe('ExtensionSessionMessageDispatcher', () => {
       sender: chrome.runtime.MessageSender,
       sendResponse: (response?: unknown) => void,
     ) => boolean
+    enum ListenerRegistrationKind {
+      NotRegistered = 'not-registered',
+      Registered = 'registered',
+    }
+
     type ListenerRegistration =
-      | { kind: 'not-registered' }
-      | { kind: 'registered'; listener: RuntimeListener }
-    let registration: ListenerRegistration = { kind: 'not-registered' }
+      | { kind: ListenerRegistrationKind.NotRegistered }
+      | { kind: ListenerRegistrationKind.Registered; listener: RuntimeListener }
+    let registration: ListenerRegistration = {
+      kind: ListenerRegistrationKind.NotRegistered,
+    }
     globalThis.chrome = {
       runtime: {
         id: 'nook-extension',
         getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
         onMessage: {
           addListener: (registered: RuntimeListener) => {
-            registration = { kind: 'registered', listener: registered }
+            registration = {
+              kind: ListenerRegistrationKind.Registered,
+              listener: registered,
+            }
           },
         },
       },
@@ -67,7 +77,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     dispatcher.registerRuntimeListener()
 
-    if (registration.kind === 'not-registered') {
+    if (registration.kind === ListenerRegistrationKind.NotRegistered) {
       throw new Error('runtime listener was not registered')
     }
     expect(

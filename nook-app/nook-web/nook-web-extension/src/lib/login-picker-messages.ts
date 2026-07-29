@@ -3,23 +3,35 @@ import type { WebsiteLoginAccountOption } from './login-fill-messages'
 
 export const MAX_LOGIN_SEARCH_LENGTH = 200
 
+export enum WebsiteLoginPickerOpenMessageType {
+  NookWebsiteLoginPickerOpen = 'nook:website-login-picker-open',
+}
+
 export type WebsiteLoginPickerOpenMessage = {
-  type: 'nook:website-login-picker-open'
+  type: WebsiteLoginPickerOpenMessageType.NookWebsiteLoginPickerOpen
   payload: {
     origin: string
   }
 }
 
+export enum LoginPickerQueryMessageType {
+  NookLoginPickerQuery = 'nook:login-picker-query',
+}
+
 export type LoginPickerQueryMessage = {
-  type: 'nook:login-picker-query'
+  type: LoginPickerQueryMessageType.NookLoginPickerQuery
   payload: {
     requestId: string
     query: string
   }
 }
 
+export enum LoginPickerSelectMessageType {
+  NookLoginPickerSelect = 'nook:login-picker-select',
+}
+
 export type LoginPickerSelectMessage = {
-  type: 'nook:login-picker-select'
+  type: LoginPickerSelectMessageType.NookLoginPickerSelect
   payload: {
     requestId: string
     vaultStoreId: string
@@ -27,15 +39,23 @@ export type LoginPickerSelectMessage = {
   }
 }
 
+export enum LoginPickerCancelMessageType {
+  NookLoginPickerCancel = 'nook:login-picker-cancel',
+}
+
 export type LoginPickerCancelMessage = {
-  type: 'nook:login-picker-cancel'
+  type: LoginPickerCancelMessageType.NookLoginPickerCancel
   payload: {
     requestId: string
   }
 }
 
+export enum WebsiteLoginSelectedMessageType {
+  NookWebsiteLoginSelected = 'nook:website-login-selected',
+}
+
 export type WebsiteLoginSelectedMessage = {
-  type: 'nook:website-login-selected'
+  type: WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected
   payload: {
     origin: string
     requestId: string
@@ -43,8 +63,12 @@ export type WebsiteLoginSelectedMessage = {
   }
 }
 
+export enum WebsiteLoginCanceledMessageType {
+  NookWebsiteLoginCanceled = 'nook:website-login-canceled',
+}
+
 export type WebsiteLoginCanceledMessage = {
-  type: 'nook:website-login-canceled'
+  type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled
   payload: {
     origin: string
     requestId: string
@@ -68,7 +92,7 @@ export function isLoginPickerQueryMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:login-picker-query' ||
+    message.type !== LoginPickerQueryMessageType.NookLoginPickerQuery ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -90,7 +114,7 @@ export function isLoginPickerSelectMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:login-picker-select' ||
+    message.type !== LoginPickerSelectMessageType.NookLoginPickerSelect ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -112,7 +136,7 @@ export function isLoginPickerCancelMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:login-picker-cancel' ||
+    message.type !== LoginPickerCancelMessageType.NookLoginPickerCancel ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -130,7 +154,7 @@ export function isWebsiteLoginSelectedMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:website-login-selected' ||
+    message.type !== WebsiteLoginSelectedMessageType.NookWebsiteLoginSelected ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'

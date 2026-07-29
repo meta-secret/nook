@@ -17,8 +17,12 @@ export function pairingGrantStorageKey(vaultStoreId: string): string {
   return `nook:extension-pairing-grant:${vaultStoreId}`
 }
 
+export enum ExtensionReadySetupStateStatus {
+  Ready = 'ready',
+}
+
 export type ExtensionReadySetupState = {
-  status: 'ready'
+  status: ExtensionReadySetupStateStatus.Ready
   deviceLabel: string
   pairedVaults: string[]
   selectedVaultStoreId: string
@@ -73,7 +77,7 @@ export function isExtensionReadySetupState(
 
   const state = value as Record<string, unknown>
   return (
-    state.status === 'ready' &&
+    state.status === ExtensionReadySetupStateStatus.Ready &&
     typeof state.deviceLabel === 'string' &&
     Array.isArray(state.pairedVaults) &&
     state.pairedVaults.length > 0 &&
@@ -99,7 +103,7 @@ export function setupStateFromPairingGrant(
   grant: StoredExtensionPairingGrant,
 ): ExtensionReadySetupState {
   return {
-    status: 'ready',
+    status: ExtensionReadySetupStateStatus.Ready,
     deviceLabel: grant.deviceLabel,
     pairedVaults: [grant.vaultName],
     selectedVaultStoreId: grant.vaultStoreId,
@@ -259,7 +263,7 @@ function isLegacyExtensionReadySetupState(
   if (!value || typeof value !== 'object') return false
   const state = value as Record<string, unknown>
   return (
-    state.status === 'ready' &&
+    state.status === ExtensionReadySetupStateStatus.Ready &&
     typeof state.deviceLabel === 'string' &&
     Array.isArray(state.pairedVaults) &&
     state.pairedVaults.length > 0 &&

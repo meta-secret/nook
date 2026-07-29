@@ -23,9 +23,17 @@ import {
   refreshSentinelUnlockStatus,
   surfaceSentinelCeremonyIfNeeded,
 } from "$lib/vault/sentinel-unlock";
+enum StorageConnectionKind {
+  Configured = "configured",
+  RemoteRecovery = "remote-recovery",
+}
+
 type StorageConnection =
-  | { kind: "configured" }
-  | { kind: "remote-recovery"; args: [string, string, string] };
+  | { kind: StorageConnectionKind.Configured }
+  | {
+      kind: StorageConnectionKind.RemoteRecovery;
+      args: [string, string, string];
+    };
 
 const log = createLogger("connect");
 
@@ -72,7 +80,9 @@ export async function loadDb(state: VaultState) {
     }
 
     let accessStatus = await state.assessVaultConnectStatus();
-    let storageConnection: StorageConnection = { kind: "configured" };
+    let storageConnection: StorageConnection = {
+      kind: StorageConnectionKind.Configured,
+    };
     log.debug("loadDb assess", {
       accessStatus,
       localVaultPresent: state.localVaultPresent,
@@ -103,7 +113,10 @@ export async function loadDb(state: VaultState) {
       log.debug("loadDb provider re-assess", { remoteStatus });
       if (remoteStatus === VaultAccessStatus.Ready) {
         accessStatus = VaultAccessStatus.Ready;
-        storageConnection = { kind: "remote-recovery", args: providerArgs };
+        storageConnection = {
+          kind: StorageConnectionKind.RemoteRecovery,
+          args: providerArgs,
+        };
       }
     }
 
@@ -144,7 +157,7 @@ export async function loadDb(state: VaultState) {
 
     const rawRecords = await state.enqueueStorage(async () => {
       const connectArgs =
-        storageConnection.kind === "remote-recovery"
+        storageConnection.kind === StorageConnectionKind.RemoteRecovery
           ? storageConnection.args
           : state.connectStorageArgs();
       log.debug("loadDb connect", { mode: connectArgs[0] });

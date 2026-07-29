@@ -43,12 +43,22 @@
     providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
-  type ProviderSelection =
-    | { kind: 'automatic' }
-    | { kind: 'selected'; providerId: string }
-  type PasswordEntrySelection =
-    | { kind: 'not-selected' }
-    | { kind: 'selected'; entryId: PasswordEntryId }
+  enum ProviderSelectionKind {
+  Automatic = "automatic",
+  Selected = "selected",
+}
+
+type ProviderSelection =
+    | { kind: ProviderSelectionKind.Automatic }
+    | { kind: ProviderSelectionKind.Selected; providerId: string }
+  enum PasswordEntrySelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
+type PasswordEntrySelection =
+    | { kind: PasswordEntrySelectionKind.NotSelected }
+    | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId }
 
   let {
     vault,
@@ -127,10 +137,10 @@
   )
 
   let selectedProviderIdState = $state<ProviderSelection>({
-    kind: 'automatic',
+    kind: ProviderSelectionKind.Automatic,
   })
   let passwordEntry = $state<PasswordEntrySelection>({
-    kind: 'not-selected',
+    kind: PasswordEntrySelectionKind.NotSelected,
   })
   let passwordInput = $state('')
   let localError = $state('')

@@ -6,7 +6,7 @@ use nook_preflight::{
     typescript_domain_boundary_boilerplate, typescript_generic_optional_state,
     typescript_implicit_application_state, typescript_json_round_trip_clones,
     typescript_mutable_void_state, typescript_null_absence_sentinels,
-    typescript_svelte_state_modeling_violations,
+    typescript_raw_string_discriminants, typescript_svelte_state_modeling_violations,
 };
 
 fn repository_root() -> PathBuf {
@@ -114,6 +114,16 @@ fn typescript_state_names_explain_the_domain_transition() -> anyhow::Result<()> 
     assert!(
         violations.is_empty(),
         "generic Option-style wrappers are forbidden; use domain-specific union names and variants: {violations:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn typescript_closed_vocabularies_use_enums() -> anyhow::Result<()> {
+    let violations = typescript_raw_string_discriminants(&repository_root())?;
+    assert!(
+        violations.is_empty(),
+        "closed TypeScript and Svelte discriminants must reference named enum members instead of raw string literal types: {violations:#?}"
     );
     Ok(())
 }

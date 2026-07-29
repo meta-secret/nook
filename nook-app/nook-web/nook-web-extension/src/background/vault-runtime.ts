@@ -32,14 +32,24 @@ import type {
 import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
-type BackgroundWasmStartup =
-  | { kind: 'not-started' }
-  | { kind: 'initializing'; operation: Promise<unknown> }
+enum BackgroundWasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-let backgroundWasmStartup: BackgroundWasmStartup = { kind: 'not-started' }
+type BackgroundWasmStartup =
+  | { kind: BackgroundWasmStartupKind.NotStarted }
+  | {
+      kind: BackgroundWasmStartupKind.Initializing
+      operation: Promise<unknown>
+    }
+
+let backgroundWasmStartup: BackgroundWasmStartup = {
+  kind: BackgroundWasmStartupKind.NotStarted,
+}
 
 function ensureExtensionWasm(): Promise<unknown> {
-  if (backgroundWasmStartup.kind === 'initializing') {
+  if (backgroundWasmStartup.kind === BackgroundWasmStartupKind.Initializing) {
     return backgroundWasmStartup.operation
   }
   const operation = initNookWasm({
@@ -48,7 +58,10 @@ function ensureExtensionWasm(): Promise<unknown> {
     configureVaultApplication('extension')
     return value
   })
-  backgroundWasmStartup = { kind: 'initializing', operation }
+  backgroundWasmStartup = {
+    kind: BackgroundWasmStartupKind.Initializing,
+    operation,
+  }
   return operation
 }
 

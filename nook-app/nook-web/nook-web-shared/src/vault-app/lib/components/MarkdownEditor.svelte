@@ -1,8 +1,13 @@
 <script lang="ts">
   import { renderMarkdown } from '$lib/markdown'
-  type TextareaMount =
-    | { kind: 'unmounted' }
-    | { kind: 'mounted'; element: HTMLTextAreaElement }
+  enum TextareaMountKind {
+  Unmounted = "unmounted",
+  Mounted = "mounted",
+}
+
+type TextareaMount =
+    | { kind: TextareaMountKind.Unmounted }
+    | { kind: TextareaMountKind.Mounted; element: HTMLTextAreaElement }
   import MarkdownBody from './MarkdownBody.svelte'
 
   let {
@@ -24,19 +29,19 @@
 
   const previewHtml = $derived(renderMarkdown(value))
 
-  let textareaState: TextareaMount = { kind: 'unmounted' }
+  let textareaState: TextareaMount = { kind: TextareaMountKind.Unmounted }
 
   function registerTextarea(node: HTMLTextAreaElement) {
-    textareaState = { kind: 'mounted', element: node }
+    textareaState = { kind: TextareaMountKind.Mounted, element: node }
     return {
       destroy() {
-        textareaState = { kind: 'unmounted' }
+        textareaState = { kind: TextareaMountKind.Unmounted }
       },
     }
   }
 
   function adjustHeight() {
-    if (fill || textareaState.kind === 'unmounted') return
+    if (fill || textareaState.kind === TextareaMountKind.Unmounted) return
     const textareaEl = textareaState.element
     textareaEl.style.height = 'auto'
     textareaEl.style.height = `${textareaEl.scrollHeight}px`

@@ -7,12 +7,18 @@
     type AppLogsResponse,
   } from '$lib/app-logs-api'
 
-  type LogsPageState =
-    | { kind: 'loading' }
-    | { kind: 'loaded'; payload: AppLogsResponse }
-    | { kind: 'failed'; message: string }
+  enum LogsPageStateKind {
+  Loading = "loading",
+  Loaded = "loaded",
+  Failed = "failed",
+}
 
-  let state = $state<LogsPageState>({ kind: 'loading' })
+type LogsPageState =
+    | { kind: LogsPageStateKind.Loading }
+    | { kind: LogsPageStateKind.Loaded; payload: AppLogsResponse }
+    | { kind: LogsPageStateKind.Failed; message: string }
+
+  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -21,12 +27,12 @@
       try {
         const query = parseAppLogsQuery(window.location.search)
         state = {
-          kind: 'loaded',
+          kind: LogsPageStateKind.Loaded,
           payload: await loadAppLogsResponse(query),
         }
       } catch (cause) {
         state = {
-          kind: 'failed',
+          kind: LogsPageStateKind.Failed,
           message:
             cause instanceof Error ? cause.message : 'Failed to load app logs',
         }

@@ -2,18 +2,25 @@
 
 export type MermaidTheme = "light" | "dark";
 
-type MermaidModuleCache =
-  | { kind: "not-loaded" }
-  | { kind: "loaded"; module: typeof import("mermaid") };
+enum MermaidModuleCacheKind {
+  NotLoaded = "not-loaded",
+  Loaded = "loaded",
+}
 
-let mermaidModuleCache: MermaidModuleCache = { kind: "not-loaded" };
+type MermaidModuleCache =
+  | { kind: MermaidModuleCacheKind.NotLoaded }
+  | { kind: MermaidModuleCacheKind.Loaded; module: typeof import("mermaid") };
+
+let mermaidModuleCache: MermaidModuleCache = {
+  kind: MermaidModuleCacheKind.NotLoaded,
+};
 
 async function loadMermaid() {
-  if (mermaidModuleCache.kind === "loaded") {
+  if (mermaidModuleCache.kind === MermaidModuleCacheKind.Loaded) {
     return mermaidModuleCache.module.default;
   }
   const loaded = await import("mermaid");
-  mermaidModuleCache = { kind: "loaded", module: loaded };
+  mermaidModuleCache = { kind: MermaidModuleCacheKind.Loaded, module: loaded };
   return loaded.default;
 }
 

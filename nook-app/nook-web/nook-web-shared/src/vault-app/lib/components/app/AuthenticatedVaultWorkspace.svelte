@@ -13,9 +13,14 @@
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import type { VaultItemType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
-  type SecretEditorMode =
-    | { kind: "closed" }
-    | { kind: "adding"; itemType: VaultItemType };
+  enum SecretEditorModeKind {
+  Closed = "closed",
+  Adding = "adding",
+}
+
+type SecretEditorMode =
+    | { kind: SecretEditorModeKind.Closed }
+    | { kind: SecretEditorModeKind.Adding; itemType: VaultItemType };
 
   let {
     vault,
@@ -45,11 +50,11 @@
 
   const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<SecretEditorMode>({ kind: "closed" });
+  let secretsAddFormType = $state<SecretEditorMode>({ kind: SecretEditorModeKind.Closed });
   let secretsEditorResetKey = $state(0);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
-      secretsAddFormType.kind === "adding" &&
+      secretsAddFormType.kind === SecretEditorModeKind.Adding &&
       secretsAddFormType.itemType === "secure-note",
   );
 
@@ -57,14 +62,14 @@
     secretsAddOpen = open;
     secretsAddFormType =
       open && type
-        ? { kind: "adding", itemType: type }
-        : { kind: "closed" };
+        ? { kind: SecretEditorModeKind.Adding, itemType: type }
+        : { kind: SecretEditorModeKind.Closed };
     onEditorOpenChange(open);
   }
 
   function leaveSecretsEditor() {
     secretsAddOpen = false;
-    secretsAddFormType = { kind: "closed" };
+    secretsAddFormType = { kind: SecretEditorModeKind.Closed };
     secretsEditorResetKey += 1;
     onEditorOpenChange(false);
   }

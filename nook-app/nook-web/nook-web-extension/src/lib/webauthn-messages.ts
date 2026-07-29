@@ -1,8 +1,12 @@
 import { omittedValue } from '../../../nook-web-shared/src/explicit-state'
 export type WebsitePasskeyCeremony = 'create' | 'get'
 
+export enum WebsitePasskeyOptionsMessageType {
+  NookWebsitePasskeyOptions = 'nook:website-passkey-options',
+}
+
 export type WebsitePasskeyOptionsMessage = {
-  type: 'nook:website-passkey-options'
+  type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
   payload: {
     requestId: string
     ceremony: WebsitePasskeyCeremony
@@ -11,16 +15,24 @@ export type WebsitePasskeyOptionsMessage = {
   }
 }
 
+export enum WebsitePasskeyPerformMessageType {
+  NookWebsitePasskeyPerform = 'nook:website-passkey-perform',
+}
+
 export type WebsitePasskeyPerformMessage = {
-  type: 'nook:website-passkey-perform'
+  type: WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform
   payload: WebsitePasskeyOptionsMessage['payload'] & {
     vaultStoreId: string
     credentialId?: string
   }
 }
 
+export enum WebsitePasskeyCancelMessageType {
+  NookWebsitePasskeyCancel = 'nook:website-passkey-cancel',
+}
+
 export type WebsitePasskeyCancelMessage = {
-  type: 'nook:website-passkey-cancel'
+  type: WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel
   payload: {
     requestId: string
   }
@@ -59,7 +71,7 @@ export function isWebsitePasskeyOptionsMessage(
   return (
     validBase(message) &&
     'type' in message &&
-    message.type === 'nook:website-passkey-options'
+    message.type === WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions
   )
 }
 
@@ -69,7 +81,8 @@ export function isWebsitePasskeyPerformMessage(
   return (
     validBase(message) &&
     'type' in message &&
-    message.type === 'nook:website-passkey-perform' &&
+    message.type ===
+      WebsitePasskeyPerformMessageType.NookWebsitePasskeyPerform &&
     'vaultStoreId' in message.payload &&
     typeof message.payload.vaultStoreId === 'string' &&
     message.payload.vaultStoreId.length > 0 &&
@@ -86,7 +99,7 @@ export function isWebsitePasskeyCancelMessage(
     message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:website-passkey-cancel' &&
+    message.type === WebsitePasskeyCancelMessageType.NookWebsitePasskeyCancel &&
     'payload' in message &&
     message.payload &&
     typeof message.payload === 'object' &&

@@ -14,32 +14,42 @@ export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
 /** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
 export const DEFAULT_GITHUB_REPO = 'nook'
 
-type E2eGithubRepoCache =
-  | { kind: 'uncached' }
-  | { kind: 'cached'; repoName: string }
+enum E2eGithubRepoCacheKind {
+  Uncached = 'uncached',
+  Cached = 'cached',
+}
 
-let e2eGithubRepoCache: E2eGithubRepoCache = { kind: 'uncached' }
+type E2eGithubRepoCache =
+  | { kind: E2eGithubRepoCacheKind.Uncached }
+  | { kind: E2eGithubRepoCacheKind.Cached; repoName: string }
+
+let e2eGithubRepoCache: E2eGithubRepoCache = {
+  kind: E2eGithubRepoCacheKind.Uncached,
+}
 
 /**
  * One GitHub repo per Playwright container/run. CI sets NOOK_GITHUB_E2E_REPO per
  * docker:e2e:run (e.g. nook-e2e-github-$RUN_ID); local runs get a random nook-* repo.
  */
 export function createE2eGithubRepoName(): string {
-  if (e2eGithubRepoCache.kind === 'cached') {
+  if (e2eGithubRepoCache.kind === E2eGithubRepoCacheKind.Cached) {
     return e2eGithubRepoCache.repoName
   }
 
   const override = process.env.NOOK_GITHUB_E2E_REPO?.trim()
   if (override) {
     registerE2eGithubRepo(override)
-    e2eGithubRepoCache = { kind: 'cached', repoName: override }
+    e2eGithubRepoCache = {
+      kind: E2eGithubRepoCacheKind.Cached,
+      repoName: override,
+    }
     return override
   }
 
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   const repoName = `nook-${suffix}`
   registerE2eGithubRepo(repoName)
-  e2eGithubRepoCache = { kind: 'cached', repoName }
+  e2eGithubRepoCache = { kind: E2eGithubRepoCacheKind.Cached, repoName }
   return repoName
 }
 

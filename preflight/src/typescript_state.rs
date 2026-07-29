@@ -92,6 +92,37 @@ pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violatio
     Ok(violations)
 }
 
+/// Finds authored string-literal discriminants that should be owned by enums.
+///
+/// Closed state and protocol vocabularies must have a named enum declaration.
+/// The serialized values may remain strings for compatibility, but union
+/// variants and message shapes refer to enum members instead of repeating raw
+/// literals.
+///
+/// # Errors
+///
+/// Returns an error when the repository source tree cannot be read.
+pub fn typescript_raw_string_discriminants(root: &Path) -> io::Result<Vec<Violation>> {
+    let mut files = Vec::new();
+    collect_authored_source_files(root, &mut files)?;
+
+    let mut violations = Vec::new();
+    for path in files {
+        let contents = fs::read_to_string(&path)?;
+        for line in
+            raw_string_discriminant_lines(&contents, path.extension()).map_err(io::Error::other)?
+        {
+            violations.push(Violation {
+                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
+                line,
+            });
+        }
+    }
+    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
+    violations.dedup();
+    Ok(violations)
+}
+
 fn collect_authored_source_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
     if !directory.exists() {
         return Ok(());
@@ -207,6 +238,80 @@ fn generic_optional_state_lines(
     typescript_code_generic_optional_state_lines(source, 1)
 }
 
+fn raw_string_discriminant_lines(
+    source: &str,
+    extension: Option<&std::ffi::OsStr>,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+    if extension.is_some_and(|value| value == "svelte") {
+        return svelte_raw_string_discriminant_lines(source);
+    }
+    typescript_code_raw_string_discriminant_lines(source, 1)
+}
+
+fn typescript_code_raw_string_discriminant_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
+    let Some(tree) = parser.parse(source, None) else {
+        return Ok(Vec::new());
+    };
+    let mut lines = Vec::new();
+    collect_raw_string_discriminant_nodes(tree.root_node(), source, first_line, &mut lines);
+    lines.sort_unstable();
+    lines.dedup();
+    Ok(lines)
+}
+
+fn collect_raw_string_discriminant_nodes(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    first_line: usize,
+    lines: &mut Vec<usize>,
+) {
+    const DISCRIMINANT_NAMES: [&str; 8] = [
+        "action",
+        "kind",
+        "mode",
+        "operation",
+        "phase",
+        "stage",
+        "status",
+        "type",
+    ];
+    if node.kind() == "property_signature" {
+        let name = node
+            .child_by_field_name("name")
+            .and_then(|value| value.utf8_text(source.as_bytes()).ok())
+            .map(str::trim);
+        let declared_type = node.child_by_field_name("type");
+        if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
+            && declared_type.is_some_and(|value| contains_string_literal_type(value, source))
+        {
+            lines.push(first_line + node.start_position().row);
+            return;
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_raw_string_discriminant_nodes(child, source, first_line, lines);
+    }
+}
+
+fn contains_string_literal_type(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    if node.kind() == "literal_type"
+        && node
+            .utf8_text(source.as_bytes())
+            .is_ok_and(|text| matches!(text.trim().chars().next(), Some('\'' | '"' | '`')))
+    {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .any(|child| contains_string_literal_type(child, source))
+}
+
 fn typescript_code_generic_optional_state_lines(
     source: &str,
     first_line: usize,
@@ -229,9 +334,10 @@ fn collect_generic_optional_state_nodes(
     first_line: usize,
     lines: &mut Vec<usize>,
 ) {
-    const BANNED_NAMES: [&str; 5] = [
+    const BANNED_NAMES: [&str; 6] = [
         "EMPTY_VALUE",
         "ValueState",
+        "omittedValue",
         "presentValue",
         "valueState",
         "valueFromState",
@@ -404,6 +510,26 @@ fn svelte_generic_optional_state_lines(
     Ok(lines)
 }
 
+fn svelte_raw_string_discriminant_lines(
+    source: &str,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
+    let Some(tree) = parser.parse(source, None) else {
+        return Ok(Vec::new());
+    };
+    let mut lines = Vec::new();
+    collect_svelte_script_fragments_with(
+        tree.root_node(),
+        source,
+        &mut lines,
+        typescript_code_raw_string_discriminant_lines,
+    )?;
+    lines.sort_unstable();
+    lines.dedup();
+    Ok(lines)
+}
+
 fn collect_svelte_script_fragments_with(
     node: tree_sitter::Node<'_>,
     source: &str,
@@ -489,7 +615,7 @@ fn collect_svelte_script_fragments(
 mod tests {
     use super::{
         typescript_code_generic_optional_state_lines, typescript_code_mutable_void_state_lines,
-        typescript_code_undefined_token_lines,
+        typescript_code_raw_string_discriminant_lines, typescript_code_undefined_token_lines,
     };
 
     #[test]
@@ -543,6 +669,28 @@ const state = presentValue(value)
         assert_eq!(
             typescript_code_generic_optional_state_lines(source, 1)?,
             vec![3, 4, 5]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn reports_raw_string_discriminants_but_accepts_enum_members()
+    -> Result<(), tree_sitter::LanguageError> {
+        let source = r#"
+enum SessionKind {
+  Closed = 'closed',
+  Open = 'open',
+}
+type SessionState =
+  | { kind: 'closed' }
+  | { kind: SessionKind.Open; handle: number }
+type Message = { type: 'nook:open'; payload: string }
+type Description = { label: 'static copy' }
+"#;
+
+        assert_eq!(
+            typescript_code_raw_string_discriminant_lines(source, 1)?,
+            vec![7, 9]
         );
         Ok(())
     }

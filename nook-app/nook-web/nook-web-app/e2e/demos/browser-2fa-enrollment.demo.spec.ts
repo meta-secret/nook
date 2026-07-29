@@ -38,24 +38,42 @@ test('uses the paired demo vault for authenticator enrollment', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
+  enum BootstrapStartSignalKind {
+    WaitingForHandler = 'waiting-for-handler',
+    Ready = 'ready',
+  }
+
   type BootstrapStartSignal =
-    | { kind: 'waiting-for-handler' }
-    | { kind: 'ready'; signal: () => void }
+    | { kind: BootstrapStartSignalKind.WaitingForHandler }
+    | { kind: BootstrapStartSignalKind.Ready; signal: () => void }
   let bootstrapStartSignal: BootstrapStartSignal = {
-    kind: 'waiting-for-handler',
+    kind: BootstrapStartSignalKind.WaitingForHandler,
   }
   const wasmBootstrapStarted = new Promise<void>((resolve) => {
-    bootstrapStartSignal = { kind: 'ready', signal: resolve }
+    bootstrapStartSignal = {
+      kind: BootstrapStartSignalKind.Ready,
+      signal: resolve,
+    }
   })
+  enum BootstrapReleaseSignalKind {
+    Blocked = 'blocked',
+    Releasable = 'releasable',
+  }
+
   type BootstrapReleaseSignal =
-    | { kind: 'blocked' }
-    | { kind: 'releasable'; release: () => void }
-  let bootstrapReleaseSignal: BootstrapReleaseSignal = { kind: 'blocked' }
+    | { kind: BootstrapReleaseSignalKind.Blocked }
+    | { kind: BootstrapReleaseSignalKind.Releasable; release: () => void }
+  let bootstrapReleaseSignal: BootstrapReleaseSignal = {
+    kind: BootstrapReleaseSignalKind.Blocked,
+  }
   const wasmBootstrapReleased = new Promise<void>((resolve) => {
-    bootstrapReleaseSignal = { kind: 'releasable', release: resolve }
+    bootstrapReleaseSignal = {
+      kind: BootstrapReleaseSignalKind.Releasable,
+      release: resolve,
+    }
   })
   await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
-    if (bootstrapStartSignal.kind === 'ready') {
+    if (bootstrapStartSignal.kind === BootstrapStartSignalKind.Ready) {
       bootstrapStartSignal.signal()
     }
     await wasmBootstrapReleased
@@ -130,7 +148,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
-  if (bootstrapReleaseSignal.kind === 'releasable') {
+  if (bootstrapReleaseSignal.kind === BootstrapReleaseSignalKind.Releasable) {
     bootstrapReleaseSignal.release()
   }
   const replacementChildCount = await page

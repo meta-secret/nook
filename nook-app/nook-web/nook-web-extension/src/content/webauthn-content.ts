@@ -11,9 +11,13 @@ const REQUEST_SOURCE = 'nook-passkey-page-v1'
 const RESPONSE_SOURCE = 'nook-passkey-extension-v1'
 const prompts = new Map<string, HTMLElement>()
 
+enum PageRequestType {
+  Request = 'request',
+}
+
 type PageRequest = {
   source: typeof REQUEST_SOURCE
-  type: 'request'
+  type: PageRequestType.Request
   requestId: string
   ceremony: WebsitePasskeyCeremony
   request: Record<string, unknown>
@@ -209,7 +213,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return
   }
   if (
-    message.type !== 'request' ||
+    message.type !== PageRequestType.Request ||
     (message.ceremony !== 'create' && message.ceremony !== 'get') ||
     typeof message.expiresAt !== 'number' ||
     !Number.isFinite(message.expiresAt) ||

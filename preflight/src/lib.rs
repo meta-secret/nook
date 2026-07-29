@@ -4,7 +4,7 @@ mod typescript_state;
 
 pub use typescript_state::{
     typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_mutable_void_state,
+    typescript_mutable_void_state, typescript_raw_string_discriminants,
 };
 
 use std::collections::HashSet;

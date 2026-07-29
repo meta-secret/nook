@@ -25,18 +25,38 @@
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultType } from '$lib/vault-architecture'
-  type MemberDetails =
-    | { kind: 'collapsed' }
-    | { kind: 'expanded'; authId: string }
-  type MemberRename =
-    | { kind: 'idle' }
-    | { kind: 'editing'; authId: string }
-  type MemberRevocation =
-    | { kind: 'idle' }
-    | { kind: 'confirming'; authId: string }
-  type ExtensionSetupOffer =
-    | { kind: 'hidden' }
-    | { kind: 'visible'; setup: ExtensionSetupState }
+  enum MemberDetailsKind {
+  Collapsed = "collapsed",
+  Expanded = "expanded",
+}
+
+type MemberDetails =
+    | { kind: MemberDetailsKind.Collapsed }
+    | { kind: MemberDetailsKind.Expanded; authId: string }
+  enum MemberRenameKind {
+  Idle = "idle",
+  Editing = "editing",
+}
+
+type MemberRename =
+    | { kind: MemberRenameKind.Idle }
+    | { kind: MemberRenameKind.Editing; authId: string }
+  enum MemberRevocationKind {
+  Idle = "idle",
+  Confirming = "confirming",
+}
+
+type MemberRevocation =
+    | { kind: MemberRevocationKind.Idle }
+    | { kind: MemberRevocationKind.Confirming; authId: string }
+  enum ExtensionSetupOfferKind {
+  Hidden = "hidden",
+  Visible = "visible",
+}
+
+type ExtensionSetupOffer =
+    | { kind: ExtensionSetupOfferKind.Hidden }
+    | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState }
 
   let {
     vault,
@@ -64,11 +84,11 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<MemberDetails>({ kind: 'collapsed' })
+  let detailsAuthId = $state<MemberDetails>({ kind: MemberDetailsKind.Collapsed })
   let renameAuthId = $state<MemberRename>({ kind: 'idle' })
   let renameLabel = $state('')
   let revokeAuthId = $state<MemberRevocation>({ kind: 'idle' })
-  let extensionSetupState = $state<ExtensionSetupOffer>({ kind: 'hidden' })
+  let extensionSetupState = $state<ExtensionSetupOffer>({ kind: ExtensionSetupOfferKind.Hidden })
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
@@ -81,8 +101,8 @@
       vault.activeVaultStoreId,
     )
     extensionSetupState = shouldOfferExtensionSetup(state.status)
-      ? { kind: 'visible', setup: state }
-      : { kind: 'hidden' }
+      ? { kind: ExtensionSetupOfferKind.Visible, setup: state }
+      : { kind: ExtensionSetupOfferKind.Hidden }
   }
 
   async function handleExtensionInstall() {
@@ -106,7 +126,7 @@
   }
 
   async function handleExtensionSetupAction() {
-    if (extensionSetupState.kind !== 'visible') return
+    if (extensionSetupState.kind !== ExtensionSetupOfferKind.Visible) return
     const state = extensionSetupState.setup
     if (state.status === 'not_installed') {
       await handleExtensionInstall()
@@ -207,7 +227,7 @@
   }
 
   function beginRename(member: VaultMember) {
-    renameAuthId = { kind: 'editing', authId: member.authId }
+    renameAuthId = { kind: MemberRenameKind.Editing, authId: member.authId }
     renameLabel = member.label.trim()
     revokeAuthId = { kind: 'idle' }
   }

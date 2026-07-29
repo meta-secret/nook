@@ -416,6 +416,11 @@ export async function websiteAuthenticatorEnrollPending(
   return { ok: true }
 }
 
+export enum WebsiteAuthenticatorBackupAttachMessageMode {
+  Replace = 'replace',
+  Merge = 'merge',
+}
+
 export async function websiteAuthenticatorBackupAttach(
   message: {
     payload: {
@@ -423,7 +428,9 @@ export async function websiteAuthenticatorBackupAttach(
       vaultStoreId: string
       secretId: string
       codes: string[]
-      mode: 'replace' | 'merge'
+      mode:
+        | WebsiteAuthenticatorBackupAttachMessageMode.Replace
+        | WebsiteAuthenticatorBackupAttachMessageMode.Merge
     }
   },
   sender: chrome.runtime.MessageSender,

@@ -200,14 +200,21 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reconnectPage.close()
     await pairingLauncher.close()
 
+    enum WebsitePasskeyStateKind {
+      NotCreated = 'not-created',
+      Created = 'created',
+    }
+
     type WebsitePasskeyState =
-      | { kind: 'not-created' }
-      | { kind: 'created'; credentialId: string }
-    let websitePasskeyState: WebsitePasskeyState = { kind: 'not-created' }
+      | { kind: WebsitePasskeyStateKind.NotCreated }
+      | { kind: WebsitePasskeyStateKind.Created; credentialId: string }
+    let websitePasskeyState: WebsitePasskeyState = {
+      kind: WebsitePasskeyStateKind.NotCreated,
+    }
     if (website) {
       const websiteCredentialId = await registerWebsitePasskey(website)
       websitePasskeyState = {
-        kind: 'created',
+        kind: WebsitePasskeyStateKind.Created,
         credentialId: websiteCredentialId,
       }
       expect(websiteCredentialId).toBeTruthy()
@@ -453,7 +460,10 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    if (websiteAfterUnlock && websitePasskeyState.kind === 'created') {
+    if (
+      websiteAfterUnlock &&
+      websitePasskeyState.kind === WebsitePasskeyStateKind.Created
+    ) {
       await assertWebsitePasskey(
         websiteAfterUnlock,
         websitePasskeyState.credentialId,

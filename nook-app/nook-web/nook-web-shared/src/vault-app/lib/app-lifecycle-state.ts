@@ -26,38 +26,79 @@ export function manualColorMode(
   return selected;
 }
 
+export enum LegalRouteKind {
+  Application = "application",
+  Legal = "legal",
+}
+
 export type LegalRoute =
-  | { kind: "application" }
-  | { kind: "legal"; page: LegalPageId };
+  | { kind: LegalRouteKind.Application }
+  | { kind: LegalRouteKind.Legal; page: LegalPageId };
 
 export function legalRoute(page: LegalPageId | void): LegalRoute {
-  return page ? { kind: "legal", page } : { kind: "application" };
+  return page
+    ? { kind: LegalRouteKind.Legal, page }
+    : { kind: LegalRouteKind.Application };
+}
+
+export enum ExtensionConnectIntentKind {
+  Absent = "absent",
+  Requested = "requested",
 }
 
 export type ExtensionConnectIntent =
-  | { kind: "absent" }
-  | { kind: "requested"; request: ExtensionConnectRequest };
+  | { kind: ExtensionConnectIntentKind.Absent }
+  | {
+      kind: ExtensionConnectIntentKind.Requested;
+      request: ExtensionConnectRequest;
+    };
 
 export function extensionConnectIntent(
   request: ExtensionConnectRequest | void,
 ): ExtensionConnectIntent {
-  return request ? { kind: "requested", request } : { kind: "absent" };
+  return request
+    ? { kind: ExtensionConnectIntentKind.Requested, request }
+    : { kind: ExtensionConnectIntentKind.Absent };
+}
+
+export enum ExtensionSetupOfferKind {
+  Hidden = "hidden",
+  Visible = "visible",
 }
 
 export type ExtensionSetupOffer =
-  | { kind: "hidden" }
-  | { kind: "visible"; setup: ExtensionSetupState };
+  | { kind: ExtensionSetupOfferKind.Hidden }
+  | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };
+
+export enum PendingVaultCreationKind {
+  Simple = "simple",
+  Sentinel = "sentinel",
+  SentinelParticipantKey = "sentinel-participant-key",
+  SentinelParticipantResponse = "sentinel-participant-response",
+  SentinelOnboarding = "sentinel-onboarding",
+}
 
 export type PendingVaultCreation =
-  | { kind: "simple"; label: string }
-  | { kind: "sentinel"; args: StartSentinelGenesisArgs }
-  | { kind: "sentinel-participant-key" }
-  | { kind: "sentinel-participant-response"; requestPayload: string }
-  | { kind: "sentinel-onboarding"; packageJson: string };
+  | { kind: PendingVaultCreationKind.Simple; label: string }
+  | { kind: PendingVaultCreationKind.Sentinel; args: StartSentinelGenesisArgs }
+  | { kind: PendingVaultCreationKind.SentinelParticipantKey }
+  | {
+      kind: PendingVaultCreationKind.SentinelParticipantResponse;
+      requestPayload: string;
+    }
+  | { kind: PendingVaultCreationKind.SentinelOnboarding; packageJson: string };
+
+export enum VaultCreationQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
 
 export type VaultCreationQueue =
-  | { kind: "idle" }
-  | { kind: "waiting-for-device"; request: PendingVaultCreation };
+  | { kind: VaultCreationQueueKind.Idle }
+  | {
+      kind: VaultCreationQueueKind.WaitingForDevice;
+      request: PendingVaultCreation;
+    };
 
 export type PendingExistingVaultImport = {
   storeId: string;
@@ -69,12 +110,28 @@ export type PendingExistingVaultImport = {
   localFolder: LocalFolderConfig | void;
 };
 
+export enum ExistingVaultImportQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
+
 export type ExistingVaultImportQueue =
-  | { kind: "idle" }
-  | { kind: "waiting-for-device"; request: PendingExistingVaultImport };
+  | { kind: ExistingVaultImportQueueKind.Idle }
+  | {
+      kind: ExistingVaultImportQueueKind.WaitingForDevice;
+      request: PendingExistingVaultImport;
+    };
 
 export type PendingEnrollmentSubmit = { code: string; password: string };
 
+export enum EnrollmentSubmitQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
+
 export type EnrollmentSubmitQueue =
-  | { kind: "idle" }
-  | { kind: "waiting-for-device"; request: PendingEnrollmentSubmit };
+  | { kind: EnrollmentSubmitQueueKind.Idle }
+  | {
+      kind: EnrollmentSubmitQueueKind.WaitingForDevice;
+      request: PendingEnrollmentSubmit;
+    };

@@ -70,14 +70,22 @@ export type ObservedActivity = {
   attempt_number: number;
 };
 
+export enum ObservedAlertKind {
+  TaskFailed = 'task-failed',
+  DependencyFailed = 'dependency-failed',
+  DependencyBlocked = 'dependency-blocked',
+  ActivityStale = 'activity-stale',
+  CancellationStuck = 'cancellation-stuck',
+}
+
 export type ObservedAlert = {
   id: string;
   kind:
-    | 'task-failed'
-    | 'dependency-failed'
-    | 'dependency-blocked'
-    | 'activity-stale'
-    | 'cancellation-stuck';
+    | ObservedAlertKind.TaskFailed
+    | ObservedAlertKind.DependencyFailed
+    | ObservedAlertKind.DependencyBlocked
+    | ObservedAlertKind.ActivityStale
+    | ObservedAlertKind.CancellationStuck;
   severity: 'critical' | 'warning';
   task_id: string;
   first_observed_at: number;

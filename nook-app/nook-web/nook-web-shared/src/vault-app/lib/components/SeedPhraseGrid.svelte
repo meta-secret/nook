@@ -2,12 +2,22 @@
   import { omittedValue } from '../../../explicit-state'
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  type FocusedWord =
-    | { kind: 'none' }
-    | { kind: 'focused'; index: number }
-  type ChecksumStatus =
-    | { kind: 'not-checked' }
-    | { kind: 'checked'; valid: boolean }
+  enum FocusedWordKind {
+  None = "none",
+  Focused = "focused",
+}
+
+type FocusedWord =
+    | { kind: FocusedWordKind.None }
+    | { kind: FocusedWordKind.Focused; index: number }
+  enum ChecksumStatusKind {
+  NotChecked = "not-checked",
+  Checked = "checked",
+}
+
+type ChecksumStatus =
+    | { kind: ChecksumStatusKind.NotChecked }
+    | { kind: ChecksumStatusKind.Checked; valid: boolean }
   import {
     inferBip39MnemonicLength,
     isBip39WordSequenceValid,
@@ -38,10 +48,10 @@
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
   let syncingFromCells = $state(false)
-  let focusedIndex = $state<FocusedWord>({ kind: 'none' })
+  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None })
   let suggestionIndex = $state(0)
   let inputRefs = $state<HTMLInputElement[]>([])
-  let checksumValid = $state<ChecksumStatus>({ kind: 'not-checked' })
+  let checksumValid = $state<ChecksumStatus>({ kind: ChecksumStatusKind.NotChecked })
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -55,7 +65,7 @@
   )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex.kind !== 'focused') return []
+    if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return []
     const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? ''
     if (!prefix || prefix.includes(' ')) return []
     if (isKnownBip39Word(prefix)) return []
@@ -102,7 +112,7 @@
     }
     cells = next
     syncValueFromCells()
-    focusedIndex = { kind: 'none' }
+    focusedIndex = { kind: FocusedWordKind.None }
     focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
@@ -117,8 +127,8 @@
     cells = Array.from({ length: 24 }, () => '')
     wordCount = 12
     value = ''
-    checksumValid = { kind: 'not-checked' }
-    focusedIndex = { kind: 'none' }
+    checksumValid = { kind: ChecksumStatusKind.NotChecked }
+    focusedIndex = { kind: FocusedWordKind.None }
     suggestionIndex = 0
     focusCell(0)
   }
@@ -150,7 +160,7 @@
 
   function selectSuggestion(word: string, index: number) {
     setCellValue(index, word)
-    focusedIndex = { kind: 'none' }
+    focusedIndex = { kind: FocusedWordKind.None }
     suggestionIndex = 0
     focusCell(index + 1)
   }
@@ -165,7 +175,7 @@
   function onCellKeyDown(index: number, event: KeyboardEvent) {
     if (
       suggestions.length > 0 &&
-      focusedIndex.kind === 'focused' &&
+      focusedIndex.kind === FocusedWordKind.Focused &&
       focusedIndex.index === index
     ) {
       if (event.key === 'ArrowDown') {
@@ -191,7 +201,7 @@
     }
 
     if (event.key === 'Escape') {
-      focusedIndex = { kind: 'none' }
+      focusedIndex = { kind: FocusedWordKind.None }
       suggestionIndex = 0
     }
   }
@@ -209,14 +219,14 @@
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = { kind: 'not-checked' }
+      checksumValid = { kind: ChecksumStatusKind.NotChecked }
       valid = false
       return
     }
 
     const mnemonic = value
     const ok = validateBip39Mnemonic(mnemonic)
-    checksumValid = { kind: 'checked', valid: ok }
+    checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok }
     valid = ok
   })
 </script>

@@ -34,11 +34,18 @@ type EnrollmentWatch = {
   callbacks: EnrollmentEvidenceCallbacks
 }
 
-type EnrollmentWatchState =
-  | { kind: 'idle' }
-  | { kind: 'watching'; watch: EnrollmentWatch }
+enum EnrollmentWatchStateKind {
+  Idle = 'idle',
+  Watching = 'watching',
+}
 
-let enrollmentWatchState: EnrollmentWatchState = { kind: 'idle' }
+type EnrollmentWatchState =
+  | { kind: EnrollmentWatchStateKind.Idle }
+  | { kind: EnrollmentWatchStateKind.Watching; watch: EnrollmentWatch }
+
+let enrollmentWatchState: EnrollmentWatchState = {
+  kind: EnrollmentWatchStateKind.Idle,
+}
 
 function pageLooksLikeAuthPath(pathname: string): boolean {
   return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify|enroll)(?:\/|$)/i.test(
@@ -135,18 +142,18 @@ export async function fillStagedEnrollmentCode(
 }
 
 export function stopPendingEnrollmentWatch(): void {
-  if (enrollmentWatchState.kind === 'idle') return
+  if (enrollmentWatchState.kind === EnrollmentWatchStateKind.Idle) return
   window.clearInterval(enrollmentWatchState.watch.timer)
   enrollmentWatchState.watch.observer.disconnect()
-  enrollmentWatchState = { kind: 'idle' }
+  enrollmentWatchState = { kind: EnrollmentWatchStateKind.Idle }
 }
 
 export function enrollmentEvidenceWatchActive(): boolean {
-  return enrollmentWatchState.kind === 'watching'
+  return enrollmentWatchState.kind === EnrollmentWatchStateKind.Watching
 }
 
 async function evaluatePendingEnrollmentEvidence(): Promise<void> {
-  if (enrollmentWatchState.kind === 'idle') return
+  if (enrollmentWatchState.kind === EnrollmentWatchStateKind.Idle) return
   const watch = enrollmentWatchState.watch
   if (watch.stageId === 'pending') return
   const observation = collectEnrollmentOutcomeObservation(
@@ -158,7 +165,7 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   // Commit on clear success without depending on a service-worker roundtrip.
   if (observation.successMarkerPresent && !observation.errorMarkerPresent) {
     if (
-      enrollmentWatchState.kind !== 'watching' ||
+      enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching ||
       enrollmentWatchState.watch.stageId !== watch.stageId
     ) {
       return
@@ -176,7 +183,7 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   const verdict = await classifyEnrollmentOutcome(watch.host, observation)
   if (
     !verdict ||
-    enrollmentWatchState.kind !== 'watching' ||
+    enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching ||
     enrollmentWatchState.watch.stageId !== watch.stageId
   ) {
     return
@@ -209,7 +216,7 @@ export function beginEnrollmentEvidenceWatch(
 ): void {
   stopPendingEnrollmentWatch()
   const observer = new MutationObserver(() => {
-    if (enrollmentWatchState.kind !== 'watching') return
+    if (enrollmentWatchState.kind !== EnrollmentWatchStateKind.Watching) return
     enrollmentWatchState.watch.sawMutation = true
     if (stageId !== 'pending') {
       void fillStagedEnrollmentCode(host, stageId)
@@ -237,6 +244,6 @@ export function beginEnrollmentEvidenceWatch(
     host,
     callbacks,
   }
-  enrollmentWatchState = { kind: 'watching', watch }
+  enrollmentWatchState = { kind: EnrollmentWatchStateKind.Watching, watch }
   void evaluatePendingEnrollmentEvidence()
 }

@@ -2,9 +2,20 @@ import { omittedValue } from '../../nook-web-shared/src/explicit-state'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 /** Parsed shape of nook-events (matches nook-core StoredVaultYaml). */
+enum StoredSecretRecordType {
+  Login = 'login',
+  ApiKey = 'api-key',
+  SeedPhrase = 'seed-phrase',
+  SecureNote = 'secure-note',
+}
+
 type StoredSecretRecord = {
   id: string
-  type: 'login' | 'api-key' | 'seed-phrase' | 'secure-note'
+  type:
+    | StoredSecretRecordType.Login
+    | StoredSecretRecordType.ApiKey
+    | StoredSecretRecordType.SeedPhrase
+    | StoredSecretRecordType.SecureNote
   data: string
 }
 
@@ -166,7 +177,7 @@ function eventSecretToStored(
   if (!secret?.id) return
   return {
     id: secret.id,
-    type: secret.type ?? 'api-key',
+    type: secret.type ?? StoredSecretRecordType.ApiKey,
     data: secret.ciphertext ?? '',
   }
 }
@@ -274,7 +285,7 @@ export function parseVaultEventLogSnapshot(
             if (!deviceId) continue
             sentinelShares.set(deviceId, {
               id: `sentinel_share:${deviceId}`,
-              type: 'secure-note',
+              type: StoredSecretRecordType.SecureNote,
               data: share.ciphertext ?? '',
             })
           }
@@ -326,7 +337,7 @@ export function parseVaultEventLogSnapshot(
     auth: [...auth.values()],
     joins: [...joins.values()].map((join) => ({
       id: join.deviceId,
-      type: 'secure-note',
+      type: StoredSecretRecordType.SecureNote,
       data: JSON.stringify({
         device_id: join.deviceId,
         public_key: join.publicKey,

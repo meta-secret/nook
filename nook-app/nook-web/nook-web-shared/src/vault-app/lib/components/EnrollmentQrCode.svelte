@@ -4,9 +4,14 @@
   import QRCodeStyling from 'qr-code-styling'
   import { createEnrollmentQrOptions } from '$lib/enrollment-qr'
 
-  type QrCodeMount =
-    | { kind: 'unmounted' }
-    | { kind: 'mounted'; instance: QRCodeStyling }
+  enum QrCodeMountKind {
+  Unmounted = "unmounted",
+  Mounted = "mounted",
+}
+
+type QrCodeMount =
+    | { kind: QrCodeMountKind.Unmounted }
+    | { kind: QrCodeMountKind.Mounted; instance: QRCodeStyling }
 
   let {
     enrollmentLink,
@@ -19,7 +24,7 @@
   } = $props()
 
   let container!: HTMLDivElement
-  let qrCode = $state.raw<QrCodeMount>({ kind: 'unmounted' })
+  let qrCode = $state.raw<QrCodeMount>({ kind: QrCodeMountKind.Unmounted })
   let isReady = $state(false)
   const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense))
 
@@ -27,17 +32,17 @@
     if (!container) return
 
     const instance = new QRCodeStyling(options)
-    qrCode = { kind: 'mounted', instance }
+    qrCode = { kind: QrCodeMountKind.Mounted, instance }
     instance.append(container)
     isReady = true
 
     return () => {
-      qrCode = { kind: 'unmounted' }
+      qrCode = { kind: QrCodeMountKind.Unmounted }
     }
   })
 
   $effect(() => {
-    if (qrCode.kind === 'unmounted') return
+    if (qrCode.kind === QrCodeMountKind.Unmounted) return
     qrCode.instance.update(options)
   })
 </script>

@@ -36,18 +36,38 @@
     StorageProvider,
     StorageProviderType,
   } from "$lib/auth-providers";
-  type VaultLabelEditor =
-    | { kind: "closed" }
-    | { kind: "editing"; storeId: StoreId };
-  type VaultRenameOperation =
-    | { kind: "idle" }
-    | { kind: "renaming"; storeId: StoreId };
-  type VaultSwitchOperation =
-    | { kind: "idle" }
-    | { kind: "switching"; storeId: StoreId };
-  type ImportProviderSection =
-    | { kind: "closed" }
-    | { kind: "open"; providerId: string };
+  enum VaultLabelEditorKind {
+  Closed = "closed",
+  Editing = "editing",
+}
+
+type VaultLabelEditor =
+    | { kind: VaultLabelEditorKind.Closed }
+    | { kind: VaultLabelEditorKind.Editing; storeId: StoreId };
+  enum VaultRenameOperationKind {
+  Idle = "idle",
+  Renaming = "renaming",
+}
+
+type VaultRenameOperation =
+    | { kind: VaultRenameOperationKind.Idle }
+    | { kind: VaultRenameOperationKind.Renaming; storeId: StoreId };
+  enum VaultSwitchOperationKind {
+  Idle = "idle",
+  Switching = "switching",
+}
+
+type VaultSwitchOperation =
+    | { kind: VaultSwitchOperationKind.Idle }
+    | { kind: VaultSwitchOperationKind.Switching; storeId: StoreId };
+  enum ImportProviderSectionKind {
+  Closed = "closed",
+  Open = "open",
+}
+
+type ImportProviderSection =
+    | { kind: ImportProviderSectionKind.Closed }
+    | { kind: ImportProviderSectionKind.Open; providerId: string };
 
   let {
     vault,
@@ -159,13 +179,13 @@
   let activeImportProvider = $state<ImportProviderSection>({ kind: "closed" });
   const activeImportProviderBinding = {
     get value(): string | void {
-      return activeImportProvider.kind === "open"
+      return activeImportProvider.kind === ImportProviderSectionKind.Open
         ? activeImportProvider.providerId
         : omittedValue();
     },
     set value(value: string | void) {
       activeImportProvider =
-        value ? { kind: "open", providerId: value } : { kind: "closed" };
+        value ? { kind: ImportProviderSectionKind.Open, providerId: value } : { kind: "closed" };
     },
   };
 
@@ -177,8 +197,8 @@
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId.kind === "renaming" ||
-      switchingTo.kind === "switching",
+      renamingStoreId.kind === VaultRenameOperationKind.Renaming ||
+      switchingTo.kind === VaultSwitchOperationKind.Switching,
   );
 
   function buildDrafts() {
@@ -224,13 +244,13 @@
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return;
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    editingStoreId = { kind: "editing", storeId: entry.storeId };
+    editingStoreId = { kind: VaultLabelEditorKind.Editing, storeId: entry.storeId };
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
     if (
-      editingStoreId.kind === "editing" &&
+      editingStoreId.kind === VaultLabelEditorKind.Editing &&
       editingStoreId.storeId === entry.storeId
     ) {
       editingStoreId = { kind: "closed" };
@@ -253,7 +273,7 @@
 
   async function renameVault(entry: NookLocalVaultEntry) {
     if (!canSave(entry)) return;
-    renamingStoreId = { kind: "renaming", storeId: entry.storeId };
+    renamingStoreId = { kind: VaultRenameOperationKind.Renaming, storeId: entry.storeId };
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry));
       if (!vault.errorMsg) {
@@ -266,7 +286,7 @@
 
   async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return;
-    switchingTo = { kind: "switching", storeId: entry.storeId };
+    switchingTo = { kind: VaultSwitchOperationKind.Switching, storeId: entry.storeId };
     try {
       await vault.switchToVault(entry.storeId);
     } finally {

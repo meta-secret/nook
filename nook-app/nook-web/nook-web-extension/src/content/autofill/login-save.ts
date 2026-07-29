@@ -22,9 +22,18 @@ import {
   translatedMessage,
 } from './workflow-ui'
 
+enum LoginSaveOfferResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 type LoginSaveOfferResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | LoginSaveOfferResponseStatus.Ready
+    | LoginSaveOfferResponseStatus.Locked
+    | LoginSaveOfferResponseStatus.Unavailable
   decision?: string
   offer?: WebsiteLoginSaveOfferView
 }

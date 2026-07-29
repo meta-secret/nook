@@ -20,45 +20,84 @@ import {
   type ReplicationType,
   type VaultArchitecture,
 } from "$lib/vault-architecture";
-type ActiveVault = { kind: "closed" } | { kind: "open"; storeId: StoreId };
+enum ActiveVaultKind {
+  Closed = "closed",
+  Open = "open",
+}
+
+type ActiveVault =
+  | { kind: ActiveVaultKind.Closed }
+  | { kind: ActiveVaultKind.Open; storeId: StoreId };
+enum LoginVaultSelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
 type LoginVaultSelection =
-  | { kind: "not-selected" }
-  | { kind: "selected"; storeId: StoreId };
+  | { kind: LoginVaultSelectionKind.NotSelected }
+  | { kind: LoginVaultSelectionKind.Selected; storeId: StoreId };
+enum LoginSetupKind {
+  Inactive = "inactive",
+  Active = "active",
+}
+
 type LoginSetup =
-  | { kind: "inactive" }
-  | { kind: "active"; providerType: StorageProviderType };
+  | { kind: LoginSetupKind.Inactive }
+  | { kind: LoginSetupKind.Active; providerType: StorageProviderType };
+enum RecoveryDiscoveryKind {
+  NotFound = "not-found",
+  Found = "found",
+}
+
 type RecoveryDiscovery =
-  | { kind: "not-found" }
-  | { kind: "found"; summary: VaultRecoverySummary };
+  | { kind: RecoveryDiscoveryKind.NotFound }
+  | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary };
+enum OAuthFileDraftKind {
+  NotConfigured = "not-configured",
+  Configured = "configured",
+}
+
 type OAuthFileDraft =
-  | { kind: "not-configured" }
-  | { kind: "configured"; config: OAuthFileConfig };
+  | { kind: OAuthFileDraftKind.NotConfigured }
+  | { kind: OAuthFileDraftKind.Configured; config: OAuthFileConfig };
+enum LocalFolderDraftKind {
+  NotConfigured = "not-configured",
+  Configured = "configured",
+}
+
 type LocalFolderDraft =
-  | { kind: "not-configured" }
-  | { kind: "configured"; config: LocalFolderConfig };
+  | { kind: LocalFolderDraftKind.NotConfigured }
+  | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig };
+enum OAuthSetupPresetKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
 type OAuthSetupPreset =
-  | { kind: "not-selected" }
-  | { kind: "selected"; preset: OAuthFilePreset };
+  | { kind: OAuthSetupPresetKind.NotSelected }
+  | { kind: OAuthSetupPresetKind.Selected; preset: OAuthFilePreset };
 export class VaultProviderState {
   providers = $state.raw<StorageProvider[]>([]);
   providersLoaded = $state(false);
   /** Locally cached vaults on this browser (metadata only). */
   localVaults = $state<NookLocalVaultEntry[]>([]);
   /** Active vault store_id — sync providers and local blob are scoped to this. */
-  private activeVaultStoreState = $state<ActiveVault>({ kind: "closed" });
+  private activeVaultStoreState = $state<ActiveVault>({
+    kind: ActiveVaultKind.Closed,
+  });
   get activeVaultStoreId(): StoreId | void {
-    if (this.activeVaultStoreState.kind === "open")
+    if (this.activeVaultStoreState.kind === ActiveVaultKind.Open)
       return this.activeVaultStoreState.storeId;
     return;
   }
   get hasActiveVaultStore(): boolean {
-    return this.activeVaultStoreState.kind === "open";
+    return this.activeVaultStoreState.kind === ActiveVaultKind.Open;
   }
   set activeVaultStoreId(value: StoreId) {
-    this.activeVaultStoreState = { kind: "open", storeId: value };
+    this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value };
   }
   clearActiveVaultStore(): void {
-    this.activeVaultStoreState = { kind: "closed" };
+    this.activeVaultStoreState = { kind: ActiveVaultKind.Closed };
   }
   /** Login gate: user picked a vault but has not unlocked yet. */
   private selectedLoginVaultStoreState = $state<LoginVaultSelection>({
@@ -81,35 +120,40 @@ export class VaultProviderState {
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false);
   localLoginPrepared = $state(false);
-  private loginSetupState = $state<LoginSetup>({ kind: "inactive" });
+  private loginSetupState = $state<LoginSetup>({
+    kind: LoginSetupKind.Inactive,
+  });
   get loginSetupType(): StorageProviderType | void {
-    if (this.loginSetupState.kind === "active")
+    if (this.loginSetupState.kind === LoginSetupKind.Active)
       return this.loginSetupState.providerType;
     return;
   }
   get loginSetupActive(): boolean {
-    return this.loginSetupState.kind === "active";
+    return this.loginSetupState.kind === LoginSetupKind.Active;
   }
   set loginSetupType(value: StorageProviderType) {
-    this.loginSetupState = { kind: "active", providerType: value };
+    this.loginSetupState = { kind: LoginSetupKind.Active, providerType: value };
   }
   clearLoginSetup(): void {
-    this.loginSetupState = { kind: "inactive" };
+    this.loginSetupState = { kind: LoginSetupKind.Inactive };
   }
   loginRequiresExistingVault = $state(false);
   private recoverySummaryState = $state<RecoveryDiscovery>({
-    kind: "not-found",
+    kind: RecoveryDiscoveryKind.NotFound,
   });
   get existingVaultRecoverySummary(): VaultRecoverySummary | void {
-    if (this.recoverySummaryState.kind === "found")
+    if (this.recoverySummaryState.kind === RecoveryDiscoveryKind.Found)
       return this.recoverySummaryState.summary;
     return;
   }
   set existingVaultRecoverySummary(value: VaultRecoverySummary) {
-    this.recoverySummaryState = { kind: "found", summary: value };
+    this.recoverySummaryState = {
+      kind: RecoveryDiscoveryKind.Found,
+      summary: value,
+    };
   }
   clearExistingVaultRecoverySummary(): void {
-    this.recoverySummaryState = { kind: "not-found" };
+    this.recoverySummaryState = { kind: RecoveryDiscoveryKind.NotFound };
   }
   addProviderOpen = $state(false);
 

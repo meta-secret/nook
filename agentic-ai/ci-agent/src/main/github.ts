@@ -102,7 +102,8 @@ export async function createFixPr(
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 const CODEX_REVIEW_HEADING = "### 💡 Codex Review";
-const CODEX_REVIEW_INTRO = "Here are some automated review suggestions for this pull request.";
+const CODEX_REVIEW_INTRO =
+  "Here are some automated review suggestions for this pull request.";
 const CODEX_ABOUT_DETAILS = [
   "<details> <summary>ℹ️ About Codex in GitHub</summary>",
   "<br/>",
@@ -115,7 +116,8 @@ const CODEX_ABOUT_DETAILS = [
   "</details>",
 ].join(" ");
 const CLEAN_CODEX_REVIEW_PREFIX = "Codex Review: Didn't find any major issues.";
-const REVIEWED_COMMIT_PATTERN = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
+const REVIEWED_COMMIT_PATTERN =
+  /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
 const CODEX_REVIEWED_COMMIT_ONLY_PATTERN =
   /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/;
 
@@ -148,7 +150,9 @@ export async function requestCodexReview(
     }),
   ]);
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const reviewRequests = comments.filter((comment) => comment.body?.includes(marker));
+  const reviewRequests = comments.filter((comment) =>
+    comment.body?.includes(marker),
+  );
   const reviewSettled =
     reviews.some(
       (review) =>
@@ -157,7 +161,11 @@ export async function requestCodexReview(
         isCodexReviewer(review.user?.login),
     ) ||
     comments.some((comment) =>
-      isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+      isCleanCodexReviewComment(
+        comment.body ?? "",
+        comment.user?.login,
+        pr.head.sha,
+      ),
     );
   const requestReactions = reviewSettled
     ? []
@@ -174,11 +182,13 @@ export async function requestCodexReview(
         )
       ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) =>
+      reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
   );
   const settled = reviewSettled || approvalReaction;
   const lastRequestIndex = comments.reduce(
-    (lastIndex, comment, index) => (comment.body?.includes(marker) ? index : lastIndex),
+    (lastIndex, comment, index) =>
+      comment.body?.includes(marker) ? index : lastIndex,
     -1,
   );
   const retryAfterUsageLimit =
@@ -289,25 +299,33 @@ export async function inspectPrFeedback(
   });
 
   let unresolvedThreads = 0;
+  enum PaginationKind {
+    FirstPage = "first-page",
+    NextPage = "next-page",
+    Complete = "complete",
+  }
+
   let pagination:
-    | { kind: "first-page" }
-    | { kind: "next-page"; cursor: string }
-    | { kind: "complete" } = { kind: "first-page" };
-  while (pagination.kind !== "complete") {
+    | { kind: PaginationKind.FirstPage }
+    | { kind: PaginationKind.NextPage; cursor: string }
+    | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
+  while (pagination.kind !== PaginationKind.Complete) {
     const page = await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
       owner,
       repo,
       number: prNumber,
-      ...(pagination.kind === "next-page"
+      ...(pagination.kind === PaginationKind.NextPage
         ? { cursor: pagination.cursor }
         : {}),
     });
     const threads = page.repository.pullRequest.reviewThreads;
-    unresolvedThreads += threads.nodes.filter((thread) => !thread.isResolved).length;
+    unresolvedThreads += threads.nodes.filter(
+      (thread) => !thread.isResolved,
+    ).length;
     pagination =
       threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
-        ? { kind: "next-page", cursor: threads.pageInfo.endCursor }
-        : { kind: "complete" };
+        ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
+        : { kind: PaginationKind.Complete };
   }
 
   const [issueComments, reviews] = await Promise.all([
@@ -326,7 +344,9 @@ export async function inspectPrFeedback(
   ]);
 
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const reviewRequests = issueComments.filter((comment) => comment.body?.includes(marker));
+  const reviewRequests = issueComments.filter((comment) =>
+    comment.body?.includes(marker),
+  );
   const currentHeadReview = reviews.some(
     (review) =>
       review.commit_id === pr.head.sha &&
@@ -346,10 +366,15 @@ export async function inspectPrFeedback(
     )
   ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) =>
+      reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
   );
   const cleanComment = issueComments.some((comment) =>
-    isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+    isCleanCodexReviewComment(
+      comment.body ?? "",
+      comment.user?.login,
+      pr.head.sha,
+    ),
   );
 
   const substantiveComments = issueComments.filter(
@@ -365,7 +390,9 @@ export async function inspectPrFeedback(
       return true;
     }
     const body = review.body?.trim() ?? "";
-    return body.length > 0 && !isCodexReviewStatusBody(body, review.user?.login);
+    return (
+      body.length > 0 && !isCodexReviewStatusBody(body, review.user?.login)
+    );
   });
 
   return {
@@ -430,7 +457,9 @@ function isCodexReviewStatusBody(body: string, login: string | void): boolean {
   }
   const trimmed = body.trim();
   const detailsIndex = trimmed.indexOf("<details>");
-  const summary = (detailsIndex === -1 ? trimmed : trimmed.slice(0, detailsIndex))
+  const summary = (
+    detailsIndex === -1 ? trimmed : trimmed.slice(0, detailsIndex)
+  )
     .replace(/[ \t]+$/gm, "")
     .trim();
   if (detailsIndex !== -1) {
@@ -442,12 +471,17 @@ function isCodexReviewStatusBody(body: string, login: string | void): boolean {
   const expectedPrefix = `${CODEX_REVIEW_HEADING}\n\n${CODEX_REVIEW_INTRO}\n\n`;
   return (
     summary.startsWith(expectedPrefix) &&
-    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(summary.slice(expectedPrefix.length))
+    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(
+      summary.slice(expectedPrefix.length),
+    )
   );
 }
 
 function isCodexUsageLimitComment(body: string, login: string | void): boolean {
-  return isCodexReviewer(login) && body.includes("Codex usage limits for code reviews");
+  return (
+    isCodexReviewer(login) &&
+    body.includes("Codex usage limits for code reviews")
+  );
 }
 
 function isCleanCodexReviewComment(
@@ -462,7 +496,10 @@ function isCleanCodexReviewComment(
   return Boolean(reviewedCommit) && headSha.startsWith(reviewedCommit);
 }
 
-function isCodexCleanReviewStatusComment(body: string, login: string | void): boolean {
+function isCodexCleanReviewStatusComment(
+  body: string,
+  login: string | void,
+): boolean {
   return (
     isCodexReviewer(login) &&
     body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX) &&
@@ -471,5 +508,9 @@ function isCodexCleanReviewStatusComment(body: string, login: string | void): bo
 }
 
 function isSubmittedReviewState(state: string): boolean {
-  return state === "APPROVED" || state === "CHANGES_REQUESTED" || state === "COMMENTED";
+  return (
+    state === "APPROVED" ||
+    state === "CHANGES_REQUESTED" ||
+    state === "COMMENTED"
+  );
 }

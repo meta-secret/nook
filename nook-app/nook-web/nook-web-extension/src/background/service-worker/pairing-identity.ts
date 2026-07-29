@@ -35,15 +35,20 @@ import {
   openCompanionLauncher,
 } from './session-lifecycle'
 
+enum PendingIdentityHandoffKind {
+  Pairing = 'pairing',
+  PairedVault = 'paired-vault',
+}
+
 type PendingIdentityHandoff =
   | {
-      kind: 'pairing'
+      kind: PendingIdentityHandoffKind.Pairing
       deviceId: string
       devicePublicKey: string
       deviceSigningPublicKey: string
     }
   | {
-      kind: 'paired-vault'
+      kind: PendingIdentityHandoffKind.PairedVault
       vaultStoreId: string
       deviceId: string
       devicePublicKey: string
@@ -78,8 +83,8 @@ function isPendingIdentityHandoff(
     'deviceSigningPublicKey' in value &&
     typeof value.deviceSigningPublicKey === 'string' &&
     'kind' in value &&
-    (value.kind === 'pairing' ||
-      (value.kind === 'paired-vault' &&
+    (value.kind === PendingIdentityHandoffKind.Pairing ||
+      (value.kind === PendingIdentityHandoffKind.PairedVault &&
         'vaultStoreId' in value &&
         typeof value.vaultStoreId === 'string'))
   )
@@ -133,7 +138,7 @@ export async function openExtensionPairing(
 ): Promise<void> {
   const nonce = randomNonce()
   await issueIdentityHandoff(nonce, {
-    kind: 'pairing',
+    kind: PendingIdentityHandoffKind.Pairing,
     deviceId: device.deviceId,
     devicePublicKey: device.devicePublicKey,
     deviceSigningPublicKey: device.deviceSigningPublicKey,
@@ -174,8 +179,15 @@ export function sendSessionMessage(message: unknown): Promise<unknown> {
   })
 }
 
+enum PairedVaultGrantIsCurrentPendingKind {
+  PairedVault = 'paired-vault',
+}
+
 async function pairedVaultGrantIsCurrent(
-  pending: Extract<PendingIdentityHandoff, { kind: 'paired-vault' }>,
+  pending: Extract<
+    PendingIdentityHandoff,
+    { kind: PairedVaultGrantIsCurrentPendingKind.PairedVault }
+  >,
 ): Promise<boolean> {
   const key = pairingGrantStorageKey(pending.vaultStoreId)
   const stored = await getPairingStorage(key)
@@ -209,9 +221,9 @@ export async function createIdentityHandoff(
     const pending = stored[key]
     if (
       !isPendingIdentityHandoff(pending) ||
-      (pending.kind === 'pairing' &&
+      (pending.kind === PendingIdentityHandoffKind.Pairing &&
         message.type !== 'nook:extension-identity-handoff-request') ||
-      (pending.kind === 'paired-vault' &&
+      (pending.kind === PendingIdentityHandoffKind.PairedVault &&
         (message.type !==
           'nook:extension-paired-vault-identity-handoff-request' ||
           pending.vaultStoreId !== message.payload.vaultStoreId)) ||
@@ -223,7 +235,7 @@ export async function createIdentityHandoff(
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
     if (
-      pending.kind === 'paired-vault' &&
+      pending.kind === PendingIdentityHandoffKind.PairedVault &&
       !(await pairedVaultGrantIsCurrent(pending))
     ) {
       return { ok: false, reason: 'extension-pairing-revoked' }
@@ -243,7 +255,7 @@ export async function createIdentityHandoff(
       typeof response.envelope === 'string'
     ) {
       if (
-        pending.kind === 'paired-vault' &&
+        pending.kind === PendingIdentityHandoffKind.PairedVault &&
         !(await pairedVaultGrantIsCurrent(pending))
       ) {
         return { ok: false, reason: 'extension-pairing-revoked' }
@@ -377,7 +389,7 @@ export async function discoverPairedVaultIdentity(
 
     const nonce = randomNonce()
     await issueIdentityHandoff(nonce, {
-      kind: 'paired-vault',
+      kind: PendingIdentityHandoffKind.PairedVault,
       vaultStoreId,
       deviceId: grant.deviceId,
       devicePublicKey: grant.devicePublicKey,
@@ -430,14 +442,21 @@ export async function requestPairedVaultUnlock(
   return { ok: true, requestId, vaultStoreId }
 }
 
+export enum HasPairingApprovedTypeResultType {
+  NookExtensionPairingApproved = 'nook:extension-pairing-approved',
+}
+
 export function hasPairingApprovedType(
   message: unknown,
-): message is { type: 'nook:extension-pairing-approved' } {
+): message is {
+  type: HasPairingApprovedTypeResultType.NookExtensionPairingApproved
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-pairing-approved'
+    message.type ===
+      HasPairingApprovedTypeResultType.NookExtensionPairingApproved
   )
 }
 
@@ -448,11 +467,18 @@ export async function setPairingStorage(
   await writeExtensionPairingState(items)
 }
 
-type LegacyPairingMigration =
-  | { kind: 'not-started' }
-  | { kind: 'running'; operation: Promise<void> }
+enum LegacyPairingMigrationKind {
+  NotStarted = 'not-started',
+  Running = 'running',
+}
 
-let legacyPairingMigration: LegacyPairingMigration = { kind: 'not-started' }
+type LegacyPairingMigration =
+  | { kind: LegacyPairingMigrationKind.NotStarted }
+  | { kind: LegacyPairingMigrationKind.Running; operation: Promise<void> }
+
+let legacyPairingMigration: LegacyPairingMigration = {
+  kind: LegacyPairingMigrationKind.NotStarted,
+}
 
 function legacyPairingStorageKeys(stored: Record<string, unknown>): string[] {
   return Object.keys(stored).filter(
@@ -497,7 +523,7 @@ function removeLegacyPairingStorage(keys: string[]): Promise<void> {
 }
 
 export function ensureLegacyPairingMigration(): Promise<void> {
-  if (legacyPairingMigration.kind === 'running') {
+  if (legacyPairingMigration.kind === LegacyPairingMigrationKind.Running) {
     return legacyPairingMigration.operation
   }
   const operation = (async () => {
@@ -530,7 +556,10 @@ export function ensureLegacyPairingMigration(): Promise<void> {
       )
     }
   })()
-  legacyPairingMigration = { kind: 'running', operation }
+  legacyPairingMigration = {
+    kind: LegacyPairingMigrationKind.Running,
+    operation,
+  }
   return operation
 }
 

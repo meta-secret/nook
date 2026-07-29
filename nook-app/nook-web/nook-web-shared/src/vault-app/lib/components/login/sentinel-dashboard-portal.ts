@@ -1,5 +1,12 @@
 export type SentinelDashboard = "card-stack" | "terminal";
-type FocusReturn = { kind: "body" } | { kind: "element"; element: HTMLElement };
+enum FocusReturnKind {
+  Body = "body",
+  Element = "element",
+}
+
+type FocusReturn =
+  | { kind: FocusReturnKind.Body }
+  | { kind: FocusReturnKind.Element; element: HTMLElement };
 
 type SentinelDashboardPortalParameters = {
   active: boolean;
@@ -21,7 +28,7 @@ export function sentinelDashboardPortal(
   ].join(",");
   const siblingInertState: Array<[HTMLElement, boolean]> = [];
   let active = false;
-  let previousFocus: FocusReturn = { kind: "body" };
+  let previousFocus: FocusReturn = { kind: FocusReturnKind.Body };
   let returnFocusTestId = "sentinel-dashboard-card-stack";
   node.before(anchor);
 
@@ -73,8 +80,8 @@ export function sentinelDashboardPortal(
         : "sentinel-dashboard-card-stack";
     previousFocus =
       document.activeElement instanceof HTMLElement
-        ? { kind: "element", element: document.activeElement }
-        : { kind: "body" };
+        ? { kind: FocusReturnKind.Element, element: document.activeElement }
+        : { kind: FocusReturnKind.Body };
     document.body.appendChild(node);
     setBackgroundInert(true);
     node.addEventListener("keydown", trapFocus);
@@ -93,7 +100,7 @@ export function sentinelDashboardPortal(
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (
-          previousFocus.kind === "element" &&
+          previousFocus.kind === FocusReturnKind.Element &&
           previousFocus.element.isConnected
         ) {
           previousFocus.element.focus();
@@ -102,7 +109,7 @@ export function sentinelDashboardPortal(
             .querySelector<HTMLElement>(`[data-testid="${returnFocusTestId}"]`)
             ?.focus();
         }
-        previousFocus = { kind: "body" };
+        previousFocus = { kind: FocusReturnKind.Body };
       });
     });
     active = false;
@@ -124,7 +131,8 @@ export function sentinelDashboardPortal(
       if (active) {
         node.removeEventListener("keydown", trapFocus);
         setBackgroundInert(false);
-        if (previousFocus.kind === "element") previousFocus.element.focus();
+        if (previousFocus.kind === FocusReturnKind.Element)
+          previousFocus.element.focus();
       }
       node.remove();
       anchor.remove();
