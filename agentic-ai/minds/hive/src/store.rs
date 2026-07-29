@@ -309,15 +309,25 @@ mod tests {
             }) else {
                 return Ok(ClaimOutcome::NoTask);
             };
-            let owning_repairs = tasks
+            let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
-                    owner.definition.kind == "main-repair"
+                    owner.definition.kind != "blocker"
                         && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                         && Self::reaches(&tasks, id, &task_id)
                 })
-                .map(|(_, owner)| owner.definition.id.clone())
+                .map(|(_, owner)| owner)
                 .collect::<Vec<_>>();
+            let owning_repairs = active_owners
+                .iter()
+                .all(|owner| owner.definition.kind == "main-repair")
+                .then(|| {
+                    active_owners
+                        .iter()
+                        .map(|owner| owner.definition.id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
             let task = tasks.get_mut(&task_id).expect("claimable task");
             task.status = "RUNNING";
             task.attempt_count += 1;
@@ -383,9 +393,25 @@ mod tests {
             _artifact: &CompletionArtifact,
         ) -> anyhow::Result<bool> {
             let mut tasks = self.tasks.lock().expect("store lock");
+            let active_owners = tasks
+                .iter()
+                .filter(|(id, owner)| {
+                    owner.definition.kind != "blocker"
+                        && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
+                        && Self::reaches(&tasks, id, claimed.id.as_str())
+                })
+                .map(|(_, owner)| owner)
+                .collect::<Vec<_>>();
+            let retirement_guard_matches = claimed.owning_repairs.is_empty()
+                || (active_owners.len() == claimed.owning_repairs.len()
+                    && active_owners.iter().all(|owner| {
+                        owner.definition.kind == "main-repair"
+                            && claimed.owning_repairs.contains(&owner.definition.id)
+                    }));
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
             let accepted = task.lease_token.as_ref() == Some(&claimed.lease_token)
-                && task.lease_until.is_some_and(|lease| lease > Instant::now());
+                && task.lease_until.is_some_and(|lease| lease > Instant::now())
+                && retirement_guard_matches;
             if accepted {
                 task.status = "COMPLETED";
                 task.lease_token = None;

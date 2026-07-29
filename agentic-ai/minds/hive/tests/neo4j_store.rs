@@ -758,6 +758,134 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         );
     }
 
+    let mut mixed_blocker = task(format!("mixed-owner-blocker-{suffix}"), Vec::new());
+    mixed_blocker.kind = "blocker".to_owned();
+    let mut mixed_repair = task(
+        format!("main-failure-mixed-owner-{suffix}"),
+        vec![mixed_blocker.id.clone()],
+    );
+    mixed_repair.kind = "main-repair".to_owned();
+    let mixed_code = task(
+        format!("mixed-owner-code-{suffix}"),
+        vec![mixed_blocker.id.clone()],
+    );
+    store.enqueue(&mixed_blocker).await?;
+    store.enqueue(&mixed_repair).await?;
+    store.enqueue(&mixed_code).await?;
+    let mixed_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(mixed_claim.id, mixed_blocker.id);
+    assert!(
+        mixed_claim.owning_repairs.is_empty(),
+        "a non-Main dependent must disable obsolete blocker retirement"
+    );
+    assert!(
+        store
+            .complete(
+                &mixed_claim,
+                &agent_a,
+                "mixed-owner prerequisite actually resolved",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    for owner in [&mixed_repair, &mixed_code] {
+        let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert_eq!(owner_claim.id, owner.id);
+        assert!(
+            store
+                .complete(
+                    &owner_claim,
+                    &agent_a,
+                    "mixed owner complete",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+    }
+
+    let mut raced_blocker = task(format!("late-owner-blocker-{suffix}"), Vec::new());
+    raced_blocker.kind = "blocker".to_owned();
+    let mut raced_parent = task(
+        format!("late-owner-parent-blocker-{suffix}"),
+        vec![raced_blocker.id.clone()],
+    );
+    raced_parent.kind = "blocker".to_owned();
+    let mut original_owner = task(
+        format!("main-failure-original-owner-{suffix}"),
+        vec![raced_parent.id.clone()],
+    );
+    original_owner.kind = "main-repair".to_owned();
+    store.enqueue(&raced_blocker).await?;
+    store.enqueue(&raced_parent).await?;
+    store.enqueue(&original_owner).await?;
+    let raced_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(raced_claim.id, raced_blocker.id);
+    assert_eq!(
+        raced_claim.owning_repairs,
+        vec![original_owner.id.clone()],
+        "intermediate blockers are part of the same chain, not independent consumers"
+    );
+    let mut late_owner = task(
+        format!("main-failure-late-owner-{suffix}"),
+        vec![raced_blocker.id.clone()],
+    );
+    late_owner.kind = "main-repair".to_owned();
+    store.enqueue(&late_owner).await?;
+    assert!(
+        !store
+            .complete(
+                &raced_claim,
+                &agent_a,
+                "stale owner snapshot",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?,
+        "completion must reject a Main repair attached after claim"
+    );
+    assert!(store.release(&raced_claim, &agent_a).await?);
+    let refreshed_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(refreshed_claim.id, raced_blocker.id);
+    assert_eq!(
+        refreshed_claim.owning_repairs,
+        vec![late_owner.id.clone(), original_owner.id.clone()]
+    );
+    assert!(
+        store
+            .complete(
+                &refreshed_claim,
+                &agent_a,
+                "fresh owner snapshot",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    let parent_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(parent_claim.id, raced_parent.id);
+    assert!(
+        store
+            .complete(
+                &parent_claim,
+                &agent_a,
+                "parent blocker complete",
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    for owner in [&original_owner, &late_owner] {
+        let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert_eq!(owner_claim.id, owner.id);
+        assert!(
+            store
+                .complete(
+                    &owner_claim,
+                    &agent_a,
+                    "late owner complete",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+    }
+
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();
     repair.max_attempts = 1;

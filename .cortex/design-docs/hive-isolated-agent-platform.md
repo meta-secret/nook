@@ -183,6 +183,17 @@ revision, commits a dependency baseline, and gives the parent task both the
 dependency summary and resulting source. Resumed publication branches still
 receive dependency artifacts added after the branch was first created.
 
+A blocker may retire as obsolete without resolving its named prerequisite only
+when every active transitive non-blocker consumer is a Main-repair task and
+every one of those repairs is already squash-merged with a successful
+containing Main run. Intermediate blocker nodes belong to the same prerequisite
+chain and are not independent consumers. Claiming snapshots the complete sorted
+owner set; completion transactionally rechecks that exact set and refuses
+retirement if a Main repair or any non-Main consumer was attached while the
+blocker was running. The shared-owner, mixed-owner, and late-owner cases are
+behavior-tested in
+`agentic-ai/minds/hive/tests/neo4j_store.rs`.
+
 ### Durable results
 
 Terminal summaries are bounded to 64 KiB. Authored changes are stored as a

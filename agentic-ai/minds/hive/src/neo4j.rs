@@ -704,18 +704,26 @@ impl TaskStore for Neo4jTaskStore {
                           [value IN collect(dependency_artifact.uri) WHERE value IS NOT NULL] AS artifact_uris,
                           [value IN collect(dependency_artifact.digest) WHERE value IS NOT NULL] AS artifact_digests,
                           [value IN collect(dependency_artifact.content) WHERE value IS NOT NULL] AS artifact_contents
-                     OPTIONAL MATCH (owning_repair:Task)-[:DEPENDS_ON*1..]->(task)
-                     WHERE owning_repair.kind = 'main-repair'
-                       AND owning_repair.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
                      WITH DISTINCT task, dependency_ids, dependency_summaries,
                           artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
-                          artifact_contents, owning_repair
-                     ORDER BY owning_repair.id
+                          artifact_contents, active_owner
+                     ORDER BY active_owner.id
                      WITH task, dependency_ids, dependency_summaries,
                           artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
                           artifact_contents,
-                          [value IN collect(owning_repair.id) WHERE value IS NOT NULL]
-                            AS owning_repair_ids
+                          collect(active_owner) AS active_owners
+                     WITH task, dependency_ids, dependency_summaries,
+                          artifact_ids, artifact_kinds, artifact_uris, artifact_digests,
+                          artifact_contents,
+                          CASE
+                            WHEN size(active_owners) > 0
+                              AND all(owner IN active_owners WHERE owner.kind = 'main-repair')
+                            THEN [owner IN active_owners | owner.id]
+                            ELSE []
+                          END AS owning_repair_ids
                      OPTIONAL MATCH (task)<-[:FOR_TASK]-(expired_attempt:Attempt {status: 'RUNNING'})
                      WHERE expired_attempt.lease_token = task.lease_token
                      OPTIONAL MATCH (expired_agent:Agent)-[:EXECUTED]->(expired_attempt)
@@ -921,6 +929,19 @@ impl TaskStore for Neo4jTaskStore {
                        AND task.lease_token = $lease_token
                        AND task.lease_until > timestamp()
                        AND attempt.lease_token = $lease_token
+                     OPTIONAL MATCH (active_owner:Task)-[:DEPENDS_ON*1..]->(task)
+                     WHERE active_owner.kind <> 'blocker'
+                       AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
+                     WITH task, attempt, collect(DISTINCT active_owner) AS active_owners
+                     WHERE size($owning_repair_ids) = 0
+                        OR (
+                          size(active_owners) = size($owning_repair_ids)
+                          AND all(
+                            owner IN active_owners
+                            WHERE owner.kind = 'main-repair'
+                              AND owner.id IN $owning_repair_ids
+                          )
+                        )
                      SET task.status = 'COMPLETED',
                          task.result_summary = $summary,
                          task.updated_at = timestamp(),
@@ -939,6 +960,13 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
+                .param(
+                    "owning_repair_ids",
+                    task.owning_repairs
+                        .iter()
+                        .map(|owner| owner.as_str())
+                        .collect::<Vec<_>>(),
+                )
                 .param("summary", summary),
             )
             .await?;
