@@ -56,6 +56,17 @@ test.describe('sync provider credential encryption', () => {
     await page.reload()
     await connectLocalVault(page)
     await disableVaultIdleLock(page)
+    await page.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: { refreshReplacementConflicts?: () => Promise<void> }
+        }
+      ).__nookVault
+      if (!vault?.refreshReplacementConflicts) {
+        throw new Error('E2E vault conflict-refresh hook is unavailable')
+      }
+      await vault.refreshReplacementConflicts()
+    })
 
     const pat = 'github_pat_22E2ElegacyUPGRADE'
     await seedExtraGithubProviders(page, [

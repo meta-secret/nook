@@ -85,7 +85,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </style>
       </head>
       <body>
-        <main id="app">
+        <main id="app" data-bootstrap-sentinel="replacement-root">
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -134,6 +134,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  await expect(
+    page.locator('[data-bootstrap-sentinel="replacement-root"]'),
+  ).toBeVisible()
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
