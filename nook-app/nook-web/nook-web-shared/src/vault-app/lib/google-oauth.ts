@@ -14,6 +14,11 @@
 import type { OAuthFileConfig } from "$lib/auth-providers";
 import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../explicit-state";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 export const DRIVE_APPDATA_SCOPE =
@@ -59,11 +64,11 @@ declare global {
 type TokenClientSlot = {
   scopeKey: string;
   client: TokenClient;
-  pendingResolve: ((response: GoogleTokenResponse) => void) | undefined;
+  pendingResolve: ValueState<(response: GoogleTokenResponse) => void>;
 };
 
 const tokenClients = new Map<string, TokenClientSlot>();
-let gisReadyPromise: Promise<void> | undefined = undefined;
+let gisReady: ValueState<Promise<void>> = EMPTY_VALUE;
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
@@ -115,11 +120,12 @@ function loadGisScript(): Promise<void> {
 }
 
 async function ensureGisReady(): Promise<void> {
-  if (gisReadyPromise) {
-    return gisReadyPromise;
+  if (gisReady.kind === "present") {
+    return gisReady.value;
   }
-  gisReadyPromise = loadGisScript();
-  return gisReadyPromise;
+  const promise = loadGisScript();
+  gisReady = presentValue(promise);
+  return promise;
 }
 
 async function tokenClientForScope(
@@ -136,13 +142,17 @@ async function tokenClientForScope(
     scope: key,
     callback: (response) => {
       const current = tokenClients.get(key);
-      current?.pendingResolve?.(response);
-      if (current) {
-        current.pendingResolve = undefined;
+      if (current?.pendingResolve.kind === "present") {
+        current.pendingResolve.value(response);
+        current.pendingResolve = EMPTY_VALUE;
       }
     },
   });
-  const slot = { scopeKey: key, client, pendingResolve: undefined };
+  const slot: TokenClientSlot = {
+    scopeKey: key,
+    client,
+    pendingResolve: EMPTY_VALUE,
+  };
   tokenClients.set(key, slot);
   return slot;
 }
@@ -181,13 +191,13 @@ export async function requestGoogleAccessToken(options?: {
   const slot = await tokenClientForScope(scope);
 
   return new Promise((resolve, reject) => {
-    slot.pendingResolve = (response) => {
+    slot.pendingResolve = presentValue((response) => {
       try {
         resolve(tokensFromResponse(response));
       } catch (error) {
         reject(error);
       }
-    };
+    });
     slot.client.requestAccessToken(
       options?.prompt !== undefined ? { prompt: options.prompt } : undefined,
     );

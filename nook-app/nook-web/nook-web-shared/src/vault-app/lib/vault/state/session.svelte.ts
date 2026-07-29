@@ -1,5 +1,10 @@
 import type { JoinRequest, VaultMember } from "$lib/nook";
 import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../../explicit-state";
+import {
   DeviceProtectionStatus,
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
@@ -8,7 +13,15 @@ import {
   type PasswordEntryId,
 } from "$app-wasm";
 export class VaultSessionState {
-  manager = $state<NookVaultManager>();
+  private managerState = $state<ValueState<NookVaultManager>>(EMPTY_VALUE);
+  get manager(): NookVaultManager | undefined {
+    return this.managerState.kind === "present"
+      ? this.managerState.value
+      : undefined;
+  }
+  set manager(value: NookVaultManager | undefined) {
+    this.managerState = value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
   );
@@ -46,6 +59,27 @@ export class VaultSessionState {
   enrollmentFromUrlPending = $state(false);
   loginEnrollmentCode = $state("");
   passwordEntries = $state<NookPasswordEntrySummary[]>([]);
-  selectedPasswordEntryId = $state<PasswordEntryId>();
-  activeEnrollmentEntryId = $state<PasswordEntryId>();
+  private selectedPasswordEntryState =
+    $state<ValueState<PasswordEntryId>>(EMPTY_VALUE);
+  get selectedPasswordEntryId(): PasswordEntryId | undefined {
+    return this.selectedPasswordEntryState.kind === "present"
+      ? this.selectedPasswordEntryState.value
+      : undefined;
+  }
+  set selectedPasswordEntryId(value: PasswordEntryId | undefined) {
+    this.selectedPasswordEntryState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
+
+  private activeEnrollmentEntryState =
+    $state<ValueState<PasswordEntryId>>(EMPTY_VALUE);
+  get activeEnrollmentEntryId(): PasswordEntryId | undefined {
+    return this.activeEnrollmentEntryState.kind === "present"
+      ? this.activeEnrollmentEntryState.value
+      : undefined;
+  }
+  set activeEnrollmentEntryId(value: PasswordEntryId | undefined) {
+    this.activeEnrollmentEntryState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
 }

@@ -41,6 +41,11 @@
     providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
 
   let {
     vault,
@@ -118,8 +123,8 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  let providerId = $state<string>()
-  let passwordEntryId = $state<PasswordEntryId>()
+  let selectedProviderIdState = $state<ValueState<string>>(EMPTY_VALUE)
+  let passwordEntry = $state<ValueState<PasswordEntryId>>(EMPTY_VALUE)
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
@@ -138,16 +143,18 @@
       firstCompatibleProvider(
         syncProviders,
         vault.vaultArchitecture.replication_type,
-        providerId,
+        selectedProviderIdState.kind === 'present'
+          ? selectedProviderIdState.value
+          : undefined,
       )?.id ?? ''
     )
   })
   const effectivePasswordEntryId = $derived.by(() => {
     if (
-      passwordEntryId !== undefined &&
-      passwordEntries.some((entry) => entry.id === passwordEntryId)
+      passwordEntry.kind === 'present' &&
+      passwordEntries.some((entry) => entry.id === passwordEntry.value)
     ) {
-      return passwordEntryId
+      return passwordEntry.value
     }
     return ''
   })
@@ -450,7 +457,7 @@
                   data-testid="onboard-password-entry-{entry.id}"
                   disabled={isBusy || isGenerating}
                   onclick={() => {
-                    passwordEntryId = entry.id
+                    passwordEntry = presentValue(entry.id)
                     passwordInput = ''
                   }}
                 >
@@ -676,7 +683,9 @@
                 data-testid="onboard-provider-{provider.id}"
                 disabled={isBusy || isGenerating || !compatible}
                 onclick={() => {
-                  if (compatible) providerId = provider.id
+                  if (compatible) {
+                    selectedProviderIdState = presentValue(provider.id)
+                  }
                 }}
               >
                 <span

@@ -48,17 +48,7 @@ export function consumeEnrollmentFromLocation(): string | undefined {
   }
 
   const url = new URL(window.location.href);
-  let raw: string | undefined;
-
-  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
-    raw = decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length));
-    url.hash = "";
-  } else {
-    raw = url.searchParams.get("enroll") ?? undefined;
-    if (raw) {
-      url.searchParams.delete("enroll");
-    }
-  }
+  const raw = enrollmentCodeFromUrl(url);
 
   if (!raw) {
     return undefined;
@@ -70,4 +60,19 @@ export function consumeEnrollmentFromLocation(): string | undefined {
     `${url.pathname}${url.search}${url.hash}`,
   );
   return normalizeEnrollmentCode(raw);
+}
+
+function enrollmentCodeFromUrl(url: URL): string | undefined {
+  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
+    const code = decodeURIComponent(
+      url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
+    );
+    url.hash = "";
+    return code;
+  }
+  const code = url.searchParams.get("enroll") ?? undefined;
+  if (code) {
+    url.searchParams.delete("enroll");
+  }
+  return code;
 }

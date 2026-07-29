@@ -1,5 +1,10 @@
 <script lang="ts">
   import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
+  import {
     KeyRound,
     Lock,
     QrCode,
@@ -67,7 +72,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<PasswordEntryId>()
+  let activeEntryId = $state<ValueState<PasswordEntryId>>(EMPTY_VALUE)
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -77,7 +82,9 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry = $derived(
-    passwordEntries.find((entry) => entry.id === activeEntryId) ?? undefined,
+    activeEntryId.kind === 'present'
+      ? passwordEntries.find((entry) => entry.id === activeEntryId.value)
+      : undefined,
   )
 
   const issuedAt = $derived.by(() => {
@@ -104,7 +111,8 @@
 
   function openPanel(target: Panel, entryId: string | undefined = undefined) {
     panel = target
-    activeEntryId = entryId
+    activeEntryId =
+      entryId === undefined ? EMPTY_VALUE : presentValue(entryId)
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -114,7 +122,7 @@
 
   function closePanel() {
     panel = 'idle'
-    activeEntryId = undefined
+    activeEntryId = EMPTY_VALUE
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -146,7 +154,7 @@
 
   async function submitRotatePassword() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== 'present') return
     if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
@@ -156,7 +164,7 @@
       return
     }
     try {
-      await onUpdatePassword(activeEntryId, passwordInput)
+      await onUpdatePassword(activeEntryId.value, passwordInput)
       closePanel()
     } catch {
       // surfaced via prop
@@ -165,9 +173,9 @@
 
   async function submitRemove() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== 'present') return
     try {
-      await onRemovePassword(activeEntryId)
+      await onRemovePassword(activeEntryId.value)
       closePanel()
     } catch {
       // surfaced via prop
@@ -176,13 +184,13 @@
 
   async function submitIssueCode() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== 'present') return
     if (!passwordInput) {
       localError = vault.t('vault_passwords.enter_pw_error')
       return
     }
     try {
-      await onIssueCode(activeEntryId, passwordInput)
+      await onIssueCode(activeEntryId.value, passwordInput)
       passwordInput = ''
       confirmInput = ''
     } catch (e: unknown) {

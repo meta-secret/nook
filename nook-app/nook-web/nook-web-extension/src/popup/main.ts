@@ -4,7 +4,6 @@ import { loadExtensionSetupState } from '../lib/pairing-state'
 import {
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
-  type ExtensionDeviceProtectionResult,
   type ExtensionDeviceProtectionStatus,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
@@ -50,12 +49,10 @@ async function main() {
   }
 
   const vaultConnection = await loadCompanionVaultConnection()
-  let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
-  let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
-  protectionStatus = await extensionDeviceProtectionStatus()
-  if (protectionStatus === 'unlocked') {
-    activeSessionDevice = await extensionSessionDevice()
-  }
+  const protectionStatus: ExtensionDeviceProtectionStatus =
+    await extensionDeviceProtectionStatus()
+  const activeSessionDevice =
+    protectionStatus === 'unlocked' ? await extensionSessionDevice() : undefined
 
   mount(PopupApp, {
     target,

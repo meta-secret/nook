@@ -13,6 +13,11 @@
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
   import type { VaultItemType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from "../../../../explicit-state";
 
   let {
     vault,
@@ -42,21 +47,24 @@
 
   const appVersion = "0.1.0";
   let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<VaultItemType>();
+  let secretsAddFormType = $state<ValueState<VaultItemType>>(EMPTY_VALUE);
   let secretsEditorResetKey = $state(0);
   const secretsNoteEditorOpen = $derived(
-    secretsAddOpen && secretsAddFormType === "secure-note",
+    secretsAddOpen &&
+      secretsAddFormType.kind === "present" &&
+      secretsAddFormType.value === "secure-note",
   );
 
   function setAddMode(open: boolean, type: VaultItemType | undefined) {
     secretsAddOpen = open;
-    secretsAddFormType = type;
+    secretsAddFormType =
+      type === undefined ? EMPTY_VALUE : presentValue(type);
     onEditorOpenChange(open);
   }
 
   function leaveSecretsEditor() {
     secretsAddOpen = false;
-    secretsAddFormType = undefined;
+    secretsAddFormType = EMPTY_VALUE;
     secretsEditorResetKey += 1;
     onEditorOpenChange(false);
   }

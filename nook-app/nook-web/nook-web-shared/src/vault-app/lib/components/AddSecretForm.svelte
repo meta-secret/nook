@@ -8,6 +8,11 @@
     type VaultItemType,
   } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from "../../../explicit-state";
   import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
   import SecretFields from "./add-secret/SecretFields.svelte";
   import { SecretFormState } from "./add-secret/secret-form-state.svelte";
@@ -21,7 +26,7 @@
     onGeneratePassword,
     onCancel,
     initialItem = undefined,
-    selectedType = $bindable<VaultItemType | undefined>(undefined),
+    selectedTypeState = $bindable<ValueState<VaultItemType>>(EMPTY_VALUE),
   }: {
     vault: VaultState;
     isSaving: boolean;
@@ -44,10 +49,15 @@
     ) => string;
     onCancel: () => void;
     initialItem?: NookSecretRecord | undefined;
-    selectedType?: VaultItemType | undefined;
+    selectedTypeState?: ValueState<VaultItemType>;
   } = $props();
 
   const state = new SecretFormState();
+  const selectedType = $derived(
+    selectedTypeState.kind === "present"
+      ? selectedTypeState.value
+      : undefined,
+  );
   const isEditMode = $derived(initialItem !== undefined);
 
   const typeTitle = $derived(
@@ -87,12 +97,12 @@
   $effect(() => {
     const item = initialItem;
     if (!item) return;
-    selectedType = item.type as VaultItemType;
+    selectedTypeState = presentValue(item.type as VaultItemType);
     state.load(item);
   });
 
   function resetForm() {
-    selectedType = undefined;
+    selectedTypeState = EMPTY_VALUE;
     state.reset();
   }
 
@@ -141,11 +151,14 @@
 </script>
 
 {#if selectedType === undefined && !isEditMode}
-  <SecretTypePicker {vault} onSelect={(type) => (selectedType = type)} />
+  <SecretTypePicker
+    {vault}
+    onSelect={(type) => (selectedTypeState = presentValue(type))}
+  />
 {:else if selectedType === "passkey" && !isEditMode}
   <PasskeyCreationGuidance
     {vault}
-    onBack={() => (selectedType = undefined)}
+    onBack={() => (selectedTypeState = EMPTY_VALUE)}
     onDone={handleCancel}
   />
 {:else if selectedType}
@@ -165,7 +178,7 @@
             type="button"
             class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             data-testid="change-secret-type-btn"
-            onclick={() => (selectedType = undefined)}
+            onclick={() => (selectedTypeState = EMPTY_VALUE)}
           >
             <ArrowLeft class="size-3.5" />
             {vault.t("add_secret.change_type")}

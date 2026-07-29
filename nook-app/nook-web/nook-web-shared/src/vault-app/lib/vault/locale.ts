@@ -7,6 +7,16 @@ import {
 
 type TranslationCatalog = string;
 
+function wasmTranslationCatalog(
+  locale: NookAppLocale,
+): TranslationCatalog | undefined {
+  try {
+    return getTranslationCatalog(locale);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function updateLocale(
   state: VaultState,
   newLocale: NookAppLocale,
@@ -19,13 +29,8 @@ export async function updateLocale(
   }
 
   const preferWasm = options?.preferWasm ?? Boolean(state.manager);
-  let wasmCatalog: TranslationCatalog | undefined;
-  if (preferWasm) {
-    try {
-      wasmCatalog = getTranslationCatalog(newLocale);
-    } catch {
-      // Fall back to the bundled JSON catalogs only.
-    }
-  }
+  const wasmCatalog = preferWasm
+    ? wasmTranslationCatalog(newLocale)
+    : undefined;
   state.translations = resolveTranslationCatalog(newLocale, wasmCatalog);
 }

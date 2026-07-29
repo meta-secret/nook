@@ -56,15 +56,22 @@ This document defines the strict development standards, architectural boundaries
 
 - **No `null` in authored TypeScript/Svelte:** Authored `nook-app/nook-web/src` code must
   not use `null` as a value, state sentinel, return type, parameter type, or
-  default prop value. Use `undefined` for absent values and model meaningful
-  UI/domain states with discriminated unions or Rust/WASM-owned enums. Browser
-  APIs that return `null` must be normalized at the boundary with
-  `?? undefined`; do not let nullable values flow through app code. Generated
+  default prop value. Normalize truthful external absence to `undefined` at the
+  boundary, but do not store that value as a named application state. Product,
+  workflow, lifecycle, resource, and UI state use discriminated unions or
+  Rust/WASM-owned enums. Browser APIs that return `null` must be normalized at
+  the boundary with `?? undefined`; do not let nullable values flow through app code. Generated
   WASM bindings and ambient declarations may mention `null` because they mirror
   external contracts. Browser callbacks and third-party component adapters
   whose signatures require `null` may retain it only at that explicit boundary;
   normalize before values enter application state. Do not hand-edit generated
   files or spread nullable types into internal helpers.
+- **Explicit TypeScript/Svelte state:** Mutable application state must not use
+  `T | undefined`, an optional property, a zero-argument `$state<T>()`, or
+  parallel flags to encode named states. Use discriminated unions with
+  variant-owned data. Keep `undefined` only when absence is the truthful
+  structural contract of an external input, browser/generated API, lookup,
+  parser, cache, optional callback, or DOM reference.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.

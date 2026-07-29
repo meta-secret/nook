@@ -8,13 +8,25 @@ export const extensionSessionDocument = 'offscreen/session.html'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
-let extensionSessionDocumentCreation: Promise<void> | undefined
+type ExtensionSessionDocumentState =
+  | { kind: 'closed' }
+  | { kind: 'creating'; operation: Promise<void> }
+  | { kind: 'open' }
+  | { kind: 'closing'; operation: Promise<void> }
 
-let extensionSessionDocumentClosure: Promise<void> | undefined
+let extensionSessionDocumentState: ExtensionSessionDocumentState = {
+  kind: 'closed',
+}
 
 export async function ensureExtensionSessionDocument(): Promise<void> {
-  await extensionSessionDocumentClosure
-  extensionSessionDocumentCreation ??= chrome.offscreen
+  if (extensionSessionDocumentState.kind === 'closing') {
+    await extensionSessionDocumentState.operation
+  }
+  if (extensionSessionDocumentState.kind === 'open') return
+  if (extensionSessionDocumentState.kind === 'creating') {
+    return extensionSessionDocumentState.operation
+  }
+  const operation = chrome.offscreen
     .createDocument({
       url: extensionSessionDocument,
       reasons: ['WORKERS'],
@@ -30,18 +42,31 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
       }
       throw error
     })
-  return extensionSessionDocumentCreation
+    .then(() => {
+      if (
+        extensionSessionDocumentState.kind === 'creating' &&
+        extensionSessionDocumentState.operation === operation
+      ) {
+        extensionSessionDocumentState = { kind: 'open' }
+      }
+    })
+  extensionSessionDocumentState = { kind: 'creating', operation }
+  return operation
 }
 
 export function closeExtensionSessionDocument(): Promise<void> {
-  extensionSessionDocumentCreation = undefined
-  if (extensionSessionDocumentClosure) return extensionSessionDocumentClosure
+  if (extensionSessionDocumentState.kind === 'closing') {
+    return extensionSessionDocumentState.operation
+  }
   const closure = chrome.offscreen.closeDocument().finally(() => {
-    if (extensionSessionDocumentClosure === closure) {
-      extensionSessionDocumentClosure = undefined
+    if (
+      extensionSessionDocumentState.kind === 'closing' &&
+      extensionSessionDocumentState.operation === closure
+    ) {
+      extensionSessionDocumentState = { kind: 'closed' }
     }
   })
-  extensionSessionDocumentClosure = closure
+  extensionSessionDocumentState = { kind: 'closing', operation: closure }
   return closure
 }
 

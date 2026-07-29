@@ -63,6 +63,13 @@
   import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
   import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
   import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+    valueFromState,
+    valueState,
+  } from "../explicit-state";
 
   const vault = new VaultState();
   const vaultSecurityRecommendations = $derived(
@@ -80,11 +87,12 @@
 
   let colorMode = $state<ColorMode>(systemColorMode());
   let followsSystemColorMode = $state(true);
-  let legalPage = $state<LegalPageId | undefined>(
+  let legalPageState = $state<ValueState<LegalPageId>>(
     typeof window !== "undefined"
-      ? getLegalPageFromPath(window.location.pathname)
-      : undefined,
+      ? valueState(getLegalPageFromPath(window.location.pathname))
+      : EMPTY_VALUE,
   );
+  const legalPage = $derived(valueFromState(legalPageState));
   let logsPage = $state<boolean>(
     typeof window !== "undefined"
       ? isLogsPath(window.location.pathname)
@@ -104,20 +112,29 @@
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   );
-  let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
-    initialExtensionConnectRequest,
+  let extensionConnectRequestState = $state<ValueState<ExtensionConnectRequest>>(
+    valueState(initialExtensionConnectRequest),
+  );
+  const extensionConnectRequest = $derived(
+    valueFromState(extensionConnectRequestState),
   );
   // Keep the public extension handoff request in memory after leaving the
   // consent route. On reload, the site asks the installed extension for a new
   // vault-bound handoff only when that extension already holds an approved
   // grant for the active local vault.
-  let extensionIdentityRequest = $state<ExtensionConnectRequest | undefined>(
-    initialExtensionConnectRequest,
+  let extensionIdentityRequestState =
+    $state<ValueState<ExtensionConnectRequest>>(
+      valueState(initialExtensionConnectRequest),
+    );
+  const extensionIdentityRequest = $derived(
+    valueFromState(extensionIdentityRequestState),
   );
   let extensionBackedVaultSession = $state(false);
   let extensionDiscoveryStoreId = $state("");
-  let extensionSetupState = $state<ExtensionSetupState | undefined>(
-    undefined,
+  let extensionSetupStateValue =
+    $state<ValueState<ExtensionSetupState>>(EMPTY_VALUE);
+  const extensionSetupState = $derived(
+    valueFromState(extensionSetupStateValue),
   );
   let extensionInstallBusy = $state(false);
   let extensionConnectError = $state(false);
@@ -139,16 +156,18 @@
   );
 
   function syncRoute() {
-    legalPage = getLegalPageFromPath(window.location.pathname);
+    legalPageState = valueState(
+      getLegalPageFromPath(window.location.pathname),
+    );
     logsPage = isLogsPath(window.location.pathname);
     appLogsPage = isAppLogsPath(window.location.pathname);
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname);
-    extensionConnectRequest = SUPPORTS_EXTENSION
-      ? extensionConnectRequestFromLocation(window.location)
-      : undefined;
+    extensionConnectRequestState = SUPPORTS_EXTENSION
+      ? valueState(extensionConnectRequestFromLocation(window.location))
+      : EMPTY_VALUE;
     if (extensionConnectRequest) {
-      extensionIdentityRequest = extensionConnectRequest;
+      extensionIdentityRequestState = presentValue(extensionConnectRequest);
     }
     if (APP_KIND !== "simple") {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation();
@@ -165,24 +184,24 @@
   function navigateHome() {
     vault.closeHelp();
     history.pushState(undefined, "", appPath("/"));
-    legalPage = undefined;
+    legalPageState = EMPTY_VALUE;
     logsPage = false;
     appLogsPage = false;
     extensionConnectRoute = false;
-    extensionConnectRequest = undefined;
+    extensionConnectRequestState = EMPTY_VALUE;
   }
 
   function finishExtensionConnect(approved = false) {
     if (!approved) {
-      extensionIdentityRequest = undefined;
+      extensionIdentityRequestState = EMPTY_VALUE;
     }
     vault.closeHelp();
     history.pushState(undefined, "", appPath("/"));
-    legalPage = undefined;
+    legalPageState = EMPTY_VALUE;
     logsPage = false;
     appLogsPage = false;
     extensionConnectRoute = false;
-    extensionConnectRequest = undefined;
+    extensionConnectRequestState = EMPTY_VALUE;
   }
 
   onMount(() => {
@@ -372,7 +391,7 @@
       if (pending) {
         await vault.activateConnectedExistingVault(pending.storeId);
       }
-      pendingExistingVaultImport = undefined;
+      pendingExistingVaultImportState = EMPTY_VALUE;
       vault.existingVaultRecoverySummary = undefined;
     }
   }
@@ -429,8 +448,10 @@
     | { kind: "sentinel-participant-key" }
     | { kind: "sentinel-participant-response"; requestPayload: string }
     | { kind: "sentinel-onboarding"; packageJson: string };
-  let pendingVaultCreation = $state<PendingVaultCreation | undefined>(
-    undefined,
+  let pendingVaultCreationState =
+    $state<ValueState<PendingVaultCreation>>(EMPTY_VALUE);
+  const pendingVaultCreation = $derived(
+    valueFromState(pendingVaultCreationState),
   );
   type PendingExistingVaultImport = {
     storeId: string;
@@ -441,13 +462,19 @@
     oauthFile: OAuthFileConfig | undefined;
     localFolder: LocalFolderConfig | undefined;
   };
-  let pendingExistingVaultImport = $state<PendingExistingVaultImport>();
+  let pendingExistingVaultImportState =
+    $state<ValueState<PendingExistingVaultImport>>(EMPTY_VALUE);
+  const pendingExistingVaultImport = $derived(
+    valueFromState(pendingExistingVaultImportState),
+  );
   let pendingExistingVaultUnlock = $state(false);
   let pendingEnrollmentDeviceUnlock = $state(false);
-  let pendingEnrollmentSubmit = $state<{
-    code: string;
-    password: string;
-  }>();
+  type PendingEnrollmentSubmit = { code: string; password: string };
+  let pendingEnrollmentSubmitState =
+    $state<ValueState<PendingEnrollmentSubmit>>(EMPTY_VALUE);
+  const pendingEnrollmentSubmit = $derived(
+    valueFromState(pendingEnrollmentSubmitState),
+  );
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
   );
@@ -463,7 +490,7 @@
   function rememberExistingVaultImport(storeId: string): void {
     const setupType = vault.loginSetupType;
     if (!setupType) return;
-    pendingExistingVaultImport = {
+    pendingExistingVaultImportState = presentValue({
       storeId,
       previousActiveStoreId: vault.activeVaultStoreId,
       setupType,
@@ -475,7 +502,7 @@
       localFolder: vault.localFolder
         ? $state.snapshot(vault.localFolder)
         : undefined,
-    };
+    });
   }
 
   async function resumeExistingVaultImport(): Promise<void> {
@@ -509,7 +536,7 @@
     await vault.connectStagedProvider();
     if (vault.isAuthenticated) {
       await vault.activateConnectedExistingVault(pending.storeId);
-      pendingExistingVaultImport = undefined;
+      pendingExistingVaultImportState = EMPTY_VALUE;
       vault.existingVaultRecoverySummary = undefined;
       return;
     }
@@ -534,14 +561,14 @@
     const pending = pendingExistingVaultImport;
     if (!pending || !vault.isAuthenticated) return;
     await vault.activateConnectedExistingVault(pending.storeId);
-    pendingExistingVaultImport = undefined;
+    pendingExistingVaultImportState = EMPTY_VALUE;
     vault.existingVaultRecoverySummary = undefined;
   }
 
   async function leaveExistingVaultImport(): Promise<void> {
     const previousStoreId =
       pendingExistingVaultImport?.previousActiveStoreId?.trim() ?? "";
-    pendingExistingVaultImport = undefined;
+    pendingExistingVaultImportState = EMPTY_VALUE;
     vault.existingVaultRecoverySummary = undefined;
     if (previousStoreId) {
       await vault.selectVaultForUnlock(previousStoreId);
@@ -551,11 +578,11 @@
 
   async function handleUseEnrollmentCode(code: string, password: string) {
     if (!vault.deviceProtectionReady) {
-      pendingEnrollmentSubmit = { code, password };
+      pendingEnrollmentSubmitState = presentValue({ code, password });
       pendingEnrollmentDeviceUnlock = true;
       return;
     }
-    pendingEnrollmentSubmit = undefined;
+    pendingEnrollmentSubmitState = EMPTY_VALUE;
     await vault.connectWithEnrollmentCode(code, password);
   }
 
@@ -588,7 +615,7 @@
       return "locked";
     }
     if (discovery.status !== "unlocked") return "unavailable";
-    extensionIdentityRequest = discovery.request;
+    extensionIdentityRequestState = presentValue(discovery.request);
     await handleUnlock(true);
     return "unlocked";
   }
@@ -602,10 +629,10 @@
       if (!adopted) return;
     }
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: "simple", label };
+      pendingVaultCreationState = presentValue({ kind: "simple", label });
       return;
     }
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     await vault.createLocalVaultWithDeviceKeys(label);
     if (connectRequest && vault.isAuthenticated) {
       extensionBackedVaultSession = true;
@@ -616,20 +643,22 @@
     args: StartSentinelGenesisArgs,
   ): Promise<boolean> {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: "sentinel", args };
+      pendingVaultCreationState = presentValue({ kind: "sentinel", args });
       return false;
     }
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     await vault.startSentinelGenesis(args);
     return true;
   }
 
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: "sentinel-participant-key" };
+      pendingVaultCreationState = presentValue({
+        kind: "sentinel-participant-key",
+      });
       return "";
     }
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     return sentinelGenesisActions.createPublicKeyAnnouncement(vault);
   }
 
@@ -637,13 +666,13 @@
     requestPayload: string,
   ): Promise<string> {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = {
+      pendingVaultCreationState = presentValue({
         kind: "sentinel-participant-response",
         requestPayload,
-      };
+      });
       return "";
     }
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     return sentinelGenesisActions.createParticipantResponse(
       vault,
       requestPayload,
@@ -652,25 +681,28 @@
 
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
-      pendingVaultCreation = { kind: "sentinel-onboarding", packageJson };
+      pendingVaultCreationState = presentValue({
+        kind: "sentinel-onboarding",
+        packageJson,
+      });
       return;
     }
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     await sentinelGenesisActions.acceptOnboardingPackage(vault, packageJson);
     sentinelOnboardingPackage = "";
   }
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION || !vault.isAuthenticated) {
-      extensionSetupState = undefined;
+      extensionSetupStateValue = EMPTY_VALUE;
       return;
     }
     const state = await resolveExtensionSetupState(
       vault.activeVaultStoreId,
     );
-    extensionSetupState = shouldOfferExtensionSetup(state.status)
-      ? state
-      : undefined;
+    extensionSetupStateValue = shouldOfferExtensionSetup(state.status)
+      ? presentValue(state)
+      : EMPTY_VALUE;
   }
 
   async function handleExtensionInstall() {
@@ -722,7 +754,7 @@
   $effect(() => {
     const pending = pendingVaultCreation;
     if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return;
-    pendingVaultCreation = undefined;
+    pendingVaultCreationState = EMPTY_VALUE;
     if (pending.kind === "simple") {
       void vault.createLocalVaultWithDeviceKeys(pending.label);
       return;
@@ -745,7 +777,7 @@
       extensionIdentityRequest?.source === "paired-vault" &&
       extensionIdentityRequest.vaultStoreId !== storeId
     ) {
-      extensionIdentityRequest = undefined;
+      extensionIdentityRequestState = EMPTY_VALUE;
     }
     if (
       !SUPPORTS_EXTENSION ||
@@ -794,7 +826,7 @@
     if (!pending || !vault.deviceProtectionReady || vault.isVerifying) {
       return;
     }
-    pendingEnrollmentSubmit = undefined;
+    pendingEnrollmentSubmitState = EMPTY_VALUE;
     pendingEnrollmentDeviceUnlock = false;
     void vault.connectWithEnrollmentCode(pending.code, pending.password);
   });
@@ -897,7 +929,7 @@
           onDismissPasskey={() => {
             if (showExistingVaultPasskeyOverlay) {
               pendingExistingVaultUnlock = false;
-              pendingExistingVaultImport = undefined;
+              pendingExistingVaultImportState = EMPTY_VALUE;
               vault.existingVaultRecoverySummary = undefined;
               return;
             }
@@ -905,7 +937,7 @@
               pendingEnrollmentDeviceUnlock = false;
               return;
             }
-            pendingVaultCreation = undefined;
+            pendingVaultCreationState = EMPTY_VALUE;
           }}
         />
       {:else if extensionConnectRequest}

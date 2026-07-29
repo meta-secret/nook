@@ -28,6 +28,11 @@ import {
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
 import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import { intoWasmStringValue } from "$lib/wasm-string-value";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../explicit-state";
 
 export * from "$lib/vault/sync-resolution";
 
@@ -793,7 +798,7 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true;
   state.errorMsg = "";
-  let providerId: string | undefined;
+  let savedProvider: ValueState<string> = EMPTY_VALUE;
   let importedAsSeparateVault = false;
   try {
     let importedStoreId: string;
@@ -834,7 +839,8 @@ export async function resolveSyncConflictImportRemote(
     }
     state.localVaultPresent = true;
     await state.refreshLocalVaultCatalog();
-    providerId = await state.ensureProviderSavedAfterConflict(conflict);
+    const providerId = await state.ensureProviderSavedAfterConflict(conflict);
+    savedProvider = presentValue(providerId);
     if (conflict.remoteYaml.trim()) {
       await state.updateProviderSyncMetadata(
         providerId,
@@ -866,14 +872,14 @@ export async function resolveSyncConflictImportRemote(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t("auth_storage.sync_failed");
-    providerId = undefined;
+    savedProvider = EMPTY_VALUE;
   } finally {
     state.isVerifying = false;
   }
-  if (providerId && !importedAsSeparateVault) {
+  if (savedProvider.kind === "present" && !importedAsSeparateVault) {
     await resumeConnectAfterSyncConflict(
       state,
-      providerId,
+      savedProvider.value,
       conflict.isPendingProvider,
     );
   }
@@ -946,7 +952,8 @@ export async function syncProviderById(
     eventLogIssueResult.free();
     const message = e instanceof Error ? e.message : String(e);
     let stagedStoreMismatch = false;
-    let localFolderIssue: LocalFolderMultipleVaultsIssue | undefined;
+    let localFolderIssue: ValueState<LocalFolderMultipleVaultsIssue> =
+      EMPTY_VALUE;
     if (eventLogIssue?.isStoreMismatch) {
       const localStoreId = eventLogIssue.localStoreId;
       const remoteStoreId = eventLogIssue.remoteStoreId;
@@ -959,22 +966,24 @@ export async function syncProviderById(
         );
       }
     } else if (eventLogIssue?.isMultipleStores) {
-      localFolderIssue = localFolderMultipleVaultsIssueFromTypedIssue(
-        provider,
-        eventLogIssue.storeIds,
-        message,
+      localFolderIssue = presentValue(
+        localFolderMultipleVaultsIssueFromTypedIssue(
+          provider,
+          eventLogIssue.storeIds,
+          message,
+        ),
       );
     }
     eventLogIssue?.free();
-    if (localFolderIssue) {
-      stageLocalFolderMultipleVaultsIssue(state, localFolderIssue);
+    if (localFolderIssue.kind === "present") {
+      stageLocalFolderMultipleVaultsIssue(state, localFolderIssue.value);
     }
     if (!options?.quiet) {
       state.errorMsg = stagedStoreMismatch
         ? state.t("auth_storage.sync_conflict_store_id_banner", {
             provider: provider.label,
           })
-        : localFolderIssue
+        : localFolderIssue.kind === "present"
           ? state.t("auth_storage.local_folder_multiple_vaults_short")
           : e instanceof Error
             ? e.message

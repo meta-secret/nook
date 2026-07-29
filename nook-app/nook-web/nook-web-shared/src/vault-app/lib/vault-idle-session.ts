@@ -13,60 +13,77 @@ export type VaultIdleSessionTracker = {
   recordActivity: () => void;
 };
 
+type ScheduledTimers = {
+  expire: ReturnType<typeof setTimeout>;
+  warning:
+    | { kind: "not-scheduled" }
+    | {
+        kind: "scheduled";
+        handle: ReturnType<typeof setTimeout>;
+      };
+};
+
+type SessionState =
+  | { kind: "stopped" }
+  | { kind: "tracking"; timers: ScheduledTimers };
+
 export function createVaultIdleSessionTracker(options: {
   timeoutMs: number;
   warningMs: number;
   onExpire: () => void;
   onWarning?: () => void;
 }): VaultIdleSessionTracker {
-  let expireTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  let warningTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  let warningShown = false;
-  let started = false;
+  let state: SessionState = { kind: "stopped" };
 
-  const clearTimers = () => {
-    if (expireTimer !== undefined) {
-      clearTimeout(expireTimer);
-      expireTimer = undefined;
-    }
-    if (warningTimer !== undefined) {
-      clearTimeout(warningTimer);
-      warningTimer = undefined;
+  const clearTimers = (timers: ScheduledTimers) => {
+    clearTimeout(timers.expire);
+    if (timers.warning.kind === "scheduled") {
+      clearTimeout(timers.warning.handle);
     }
   };
 
   const scheduleTimers = () => {
-    clearTimers();
-    warningShown = false;
+    if (state.kind === "tracking") {
+      clearTimers(state.timers);
+    }
 
-    expireTimer = setTimeout(() => {
-      expireTimer = undefined;
+    const expire = setTimeout(() => {
+      state = { kind: "stopped" };
       options.onExpire();
     }, options.timeoutMs);
 
+    let warning: ScheduledTimers["warning"] = { kind: "not-scheduled" };
     if (
       options.onWarning &&
       options.warningMs > 0 &&
       options.warningMs < options.timeoutMs
     ) {
       const warningDelay = options.timeoutMs - options.warningMs;
-      warningTimer = setTimeout(() => {
-        warningTimer = undefined;
-        if (warningShown) return;
-        warningShown = true;
-        options.onWarning?.();
-      }, warningDelay);
+      warning = {
+        kind: "scheduled",
+        handle: setTimeout(() => {
+          if (state.kind !== "tracking") return;
+          state = {
+            kind: "tracking",
+            timers: {
+              ...state.timers,
+              warning: { kind: "not-scheduled" },
+            },
+          };
+          options.onWarning?.();
+        }, warningDelay),
+      };
     }
+    state = { kind: "tracking", timers: { expire, warning } };
   };
 
   const onActivity = () => {
-    if (!started) return;
+    if (state.kind !== "tracking") return;
     scheduleTimers();
   };
 
   const start = () => {
-    if (started || typeof document === "undefined") return;
-    started = true;
+    if (state.kind === "tracking" || typeof document === "undefined") return;
     for (const event of ACTIVITY_EVENTS) {
       document.addEventListener(event, onActivity, { passive: true });
     }
@@ -74,10 +91,9 @@ export function createVaultIdleSessionTracker(options: {
   };
 
   const stop = () => {
-    if (!started) return;
-    started = false;
-    clearTimers();
-    warningShown = false;
+    if (state.kind === "stopped") return;
+    clearTimers(state.timers);
+    state = { kind: "stopped" };
     if (typeof document === "undefined") return;
     for (const event of ACTIVITY_EVENTS) {
       document.removeEventListener(event, onActivity);

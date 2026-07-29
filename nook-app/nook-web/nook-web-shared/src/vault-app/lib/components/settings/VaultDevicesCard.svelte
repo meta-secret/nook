@@ -24,6 +24,11 @@
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultType } from '$lib/vault-architecture'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../../explicit-state'
 
   let {
     vault,
@@ -51,13 +56,11 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<string>()
-  let renameAuthId = $state<string>()
+  let detailsAuthId = $state<ValueState<string>>(EMPTY_VALUE)
+  let renameAuthId = $state<ValueState<string>>(EMPTY_VALUE)
   let renameLabel = $state('')
-  let revokeAuthId = $state<string>()
-  let extensionSetupState = $state<ExtensionSetupState | undefined>(
-    undefined,
-  )
+  let revokeAuthId = $state<ValueState<string>>(EMPTY_VALUE)
+  let extensionSetupState = $state<ValueState<ExtensionSetupState>>(EMPTY_VALUE)
   let extensionInstallBusy = $state(false)
   let extensionConnectError = $state(false)
   const isSentinelVault = $derived(
@@ -70,8 +73,8 @@
       vault.activeVaultStoreId,
     )
     extensionSetupState = shouldOfferExtensionSetup(state.status)
-      ? state
-      : undefined
+      ? presentValue(state)
+      : EMPTY_VALUE
   }
 
   async function handleExtensionInstall() {
@@ -95,8 +98,8 @@
   }
 
   async function handleExtensionSetupAction() {
-    const state = extensionSetupState
-    if (!state) return
+    if (extensionSetupState.kind !== 'present') return
+    const state = extensionSetupState.value
     if (state.status === 'not_installed') {
       await handleExtensionInstall()
       return
@@ -196,14 +199,14 @@
   }
 
   function beginRename(member: VaultMember) {
-    renameAuthId = member.authId
+    renameAuthId = presentValue(member.authId)
     renameLabel = member.label.trim()
-    revokeAuthId = undefined
+    revokeAuthId = EMPTY_VALUE
   }
 
   async function saveRename(member: VaultMember) {
     await onRenameDevice(member.authId, renameLabel)
-    renameAuthId = undefined
+    renameAuthId = EMPTY_VALUE
     renameLabel = ''
   }
 
@@ -214,11 +217,12 @@
 </script>
 
 <div class="space-y-4" data-testid="vault-devices-card">
-  {#if SUPPORTS_EXTENSION && extensionSetupState}
+  {#if SUPPORTS_EXTENSION && extensionSetupState.kind === 'present'}
+    {@const extensionSetup = extensionSetupState.value}
     <section
       class="space-y-2 rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
       data-testid="extension-setup-settings"
-      data-status={extensionSetupState.status}
+      data-status={extensionSetup.status}
     >
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
@@ -229,27 +233,27 @@
             {vault.t('extension_setup.settings_body')}
           </p>
         </div>
-        {#if extensionSetupState}
+        {#if extensionSetup}
           <span
             class="shrink-0 rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
             data-testid="extension-setup-settings-status"
           >
-            {extensionStatusLabel(extensionSetupState.status)}
+            {extensionStatusLabel(extensionSetup.status)}
           </span>
         {/if}
       </div>
-      {#if extensionSetupState.status === 'paired_elsewhere'}
+      {#if extensionSetup.status === 'paired_elsewhere'}
         <p
           class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
           data-testid="extension-setup-settings-connected-vault"
         >
           {vault.t('extension_setup.connected_vault', {
-            vault: extensionSetupState.connectedVaultName ?? '',
-            store: extensionSetupState.connectedVaultStoreId ?? '',
+            vault: extensionSetup.connectedVaultName ?? '',
+            store: extensionSetup.connectedVaultStoreId ?? '',
           })}
         </p>
       {/if}
-      {#if extensionSetupState.status === 'installed_unpaired' || extensionSetupState.status === 'paired_elsewhere'}
+      {#if extensionSetup.status === 'installed_unpaired' || extensionSetup.status === 'paired_elsewhere'}
         <p class="text-[11px] leading-relaxed text-muted-foreground/80">
           {vault.t('extension_setup.pair_hint')}
         </p>
@@ -259,14 +263,14 @@
           </p>
         {/if}
       {/if}
-      {#if extensionSetupState.status !== 'paired'}
+      {#if extensionSetup.status !== 'paired'}
         <Button
           type="button"
           size="sm"
-          variant={extensionSetupState.status === 'not_installed'
+          variant={extensionSetup.status === 'not_installed'
             ? 'default'
             : 'outline'}
-          class={extensionSetupState.status !== 'not_installed'
+          class={extensionSetup.status !== 'not_installed'
             ? 'border-border'
             : undefined}
           disabled={extensionInstallBusy || isBusy}
@@ -275,15 +279,15 @@
         >
           {#if extensionInstallBusy}
             {vault.t(
-              extensionSetupState.status === 'not_installed'
+              extensionSetup.status === 'not_installed'
                 ? 'extension_setup.loading_install'
                 : 'extension_setup.opening_extension',
             )}
-          {:else if extensionSetupState.status === 'not_installed'}
+          {:else if extensionSetup.status === 'not_installed'}
             {vault.t('extension_setup.install_cta')}
           {:else}
             {vault.t(
-              extensionSetupState.status === 'paired_elsewhere'
+              extensionSetup.status === 'paired_elsewhere'
                 ? 'extension_setup.switch_cta'
                 : 'extension_setup.connect_cta',
             )}
@@ -417,8 +421,10 @@
       <ul class="space-y-2" data-testid="vault-members-list">
         {#each sortedMembers as member (member.authId)}
           {@const isCurrent = member.deviceId === deviceId}
-          {@const isRenaming = renameAuthId === member.authId}
-          {@const isConfirmingRevoke = revokeAuthId === member.authId}
+          {@const isRenaming = renameAuthId.kind === 'present' &&
+            renameAuthId.value === member.authId}
+          {@const isConfirmingRevoke = revokeAuthId.kind === 'present' &&
+            revokeAuthId.value === member.authId}
           {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
           <li
             class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
@@ -503,7 +509,7 @@
                     disabled={isBusy}
                     aria-label={vault.t('devices_card.cancel_rename')}
                     onclick={() => {
-                      renameAuthId = undefined
+                      renameAuthId = EMPTY_VALUE
                       renameLabel = ''
                     }}
                   >
@@ -531,8 +537,8 @@
                     data-testid="device-revoke-btn"
                     aria-label={vault.t('devices_card.revoke_device')}
                     onclick={() => {
-                      revokeAuthId = member.authId
-                      renameAuthId = undefined
+                      revokeAuthId = presentValue(member.authId)
+                      renameAuthId = EMPTY_VALUE
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -544,17 +550,19 @@
                   variant="ghost"
                   class="px-2 text-muted-foreground"
                   aria-label={vault.t('devices_card.toggle_details')}
-                  aria-expanded={detailsAuthId === member.authId}
+                  aria-expanded={detailsAuthId.kind === 'present' &&
+                    detailsAuthId.value === member.authId}
                   data-testid="device-details-toggle"
                   onclick={() =>
                     (detailsAuthId =
-                      detailsAuthId === member.authId
-                        ? undefined
-                        : member.authId)}
+                      detailsAuthId.kind === 'present' &&
+                      detailsAuthId.value === member.authId
+                        ? EMPTY_VALUE
+                        : presentValue(member.authId))}
                 >
                   <ChevronDown
-                    class="size-3.5 transition-transform {detailsAuthId ===
-                    member.authId
+                    class="size-3.5 transition-transform {detailsAuthId.kind ===
+                      'present' && detailsAuthId.value === member.authId
                       ? 'rotate-180'
                       : ''}"
                   />
@@ -583,7 +591,7 @@
                       class="h-8 border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
                       disabled={isBusy}
                       data-testid="device-revoke-cancel"
-                      onclick={() => (revokeAuthId = undefined)}
+                      onclick={() => (revokeAuthId = EMPTY_VALUE)}
                     >
                       {vault.t('devices_card.cancel')}
                     </Button>
@@ -603,7 +611,8 @@
               </div>
             {/if}
 
-            {#if detailsAuthId === member.authId}
+            {#if detailsAuthId.kind === 'present' &&
+            detailsAuthId.value === member.authId}
               <dl
                 class="mt-3 space-y-2 border-t border-border/30 pt-3 text-xs"
                 data-testid="device-technical-details"

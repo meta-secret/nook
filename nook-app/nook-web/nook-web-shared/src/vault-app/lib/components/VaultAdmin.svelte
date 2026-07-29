@@ -34,6 +34,11 @@
     StorageProvider,
     StorageProviderType,
   } from "$lib/auth-providers";
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from "../../../explicit-state";
 
   let {
     vault,
@@ -139,10 +144,21 @@
   let drafts = $state<Record<string, string>>({});
   let draftSeed = $state("");
   let creating = $state(false);
-  let editingStoreId = $state<StoreId>();
-  let renamingStoreId = $state<StoreId>();
-  let switchingTo = $state<StoreId>();
-  let activeImportProvider = $state<string>();
+  let editingStoreId = $state<ValueState<StoreId>>(EMPTY_VALUE);
+  let renamingStoreId = $state<ValueState<StoreId>>(EMPTY_VALUE);
+  let switchingTo = $state<ValueState<StoreId>>(EMPTY_VALUE);
+  let activeImportProvider = $state<ValueState<string>>(EMPTY_VALUE);
+  const activeImportProviderBinding = {
+    get value(): string | undefined {
+      return activeImportProvider.kind === "present"
+        ? activeImportProvider.value
+        : undefined;
+    },
+    set value(value: string | undefined) {
+      activeImportProvider =
+        value === undefined ? EMPTY_VALUE : presentValue(value);
+    },
+  };
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? "");
   const vaults = $derived(vault.localVaults);
@@ -152,8 +168,8 @@
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId !== undefined ||
-      switchingTo !== undefined,
+      renamingStoreId.kind === "present" ||
+      switchingTo.kind === "present",
   );
 
   function buildDrafts() {
@@ -199,13 +215,16 @@
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return;
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    editingStoreId = entry.storeId;
+    editingStoreId = presentValue(entry.storeId);
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    if (editingStoreId === entry.storeId) {
-      editingStoreId = undefined;
+    if (
+      editingStoreId.kind === "present" &&
+      editingStoreId.value === entry.storeId
+    ) {
+      editingStoreId = EMPTY_VALUE;
     }
   }
 
@@ -225,24 +244,24 @@
 
   async function renameVault(entry: NookLocalVaultEntry) {
     if (!canSave(entry)) return;
-    renamingStoreId = entry.storeId;
+    renamingStoreId = presentValue(entry.storeId);
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry));
       if (!vault.errorMsg) {
-        editingStoreId = undefined;
+        editingStoreId = EMPTY_VALUE;
       }
     } finally {
-      renamingStoreId = undefined;
+      renamingStoreId = EMPTY_VALUE;
     }
   }
 
   async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return;
-    switchingTo = entry.storeId;
+    switchingTo = presentValue(entry.storeId);
     try {
       await vault.switchToVault(entry.storeId);
     } finally {
-      switchingTo = undefined;
+      switchingTo = EMPTY_VALUE;
     }
   }
 </script>
@@ -315,7 +334,8 @@
       >
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
-          {@const isEditing = editingStoreId === entry.storeId}
+          {@const isEditing = editingStoreId.kind === "present" &&
+            editingStoreId.value === entry.storeId}
           <li
             class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
             data-testid="vault-admin-entry"
@@ -385,7 +405,8 @@
                   class="h-10 w-full"
                   data-testid="vault-admin-cancel-rename-btn"
                   data-store-id={entry.storeId}
-                  disabled={renamingStoreId === entry.storeId}
+                  disabled={renamingStoreId.kind === "present" &&
+                    renamingStoreId.value === entry.storeId}
                   onclick={() => cancelRename(entry)}
                 >
                   <X class="size-4" />
@@ -402,7 +423,8 @@
                   disabled={isBusy}
                   onclick={() => void switchTo(entry)}
                 >
-                  {#if switchingTo === entry.storeId}
+                  {#if switchingTo.kind === "present" &&
+                  switchingTo.value === entry.storeId}
                     <RefreshCw class="size-4 animate-spin" />
                   {/if}
                   {vault.t("common.switch")}
@@ -427,7 +449,9 @@
                 onclick={() =>
                   isEditing ? void renameVault(entry) : beginRename(entry)}
               >
-                {#if isEditing && renamingStoreId === entry.storeId}
+                {#if isEditing &&
+                renamingStoreId.kind === "present" &&
+                renamingStoreId.value === entry.storeId}
                   <RefreshCw class="size-4 animate-spin" />
                 {:else if !isEditing}
                   <PencilLine class="size-4" />
@@ -535,7 +559,7 @@
         title={vault.t("apple_passwords_import.source")}
         subtitle={vault.t("apple_passwords_import.description")}
         section="apple-passwords"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="apple-passwords-import-section"
       >
         <ApplePasswordsImportPanel
@@ -550,7 +574,7 @@
         title={vault.t("chrome_passwords_import.source")}
         subtitle={vault.t("chrome_passwords_import.description")}
         section="chrome-passwords"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="chrome-passwords-import-section"
       >
         <ChromePasswordsImportPanel
@@ -565,7 +589,7 @@
         title={vault.t("google_authenticator_import.source")}
         subtitle={vault.t("google_authenticator_import.description")}
         section="google-authenticator"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="google-authenticator-import-section"
       >
         <GoogleAuthenticatorImportPanel
@@ -580,7 +604,7 @@
         title={vault.t("bitwarden_import.source")}
         subtitle={vault.t("bitwarden_import.description")}
         section="bitwarden"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="bitwarden-import-section"
       >
         <BitwardenImportPanel
@@ -595,7 +619,7 @@
         title={vault.t("lastpass_import.source")}
         subtitle={vault.t("lastpass_import.description")}
         section="lastpass"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="lastpass-import-section"
       >
         <LastPassImportPanel
@@ -610,7 +634,7 @@
         title={vault.t("onepassword_import.source")}
         subtitle={vault.t("onepassword_import.description")}
         section="onepassword"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="onepassword-import-section"
       >
         <OnePasswordImportPanel
@@ -625,7 +649,7 @@
         title={vault.t("proton_pass_import.source")}
         subtitle={vault.t("proton_pass_import.description")}
         section="proton-pass"
-        bind:activeSection={activeImportProvider}
+        bind:activeSection={activeImportProviderBinding.value}
         testId="proton-pass-import-section"
       >
         <ProtonPassImportPanel

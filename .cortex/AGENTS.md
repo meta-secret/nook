@@ -96,6 +96,23 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
+## ⛔ Non-negotiable: TypeScript application state must be explicit
+
+Authored TypeScript and Svelte must not use `undefined` to encode a named
+product, workflow, lifecycle, resource, or UI state. Mutable state uses a
+discriminated union whose variants own their data, or a generated Rust/WASM
+enum when the state is portable domain policy. Do not spread `T | undefined`
+fields, zero-argument `$state<T>()` runes, optional-field bags, and parallel
+booleans across a controller and then reconstruct the real state through
+condition chains.
+
+Truthful structural absence remains valid at external inputs, browser and
+generated contracts, lookups, parsers, caches, optional callbacks, and DOM
+references. Normalize those values at the boundary and do not store them as
+implicit application state. Do not create decorative one-variant wrappers or
+sentinel strings merely to avoid the token. Full contract:
+[dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
+
 Authored Rust must not call `.unwrap()`. Production paths propagate or classify
 failure. Rust tests that perform fallible setup or verification return
 `Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to

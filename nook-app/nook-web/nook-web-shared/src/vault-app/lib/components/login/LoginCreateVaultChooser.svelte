@@ -22,6 +22,11 @@
     type SentinelDashboard,
   } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../../explicit-state'
   import { VaultType } from '$lib/vault-architecture'
   import type { AppKind } from '$lib/app-kind'
   import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
@@ -113,7 +118,13 @@
   let chosenPath = $state<ChosenPath>('undecided')
   let vaultName = $state('')
   let sentinelName = $state('')
-  let sentinelDashboard = $state<SentinelDashboard>()
+  let sentinelDashboardState =
+    $state<ValueState<SentinelDashboard>>(EMPTY_VALUE)
+  const sentinelDashboard = $derived(
+    sentinelDashboardState.kind === 'present'
+      ? sentinelDashboardState.value
+      : undefined,
+  )
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
   let sentinelActionBusy = $state(false)
@@ -154,11 +165,13 @@
 
   $effect(() => {
     if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
-      sentinelDashboard = undefined
+      sentinelDashboardState = EMPTY_VALUE
       return
     }
     if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
-      sentinelDashboard ??= 'card-stack'
+      if (sentinelDashboardState.kind === 'empty') {
+        sentinelDashboardState = presentValue('card-stack')
+      }
       wizardStep = 'sentinel-ceremony'
       chosenPath = 'sentinel'
     }
@@ -257,12 +270,12 @@
     chosenPath = 'sentinel'
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
-    sentinelDashboard = undefined
+    sentinelDashboardState = EMPTY_VALUE
     wizardStep = 'sentinel-dashboard'
   }
 
   function chooseSentinelDashboard(dashboard: SentinelDashboard) {
-    sentinelDashboard = dashboard
+    sentinelDashboardState = presentValue(dashboard)
     wizardStep = 'sentinel-policy'
   }
 
@@ -309,14 +322,14 @@
       return
     }
     if (wizardStep === 'sentinel-dashboard') {
-      sentinelDashboard = undefined
+      sentinelDashboardState = EMPTY_VALUE
       chosenPath = 'undecided'
       wizardStep = 'choose'
       return
     }
     if (wizardStep === 'sentinel-policy') {
       const dashboard = sentinelDashboard
-      sentinelDashboard = undefined
+      sentinelDashboardState = EMPTY_VALUE
       wizardStep = 'sentinel-dashboard'
       if (dashboard) restoreDashboardChoiceFocus(dashboard)
     }

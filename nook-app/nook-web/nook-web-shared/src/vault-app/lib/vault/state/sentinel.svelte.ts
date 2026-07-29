@@ -10,6 +10,11 @@ import {
   type SentinelStoredDeliverySummary,
   type SentinelUnlockSessionStatus,
 } from "$lib/vault/sentinel-unlock";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../../explicit-state";
 export class VaultSentinelState {
   sentinelGenesisPhase = $state<SentinelGenesisPhase>(
     SentinelGenesisPhase.Inactive,
@@ -20,7 +25,16 @@ export class VaultSentinelState {
     [],
   );
   sentinelGenesisDeliveries = $state<NookSentinelGenesisDelivery[]>([]);
-  sentinelGenesisStoreId = $state<StoreId>();
+  private sentinelGenesisStoreState = $state<ValueState<StoreId>>(EMPTY_VALUE);
+  get sentinelGenesisStoreId(): StoreId | undefined {
+    return this.sentinelGenesisStoreState.kind === "present"
+      ? this.sentinelGenesisStoreState.value
+      : undefined;
+  }
+  set sentinelGenesisStoreId(value: StoreId | undefined) {
+    this.sentinelGenesisStoreState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
 
   sentinelCeremonyPrompt = $state(false);
   sentinelUnlockStatus = $state<SentinelVaultUnlockState>(

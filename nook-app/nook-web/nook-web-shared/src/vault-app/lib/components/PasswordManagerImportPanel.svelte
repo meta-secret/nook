@@ -10,6 +10,11 @@
     selectedImportFile,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
 
   type CommonProps = {
     translationPrefix: string
@@ -28,8 +33,8 @@
     )
 
   let props: Props = $props()
-  let selectedFile = $state<File>()
-  let result = $state<NookImportResult>()
+  let selectedFile = $state<ValueState<File>>(EMPTY_VALUE)
+  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE)
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
@@ -38,30 +43,42 @@
     `${props.translationPrefix}.${suffix}`
 
   function selectFile(event: Event) {
-    selectedFile = selectedImportFile(event)
-    result = undefined
+    const file = selectedImportFile(event)
+    selectedFile = file ? presentValue(file) : EMPTY_VALUE
+    result = EMPTY_VALUE
     error = ''
   }
 
   async function importFile() {
-    if (!selectedFile || busy) return
-    result = undefined
+    if (selectedFile.kind === 'empty' || busy) return
+    const file = selectedFile.value
+    result = EMPTY_VALUE
     error = ''
     isImporting = true
     try {
       if (props.format === 'text') {
-        ;({ result, error } = await importTextFile(
-          selectedFile,
+        const imported = await importTextFile(
+          file,
           false,
           props.onImport,
-        ))
+        )
+        result =
+          imported.result === undefined
+            ? EMPTY_VALUE
+            : presentValue(imported.result)
+        error = imported.error
         return
       }
-      ;({ result, error } = await importBinaryFile(
-        selectedFile,
+      const imported = await importBinaryFile(
+        file,
         false,
         props.onImport,
-      ))
+      )
+      result =
+        imported.result === undefined
+          ? EMPTY_VALUE
+          : presentValue(imported.result)
+      error = imported.error
     } finally {
       isImporting = false
     }
@@ -116,7 +133,7 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={!selectedFile || busy}
+        disabled={selectedFile.kind === 'empty' || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -138,20 +155,20 @@
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === 'present'}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
             {props.vault.t(messageKey('result_imported'), {
-              count: String(result.imported),
+              count: String(result.value.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {props.vault.t(messageKey('result_skipped'), {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.value.skippedUnsupported),
+              duplicates: String(result.value.skippedDuplicates),
             })}
           </p>
         </div>

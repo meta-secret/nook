@@ -143,7 +143,7 @@
       })
 
     return (async () => {
-      let lastError: Error | undefined
+      let lastError = new Error(vault.t('extension.consent.grant_rejected'))
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           await sendOnce()
@@ -160,7 +160,7 @@
           }
         }
       }
-      throw lastError ?? new Error(vault.t('extension.consent.grant_rejected'))
+      throw lastError
     })()
   }
 

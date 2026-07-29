@@ -6,6 +6,11 @@ import {
   SessionOperationQueue,
   type SessionOperationPriority,
 } from '../lib/session-operation-queue'
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
 
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
 
@@ -105,27 +110,31 @@ export class ExtensionSessionMessageDispatcher {
     payload: Record<string, unknown>,
     fields: readonly string[],
   ): Promise<unknown> {
-    let pendingPayload: Record<string, unknown> | undefined = { ...payload }
+    let pendingPayload: ValueState<Record<string, unknown>> = presentValue({
+      ...payload,
+    })
     for (const field of fields) {
-      pendingPayload[field] = copySensitiveValue(payload[field])
+      if (pendingPayload.kind === 'present') {
+        pendingPayload.value[field] = copySensitiveValue(payload[field])
+      }
       clearSensitiveValue(payload[field])
       payload[field] = typeof payload[field] === 'string' ? '' : []
     }
     const clearPending = () => {
-      if (!pendingPayload) return
+      if (pendingPayload.kind === 'empty') return
       for (const field of fields) {
-        clearSensitiveValue(pendingPayload[field])
-        pendingPayload[field] = undefined
+        clearSensitiveValue(pendingPayload.value[field])
+        pendingPayload.value[field] = undefined
       }
-      pendingPayload = undefined
+      pendingPayload = EMPTY_VALUE
     }
     return this.operations.enqueue(
       async () => {
-        const operationPayload = pendingPayload
-        pendingPayload = undefined
-        if (!operationPayload) {
+        if (pendingPayload.kind === 'empty') {
           throw new Error('Extension session request expired.')
         }
+        const operationPayload = pendingPayload.value
+        pendingPayload = EMPTY_VALUE
         try {
           return await this.context.handleMessage({
             ...message,
@@ -167,22 +176,22 @@ export class ExtensionSessionMessageDispatcher {
       )
     }
     payload.providers = []
-    let pendingPayload: Record<string, unknown> | undefined = {
+    let pendingPayload: ValueState<Record<string, unknown>> = presentValue({
       ...payload,
       providers: stagedProviders,
-    }
+    })
     const clearPending = () => {
-      if (!pendingPayload) return
-      scrubProviderCredentials(pendingPayload.providers)
-      pendingPayload = undefined
+      if (pendingPayload.kind === 'empty') return
+      scrubProviderCredentials(pendingPayload.value.providers)
+      pendingPayload = EMPTY_VALUE
     }
     return this.operations.enqueue(
       async () => {
-        const operationPayload = pendingPayload
-        pendingPayload = undefined
-        if (!operationPayload) {
+        if (pendingPayload.kind === 'empty') {
           throw new Error('Extension session request expired.')
         }
+        const operationPayload = pendingPayload.value
+        pendingPayload = EMPTY_VALUE
         try {
           return await this.context.handleMessage({
             ...message,

@@ -5,6 +5,11 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
 
   let {
     vault,
@@ -23,26 +28,28 @@
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<File>()
-  let result = $state<NookImportResult>()
+  let selectedFile = $state<ValueState<File>>(EMPTY_VALUE)
+  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE)
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
-    selectedFile = (event.currentTarget as HTMLInputElement).files?.[0]
-    result = undefined
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    selectedFile = file ? presentValue(file) : EMPTY_VALUE
+    result = EMPTY_VALUE
     error = ''
   }
 
   async function importFile() {
-    if (!selectedFile || busy) return
+    if (selectedFile.kind === 'empty' || busy) return
+    const file = selectedFile.value
     error = ''
-    result = undefined
+    result = EMPTY_VALUE
     isImporting = true
     try {
-      result = await onImport(await selectedFile.text(), password)
+      result = presentValue(await onImport(await file.text(), password))
       password = ''
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause)
@@ -124,7 +131,7 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={!selectedFile || busy}
+        disabled={selectedFile.kind === 'empty' || busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -143,20 +150,20 @@
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === 'present'}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
             {vault.t('bitwarden_import.result_imported', {
-              count: String(result.imported),
+              count: String(result.value.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t('bitwarden_import.result_skipped', {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.value.skippedUnsupported),
+              duplicates: String(result.value.skippedDuplicates),
             })}
           </p>
         </div>

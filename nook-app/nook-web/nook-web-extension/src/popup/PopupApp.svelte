@@ -1,6 +1,11 @@
 <script lang="ts">
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../nook-web-shared/src/explicit-state'
   import type { ExtensionI18n } from '../lib/i18n'
   import type { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
@@ -44,7 +49,8 @@
   let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
   let pin = $state('')
   let pinConfirm = $state('')
-  let pendingDevice = $state<ExtensionDeviceProtectionResult | undefined>()
+  let pendingDevice =
+    $state<ValueState<ExtensionDeviceProtectionResult>>(EMPTY_VALUE)
   let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
 
   const needsSetup = $derived(status === 'missing' || status === 'plaintext')
@@ -141,7 +147,7 @@
   }
 
   function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
-    pendingDevice = device
+    pendingDevice = presentValue(device)
     status = 'unlocked'
     busy = false
     error = ''
@@ -260,13 +266,14 @@
       >
         {i18n.t('extension.companion.stay_ready')}
       </button>
-    {:else if pendingDevice}
+    {:else if pendingDevice.kind === 'present'}
       <button
         type="button"
         disabled={busy}
         data-testid="connect-simple-vault-btn"
         onclick={() => {
-          if (pendingDevice) beginPairing(pendingDevice)
+          if (pendingDevice.kind === 'present')
+            beginPairing(pendingDevice.value)
         }}
       >
         {busy

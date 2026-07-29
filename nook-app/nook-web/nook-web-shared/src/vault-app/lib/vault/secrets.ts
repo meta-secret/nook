@@ -23,6 +23,11 @@ import {
   refreshSentinelUnlockStatus,
   surfaceSentinelCeremonyIfNeeded,
 } from "$lib/vault/sentinel-unlock";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../explicit-state";
 
 const log = createLogger("connect");
 
@@ -69,7 +74,7 @@ export async function loadDb(state: VaultState) {
     }
 
     let accessStatus = await state.assessVaultConnectStatus();
-    let connectArgsOverride: [string, string, string] | undefined = undefined;
+    let connectArgsOverride: ValueState<[string, string, string]> = EMPTY_VALUE;
     log.debug("loadDb assess", {
       accessStatus,
       localVaultPresent: state.localVaultPresent,
@@ -100,7 +105,7 @@ export async function loadDb(state: VaultState) {
       log.debug("loadDb provider re-assess", { remoteStatus });
       if (remoteStatus === VaultAccessStatus.Ready) {
         accessStatus = VaultAccessStatus.Ready;
-        connectArgsOverride = providerArgs;
+        connectArgsOverride = presentValue(providerArgs);
       }
     }
 
@@ -140,7 +145,10 @@ export async function loadDb(state: VaultState) {
     }
 
     const rawRecords = await state.enqueueStorage(async () => {
-      const connectArgs = connectArgsOverride ?? state.connectStorageArgs();
+      const connectArgs =
+        connectArgsOverride.kind === "present"
+          ? connectArgsOverride.value
+          : state.connectStorageArgs();
       log.debug("loadDb connect", { mode: connectArgs[0] });
       const connectPromise =
         state.remoteVaultRecoveryState === RemoteVaultRecoveryState.ConnectFresh

@@ -82,9 +82,11 @@ When you see `Option<T>`, ask:
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
   `nook-app/nook-core/src`; place them in the owning group and re-export through
   `lib.rs` only when they are part of the stable public core API.
-- Authored TypeScript/Svelte uses `undefined`, never `null`, for absence. Rust
-  and WASM helpers should make it easy for TS to pass plain objects or omitted
-  values instead of forcing TS to construct nullable shim objects.
+- Optional TypeScript/Svelte boundary contracts use `undefined`, never `null`.
+  Mutable application state converts that structural absence to an explicit
+  discriminated variant. Rust and WASM helpers should make it easy for TS to
+  pass plain objects or omitted values instead of forcing TS to construct
+  nullable shim objects.
 
 ## Examples
 

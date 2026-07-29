@@ -4,6 +4,11 @@ import {
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
 import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
+import {
   intoWasmStringValue,
   takeWasmStringValue,
 } from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
@@ -22,7 +27,7 @@ import {
   type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-let initPromise: Promise<unknown> | undefined
+let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
 
 export type {
   NookAppLocale,
@@ -30,11 +35,15 @@ export type {
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export function ensureNookWasm() {
-  initPromise ??= initNookWasm().then((value) => {
+  if (wasmInitialization.kind === 'present') {
+    return wasmInitialization.value
+  }
+  const operation = initNookWasm().then((value) => {
     configureVaultApplication('extension')
     return value
   })
-  return initPromise
+  wasmInitialization = presentValue(operation)
+  return operation
 }
 
 export type ExtensionDeviceProtectionResult = {
@@ -350,11 +359,13 @@ export async function getResolvedTranslationCatalog(
   locale: NookAppLocale,
 ): Promise<string> {
   await ensureNookWasm()
-  let wasmCatalog: string | undefined
+  return wasmResolveTranslationCatalog(locale, readWasmCatalog(locale))
+}
+
+function readWasmCatalog(locale: NookAppLocale): string | undefined {
   try {
-    wasmCatalog = wasmGetTranslationCatalog(locale)
+    return wasmGetTranslationCatalog(locale)
   } catch {
-    wasmCatalog = undefined
+    return undefined
   }
-  return wasmResolveTranslationCatalog(locale, wasmCatalog)
 }

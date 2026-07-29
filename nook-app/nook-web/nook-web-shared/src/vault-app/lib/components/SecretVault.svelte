@@ -35,6 +35,11 @@
     type DecryptedSecrets,
   } from '$lib/vault/secret-exposure'
   import { onDestroy, untrack } from 'svelte'
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../explicit-state'
 
   let {
     vault,
@@ -77,10 +82,10 @@
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<string>()
+  let copiedKey = $state<ValueState<string>>(EMPTY_VALUE)
   let addSecretOpen = $state(false)
-  let formSelectedType = $state<VaultItemType>()
-  let editingItem = $state<NookSecretRecord>()
+  let formSelectedType = $state<ValueState<VaultItemType>>(EMPTY_VALUE)
+  let editingItem = $state<ValueState<NookSecretRecord>>(EMPTY_VALUE)
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
@@ -145,7 +150,12 @@
   })
 
   function notifyAddMode() {
-    onAddModeChange?.(addSecretOpen, formSelectedType)
+    onAddModeChange?.(
+      addSecretOpen,
+      formSelectedType.kind === 'present'
+        ? formSelectedType.value
+        : undefined,
+    )
   }
 
   function selectTypeFilter(value: string | undefined) {
@@ -157,7 +167,7 @@
   function openAddSecret() {
     editLoadSequence += 1
     releaseEditingItem()
-    formSelectedType = undefined
+    formSelectedType = EMPTY_VALUE
     addSecretOpen = true
     notifyAddMode()
   }
@@ -166,13 +176,13 @@
     editLoadSequence += 1
     releaseEditingItem()
     addSecretOpen = false
-    formSelectedType = undefined
+    formSelectedType = EMPTY_VALUE
     notifyAddMode()
   }
 
   function releaseEditingItem() {
-    editingItem?.free()
-    editingItem = undefined
+    if (editingItem.kind === 'present') editingItem.value.free()
+    editingItem = EMPTY_VALUE
   }
 
   async function openEditItem(item: NookSecretListItem) {
@@ -184,8 +194,8 @@
       return
     }
     releaseEditingItem()
-    editingItem = record
-    formSelectedType = item.type as VaultItemType
+    editingItem = presentValue(record)
+    formSelectedType = presentValue(item.type as VaultItemType)
     addSecretOpen = true
     notifyAddMode()
   }
@@ -207,14 +217,20 @@
   })
 
   const isSecureNoteEditor = $derived(
-    addSecretOpen && formSelectedType === 'secure-note',
+    addSecretOpen &&
+      formSelectedType.kind === 'present' &&
+      formSelectedType.value === 'secure-note',
   )
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
-    copiedKey = `${id}-${field}`
+    copiedKey = presentValue(`${id}-${field}`)
     setTimeout(() => {
-      if (copiedKey === `${id}-${field}`) copiedKey = undefined
+      if (
+        copiedKey.kind === 'present' &&
+        copiedKey.value === `${id}-${field}`
+      )
+        copiedKey = EMPTY_VALUE
     }, 2000)
   }
 
@@ -314,7 +330,7 @@
         : ''}"
       data-testid="add-secret-panel"
     >
-      {#if formSelectedType === undefined}
+      {#if formSelectedType.kind === 'empty'}
         <div class="mb-3">
           <button
             type="button"
@@ -331,12 +347,14 @@
       <AddSecretForm
         {vault}
         {isSaving}
-        bind:selectedType={formSelectedType}
+        bind:selectedTypeState={formSelectedType}
         {onAddSecret}
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
-        initialItem={editingItem}
+        initialItem={editingItem.kind === 'present'
+          ? editingItem.value
+          : undefined}
       />
     </div>
   {:else}
@@ -495,7 +513,9 @@
                     expanded={Boolean(expandedSecrets[item.id])}
                     decrypted={decryptedSecrets[item.id]}
                     authenticatorCode={authenticatorCodes[item.id]}
-                    {copiedKey}
+                    copiedKey={copiedKey.kind === 'present'
+                      ? copiedKey.value
+                      : undefined}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}

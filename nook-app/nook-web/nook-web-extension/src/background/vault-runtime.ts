@@ -1,5 +1,10 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
 import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
+import {
   defaultPasswordGenerationOptions,
   generatePasswordWithOptions,
 } from '../../../nook-web-shared/src/password/generator'
@@ -31,16 +36,20 @@ import type {
 import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
-let initPromise: Promise<unknown> | undefined
+let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
 
 function ensureExtensionWasm(): Promise<unknown> {
-  initPromise ??= initNookWasm({
+  if (wasmInitialization.kind === 'present') {
+    return wasmInitialization.value
+  }
+  const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }).then((value) => {
     configureVaultApplication('extension')
     return value
   })
-  return initPromise
+  wasmInitialization = presentValue(operation)
+  return operation
 }
 
 export async function readExtensionPairingState(): Promise<

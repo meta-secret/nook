@@ -6,6 +6,11 @@
   import type { NookImportResult } from "$lib/nook";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
+  import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from "../../../explicit-state";
 
   let {
     vault,
@@ -23,7 +28,7 @@
   let scanner: QrScanner | undefined;
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<NookImportResult>();
+  let result = $state<ValueState<NookImportResult>>(EMPTY_VALUE);
   let error = $state("");
 
   function stopCamera() {
@@ -43,7 +48,7 @@
       return;
     }
     migrationUris = [...migrationUris, uri];
-    result = undefined;
+    result = EMPTY_VALUE;
     error = "";
     stopCamera();
   }
@@ -54,7 +59,7 @@
       return;
     }
     error = "";
-    result = undefined;
+    result = EMPTY_VALUE;
     scanner ??= new QrScanner(
       videoElement,
       (scanResult) => addMigrationUri(scanResult.data),
@@ -80,7 +85,7 @@
     input.value = "";
     if (!file) return;
     error = "";
-    result = undefined;
+    result = EMPTY_VALUE;
     try {
       const scanResult = await QrScanner.scanImage(file, {
         returnDetailedScanResult: true,
@@ -93,7 +98,7 @@
 
   function clearScans() {
     migrationUris = [];
-    result = undefined;
+    result = EMPTY_VALUE;
     error = "";
     stopCamera();
   }
@@ -101,9 +106,9 @@
   async function importScans() {
     if (migrationUris.length === 0 || isSaving) return;
     error = "";
-    result = undefined;
+    result = EMPTY_VALUE;
     try {
-      result = await onImport(migrationUris);
+      result = presentValue(await onImport(migrationUris));
       migrationUris = [];
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause);
@@ -232,20 +237,20 @@
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === "present"}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
             {vault.t("google_authenticator_import.result_imported", {
-              count: String(result.imported),
+              count: String(result.value.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t("google_authenticator_import.result_skipped", {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.value.skippedUnsupported),
+              duplicates: String(result.value.skippedDuplicates),
             })}
           </p>
         </div>

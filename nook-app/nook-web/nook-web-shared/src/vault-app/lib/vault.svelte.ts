@@ -50,6 +50,11 @@ import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { SerialOperationQueue } from "$lib/serial-operation-queue";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../explicit-state";
 
 export class VaultState extends VaultStateSlices {
   secretPageGeneration = 0;
@@ -120,10 +125,49 @@ export class VaultState extends VaultStateSlices {
     return this.passwordEntries.length > 0;
   }
 
-  successDismissTimer: ReturnType<typeof setTimeout> | undefined;
-  idleSessionTracker: VaultIdleSessionTracker | undefined;
-  syncTimer: ReturnType<typeof setInterval> | undefined;
-  initPromise: Promise<void> | undefined;
+  private successDismissTimerState: ValueState<ReturnType<typeof setTimeout>> =
+    EMPTY_VALUE;
+  get successDismissTimer(): ReturnType<typeof setTimeout> | undefined {
+    return this.successDismissTimerState.kind === "present"
+      ? this.successDismissTimerState.value
+      : undefined;
+  }
+  set successDismissTimer(value: ReturnType<typeof setTimeout> | undefined) {
+    this.successDismissTimerState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
+
+  private idleSessionTrackerState: ValueState<VaultIdleSessionTracker> =
+    EMPTY_VALUE;
+  get idleSessionTracker(): VaultIdleSessionTracker | undefined {
+    return this.idleSessionTrackerState.kind === "present"
+      ? this.idleSessionTrackerState.value
+      : undefined;
+  }
+  set idleSessionTracker(value: VaultIdleSessionTracker | undefined) {
+    this.idleSessionTrackerState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
+
+  private syncTimerState: ValueState<ReturnType<typeof setInterval>> =
+    EMPTY_VALUE;
+  get syncTimer(): ReturnType<typeof setInterval> | undefined {
+    return this.syncTimerState.kind === "present"
+      ? this.syncTimerState.value
+      : undefined;
+  }
+  set syncTimer(value: ReturnType<typeof setInterval> | undefined) {
+    this.syncTimerState =
+      value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
+
+  private initState: ValueState<Promise<void>> = EMPTY_VALUE;
+  get initPromise(): Promise<void> | undefined {
+    return this.initState.kind === "present" ? this.initState.value : undefined;
+  }
+  set initPromise(value: Promise<void> | undefined) {
+    this.initState = value === undefined ? EMPTY_VALUE : presentValue(value);
+  }
   private storageQueue = new SerialOperationQueue();
   localDataDeletionStarted = false;
   /** Internal browser-orchestration flag shared with the device-protection actions. */

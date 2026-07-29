@@ -6,6 +6,11 @@
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    EMPTY_VALUE,
+    presentValue,
+    type ValueState,
+  } from '../../../../explicit-state'
+  import {
     createSentinelUnlockResponse,
     listSentinelStoredDeliveries,
   } from '$lib/vault/sentinel-unlock'
@@ -25,7 +30,7 @@
   let actionBusy = $state(false)
   let loaded = $state(false)
   let open = $state(false)
-  let selectedDelivery = $state<string>()
+  let selectedDelivery = $state<ValueState<string>>(EMPTY_VALUE)
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
@@ -35,7 +40,9 @@
   )
   const selectedSummary = $derived(
     vault.sentinelStoredDeliveries.find(
-      (delivery) => delivery.storeId === selectedDelivery,
+      (delivery) =>
+        selectedDelivery.kind === 'present' &&
+        delivery.storeId === selectedDelivery.value,
     ),
   )
 
@@ -51,10 +58,15 @@
     try {
       const deliveries = await listSentinelStoredDeliveries(vault)
       if (
-        !selectedDelivery ||
-        !deliveries.some((delivery) => delivery.storeId === selectedDelivery)
+        selectedDelivery.kind !== 'present' ||
+        !deliveries.some(
+          (delivery) => delivery.storeId === selectedDelivery.value,
+        )
       ) {
-        selectedDelivery = deliveries[0]?.storeId
+        const firstDelivery = deliveries[0]
+        selectedDelivery = firstDelivery
+          ? presentValue(firstDelivery.storeId)
+          : EMPTY_VALUE
       }
     } catch {
       // A missing device identity or empty list simply hides the first-vault helper.
@@ -64,7 +76,8 @@
   }
 
   async function createResponse() {
-    const storeId = selectedDelivery?.trim()
+    const storeId =
+      selectedDelivery.kind === 'present' ? selectedDelivery.value.trim() : ''
     const payload = request.trim()
     if (!storeId || !payload || actionBusy) return
     actionBusy = true
@@ -148,8 +161,13 @@
             </label>
             <Select.Root
               type="single"
-              value={selectedDelivery}
-              onValueChange={(value) => (selectedDelivery = value)}
+              value={selectedDelivery.kind === 'present'
+                ? selectedDelivery.value
+                : undefined}
+              onValueChange={(value) => {
+                selectedDelivery =
+                  value === undefined ? EMPTY_VALUE : presentValue(value)
+              }}
             >
               <Select.Trigger
                 id="sentinel-delivery-select"
@@ -196,7 +214,7 @@
               data-testid="sentinel-unlock-create-response-btn"
               disabled={disabled ||
                 actionBusy ||
-                !selectedDelivery ||
+                selectedDelivery.kind !== 'present' ||
                 !request.trim()}
               onclick={() => void createResponse()}
             >

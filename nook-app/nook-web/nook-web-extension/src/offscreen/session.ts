@@ -9,6 +9,11 @@ import initNookWasm, {
   providerWasmArgs,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from '../../../nook-web-shared/src/explicit-state'
 import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
@@ -37,9 +42,9 @@ type ExtensionVaultGrant = {
   deviceSigningPublicKey: string
 }
 
-let initPromise: Promise<unknown> | undefined
-let manager: NookVaultManager | undefined
-let sessionTimer: ReturnType<typeof setTimeout> | undefined
+let wasmInitialization: ValueState<Promise<unknown>> = EMPTY_VALUE
+let managerState: ValueState<NookVaultManager> = EMPTY_VALUE
+let sessionTimerState: ValueState<ReturnType<typeof setTimeout>> = EMPTY_VALUE
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
@@ -59,7 +64,6 @@ type PendingLoginSaveOffer = {
 
 const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
-let sessionMessageDispatcher: ExtensionSessionMessageDispatcher | undefined
 
 function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
   if (!offer) return
@@ -88,18 +92,24 @@ function findPendingLoginSaveOffer(
 }
 
 function ensureWasm(): Promise<unknown> {
-  initPromise ??= initNookWasm({
+  if (wasmInitialization.kind === 'present') {
+    return wasmInitialization.value
+  }
+  const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
   }).then((value) => {
     configureVaultApplication('extension')
     return value
   })
-  return initPromise
+  wasmInitialization = presentValue(operation)
+  return operation
 }
 
 async function getManager(): Promise<NookVaultManager> {
   await ensureWasm()
-  manager ??= new NookVaultManager()
+  if (managerState.kind === 'present') return managerState.value
+  const manager = new NookVaultManager()
+  managerState = presentValue(manager)
   return manager
 }
 
@@ -125,32 +135,38 @@ async function deviceResult(
 }
 
 function scheduleSessionExpiry(generation: number): void {
-  if (sessionTimer) clearTimeout(sessionTimer)
+  if (sessionTimerState.kind === 'present') {
+    clearTimeout(sessionTimerState.value)
+  }
   sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
-  sessionTimer = setTimeout(() => {
-    if (generation !== sessionGeneration) return
-    sessionTimer = undefined
-    sessionDeadlineAt = 0
-    sessionGeneration += 1
-    const expiredManager = manager
-    manager = undefined
-    if (expiredManager) {
-      try {
-        expiredManager.lockDeviceIdentity()
-        expiredManager.free()
-      } catch {
-        // The service worker closes this document immediately if a WASM call
-        // still owns the manager when the session expires.
+  sessionTimerState = presentValue(
+    setTimeout(() => {
+      if (generation !== sessionGeneration) return
+      sessionTimerState = EMPTY_VALUE
+      sessionDeadlineAt = 0
+      sessionGeneration += 1
+      const expiredManager = managerState
+      managerState = EMPTY_VALUE
+      if (expiredManager.kind === 'present') {
+        try {
+          expiredManager.value.lockDeviceIdentity()
+          expiredManager.value.free()
+        } catch {
+          // The service worker closes this document immediately if a WASM call
+          // still owns the manager when the session expires.
+        }
       }
-    }
-    sessionMessageDispatcher?.replaceOperations(new Error(SESSION_LOCKED_ERROR))
-    chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
-  }, SESSION_DURATION_MS)
+      sessionMessageDispatcher.replaceOperations(
+        new Error(SESSION_LOCKED_ERROR),
+      )
+      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+    }, SESSION_DURATION_MS),
+  )
 }
 
 async function activateSession(): Promise<DeviceResult> {
   // Expiry closes the queue permanently; unlock must install a fresh queue.
-  sessionMessageDispatcher?.resetOperations()
+  sessionMessageDispatcher.resetOperations()
   const activeManager = await getManager()
   sessionGeneration += 1
   scheduleSessionExpiry(sessionGeneration)
@@ -254,7 +270,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       pendingLoginSaveOffers.clear()
       canceledWebsitePasskeyRequests.clear()
-      sessionMessageDispatcher?.replaceOperations(
+      sessionMessageDispatcher.replaceOperations(
         new Error('Extension session reset.'),
       )
       const activeManager = await getManager()
@@ -899,7 +915,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
   }
 }
 
-sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
+const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
   handleMessage,
   messagePayload,
   messageType,

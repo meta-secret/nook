@@ -20,6 +20,11 @@ import {
 } from "$lib/icloud-oauth-config";
 import { createLogger } from "$lib/log";
 import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../explicit-state";
+import {
   CLOUDKIT_SIGN_IN_BUTTON_ID,
   CLOUDKIT_SIGN_OUT_BUTTON_ID,
   cloudKitAuthTokenStore,
@@ -57,16 +62,37 @@ type ICloudWebAuthTokenRequestOptions = {
   clickSignInControl?: boolean;
 };
 
-let initPromise: Promise<void> | undefined = undefined;
-let authSetupPromise: Promise<CloudKitUserIdentity | undefined> | undefined =
-  undefined;
-let authSetupUserIdentity: CloudKitUserIdentity | undefined = undefined;
+let cloudKitInitialization: ValueState<Promise<void>> = EMPTY_VALUE;
+let cloudKitAuthSetup: ValueState<Promise<CloudKitUserIdentity | undefined>> =
+  EMPTY_VALUE;
+let cloudKitIdentity: ValueState<CloudKitUserIdentity> = EMPTY_VALUE;
+
+function currentAuthSetup():
+  | Promise<CloudKitUserIdentity | undefined>
+  | undefined {
+  return cloudKitAuthSetup.kind === "present"
+    ? cloudKitAuthSetup.value
+    : undefined;
+}
+
+function currentCloudKitIdentity(): CloudKitUserIdentity | undefined {
+  return cloudKitIdentity.kind === "present"
+    ? cloudKitIdentity.value
+    : undefined;
+}
+
+function rememberCloudKitIdentity(
+  identity: CloudKitUserIdentity | undefined,
+): void {
+  cloudKitIdentity =
+    identity === undefined ? EMPTY_VALUE : presentValue(identity);
+}
 
 /** @internal Clears module singletons between unit tests. */
 export function resetICloudAuthStateForTests(): void {
-  initPromise = undefined;
-  authSetupPromise = undefined;
-  authSetupUserIdentity = undefined;
+  cloudKitInitialization = EMPTY_VALUE;
+  cloudKitAuthSetup = EMPTY_VALUE;
+  cloudKitIdentity = EMPTY_VALUE;
   webAuthTokenListeners.clear();
 }
 
@@ -131,18 +157,14 @@ function waitForStoredWebAuthToken(
   log.info("CloudKit web auth token wait started", { timeoutMs });
 
   return new Promise((resolve, reject) => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
-    let pollId: ReturnType<typeof setInterval> | undefined = undefined;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let pollId: ReturnType<typeof setInterval>;
     let settled = false;
 
     const cleanup = () => {
       settled = true;
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-      if (pollId !== undefined) {
-        clearInterval(pollId);
-      }
+      clearTimeout(timeoutId);
+      clearInterval(pollId);
       webAuthTokenListeners.delete(listener);
     };
 
@@ -202,6 +224,19 @@ function numericStatus(value: unknown): number | undefined {
   return Number.isInteger(status) ? status : undefined;
 }
 
+function cloudKitRedirectDetails(redirectURL: string | undefined): {
+  origin?: string;
+  pathname?: string;
+} {
+  if (!redirectURL) return {};
+  try {
+    const parsed = new URL(redirectURL);
+    return { origin: parsed.origin, pathname: parsed.pathname };
+  } catch {
+    return {};
+  }
+}
+
 function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
   if (error instanceof Error) {
     return {
@@ -211,19 +246,8 @@ function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
   }
   if (error != undefined && typeof error === "object") {
     const authError = error as CloudKitAuthError;
-    let redirectURLOrigin: string | undefined;
-    let redirectURLPathname: string | undefined;
     const redirectURL = stringValue(authError.redirectURL);
-    if (redirectURL) {
-      try {
-        const parsed = new URL(redirectURL);
-        redirectURLOrigin = parsed.origin;
-        redirectURLPathname = parsed.pathname;
-      } catch {
-        redirectURLOrigin = undefined;
-        redirectURLPathname = undefined;
-      }
-    }
+    const redirect = cloudKitRedirectDetails(redirectURL);
     return {
       code:
         stringValue(authError.code) ??
@@ -232,8 +256,8 @@ function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
         stringValue(authError.name),
       message: stringValue(authError.message),
       redirectURLPresent: Boolean(redirectURL),
-      redirectURLOrigin,
-      redirectURLPathname,
+      redirectURLOrigin: redirect.origin,
+      redirectURLPathname: redirect.pathname,
       reason: stringValue(authError.reason) ?? stringValue(authError._reason),
       status:
         numericStatus(authError.status) ?? numericStatus(authError.statusCode),
@@ -338,11 +362,11 @@ function cloudKitSignInTimeoutError(): Error {
 }
 
 export async function initICloudAuth(): Promise<void> {
-  if (initPromise) {
+  if (cloudKitInitialization.kind === "present") {
     log.info("CloudKit auth init reused existing promise");
-    return initPromise;
+    return cloudKitInitialization.value;
   }
-  initPromise = (async () => {
+  const operation = (async () => {
     log.info("CloudKit auth init started", {
       config: iCloudConfigDiagnostics(),
       browser: currentBrowserDiagnostics(),
@@ -370,15 +394,17 @@ export async function initICloudAuth(): Promise<void> {
       hasCloudKitGlobal: Boolean(window.CloudKit),
     });
   })();
-  return initPromise;
+  cloudKitInitialization = presentValue(operation);
+  return operation;
 }
 
 function setUpCloudKitAuth(
   container: CloudKitContainer,
 ): Promise<CloudKitUserIdentity | undefined> {
-  if (authSetupPromise) {
+  const existingSetup = currentAuthSetup();
+  if (existingSetup) {
     log.info("CloudKit setUpAuth reused existing promise");
-    return authSetupPromise;
+    return existingSetup;
   }
   log.info("CloudKit setUpAuth started", {
     grabAuthToken: true,
@@ -386,13 +412,13 @@ function setUpCloudKitAuth(
     hasSignInMount: hasCloudKitSignInControl(),
     control: cloudKitSignInControlDiagnostics(),
   });
-  authSetupPromise = container
+  const operation = container
     .setUpAuth({
       grabAuthToken: true,
       persist: true,
     })
     .then((userIdentity) => {
-      authSetupUserIdentity = userIdentity;
+      rememberCloudKitIdentity(userIdentity);
       log.info("CloudKit setUpAuth completed", {
         signedIn: Boolean(userIdentity),
         token: tokenDiagnostics(readStoredWebAuthToken()),
@@ -409,14 +435,15 @@ function setUpCloudKitAuth(
           storage: webAuthTokenStorageDiagnostics(),
           control: cloudKitSignInControlDiagnostics(),
         });
-        authSetupUserIdentity = undefined;
+        cloudKitIdentity = EMPTY_VALUE;
         return undefined;
       }
-      authSetupPromise = undefined;
-      authSetupUserIdentity = undefined;
+      cloudKitAuthSetup = EMPTY_VALUE;
+      cloudKitIdentity = EMPTY_VALUE;
       throw error;
     });
-  return authSetupPromise;
+  cloudKitAuthSetup = presentValue(operation);
+  return operation;
 }
 
 export async function prepareICloudSignInControl(): Promise<void> {
@@ -428,12 +455,12 @@ export async function prepareICloudSignInControl(): Promise<void> {
     'button, [role="button"], iframe, a, .apple-auth-button',
   );
   if (
-    authSetupPromise &&
-    !authSetupUserIdentity &&
+    currentAuthSetup() &&
+    !currentCloudKitIdentity() &&
     !readStoredWebAuthToken() &&
     !existingControl
   ) {
-    authSetupPromise = undefined;
+    cloudKitAuthSetup = EMPTY_VALUE;
   }
   try {
     await setUpCloudKitAuth(container);
@@ -485,7 +512,7 @@ function accountNameFromIdentity(
 }
 
 function requireStoredWebAuthToken(
-  identity = authSetupUserIdentity,
+  identity = currentCloudKitIdentity(),
 ): ICloudOAuthTokens {
   const token = readStoredWebAuthToken();
   if (!token) {
@@ -541,6 +568,17 @@ function requireCloudKitRecordInfo(
   return { zoneID, rootRecordName };
 }
 
+async function previewCloudKitRecord(
+  container: CloudKitContainer,
+  shortGuid: string,
+): Promise<CloudKitRecordInfosResponse | undefined> {
+  try {
+    return await container.fetchRecordInfos?.([shortGuid]);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Create a shareable CloudKit root hierarchy in the owner's private DB. */
 export async function createICloudSharedVault(
   title: string,
@@ -549,7 +587,7 @@ export async function createICloudSharedVault(
   await initNookWasm();
   const container = window.CloudKit!.getDefaultContainer();
   const setupIdentity =
-    authSetupUserIdentity ?? (await setUpCloudKitAuth(container));
+    currentCloudKitIdentity() ?? (await setUpCloudKitAuth(container));
   const identity =
     setupIdentity ?? (await container.fetchCurrentUserIdentity?.());
   const ownerRecordName = identity?.userRecordName?.trim();
@@ -616,7 +654,7 @@ export async function acceptICloudSharedVault(
     : undefined;
   const shortGuid = normalizedICloudShortGuid(shareReference);
   const identity =
-    authSetupUserIdentity ?? (await container.fetchCurrentUserIdentity?.());
+    currentCloudKitIdentity() ?? (await container.fetchCurrentUserIdentity?.());
   if (
     encodedTarget &&
     identity?.userRecordName?.trim() === encodedTarget.ownerRecordName.trim()
@@ -633,12 +671,7 @@ export async function acceptICloudSharedVault(
   if (!container.acceptShares || !container.fetchRecordInfos) {
     throw new Error("provider_setup.icloud_shared_connect_failed");
   }
-  let current: CloudKitRecordInfosResponse | undefined;
-  try {
-    current = await container.fetchRecordInfos([shortGuid]);
-  } catch {
-    // Acceptance remains authoritative; preview lookup can fail independently.
-  }
+  const current = await previewCloudKitRecord(container, shortGuid);
   const response =
     current?.results[0]?.participantStatus === "ACCEPTED"
       ? current
@@ -743,13 +776,11 @@ async function requestDirectCloudKitWebAuthToken(
   }
   return new Promise((resolve, reject) => {
     let settled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
+    let timeoutId: ReturnType<typeof setTimeout>;
     const cleanup = () => {
       settled = true;
       window.removeEventListener("message", handleMessage);
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
+      clearTimeout(timeoutId);
     };
     const handleMessage = (event: MessageEvent<unknown>) => {
       const token = webAuthTokenFromMessageData(event.data);
@@ -805,14 +836,14 @@ async function waitForCloudKitSignIn(
     log.info("CloudKit sign-in succeeded through direct primary auth", {
       token: tokenDiagnostics(readStoredWebAuthToken()),
     });
-    return authSetupUserIdentity ?? {};
+    return currentCloudKitIdentity() ?? {};
   }
   const tokenPromise = waitForStoredWebAuthToken(timeoutMs);
   let sawExpectedSignInFailure = false;
   const signInPromise = container
     .whenUserSignsIn()
     .then((userIdentity) => {
-      authSetupUserIdentity = userIdentity;
+      rememberCloudKitIdentity(userIdentity);
       log.info("CloudKit whenUserSignsIn resolved", {
         signedIn: Boolean(userIdentity),
         token: tokenDiagnostics(readStoredWebAuthToken()),
@@ -848,29 +879,29 @@ async function waitForCloudKitSignIn(
     const immediateToken = readStoredWebAuthToken();
     if (immediateToken) {
       log.info("CloudKit sign-in succeeded with immediate token", {
-        signedIn: Boolean(authSetupUserIdentity),
+        signedIn: Boolean(currentCloudKitIdentity()),
         token: tokenDiagnostics(immediateToken),
       });
-      return authSetupUserIdentity ?? {};
+      return currentCloudKitIdentity() ?? {};
     }
     if (sawExpectedSignInFailure) {
       await requestDirectCloudKitWebAuthToken(timeoutMs);
       log.info("CloudKit sign-in succeeded through direct fallback", {
         token: tokenDiagnostics(readStoredWebAuthToken()),
       });
-      return authSetupUserIdentity ?? {};
+      return currentCloudKitIdentity() ?? {};
     }
     await tokenPromise;
     log.info("CloudKit sign-in succeeded after token wait", {
-      signedIn: Boolean(authSetupUserIdentity),
+      signedIn: Boolean(currentCloudKitIdentity()),
       token: tokenDiagnostics(readStoredWebAuthToken()),
     });
-    return authSetupUserIdentity ?? {};
+    return currentCloudKitIdentity() ?? {};
   } catch (error) {
     // Allow a fresh setUpAuth attempt on the next user interaction so
     // retries do not reuse a stale cached promise.
-    authSetupPromise = undefined;
-    authSetupUserIdentity = undefined;
+    cloudKitAuthSetup = EMPTY_VALUE;
+    cloudKitIdentity = EMPTY_VALUE;
     logCloudKitAuthFailure("CloudKit sign-in failed", error);
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
   }
@@ -881,18 +912,18 @@ export function requestPreparedICloudWebAuthToken(
 ): Promise<ICloudOAuthTokens> {
   log.info("CloudKit prepared token request started", {
     hasCloudKitGlobal: Boolean(window.CloudKit),
-    hasAuthSetupPromise: Boolean(authSetupPromise),
-    hasAuthSetupUserIdentity: Boolean(authSetupUserIdentity),
+    hasAuthSetupPromise: Boolean(currentAuthSetup()),
+    hasAuthSetupUserIdentity: Boolean(currentCloudKitIdentity()),
     clickSignInControl: options.clickSignInControl !== false,
   });
-  if (!window.CloudKit || !authSetupPromise) {
+  if (!window.CloudKit || !currentAuthSetup()) {
     return Promise.reject(
       new Error(
         "Apple sign-in control is still loading. Try again in a moment.",
       ),
     );
   }
-  if (authSetupUserIdentity) {
+  if (currentCloudKitIdentity()) {
     log.info("CloudKit prepared token request using existing identity");
     return Promise.resolve(requireStoredWebAuthToken());
   }
@@ -910,13 +941,12 @@ export async function requestICloudWebAuthToken(
   log.info("CloudKit direct token request started");
   await initICloudAuth();
   const container = window.CloudKit!.getDefaultContainer();
-  let userIdentity: CloudKitUserIdentity | undefined;
-  try {
-    userIdentity = await setUpCloudKitAuth(container);
-  } catch (error) {
-    logCloudKitAuthFailure("CloudKit auth setup failed", error);
-    throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
-  }
+  const userIdentity = await setUpCloudKitAuth(container).catch(
+    (error: unknown) => {
+      logCloudKitAuthFailure("CloudKit auth setup failed", error);
+      throw new Error(cloudKitAuthErrorMessage(error), { cause: error });
+    },
+  );
 
   if (!userIdentity && readStoredWebAuthToken()) {
     log.info("CloudKit direct token request reused stored token");

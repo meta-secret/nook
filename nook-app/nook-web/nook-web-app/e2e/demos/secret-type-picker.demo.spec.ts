@@ -30,5 +30,13 @@ test('choose from the compact secret type picker', async ({ page }) => {
   await page.getByTestId('change-secret-type-btn').click()
   await expect(picker).toBeVisible()
   await expect(picker.getByRole('button')).toHaveCount(8)
+  await page.getByTestId('add-secret-back-btn').click()
+  await expect(page.getByTestId('add-secret-panel')).toBeHidden()
+
+  // Re-entering proves the explicit empty -> selected -> empty transition
+  // leaves no stale form selection behind.
+  await page.getByTestId('add-secret-btn').click()
+  await expect(picker).toBeVisible()
+  await expect(page.getByTestId('secret-label')).toBeHidden()
   await page.waitForTimeout(DEMO_BEAT_MS)
 })

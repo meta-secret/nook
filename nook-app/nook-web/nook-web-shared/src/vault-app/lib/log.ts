@@ -33,6 +33,11 @@ import {
   nookLogInit,
   nookLogSetLevel,
 } from "$app-wasm";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../explicit-state";
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 
@@ -65,7 +70,7 @@ type PendingRecord = {
 };
 
 let wasmReady = false;
-let flushTimer: ReturnType<typeof setInterval> | undefined = undefined;
+let flushTimer: ValueState<ReturnType<typeof setInterval>> = EMPTY_VALUE;
 let flushing = false;
 let consolePatched = false;
 let diagnosticsInstalled = false;
@@ -415,9 +420,9 @@ export async function flushLogs(): Promise<void> {
 
 /** Stop all persistence before the destructive local-browser cleanup runs. */
 export async function suspendWasmLogging(): Promise<void> {
-  if (flushTimer) {
-    clearInterval(flushTimer);
-    flushTimer = undefined;
+  if (flushTimer.kind === "present") {
+    clearInterval(flushTimer.value);
+    flushTimer = EMPTY_VALUE;
   }
   while (flushing) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -487,18 +492,20 @@ export function initWasmLogging() {
     }
   }
 
-  if (!flushTimer) {
-    flushTimer = setInterval(() => {
-      if (flushing) return;
-      flushing = true;
-      void nookLogFlush()
-        .catch(() => {
-          // Drop the batch on storage errors; logging must never break the app.
-        })
-        .finally(() => {
-          flushing = false;
-        });
-    }, FLUSH_INTERVAL_MS);
+  if (flushTimer.kind === "empty") {
+    flushTimer = presentValue(
+      setInterval(() => {
+        if (flushing) return;
+        flushing = true;
+        void nookLogFlush()
+          .catch(() => {
+            // Drop the batch on storage errors; logging must never break the app.
+          })
+          .finally(() => {
+            flushing = false;
+          });
+      }, FLUSH_INTERVAL_MS),
+    );
   }
 }
 

@@ -38,6 +38,11 @@ import {
   type NookStorageConnectArgs,
 } from "$app-wasm";
 import { createLogger } from "$lib/log";
+import {
+  EMPTY_VALUE,
+  presentValue,
+  type ValueState,
+} from "../../../explicit-state";
 
 export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = "VaultAssessTimeoutError";
 
@@ -525,7 +530,7 @@ export async function ensureProviderSaved(
     : state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
   const type = state.loginSetupType ?? state.storageMode;
   const isNewSetup = state.loginSetupType !== undefined;
-  let oauthProviderToUpdateId: string | undefined;
+  let oauthProviderToUpdate: ValueState<string> = EMPTY_VALUE;
   const vaultStoreId = await vaultStoreIdForProviderSave(state);
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? "google-drive";
@@ -591,7 +596,7 @@ export async function ensureProviderSaved(
     } else {
       state.providers = [...state.providers, provider];
       if (provider.type === "oauth-file") {
-        oauthProviderToUpdateId = provider.id;
+        oauthProviderToUpdate = presentValue(provider.id);
       }
     }
   } else if (isNewSetup && type === "local" && !state.localProvider) {
@@ -625,13 +630,22 @@ export async function ensureProviderSaved(
 
   if (state.storageMode === "oauth-file" && state.oauthFile?.fileId) {
     const activePreset = state.oauthFile.preset;
-    oauthProviderToUpdateId ??= findDuplicateSyncProvider(state.syncProviders, {
-      id: "oauth-provider-update-target",
-      type: "oauth-file",
-      label: "",
-      oauthFile: state.oauthFile,
-      createdAt: "",
-    })?.id;
+    if (oauthProviderToUpdate.kind === "empty") {
+      const duplicate = findDuplicateSyncProvider(state.syncProviders, {
+        id: "oauth-provider-update-target",
+        type: "oauth-file",
+        label: "",
+        oauthFile: state.oauthFile,
+        createdAt: "",
+      });
+      if (duplicate) {
+        oauthProviderToUpdate = presentValue(duplicate.id);
+      }
+    }
+    const oauthProviderToUpdateId =
+      oauthProviderToUpdate.kind === "present"
+        ? oauthProviderToUpdate.value
+        : undefined;
     state.providers = state.providers.map((provider) => {
       if (
         provider.type !== "oauth-file" ||
@@ -722,7 +736,7 @@ export async function discoverStagedVaultStoreId(
         )
       ).trim();
     })();
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let timeoutId: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
         const timeoutError = new Error(state.t("auth_storage.sync_failed"));
@@ -746,7 +760,7 @@ export async function discoverStagedVaultStoreId(
       }
       return storeId;
     } finally {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
     }
   } finally {
     state.isVerifying = false;

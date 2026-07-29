@@ -31,7 +31,11 @@ export function attachPointerDrag(
   handle: HTMLElement,
   options?: { onTap?: () => void },
 ): void {
-  let pointerId: number | undefined
+  type DragPointerState =
+    | { kind: 'released' }
+    | { kind: 'captured'; pointerId: number }
+
+  let pointer: DragPointerState = { kind: 'released' }
   let startX = 0
   let startY = 0
   let originLeft = 0
@@ -48,8 +52,8 @@ export function attachPointerDrag(
     ) {
       return
     }
-    pointerId = event.pointerId
-    handle.setPointerCapture(pointerId)
+    pointer = { kind: 'captured', pointerId: event.pointerId }
+    handle.setPointerCapture(pointer.pointerId)
     const rect = host.getBoundingClientRect()
     startX = event.clientX
     startY = event.clientY
@@ -59,7 +63,9 @@ export function attachPointerDrag(
   })
 
   handle.addEventListener('pointermove', (event) => {
-    if (pointerId === undefined || event.pointerId !== pointerId) return
+    if (pointer.kind !== 'captured' || event.pointerId !== pointer.pointerId) {
+      return
+    }
     const dx = event.clientX - startX
     const dy = event.clientY - startY
     if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
@@ -75,11 +81,13 @@ export function attachPointerDrag(
   })
 
   const endDrag = (event: PointerEvent) => {
-    if (pointerId === undefined || event.pointerId !== pointerId) return
-    if (handle.hasPointerCapture(pointerId)) {
-      handle.releasePointerCapture(pointerId)
+    if (pointer.kind !== 'captured' || event.pointerId !== pointer.pointerId) {
+      return
     }
-    pointerId = undefined
+    if (handle.hasPointerCapture(pointer.pointerId)) {
+      handle.releasePointerCapture(pointer.pointerId)
+    }
+    pointer = { kind: 'released' }
     host.classList.remove('dragging')
     if (!dragged) options?.onTap?.()
   }

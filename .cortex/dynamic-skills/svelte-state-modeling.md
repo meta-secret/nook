@@ -2,51 +2,50 @@
 
 ## Purpose
 
-Keep Svelte rune state declarations concise while preserving meaningful
-uninitialized states.
+Keep Svelte rune state explicit by representing meaningful application states
+as discriminated unions instead of implicit `undefined`.
 
 ## Problem Pattern
 
-Authored web code repeats `undefined` in both the generic and initializer:
-
-```ts
-let selected = $state<Item | undefined>(undefined)
-```
-
-The two occurrences describe different layers—the accepted TypeScript value and
-the initial runtime value—but Svelte's no-argument overload already expresses
-both. Repeating them adds noise throughout state-owning modules.
-
-## Preferred Pattern
-
-Use the no-argument `$state<T>()` overload for state that starts absent:
+Authored web code can use an absent initial value as an unnamed lifecycle
+state:
 
 ```ts
 let selected = $state<Item>()
 ```
 
-Its inferred type is `Item | undefined`. Keep `undefined` when absence is a real
-UI or lifecycle state, such as no selection, no completed sync, or an object
-that has not loaded. Do not replace meaningful domain workflow variants with
-optional UI state; model closed domain states in Rust/WASM.
+The declaration silently means `Item | undefined`, so every consumer must
+remember what absence means and which other flags or fields are valid with it.
 
-Optionality does not justify erasing the value's domain type. Use generated
-semantic identifiers such as `$state<StoreId>()` and
-`$state<PasswordEntryId>()`, never `$state<string>()`, when Rust owns that
-identifier.
+## Preferred Pattern
+
+Use a discriminated union with named variants:
+
+```ts
+type SelectionState =
+  | { kind: "not-selected" }
+  | { kind: "selected"; item: Item }
+
+let selection = $state<SelectionState>({ kind: "not-selected" })
+```
+
+Put data only on the variant that owns it. Group fields that transition
+together into one union so illegal combinations cannot compile. Closed portable
+domain workflows belong in Rust/WASM; component-local visual and browser
+lifecycle states may use TypeScript discriminated unions.
+
+Optionality does not justify erasing the value's domain type. Put generated
+semantic identifiers such as `StoreId` and `PasswordEntryId` inside the
+explicit variant, never widen them to `string`, when Rust owns that identifier.
 
 Do not encode closed domain workflows as string-literal rune state. Use
 generated Rust/WASM enums for authentication, unlock, recovery, Sentinel,
 provider, and session phases. Keep string unions only for visual component
 state such as panel, tab, accordion, or form-view selection.
 
-Do not include `undefined` in a union when the state is initialized and never
-cleared. For non-rune class fields that genuinely start absent, declare the
-union without the redundant initializer:
-
-```ts
-syncTimer: ReturnType<typeof setInterval> | undefined
-```
+Do not use zero-argument `$state<T>()` for modeled state. DOM element bindings
+are structural browser references and may remain optional when Svelte owns
+their assignment contract.
 
 Do not write `value ?? undefined` when `value` is already typed as possibly
 `undefined`. Keep `?? undefined` only at a boundary that converts a possible
@@ -64,35 +63,38 @@ let isLoading = $state(false)
 Applies to:
 
 - Authored `.svelte` and `.svelte.ts` files under `nook-app/nook-web`.
-- Optional component-local and browser-lifecycle state.
+- Component-local visual state and browser-lifecycle state.
 
 Does not apply to:
 
 - Generated TypeScript declarations.
 - Optional Rust/WASM DTO fields or domain workflows that should be modeled as
   Rust enums.
-- Function parameters and object properties where omission and an explicit
-  `undefined` may have different API semantics.
+- DOM references, external inputs, generated/browser contracts, lookup/parser
+  results, caches, and optional callbacks where absence is structural.
 
 ## Examples
 
-- Before: `$state<SvelteDate | undefined>(undefined)`
-- After: `$state<SvelteDate>()`
-- Before: `$state<string | undefined>(undefined)`
-- After: `$state<string>()`
+- Before: `let result = $state<NookImportResult>()`
+- After: `let result = $state<ImportState>({ kind: "idle" })`
+- Before: `let selectedFile = $state<File>()`
+- After: `let selection = $state<FileSelection>({ kind: "empty" })`
 - Before: `selectedVaultStoreId = $state<string>()`
-- After: `selectedVaultStoreId = $state<StoreId>()`
+- After: `selection = $state<ValueState<StoreId>>({ kind: "empty" })`
 
 ## Application Checklist
 
-- [ ] Search authored web sources for `$state<T | undefined>(undefined)`.
-- [ ] Replace it with `$state<T>()`.
-- [ ] Confirm each absent value is a meaningful UI or lifecycle state.
+- [ ] Search authored web sources for zero-argument `$state<T>()`,
+      `$state<T | undefined>`, and assignments that clear state to `undefined`.
+- [ ] Name each meaningful state and move state-owned data onto its variant.
+- [ ] Combine fields that transition together instead of creating parallel
+      optionals and booleans.
 - [ ] Preserve Rust/WASM-owned identifier types instead of widening them to
       `string`.
 - [ ] Replace domain string-literal unions with generated Rust/WASM enums;
       retain only visual string unions in Svelte.
-- [ ] Remove `undefined` union members from state that is never cleared.
+- [ ] Preserve structural DOM and external-boundary absence only where the
+      contract genuinely requires it.
 - [ ] Remove redundant `?? undefined` while preserving `null` normalization at
       external boundaries.
 - [ ] Escalate closed domain-state modeling to Rust/WASM rather than hiding it
@@ -100,6 +102,6 @@ Does not apply to:
 
 ## Validation
 
-Search the authored web tree for the redundant declaration pattern and run
+Run the syntax-aware TypeScript application-state preflight and
 `git diff --check`. Run formatting only when preparing a push; product checks
 remain in GitHub Actions.

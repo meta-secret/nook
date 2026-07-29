@@ -6,8 +6,12 @@
     type AppLogsResponse,
   } from '$lib/app-logs-api'
 
-  let payload = $state<AppLogsResponse>()
-  let error = $state<string>()
+  type LogsPageState =
+    | { kind: 'loading' }
+    | { kind: 'loaded'; payload: AppLogsResponse }
+    | { kind: 'failed'; message: string }
+
+  let state = $state<LogsPageState>({ kind: 'loading' })
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -15,10 +19,16 @@
     void (async () => {
       try {
         const query = parseAppLogsQuery(window.location.search)
-        payload = await loadAppLogsResponse(query)
+        state = {
+          kind: 'loaded',
+          payload: await loadAppLogsResponse(query),
+        }
       } catch (cause) {
-        error =
-          cause instanceof Error ? cause.message : 'Failed to load app logs'
+        state = {
+          kind: 'failed',
+          message:
+            cause instanceof Error ? cause.message : 'Failed to load app logs',
+        }
       }
     })()
   })
@@ -29,15 +39,15 @@
 </svelte:head>
 
 <main class="app-logs-api-page">
-  {#if error}
+  {#if state.kind === 'failed'}
     <pre data-testid="app-logs-error">{JSON.stringify(
-        { error },
+        { error: state.message },
         undefined,
         2,
       )}</pre>
-  {:else if payload}
+  {:else if state.kind === 'loaded'}
     <pre data-testid="app-logs-json">{JSON.stringify(
-        payload,
+        state.payload,
         undefined,
         2,
       )}</pre>
