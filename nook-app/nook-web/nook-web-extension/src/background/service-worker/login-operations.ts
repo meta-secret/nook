@@ -1,5 +1,8 @@
 import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
-import { type WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
+import {
+  NookWebsiteLoginSaveDecision,
+  type WebsiteLoginSaveOfferView,
+} from '../../lib/login-save-messages'
 import { classifyAuthenticationOutcome } from '../vault-runtime'
 import {
   authorizedWebsiteGrant,
@@ -231,18 +234,19 @@ export async function websiteLoginSaveOffer(
     !('ok' in response) ||
     response.ok !== true ||
     !('decision' in response) ||
-    typeof response.decision !== 'string'
+    typeof response.decision !== 'number'
   ) {
     return { ok: false, reason: 'login-save-plan-failed' }
   }
   if (
-    response.decision === 'already-saved' ||
-    response.decision === 'invalid'
+    response.decision === NookWebsiteLoginSaveDecision.AlreadySaved ||
+    response.decision === NookWebsiteLoginSaveDecision.Invalid
   ) {
     return { ok: true, status: 'ready', decision: response.decision }
   }
   if (
-    (response.decision !== 'create' && response.decision !== 'update') ||
+    (response.decision !== NookWebsiteLoginSaveDecision.Create &&
+      response.decision !== NookWebsiteLoginSaveDecision.Update) ||
     !('offerId' in response) ||
     typeof response.offerId !== 'string'
   ) {
@@ -290,7 +294,7 @@ export async function websiteLoginSavePending(
   }
   const staged = response.offer as {
     offerId?: string
-    decision?: string
+    decision?: unknown
     vaultStoreId?: string
   }
   const grant = grants.find(
@@ -299,7 +303,8 @@ export async function websiteLoginSavePending(
   if (
     !grant ||
     typeof staged.offerId !== 'string' ||
-    (staged.decision !== 'create' && staged.decision !== 'update')
+    (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
+      staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
     return { ok: true, offer: omittedValue() }
   }

@@ -1,14 +1,13 @@
 import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
+import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-export type WebsiteLoginSaveDecision =
-  | 'create'
-  | 'update'
-  | 'already-saved'
-  | 'invalid'
+export { NookWebsiteLoginSaveDecision }
 
 export type WebsiteLoginSaveOfferView = {
   offerId: string
-  decision: 'create' | 'update'
+  decision:
+    | NookWebsiteLoginSaveDecision.Create
+    | NookWebsiteLoginSaveDecision.Update
   vaultStoreId: string
   vaultName: string
 }

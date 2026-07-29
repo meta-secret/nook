@@ -63,6 +63,7 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "VaultType",
     "ReplicationType",
     "OnboardingType",
+    "WebsiteLoginSaveDecision",
     "SecretFormInputType",
     "SecretType",
     "StorageProviderType",
@@ -86,6 +87,7 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "VaultType",
     "ReplicationType",
     "OnboardingType",
+    "WebsiteLoginSaveDecision",
     "SecretFormInputType",
     "SecretType",
 ];

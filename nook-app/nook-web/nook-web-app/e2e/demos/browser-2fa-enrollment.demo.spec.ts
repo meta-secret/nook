@@ -3,7 +3,11 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
+import {
+  demoDomainEnumArgs,
+  installDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -33,6 +37,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   ) as Record<string, ChromeMessage>
   const stubArgs = {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     enrollPilotFlow: true,
   }
 

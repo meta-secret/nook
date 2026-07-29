@@ -5,7 +5,10 @@ import {
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
-import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
+import {
+  NookWebsiteLoginSaveDecision,
+  type WebsiteLoginSaveOfferView,
+} from '../../lib/login-save-messages'
 import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
@@ -35,7 +38,7 @@ type LoginSaveOfferResponse = {
     | LoginSaveOfferResponseStatus.Ready
     | LoginSaveOfferResponseStatus.Locked
     | LoginSaveOfferResponseStatus.Unavailable
-  decision?: string
+  decision?: NookWebsiteLoginSaveDecision
   offer?: WebsiteLoginSaveOfferView
 }
 
@@ -269,7 +272,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
 
   const title = document.createElement('h1')
   title.textContent = translatedMessage(
-    offer.decision === 'update'
+    offer.decision === NookWebsiteLoginSaveDecision.Update
       ? 'widgetUpdateLoginTitle'
       : 'widgetSaveLoginTitle',
   )
@@ -281,7 +284,7 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const description = document.createElement('p')
   description.className = 'description'
   description.textContent = translatedMessage(
-    offer.decision === 'update'
+    offer.decision === NookWebsiteLoginSaveDecision.Update
       ? 'widgetUpdateLoginDescription'
       : 'widgetSaveLoginDescription',
   )
@@ -292,7 +295,9 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   saveButton.className = 'primary-button'
   saveButton.setAttribute('data-testid', 'nook-auth-gate-save')
   saveButton.textContent = translatedMessage(
-    offer.decision === 'update' ? 'widgetUpdateLogin' : 'widgetSaveLogin',
+    offer.decision === NookWebsiteLoginSaveDecision.Update
+      ? 'widgetUpdateLogin'
+      : 'widgetSaveLogin',
   )
   saveButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return

@@ -4,7 +4,7 @@ import {
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
-import { installDemoChromeStub } from './static-chrome-stub'
+import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
 
 test('propose Create passkey through Nook Pilot without silent ceremony', async ({
   page,
@@ -12,6 +12,7 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   const messages = await loadPilotMessages()
   const stubArgs = {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     passkeyPilotFlow: true,
   }
 

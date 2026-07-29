@@ -833,32 +833,46 @@ impl Drop for NookLoginFillCredential {
 }
 
 #[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NookWebsiteLoginSaveDecision {
+    Create,
+    Update,
+    AlreadySaved,
+    Invalid,
+}
+
+#[wasm_bindgen]
 pub struct NookWebsiteLoginSavePlan {
-    decision: String,
+    decision: NookWebsiteLoginSaveDecision,
     secret_id: Option<String>,
 }
 
 #[wasm_bindgen]
 impl NookWebsiteLoginSavePlan {
     pub(crate) fn from_decision(decision: nook_core::WebsiteLoginSaveDecision) -> Self {
-        let label = decision.as_str().to_owned();
         match decision {
-            nook_core::WebsiteLoginSaveDecision::Create
-            | nook_core::WebsiteLoginSaveDecision::Invalid => Self {
-                decision: label,
+            nook_core::WebsiteLoginSaveDecision::Create => Self {
+                decision: NookWebsiteLoginSaveDecision::Create,
                 secret_id: None,
             },
-            nook_core::WebsiteLoginSaveDecision::Update { secret_id }
-            | nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
-                decision: label,
+            nook_core::WebsiteLoginSaveDecision::Invalid => Self {
+                decision: NookWebsiteLoginSaveDecision::Invalid,
+                secret_id: None,
+            },
+            nook_core::WebsiteLoginSaveDecision::Update { secret_id } => Self {
+                decision: NookWebsiteLoginSaveDecision::Update,
+                secret_id: Some(secret_id.to_string()),
+            },
+            nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
+                decision: NookWebsiteLoginSaveDecision::AlreadySaved,
                 secret_id: Some(secret_id.to_string()),
             },
         }
     }
 
     #[wasm_bindgen(getter)]
-    pub fn decision(&self) -> String {
-        self.decision.clone()
+    pub const fn decision(&self) -> NookWebsiteLoginSaveDecision {
+        self.decision
     }
 
     #[wasm_bindgen(getter, js_name = secretId)]

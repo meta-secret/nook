@@ -5,6 +5,7 @@ import initNookWasm, {
   DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
+  NookWebsiteLoginSaveDecision,
   NookVaultManager,
   previewOtpauthUri,
   providerWasmArgs,
@@ -85,7 +86,9 @@ type PendingLoginSaveOffer = {
   username: string
   password: string
   vaultStoreId: string
-  decision: 'create' | 'update'
+  decision:
+    | NookWebsiteLoginSaveDecision.Create
+    | NookWebsiteLoginSaveDecision.Update
   replaceSecretId?: string
   expiresAt: number
   expiryTimer: ReturnType<typeof setTimeout>
@@ -757,7 +760,10 @@ async function handleMessage(message: unknown): Promise<unknown> {
       )
       try {
         const decision = plan.decision
-        if (decision !== 'create' && decision !== 'update') {
+        if (
+          decision !== NookWebsiteLoginSaveDecision.Create &&
+          decision !== NookWebsiteLoginSaveDecision.Update
+        ) {
           payload.password = ''
           return { ok: true, decision, secretId: plan.secretId }
         }
@@ -769,7 +775,8 @@ async function handleMessage(message: unknown): Promise<unknown> {
         }
         const offerId = crypto.randomUUID()
         const replaceSecretId =
-          decision === 'update' && typeof plan.secretId === 'string'
+          decision === NookWebsiteLoginSaveDecision.Update &&
+          typeof plan.secretId === 'string'
             ? plan.secretId
             : omittedValue()
         const offer: PendingLoginSaveOffer = {

@@ -53,7 +53,7 @@ pub use types::{
     NookStringValue, NookTotpCode, NookValueState, NookVaultAccessReport, NookVaultArchitecture,
     NookVaultClientPolicy, NookVaultEpochHistoryDiagnostic, NookVaultEventAccessDiagnostic,
     NookVaultMember, NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations,
-    NookVaultSyncResult, NookWebsiteLoginSavePlan,
+    NookVaultSyncResult, NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 

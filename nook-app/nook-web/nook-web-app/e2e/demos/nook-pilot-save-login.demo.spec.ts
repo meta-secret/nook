@@ -4,11 +4,16 @@ import {
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
-import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
+import {
+  demoDomainEnumArgs,
+  installDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 function savePilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     savePilotFlow: true,
     recordRuntimeMessageTypes: true,
   }
