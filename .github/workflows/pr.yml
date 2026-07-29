@@ -40,12 +40,31 @@ env:
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  validation-request:
+    name: Validate explicit CI request
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject unsupported label events
+        env:
+          REQUESTED_LABEL: ${{ github.event.label.name }}
+        run: |
+          case "$REQUESTED_LABEL" in
+            ci:validate|ci:full-e2e) ;;
+            *)
+              echo "Unsupported PR validation label: $REQUESTED_LABEL" >&2
+              exit 1
+              ;;
+          esac
+
   rust:
     name: Native Rust verification
     if: >-
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -159,6 +178,7 @@ jobs:
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -278,6 +298,7 @@ jobs:
       github.event.action != 'closed' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -807,7 +828,7 @@ jobs:
     name: Full browser e2e (main fix)
     if: >-
       github.event.action != 'closed' &&
-      github.event.label.name == 'ci:full-e2e'
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: wasm
     runs-on: ubuntu-latest
     steps:
@@ -854,7 +875,7 @@ jobs:
     name: Full extension e2e (main fix)
     if: >-
       github.event.action != 'closed' &&
-      github.event.label.name == 'ci:full-e2e'
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: wasm
     runs-on: ubuntu-latest
     steps:

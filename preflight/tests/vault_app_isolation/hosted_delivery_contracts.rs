@@ -344,10 +344,12 @@ fn assert_pr_workflow_contract(root: &Path) {
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
         "types: [labeled, closed]",
+        "name: Validate explicit CI request",
+        "name: Reject unsupported label events",
         "github.event.label.name == 'ci:validate'",
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
-        "github.event.label.name == 'ci:full-e2e'",
+        "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
         "NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/",
         "name: pr-wasm-${{ github.run_id }}",
         "task ci:pr:e2e:web:artifacts",
@@ -492,6 +494,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         verify_job.contains("github.event.action != 'closed'")
             && verify_job.contains("github.event.label.name == 'ci:validate'")
             && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
+            && verify_job.contains("needs: validation-request")
             && !verify_job.contains("needs: wasm")
             && verify_job.contains("name: Wait for built WASM handoff")
             && verify_job.contains("WASM verification completed with $wasm_conclusion")

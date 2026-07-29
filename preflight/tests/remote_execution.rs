@@ -94,6 +94,16 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
     let remote_doc = read(".cortex/workflows/remote-execution.md");
 
     assert!(pr.contains("types: [labeled, closed]"));
+    for required in [
+        "name: Validate explicit CI request",
+        "name: Reject unsupported label events",
+        "ci:validate|ci:full-e2e",
+    ] {
+        assert!(
+            pr.contains(required),
+            "PR workflow request guard missing: {required}"
+        );
+    }
     for label in ["ci:validate", "ci:full-e2e"] {
         assert!(
             pr.contains(&format!("github.event.label.name == '{label}'")),
@@ -102,6 +112,23 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
         assert!(
             remote_tasks.contains(label),
             "PR validation Task command must own {label}"
+        );
+    }
+    assert_eq!(
+        pr.matches("contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
+            .count(),
+        2,
+        "a persistent Main-fix label must keep both full e2e jobs active"
+    );
+    for required in [
+        "E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts",
+        "name: Preserve Playwright diagnostics",
+        "if: always()",
+        "uses: actions/upload-artifact@v7",
+    ] {
+        assert!(
+            workflow_or_remote_tasks(required),
+            "remote e2e diagnostics contract missing: {required}"
         );
     }
     for required in [
@@ -118,4 +145,9 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() {
             "remote execution contract missing: {required}"
         );
     }
+}
+
+fn workflow_or_remote_tasks(required: &str) -> bool {
+    read(".github/workflows/remote.yml").contains(required)
+        || read("nook-app/docker/Taskfile.yml").contains(required)
 }

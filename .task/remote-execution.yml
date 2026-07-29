@@ -14,7 +14,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -euo pipefail
+        set -eu
 
         requested_task="$REQUESTED_REMOTE_TASK"
         case "$requested_task" in
@@ -37,10 +37,8 @@ tasks:
         fi
 
         local_sha="$(git rev-parse HEAD)"
-        remote_sha="$(
-          git ls-remote --refs origin "refs/heads/$branch" |
-            awk 'NR == 1 { print $1 }'
-        )"
+        remote_refs="$(git ls-remote --refs origin "refs/heads/$branch")"
+        remote_sha="$(printf '%s\n' "$remote_refs" | awk 'NR == 1 { print $1 }')"
         if [ -z "$remote_sha" ]; then
           echo "Push $branch before requesting remote execution." >&2
           exit 2
@@ -97,12 +95,14 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -euo pipefail
+        set -eu
 
-        if ! [[ "$REQUESTED_PR" =~ ^[0-9]+$ ]] || [ "$REQUESTED_PR" -eq 0 ]; then
-          echo "PR must be a positive pull-request number." >&2
-          exit 2
-        fi
+        case "$REQUESTED_PR" in
+          ''|*[!0-9]*|0)
+            echo "PR must be a positive pull-request number." >&2
+            exit 2
+            ;;
+        esac
         if [ "$REQUEST_FULL_E2E" != "0" ] && [ "$REQUEST_FULL_E2E" != "1" ]; then
           echo "FULL_E2E must be 0 or 1." >&2
           exit 2
@@ -126,8 +126,8 @@ tasks:
           validation_label="ci:full-e2e"
         fi
 
-        if gh pr view "$REQUESTED_PR" --json labels \
-          --jq '.labels[].name' | grep -Fxq "$validation_label"; then
+        current_labels="$(gh pr view "$REQUESTED_PR" --json labels --jq '.labels[].name')"
+        if printf '%s\n' "$current_labels" | grep -Fxq "$validation_label"; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"

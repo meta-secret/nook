@@ -106,9 +106,18 @@ the relevant label:
 - `ci:full-e2e` for Main-fix validation.
 
 GitHub Actions does not support filtering `pull_request` triggers by label name
-before creating the workflow run. `pr.yml` therefore listens for label events
-but allocates validation workers only for these two labels. Agents must use the
-Task command so an already-present label is toggled and produces a new event.
+before creating the workflow run. `pr.yml` therefore listens for label events,
+runs a small request guard that rejects every unsupported label, and allocates
+product-validation workers only for these two labels. Agents must use the Task
+command so an already-present label is toggled and produces a new event.
+
+When `ci:full-e2e` remains on a Main-fix PR, every later validation request keeps
+the browser and extension gates active. A normal `ci:validate` event cannot
+downgrade a PR that is already marked for Main-equivalent coverage.
+
+Remote browser jobs preserve Playwright `test-results`, including traces,
+screenshots, videos, and attached `nook-app-logs.json`, as run artifacts even
+when the selected task fails.
 
 Any later push changes the PR head. Checks and deployment for the earlier SHA do
 not authorize the new head, and `task pr:ready` must reject it until the agent
