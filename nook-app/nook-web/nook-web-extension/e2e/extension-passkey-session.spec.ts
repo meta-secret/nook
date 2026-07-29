@@ -576,9 +576,9 @@ test('reuses the offscreen session after the service worker restarts', async ({
     await context.waitForEvent('serviceworker', { timeout: 15_000 })
 
     await popupPage.reload()
-    await expect(
-      popupPage.getByTestId('extension-companion-home'),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible(
+      { timeout: 15_000 },
+    )
   } finally {
     await context.close()
   }

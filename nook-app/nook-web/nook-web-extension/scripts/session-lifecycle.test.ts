@@ -10,9 +10,8 @@ describe('ensureExtensionSessionDocument', () => {
         createDocument: () => Promise.reject('single offscreen document'),
       },
     } as typeof chrome
-    const { ensureExtensionSessionDocument } = await import(
-      '../src/background/service-worker/session-lifecycle'
-    )
+    const { ensureExtensionSessionDocument } =
+      await import('../src/background/service-worker/session-lifecycle')
 
     await expect(ensureExtensionSessionDocument()).resolves.toBeUndefined()
   })
