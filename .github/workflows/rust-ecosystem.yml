@@ -19,9 +19,13 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
-  group: rust-ecosystem-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    rust-ecosystem-${{ github.event_name }}-
+    ${{ github.event.pull_request.number || github.ref }}-
+    ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
   cancel-in-progress: true
 
 jobs:
@@ -40,10 +44,19 @@ jobs:
           manifest-path: nook-app/Cargo.toml
           command: check
           log-level: error
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: fuzz/Cargo.toml
+          command: check
+          log-level: error
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: nook-app
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: fuzz
 
   deterministic-tests:
     if: >-
@@ -86,12 +99,28 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz@0.13.2
+      - name: Enforce fuzz-target lints
+        working-directory: nook-app
+        run: >-
+          cargo clippy --manifest-path ../fuzz/Cargo.toml
+          --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
       - name: Exercise wire parsers
         working-directory: nook-app
+        env:
+          FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
         run: >-
           cargo fuzz run --fuzz-dir ../fuzz
           --target x86_64-unknown-linux-gnu
-          wire-parsers -- -max_total_time=20
+          wire-parsers -- -max_total_time=${FUZZ_SECONDS}
+      - name: Preserve fuzz corpus and crash inputs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: wire-parsers-fuzz-${{ github.run_id }}
+          path: |
+            fuzz/artifacts
+            fuzz/corpus
+          if-no-files-found: ignore
 
   kani:
     if: >-
@@ -120,6 +149,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with:
+          toolchain: nightly-2026-04-16
           components: llvm-tools-preview,rustc-dev
       - name: Install workspace linker
         run: sudo apt-get update && sudo apt-get install --yes mold
@@ -127,4 +157,4 @@ jobs:
         run: cargo install cargo-dylint dylint-link --version 6.0.1 --locked
       - name: Run configured lint libraries
         working-directory: nook-app
-        run: cargo dylint --all -- --all-targets
+        run: cargo dylint --all -- --all-targets -- -D warnings

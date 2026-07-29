@@ -2,8 +2,8 @@
 
 Use this workflow for quality, CI, and deployment changes.
 
-1. Keep Taskfile as the source of truth for build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
-2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for repo behavior.
+1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling. The pinned `rust-ecosystem.yml` workflow is the source of truth for compiler-coupled or sanitizer-backed tools whose official runners provision a specialized toolchain (Kani, cargo-fuzz, and Dylint); do not duplicate those commands in bespoke preflight scanners.
+2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior. The Rust ecosystem workflow may use pinned official actions and GitHub-hosted native toolchains for advisory database access, sanitizers, model checking, and rustc-private lint libraries that are intentionally outside the stable sealed project images. Keep those jobs exact-head merge gates and pin every compiler-coupled version.
 3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`. Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs; the Rust dep cache and warm `target/` are baked into normal image layers, and workspace source is copied into the nook-web image (sealed image, no runtime mount). The optional remote Redis sccache is a compiler-output optimization below Docker/cargo-chef and never a correctness input. See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
@@ -120,9 +120,9 @@ Use this workflow for quality, CI, and deployment changes.
 22. **Cost tiers:** cargo-deny, RustSec, Proptest, and committed Insta snapshots
     are normal merge checks. Loom models must remain bounded. Cargo-fuzz uses a
     short merge smoke and longer scheduled/manual campaigns. Kani proofs must
-    declare practical unwind bounds. Dylint libraries and versions are pinned
-    in workspace metadata so compiler-coupled lint behavior changes
-    intentionally.
+    declare practical unwind bounds. Dylint libraries, versions, and their
+    dated nightly (`nightly-2026-04-16` for Dylint `6.0.1`) are pinned so
+    compiler-coupled lint behavior changes intentionally.
 
 ## Fix check findings — not silence them
 

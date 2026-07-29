@@ -10,6 +10,14 @@ pub enum ReplicaInsertStatus {
     Conflict,
 }
 
+fn classify_immutable_insert(existing: Option<&[u8]>, incoming: &[u8]) -> ReplicaInsertStatus {
+    match existing {
+        Some(bytes) if bytes == incoming => ReplicaInsertStatus::Duplicate,
+        Some(_) => ReplicaInsertStatus::Conflict,
+        None => ReplicaInsertStatus::Inserted,
+    }
+}
+
 /// Provider event-set classification before a connect or sync path mutates
 /// remote state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,14 +62,14 @@ where
     }
 
     pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) -> ReplicaInsertStatus {
-        match self.events.get(&event_id) {
-            Some(existing) if existing == &storage_bytes => ReplicaInsertStatus::Duplicate,
-            Some(_) => ReplicaInsertStatus::Conflict,
-            None => {
-                self.events.insert(event_id, storage_bytes);
-                ReplicaInsertStatus::Inserted
-            }
+        let status = classify_immutable_insert(
+            self.events.get(&event_id).map(Vec::as_slice),
+            &storage_bytes,
+        );
+        if status == ReplicaInsertStatus::Inserted {
+            self.events.insert(event_id, storage_bytes);
         }
+        status
     }
 
     #[must_use]
@@ -86,14 +94,11 @@ where
         bytes: Vec<u8>,
     ) -> ReplicaInsertStatus {
         let entries = self.outbox.entry(provider_id.to_owned()).or_default();
-        match entries.get(&event_id) {
-            Some(existing) if existing == &bytes => ReplicaInsertStatus::Duplicate,
-            Some(_) => ReplicaInsertStatus::Conflict,
-            None => {
-                entries.insert(event_id, bytes);
-                ReplicaInsertStatus::Inserted
-            }
+        let status = classify_immutable_insert(entries.get(&event_id).map(Vec::as_slice), &bytes);
+        if status == ReplicaInsertStatus::Inserted {
+            entries.insert(event_id, bytes);
         }
+        status
     }
 
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &Id) -> Option<Vec<u8>> {
@@ -239,6 +244,24 @@ mod loom_tests {
     use loom::sync::{Arc, Mutex};
     use loom::thread;
 
+    fn lock_store(
+        store: &Mutex<super::ReplicaStore<u8>>,
+    ) -> loom::sync::MutexGuard<'_, super::ReplicaStore<u8>> {
+        match store.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    fn join_writer(
+        writer: loom::thread::JoinHandle<super::ReplicaInsertStatus>,
+    ) -> super::ReplicaInsertStatus {
+        match writer.join() {
+            Ok(status) => status,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
     #[test]
     fn serialized_replica_inserts_preserve_immutable_first_writer() {
         loom::model(|| {
@@ -247,17 +270,17 @@ mod loom_tests {
             let second = Arc::clone(&store);
 
             let first_writer = thread::spawn(move || {
-                let mut guard = first.lock().expect("loom mutex must remain available");
+                let mut guard = lock_store(&first);
                 guard.put_event(1_u8, vec![1])
             });
             let second_writer = thread::spawn(move || {
-                let mut guard = second.lock().expect("loom mutex must remain available");
+                let mut guard = lock_store(&second);
                 guard.put_event(1_u8, vec![2])
             });
 
-            let first_status = first_writer.join().expect("loom writer must finish");
-            let second_status = second_writer.join().expect("loom writer must finish");
-            let guard = store.lock().expect("loom mutex must remain available");
+            let first_status = join_writer(first_writer);
+            let second_status = join_writer(second_writer);
+            let guard = lock_store(&store);
 
             assert_ne!(first_status, second_status);
             assert!(
@@ -281,21 +304,23 @@ mod loom_tests {
 #[cfg(kani)]
 mod kani_proofs {
     #[kani::proof]
-    fn duplicate_insert_never_replaces_immutable_bytes() {
+    fn immutable_insert_status_covers_every_existing_state() {
+        let has_existing = kani::any::<bool>();
         let same_payload = kani::any::<bool>();
-        let mut store = super::ReplicaStore::new();
-
-        assert_eq!(
-            store.put_event(1_u8, vec![7]),
+        let existing = [7_u8];
+        let incoming = [if same_payload { 7 } else { 9 }];
+        let existing = has_existing.then_some(existing.as_slice());
+        let expected_status = if !has_existing {
             super::ReplicaInsertStatus::Inserted
-        );
-        let second_payload = if same_payload { 7 } else { 9 };
-        let expected_status = if same_payload {
+        } else if same_payload {
             super::ReplicaInsertStatus::Duplicate
         } else {
             super::ReplicaInsertStatus::Conflict
         };
-        assert_eq!(store.put_event(1_u8, vec![second_payload]), expected_status);
-        assert_eq!(store.get_bytes(&1_u8), Some([7].as_slice()));
+
+        assert_eq!(
+            super::classify_immutable_insert(existing, &incoming),
+            expected_status
+        );
     }
 }

@@ -1,7 +1,6 @@
 behavior:
   update: no
   output: diff
-  force_update: false
 
 test:
   runner: nextest

@@ -19,6 +19,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let workspace = read("nook-app/Cargo.toml")?;
     let replication = read("nook-app/nook-replication/src/replica_store.rs")?;
     let fuzz_target = read("fuzz/fuzz_targets/wire_parsers.rs")?;
+    let fuzz_manifest = read("fuzz/Cargo.toml")?;
+    let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
 
     for marker in [
         "cargo-deny-action",
@@ -26,8 +28,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Property and snapshot tests",
         "Concurrency permutation model",
         "cargo fuzz run",
+        "Preserve fuzz corpus and crash inputs",
+        "FUZZ_SECONDS",
         "kani-github-action",
         "cargo dylint --all",
+        "nightly-2026-04-16",
+        "checks: write",
     ] {
         assert!(
             workflow.contains(marker),
@@ -60,6 +66,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(replication.contains("loom::model"));
     assert!(replication.contains("#[kani::proof]"));
     assert!(fuzz_target.contains("fuzz_target!"));
+    assert!(fuzz_manifest.contains("[lints.clippy]"));
+    assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     Ok(())
 }
 
