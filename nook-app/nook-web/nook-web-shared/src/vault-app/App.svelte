@@ -78,12 +78,14 @@
   } from '$lib/vault/existing-vault-provider.svelte'
   import {
     mountBrowserLifecycle,
+    THEME_STORAGE_KEY,
     updateApplicationDocument,
   } from '$lib/app-browser-lifecycle'
   import {
     ActiveVaultKind,
     LoginSetupKind,
     RecoveryDiscoveryKind,
+    type ActiveVault,
   } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
   const vault = new VaultState()
@@ -546,7 +548,7 @@
   }
 
   async function leaveExistingVaultImport(): Promise<void> {
-    const previousActiveVault =
+    const previousActiveVault: ActiveVault =
       pendingExistingVaultImportState.kind ===
       ExistingVaultImportQueueKind.WaitingForDevice
         ? pendingExistingVaultImportState.request.previousActiveVault

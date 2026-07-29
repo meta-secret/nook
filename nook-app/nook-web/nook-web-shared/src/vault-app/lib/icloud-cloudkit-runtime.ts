@@ -1,4 +1,4 @@
-import type {
+import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,

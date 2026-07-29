@@ -73,6 +73,102 @@ export const OAUTH_FILE_PROVIDER_TYPE =
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 
+export enum OAuthAccessTokenKind {
+  Missing = 'missing',
+  Available = 'available',
+}
+
+export type OAuthAccessToken =
+  | { kind: OAuthAccessTokenKind.Missing }
+  | { kind: OAuthAccessTokenKind.Available; token: string }
+
+export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
+  const token = config.accessToken?.trim()
+  return token
+    ? { kind: OAuthAccessTokenKind.Available, token }
+    : { kind: OAuthAccessTokenKind.Missing }
+}
+
+export enum OAuthFileNameKind {
+  Unresolved = 'unresolved',
+  Resolved = 'resolved',
+}
+
+export type OAuthFileName =
+  | { kind: OAuthFileNameKind.Unresolved }
+  | { kind: OAuthFileNameKind.Resolved; fileName: string }
+
+export function oauthFileName(config: OAuthFileConfig): OAuthFileName {
+  const fileName = config.fileName?.trim()
+  return fileName
+    ? { kind: OAuthFileNameKind.Resolved, fileName }
+    : { kind: OAuthFileNameKind.Unresolved }
+}
+
+export enum LocalFolderHandleKind {
+  Unselected = 'unselected',
+  Selected = 'selected',
+}
+
+export type LocalFolderHandle =
+  | { kind: LocalFolderHandleKind.Unselected }
+  | { kind: LocalFolderHandleKind.Selected; handleId: string }
+
+export function localFolderHandle(
+  config: LocalFolderConfig,
+): LocalFolderHandle {
+  const handleId = config.handleId?.trim()
+  return handleId
+    ? { kind: LocalFolderHandleKind.Selected, handleId }
+    : { kind: LocalFolderHandleKind.Unselected }
+}
+
+export enum OAuthProviderConfigurationKind {
+  Missing = 'missing',
+  Configured = 'configured',
+}
+
+export type OAuthProviderConfiguration =
+  | { kind: OAuthProviderConfigurationKind.Missing }
+  | {
+      kind: OAuthProviderConfigurationKind.Configured
+      config: OAuthFileConfig
+    }
+
+export function oauthProviderConfiguration(
+  provider: StorageProvider,
+): OAuthProviderConfiguration {
+  return provider.oauthFile
+    ? {
+        kind: OAuthProviderConfigurationKind.Configured,
+        config: provider.oauthFile,
+      }
+    : { kind: OAuthProviderConfigurationKind.Missing }
+}
+
+export enum LocalFolderProviderConfigurationKind {
+  Missing = 'missing',
+  Configured = 'configured',
+}
+
+export type LocalFolderProviderConfiguration =
+  | { kind: LocalFolderProviderConfigurationKind.Missing }
+  | {
+      kind: LocalFolderProviderConfigurationKind.Configured
+      config: LocalFolderConfig
+    }
+
+export function localFolderProviderConfiguration(
+  provider: StorageProvider,
+): LocalFolderProviderConfiguration {
+  return provider.localFolder
+    ? {
+        kind: LocalFolderProviderConfigurationKind.Configured,
+        config: provider.localFolder,
+      }
+    : { kind: LocalFolderProviderConfigurationKind.Missing }
+}
+
 export enum DuplicateSyncProviderKind {
   Duplicate = 'duplicate',
   Unique = 'unique',

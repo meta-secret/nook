@@ -4,6 +4,10 @@ import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
+  oauthFileName,
+  OAuthFileNameKind,
   setGoogleDriveProviderMode,
   setICloudProviderMode,
   type GoogleDriveMode,
@@ -255,21 +259,23 @@ export async function createGoogleSharedFolder(
     throw new Error(state.t('provider_setup.google_shared_sign_in_first'))
   }
   const oauthFile = state.oauthFileDraft.config
-  const accessToken = oauthFile.accessToken.trim()
-  if (!accessToken) {
+  const accessCredential = oauthAccessToken(oauthFile)
+  if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
     throw new Error(state.t('provider_setup.google_shared_sign_in_first'))
   }
-  const folderName =
-    state.githubRepo.trim() ||
-    oauthFile.fileName?.trim() ||
-    DEFAULT_DRIVE_BACKUP_NAME
+  const remoteFileName = oauthFileName(oauthFile)
+  const folderName = state.githubRepo.trim()
+    ? state.githubRepo.trim()
+    : remoteFileName.kind === OAuthFileNameKind.Resolved
+      ? remoteFileName.fileName
+      : DEFAULT_DRIVE_BACKUP_NAME
   const grant = await prepareSharedStorageGrant({
     providerType: 'oauth-file',
     oauthPreset: providerOauthPresetForConfig(oauthFile),
     joinerIdentityKind: 'email',
     joinerIdentity: collaboratorEmail,
     storageTargetHint: folderName,
-    accessToken,
+    accessToken: accessCredential.token,
   })
   if (grant.kind === 'unsupported') {
     throw new Error(state.t(grant.reasonKey))

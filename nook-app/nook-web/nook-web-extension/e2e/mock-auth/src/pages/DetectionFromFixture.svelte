@@ -120,7 +120,6 @@
     <p class="error" role="alert">No fixture for {label}</p>
   </main>
 {:else if wrapAriaHidden}
-  {@const fixture = renderState.fixture}
   {@const step = renderState.step}
   <div aria-hidden="true">
     <main>
@@ -166,7 +165,6 @@
     </main>
   </div>
 {:else}
-  {@const fixture = renderState.fixture}
   {@const step = renderState.step}
   <main>
     <h1>{label}</h1>

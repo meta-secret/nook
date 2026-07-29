@@ -21,7 +21,11 @@
   } from '$lib/auth-providers'
   import {
     DEFAULT_GITHUB_REPO,
+    localFolderHandle,
+    LocalFolderHandleKind,
     localizeProviderLabel,
+    oauthAccessToken,
+    OAuthAccessTokenKind,
     providerStorageDetail,
   } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
@@ -115,10 +119,12 @@
     setupIs('local') ||
       (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        Boolean(vault.localFolderDraft.config.handleId.trim())) ||
+        localFolderHandle(vault.localFolderDraft.config).kind ===
+          LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        Boolean(vault.oauthFileDraft.config.accessToken?.trim())) ||
+        oauthAccessToken(vault.oauthFileDraft.config).kind ===
+          OAuthAccessTokenKind.Available) ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const oauthPreset = $derived(

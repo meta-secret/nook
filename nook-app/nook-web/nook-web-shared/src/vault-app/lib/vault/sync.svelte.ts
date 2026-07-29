@@ -46,7 +46,8 @@ import {
   scheduleAutoConnectAfterApproval,
   syncError,
 } from '$lib/vault/sync-runtime'
-export { publishExtensionEventLogUpdateForVault } from '$lib/vault/sync-extension-bridge'
+import { publishExtensionEventLogUpdateForVault } from '$lib/vault/sync-extension-bridge'
+export { publishExtensionEventLogUpdateForVault }
 
 export * from '$lib/vault/sync-resolution'
 export { syncConflictLabel } from '$lib/vault/sync-conflict-label'

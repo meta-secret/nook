@@ -58,6 +58,7 @@ type ProviderStateFields = Pick<
   | 'providersLoaded'
   | 'requireActiveVaultStoreId'
   | 'hasSelectedLoginVaultStore'
+  | 'selectedLoginVault'
   | 'selectLoginVault'
   | 'storageMode'
 >

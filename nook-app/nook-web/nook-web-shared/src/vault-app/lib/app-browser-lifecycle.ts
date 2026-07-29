@@ -12,7 +12,7 @@ import { configuredVaultApplication, VaultApplication } from '$app-wasm'
 import { legalPageForId } from '$lib/legal-content'
 import type { VaultState } from '$lib/vault.svelte'
 
-const THEME_STORAGE_KEY = 'nook_color_mode'
+export const THEME_STORAGE_KEY = 'nook_color_mode'
 
 type BrowserLifecycleOptions = {
   vault: VaultState
@@ -20,6 +20,19 @@ type BrowserLifecycleOptions = {
   setColorMode(mode: ColorMode): void
   stopFollowingSystemColorMode(): void
   syncRoute(): void
+}
+
+type AuthProviderDebugHooks = {
+  loadAuthProviders(): Promise<AuthProvidersSnapshot>
+  saveAuthProviders(
+    snapshot: Parameters<typeof saveAuthProviders>[1],
+  ): ReturnType<typeof saveAuthProviders>
+}
+
+type BrowserDebugHooks = {
+  __nookVault: VaultState
+  __nookConfiguredVaultApplication: VaultApplication
+  __nookAuthProviders: AuthProviderDebugHooks
 }
 
 export function mountBrowserLifecycle({
@@ -49,29 +62,23 @@ export function mountBrowserLifecycle({
   void vault.init()
 
   if (vault.runtimeConfig.exposeDebugHooks()) {
-    ;(window as Window & { __nookVault: VaultState }).__nookVault = vault
-    ;(
-      window as Window & {
-        __nookConfiguredVaultApplication: VaultApplication
-      }
-    ).__nookConfiguredVaultApplication = configuredVaultApplication()
-    ;(
-      window as Window & {
-        __nookAuthProviders: {
-          loadAuthProviders: () => Promise<AuthProvidersSnapshot>
-          saveAuthProviders: (
-            snapshot: Parameters<typeof saveAuthProviders>[1],
-          ) => ReturnType<typeof saveAuthProviders>
-        }
-      }
-    ).__nookAuthProviders = {
-      loadAuthProviders: () =>
-        vault.enqueueStorage(() => vault.requireManager().loadAuthProviders()),
-      saveAuthProviders: (snapshot) =>
-        vault.enqueueStorage(() =>
-          saveAuthProviders(vault.requireManager(), snapshot),
-        ),
+    const debugHooks: BrowserDebugHooks = {
+      __nookVault: vault,
+      __nookConfiguredVaultApplication: configuredVaultApplication(),
+      __nookAuthProviders: {
+        loadAuthProviders: () =>
+          vault.enqueueStorage(() =>
+            vault.requireManager().loadAuthProviders(),
+          ),
+        saveAuthProviders: (
+          snapshot: Parameters<typeof saveAuthProviders>[1],
+        ) =>
+          vault.enqueueStorage(() =>
+            saveAuthProviders(vault.requireManager(), snapshot),
+          ),
+      },
     }
+    Object.assign(window, debugHooks)
   }
 
   syncRoute()

@@ -11,7 +11,13 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
+  import {
+    DEFAULT_GITHUB_REPO,
+    localFolderHandle,
+    LocalFolderHandleKind,
+    oauthAccessToken,
+    OAuthAccessTokenKind,
+  } from '$lib/auth-providers'
   import {
     Card,
     CardContent,
@@ -222,10 +228,12 @@
     setupIs('local') ||
       (setupIs('local-folder') &&
         vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-        Boolean(vault.localFolderDraft.config.handleId.trim())) ||
+        localFolderHandle(vault.localFolderDraft.config).kind ===
+          LocalFolderHandleKind.Selected) ||
       (setupIs('oauth-file') &&
         vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-        Boolean(vault.oauthFileDraft.config.accessToken?.trim())) ||
+        oauthAccessToken(vault.oauthFileDraft.config).kind ===
+          OAuthAccessTokenKind.Available) ||
       (setupIs('github') && Boolean(githubPat.trim())),
   )
   const recoveryPasswordEntries = $derived(

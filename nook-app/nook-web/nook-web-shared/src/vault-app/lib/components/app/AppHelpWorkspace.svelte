@@ -4,6 +4,7 @@
   import { ColorMode } from '$lib/app-lifecycle-state'
   import { MermaidTheme } from '$lib/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
+  import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
 
   let {
     vault,
@@ -34,7 +35,9 @@
     {...vault.isAuthenticated ? {} : { label: 'Nook' }}
     showSyncStatus={vault.isAuthenticated}
     showStorageIcon={vault.isAuthenticated}
-    variant={vault.isAuthenticated ? 'panel' : 'quiet'}
+    variant={vault.isAuthenticated
+      ? VaultStatusBarVariant.Panel
+      : VaultStatusBarVariant.Quiet}
     onDismissSuccess={() => vault.dismissSuccess()}
     onDismissError={() => vault.dismissError()}
   />

@@ -17,6 +17,7 @@ import {
   isExtensionIdentityHandoffRequestMessage,
   isExtensionLocalEventLogUpdatedMessage,
   isOpenCompanionLauncherMessage,
+  ExtensionPairingVaultType,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityStatusMessage,
@@ -174,7 +175,7 @@ describe('extension pairing approved message', () => {
       isExtensionPairingApprovedMessage({
         type: 'nook:extension-pairing-approved',
         payload: {
-          vaultType: 'simple',
+          vaultType: ExtensionPairingVaultType.Simple,
           deviceId: 'device-1',
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
@@ -235,7 +236,7 @@ describe('extension pairing approved message', () => {
   test('maps approved grants into extension-owned storage keys', () => {
     const items = extensionPairingGrantStorageItems(
       {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -315,7 +316,7 @@ describe('extension pairing approved message', () => {
   test('keeps passive updates from selecting another paired vault', () => {
     const approved = extensionPairingGrantStorageItems(
       {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -359,7 +360,7 @@ describe('extension pairing approved message', () => {
   test('restores the newest surviving grant when the selected vault is removed', () => {
     const first = extensionPairingGrantStorageItems(
       {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -379,7 +380,7 @@ describe('extension pairing approved message', () => {
     )
     const second = extensionPairingGrantStorageItems(
       {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -423,7 +424,7 @@ describe('extension pairing approved message', () => {
   test('migrates the uniquely selected valid legacy grant into Rexie shape', () => {
     const current = extensionPairingGrantStorageItems(
       {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',

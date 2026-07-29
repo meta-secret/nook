@@ -12,7 +12,6 @@ import {
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
   VaultEditDecision,
-  providerLabelById,
   resolveErrorMessage as wasmResolveErrorMessage,
   translateWithReplacements,
   type NookPendingSyncConflict,
@@ -144,17 +143,17 @@ export class VaultState extends VaultLifecycleState {
     if (this.manualProviderSync.kind === ManualProviderSyncKind.Idle) {
       return { kind: SyncProviderLabelKind.Idle }
     }
+    for (const provider of this.providers) {
+      if (provider.id === this.manualProviderSync.providerId) {
+        return {
+          kind: SyncProviderLabelKind.Active,
+          label: provider.label,
+        }
+      }
+    }
     return {
       kind: SyncProviderLabelKind.Active,
-      label: providerLabelById(
-        $state.snapshot({
-          providers: this.providers,
-          ...(this.activeVault.kind === ActiveVaultKind.Open
-            ? { activeVaultStoreId: this.activeVault.storeId }
-            : {}),
-        }),
-        this.manualProviderSync.providerId,
-      ),
+      label: this.manualProviderSync.providerId,
     }
   }
 

@@ -7,12 +7,25 @@ import {
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   LOCAL_PROVIDER_TYPE,
+  localFolderHandle,
+  LocalFolderHandleKind,
+  localFolderProviderConfiguration,
+  LocalFolderProviderConfigurationKind,
   OAUTH_FILE_PROVIDER_TYPE,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
+  oauthFileName,
+  OAuthFileNameKind,
+  oauthProviderConfiguration,
+  OAuthProviderConfigurationKind,
   providerDefaultLabel,
   saveAuthProviders,
   type AuthProvidersSnapshot,
   type LocalFolderConfig,
+  type LocalFolderHandle,
   type OAuthFileConfig,
+  type OAuthAccessToken,
+  type OAuthFileName,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
@@ -200,8 +213,11 @@ export function stagedProviderLabel(state: ProviderActionsContext): string {
   if (providerType === 'oauth-file') {
     if (state.oauthFileDraft.kind === OAuthFileDraftKind.Configured) {
       const oauthFile = state.oauthFileDraft.config
+      const remoteFileName = oauthFileName(oauthFile)
       return stagedConfiguredOauthProviderLabel(
-        oauthFile.fileName,
+        remoteFileName.kind === OAuthFileNameKind.Resolved
+          ? remoteFileName.fileName
+          : DEFAULT_DRIVE_BACKUP_NAME,
         oauthFile.preset,
       )
     }
@@ -215,14 +231,22 @@ export function stagedProviderLabel(state: ProviderActionsContext): string {
 export function hasRemoteProviderCredentials(
   state: ProviderActionsContext,
 ): boolean {
+  const oauthCredential: OAuthAccessToken =
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? oauthAccessToken(state.oauthFileDraft.config)
+      : { kind: OAuthAccessTokenKind.Missing }
+  const folderHandle: LocalFolderHandle =
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? localFolderHandle(state.localFolderDraft.config)
+      : { kind: LocalFolderHandleKind.Unselected }
   return hasRemoteCredentials(
     state.storageMode,
     state.githubPat,
-    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? state.oauthFileDraft.config.accessToken
+    oauthCredential.kind === OAuthAccessTokenKind.Available
+      ? oauthCredential.token
       : '',
-    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
-      ? state.localFolderDraft.config.handleId
+    folderHandle.kind === LocalFolderHandleKind.Selected
+      ? folderHandle.handleId
       : '',
   )
 }
@@ -475,12 +499,32 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   state.storageMode = syncProvider.type
   state.githubPat = syncProvider.githubPat ?? ''
   if (syncProvider.type === 'oauth-file') {
-    state.configureOauthFile(syncProvider.oauthFile)
+    const oauthConfiguration = oauthProviderConfiguration(syncProvider)
+    if (oauthConfiguration.kind === OAuthProviderConfigurationKind.Configured) {
+      state.configureOauthFile(oauthConfiguration.config)
+    } else {
+      state.clearOauthFile()
+    }
     state.clearLocalFolder()
+    const remoteFileName: OAuthFileName =
+      oauthConfiguration.kind === OAuthProviderConfigurationKind.Configured
+        ? oauthFileName(oauthConfiguration.config)
+        : { kind: OAuthFileNameKind.Unresolved }
     state.githubRepo =
-      syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+      remoteFileName.kind === OAuthFileNameKind.Resolved
+        ? remoteFileName.fileName
+        : DEFAULT_DRIVE_BACKUP_NAME
   } else if (syncProvider.type === 'local-folder') {
-    state.configureLocalFolder(syncProvider.localFolder)
+    const localFolderConfiguration =
+      localFolderProviderConfiguration(syncProvider)
+    if (
+      localFolderConfiguration.kind ===
+      LocalFolderProviderConfigurationKind.Configured
+    ) {
+      state.configureLocalFolder(localFolderConfiguration.config)
+    } else {
+      state.clearLocalFolder()
+    }
     state.githubRepo = DEFAULT_GITHUB_REPO
     state.clearOauthFile()
   } else {
