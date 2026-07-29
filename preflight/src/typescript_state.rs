@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -258,8 +259,16 @@ fn typescript_code_raw_string_discriminant_lines(
     let Some(tree) = parser.parse(source, None) else {
         return Ok(Vec::new());
     };
+    let mut enum_values = HashSet::new();
+    collect_enum_string_values(tree.root_node(), source, &mut enum_values);
     let mut lines = Vec::new();
-    collect_raw_string_discriminant_nodes(tree.root_node(), source, first_line, &mut lines);
+    collect_raw_string_discriminant_nodes(
+        tree.root_node(),
+        source,
+        first_line,
+        &enum_values,
+        &mut lines,
+    );
     lines.sort_unstable();
     lines.dedup();
     Ok(lines)
@@ -269,6 +278,7 @@ fn collect_raw_string_discriminant_nodes(
     node: tree_sitter::Node<'_>,
     source: &str,
     first_line: usize,
+    enum_values: &HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
     const DISCRIMINANT_NAMES: [&str; 8] = [
@@ -310,7 +320,9 @@ fn collect_raw_string_discriminant_nodes(
             .map(str::trim);
         let value = node.child_by_field_name("value");
         if name.is_some_and(|value| DISCRIMINANT_NAMES.contains(&value))
-            && value.is_some_and(is_string_literal_expression)
+            && value
+                .and_then(|literal| string_literal_value(literal, source))
+                .is_some_and(|literal| enum_values.contains(literal))
         {
             lines.push(first_line + node.start_position().row);
             return;
@@ -329,8 +341,34 @@ fn collect_raw_string_discriminant_nodes(
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_raw_string_discriminant_nodes(child, source, first_line, lines);
+        collect_raw_string_discriminant_nodes(child, source, first_line, enum_values, lines);
     }
+}
+
+fn collect_enum_string_values(
+    node: tree_sitter::Node<'_>,
+    source: &str,
+    values: &mut HashSet<String>,
+) {
+    if node.kind() == "enum_assignment"
+        && let Some(value) = node.child_by_field_name("value")
+        && let Some(literal) = string_literal_value(value, source)
+    {
+        values.insert(literal.to_owned());
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_enum_string_values(child, source, values);
+    }
+}
+
+fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Option<&'a str> {
+    if !is_string_literal_expression(node) {
+        return None;
+    }
+    node.utf8_text(source.as_bytes())
+        .ok()
+        .and_then(|text| text.get(1..text.len().saturating_sub(1)))
 }
 
 fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
