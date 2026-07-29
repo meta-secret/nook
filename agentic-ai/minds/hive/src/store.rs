@@ -139,6 +139,39 @@ mod tests {
             }
             false
         }
+
+        fn rearm_obsolete(tasks: &mut BTreeMap<String, TestTask>, task_id: &TaskId) -> bool {
+            let Some(task) = tasks.get(task_id.as_str()) else {
+                return false;
+            };
+            if task.status != "COMPLETED" || !task.obsolete {
+                return false;
+            }
+            let dependencies = task.definition.dependencies.clone();
+            for dependency in &dependencies {
+                Self::rearm_obsolete(tasks, dependency);
+            }
+            let status = if dependencies.iter().any(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "FAILED")
+            }) {
+                "FAILED"
+            } else if dependencies.iter().all(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "COMPLETED")
+            }) {
+                "READY"
+            } else {
+                "BLOCKED"
+            };
+            let task = tasks.get_mut(task_id.as_str()).expect("obsolete task");
+            task.status = status;
+            task.obsolete = false;
+            task.attempt_count = 0;
+            true
+        }
     }
 
     #[async_trait]
@@ -153,18 +186,31 @@ mod tests {
 
         async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
             task.validate()?;
-            let tasks = self.tasks.lock().expect("store lock");
+            let mut tasks = self.tasks.lock().expect("store lock");
+            for dependency in &task.dependencies {
+                Self::rearm_obsolete(&mut tasks, dependency);
+            }
+            let failed = task.dependencies.iter().any(|dependency| {
+                tasks
+                    .get(dependency.as_str())
+                    .is_some_and(|dependency| dependency.status == "FAILED")
+            });
             let ready = task.dependencies.iter().all(|dependency| {
                 tasks
                     .get(dependency.as_str())
                     .is_some_and(|dependency| dependency.status == "COMPLETED")
             });
-            drop(tasks);
-            self.tasks.lock().expect("store lock").insert(
+            tasks.insert(
                 task.id.as_str().to_owned(),
                 TestTask {
                     definition: task.clone(),
-                    status: if ready { "READY" } else { "BLOCKED" },
+                    status: if failed {
+                        "FAILED"
+                    } else if ready {
+                        "READY"
+                    } else {
+                        "BLOCKED"
+                    },
                     obsolete: false,
                     attempt_count: 0,
                     lease_token: None,
@@ -502,10 +548,7 @@ mod tests {
                 .get(blocker.id.as_str())
                 .is_some_and(|existing| existing.status == "COMPLETED" && existing.obsolete);
             if blocker_was_obsolete {
-                let existing = tasks.get_mut(blocker.id.as_str()).expect("blocker");
-                existing.status = "READY";
-                existing.obsolete = false;
-                existing.attempt_count = 0;
+                Self::rearm_obsolete(&mut tasks, &blocker.id);
             } else if !tasks.contains_key(blocker.id.as_str()) {
                 tasks.insert(
                     blocker.id.as_str().to_owned(),
@@ -522,11 +565,14 @@ mod tests {
             let blocker_completed = tasks
                 .get(blocker.id.as_str())
                 .is_some_and(|stored| stored.status == "COMPLETED");
+            let blocker_failed = tasks
+                .get(blocker.id.as_str())
+                .is_some_and(|stored| stored.status == "FAILED");
             let task = tasks.get_mut(claimed.id.as_str()).expect("task");
-            task.status = if blocker_was_obsolete {
-                "BLOCKED"
-            } else if blocker_completed {
+            task.status = if blocker_completed {
                 "READY"
+            } else if blocker_failed {
+                "FAILED"
             } else {
                 "BLOCKED"
             };
@@ -583,6 +629,44 @@ mod tests {
         let first = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(first.id, dependency.id);
         assert!(store.claim(&agent, 300).await?.is_idle());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn direct_dependency_rearms_an_obsolete_subtree() -> anyhow::Result<()> {
+        let store = MemoryStore::default();
+        let child = task("obsolete-child", Vec::new());
+        let parent = task("obsolete-parent", vec![child.id.clone()]);
+        store.enqueue(&child).await?;
+        store.enqueue(&parent).await?;
+        {
+            let mut tasks = store.tasks.lock().expect("store lock");
+            for retired in [&child.id, &parent.id] {
+                let task = tasks.get_mut(retired.as_str()).expect("retired task");
+                task.status = "COMPLETED";
+                task.obsolete = true;
+            }
+        }
+        store
+            .enqueue(&task("future", vec![parent.id.clone()]))
+            .await?;
+        let agent = AgentId::new("agent")?;
+
+        let rearmed_child = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(rearmed_child.id, child.id);
+        assert!(
+            store
+                .complete(
+                    &rearmed_child,
+                    &agent,
+                    false,
+                    "child repaired",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+        let rearmed_parent = store.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(rearmed_parent.id, parent.id);
         Ok(())
     }
 

@@ -251,6 +251,7 @@ impl<S: TaskStore> Worker<S> {
                             result.changed_files().is_empty(),
                             "obsolete blocker retirement cannot report changed files"
                         );
+                        verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
                     }
                     if task.kind == "main-repair" {
                         verify_main_repair_delivery(
@@ -964,6 +965,32 @@ fn repair_branch_name(task_id: &str) -> String {
     format!("codex/hive-{}", slug.trim_matches('-'))
 }
 
+async fn verify_obsolete_owner_deliveries(
+    repository: &Path,
+    owning_repairs: &[crate::model::TaskId],
+) -> anyhow::Result<()> {
+    for (owner, branch) in obsolete_owner_delivery_targets(owning_repairs) {
+        verify_main_repair_delivery(repository, &branch, owner.as_str())
+            .await
+            .with_context(|| {
+                format!(
+                    "obsolete blocker retirement requires completed delivery for owning repair \
+                     {owner}"
+                )
+            })?;
+    }
+    Ok(())
+}
+
+fn obsolete_owner_delivery_targets(
+    owning_repairs: &[crate::model::TaskId],
+) -> Vec<(crate::model::TaskId, String)> {
+    owning_repairs
+        .iter()
+        .map(|owner| (owner.clone(), repair_branch_name(owner.as_str())))
+        .collect()
+}
+
 fn bounded(value: &str) -> String {
     if value.len() <= MAX_PERSISTED_RESULT_BYTES {
         return value.to_owned();
@@ -992,8 +1019,8 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        establish_worker_lifecycle, persistable_patch, prepare_workspace, task_prompt,
-        validate_dependency_artifacts,
+        establish_worker_lifecycle, obsolete_owner_delivery_targets, persistable_patch,
+        prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -1061,6 +1088,12 @@ mod tests {
         assert!(prompt.contains("Never extend an obsolete blocker chain"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
+        let targets = obsolete_owner_delivery_targets(&[
+            task.owning_repairs[0].clone(),
+            TaskId::new("main-failure-def-run-43-attempt-1")?,
+        ]);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
         Ok(())
     }
 

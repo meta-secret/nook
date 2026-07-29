@@ -9,6 +9,9 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
 
+#[path = "neo4j_store/schema.rs"]
+mod schema;
+
 fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     EnqueueTask {
         id: TaskId::new(id).expect("valid task id"),
@@ -774,6 +777,97 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     )
     .await?;
 
+    graph
+        .run(
+            query(
+                "MATCH (blocker:Task {id: $blocker_id})
+                 SET blocker.status = 'COMPLETED', blocker.obsolete = true",
+            )
+            .param("blocker_id", shared_blocker.id.as_str()),
+        )
+        .await?;
+    let direct_future = task(
+        format!("direct-future-owner-{suffix}"),
+        vec![shared_blocker.id.clone()],
+    );
+    store.enqueue(&direct_future).await?;
+    let direct_blocker_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(
+        direct_blocker_claim.id, shared_blocker.id,
+        "direct enqueue must rearm an obsolete dependency"
+    );
+    complete_without_artifact(
+        &store,
+        &direct_blocker_claim,
+        &agent_a,
+        false,
+        "direct prerequisite repaired",
+    )
+    .await?;
+    let direct_future_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(direct_future_claim.id, direct_future.id);
+    complete_without_artifact(
+        &store,
+        &direct_future_claim,
+        &agent_a,
+        false,
+        "direct future task complete",
+    )
+    .await?;
+
+    graph
+        .run(
+            query(
+                "MATCH (blocker:Task {id: $blocker_id})
+                 SET blocker.status = 'COMPLETED', blocker.obsolete = true
+                 CREATE (failed:Task {
+                   id: $failed_id,
+                   status: 'FAILED',
+                   obsolete: false,
+                   source_commit: blocker.source_commit
+                 })
+                 MERGE (blocker)-[:DEPENDS_ON]->(failed)",
+            )
+            .param("blocker_id", shared_blocker.id.as_str())
+            .param("failed_id", format!("failed-rearmed-child-{suffix}")),
+        )
+        .await?;
+    let nested_future = task(format!("nested-future-owner-{suffix}"), Vec::new());
+    store.enqueue(&nested_future).await?;
+    let nested_future_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(nested_future_claim.id, nested_future.id);
+    assert!(
+        store
+            .block(
+                &nested_future_claim,
+                &agent_a,
+                &shared_blocker,
+                "nested retired prerequisite became relevant again",
+            )
+            .await?
+    );
+    let mut nested_rows = graph
+        .execute(
+            query(
+                "MATCH (task:Task)
+                 WHERE task.id IN [$blocker_id, $future_id]
+                 RETURN task.id AS id, task.status AS status",
+            )
+            .param("blocker_id", shared_blocker.id.as_str())
+            .param("future_id", nested_future.id.as_str()),
+        )
+        .await?;
+    let mut nested_status_count = 0;
+    while let Some(row) = nested_rows.next().await? {
+        nested_status_count += 1;
+        assert_eq!(
+            row.get::<String>("status")?,
+            "FAILED",
+            "rearmed blocker state must reflect its failed dependency"
+        );
+    }
+    assert_eq!(nested_status_count, 2);
+
     let mut mixed_blocker = task(format!("mixed-owner-blocker-{suffix}"), Vec::new());
     mixed_blocker.kind = "blocker".to_owned();
     let mut mixed_repair = task(
@@ -1375,108 +1469,6 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await?
     );
 
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean isolated integration database");
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 1})
-             CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
-        ))
-        .await
-        .expect("create schema-1 fixture");
-    assert!(
-        store
-            .migrate()
-            .await
-            .expect_err("schema-1 legacy tasks must block schema 2")
-            .to_string()
-            .contains("without source_commit")
-    );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean schema migration fixture");
-    graph
-        .run(query(
-            "CREATE (:HiveSchemaMigration {version: 3})
-             CREATE (:Task {
-               id: 'schema-3-task',
-               status: 'FAILED',
-               manual_retry_used: true,
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (:Task {
-               id: 'schema-4-rollback-task',
-               status: 'FAILED',
-               manual_retry_used: true,
-               last_retry_release:
-                 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (activity_task:Task {
-               id: 'schema-6-activity-task',
-               status: 'RUNNING',
-               source_commit: '0123456789abcdef0123456789abcdef01234567'
-             })
-             CREATE (activity:TaskActivity {
-               id: 'schema-6-activity',
-               created_at: 123456
-             })
-             CREATE (activity)-[:FOR_TASK]->(activity_task)",
-        ))
-        .await
-        .expect("create schema-3 fixture");
-    store.migrate().await?;
-    let mut schema_seven_rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-3-task'})
-             MATCH (activity_task:Task {id: 'schema-6-activity-task'})
-             MATCH (migration:HiveSchemaMigration {version: 7})
-             RETURN task.last_retry_release AS last_retry_release,
-                    task.manual_retry_used IS NULL AS removed_legacy_marker,
-                    activity_task.latest_activity_at AS latest_activity_at,
-                    migration.version AS version",
-        ))
-        .await?;
-    let schema_seven = schema_seven_rows
-        .next()
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("schema-7 migration row was missing"))?;
-    assert_eq!(
-        schema_seven
-            .get::<String>("last_retry_release")
-            .expect("initialized release marker"),
-        ""
-    );
-    assert!(
-        schema_seven
-            .get::<bool>("removed_legacy_marker")
-            .expect("removed legacy marker")
-    );
-    assert_eq!(schema_seven.get::<i64>("latest_activity_at")?, 123456);
-    assert_eq!(schema_seven.get::<i64>("version")?, 7);
-    let mut rollback_marker_rows = graph
-        .execute(query(
-            "MATCH (task:Task {id: 'schema-4-rollback-task'})
-             RETURN task.last_retry_release AS last_retry_release",
-        ))
-        .await
-        .expect("read retained schema-4 rollback marker");
-    assert_eq!(
-        rollback_marker_rows
-            .next()
-            .await
-            .expect("read schema-4 rollback row")
-            .expect("schema-4 rollback row")
-            .get::<String>("last_retry_release")
-            .expect("retained schema-4 rollback marker"),
-        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean schema-4 migration fixture");
+    schema::verify_migrations(&store, &graph).await?;
     Ok(())
 }
