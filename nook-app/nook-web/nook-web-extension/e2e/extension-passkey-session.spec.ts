@@ -617,10 +617,12 @@ test('reuses the offscreen session after the service worker restarts', async ({
       (target) =>
         target.type === 'service_worker' && target.url === worker.url(),
     )
-    expect(workerTarget).toBeDefined()
+    if (!workerTarget) {
+      throw new Error('Expected the active extension service worker target')
+    }
     await expect(
       cdp.send('Target.closeTarget', {
-        targetId: workerTarget!.targetId,
+        targetId: workerTarget.targetId,
       }),
     ).resolves.toEqual({ success: true })
 

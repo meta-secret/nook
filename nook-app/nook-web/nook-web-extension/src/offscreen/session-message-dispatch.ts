@@ -3,8 +3,8 @@ import {
   stageProviderCredentials,
 } from '../lib/provider-credential-staging'
 import {
+  SessionOperationPriority,
   SessionOperationQueue,
-  type SessionOperationPriority,
 } from '../lib/session-operation-queue'
 
 const INTERACTIVE_QUEUE_TIMEOUT_MS = 5_000
@@ -176,7 +176,7 @@ export class ExtensionSessionMessageDispatcher {
         }
       },
       {
-        priority: 'interactive',
+        priority: SessionOperationPriority.Interactive,
         expiresAt: Date.now() + INTERACTIVE_QUEUE_TIMEOUT_MS,
         onExpire: clearPending,
       },
@@ -200,7 +200,7 @@ export class ExtensionSessionMessageDispatcher {
               providers: stagedProviders ?? payload.providers ?? [],
             },
           }),
-        { priority: 'interactive' },
+        { priority: SessionOperationPriority.Interactive },
       )
     }
     payload.providers = []
@@ -232,7 +232,7 @@ export class ExtensionSessionMessageDispatcher {
         }
       },
       {
-        priority: 'interactive',
+        priority: SessionOperationPriority.Interactive,
         onExpire: clearPending,
       },
     )

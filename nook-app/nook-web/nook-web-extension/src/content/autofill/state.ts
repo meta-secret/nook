@@ -99,7 +99,7 @@ type PendingSaveWatch = {
 }
 
 class ScanState {
-  private scheduleState: ScanSchedule = { kind: 'idle' }
+  private scheduleState: ScanSchedule = { kind: ScanScheduleKind.Idle }
   sequence = 0
   schedule: () => void = () => {}
   get pendingTimer(): number | void {
@@ -115,14 +115,18 @@ class ScanState {
     this.scheduleState = { kind: ScanScheduleKind.Scheduled, timer: value }
   }
   clearPendingTimer(): void {
-    this.scheduleState = { kind: 'idle' }
+    this.scheduleState = { kind: ScanScheduleKind.Idle }
   }
 }
 
 class WidgetState {
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
-  private workflowKeyState: WidgetWorkflowKey = { kind: 'unassigned' }
-  private workflowRootState: WidgetWorkflowRoot = { kind: 'unassigned' }
+  private workflowKeyState: WidgetWorkflowKey = {
+    kind: WidgetWorkflowKeyKind.Unassigned,
+  }
+  private workflowRootState: WidgetWorkflowRoot = {
+    kind: WidgetWorkflowRootKind.Unassigned,
+  }
   private placementState: WidgetPlacement = {
     kind: WidgetPlacementKind.Unpositioned,
   }
@@ -138,13 +142,16 @@ class WidgetState {
     this.hostState = { kind: WidgetHostKind.Attached, element: value }
   }
   get renderedWorkflowKey(): string | void {
-    if (this.workflowKeyState.kind === 'assigned') {
+    if (this.workflowKeyState.kind === WidgetWorkflowKeyKind.Assigned) {
       return this.workflowKeyState.key
     }
     return
   }
   set renderedWorkflowKey(value: string) {
-    this.workflowKeyState = { kind: 'assigned', key: value }
+    this.workflowKeyState = {
+      kind: WidgetWorkflowKeyKind.Assigned,
+      key: value,
+    }
   }
   get renderedWorkflowRoot(): WidgetWorkflowRoot {
     return this.workflowRootState
@@ -166,14 +173,14 @@ class WidgetState {
   }
   clearRenderedWidget(): void {
     this.hostState = { kind: WidgetHostKind.Detached }
-    this.workflowKeyState = { kind: 'unassigned' }
-    this.workflowRootState = { kind: 'unassigned' }
+    this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
+    this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }
   }
 }
 
 class SaveOfferState {
   private offerState: SaveOfferDisplay = { kind: SaveOfferDisplayKind.Hidden }
-  private watchState: SavePageWatch = { kind: 'idle' }
+  private watchState: SavePageWatch = { kind: SavePageWatchKind.Idle }
   confirmationActive = false
   dismissedOfferIds = new Set<string>()
   get activeOffer(): WebsiteLoginSaveOfferView | void {
@@ -196,34 +203,40 @@ class SaveOfferState {
     this.offerState = { kind: SaveOfferDisplayKind.Hidden }
   }
   clearPendingWatch(): void {
-    this.watchState = { kind: 'idle' }
+    this.watchState = { kind: SavePageWatchKind.Idle }
   }
 }
 
 class PickerState {
-  private authenticatorState: AuthenticatorPicker = { kind: 'closed' }
-  private loginState: LoginPicker = { kind: 'closed' }
+  private authenticatorState: AuthenticatorPicker = {
+    kind: AuthenticatorPickerKind.Closed,
+  }
+  private loginState: LoginPicker = { kind: LoginPickerKind.Closed }
   get pendingAuthenticator(): PendingAuthenticatorPicker | void {
-    if (this.authenticatorState.kind === 'open') {
+    if (this.authenticatorState.kind === AuthenticatorPickerKind.Open) {
       return this.authenticatorState.request
     }
     return
   }
   set pendingAuthenticator(value: PendingAuthenticatorPicker) {
-    this.authenticatorState = { kind: 'open', request: value }
+    this.authenticatorState = {
+      kind: AuthenticatorPickerKind.Open,
+      request: value,
+    }
   }
   get pendingLogin(): PendingLoginPicker | void {
-    if (this.loginState.kind === 'open') return this.loginState.request
+    if (this.loginState.kind === LoginPickerKind.Open)
+      return this.loginState.request
     return
   }
   set pendingLogin(value: PendingLoginPicker) {
-    this.loginState = { kind: 'open', request: value }
+    this.loginState = { kind: LoginPickerKind.Open, request: value }
   }
   clearPendingAuthenticator(): void {
-    this.authenticatorState = { kind: 'closed' }
+    this.authenticatorState = { kind: AuthenticatorPickerKind.Closed }
   }
   clearPendingLogin(): void {
-    this.loginState = { kind: 'closed' }
+    this.loginState = { kind: LoginPickerKind.Closed }
   }
 }
 

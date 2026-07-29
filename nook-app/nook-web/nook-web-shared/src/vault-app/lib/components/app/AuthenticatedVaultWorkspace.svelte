@@ -5,6 +5,7 @@
     type ExtensionSetupOffer,
   } from '$lib/app-lifecycle-state'
   import { SUPPORTS_EXTENSION } from '$lib/app-kind'
+  import { ExtensionSetupStatus } from '$lib/extension-install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
@@ -107,7 +108,7 @@
         ? 'space-y-4'
         : 'flex min-h-0 flex-1 flex-col gap-4'}"
     >
-      {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible && extensionSetupState.setup.status !== 'paired'}
+      {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible && extensionSetupState.setup.status !== ExtensionSetupStatus.Paired}
         <ExtensionInstallSetupCard
           {vault}
           state={extensionSetupState.setup}
@@ -233,8 +234,7 @@
             <SecretVault
               {vault}
               isSaving={vault.isSaving}
-              editsBlocked={vault.editsBlocked}
-              editBlockMessage={vault.editBlockMessage}
+              editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
               onAddSecret={(id, type, data) =>

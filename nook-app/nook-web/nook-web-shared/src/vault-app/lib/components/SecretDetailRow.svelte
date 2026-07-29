@@ -17,26 +17,28 @@
     Check,
     ChevronDown,
   } from '@lucide/svelte'
-  import type {
-    AuthenticatorCodeView,
-    NookSecretListItem,
-    NookSecretRecord,
-  } from '$lib/nook'
+  import type { NookSecretListItem } from '$lib/nook'
   import { SecretType } from '$lib/nook'
-  import type { VaultState } from '$lib/vault.svelte'
+  import { VaultEditDecision } from '$app-wasm'
+  import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
+  import AuthenticatorSecretDetail from './AuthenticatorSecretDetail.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
   import SeedPhraseGrid from './SeedPhraseGrid.svelte'
   import {
+    AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
+    SecretRevealKind,
+    type AuthenticatorCodePresentation,
     type ClipboardNotice,
+    type SecretReveal,
   } from './secret-vault-state'
 
   let {
     item,
     index,
     expanded,
-    decrypted,
-    authenticatorCode,
+    reveal = { kind: SecretRevealKind.Hidden },
+    authenticatorCode = { kind: AuthenticatorCodePresentationKind.Hidden },
     copiedNotice = { kind: ClipboardNoticeKind.Hidden },
     onToggleExpand,
     onToggleReveal,
@@ -45,15 +47,14 @@
     onCopyToClipboard,
     onCopySecret,
     vault,
-    editDisabled = false,
-    editDisabledReason,
+    editRestriction = { decision: VaultEditDecision.Allowed },
     titleAsHeader = false,
   }: {
     item: NookSecretListItem
     index: number
     expanded: boolean
-    decrypted: NookSecretRecord | void
-    authenticatorCode?: AuthenticatorCodeView | void
+    reveal?: SecretReveal
+    authenticatorCode?: AuthenticatorCodePresentation
     copiedNotice?: ClipboardNotice
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => Promise<void>
@@ -66,8 +67,7 @@
     ) => Promise<void>
     onCopySecret: (id: string) => Promise<void>
     vault: VaultState
-    editDisabled?: boolean
-    editDisabledReason?: string | void
+    editRestriction?: VaultEditRestriction
     /** Use the title row as the card header (no duplicate group header). */
     titleAsHeader?: boolean
   } = $props()
@@ -156,8 +156,13 @@
 
   const cardExpiration = $derived.by(() => {
     const month =
-      decrypted?.expirationMonth?.trim() || item.expirationMonth.trim()
-    const year = decrypted?.expirationYear?.trim() || item.expirationYear.trim()
+      reveal.kind === SecretRevealKind.Revealed
+        ? reveal.record.expirationMonth.trim()
+        : item.expirationMonth.trim()
+    const year =
+      reveal.kind === SecretRevealKind.Revealed
+        ? reveal.record.expirationYear.trim()
+        : item.expirationYear.trim()
     if (!month && !year) return ''
     if (month && year) return `${month.padStart(2, '0')}/${year}`
     return month || year
@@ -170,19 +175,24 @@
   }
 
   function downloadFileAttachment() {
-    if (!decrypted || item.type !== SecretType.FileAttachment) return
-    const binary = atob(decrypted.contentBase64)
+    if (
+      reveal.kind !== SecretRevealKind.Revealed ||
+      item.type !== SecretType.FileAttachment
+    ) {
+      return
+    }
+    const binary = atob(reveal.record.contentBase64)
     const bytes = new Uint8Array(binary.length)
     for (let index = 0; index < binary.length; index += 1) {
       bytes[index] = binary.charCodeAt(index)
     }
     const blob = new Blob([bytes], {
-      type: decrypted.mimeType || 'application/octet-stream',
+      type: reveal.record.mimeType || 'application/octet-stream',
     })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = decrypted.fileName || item.fileName || 'secret-file'
+    link.download = reveal.record.fileName || item.fileName || 'secret-file'
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -294,24 +304,26 @@
           <button
             type="button"
             onclick={() => void onToggleReveal(item.id)}
-            aria-label={decrypted
+            aria-label={reveal.kind === SecretRevealKind.Revealed
               ? vault.t('vault.hide_value')
               : vault.t('vault.show_value')}
-            aria-pressed={Boolean(decrypted)}
+            aria-pressed={reveal.kind === SecretRevealKind.Revealed}
             data-testid="reveal-secret-btn"
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
           >
-            {#if decrypted}<EyeOff class="size-3.5" />{:else}<Eye
+            {#if reveal.kind === SecretRevealKind.Revealed}<EyeOff
                 class="size-3.5"
-              />{/if}
+              />{:else}<Eye class="size-3.5" />{/if}
           </button>
           <button
             type="button"
             onclick={() => void onEditItem(item)}
             aria-label={vault.t('common.edit')}
             data-testid="edit-secret-btn"
-            disabled={editDisabled}
-            {...editDisabled ? { title: editDisabledReason } : {}}
+            disabled={editRestriction.decision !== VaultEditDecision.Allowed}
+            {...editRestriction.decision !== VaultEditDecision.Allowed
+              ? { title: editRestriction.reason }
+              : {}}
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <Pencil class="size-3.5" />
@@ -396,7 +408,9 @@
                 class="truncate font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {decrypted ? decrypted.password : '••••••••••••••••'}
+                {reveal.kind === SecretRevealKind.Revealed
+                  ? reveal.record.password
+                  : '••••••••••••••••'}
               </code>
               <button
                 type="button"
@@ -411,7 +425,7 @@
             </div>
           </div>
 
-          {#if decrypted?.notes}
+          {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
                 >{vault.t('vault.fields.notes')}</span
@@ -419,7 +433,7 @@
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
               >
-                {decrypted.notes}
+                {reveal.record.notes}
               </div>
             </div>
           {/if}
@@ -461,7 +475,9 @@
                 class="break-all font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {decrypted ? decrypted.primaryCredential : '••••••••••••••••'}
+                {reveal.kind === SecretRevealKind.Revealed
+                  ? reveal.record.primaryCredential
+                  : '••••••••••••••••'}
               </code>
               <button
                 type="button"
@@ -546,165 +562,23 @@
             </div>
             <SeedPhraseGrid
               {vault}
-              value={decrypted?.seed ?? ''}
+              value={reveal.kind === SecretRevealKind.Revealed
+                ? reveal.record.seed
+                : ''}
               readonly
-              revealed={Boolean(decrypted)}
+              revealed={reveal.kind === SecretRevealKind.Revealed}
             />
           </div>
         {:else if item.type === SecretType.Authenticator}
-          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.current_code')}</span
-            >
-            <div
-              class="flex items-center justify-between gap-2 min-w-0 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2"
-            >
-              <div class="min-w-0">
-                <code
-                  class="font-mono text-xl font-semibold tracking-[0.2em] text-foreground"
-                  data-testid="authenticator-current-code"
-                  data-period={authenticatorCode?.period}
-                  >{authenticatorCode?.code ?? '••••••'}</code
-                >
-                {#if authenticatorCode}
-                  <p class="mt-0.5 text-[10px] text-muted-foreground">
-                    {vault.t('vault.fields.code_expires_in', {
-                      count: String(authenticatorCode.secondsRemaining),
-                    })}
-                  </p>
-                {/if}
-              </div>
-              {#if authenticatorCode}
-                <button
-                  type="button"
-                  onclick={() =>
-                    void onCopyToClipboard(
-                      authenticatorCode.code,
-                      item.id,
-                      'current-code',
-                    )}
-                  aria-label={vault.t('vault.copy_current_code')}
-                  class="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {#if isCopied(`${item.id}-current-code`)}<Check
-                      class="size-3.5 text-emerald-500"
-                    />{:else}<Copy class="size-3.5" />{/if}
-                </button>
-              {/if}
-            </div>
-          </div>
-
-          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.account')}</span
-            >
-            <div
-              class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
-            >
-              <span class="truncate text-foreground"
-                >{item.account || vault.t('common.none')}</span
-              >
-            </div>
-          </div>
-
-          <div
-            class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs"
-            data-testid="authenticator-website"
-          >
-            <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.website_label')}</span
-            >
-            <div
-              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
-            >
-              <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
-              >
-              {#if item.websiteUrl}
-                <button
-                  type="button"
-                  onclick={() =>
-                    void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label={vault.t('vault.copy_website_url')}
-                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
-                >
-                  {#if isCopied(`${item.id}-website`)}<Check
-                      class="size-3 text-emerald-500"
-                    />{:else}<Copy class="size-3" />{/if}
-                </button>
-              {/if}
-            </div>
-          </div>
-
-          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.authenticator_secret')}</span
-            >
-            <div
-              class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
-            >
-              <code
-                class="break-all font-mono text-foreground"
-                data-testid="revealed-secret"
-                >{decrypted ? decrypted.totpSecret : '••••••••••••••••'}</code
-              >
-              <button
-                type="button"
-                onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t('vault.copy_authenticator_secret')}
-                class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {#if isCopied(`${item.id}-secret`)}<Check
-                    class="size-3 text-emerald-500"
-                  />{:else}<Copy class="size-3" />{/if}
-              </button>
-            </div>
-          </div>
-
-          {#if item.backupCodeCount > 0}
-            <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
-              <span class="pt-1 text-muted-foreground/70 font-medium"
-                >{vault.t('vault.fields.backup_codes')}</span
-              >
-              <div
-                class="space-y-1 rounded-md border border-border/20 bg-muted/20 px-2 py-1.5"
-                data-testid="authenticator-backup-codes"
-              >
-                {#if decrypted}
-                  {#if decrypted.backupCodes.length > 0}
-                    {#each decrypted.backupCodes as backupCode, backupIndex (`${backupCode}-${backupIndex}`)}
-                      <div class="flex items-center justify-between gap-2">
-                        <code class="break-all font-mono text-foreground"
-                          >{backupCode}</code
-                        >
-                        <button
-                          type="button"
-                          onclick={() =>
-                            void onCopyToClipboard(
-                              backupCode,
-                              item.id,
-                              `backup-${backupIndex}`,
-                            )}
-                          aria-label={vault.t('vault.copy_backup_code')}
-                          class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          {#if isCopied(`${item.id}-backup-${backupIndex}`)}<Check
-                              class="size-3 text-emerald-500"
-                            />{:else}<Copy class="size-3" />{/if}
-                        </button>
-                      </div>
-                    {/each}
-                  {:else}
-                    <span class="text-muted-foreground"
-                      >{vault.t('common.none')}</span
-                    >
-                  {/if}
-                {:else}
-                  <span class="font-mono text-foreground">••••••••</span>
-                {/if}
-              </div>
-            </div>
-          {/if}
+          <AuthenticatorSecretDetail
+            {item}
+            {reveal}
+            {authenticatorCode}
+            {isCopied}
+            {onCopyToClipboard}
+            {onCopySecret}
+            {vault}
+          />
         {:else if item.type === SecretType.Passkey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
@@ -803,18 +677,18 @@
                 class="truncate font-mono text-foreground"
                 data-testid="credit-card-number-value"
               >
-                {decrypted
-                  ? decrypted.cardNumber
+                {reveal.kind === SecretRevealKind.Revealed
+                  ? reveal.record.cardNumber
                   : item.last4.trim()
                     ? `•••• ${item.last4}`
                     : '••••••••••••••••'}
               </code>
-              {#if decrypted?.cardNumber}
+              {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.cardNumber}
                 <button
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(
-                      decrypted.cardNumber,
+                      reveal.record.cardNumber,
                       item.id,
                       'card-number',
                     )}
@@ -870,13 +744,15 @@
                 class="truncate font-mono text-foreground"
                 data-testid="credit-card-cvv-value"
               >
-                {decrypted ? decrypted.cvv || vault.t('common.none') : '•••'}
+                {reveal.kind === SecretRevealKind.Revealed
+                  ? reveal.record.cvv || vault.t('common.none')
+                  : '•••'}
               </code>
-              {#if decrypted?.cvv}
+              {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.cvv}
                 <button
                   type="button"
                   onclick={() =>
-                    void onCopyToClipboard(decrypted.cvv, item.id, 'cvv')}
+                    void onCopyToClipboard(reveal.record.cvv, item.id, 'cvv')}
                   aria-label={vault.t('vault.copy_cvv')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
@@ -888,7 +764,7 @@
             </div>
           </div>
 
-          {#if decrypted?.notes}
+          {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
                 >{vault.t('vault.fields.notes')}</span
@@ -896,7 +772,7 @@
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
               >
-                {decrypted.notes}
+                {reveal.record.notes}
               </div>
             </div>
           {/if}
@@ -945,14 +821,14 @@
             <button
               type="button"
               data-testid="download-file-attachment-btn"
-              disabled={!decrypted}
+              disabled={reveal.kind !== SecretRevealKind.Revealed}
               onclick={downloadFileAttachment}
               class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download class="size-3.5" />
               {vault.t('vault.download_file')}
             </button>
-            {#if !decrypted}
+            {#if reveal.kind !== SecretRevealKind.Revealed}
               <p class="mt-1 text-[11px] text-muted-foreground">
                 {vault.t('vault.reveal_to_download')}
               </p>
@@ -966,12 +842,12 @@
             <div
               class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
             >
-              {#if decrypted}
+              {#if reveal.kind === SecretRevealKind.Revealed}
                 <div
                   class="min-w-0 flex-1 text-[11px] leading-relaxed text-foreground"
                   data-testid="revealed-secret"
                 >
-                  <MarkdownContent source={decrypted.note} />
+                  <MarkdownContent source={reveal.record.note} />
                 </div>
               {:else}
                 <span

@@ -11,6 +11,7 @@ import {
   DeviceProtectionStatus,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
+  VaultEditDecision,
   providerLabelById,
   resolveErrorMessage as wasmResolveErrorMessage,
   translateWithReplacements,
@@ -63,6 +64,16 @@ import type {
   ProviderSyncRevision,
 } from '$lib/vault/sync-operation-state'
 
+export type VaultEditRestriction =
+  | { decision: VaultEditDecision.Allowed }
+  | {
+      decision:
+        | VaultEditDecision.BlockedSecurityConflict
+        | VaultEditDecision.BlockedSyncConflict
+        | VaultEditDecision.BlockedByArchitecture
+      reason: string
+    }
+
 export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0
   secretPageRequestOffset = 0
@@ -88,14 +99,26 @@ export class VaultState extends VaultLifecycleState {
     return this.architectureSecretCreationAllowed
   }
 
-  get editBlockMessage(): string | void {
-    return this.clientPolicy.editBlockMessage(
+  get editRestriction(): VaultEditRestriction {
+    const decision = this.clientPolicy.editBlockReason(
+      this.securityConflicts.length,
+      this.syncBlocked,
+      this.architectureCanCreateSecret,
+    )
+    if (decision === VaultEditDecision.Allowed) {
+      return { decision }
+    }
+    const reason = this.clientPolicy.editBlockMessage(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
       this.translations,
       this.locale,
     )
+    if (!reason) {
+      throw new Error('Blocked vault edit decision requires a reason')
+    }
+    return { decision, reason }
   }
 
   get deviceProtectionReady(): boolean {

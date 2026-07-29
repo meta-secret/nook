@@ -17,6 +17,7 @@ import {
   type NookSecretPage,
   type NookVaultManager,
 } from '$app-wasm'
+import { VaultEditDecision } from '$app-wasm'
 import { syncLocalFolderProvider } from '$lib/vault/sync.svelte'
 import {
   isSentinelCeremonyRequiredError,
@@ -251,8 +252,10 @@ async function runPasswordManagerImport(
 ): Promise<NookImportResult> {
   const manager = state.manager
   if (!manager) throw new Error(state.t('errors.engine_unavailable'))
-  const editBlockMessage = state.editBlockMessage
-  if (editBlockMessage) throw new Error(editBlockMessage)
+  const editRestriction = state.editRestriction
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    throw new Error(editRestriction.reason)
+  }
   state.errorMsg = ''
   state.dismissSuccess()
   state.isSaving = true
@@ -282,9 +285,9 @@ async function runPasswordManagerImport(
 
 async function prepareSecretMutation(state: VaultState): Promise<boolean> {
   if (!state.manager) return false
-  const editBlockMessage = state.editBlockMessage
-  if (editBlockMessage) {
-    state.errorMsg = editBlockMessage
+  const editRestriction = state.editRestriction
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    state.errorMsg = editRestriction.reason
     return false
   }
   state.errorMsg = ''
@@ -418,9 +421,9 @@ export async function handleProtonPassImport(
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return
-  const editBlockMessage = state.editBlockMessage
-  if (editBlockMessage) {
-    state.errorMsg = editBlockMessage
+  const editRestriction = state.editRestriction
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    state.errorMsg = editRestriction.reason
     return
   }
   state.errorMsg = ''

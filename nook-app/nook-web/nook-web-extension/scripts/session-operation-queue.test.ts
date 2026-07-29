@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { SessionOperationQueue } from '../src/lib/session-operation-queue'
+import {
+  SessionOperationPriority,
+  SessionOperationQueue,
+} from '../src/lib/session-operation-queue'
 
 enum ReleaseGateKind {
   Waiting = 'waiting',
@@ -55,7 +58,7 @@ describe('SessionOperationQueue', () => {
       async () => {
         order.push('interactive')
       },
-      { priority: 'interactive' },
+      { priority: SessionOperationPriority.Interactive },
     )
 
     blocker.release()
@@ -69,30 +72,30 @@ describe('SessionOperationQueue', () => {
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
     let passwordResidency: PasswordResidency = {
-      kind: 'resident',
+      kind: PasswordResidencyKind.Resident,
       password: 'temporary-password',
     }
     const queued = queue.enqueue(
       async () => {
         throw new Error(
           `Unexpected password use: ${
-            passwordResidency.kind === 'resident'
+            passwordResidency.kind === PasswordResidencyKind.Resident
               ? passwordResidency.password
               : 'cleared'
           }`,
         )
       },
       {
-        priority: 'interactive',
+        priority: SessionOperationPriority.Interactive,
         expiresAt: Date.now() + 10,
         onExpire: () => {
-          passwordResidency = { kind: 'cleared' }
+          passwordResidency = { kind: PasswordResidencyKind.Cleared }
         },
       },
     )
 
     await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
-    expect(passwordResidency.kind).toBe('cleared')
+    expect(passwordResidency.kind).toBe(PasswordResidencyKind.Cleared)
     blocker.release()
     await first
   })
@@ -111,19 +114,19 @@ describe('SessionOperationQueue', () => {
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
     let secretResidency: SecretResidency = {
-      kind: 'resident',
+      kind: SecretResidencyKind.Resident,
       secret: 'temporary-secret',
     }
     const queued = queue.enqueue(async () => {}, {
       onExpire: () => {
-        secretResidency = { kind: 'cleared' }
+        secretResidency = { kind: SecretResidencyKind.Cleared }
       },
     })
 
     queue.close(new Error('session expired'))
 
     await expect(queued).rejects.toThrow('session expired')
-    expect(secretResidency.kind).toBe('cleared')
+    expect(secretResidency.kind).toBe(SecretResidencyKind.Cleared)
     await expect(queue.enqueue(async () => {})).rejects.toThrow(
       'session expired',
     )

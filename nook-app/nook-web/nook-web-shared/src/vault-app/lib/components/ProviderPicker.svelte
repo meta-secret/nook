@@ -28,7 +28,7 @@
     type: StorageProviderType,
     oauthPreset?: OAuthFilePreset,
   ): StorageProvider {
-    const base = {
+    const base: StorageProvider = {
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
       type,
       label: type,

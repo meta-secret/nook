@@ -27,7 +27,7 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let workflow = $state(LoginVaultWorkflow.Open)
+  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
 </script>
 
 <div class="space-y-5" data-testid="login-vault-picker">

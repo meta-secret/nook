@@ -272,7 +272,7 @@
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
-  {:else if (showCreateVault || sentinelInvitationRequest.trim()) && onCreateDeviceVault}
+  {:else if showCreateVault || sentinelInvitationRequest.trim()}
     <LoginCreateVaultChooser
       {vault}
       {appKind}

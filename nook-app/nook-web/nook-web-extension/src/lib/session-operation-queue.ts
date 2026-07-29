@@ -1,8 +1,9 @@
-export type SessionOperationPriority =
-  | 'expiry'
-  | 'interactive'
-  | 'normal'
-  | 'probe'
+export enum SessionOperationPriority {
+  Expiry = 'expiry',
+  Interactive = 'interactive',
+  Normal = 'normal',
+  Probe = 'probe',
+}
 
 type QueueOptions = {
   priority?: SessionOperationPriority
@@ -23,10 +24,10 @@ type QueueEntry<T> = {
 }
 
 const priorityOrder: Record<SessionOperationPriority, number> = {
-  expiry: 0,
-  interactive: 1,
-  normal: 2,
-  probe: 3,
+  [SessionOperationPriority.Expiry]: 0,
+  [SessionOperationPriority.Interactive]: 1,
+  [SessionOperationPriority.Normal]: 2,
+  [SessionOperationPriority.Probe]: 3,
 }
 
 const expiredError = () => new Error('EXTENSION_SESSION_REQUEST_EXPIRED')
@@ -72,7 +73,8 @@ export class SessionOperationQueue {
       }
       const entry: QueueEntry<T> = {
         sequence: this.sequence++,
-        priority: priorityOrder[options.priority ?? 'normal'],
+        priority:
+          priorityOrder[options.priority ?? SessionOperationPriority.Normal],
         operation,
         resolve,
         reject,

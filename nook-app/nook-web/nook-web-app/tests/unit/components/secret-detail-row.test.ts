@@ -7,6 +7,10 @@ import {
 } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
+import {
+  SecretRevealKind,
+  type SecretReveal,
+} from '$lib/components/secret-vault-state'
 
 const vault = {
   t(key: string): string {
@@ -31,12 +35,14 @@ const decryptedAuthenticator = {
   backupCodes: ['recovery-one', 'recovery-two'],
 } as unknown as NookSecretRecord
 
-function authenticatorProps(revealed?: NookSecretRecord) {
+function authenticatorProps(
+  reveal: SecretReveal = { kind: SecretRevealKind.Hidden },
+) {
   return {
     item: authenticatorItem,
     index: 0,
     expanded: true,
-    ...(revealed ? { decrypted: revealed } : {}),
+    reveal,
     onToggleExpand: vi.fn(),
     onToggleReveal: vi.fn(async () => {}),
     onEditItem: vi.fn(async () => {}),
@@ -89,7 +95,12 @@ describe('SecretDetailRow authenticator recovery codes', () => {
     ).toContain('••••••••')
     expect(view.queryByText('recovery-one')).not.toBeTruthy()
 
-    await view.rerender(authenticatorProps(decryptedAuthenticator))
+    await view.rerender(
+      authenticatorProps({
+        kind: SecretRevealKind.Revealed,
+        record: decryptedAuthenticator,
+      }),
+    )
 
     expect(view.getByText('recovery-one')).toBeTruthy()
     expect(view.getByText('recovery-two')).toBeTruthy()

@@ -1,16 +1,15 @@
 <script lang="ts">
-
   let {
     src,
     alt = 'Nook logo',
-    filter,
+    filter = '',
     class: className = '',
   }: {
     src: string
     alt?: string
-    filter?: string | void
+    filter?: string
     class?: string
   } = $props()
 </script>
 
-<img {src} {alt} class={className} style:filter={filter} />
+<img {src} {alt} class={className} style:filter />

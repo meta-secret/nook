@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { NookSecretTypeFilter } from '$app-wasm'
+  import { NookSecretTypeFilter, VaultEditDecision } from '$app-wasm'
 
   import {
     ArrowLeft,
@@ -18,7 +18,7 @@
     Paperclip,
     TriangleAlert,
   } from '@lucide/svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import * as Select from '$lib/components/ui/select'
@@ -38,17 +38,20 @@
     type SecretTypeSelection,
   } from '$lib/components/secret-form-state'
   import {
+    AuthenticatorCodePresentationKind,
     ClipboardNoticeKind,
     SecretEditorKind,
+    SecretRevealKind,
+    type AuthenticatorCodePresentation,
     type ClipboardNotice,
     type SecretEditor,
+    type SecretReveal,
   } from './secret-vault-state'
 
   let {
     vault,
     isSaving,
-    editsBlocked = false,
-    editBlockMessage,
+    editRestriction = { decision: VaultEditDecision.Allowed },
     secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,
@@ -58,8 +61,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    editsBlocked?: boolean
-    editBlockMessage?: string | void
+    editRestriction?: VaultEditRestriction
     secrets?: NookSecretListItem[]
     onAddSecret: (id: string, type: SecretType, data: string) => Promise<void>
     onReplaceSecret: (
@@ -78,6 +80,9 @@
     onAddModeChange?: (open: boolean, selection: SecretTypeSelection) => void
   } = $props()
 
+  const editsBlocked = $derived(
+    editRestriction.decision !== VaultEditDecision.Allowed,
+  )
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
@@ -291,6 +296,22 @@
     }, 2000)
   }
 
+  function secretReveal(itemId: string): SecretReveal {
+    const record = decryptedSecrets[itemId]
+    return record
+      ? { kind: SecretRevealKind.Revealed, record }
+      : { kind: SecretRevealKind.Hidden }
+  }
+
+  function authenticatorCodePresentation(
+    itemId: string,
+  ): AuthenticatorCodePresentation {
+    const code = authenticatorCodes[itemId]
+    return code
+      ? { kind: AuthenticatorCodePresentationKind.Visible, code }
+      : { kind: AuthenticatorCodePresentationKind.Hidden }
+  }
+
   async function toggleReveal(id: string) {
     const revealing = !(id in decryptedSecrets)
     decryptedSecrets = await toggleSecretExposure(
@@ -433,8 +454,8 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            {...editsBlocked && editBlockMessage
-              ? { title: editBlockMessage }
+            {...editRestriction.decision !== VaultEditDecision.Allowed
+              ? { title: editRestriction.reason }
               : {}}
             onclick={openAddSecret}
           >
@@ -444,14 +465,14 @@
         </div>
       </div>
 
-      {#if editsBlocked && editBlockMessage}
+      {#if editRestriction.decision !== VaultEditDecision.Allowed}
         <div
           class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
           data-testid="secret-edit-blocked-banner"
         >
           <TriangleAlert class="mt-0.5 size-4 shrink-0 text-amber-600" />
           <p class="text-pretty text-xs text-muted-foreground">
-            {editBlockMessage}
+            {editRestriction.reason}
           </p>
         </div>
       {/if}
@@ -568,14 +589,13 @@
                     {index}
                     titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
-                    decrypted={decryptedSecrets[item.id]}
-                    authenticatorCode={authenticatorCodes[item.id]}
+                    reveal={secretReveal(item.id)}
+                    authenticatorCode={authenticatorCodePresentation(item.id)}
                     copiedNotice={copiedKey}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
-                    editDisabled={editsBlocked}
-                    editDisabledReason={editBlockMessage}
+                    {editRestriction}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                     onCopySecret={copySecret}

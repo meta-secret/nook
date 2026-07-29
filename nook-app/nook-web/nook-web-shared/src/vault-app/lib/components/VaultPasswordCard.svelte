@@ -26,6 +26,7 @@
     ResolvedPasswordEntryKind,
     VaultPasswordPanel,
     type ActivePasswordEntry,
+    type ResolvedPasswordEntry,
   } from './vault-password-card-state'
 
   let {
@@ -82,7 +83,7 @@
   let localError = $state('')
 
   const hasPasswords = $derived(passwordEntries.length > 0)
-  const activeEntry = $derived.by(() => {
+  const activeEntry: ResolvedPasswordEntry = $derived.by(() => {
     if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) {
       return { kind: ResolvedPasswordEntryKind.Unavailable } as const
     }
