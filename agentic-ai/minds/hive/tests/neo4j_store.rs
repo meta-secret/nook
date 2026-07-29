@@ -1,8 +1,8 @@
 use std::env;
 
 use hive::model::{
-    ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask,
-    TaskActivity, TaskId, TaskTrigger,
+    ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, ClaimedTask, CompletionArtifact,
+    EnqueueTask, TaskActivity, TaskId, TaskTrigger,
 };
 use hive::observer::AlertKind;
 use hive::{Neo4jTaskStore, TaskStore};
@@ -20,6 +20,27 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
         max_attempts: 3,
         dependencies,
     }
+}
+
+async fn complete_without_artifact(
+    store: &Neo4jTaskStore,
+    task: &ClaimedTask,
+    agent: &AgentId,
+    obsolete: bool,
+    summary: &str,
+) -> anyhow::Result<()> {
+    assert!(
+        store
+            .complete(
+                task,
+                agent,
+                obsolete,
+                summary,
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -299,18 +320,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         vec![artifact.clone(), dependent_artifact],
         "transitive dependency patches must be returned in ancestor-first order"
     );
-    assert!(
-        store
-            .complete(
-                &descendant_claim,
-                &agent_a,
-                false,
-                "descendant complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete descendant")
-    );
+    complete_without_artifact(
+        &store,
+        &descendant_claim,
+        &agent_a,
+        false,
+        "descendant complete",
+    )
+    .await?;
 
     let left = task(format!("left-{suffix}"), vec![dependency.id.clone()]);
     let right = task(format!("right-{suffix}"), vec![dependency.id.clone()]);
@@ -367,18 +384,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         1,
         "a shared ancestor artifact must be materialized only once"
     );
-    assert!(
-        store
-            .complete(
-                &diamond_claim,
-                &agent_a,
-                false,
-                "diamond complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete diamond")
-    );
+    complete_without_artifact(&store, &diamond_claim, &agent_a, false, "diamond complete").await?;
 
     let mut rows = graph
         .execute(
@@ -418,18 +424,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .into_claimed()
         .expect("released task available");
     assert_eq!(resumed.attempt_number, 1);
-    assert!(
-        store
-            .complete(
-                &resumed,
-                &agent_b,
-                false,
-                "rollout recovery complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete released task")
-    );
+    complete_without_artifact(
+        &store,
+        &resumed,
+        &agent_b,
+        false,
+        "rollout recovery complete",
+    )
+    .await?;
     let mut rollout_rows = graph
         .execute(
             query(
@@ -475,18 +477,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .into_claimed()
         .expect("blocker available");
     assert_eq!(blocker_claim.id, blocker.id);
-    assert!(
-        store
-            .complete(
-                &blocker_claim,
-                &agent_a,
-                false,
-                "blocker complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete blocker")
-    );
+    complete_without_artifact(&store, &blocker_claim, &agent_a, false, "blocker complete").await?;
     let resumed_original = store
         .claim(&agent_a, 300)
         .await
@@ -495,18 +486,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .expect("original resumed");
     assert_eq!(resumed_original.id, original.id);
     assert_eq!(resumed_original.attempt_number, 1);
-    assert!(
-        store
-            .complete(
-                &resumed_original,
-                &agent_a,
-                false,
-                "original complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete resumed original")
-    );
+    complete_without_artifact(
+        &store,
+        &resumed_original,
+        &agent_a,
+        false,
+        "original complete",
+    )
+    .await?;
 
     let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new());
     let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new());
@@ -575,18 +562,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .expect("task with completed blocker is ready");
     assert_eq!(resumed_reused.id, reused.id);
     assert_eq!(resumed_reused.attempt_number, 1);
-    assert!(
-        store
-            .complete(
-                &resumed_reused,
-                &agent_a,
-                false,
-                "completed reused-blocker task",
-                &CompletionArtifact::NotProduced,
-            )
-            .await
-            .expect("complete reused-blocker task")
-    );
+    complete_without_artifact(
+        &store,
+        &resumed_reused,
+        &agent_a,
+        false,
+        "completed reused-blocker task",
+    )
+    .await?;
 
     let cycle_root = task(format!("cycle-root-{suffix}"), Vec::new());
     let cycle_dependent = task(
@@ -620,36 +603,21 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await
             .expect("reject dependency cycle")
     );
-    assert!(
-        store
-            .complete(
-                &cycle_claim,
-                &agent_a,
-                false,
-                "cycle root complete",
-                &CompletionArtifact::NotProduced
-            )
-            .await
-            .expect("complete cycle root")
-    );
+    complete_without_artifact(&store, &cycle_claim, &agent_a, false, "cycle root complete").await?;
     let cycle_dependent_claim = store
         .claim(&agent_a, 300)
         .await
         .expect("claim cycle dependent")
         .into_claimed()
         .expect("cycle dependent available");
-    assert!(
-        store
-            .complete(
-                &cycle_dependent_claim,
-                &agent_a,
-                false,
-                "cycle dependent complete",
-                &CompletionArtifact::NotProduced,
-            )
-            .await
-            .expect("complete cycle dependent")
-    );
+    complete_without_artifact(
+        &store,
+        &cycle_dependent_claim,
+        &agent_a,
+        false,
+        "cycle dependent complete",
+    )
+    .await?;
 
     let mut exhausted = task(format!("exhausted-{suffix}"), Vec::new());
     exhausted.max_attempts = 1;
@@ -745,31 +713,25 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         vec![owner_a.id.clone(), owner_b.id.clone()],
         "a shared blocker must receive every active owning Main repair"
     );
-    assert!(
-        store
-            .complete(
-                &shared_claim,
-                &agent_a,
-                true,
-                "shared prerequisite complete",
-                &CompletionArtifact::NotProduced,
-            )
-            .await?
-    );
+    complete_without_artifact(
+        &store,
+        &shared_claim,
+        &agent_a,
+        true,
+        "shared prerequisite complete",
+    )
+    .await?;
     for owner in [&owner_b, &owner_a] {
         let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
         assert_eq!(owner_claim.id, owner.id);
-        assert!(
-            store
-                .complete(
-                    &owner_claim,
-                    &agent_a,
-                    false,
-                    "owning repair complete",
-                    &CompletionArtifact::NotProduced,
-                )
-                .await?
-        );
+        complete_without_artifact(
+            &store,
+            &owner_claim,
+            &agent_a,
+            false,
+            "owning repair complete",
+        )
+        .await?;
     }
 
     let mut future_owner = task(format!("main-failure-future-owner-{suffix}"), Vec::new());
@@ -793,30 +755,24 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "a future repair must rearm an obsolete blocker with the same stable id"
     );
     assert_eq!(rearmed_claim.owning_repairs, vec![future_owner.id.clone()]);
-    assert!(
-        store
-            .complete(
-                &rearmed_claim,
-                &agent_a,
-                false,
-                "shared prerequisite repaired for the future owner",
-                &CompletionArtifact::NotProduced,
-            )
-            .await?
-    );
+    complete_without_artifact(
+        &store,
+        &rearmed_claim,
+        &agent_a,
+        false,
+        "shared prerequisite repaired for the future owner",
+    )
+    .await?;
     let resumed_future = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(resumed_future.id, future_owner.id);
-    assert!(
-        store
-            .complete(
-                &resumed_future,
-                &agent_a,
-                false,
-                "future owning repair complete",
-                &CompletionArtifact::NotProduced,
-            )
-            .await?
-    );
+    complete_without_artifact(
+        &store,
+        &resumed_future,
+        &agent_a,
+        false,
+        "future owning repair complete",
+    )
+    .await?;
 
     let mut mixed_blocker = task(format!("mixed-owner-blocker-{suffix}"), Vec::new());
     mixed_blocker.kind = "blocker".to_owned();
@@ -838,31 +794,25 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         mixed_claim.owning_repairs.is_empty(),
         "a non-Main dependent must disable obsolete blocker retirement"
     );
-    assert!(
-        store
-            .complete(
-                &mixed_claim,
-                &agent_a,
-                false,
-                "mixed-owner prerequisite actually resolved",
-                &CompletionArtifact::NotProduced,
-            )
-            .await?
-    );
+    complete_without_artifact(
+        &store,
+        &mixed_claim,
+        &agent_a,
+        false,
+        "mixed-owner prerequisite actually resolved",
+    )
+    .await?;
     for owner in [&mixed_repair, &mixed_code] {
         let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
         assert_eq!(owner_claim.id, owner.id);
-        assert!(
-            store
-                .complete(
-                    &owner_claim,
-                    &agent_a,
-                    false,
-                    "mixed owner complete",
-                    &CompletionArtifact::NotProduced,
-                )
-                .await?
-        );
+        complete_without_artifact(
+            &store,
+            &owner_claim,
+            &agent_a,
+            false,
+            "mixed owner complete",
+        )
+        .await?;
     }
 
     let mut genuine_blocker = task(format!("genuine-race-blocker-{suffix}"), Vec::new());
@@ -904,17 +854,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     for owner in [&genuine_owner, &genuine_late_owner] {
         let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
         assert_eq!(owner_claim.id, owner.id);
-        assert!(
-            store
-                .complete(
-                    &owner_claim,
-                    &agent_a,
-                    false,
-                    "genuine owner complete",
-                    &CompletionArtifact::NotProduced,
-                )
-                .await?
-        );
+        complete_without_artifact(
+            &store,
+            &owner_claim,
+            &agent_a,
+            false,
+            "genuine owner complete",
+        )
+        .await?;
     }
 
     let mut raced_blocker = task(format!("late-owner-blocker-{suffix}"), Vec::new());
