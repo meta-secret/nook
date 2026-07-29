@@ -1,6 +1,6 @@
 //! `IndexedDB` persistence for the immutable vault event log.
 
-use crate::NookError;
+use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventId, LocalEventStore};
 
 const EVENT_LOG_MODE_KEY: &str = "event_log:mode";
@@ -9,7 +9,6 @@ const EVENT_LOG_ACTIVE: &str = "event_log";
 const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
-const STORE_PROVIDER_RECEIPTS: &str = "provider_receipts";
 const STORE_OUTBOX: &str = "outbox";
 
 fn event_key(store_id: &str, event_id: &str) -> String {
@@ -32,21 +31,8 @@ async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
     store_get(STORE_VAULT, key).await
 }
 
-async fn open_nook_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder("nook_db")
-        .version(2)
-        .add_object_store(rexie::ObjectStore::new(STORE_VAULT))
-        .add_object_store(rexie::ObjectStore::new(STORE_EVENTS))
-        .add_object_store(rexie::ObjectStore::new(STORE_PROJECTIONS))
-        .add_object_store(rexie::ObjectStore::new(STORE_PROVIDER_RECEIPTS))
-        .add_object_store(rexie::ObjectStore::new(STORE_OUTBOX))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
-}
-
 async fn store_get(store_name: &str, key: &str) -> Result<Option<String>, NookError> {
-    let rexie = open_nook_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&[store_name], rexie::TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -77,7 +63,7 @@ async fn vault_put(key: &str, value: &str) -> Result<(), NookError> {
 }
 
 async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookError> {
-    let rexie = open_nook_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;

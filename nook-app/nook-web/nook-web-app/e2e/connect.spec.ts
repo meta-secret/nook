@@ -6,7 +6,9 @@ import {
   dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectAppLogMilestones,
+  flushNookLogPersistQueue,
   openLoginProviderSetup,
+  readPersistedAppLogs,
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
@@ -28,7 +30,7 @@ test.describe('vault connect flow', () => {
         messageIncludes: 'connect complete',
       },
       {
-        scope: 'vault',
+        scope: 'vault-session',
         level: 'info',
         messageIncludes: 'vault session unlocked',
       },
@@ -40,6 +42,21 @@ test.describe('vault connect flow', () => {
     ])
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
+    // A reload replaces the WASM manager while retaining the encrypted local
+    // projection. Unlocking must restore vault crypto from that cache before
+    // the default secret-page query runs.
+    await page.reload()
+    await authorizeDeviceProtection(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await flushNookLogPersistQueue(page)
+    const logs = await readPersistedAppLogs(page)
+    expect(
+      logs?.some(
+        (entry) =>
+          entry.scope === 'vault-sync' &&
+          entry.data?.includes('Vault crypto not initialized'),
+      ),
+    ).toBeFalsy()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
     await expect(page.getByTestId('extension-install-setup')).toBeVisible()
     await expect(page.getByTestId('extension-install-setup')).toHaveAttribute(

@@ -13,7 +13,10 @@ export default defineConfig({
   reporter: isCi ? 'line' : 'list',
   timeout: isHostedSmoke ? 180_000 : isCi ? 90_000 : 60_000,
   expect: {
-    timeout: 5_000,
+    // Pairing boots a fresh vault and extension service worker. On hosted
+    // runners that can exceed Playwright's default while still completing
+    // within the test's explicit end-to-end timeout.
+    timeout: isCi ? 15_000 : 5_000,
   },
   use: {
     actionTimeout: 5_000,

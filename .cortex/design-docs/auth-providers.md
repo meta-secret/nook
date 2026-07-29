@@ -106,9 +106,10 @@ credentials for the browser extension).
 
 **Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`,
 `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`.
-Existing **plaintext** provider rows (pre-encryption, or those seeded directly in
-e2e) are read transparently and re-saved in sealed form on the next load
-(`had_plaintext` upgrade path).
+Existing **plaintext** provider rows are rejected rather than loaded into the
+application. This fail-closed boundary prevents an unsealed credential from
+remaining usable or being mistaken for trusted encrypted state; users must
+re-enter the provider credential so the normal save path persists it sealed.
 
 **Provider switch:** Changing the active saved provider calls `resetVaultSession`
 in wasm and clears login password-entry preview state so backup-password lists

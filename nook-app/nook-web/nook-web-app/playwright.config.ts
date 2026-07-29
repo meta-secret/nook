@@ -92,9 +92,9 @@ const webServerCommand = usePreviewServer
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
-  // Each Task entry point selects a group-specific worker budget. Do not map
-  // all runner CPUs here: fresh contexts concurrently fetch and compile the
-  // large WASM bundle through one preview server.
+  // Each Task entry point selects a group-specific worker budget. Keep the
+  // budget deliberately small: fresh contexts concurrently fetch and compile
+  // the large WASM bundle through one preview server.
   workers,
   maxFailures: isCi ? 1 : undefined,
   retries: isCi ? 2 : 0,

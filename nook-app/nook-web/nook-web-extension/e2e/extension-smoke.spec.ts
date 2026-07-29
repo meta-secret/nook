@@ -25,6 +25,9 @@ import {
   type ExtensionPairingApprovedMessage,
 } from './helpers/extension-smoke-runtime'
 
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
 }, testInfo) => {

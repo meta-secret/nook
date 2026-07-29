@@ -11,10 +11,38 @@ import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
+  const clearedThroughManager = await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          initPromise?: Promise<void>
+          stopVaultSync?: () => void
+          waitForStorageChain?: () => Promise<void>
+          enqueueStorage?: <T>(operation: () => Promise<T>) => Promise<T>
+          manager?: { deleteLocalBrowserData?: () => Promise<void> }
+        }
+      }
+    ).__nookVault
+    await vault?.initPromise
+    vault?.stopVaultSync?.()
+    await vault?.waitForStorageChain?.()
+    const manager = vault?.manager
+    if (!manager?.deleteLocalBrowserData) return false
+    if (vault.enqueueStorage) {
+      await vault.enqueueStorage(() => manager.deleteLocalBrowserData!())
+    } else {
+      await manager.deleteLocalBrowserData()
+    }
+    return true
+  })
   await page.evaluate(
-    () =>
+    (vaultAlreadyCleared) =>
       new Promise<void>((resolve, reject) => {
         localStorage.clear()
+        if (vaultAlreadyCleared) {
+          resolve()
+          return
+        }
         let pending = 2
         const done = () => {
           pending -= 1
@@ -33,6 +61,7 @@ export async function clearBrowserVault(page: Page) {
         authDb.onerror = () => onError(authDb.error ?? undefined)
         authDb.onblocked = done
       }),
+    clearedThroughManager,
   )
 }
 

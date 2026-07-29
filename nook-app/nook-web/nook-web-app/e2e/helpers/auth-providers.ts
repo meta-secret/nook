@@ -73,6 +73,45 @@ export async function appendAuthProviders(
   )
 }
 
+async function appendSealedAuthProviders(
+  page: Page,
+  providers: SeededAuthProvider[],
+  vaultStoreId?: string,
+): Promise<void> {
+  await page.evaluate(
+    async ({ providers: additions, vaultStoreId: fallbackStoreId }) => {
+      const hook = (
+        window as Window & {
+          __nookAuthProviders?: {
+            loadAuthProviders: () => Promise<{
+              providers: SeededAuthProvider[]
+              activeVaultStoreId?: string
+            }>
+            saveAuthProviders: (snapshot: {
+              providers: SeededAuthProvider[]
+              activeVaultStoreId?: string
+            }) => Promise<void>
+          }
+        }
+      ).__nookAuthProviders
+      if (!hook) throw new Error('E2E auth provider hooks are unavailable')
+      const snapshot = await hook.loadAuthProviders()
+      const activeStoreId =
+        snapshot.activeVaultStoreId?.trim() || fallbackStoreId
+      snapshot.providers.push(
+        ...additions.map((provider) => ({
+          ...provider,
+          storeId:
+            provider.type === 'oauth-file' ? activeStoreId : provider.storeId,
+          createdAt: new Date().toISOString(),
+        })),
+      )
+      await hook.saveAuthProviders(snapshot)
+    },
+    { providers, vaultStoreId },
+  )
+}
+
 export async function waitForAuthProviderIds(
   page: Page,
   expectedIds: string[],
@@ -116,7 +155,7 @@ export async function seedExtraGithubProviders(
     githubPat: string
   }>,
 ) {
-  await appendAuthProviders(
+  await appendSealedAuthProviders(
     page,
     extras.map((provider) => ({ ...provider, type: 'github' })),
   )
@@ -143,7 +182,7 @@ export async function seedExtraOauthFileProviders(
   const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
   const storeIdFromVault = vaultYaml.match(/^store_id:\s*(\S+)/m)?.[1]
 
-  await appendAuthProviders(
+  await appendSealedAuthProviders(
     page,
     extras.map((provider) => ({
       id: provider.id,

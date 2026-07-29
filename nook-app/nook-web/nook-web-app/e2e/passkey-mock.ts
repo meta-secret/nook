@@ -145,7 +145,8 @@ export function installMockPasskeyRuntime() {
           }
         }
       }) => {
-        if (localStorage.getItem('nook_e2e_passkey_mode') === 'cancel') {
+        const mode = localStorage.getItem('nook_e2e_passkey_mode')
+        if (mode === 'cancel') {
           throw new DOMException(
             'The operation was cancelled.',
             'NotAllowedError',
@@ -162,7 +163,10 @@ export function installMockPasskeyRuntime() {
           throw new TypeError('WebAuthn request PRF input must be binary')
         }
         if (!first) throw new Error('Missing E2E PRF get input')
-        return result(first, false)
+        // A credential that accepted PRF during registration keeps supporting
+        // it when it is used to unlock the vault. Returning `false` here makes
+        // the browser boundary reject an otherwise valid PRF result.
+        return result(first, mode !== 'unsupported')
       },
     },
   })

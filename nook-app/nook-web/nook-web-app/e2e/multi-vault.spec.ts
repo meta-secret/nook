@@ -5,6 +5,7 @@ import {
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
+  saveAuthProvidersInBrowser,
   unlockVaultOnLogin,
 } from './helpers'
 
@@ -57,65 +58,41 @@ async function seedScopedSyncProviders(
   storeA: string,
   storeB: string,
 ) {
-  await page.evaluate(
-    ({ storeA, storeB }) => {
-      return new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_auth', 1)
-        request.onerror = () =>
-          reject(request.error ?? new Error('idb open failed'))
-        request.onsuccess = () => {
-          const db = request.result
-          const tx = db.transaction('auth', 'readwrite')
-          const store = tx.objectStore('auth')
-          const snapshot = {
-            activeVaultStoreId: storeA,
-            providers: [
-              {
-                id: 'provider-a',
-                type: 'oauth-file',
-                label: 'File · nook-multi-vault-a',
-                oauthFile: {
-                  preset: 'google-drive',
-                  accessToken: 'ya29.e2e_file_sync_token',
-                  fileName: 'nook-multi-vault-a.yaml',
-                  driveMode: 'private',
-                  iCloudMode: 'private',
-                  accountEmail: 'file-sync-e2e@example.com',
-                },
-                storeId: storeA,
-                createdAt: new Date().toISOString(),
-              },
-              {
-                id: 'provider-b',
-                type: 'oauth-file',
-                label: 'File · nook-multi-vault-b',
-                oauthFile: {
-                  preset: 'google-drive',
-                  accessToken: 'ya29.e2e_file_sync_token',
-                  fileName: 'nook-multi-vault-b.yaml',
-                  driveMode: 'private',
-                  iCloudMode: 'private',
-                  accountEmail: 'file-sync-e2e@example.com',
-                },
-                storeId: storeB,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          }
-          const putReq = store.put(snapshot, 'providers')
-          putReq.onerror = () =>
-            reject(putReq.error ?? new Error('idb write failed'))
-          putReq.onsuccess = () => undefined
-          tx.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-        }
-      })
-    },
-    { storeA, storeB },
-  )
+  await saveAuthProvidersInBrowser(page, {
+    activeVaultStoreId: storeA,
+    providers: [
+      {
+        id: 'provider-a',
+        type: 'oauth-file',
+        label: 'File · nook-multi-vault-a',
+        oauthFile: {
+          preset: 'google-drive',
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-a.yaml',
+          driveMode: 'private',
+          iCloudMode: 'private',
+          accountEmail: 'file-sync-e2e@example.com',
+        },
+        storeId: storeA,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'provider-b',
+        type: 'oauth-file',
+        label: 'File · nook-multi-vault-b',
+        oauthFile: {
+          preset: 'google-drive',
+          accessToken: 'ya29.e2e_file_sync_token',
+          fileName: 'nook-multi-vault-b.yaml',
+          driveMode: 'private',
+          iCloudMode: 'private',
+          accountEmail: 'file-sync-e2e@example.com',
+        },
+        storeId: storeB,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  })
   await disableLoginAutoUnlock(page)
   await page.reload()
   await expect(page.getByTestId('login-gate')).toBeVisible({

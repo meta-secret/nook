@@ -341,6 +341,35 @@ mod import_tests {
     }
 }
 
+#[cfg(test)]
+mod prepared_page_tests {
+    use super::*;
+    use crate::manager::VaultCryptoState;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()
+            .map_err(|error| JsError::new(&error.to_string()))?
+            .to_string();
+        manager.vault.last_synced_content = manager.serialize_current_projection_yaml()?;
+        manager.vault.secrets_key.clear();
+        manager.vault.members_key.clear();
+        manager.vault.crypto = VaultCryptoState::Locked;
+
+        manager
+            .query_prepared_secret_page_js("", NookStringValue::unavailable(), 0, 25)
+            .await?;
+
+        assert!(manager.vault.crypto.is_unlocked());
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
@@ -365,6 +394,10 @@ impl NookVaultManager {
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
+        // The default vault view uses an empty query, but it still decrypts
+        // records below. Restore the session key before either the default or
+        // search path reads the page after a provider/session transition.
+        self.ensure_vault_crypto_from_cache().await?;
         if !query.trim().is_empty() {
             self.prepare_secret_search_catalog().await?;
         }

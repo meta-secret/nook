@@ -38,7 +38,7 @@ test.describe('application logging', () => {
     await createLocalVaultOnLogin(page)
 
     await waitForPersistedAppLog(page, {
-      scope: 'vault',
+      scope: 'vault-lifecycle',
       level: 'info',
       messageIncludes: 'app init finished',
     })
@@ -53,7 +53,7 @@ test.describe('application logging', () => {
       messageIncludes: 'connect complete',
     })
     await waitForPersistedAppLog(page, {
-      scope: 'vault',
+      scope: 'vault-session',
       level: 'info',
       messageIncludes: 'vault session unlocked',
     })

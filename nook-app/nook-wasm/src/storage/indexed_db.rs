@@ -26,7 +26,7 @@
 //!   session, this may survive refresh and does not contain plaintext key
 //!   material.
 
-use crate::NookError;
+use crate::{NookError, storage::open_nook_database};
 use serde::{Deserialize, Serialize};
 
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
@@ -79,19 +79,6 @@ fn sentinel_genesis_share_key(store_id: &str, device_id: &str) -> String {
     format!("sentinel_genesis_share:{store_id}:{device_id}")
 }
 
-async fn open_vault_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder("nook_db")
-        .version(2)
-        .add_object_store(rexie::ObjectStore::new("vault"))
-        .add_object_store(rexie::ObjectStore::new("events"))
-        .add_object_store(rexie::ObjectStore::new("projections"))
-        .add_object_store(rexie::ObjectStore::new("provider_receipts"))
-        .add_object_store(rexie::ObjectStore::new("outbox"))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
-}
-
 pub(crate) async fn clear_vault_db() -> Result<(), NookError> {
     const STORES: [&str; 5] = [
         "vault",
@@ -100,7 +87,7 @@ pub(crate) async fn clear_vault_db() -> Result<(), NookError> {
         "provider_receipts",
         "outbox",
     ];
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let mut errors = Vec::new();
     for store_name in STORES {
         if let Err(error) = clear_vault_store(&rexie, store_name).await {
@@ -140,7 +127,7 @@ async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(),
 }
 
 async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -169,7 +156,7 @@ async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
 }
 
 async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -192,7 +179,7 @@ async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
 }
 
 async fn idb_delete_key(key: &str) -> Result<(), NookError> {
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -332,7 +319,7 @@ pub(crate) async fn delete_legacy_secret_search_catalog(store_id: &str) -> Resul
 pub(crate) async fn load_secret_search_catalog_buckets(
     store_id: &str,
 ) -> Result<Vec<(u8, String)>, NookError> {
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -365,7 +352,7 @@ pub(crate) async fn save_secret_search_catalog_buckets(
     store_id: &str,
     writes: &[(u8, Option<String>)],
 ) -> Result<(), NookError> {
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -469,7 +456,7 @@ pub(crate) async fn save_wrapped_device_identity(
     record: &nook_core::WrappedDeviceIdentity,
 ) -> Result<(), NookError> {
     let wrapped = nook_core::serialize_wrapped_device_identity(record)?;
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -633,7 +620,7 @@ pub(crate) async fn save_sentinel_genesis_share_delivery(
             "Refusing to persist an incomplete Sentinel genesis share delivery.".to_owned(),
         ));
     }
-    let rexie = open_vault_db().await?;
+    let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;

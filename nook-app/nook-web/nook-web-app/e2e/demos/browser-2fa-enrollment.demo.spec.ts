@@ -15,9 +15,16 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('guide authenticator enrollment through consented Pilot ceremony', async ({
+test('uses the paired demo vault for authenticator enrollment', async ({
   page,
 }) => {
+  const bootstrapErrors: Error[] = []
+  page.on('pageerror', (error) => {
+    if (error.message.includes("reading 'appendChild'")) {
+      bootstrapErrors.push(error)
+    }
+  })
+
   const messages = JSON.parse(
     await readFile(
       path.join(extensionDist, '_locales/en/messages.json'),
@@ -31,10 +38,24 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  // Keep the demo page independent from the Nook app lifecycle while retaining
-  // a real web origin for the enrollment binding. Loading `/` starts the
-  // Svelte application, whose async bootstrap can race with `setContent()`.
-  await page.goto('/terms.html')
+  let signalWasmBootstrapStarted: (() => void) | undefined
+  const wasmBootstrapStarted = new Promise<void>((resolve) => {
+    signalWasmBootstrapStarted = resolve
+  })
+  let releaseWasmBootstrap: (() => void) | undefined
+  const wasmBootstrapReleased = new Promise<void>((resolve) => {
+    releaseWasmBootstrap = resolve
+  })
+  await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
+    signalWasmBootstrapStarted?.()
+    await wasmBootstrapReleased
+    await route.continue().catch(() => undefined)
+  })
+
+  // Replace the document while the real app bootstrap is active. This covers
+  // the stale mount-target race while retaining a real origin for enrollment.
+  await page.goto('/app/', { waitUntil: 'commit' })
+  await wasmBootstrapStarted
   await page.setContent(`<!doctype html>
     <html>
       <head>
@@ -78,7 +99,8 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
         </style>
       </head>
       <body>
-        <main id="setup">
+        <main id="app" data-bootstrap-sentinel="replacement-root">
+          <span data-bootstrap-sentinel-child hidden></span>
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -98,13 +120,17 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
         </main>
       </body>
     </html>`)
+  releaseWasmBootstrap?.()
+  const replacementChildCount = await page
+    .locator('[data-bootstrap-sentinel="replacement-root"]')
+    .evaluate((root) => root.children.length)
 
   await page.evaluate(() => {
     document
       .querySelector('#verify-form')
       ?.addEventListener('submit', (event) => {
         event.preventDefault()
-        const setup = document.querySelector('#setup')
+        const setup = document.querySelector('#app')
         setup?.remove()
         const success = document.createElement('main')
         success.id = 'success'
@@ -127,6 +153,14 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
     'Connected to Demo vault',
   )
+  await expect(
+    page.locator('[data-bootstrap-sentinel="replacement-root"]'),
+  ).toBeVisible()
+  expect(
+    await page
+      .locator('[data-bootstrap-sentinel="replacement-root"]')
+      .evaluate((root) => root.children.length),
+  ).toBe(replacementChildCount)
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
@@ -160,6 +194,9 @@ test('guide authenticator enrollment through consented Pilot ceremony', async ({
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
-  await expect(widget.getByTestId('nook-auth-gate')).toBeVisible()
+  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
+    'Connected to Demo vault',
+  )
   await demoBeat(page)
+  expect(bootstrapErrors).toEqual([])
 })

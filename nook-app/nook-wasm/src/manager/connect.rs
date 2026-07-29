@@ -400,7 +400,7 @@ impl NookVaultManager {
         }
     }
 
-    fn initialize_genesis_vault(
+    pub(in crate::manager) fn initialize_genesis_vault(
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {

@@ -159,6 +159,16 @@ pub enum UnauthenticatedSyncDecision {
 pub struct VaultClientPolicy;
 
 impl VaultClientPolicy {
+    /// Device-dependent manual sync is meaningful only after a local vault or
+    /// an explicit sync-provider target exists.
+    #[must_use]
+    pub const fn manual_sync_has_target(
+        local_vault_present: bool,
+        sync_provider_count: usize,
+    ) -> bool {
+        local_vault_present || sync_provider_count > 0
+    }
+
     #[must_use]
     pub const fn remote_recovery_prompt_visible(state: RemoteVaultRecoveryState) -> bool {
         state.prompt_visible()
@@ -415,6 +425,13 @@ impl VaultClientPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manual_sync_requires_a_vault_or_explicit_provider_target() {
+        assert!(!VaultClientPolicy::manual_sync_has_target(false, 0));
+        assert!(VaultClientPolicy::manual_sync_has_target(true, 0));
+        assert!(VaultClientPolicy::manual_sync_has_target(false, 1));
+    }
 
     #[test]
     fn edit_blocking_has_security_first_precedence() {

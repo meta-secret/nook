@@ -671,6 +671,23 @@ export async function manualSync(state: SyncActionsContext) {
   if (!state.manager) return;
   if (state.syncBlocked) return;
   if (state.isSyncing) return;
+
+  // A fresh browser may retain provider credentials before it has a vault, but
+  // credentials alone do not establish a sync target. Initializing
+  // device-dependent sync in that state asks the WASM manager to encrypt before
+  // vault crypto exists. Keep the device roster projection empty until a vault
+  // or a connected sync provider exists.
+  if (
+    !state.clientPolicy.manualSyncHasTarget(
+      state.localVaultPresent,
+      state.syncProviders.length,
+    )
+  ) {
+    state.pendingJoins = [];
+    state.vaultMembers = [];
+    return;
+  }
+
   log.info("manual sync started", { providers: state.syncProviders.length });
   state.isSyncing = true;
   try {
