@@ -22,7 +22,9 @@ export function formatToolStarted(toolCall: ToolCall): string {
     case "grep": {
       const pattern = stringArg(toolCall.args, "pattern");
       const path = stringArg(toolCall.args, "path");
-      return path ? `grep ${truncate(pattern, 80)} in ${shortenPath(path)}` : `grep ${truncate(pattern, 100)}`;
+      return path
+        ? `grep ${truncate(pattern, 80)} in ${shortenPath(path)}`
+        : `grep ${truncate(pattern, 100)}`;
     }
     case "glob":
       return `glob ${stringArg(toolCall.args, "glob_pattern")}`;
@@ -51,11 +53,11 @@ export function formatToolStarted(toolCall: ToolCall): string {
 export function formatToolCompleted(
   toolCall: ToolCall,
   options: { includeShellOutput?: boolean } = {},
-): string[] | null {
+): string[] {
   const includeShellOutput = options.includeShellOutput ?? true;
   const result = toolCall.result;
   if (!result) {
-    return null;
+    return [];
   }
 
   if (result.status === "error") {
@@ -81,11 +83,13 @@ export function formatToolCompleted(
     case "mcp":
       return ["mcp done"];
     default:
-      return null;
+      return [];
   }
 }
 
-export function extractShellOutputChunk(event: Record<string, unknown> | void): string {
+export function extractShellOutputChunk(
+  event: Record<string, unknown> | void,
+): string {
   if (!event) {
     return "";
   }
@@ -127,7 +131,10 @@ function formatTaskOutputBlocks(value: unknown): string[] {
   if (typeof record.durationMs === "number") {
     lines.push(`task duration ${record.durationMs}ms`);
   }
-  if (typeof record.resultSuffix === "string" && record.resultSuffix.trim().length > 0) {
+  if (
+    typeof record.resultSuffix === "string" &&
+    record.resultSuffix.trim().length > 0
+  ) {
     lines.push(...formatOutputBlock("task result", record.resultSuffix));
   }
 

@@ -60,8 +60,12 @@ mutable flags create the same problem.
 - Match variants exhaustively. Do not convert a discriminated union back into
   parallel booleans.
 - Normalize optional external input shape into an explicit union immediately.
-- Give callbacks, commands, and promises a meaningful completion/result type;
-  authored `void` is not an acceptable result model.
+- Use `void` normally as TypeScript's unit/effect type. Function and callback
+  return types, `Promise<void>`, and unary `void expression` for intentionally
+  discarded results are valid and equivalent to Rust `()`, not `Option<T>`.
+- Do not use `void` as unnamed mutable absence. A slot such as
+  `let result: Result | void` still needs a semantic state union because the
+  union is storing “missing result,” not describing effect completion.
 - Normalize missing browser, lookup, parser, cache, and DOM results directly
   into a domain-specific union at the narrow boundary.
 - Normalize external `null` directly into the same explicit union at the
@@ -139,13 +143,14 @@ type ImportState =
 
 ## Validation
 
-The AST-backed preflight rejects every executable or type-level `undefined`,
-`null`, and `void` token, every quoted-sentinel comparison, and every
-generic optional-state escape hatch in authored JavaScript, TypeScript, and
-Svelte. It also rejects raw string literal types on closed unions and
-discriminant fields (`kind`, `type`, `status`, `phase`, `stage`, `mode`,
-`action`, and `operation`), plus raw runtime discriminant constructors and
-comparisons, while accepting enum member types and ignoring comments and
-unrelated prose strings. Add positive and negative fixtures whenever the rule
-is sharpened. Run `task format` before pushing and use GitHub Actions as the
-product validation gate.
+The AST-backed preflight rejects every executable or type-level `undefined` and
+`null` token, every quoted-sentinel comparison, every mutable `T | void`
+absence slot, and every generic optional-state escape hatch in authored
+JavaScript, TypeScript, and Svelte. It accepts `void` in function and callback
+return types, `Promise<void>`, and unary discard expressions. It also rejects
+raw string literal types on closed unions and discriminant fields (`kind`,
+`type`, `status`, `phase`, `stage`, `mode`, `action`, and `operation`), plus raw
+runtime discriminant constructors and comparisons, while accepting enum member
+types and ignoring comments and unrelated prose strings. Add positive and
+negative fixtures whenever the rule is sharpened. Run `task format` before
+pushing and use GitHub Actions as the product validation gate.

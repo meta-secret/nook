@@ -69,11 +69,11 @@ fn typescript_does_not_clone_through_json_serialization() -> anyhow::Result<()> 
 }
 
 #[test]
-fn typescript_uses_undefined_only_at_structural_boundaries() -> anyhow::Result<()> {
+fn authored_javascript_typescript_and_svelte_never_use_null() -> anyhow::Result<()> {
     let violations = typescript_null_absence_sentinels(&repository_root())?;
     assert!(
         violations.is_empty(),
-        "authored TypeScript and Svelte must keep null at explicit platform boundaries and use undefined only for truthful structural absence: {violations:#?}"
+        "authored JavaScript, TypeScript, and Svelte must normalize external null without authoring null values or types: {violations:#?}"
     );
     Ok(())
 }

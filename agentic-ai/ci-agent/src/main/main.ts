@@ -3,18 +3,19 @@ import { chdir } from "node:process";
 import { exitCiAgent } from "./exit.js";
 import { runCiFix } from "./fix.js";
 import { runCiImplement } from "./implement.js";
-import { loadConfig } from "./config.js";
+import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
 import { runPrAudit } from "./pr-audit.js";
 import { runPrReviewRequest } from "./pr-review.js";
 
 async function runAgentCommand(): Promise<void> {
-  const config = loadConfig();
-  if (!config) {
+  const loadedConfig = loadConfig();
+  if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
     console.log("::warning::CURSOR_API_KEY is not set — skipping agent run.");
     return;
   }
+  const config = loadedConfig.config;
 
   chdir(config.repoRoot);
   const prompt = await loadPrompt(config);

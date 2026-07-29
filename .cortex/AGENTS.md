@@ -126,15 +126,21 @@ discriminant list is not an escape hatch. Svelte components import runtime
 enums from a cohesive adjacent TypeScript state module because the Svelte
 compilation boundary does not preprocess runtime TypeScript enum syntax.
 
-External and browser contracts may still produce JavaScript's missing value at
+External and browser contracts may still produce JavaScript absence values at
 runtime. Optional external input shape is normalized at its narrow boundary,
 and lookup/parser/browser results become a domain-specific union immediately.
-Authored code must not use `undefined`, `null`, or `void` as values, types,
-operators, callback results, or promise results. Generated declarations may
-mirror external contracts and are excluded. Tests, build scripts, `.agents`,
-and `.github` code are authored code and are not excluded. Do not evade the
-rule with quoted sentinel names, casts, fake defaults, decorative wrappers, or
-sentinel strings. Full contract:
+Authored code must not use `undefined` or `null` as values or types. Generated
+declarations may mirror external contracts and are excluded. Tests, build
+scripts, `.agents`, and `.github` code are authored code and are not excluded.
+Do not evade the rule with quoted sentinel names, casts, fake defaults,
+decorative wrappers, or sentinel strings.
+
+`void` is not an absence value when used as TypeScript's unit/effect type. It
+is permitted for function and callback return types, `Promise<void>`, and the
+unary `void` operator when a result is intentionally discarded. This is
+equivalent to Rust `()`, not `Option<T>`. A mutable application-state slot such
+as `let result: T | void` is still forbidden because that union uses `void` as
+unnamed absence rather than effect completion. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 
 Authored Rust must not call `.unwrap()` or `.expect(...)`. Production paths
@@ -341,21 +347,22 @@ build-performance PR. Full policy:
 * [references/cloudflare-operations.md](references/cloudflare-operations.md) — **Privileged Cloudflare operations** through the OAuth-authenticated `cloudflare-api` MCP connection in the local AI-agent environment.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
-* [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
-* [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
-* [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
-* [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
-* [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
-* [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
-* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
-* [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
-* [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
-* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
-* [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
-* [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
-* [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
-* [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
+
+- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
+- [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
+- [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
+- [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
+- [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
+- [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
+- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
+- [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
+- [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
+- [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
+- [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
+- [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
+- [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
+- [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
+- [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
 
 ## 7. Agent duties beyond code
 

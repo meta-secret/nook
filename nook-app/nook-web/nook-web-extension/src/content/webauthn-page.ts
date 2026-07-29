@@ -107,7 +107,6 @@ function publicCredential(
           clientDataJSON,
           attestationObject: bytes(result.attestationObject),
           getTransports: () => ['internal'],
-          getPublicKey: () => null,
           getPublicKeyAlgorithm: () => -7,
         }
       : {
@@ -141,8 +140,8 @@ function publicCredential(
 async function extensionCeremony(
   ceremony: 'create' | 'get',
   options: CredentialCreationOptions | CredentialRequestOptions,
-  fallback: () => Promise<Credential | null>,
-): Promise<Credential | null> {
+  fallback: () => ReturnType<CredentialsContainer['get']>,
+): ReturnType<CredentialsContainer['get']> {
   if (!('publicKey' in options) || !options.publicKey) return fallback()
   if ('mediation' in options && options.mediation === 'conditional')
     return fallback()
@@ -161,7 +160,9 @@ async function extensionCeremony(
   )
   const signal = options.signal
 
-  return new Promise<Credential | null>((resolve, reject) => {
+  return new Promise<
+    Awaited<ReturnType<CredentialsContainer['get']>>
+  >((resolve, reject) => {
     let settled = false
     const finish = (callback: () => void) => {
       if (settled) return

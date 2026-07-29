@@ -4,7 +4,7 @@
   import CheckIcon from '@lucide/svelte/icons/check'
 
   let {
-    ref = $bindable(null),
+    ref = $bindable(),
     class: className,
     value,
     label,

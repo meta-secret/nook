@@ -1,14 +1,19 @@
 import { chdir } from "node:process";
 
-import { loadConfig } from "./config.js";
+import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import {
   branchExistsOnOrigin,
   createFixPr,
   createOctokit,
   findOpenPr,
+  OpenPrLookupKind,
   parseRepository,
 } from "./github.js";
-import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
+import {
+  configureGitForCi,
+  hasWorkingTreeChanges,
+  pushFixBranch,
+} from "./git.js";
 import { createLogger } from "./logger.js";
 import { loadPrompt, resolveAgentTask } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
@@ -36,48 +41,66 @@ export async function runCiImplement(): Promise<void> {
   await configureGitForCi(repoRoot, octokit);
   const repoRef = parseRepository(repository);
 
-  let prNumber = await findOpenPr(octokit, repoRef, agentBranch);
-  if (prNumber) {
+  let openPr = await findOpenPr(octokit, repoRef, agentBranch);
+  let prNumber: number;
+  if (openPr.kind === OpenPrLookupKind.Found) {
+    prNumber = openPr.number;
     log.info(`Open PR already exists for ${agentBranch} (#${prNumber})`);
   } else {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
     if (!cursorApiKey) {
-      console.log("::warning::CURSOR_API_KEY is not set — skipping agent implement job.");
+      console.log(
+        "::warning::CURSOR_API_KEY is not set — skipping agent implement job.",
+      );
       console.log(
         "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
       );
       return;
     }
 
-    const config = loadConfig();
-    if (!config) {
+    const loadedConfig = loadConfig();
+    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
       return;
     }
+    const config = loadedConfig.config;
 
     const prompt = await loadPrompt(config);
     await runFixAgent(config, prompt);
 
     if (!(await hasWorkingTreeChanges(repoRoot))) {
-      console.log("::warning::Agent finished but working tree is clean — nothing to push.");
+      console.log(
+        "::warning::Agent finished but working tree is clean — nothing to push.",
+      );
       return;
     }
 
     await pushFixBranch(repoRoot, agentBranch, runId);
 
     if (!(await branchExistsOnOrigin(octokit, repoRef, agentBranch))) {
-      throw new Error(`Agent branch ${agentBranch} was not found on origin after push`);
+      throw new Error(
+        `Agent branch ${agentBranch} was not found on origin after push`,
+      );
     }
 
-    prNumber = await findOpenPr(octokit, repoRef, agentBranch);
-    if (!prNumber) {
-      prNumber = await createFixPr(octokit, repoRef, agentBranch, runId, config.fixLabel);
+    openPr = await findOpenPr(octokit, repoRef, agentBranch);
+    if (openPr.kind === OpenPrLookupKind.Found) {
+      prNumber = openPr.number;
+    } else {
+      prNumber = await createFixPr(
+        octokit,
+        repoRef,
+        agentBranch,
+        runId,
+        config.fixLabel,
+      );
     }
     log.info(`Opened implement PR #${prNumber}`);
-
   }
 
   log.info(
     `PR #${prNumber} opened; this bounded worker hands it to a continuing task-owning agent`,
   );
-  log.info(`Done — implement run ${runId} exits before the monitor-and-merge lifecycle`);
+  log.info(
+    `Done — implement run ${runId} exits before the monitor-and-merge lifecycle`,
+  );
 }

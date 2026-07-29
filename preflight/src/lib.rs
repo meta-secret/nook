@@ -4,7 +4,8 @@ mod typescript_state;
 
 pub use typescript_state::{
     typescript_generic_optional_state, typescript_implicit_application_state,
-    typescript_mutable_void_state, typescript_raw_string_discriminants,
+    typescript_mutable_void_state, typescript_null_absence_sentinels,
+    typescript_raw_string_discriminants,
 };
 
 use std::collections::HashSet;
@@ -90,69 +91,6 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "WebsiteLoginSaveDecision",
     "SecretFormInputType",
     "SecretType",
-];
-
-const TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES: &[(&str, &str)] = &[
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-content.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-group-heading.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-group.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-item.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-label.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-scroll-down-button.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-scroll-up-button.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-separator.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/separator/separator.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/utils.ts",
-        "ref?: U | null;",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "getPublicKey: () => null,",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "fallback: () => Promise<Credential | null>,",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "): Promise<Credential | null> {",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "return new Promise<Credential | null>((resolve, reject) => {",
-    ),
 ];
 
 const RUST_WASM_UNCHECKED_TYPE_MARKERS: &[&str] =
@@ -422,138 +360,6 @@ fn json_round_trip_clone_lines(source: &str) -> Vec<usize> {
         .enumerate()
         .filter_map(|(index, window)| (window == PATTERN).then_some(source_lines[index]))
         .collect()
-}
-
-/// Finds authored TypeScript and Svelte source that uses `null` outside a
-/// platform-mandated boundary.
-///
-/// Ambient declarations mirror external APIs and are excluded. The explicit
-/// `WebAuthn` exceptions implement browser signatures whose return type requires
-/// `null`; all inbound nullable values must still be normalized to `undefined`
-/// before entering application state.
-///
-/// # Errors
-///
-/// Returns an error when the web source tree cannot be read.
-pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-web");
-    let mut files = Vec::new();
-    for extension in ["ts", "svelte"] {
-        collect_files_with_extension(&directory, extension, &mut files)?;
-    }
-
-    files.retain(|path| {
-        !path
-            .file_name()
-            .and_then(std::ffi::OsStr::to_str)
-            .is_some_and(|name| name.ends_with(".d.ts"))
-    });
-
-    let mut violations = Vec::new();
-    for path in files {
-        let relative_path = path.strip_prefix(root).unwrap_or(&path);
-        let relative_path_string = relative_path.to_string_lossy();
-        let contents = fs::read_to_string(&path)?;
-        let lines = contents.lines().collect::<Vec<_>>();
-        for line_number in
-            typescript_null_token_lines(&contents, path.extension()).map_err(io::Error::other)?
-        {
-            let line = lines
-                .get(line_number.saturating_sub(1))
-                .copied()
-                .unwrap_or("");
-            if !TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES.iter().any(
-                |(exception_path, exception_line)| {
-                    relative_path_string == *exception_path && line.trim() == *exception_line
-                },
-            ) {
-                violations.push(Violation {
-                    path: relative_path.to_path_buf(),
-                    line: line_number,
-                });
-            }
-        }
-    }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
-}
-
-fn typescript_null_token_lines(
-    source: &str,
-    extension: Option<&std::ffi::OsStr>,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_null_token_lines(source);
-    }
-
-    typescript_code_null_token_lines(source, 1)
-}
-
-fn typescript_code_null_token_lines(
-    source: &str,
-    first_line: usize,
-) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_null_nodes(tree.root_node(), first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
-    let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
-    let Some(tree) = parser.parse(source, None) else {
-        return Ok(Vec::new());
-    };
-    let mut lines = Vec::new();
-    collect_svelte_typescript_fragments(tree.root_node(), source, &mut lines)?;
-    lines.sort_unstable();
-    lines.dedup();
-    Ok(lines)
-}
-
-fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
-    if node.kind() == "null" {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_null_nodes(child, first_line, lines);
-    }
-}
-
-fn collect_svelte_typescript_fragments(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-) -> Result<(), tree_sitter::LanguageError> {
-    if (node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element"))
-        || node.kind() == "svelte_raw_text"
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_code_null_token_lines(
-                fragment,
-                node.start_position().row + 1,
-            )?);
-        }
-        return Ok(());
-    }
-
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_typescript_fragments(child, source, lines)?;
-    }
-    Ok(())
 }
 
 /// Reject declarations that make a raw JavaScript value look typed only in the
@@ -1306,17 +1112,19 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
     }
 
     #[test]
-    fn reports_authored_null_while_preserving_external_contracts() -> anyhow::Result<()> {
+    fn reports_all_authored_null_while_ignoring_generated_declarations() -> anyhow::Result<()> {
         let root = temporary_directory()?;
         let web_root = root.join("nook-app/nook-web");
         let app_source = web_root.join("nook-web-app/src");
         let extension_source = web_root.join("nook-web-extension/src/content");
         let select_source = web_root.join("nook-web-shared/src/vault-app/lib/components/ui/select");
         let scripts = web_root.join("nook-web-extension/scripts");
+        let github_scripts = root.join(".github/scripts");
         fs::create_dir_all(&app_source)?;
         fs::create_dir_all(&extension_source)?;
         fs::create_dir_all(&select_source)?;
         fs::create_dir_all(&scripts)?;
+        fs::create_dir_all(&github_scripts)?;
         fs::write(
             app_source.join("state.ts"),
             "const nullableName = 'annulled'\n// provider returned null\nconst message = \"provider returned null\"\nconst template = `provider returned null`\nconst matcher = /null|nil/\nconst interpolation = `value: ${null}`\nlet value: string | null = null\nconst ratio = amount / null\nconst assertedRatio = value! / (fallback ?? null)\nconst incrementedRatio = index++ / null\n",
@@ -1338,10 +1146,18 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
             "ref = $bindable(null),\n",
         )?;
         fs::write(scripts.join("build.ts"), "const value = null\n")?;
+        fs::write(
+            github_scripts.join("validate.cjs"),
+            "const missing = null\n",
+        )?;
 
         assert_eq!(
             typescript_null_absence_sentinels(&root)?,
             vec![
+                Violation {
+                    path: PathBuf::from(".github/scripts/validate.cjs"),
+                    line: 1,
+                },
                 Violation {
                     path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
                     line: 3,
@@ -1376,6 +1192,36 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
                 },
                 Violation {
                     path: PathBuf::from("nook-app/nook-web/nook-web-extension/scripts/build.ts"),
+                    line: 1,
+                },
+                Violation {
+                    path: PathBuf::from(
+                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                    ),
+                    line: 1,
+                },
+                Violation {
+                    path: PathBuf::from(
+                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                    ),
+                    line: 2,
+                },
+                Violation {
+                    path: PathBuf::from(
+                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                    ),
+                    line: 3,
+                },
+                Violation {
+                    path: PathBuf::from(
+                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                    ),
+                    line: 4,
+                },
+                Violation {
+                    path: PathBuf::from(
+                        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
+                    ),
                     line: 1,
                 },
             ]

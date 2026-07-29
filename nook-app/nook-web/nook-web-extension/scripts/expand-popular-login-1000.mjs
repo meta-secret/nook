@@ -8,6 +8,7 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { prettyJson } from './lib/pretty-json.mjs'
 import {
   emailFirst,
   emailPassword,
@@ -168,7 +169,7 @@ function main() {
     }
     writeFileSync(
       path.join(templatesDir, `${id}.json`),
-      `${JSON.stringify({ id, quirks: template.quirks ?? [], steps: template.steps }, null, 2)}\n`,
+      `${prettyJson({ id, quirks: template.quirks ?? [], steps: template.steps })}\n`,
     )
   }
   // Always write required templates
@@ -176,7 +177,7 @@ function main() {
     const template = existingTemplates.get(templateId)
     writeFileSync(
       path.join(templatesDir, `${templateId}.json`),
-      `${JSON.stringify({ id: templateId, quirks: template.quirks ?? [], steps: template.steps }, null, 2)}\n`,
+      `${prettyJson({ id: templateId, quirks: template.quirks ?? [], steps: template.steps })}\n`,
     )
   }
 
@@ -227,8 +228,8 @@ function main() {
     }
   }
 
-  writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`)
-  writeFileSync(siteShellsPath, `${JSON.stringify(siteShells, null, 2)}\n`)
+  writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
+  writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
 
   const counts = {}
   for (const site of sites) {

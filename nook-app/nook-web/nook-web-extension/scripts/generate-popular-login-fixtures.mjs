@@ -6,6 +6,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { prettyJson } from './lib/pretty-json.mjs'
 import { createHash } from 'node:crypto'
 import { buildPopularLoginFixtureData } from './popular-login-fixture-data.mjs'
 
@@ -265,20 +266,24 @@ function genericTemplateName(shell) {
   const steps = shell.steps ?? []
   const names = (steps[0]?.fields ?? []).map((field) => field.name)
   if (steps.length === 1 && names[0] === 'email' && names[1] === 'password') {
-    return 'email-password'
+    return { matched: true, templateName: 'email-password' }
   }
   if (
     steps.length === 1 &&
     names[0] === 'username' &&
     names[1] === 'password'
   ) {
-    return 'username-password'
+    return { matched: true, templateName: 'username-password' }
   }
-  if (steps.length >= 2 && names[0] === 'email') return 'email-first'
-  if (steps.length >= 2 && names[0] === 'loginfmt') return 'microsoft'
-  if (steps.length >= 2 && names[0] === 'identifier') return 'google'
-  if (steps.length === 1 && names[0] === 'accountName') return 'apple'
-  return null
+  if (steps.length >= 2 && names[0] === 'email')
+    return { matched: true, templateName: 'email-first' }
+  if (steps.length >= 2 && names[0] === 'loginfmt')
+    return { matched: true, templateName: 'microsoft' }
+  if (steps.length >= 2 && names[0] === 'identifier')
+    return { matched: true, templateName: 'google' }
+  if (steps.length === 1 && names[0] === 'accountName')
+    return { matched: true, templateName: 'apple' }
+  return { matched: false }
 }
 
 const catalog = SITES.map(([id, name, family, loginUrl, hosts], index) => ({
@@ -290,7 +295,7 @@ const catalog = SITES.map(([id, name, family, loginUrl, hosts], index) => ({
   rank: index + 1,
 }))
 
-writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`)
+writeFileSync(catalogPath, `${prettyJson(catalog)}\n`)
 
 /** @type {Map<string, { quirks: string[], steps: unknown[] }>} */
 const shellsById = new Map()
@@ -311,8 +316,10 @@ for (const site of catalog) {
   const shell = shellsById.get(site.id)
   const key = shapeKey(shell)
   if (templateIdByShape.has(key)) continue
+  const genericTemplate = genericTemplateName(shell)
   let templateId =
-    SPECIAL_TEMPLATE_IDS[site.id] ?? genericTemplateName(shell) ?? site.id
+    SPECIAL_TEMPLATE_IDS[site.id] ??
+    (genericTemplate.matched ? genericTemplate.templateName : site.id)
   const existing = templates.get(templateId)
   if (existing && shapeKey(existing) !== key) {
     templateId = `${templateId}-${createHash('sha1').update(key).digest('hex').slice(0, 6)}`
@@ -336,7 +343,7 @@ for (const [templateId, template] of [...templates.entries()].sort((a, b) =>
 )) {
   writeFileSync(
     path.join(templatesDir, `${templateId}.json`),
-    `${JSON.stringify(template, null, 2)}\n`,
+    `${prettyJson(template)}\n`,
   )
 }
 
@@ -352,7 +359,7 @@ for (const site of catalog) {
   }
 }
 
-writeFileSync(siteShellsPath, `${JSON.stringify(siteShells, null, 2)}\n`)
+writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
 
 console.log(`Wrote ${catalog.length} catalog entries → ${catalogPath}`)
 console.log(`Wrote ${templates.size} shell templates → ${templatesDir}`)

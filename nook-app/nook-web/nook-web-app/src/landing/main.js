@@ -20,8 +20,9 @@ const extensionManual = document.querySelector('.extension-manual')
 const githubStarsLink = document.querySelector('.github-stars')
 const githubStarsCount = document.querySelector('.github-stars-count')
 const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
-let extensionMetadata = null
-let extensionMetadataUnavailable = false
+const extensionMetadataLoading = Object.freeze({})
+const extensionMetadataUnavailable = Object.freeze({})
+let extensionMetadataState = extensionMetadataLoading
 let githubStarsState = { kind: 'not-loaded' }
 let followsSystemTheme = true
 
@@ -89,18 +90,19 @@ function validateExtensionMetadata(metadata) {
 
 function updateExtensionInstallState(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (extensionMetadataUnavailable) {
+  if (extensionMetadataState === extensionMetadataUnavailable) {
     extensionInstallStatus.textContent = messages['extension.unavailable']
     extensionInstallAction.hidden = true
     extensionStoreNote.hidden = true
     extensionManual.hidden = true
     return
   }
-  if (!extensionMetadata) {
+  if (extensionMetadataState === extensionMetadataLoading) {
     extensionInstallStatus.textContent = messages['extension.loading']
     return
   }
 
+  const extensionMetadata = extensionMetadataState.metadata
   const storeInstall = extensionMetadata.install_method === 'chrome_web_store'
   const actionKey = storeInstall
     ? 'extension.add_store'
@@ -123,9 +125,11 @@ async function loadExtensionMetadata() {
       headers: { Accept: 'application/json' },
     })
     if (!response.ok) throw new Error('Extension metadata unavailable.')
-    extensionMetadata = validateExtensionMetadata(await response.json())
+    extensionMetadataState = {
+      metadata: validateExtensionMetadata(await response.json()),
+    }
   } catch {
-    extensionMetadataUnavailable = true
+    extensionMetadataState = extensionMetadataUnavailable
   }
   updateExtensionInstallState()
 }

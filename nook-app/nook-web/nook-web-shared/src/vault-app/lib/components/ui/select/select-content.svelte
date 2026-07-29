@@ -8,7 +8,7 @@
   import type { WithoutChildrenOrChild } from '$lib/utils.js'
 
   let {
-    ref = $bindable(null),
+    ref = $bindable(),
     class: className,
     sideOffset = 4,
     portalProps,

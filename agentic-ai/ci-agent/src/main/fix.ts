@@ -1,14 +1,19 @@
 import { chdir } from "node:process";
 
-import { loadConfig } from "./config.js";
+import { CiAgentConfigLoadKind, loadConfig } from "./config.js";
 import {
   branchExistsOnOrigin,
   createFixPr,
   createOctokit,
   findOpenPr,
+  OpenPrLookupKind,
   parseRepository,
 } from "./github.js";
-import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
+import {
+  configureGitForCi,
+  hasWorkingTreeChanges,
+  pushFixBranch,
+} from "./git.js";
 import { createLogger } from "./logger.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
@@ -30,40 +35,51 @@ export async function runCiFix(): Promise<void> {
   await configureGitForCi(repoRoot, octokit);
   const repoRef = parseRepository(repository);
 
-  let prNumber = await findOpenPr(octokit, repoRef, fixBranch);
-  if (prNumber) {
+  let openPr = await findOpenPr(octokit, repoRef, fixBranch);
+  let prNumber: number;
+  if (openPr.kind === OpenPrLookupKind.Found) {
+    prNumber = openPr.number;
     log.info(`Open PR already exists for ${fixBranch} (#${prNumber})`);
   } else {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
     if (!cursorApiKey) {
-      console.log("::warning::CURSOR_API_KEY is not set — skipping AI CI fix job.");
+      console.log(
+        "::warning::CURSOR_API_KEY is not set — skipping AI CI fix job.",
+      );
       console.log(
         "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).",
       );
       return;
     }
 
-    const config = loadConfig();
-    if (!config) {
+    const loadedConfig = loadConfig();
+    if (loadedConfig.kind === CiAgentConfigLoadKind.MissingApiKey) {
       return;
     }
+    const config = loadedConfig.config;
 
     const prompt = await loadPrompt(config);
     await runFixAgent(config, prompt);
 
     if (!(await hasWorkingTreeChanges(repoRoot))) {
-      console.log("::warning::Agent finished but working tree is clean — nothing to push.");
+      console.log(
+        "::warning::Agent finished but working tree is clean — nothing to push.",
+      );
       return;
     }
 
     await pushFixBranch(repoRoot, fixBranch, runId);
 
     if (!(await branchExistsOnOrigin(octokit, repoRef, fixBranch))) {
-      throw new Error(`Fix branch ${fixBranch} was not found on origin after push`);
+      throw new Error(
+        `Fix branch ${fixBranch} was not found on origin after push`,
+      );
     }
 
-    prNumber = await findOpenPr(octokit, repoRef, fixBranch);
-    if (!prNumber) {
+    openPr = await findOpenPr(octokit, repoRef, fixBranch);
+    if (openPr.kind === OpenPrLookupKind.Found) {
+      prNumber = openPr.number;
+    } else {
       prNumber = await createFixPr(
         octokit,
         repoRef,
@@ -76,6 +92,10 @@ export async function runCiFix(): Promise<void> {
   }
 
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
-  log.info(`PR #${prNumber} opened for review; no automatic merge is configured`);
-  log.info(`Done — ${fixLabel} run ${runId} requires explicit merge authorization`);
+  log.info(
+    `PR #${prNumber} opened for review; no automatic merge is configured`,
+  );
+  log.info(
+    `Done — ${fixLabel} run ${runId} requires explicit merge authorization`,
+  );
 }

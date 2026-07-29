@@ -208,7 +208,6 @@ cache_telemetry:
         compile_requests: 0
         cache_hits: 0
         cache_misses: 0
-        hit_rate_percent: null
       buildkit:
         completed_steps: 60
         cached_steps: 48
@@ -243,12 +242,13 @@ waste_assessment:
 `task check` / `task ci:pr` local runs under the hosted-execution policy.
 `test_inventory.total`
 must equal the sum of `test_inventory.by_type`, and `test_inventory.head_sha`
-must match `source_pr.head_sha`. Parallel local and remote durations may overlap,
-so never add them together and call the result PR elapsed time. Percent changes
-compare the current value with the median of the selected baseline records; use
-`null` only for comparison values that cannot be computed from available history.
-When a baseline lacks `test_inventory`, set `test_inventory_total_change` to
-`null` and note the incomplete baseline in `baseline_note`.
+must match `source_pr.head_sha`. Parallel local and remote durations may
+overlap, so never add them together and call the result PR elapsed time.
+Percent changes compare the current value with the median of the selected
+baseline records. Omit comparison fields that cannot be computed from
+available history. When a baseline lacks `test_inventory`, omit
+`test_inventory_total_change` and note the incomplete baseline in
+`baseline_note`.
 
 Download cache artifacts for each recorded Actions attempt before writing the
 stats YAML:
@@ -263,8 +263,8 @@ Flatten the artifact summaries into `cache_telemetry.jobs`, then derive
 `cache_telemetry.totals` by summing counters and recomputing percentages from
 the summed numerators and denominators. Never average job percentages. The
 sccache denominator is `cache_hits + cache_misses`; a job with no executed
-cacheable compiler requests uses `null`. BuildKit's metric is explicitly
-`buildx_target_record_steps`: Bake target records can share dependency
+cacheable compiler requests omits `hit_rate_percent`. BuildKit's metric is
+explicitly `buildx_target_record_steps`: Bake target records can share dependency
 vertices, so it is a target-step reuse rate, not a byte count or a unique-layer
 count. Keep incomplete telemetry with its warnings instead of inventing zeros.
 

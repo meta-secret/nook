@@ -12,6 +12,7 @@ import { chromium } from 'playwright'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { prettyJson } from './lib/pretty-json.mjs'
 
 const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -97,13 +98,13 @@ async function captureSite(site) {
       ],
     }
     mkdirSync(templatesDir, { recursive: true })
-    writeFileSync(templatePath, `${JSON.stringify(template, null, 2)}\n`)
+    writeFileSync(templatePath, `${prettyJson(template)}\n`)
     siteShells[site.id] = {
       template: templateId,
       source: 'capture',
       loginUrl: site.loginUrl,
     }
-    writeFileSync(siteShellsPath, `${JSON.stringify(siteShells, null, 2)}\n`)
+    writeFileSync(siteShellsPath, `${prettyJson(siteShells)}\n`)
     console.log(`captured ${site.id} → template ${templateId}`)
     return true
   } catch (error) {

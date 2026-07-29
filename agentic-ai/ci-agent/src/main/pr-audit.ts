@@ -8,6 +8,7 @@ import {
   type RepoRef,
   type RequiredPrWorkflow,
 } from "./github.js";
+import { prettyJson } from "./json.js";
 
 type WorkflowAudit = RequiredPrWorkflow & {
   conclusion?: string;
@@ -54,9 +55,11 @@ export async function runPrAudit(requireReady: boolean): Promise<void> {
   const octokit = createOctokit();
   const repoRef = parseRepository(repository);
   const audit = await buildPrAudit(octokit, repoRef, prNumber);
-  console.log(JSON.stringify(audit, null, 2));
+  console.log(prettyJson(audit));
   if (requireReady && !audit.ready) {
-    throw new Error(`PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`);
+    throw new Error(
+      `PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`,
+    );
   }
 }
 
@@ -109,19 +112,31 @@ export async function buildPrAudit(
   if (pr.state !== "open") reasons.push(`state is ${pr.state}`);
   if (pr.draft) reasons.push("pull request is draft");
   const mergeability =
-    mergeable === true ? "mergeable" : mergeable === false ? "conflicting" : "unknown";
-  if (mergeability === "conflicting") reasons.push("pull request has a merge conflict");
-  if (mergeability === "unknown") reasons.push("pull request mergeability is unknown");
+    mergeable === true
+      ? "mergeable"
+      : mergeable === false
+        ? "conflicting"
+        : "unknown";
+  if (mergeability === "conflicting")
+    reasons.push("pull request has a merge conflict");
+  if (mergeability === "unknown")
+    reasons.push("pull request mergeability is unknown");
   if (comparison.data.behind_by > 0) {
-    reasons.push(`head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`);
+    reasons.push(
+      `head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`,
+    );
   }
   for (const workflow of requiredWorkflows) {
     if (!("runId" in workflow)) {
-      reasons.push(`${workflow.workflowName} run is not indexed for the current head`);
+      reasons.push(
+        `${workflow.workflowName} run is not indexed for the current head`,
+      );
     } else if (workflow.status !== "completed") {
       reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
     } else if (workflow.conclusion !== "success") {
-      reasons.push(`${workflow.workflowName} run concluded ${workflow.conclusion}`);
+      reasons.push(
+        `${workflow.workflowName} run concluded ${workflow.conclusion}`,
+      );
     }
   }
   if (
@@ -131,13 +146,19 @@ export async function buildPrAudit(
     reasons.push("exact-head github-pages deployment is not successful");
   }
   if (feedback.unresolvedThreads > 0) {
-    reasons.push(`${feedback.unresolvedThreads} unresolved review thread(s) already present`);
+    reasons.push(
+      `${feedback.unresolvedThreads} unresolved review thread(s) already present`,
+    );
   }
   if (feedback.substantiveComments > 0) {
-    reasons.push(`${feedback.substantiveComments} substantive PR comment(s) already present`);
+    reasons.push(
+      `${feedback.substantiveComments} substantive PR comment(s) already present`,
+    );
   }
   if (feedback.substantiveReviews > 0) {
-    reasons.push(`${feedback.substantiveReviews} substantive current-head review(s) already present`);
+    reasons.push(
+      `${feedback.substantiveReviews} substantive current-head review(s) already present`,
+    );
   }
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
@@ -203,14 +224,21 @@ async function inspectBranchProtection(
   branch: string,
 ): Promise<BranchProtectionAudit> {
   try {
-    const { data } = await octokit.rest.repos.getBranchProtection({ owner, repo, branch });
+    const { data } = await octokit.rest.repos.getBranchProtection({
+      owner,
+      repo,
+      branch,
+    });
     return {
       available: true,
       requiresApprovingReviews:
-        (data.required_pull_request_reviews?.required_approving_review_count ?? 0) > 0,
-      requiresConversationResolution: data.required_conversation_resolution?.enabled ?? false,
+        (data.required_pull_request_reviews?.required_approving_review_count ??
+          0) > 0,
+      requiresConversationResolution:
+        data.required_conversation_resolution?.enabled ?? false,
       requiredStatusChecks:
-        data.required_status_checks?.checks?.map((check) => check.context) ?? [],
+        data.required_status_checks?.checks?.map((check) => check.context) ??
+        [],
     };
   } catch (error: unknown) {
     if (isHttpStatus(error, 403) || isHttpStatus(error, 404)) {
@@ -248,22 +276,23 @@ async function inspectExactHeadDeployment(
       };
     }
   }
-  return ;
+  return;
 }
 
 function readPrNumber(): number {
   const raw = process.env.PR_NUMBER?.trim() ?? "";
   const value = Number(raw);
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`PR_NUMBER must be a positive integer (received ${raw || "empty"})`);
+    throw new Error(
+      `PR_NUMBER must be a positive integer (received ${raw || "empty"})`,
+    );
   }
   return value;
 }
 
 function isHttpStatus(error: unknown, status: number): boolean {
   return (
-    typeof error === "object" &&
-    error !== null &&
+    error instanceof Error &&
     "status" in error &&
     (error as { status: number }).status === status
   );

@@ -4,7 +4,7 @@
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down'
 
   let {
-    ref = $bindable(null),
+    ref = $bindable(),
     class: className,
     children,
     size = 'default',

@@ -6,6 +6,15 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
+export enum OpenPrLookupKind {
+  Found = "found",
+  NotFound = "not-found",
+}
+
+export type OpenPrLookup =
+  | { kind: OpenPrLookupKind.Found; number: number }
+  | { kind: OpenPrLookupKind.NotFound };
+
 export function parseRepository(fullName: string): RepoRef {
   const [owner, repo] = fullName.split("/");
   if (!owner || !repo) {
@@ -34,7 +43,7 @@ export async function findOpenPr(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   headBranch: string,
-): Promise<number | null> {
+): Promise<OpenPrLookup> {
   const { data } = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42,7 +51,10 @@ export async function findOpenPr(
     head: `${owner}:${headBranch}`,
     per_page: 1,
   });
-  return data[0]?.number ?? null;
+  const match = data[0];
+  return match
+    ? { kind: OpenPrLookupKind.Found, number: match.number }
+    : { kind: OpenPrLookupKind.NotFound };
 }
 
 export async function branchExistsOnOrigin(
@@ -93,8 +105,8 @@ export async function createFixPr(
     return data.number;
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
-    if (existing) {
-      return existing;
+    if (existing.kind === OpenPrLookupKind.Found) {
+      return existing.number;
     }
     throw err;
   }
@@ -411,8 +423,7 @@ export async function inspectPrFeedback(
 
 function isNotFound(err: unknown): boolean {
   return (
-    typeof err === "object" &&
-    err !== null &&
+    err instanceof Error &&
     "status" in err &&
     (err as { status: number }).status === 404
   );
