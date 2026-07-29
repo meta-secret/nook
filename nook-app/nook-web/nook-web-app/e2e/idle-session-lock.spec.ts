@@ -52,7 +52,7 @@ test.describe('idle session auto-lock', () => {
     await expect(page.getByTestId('login-session-expired')).not.toBeVisible()
 
     await waitForPersistedAppLog(page, {
-      scope: 'vault',
+      scope: 'vault-session',
       level: 'info',
       messageIncludes: 'vault session unlocked',
     })

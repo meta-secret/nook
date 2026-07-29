@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  appendAuthProviders,
   clearBrowserVault,
   connectLocalVault,
   disableVaultIdleLock,
@@ -85,16 +86,16 @@ test.describe('sync provider credential encryption', () => {
 
   test('load rejects legacy plaintext IndexedDB rows', async ({ page }) => {
     const pat = 'github_pat_22E2ElegacyUPGRADE'
-    await seedExtraGithubProviders(page, [
+    await waitForAuthProvidersE2eHook(page)
+    await appendAuthProviders(page, [
       {
         id: 'gh-e2e-legacy',
+        type: 'github',
         label: 'GitHub · legacy',
         githubRepo: 'nook-legacy',
         githubPat: pat,
       },
     ])
-
-    await waitForAuthProvidersE2eHook(page)
 
     await expect(loadDecryptedAuthProvidersInBrowser(page)).rejects.toThrow(
       'Provider credential is not age-encrypted.',
