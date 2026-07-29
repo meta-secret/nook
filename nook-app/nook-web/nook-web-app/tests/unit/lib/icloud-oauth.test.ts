@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   acceptICloudSharedVault,
   createICloudSharedVault,
+  ICloudAccountNameKind,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
   prepareICloudSignInControl,
@@ -9,6 +10,7 @@ import {
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
 } from '$lib/icloud-oauth'
+import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
 import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
@@ -39,18 +41,27 @@ describe('icloud-oauth', () => {
   })
 
   it('maps tokens to oauth-file icloud config', () => {
-    expect(
-      oauthTokensToICloudConfig({
+    const config = oauthTokensToICloudConfig(
+      {
         accessToken: 'ck-web-auth-token',
-        accountName: 'Apple User',
-      }),
-    ).toEqual({
-      preset: 'icloud',
-      accessToken: 'ck-web-auth-token',
-      accountEmail: 'Apple User',
-      driveMode: 'private',
-      iCloudMode: 'private',
+        accountName: {
+          kind: ICloudAccountNameKind.Available,
+          value: 'Apple User',
+        },
+      },
+      oauthConfigurationNotApplicable(),
+    )
+    expect(config.preset).toBe('icloud')
+    expect(config.accessToken).toEqual({
+      state: 'accessToken',
+      value: 'ck-web-auth-token',
     })
+    expect(config.accountEmail).toEqual({
+      state: 'email',
+      value: 'Apple User',
+    })
+    expect(config.driveMode).toBe('private')
+    expect(config.iCloudMode).toBe('private')
   })
 
   describe('shared CloudKit target', () => {

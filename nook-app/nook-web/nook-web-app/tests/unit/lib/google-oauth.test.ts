@@ -9,6 +9,7 @@ import {
   oauthTokensToConfig,
   requestGoogleAccessToken,
 } from '$lib/google-oauth'
+import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
 
 describe('google-oauth', () => {
   it('is configured with the committed client id', () => {
@@ -16,10 +17,13 @@ describe('google-oauth', () => {
   })
 
   it('detects expired oauth access tokens with skew', () => {
-    const expired = oauthTokensToConfig({
-      accessToken: 'token',
-      expiresAt: new Date(Date.now() - 1_000).toISOString(),
-    })
+    const expired = oauthTokensToConfig(
+      {
+        accessToken: 'token',
+        expiresAt: new Date(Date.now() - 1_000).toISOString(),
+      },
+      oauthConfigurationNotApplicable(),
+    )
     expect(isOAuthAccessTokenExpired(expired)).toBe(true)
   })
 

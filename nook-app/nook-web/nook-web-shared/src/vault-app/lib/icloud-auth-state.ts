@@ -32,3 +32,30 @@ export enum CloudKitIdentityKind {
 export type CloudKitIdentity =
   | { kind: CloudKitIdentityKind.SignedOut }
   | { kind: CloudKitIdentityKind.SignedIn; identity: CloudKitUserIdentity };
+
+export enum ICloudAccountNameKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+export type ICloudAccountName =
+  | { kind: ICloudAccountNameKind.Unavailable }
+  | { kind: ICloudAccountNameKind.Available; value: string };
+
+export function iCloudAccountNameFromIdentity(
+  identity: CloudKitIdentity,
+): ICloudAccountName {
+  if (identity.kind === CloudKitIdentityKind.SignedOut) {
+    return { kind: ICloudAccountNameKind.Unavailable };
+  }
+  const given = identity.identity.nameComponents?.givenName?.trim() ?? "";
+  const family = identity.identity.nameComponents?.familyName?.trim() ?? "";
+  const fullName = `${given} ${family}`.trim();
+  if (fullName) {
+    return { kind: ICloudAccountNameKind.Available, value: fullName };
+  }
+  const email = identity.identity.lookupInfo?.emailAddress?.trim();
+  return email
+    ? { kind: ICloudAccountNameKind.Available, value: email }
+    : { kind: ICloudAccountNameKind.Unavailable };
+}

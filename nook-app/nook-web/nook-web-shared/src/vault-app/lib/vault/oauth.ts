@@ -1,6 +1,8 @@
 import type { VaultState } from "$lib/vault.svelte";
 import {
   bindGoogleDriveSharedFolder,
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
   DEFAULT_DRIVE_BACKUP_NAME,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
@@ -10,6 +12,12 @@ import {
   OAuthFileNameKind,
   setGoogleDriveProviderMode,
   setICloudProviderMode,
+  storedICloudShareTarget,
+  storedOAuthAccountEmail,
+  storedOAuthRemoteFileName,
+  unresolvedOAuthRemoteFileId,
+  OAUTH_FILE_PROVIDER_TYPE,
+  providerPersistenceDefaults,
   type GoogleDriveMode,
   type ICloudMode,
   type OAuthFileConfig,
@@ -31,6 +39,7 @@ import {
   acceptICloudSharedVault,
   createICloudSharedVault,
   ensureValidICloudOAuthFileConfig,
+  ICloudAccountNameKind,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
   prepareICloudSignInControl,
@@ -44,7 +53,12 @@ import {
 import { createLogger } from "$lib/log";
 import {
   prepareSharedStorageGrant,
+  createSharedStorageTarget,
   providerOauthPresetForConfig,
+  resolveSharedStorageGrantTarget,
+  sharedStorageGrantAccessToken,
+  SharedStorageGrantTargetKind,
+  suggestedSharedStorageTarget,
 } from "$lib/vault-architecture";
 import {
   LoginSetupKind,
@@ -64,16 +78,18 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   const oauthFile = state.oauthFileDraft.config;
   log.info("oauth token freshness check started", {
     preset: oauthFile.preset,
-    hasAccessToken: Boolean(oauthFile.accessToken?.trim()),
+    hasAccessToken:
+      oauthAccessToken(oauthFile).kind === OAuthAccessTokenKind.Available,
     expiresAt: oauthFile.expiresAt,
   });
   const providerToRefresh: ReturnType<typeof findDuplicateSyncProvider> =
     state.loginSetup.kind !== LoginSetupKind.Active && !state.addProviderOpen
       ? findDuplicateSyncProvider(state.syncProviders, {
+          ...providerPersistenceDefaults(),
           id: "oauth-refresh-target",
-          type: "oauth-file",
+          type: OAUTH_FILE_PROVIDER_TYPE,
           label: "",
-          oauthFile,
+          oauthFile: configuredOAuthFile(oauthFile),
           createdAt: "",
         })
       : { kind: DuplicateSyncProviderKind.Unique };
@@ -82,8 +98,9 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
       ? await ensureValidICloudOAuthFileConfig(oauthFile)
       : await ensureValidOAuthFileConfig(oauthFile);
   if (
-    refreshed.accessToken === oauthFile.accessToken &&
-    refreshed.expiresAt === oauthFile.expiresAt
+    JSON.stringify(refreshed.accessToken) ===
+      JSON.stringify(oauthFile.accessToken) &&
+    JSON.stringify(refreshed.expiresAt) === JSON.stringify(oauthFile.expiresAt)
   ) {
     log.info("oauth token freshness check kept existing token", {
       preset: refreshed.preset,
@@ -95,7 +112,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   if (providerToRefresh.kind === DuplicateSyncProviderKind.Duplicate) {
     state.providers = state.providers.map((provider) =>
       provider.id === providerToRefresh.provider.id
-        ? { ...provider, oauthFile: refreshed }
+        ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
         : provider,
     );
     await state.persistProviders();
@@ -116,9 +133,9 @@ function bindSharedICloudTarget(
   const sharedConfig: OAuthFileConfig = {
     ...config,
     iCloudMode: "shared",
-    iCloudShareTarget: storageTargetId,
+    iCloudShareTarget: storedICloudShareTarget(storageTargetId),
+    fileId: unresolvedOAuthRemoteFileId(),
   };
-  delete sharedConfig.fileId;
   return sharedConfig;
 }
 
@@ -136,7 +153,7 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
     const shared =
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
       (state.oauthFileDraft.config.driveMode === "shared" ||
-        Boolean(state.oauthFileDraft.config.folderId?.trim()));
+        state.oauthFileDraft.config.folderId.state === "folderId");
     const tokens = shared
       ? await requestGoogleDriveSharedAccess({
           prompt: GoogleOAuthPrompt.Consent,
@@ -163,8 +180,7 @@ export function selectGoogleDriveMode(
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
   const oauthFile = state.oauthFileDraft.config;
   if (oauthFile.preset !== "google-drive") return;
-  const current =
-    oauthFile.driveMode ?? (oauthFile.folderId?.trim() ? "shared" : "private");
+  const current = oauthFile.driveMode;
   if (current === mode) return;
   state.configureOauthFile(setGoogleDriveProviderMode(oauthFile, mode));
   state.sharedGrantInstructions = "";
@@ -175,9 +191,7 @@ export function selectICloudMode(state: VaultState, mode: ICloudMode): void {
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) return;
   const oauthFile = state.oauthFileDraft.config;
   if (oauthFile.preset !== "icloud") return;
-  const current =
-    oauthFile.iCloudMode ??
-    (oauthFile.iCloudShareTarget?.trim() ? "shared" : "private");
+  const current = oauthFile.iCloudMode;
   if (current === mode) return;
   state.configureOauthFile(setICloudProviderMode(oauthFile, mode));
   state.sharedGrantInstructions = "";
@@ -189,7 +203,8 @@ export async function createICloudSharedProvider(
 ): Promise<void> {
   if (
     state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-    !state.oauthFileDraft.config.accessToken?.trim()
+    oauthAccessToken(state.oauthFileDraft.config).kind ===
+      OAuthAccessTokenKind.Missing
   ) {
     throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
   }
@@ -224,7 +239,8 @@ export async function useICloudSharedProvider(
 ): Promise<void> {
   if (
     state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-    !state.oauthFileDraft.config.accessToken?.trim()
+    oauthAccessToken(state.oauthFileDraft.config).kind ===
+      OAuthAccessTokenKind.Missing
   ) {
     throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
   }
@@ -270,53 +286,65 @@ export async function createGoogleSharedFolder(
       ? remoteFileName.fileName
       : DEFAULT_DRIVE_BACKUP_NAME;
   const grant = await prepareSharedStorageGrant({
-    providerType: "oauth-file",
+    providerType: OAUTH_FILE_PROVIDER_TYPE,
     oauthPreset: providerOauthPresetForConfig(oauthFile),
     joinerIdentityKind: "email",
     joinerIdentity: collaboratorEmail,
-    storageTargetHint: folderName,
-    accessToken: accessCredential.token,
+    storageTargetHint: suggestedSharedStorageTarget(folderName),
+    storageTarget: createSharedStorageTarget(),
+    credential: sharedStorageGrantAccessToken(accessCredential.token),
   });
   if (grant.kind === "unsupported") {
     throw new Error(state.t(grant.reasonKey));
   }
-  if (!grant.storageTargetId) {
+  const target = resolveSharedStorageGrantTarget(grant.target);
+  if (target.kind === SharedStorageGrantTargetKind.Unavailable) {
     throw new Error(state.t("provider_setup.google_shared_create_failed"));
   }
   state.configureOauthFile(
     bindGoogleDriveSharedFolder(
       state.requireOauthFileConfig(),
-      grant.storageTargetId,
+      target.storageTargetId,
     ),
   );
   state.sharedGrantInstructions =
     grant.kind === "granted"
       ? state.t("provider_setup.google_shared_folder_created", {
           email: collaboratorEmail.trim(),
-          folder: grant.storageTargetName ?? grant.storageTargetId,
+          folder:
+            target.kind === SharedStorageGrantTargetKind.Named
+              ? target.storageTargetName
+              : target.storageTargetId,
         })
       : state.t(grant.instructionsKey, {
           email: grant.joinerIdentity,
           folder:
-            grant.storageTargetName ?? grant.storageTargetId ?? folderName,
+            target.kind === SharedStorageGrantTargetKind.Named
+              ? target.storageTargetName
+              : target.storageTargetId,
         });
-  return grant.storageTargetName ?? folderName;
+  return target.kind === SharedStorageGrantTargetKind.Named
+    ? target.storageTargetName
+    : folderName;
 }
 
 export async function useGoogleSharedFolder(
   state: VaultState,
   folderRef: string,
 ): Promise<string> {
-  const accessToken =
+  const accessCredential =
     state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? state.oauthFileDraft.config.accessToken?.trim()
-      : "";
-  if (!accessToken) {
+      ? oauthAccessToken(state.oauthFileDraft.config)
+      : { kind: OAuthAccessTokenKind.Missing as const };
+  if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
     throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
   }
   let folder;
   try {
-    folder = await verifySharedGoogleDriveFolder(accessToken, folderRef);
+    folder = await verifySharedGoogleDriveFolder(
+      accessCredential.token,
+      folderRef,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("provider_setup.google_shared_not_folder")) {
@@ -391,7 +419,8 @@ export async function signInWithICloud(
     log.info("iCloud sign-in returned token", {
       hasAccessToken: Boolean(tokens.accessToken.trim()),
       tokenLength: tokens.accessToken.length,
-      hasAccountName: Boolean(tokens.accountName?.trim()),
+      hasAccountName:
+        tokens.accountName.kind === ICloudAccountNameKind.Available,
     });
     await applyICloudOAuthTokens(state, tokens);
   } catch (error) {
@@ -465,33 +494,22 @@ async function applyICloudOAuthTokens(
   }
   state.selectOauthSetupPreset("icloud");
   const previousOauthFile = state.oauthFileDraft;
+  const fallbackFileName = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+  const existingConfiguration =
+    previousOauthFile.kind === OAuthFileDraftKind.Configured
+      ? configuredOAuthFile(previousOauthFile.config)
+      : configuredOAuthFile(defaultOAuthFileConfig("icloud", fallbackFileName));
   state.configureOauthFile(
-    oauthTokensToICloudConfig(tokens, {
-      ...(previousOauthFile.kind === OAuthFileDraftKind.Configured
-        ? previousOauthFile.config
-        : {}),
-      preset: "icloud",
-      accessToken: tokens.accessToken,
-      driveMode: "private",
-      iCloudMode:
-        previousOauthFile.kind === OAuthFileDraftKind.Configured
-          ? (previousOauthFile.config.iCloudMode ??
-            (previousOauthFile.config.iCloudShareTarget?.trim()
-              ? "shared"
-              : "private"))
-          : "private",
-      fileName:
-        (previousOauthFile.kind === OAuthFileDraftKind.Configured
-          ? previousOauthFile.config.fileName?.trim()
-          : "") ||
-        state.githubRepo.trim() ||
-        DEFAULT_DRIVE_BACKUP_NAME,
-      accountEmail: tokens.accountName,
-    }),
+    oauthTokensToICloudConfig(tokens, existingConfiguration),
   );
   const oauthFile = state.requireOauthFileConfig();
   state.githubPat = "";
-  state.githubRepo = oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+  const resolvedFileName = oauthFileName(oauthFile);
+  state.githubRepo =
+    resolvedFileName.kind === OAuthFileNameKind.Resolved
+      ? resolvedFileName.fileName
+      : DEFAULT_DRIVE_BACKUP_NAME;
+  const accessCredential = oauthAccessToken(oauthFile);
   log.info("iCloud oauth tokens applied to vault state", {
     storageMode: state.storageMode,
     oauthSetupPreset:
@@ -500,8 +518,11 @@ async function applyICloudOAuthTokens(
         : "",
     hasOauthFile: true,
     fileName: oauthFile.fileName,
-    hasAccessToken: Boolean(oauthFile.accessToken?.trim()),
-    tokenLength: oauthFile.accessToken?.length ?? 0,
+    hasAccessToken: accessCredential.kind === OAuthAccessTokenKind.Available,
+    tokenLength:
+      accessCredential.kind === OAuthAccessTokenKind.Available
+        ? accessCredential.token.length
+        : 0,
   });
 }
 
@@ -543,36 +564,33 @@ async function applyGoogleOAuthTokens(
   }
   state.selectOauthSetupPreset("google-drive");
   const previousOauthFile = state.oauthFileDraft;
+  const fallbackFileName = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+  const previousConfig =
+    previousOauthFile.kind === OAuthFileDraftKind.Configured
+      ? previousOauthFile.config
+      : defaultOAuthFileConfig("google-drive", fallbackFileName);
+  const existingConfig: OAuthFileConfig = {
+    ...previousConfig,
+    fileName:
+      previousConfig.fileName.state === "fileName"
+        ? previousConfig.fileName
+        : storedOAuthRemoteFileName(fallbackFileName),
+    accountEmail:
+      email.kind === GoogleAccountIdentityKind.Available
+        ? storedOAuthAccountEmail(email.label)
+        : previousConfig.accountEmail,
+  };
   state.configureOauthFile(
-    oauthTokensToConfig(tokens, {
-      ...(previousOauthFile.kind === OAuthFileDraftKind.Configured
-        ? previousOauthFile.config
-        : {}),
-      preset: "google-drive",
-      accessToken: tokens.accessToken,
-      expiresAt: tokens.expiresAt,
-      driveMode:
-        previousOauthFile.kind === OAuthFileDraftKind.Configured
-          ? (previousOauthFile.config.driveMode ??
-            (previousOauthFile.config.folderId?.trim() ? "shared" : "private"))
-          : "private",
-      iCloudMode: "private",
-      fileName:
-        (previousOauthFile.kind === OAuthFileDraftKind.Configured
-          ? previousOauthFile.config.fileName?.trim()
-          : "") ||
-        state.githubRepo.trim() ||
-        DEFAULT_DRIVE_BACKUP_NAME,
-      ...(email.kind === GoogleAccountIdentityKind.Available
-        ? { accountEmail: email.label }
-        : {}),
-    }),
+    oauthTokensToConfig(tokens, configuredOAuthFile(existingConfig)),
   );
   const oauthFile = state.requireOauthFileConfig();
   state.githubPat = "";
   const sharedGoogleDrive =
-    oauthFile.driveMode === "shared" || Boolean(oauthFile.folderId?.trim());
+    oauthFile.driveMode === "shared" || oauthFile.folderId.state === "folderId";
+  const resolvedFileName = oauthFileName(oauthFile);
   state.githubRepo = sharedGoogleDrive
     ? sharedFolderName || DEFAULT_DRIVE_BACKUP_NAME
-    : oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+    : resolvedFileName.kind === OAuthFileNameKind.Resolved
+      ? resolvedFileName.fileName
+      : DEFAULT_DRIVE_BACKUP_NAME;
 }

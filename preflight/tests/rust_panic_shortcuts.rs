@@ -45,7 +45,9 @@ fn is_rust_test_source(path: &Path) -> bool {
         || path
             .file_stem()
             .and_then(|stem| stem.to_str())
-            .is_some_and(|stem| stem == "test" || stem.ends_with("_test") || stem.ends_with("_tests"))
+            .is_some_and(|stem| {
+                stem == "test" || stem.ends_with("_test") || stem.ends_with("_tests")
+            })
 }
 
 #[test]

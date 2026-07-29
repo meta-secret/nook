@@ -11,7 +11,11 @@
  *   collaborator can read the owner-created folder and immutable event files.
  */
 
-import type { OAuthFileConfig } from "$lib/auth-providers";
+import type {
+  OAuthFileConfig,
+  StoredOAuthFileConfiguration,
+} from "$lib/auth-providers";
+import { configuredOAuthFile } from "$lib/auth-providers";
 import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
 
@@ -264,7 +268,7 @@ export async function requestGoogleDriveSharedAccess(options?: {
 
 export function oauthTokensToConfig(
   tokens: GoogleOAuthTokens,
-  existing?: OAuthFileConfig,
+  existing: StoredOAuthFileConfiguration,
 ): OAuthFileConfig {
   return googleOAuthTokensToConfigCore(
     tokens.accessToken,
@@ -277,8 +281,8 @@ export function isOAuthAccessTokenExpired(
   config: OAuthFileConfig,
   skewMs = 60_000,
 ): boolean {
-  if (!config.expiresAt) return false;
-  const expiresAt = Date.parse(config.expiresAt);
+  if (config.expiresAt.state === "unknown") return false;
+  const expiresAt = Date.parse(config.expiresAt.value);
   if (Number.isNaN(expiresAt)) return false;
   return Date.now() + skewMs >= expiresAt;
 }
@@ -290,7 +294,7 @@ export async function ensureValidOAuthFileConfig(
     return config;
   }
   const shared =
-    config.driveMode === "shared" || Boolean(config.folderId?.trim());
+    config.driveMode === "shared" || config.folderId.state === "folderId";
   const scope = shared
     ? GoogleDriveOAuthScope.Shared
     : GoogleDriveOAuthScope.AppData;
@@ -298,7 +302,7 @@ export async function ensureValidOAuthFileConfig(
     prompt: GoogleOAuthPrompt.Default,
     scope,
   });
-  return oauthTokensToConfig(refreshed, config);
+  return oauthTokensToConfig(refreshed, configuredOAuthFile(config));
 }
 
 export async function fetchGoogleAccountEmail(

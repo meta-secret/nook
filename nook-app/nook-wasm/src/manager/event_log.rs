@@ -851,8 +851,8 @@ mod tests {
         );
         let issue = manager.take_event_log_sync_issue().issue()?;
         assert!(issue.is_store_mismatch());
-        assert_eq!(issue.local_store_id().as_deref(), Some("store_local12345"));
-        assert_eq!(issue.remote_store_id().as_deref(), Some("store_remote1234"));
+        assert_eq!(issue.local_store_id()?, "store_local12345");
+        assert_eq!(issue.remote_store_id()?, "store_remote1234");
         Ok(())
     }
 }

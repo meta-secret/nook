@@ -696,14 +696,14 @@ mod wasm_tests {
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
-                Some(nook_core::OauthFilePreset::GoogleDrive),
+                nook_core::OauthFilePreset::GoogleDrive,
             )?,
             "google-drive"
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
-                Some(nook_core::OauthFilePreset::ICloud),
+                nook_core::OauthFilePreset::ICloud,
             )?,
             "icloud"
         );
@@ -743,10 +743,10 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn classify_authentication_outcome_preserves_core_policy() {
+    fn classify_authentication_outcome_preserves_core_policy() -> anyhow::Result<()> {
         let navigation_only =
             NookAuthenticationOutcomeObservation::new(true, false, false, false, false, false, 500);
-        let navigation = classify_authentication_outcome(&navigation_only, None);
+        let navigation = classify_authentication_outcome_with_default_timeout(&navigation_only);
         assert_eq!(
             navigation.verdict(),
             nook_core::AuthenticationOutcomeVerdict::Insufficient
@@ -755,7 +755,7 @@ mod wasm_tests {
 
         let success =
             NookAuthenticationOutcomeObservation::new(true, false, true, false, false, false, 300);
-        let sufficient = classify_authentication_outcome(&success, None);
+        let sufficient = classify_authentication_outcome_with_default_timeout(&success);
         assert_eq!(
             sufficient.verdict(),
             nook_core::AuthenticationOutcomeVerdict::Sufficient
@@ -765,9 +765,10 @@ mod wasm_tests {
         let conflict =
             NookAuthenticationOutcomeObservation::new(false, true, true, true, false, false, 100);
         assert_eq!(
-            classify_authentication_outcome(&conflict, None).verdict(),
+            classify_authentication_outcome_with_default_timeout(&conflict).verdict(),
             nook_core::AuthenticationOutcomeVerdict::Conflicting
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -886,21 +887,22 @@ mod wasm_tests {
 #[cfg(test)]
 mod tests {
     use crate::public_api::is_google_drive_shared_grant_request;
-    use nook_core::{OauthFilePreset, ProviderOauthPreset};
+    use nook_core::{OauthFilePreset, ProviderOauthPreset, StorageProviderType};
 
     #[test]
-    fn google_drive_grant_requires_explicit_preset() {
+    fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
         assert!(!is_google_drive_shared_grant_request(
-            "oauth-file",
+            StorageProviderType::OauthFile,
             ProviderOauthPreset::NotApplicable,
         ));
         assert!(is_google_drive_shared_grant_request(
-            "oauth-file",
+            StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
         ));
         assert!(!is_google_drive_shared_grant_request(
-            "oauth-file",
+            StorageProviderType::OauthFile,
             ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
         ));
+        Ok(())
     }
 }

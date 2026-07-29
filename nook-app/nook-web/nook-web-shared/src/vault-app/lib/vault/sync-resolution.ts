@@ -18,6 +18,12 @@ import {
   type ConflictProviderSave,
 } from "$lib/vault/sync-operation-state";
 import { StagedRemoteStorageKind } from "$lib/vault/state/provider.svelte";
+import {
+  localFolderHandle,
+  LocalFolderHandleKind,
+  localFolderProviderConfiguration,
+  LocalFolderProviderConfigurationKind,
+} from "$lib/auth-providers";
 
 const log = createLogger("vault-sync-resolution");
 
@@ -254,15 +260,21 @@ export async function resolveSyncConflictImportRemote(
       const provider = state.providers.find(
         (p) => p.id === conflict.providerId,
       );
-      if (provider?.type === "local-folder") {
-        const handleId = provider.localFolder?.handleId;
-        if (!handleId) {
+      if (provider && provider.type === "local-folder") {
+        const configuration = localFolderProviderConfiguration(provider);
+        if (
+          configuration.kind === LocalFolderProviderConfigurationKind.Missing
+        ) {
+          throw new Error(state.t("auth_storage.local_folder_choose_err"));
+        }
+        const handle = localFolderHandle(configuration.config);
+        if (handle.kind === LocalFolderHandleKind.Unselected) {
           throw new Error(state.t("auth_storage.local_folder_choose_err"));
         }
         importedStoreId = (await state.enqueueStorage(() =>
           state
             .requireManager()
-            .importLocalFolderEventLogAsLocalVault(handleId),
+            .importLocalFolderEventLogAsLocalVault(handle.handleId),
         )) as string;
       } else {
         importedStoreId = (await state.enqueueStorage(() =>

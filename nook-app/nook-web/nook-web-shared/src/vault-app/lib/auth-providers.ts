@@ -357,6 +357,20 @@ export function oauthFileName(config: OAuthFileConfig): OAuthFileName {
     : { kind: OAuthFileNameKind.Unresolved };
 }
 
+export function oauthAccountLabel(config: OAuthFileConfig): string {
+  return config.accountEmail.state === "email"
+    ? config.accountEmail.value.trim()
+    : "";
+}
+
+export function hasGoogleDriveFolder(config: OAuthFileConfig): boolean {
+  return config.folderId.state === "folderId";
+}
+
+export function hasICloudShareTarget(config: OAuthFileConfig): boolean {
+  return config.iCloudShareTarget.state === "sharedTarget";
+}
+
 export enum LocalFolderHandleKind {
   Unselected = "unselected",
   Selected = "selected",
@@ -397,6 +411,14 @@ export function oauthProviderConfiguration(
         config: provider.oauthFile.config,
       }
     : { kind: OAuthProviderConfigurationKind.Missing };
+}
+
+export function isICloudProvider(provider: StorageProvider): boolean {
+  const configuration = oauthProviderConfiguration(provider);
+  return (
+    configuration.kind === OAuthProviderConfigurationKind.Configured &&
+    configuration.config.preset === "icloud"
+  );
 }
 
 export enum LocalFolderProviderConfigurationKind {

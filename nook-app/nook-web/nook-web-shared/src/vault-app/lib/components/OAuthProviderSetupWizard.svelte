@@ -15,7 +15,14 @@
     ICloudMode,
     OAuthFilePreset,
   } from '$lib/auth-providers'
-  import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
+  import {
+    DEFAULT_DRIVE_BACKUP_NAME,
+    hasGoogleDriveFolder,
+    hasICloudShareTarget,
+    oauthAccessToken,
+    oauthAccountLabel,
+    OAuthAccessTokenKind,
+  } from '$lib/auth-providers'
   import { createLogger } from '$lib/log'
   import {
     BrowserOAuthProvider,
@@ -55,18 +62,12 @@
   const googleDriveMode = $derived.by((): GoogleDriveMode => {
     const draft = vault.oauthFileDraft
     if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
-    return (
-      draft.config.driveMode ??
-      (draft.config.folderId?.trim() ? 'shared' : 'private')
-    )
+    return draft.config.driveMode
   })
   const iCloudMode = $derived.by((): ICloudMode => {
     const draft = vault.oauthFileDraft
     if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
-    return (
-      draft.config.iCloudMode ??
-      (draft.config.iCloudShareTarget?.trim() ? 'shared' : 'private')
-    )
+    return draft.config.iCloudMode
   })
   const isSharedGoogleDrive = $derived(
     !isICloud && googleDriveMode === 'shared',
@@ -75,21 +76,22 @@
   const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud)
   const oauthSignedIn = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-      Boolean(vault.oauthFileDraft.config.accessToken?.trim()),
+      oauthAccessToken(vault.oauthFileDraft.config).kind ===
+        OAuthAccessTokenKind.Available,
   )
   const sharedTargetReady = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
       ((isSharedGoogleDrive &&
-        Boolean(vault.oauthFileDraft.config.folderId?.trim())) ||
+        hasGoogleDriveFolder(vault.oauthFileDraft.config)) ||
         (isSharedICloud &&
-          Boolean(vault.oauthFileDraft.config.iCloudShareTarget?.trim()))),
+          hasICloudShareTarget(vault.oauthFileDraft.config))),
   )
   const canConnect = $derived(
     oauthSignedIn && (!isSharedProvider || sharedTargetReady),
   )
   const oauthAccount = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? (vault.oauthFileDraft.config.accountEmail ?? '')
+      ? oauthAccountLabel(vault.oauthFileDraft.config)
       : '',
   )
   const oauthBusy = $derived(

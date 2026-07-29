@@ -19,6 +19,7 @@
   import { Button } from '$lib/components/ui/button'
   import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
+    isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
     type OAuthFilePreset,
@@ -217,7 +218,7 @@
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
       selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
-      selectedProvider.provider.oauthFile?.preset !== 'icloud',
+      !isICloudProvider(selectedProvider.provider),
   )
   const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
     const entry = passwordEntries.find(

@@ -24,6 +24,10 @@ import {
 import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
+  localFolderHandle,
+  LocalFolderHandleKind,
+  localFolderProviderConfiguration,
+  LocalFolderProviderConfigurationKind,
   unselectedVaultScope,
   type StorageProvider,
 } from "$lib/auth-providers";
@@ -499,12 +503,16 @@ export async function syncLocalFolderProvider(
     throw new Error(state.t("errors.manager_uninitialized"));
   }
   const manager = state.requireManager();
-  const handleId = provider.localFolder?.handleId;
-  if (!handleId) {
+  const configuration = localFolderProviderConfiguration(provider);
+  if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+    throw new Error(state.t("errors.local_backup_folder_required"));
+  }
+  const handle = localFolderHandle(configuration.config);
+  if (handle.kind === LocalFolderHandleKind.Unselected) {
     throw new Error(state.t("errors.local_backup_folder_required"));
   }
   const localYaml = (await state.enqueueStorage(() =>
-    manager.syncLocalFolderProvider(handleId),
+    manager.syncLocalFolderProvider(handle.handleId),
   )) as string;
   if (localYaml.trim()) {
     await state.updateProviderSyncMetadata(provider.id, localYaml, {

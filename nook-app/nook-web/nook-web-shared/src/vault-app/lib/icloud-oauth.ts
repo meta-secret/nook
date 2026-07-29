@@ -5,7 +5,15 @@
  * token is passed to wasm for CloudKit REST calls.
  */
 
-import type { OAuthFileConfig } from "$lib/auth-providers";
+import {
+  configuredOAuthFile,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
+  storedOAuthAccountEmail,
+  unknownOAuthAccountIdentity,
+  type OAuthFileConfig,
+  type StoredOAuthFileConfiguration,
+} from "$lib/auth-providers";
 import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
 import {
   default as initNookWasm,
@@ -57,9 +65,16 @@ import {
   CloudKitAuthSetupKind,
   CloudKitIdentityKind,
   CloudKitInitializationKind,
+  iCloudAccountNameFromIdentity,
+  ICloudAccountNameKind,
   type CloudKitAuthSetup,
   type CloudKitIdentity,
   type CloudKitInitialization,
+  type ICloudAccountName,
+} from "$lib/icloud-auth-state";
+export {
+  ICloudAccountNameKind,
+  type ICloudAccountName,
 } from "$lib/icloud-auth-state";
 
 export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000;
@@ -67,8 +82,7 @@ const log = createLogger("icloud-oauth");
 
 export type ICloudOAuthTokens = {
   accessToken: string;
-  accountName?: string;
-  userRecordName?: string;
+  accountName: ICloudAccountName;
 };
 
 type ICloudWebAuthTokenRequestOptions = {
@@ -426,33 +440,6 @@ function clickCloudKitSignInButton(): void {
   control.click();
 }
 
-enum ICloudAccountNameKind {
-  Unavailable = "unavailable",
-  Available = "available",
-}
-
-type ICloudAccountName =
-  | { kind: ICloudAccountNameKind.Unavailable }
-  | { kind: ICloudAccountNameKind.Available; value: string };
-
-function accountNameFromIdentity(
-  identity: CloudKitIdentity,
-): ICloudAccountName {
-  if (identity.kind === CloudKitIdentityKind.SignedOut) {
-    return { kind: ICloudAccountNameKind.Unavailable };
-  }
-  const given = identity.identity.nameComponents?.givenName?.trim() ?? "";
-  const family = identity.identity.nameComponents?.familyName?.trim() ?? "";
-  const fullName = `${given} ${family}`.trim();
-  if (fullName) {
-    return { kind: ICloudAccountNameKind.Available, value: fullName };
-  }
-  const email = identity.identity.lookupInfo?.emailAddress?.trim();
-  return email
-    ? { kind: ICloudAccountNameKind.Available, value: email }
-    : { kind: ICloudAccountNameKind.Unavailable };
-}
-
 function requireStoredWebAuthToken(
   identity = currentCloudKitIdentity(),
 ): ICloudOAuthTokens {
@@ -460,16 +447,10 @@ function requireStoredWebAuthToken(
   if (token.kind === WebAuthTokenLookupKind.Unavailable) {
     throw new Error("iCloud sign-in did not return a web auth token.");
   }
-  const accountName = accountNameFromIdentity(identity);
+  const accountName = iCloudAccountNameFromIdentity(identity);
   return {
     accessToken: token.token,
-    ...(accountName.kind === ICloudAccountNameKind.Available
-      ? { accountName: accountName.value }
-      : {}),
-    ...(identity.kind === CloudKitIdentityKind.SignedIn &&
-    identity.identity.userRecordName
-      ? { userRecordName: identity.identity.userRecordName }
-      : {}),
+    accountName,
   };
 }
 
@@ -978,11 +959,13 @@ export async function requestICloudWebAuthToken(
 
 export function oauthTokensToICloudConfig(
   tokens: ICloudOAuthTokens,
-  existing?: OAuthFileConfig,
+  existing: StoredOAuthFileConfiguration,
 ): OAuthFileConfig {
   return iCloudOAuthTokensToConfigCore(
     tokens.accessToken,
-    tokens.accountName,
+    tokens.accountName.kind === ICloudAccountNameKind.Available
+      ? storedOAuthAccountEmail(tokens.accountName.value)
+      : unknownOAuthAccountIdentity(),
     existing,
   );
 }
@@ -990,9 +973,9 @@ export function oauthTokensToICloudConfig(
 export async function ensureValidICloudOAuthFileConfig(
   config: OAuthFileConfig,
 ): Promise<OAuthFileConfig> {
-  if (config.accessToken?.trim()) {
+  if (oauthAccessToken(config).kind === OAuthAccessTokenKind.Available) {
     return config;
   }
   const refreshed = await requestICloudWebAuthToken();
-  return oauthTokensToICloudConfig(refreshed, config);
+  return oauthTokensToICloudConfig(refreshed, configuredOAuthFile(config));
 }
