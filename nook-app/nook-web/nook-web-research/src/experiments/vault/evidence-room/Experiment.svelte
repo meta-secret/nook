@@ -9,7 +9,10 @@
   } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import { EvidenceStatus } from './evidence-status'
+  import {
+    atomicGenesisEvidenceStatus,
+    vaultIdentityEvidenceStatus,
+  } from './evidence-status'
 
   interface ParticipantDevice {
     name: string
@@ -82,7 +85,7 @@
     </header>
     <div class="mt-10 grid gap-6 lg:grid-cols-[1fr_23rem]">
       <div class="grid gap-4 sm:grid-cols-2">
-        {#each [{ id: 1, title: 'Vault identity', status: name ? EvidenceStatus.Recorded : EvidenceStatus.Pending }, { id: 2, title: 'Shamir policy', status: `${threshold}-OF-${total}` }, { id: 3, title: 'Participant keys', status: `${keys}/${total} VERIFIED` }, { id: 4, title: 'Atomic genesis', status: sealed ? EvidenceStatus.Sealed : EvidenceStatus.Held }] as item (item.id)}<button
+        {#each [{ id: 1, title: 'Vault identity', status: vaultIdentityEvidenceStatus(Boolean(name)) }, { id: 2, title: 'Shamir policy', status: `${threshold}-OF-${total}` }, { id: 3, title: 'Participant keys', status: `${keys}/${total} VERIFIED` }, { id: 4, title: 'Atomic genesis', status: atomicGenesisEvidenceStatus(sealed) }] as item (item.id)}<button
             class={`relative min-h-64 border-4 border-black p-6 text-left ${selected === item.id ? 'bg-[#fff9df]' : 'bg-[#eee9dc]'}`}
             onclick={() => (selected = item.id)}
             ><Package class="size-10" /><span
