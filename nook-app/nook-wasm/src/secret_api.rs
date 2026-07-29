@@ -736,20 +736,26 @@ mod wasm_tests {
         let navigation_only =
             NookAuthenticationOutcomeObservation::new(true, false, false, false, false, false, 500);
         let navigation = classify_authentication_outcome(&navigation_only, None);
-        assert_eq!(navigation.name(), "insufficient");
+        assert_eq!(
+            navigation.verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Insufficient
+        );
         assert!(!navigation.allows_credential_commit());
 
         let success =
             NookAuthenticationOutcomeObservation::new(true, false, true, false, false, false, 300);
         let sufficient = classify_authentication_outcome(&success, None);
-        assert_eq!(sufficient.name(), "sufficient");
+        assert_eq!(
+            sufficient.verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Sufficient
+        );
         assert!(sufficient.allows_credential_commit());
 
         let conflict =
             NookAuthenticationOutcomeObservation::new(false, true, true, true, false, false, 100);
         assert_eq!(
-            classify_authentication_outcome(&conflict, None).name(),
-            "conflicting"
+            classify_authentication_outcome(&conflict, None).verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Conflicting
         );
     }
 
@@ -767,7 +773,7 @@ mod wasm_tests {
         );
 
         assert_eq!(item.id(), "secret_login");
-        assert_eq!(item.secret_type(), "login");
+        assert_eq!(item.secret_type(), nook_core::SecretType::Login);
         assert_eq!(item.website_url(), "https://example.com");
         assert_eq!(item.website_host(), "example.com");
         assert_eq!(item.username(), "alice");
@@ -789,7 +795,7 @@ mod wasm_tests {
             "login.example.com".to_owned(),
         );
 
-        assert_eq!(item.secret_type(), "passkey");
+        assert_eq!(item.secret_type(), nook_core::SecretType::Passkey);
         assert_eq!(item.rp_id(), "login.example.com");
         assert_eq!(item.passkey_user_name(), "alice@example.com");
         assert_eq!(item.passkey_user_display_name(), "Alice");
