@@ -71,6 +71,38 @@ pub enum HiveError {
     #[error(transparent)]
     IntegerConversion(#[from] std::num::TryFromIntError),
     #[error("{operation}: {source}")]
+    IntegerParseOperation {
+        operation: String,
+        #[source]
+        source: std::num::ParseIntError,
+    },
+    #[error(transparent)]
+    IntegerParse(#[from] std::num::ParseIntError),
+    #[error("{operation}: {source}")]
+    EnvironmentVariableOperation {
+        operation: String,
+        #[source]
+        source: std::env::VarError,
+    },
+    #[error(transparent)]
+    EnvironmentVariable(#[from] std::env::VarError),
+    #[error("{operation}: {source}")]
+    WatchReceiveOperation {
+        operation: String,
+        #[source]
+        source: tokio::sync::watch::error::RecvError,
+    },
+    #[error(transparent)]
+    WatchReceive(#[from] tokio::sync::watch::error::RecvError),
+    #[error("{operation}: {source}")]
+    TaskJoinOperation {
+        operation: String,
+        #[source]
+        source: tokio::task::JoinError,
+    },
+    #[error(transparent)]
+    TaskJoin(#[from] tokio::task::JoinError),
+    #[error("{operation}: {source}")]
     TimeFormatOperation {
         operation: String,
         #[source]
@@ -165,6 +197,40 @@ impl HiveError {
                 operation: previous,
                 source,
             } => Self::IntegerConversionOperation {
+                operation: format!("{operation}: {previous}"),
+                source,
+            },
+            Self::IntegerParse(source) => Self::IntegerParseOperation { operation, source },
+            Self::IntegerParseOperation {
+                operation: previous,
+                source,
+            } => Self::IntegerParseOperation {
+                operation: format!("{operation}: {previous}"),
+                source,
+            },
+            Self::EnvironmentVariable(source) => {
+                Self::EnvironmentVariableOperation { operation, source }
+            }
+            Self::EnvironmentVariableOperation {
+                operation: previous,
+                source,
+            } => Self::EnvironmentVariableOperation {
+                operation: format!("{operation}: {previous}"),
+                source,
+            },
+            Self::WatchReceive(source) => Self::WatchReceiveOperation { operation, source },
+            Self::WatchReceiveOperation {
+                operation: previous,
+                source,
+            } => Self::WatchReceiveOperation {
+                operation: format!("{operation}: {previous}"),
+                source,
+            },
+            Self::TaskJoin(source) => Self::TaskJoinOperation { operation, source },
+            Self::TaskJoinOperation {
+                operation: previous,
+                source,
+            } => Self::TaskJoinOperation {
                 operation: format!("{operation}: {previous}"),
                 source,
             },

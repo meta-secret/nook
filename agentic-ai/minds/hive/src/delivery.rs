@@ -585,28 +585,23 @@ async fn validate_non_thread_feedback(repository: &Path, number: u64) -> crate::
             "repos/{{owner}}/{{repo}}/{}",
             surface.replace("{number}", &number.to_string())
         );
-        let pages: serde_json::Value = serde_json::from_str(
-            &gh_output(
-                repository,
-                &["api", "--paginate", "--slurp", endpoint.as_str()],
-            )
-            .await?,
-        )
-        .hive_context("GitHub returned invalid paginated feedback")?;
-        let actionable = pages
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|page| page.as_array().into_iter().flatten())
-            .filter_map(|item| item.get("body").and_then(serde_json::Value::as_str))
-            .any(is_actionable_feedback);
-        if actionable {
+        let arguments = feedback_api_arguments(&endpoint);
+        let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+        let bodies = gh_output(repository, &references).await?;
+        if is_actionable_feedback(&bodies) {
             crate::hive_bail!(
                 "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
             );
         }
     }
     Ok(())
+}
+
+fn feedback_api_arguments(endpoint: &str) -> Vec<String> {
+    ["api", "--paginate", "--jq", ".[].body", endpoint]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
 
 fn is_actionable_feedback(body: &str) -> bool {
@@ -631,8 +626,9 @@ mod tests {
 
     use super::{
         DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
-        delivery_generation, latest_delivery_generation, select_successful_main_run,
-        validate_full_e2e_checks, validate_merged_hive_pull_request, validate_repository_checks,
+        delivery_generation, feedback_api_arguments, is_actionable_feedback,
+        latest_delivery_generation, select_successful_main_run, validate_full_e2e_checks,
+        validate_merged_hive_pull_request, validate_repository_checks,
     };
 
     fn pull_request(
@@ -683,6 +679,30 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn paginated_feedback_bodies_preserve_actionable_markers() -> anyhow::Result<()> {
+        let arguments = feedback_api_arguments("repos/{owner}/{repo}/issues/42/comments");
+        let bodies =
+            "Automated summary: looks good.\n[P1] Resolve the delivery race.\nMore detail.";
+
+        assert_eq!(
+            arguments,
+            [
+                "api",
+                "--paginate",
+                "--jq",
+                ".[].body",
+                "repos/{owner}/{repo}/issues/42/comments"
+            ]
+        );
+        assert!(!arguments.iter().any(|argument| argument == "--slurp"));
+        assert!(is_actionable_feedback(bodies));
+        assert!(!is_actionable_feedback(
+            "Automated summary: checks passed.\nThis report is informational."
+        ));
+        Ok(())
     }
 
     #[test]
