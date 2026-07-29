@@ -572,10 +572,22 @@ test('reuses the offscreen session after the service worker restarts', async ({
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
     const worker = await getServiceWorker(context)
-    await worker.evaluate(() => self.close())
-    await context.waitForEvent('serviceworker', { timeout: 15_000 })
+    const cdp = await context.newCDPSession(popupPage)
+    const { targetInfos } = await cdp.send('Target.getTargets')
+    const workerTarget = targetInfos.find(
+      (target) =>
+        target.type === 'service_worker' && target.url === worker.url(),
+    )
+    expect(workerTarget).toBeDefined()
+    await cdp.send('Target.closeTarget', {
+      targetId: workerTarget!.targetId,
+    })
 
+    const restartedWorker = context.waitForEvent('serviceworker', {
+      timeout: 15_000,
+    })
     await popupPage.reload()
+    await restartedWorker
     await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible(
       { timeout: 15_000 },
     )
