@@ -527,9 +527,10 @@ export async function loadSecretPage(
   requestedOffset = 0,
 ): Promise<void> {
   if (!state.manager) return;
-  // Publish the requested query immediately so maintenance refreshes queued
-  // behind this request cannot re-submit the previous query.
+  // Publish the request immediately so maintenance refreshes queued behind it
+  // cannot re-submit the previous query or page.
   state.secretQuery = query;
+  state.secretPageOffset = requestedOffset;
   // Each request supersedes every older page request. The storage queue
   // serializes WASM access, but it does not prevent an earlier caller from
   // applying its result after a newer search has already been requested.

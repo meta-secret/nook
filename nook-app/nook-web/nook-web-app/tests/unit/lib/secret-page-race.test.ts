@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { loadSecretPage } from '$lib/vault/secrets'
+import { loadSecretPage, refreshSecretsFromSession } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 
 type PageRecord = { label: string; free: ReturnType<typeof vi.fn> }
@@ -12,14 +12,14 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function secretPage(label: string) {
+function secretPage(label: string, offset = 0, total = 1) {
   const record: PageRecord = { label, free: vi.fn() }
   return {
     record,
     page: {
       takeItems: () => [record],
-      total: 1,
-      offset: 0,
+      total,
+      offset,
       free: vi.fn(),
     },
   }
@@ -60,5 +60,44 @@ describe('loadSecretPage', () => {
     expect(state.secretQuery).toBe('newer')
     expect(previousRecord.free).toHaveBeenCalledOnce()
     expect(oldPage.record.free).toHaveBeenCalledOnce()
+  })
+
+  test('keeps a queued maintenance refresh on the newly requested page', async () => {
+    const pagination = deferred<ReturnType<typeof secretPage>['page']>()
+    const maintenance = deferred<ReturnType<typeof secretPage>['page']>()
+    const paginatedPage = secretPage('interactive page', 25, 50)
+    const refreshedPage = secretPage('refreshed page', 25, 50)
+    const manager = {
+      queryPreparedSecretPage: vi
+        .fn()
+        .mockReturnValueOnce(pagination.promise)
+        .mockReturnValueOnce(maintenance.promise),
+    }
+    const state = {
+      manager,
+      enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
+      secretPageGeneration: 0,
+      secretTypeFilter: undefined,
+      secretPageSize: 25,
+      secrets: [],
+      secretTotal: 50,
+      secretPageOffset: 0,
+      secretQuery: 'vault',
+    } as unknown as VaultState
+
+    const paginationRequest = loadSecretPage(state, 'vault', 25)
+    const maintenanceRefresh = refreshSecretsFromSession(state)
+    maintenance.resolve(refreshedPage.page)
+    await maintenanceRefresh
+    pagination.resolve(paginatedPage.page)
+    await paginationRequest
+
+    expect(manager.queryPreparedSecretPage.mock.calls[1]?.[0]).toBe('vault')
+    expect(manager.queryPreparedSecretPage.mock.calls[1]?.slice(2)).toEqual([
+      25, 25,
+    ])
+    expect(state.secrets).toEqual([refreshedPage.record])
+    expect(state.secretPageOffset).toBe(25)
+    expect(paginatedPage.record.free).toHaveBeenCalledOnce()
   })
 })
