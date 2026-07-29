@@ -387,10 +387,15 @@ fn collect_raw_string_discriminant_nodes(
         let left = node.child_by_field_name("left");
         let right = node.child_by_field_name("right");
         if left.zip(right).is_some_and(|(left, right)| {
+            let literal = if is_discriminant_member(left, source) {
+                string_literal_value(right, source)
+            } else if is_discriminant_member(right, source) {
+                string_literal_value(left, source)
+            } else {
+                None
+            };
             is_equality_comparison(node, left, right, source)
-                && ((is_discriminant_member(left, source) && is_string_literal_expression(right))
-                    || (is_string_literal_expression(left)
-                        && is_discriminant_member(right, source)))
+                && literal.is_some_and(|value| enum_values.contains(value))
         }) {
             lines.push(first_line + node.start_position().row);
             return;
@@ -944,6 +949,7 @@ type Panel = 'closed' | 'open'
 const state: SessionState = { kind: 'closed' }
 if (state.kind === 'closed') console.log('closed')
 if ('closed' !== state.kind) console.log('open')
+if (server.transport.type !== 'stdio') console.log('external protocol')
 const description = { label: 'static copy' }
 const externalKind = state.kind ?? 'external-value'
 ";
