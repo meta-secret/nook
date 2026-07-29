@@ -489,7 +489,9 @@ fn assert_pr_workflow_contract(root: &Path) {
     );
     let verify_job = section(&pr, "  verify:\n", "  coverage:\n");
     assert!(
-        verify_job.contains("if: github.event.action != 'closed'")
+        verify_job.contains("github.event.action != 'closed'")
+            && verify_job.contains("github.event.label.name == 'ci:validate'")
+            && verify_job.contains("github.event.label.name == 'ci:full-e2e'")
             && !verify_job.contains("needs: wasm")
             && verify_job.contains("name: Wait for built WASM handoff")
             && verify_job.contains("WASM verification completed with $wasm_conclusion")
