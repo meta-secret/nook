@@ -89,6 +89,11 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
 under [`infra/k0s/`](../../infra/k0s/).
 
+Worker/coordinator, dispatcher, and observer Deployments use the Kubernetes
+`Recreate` strategy. A graph-schema rollout therefore drains every older binary
+before any new revision can migrate and serve the retained graph; temporary
+control-plane unavailability is preferred to mixed schema semantics.
+
 ## 3. Components and ownership
 
 | Component | Runs where | Owns | Must not own |
@@ -202,10 +207,12 @@ schema-8 terminal result marks this exceptional path explicitly with
 `obsolete: true`, and Hive persists that marker on both the task and attempt.
 If a future task discovers or directly depends on the same stable blocker ID,
 Hive transactionally rearms the dependency subtree only when that requested
-root is itself obsolete. It uses a fresh attempt budget and derives each task's
-state from its direct dependencies instead of treating the retired chain as
-satisfied; a normally completed root remains satisfied even if historical
-obsolete descendants are still attached.
+root is itself obsolete. Edge attachment takes a write lock on that root before
+re-reading and rearming it, so a concurrent retirement cannot leave the new
+consumer treating it as satisfied. Rearming preserves the monotonic attempt
+number and extends the maximum by three attempts, then derives each task's state
+from its direct dependencies; a normally completed root remains satisfied even
+if historical obsolete descendants are still attached.
 Normal completion, including a real patch produced while owners change,
 bypasses the retirement-only guard and persists normally. The shared-owner,
 mixed-owner, late-owner, future-owner, and genuine-completion race cases are

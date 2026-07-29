@@ -118,7 +118,8 @@ impl Neo4jTaskStore {
                                ELSE 'BLOCKED'
                              END,
                              retired.obsolete = false,
-                             retired.attempt_count = 0,
+                             retired.max_attempts =
+                               coalesce(retired.attempt_count, 0) + 3,
                              retired.result_summary = null,
                              retired.blocked_reason = CASE
                                WHEN failed_count = 0
@@ -1255,44 +1256,11 @@ impl TaskStore for Neo4jTaskStore {
             anyhow::bail!("a newly discovered blocker must not have undeclared dependencies");
         }
         let mut transaction = self.graph.start_txn().await?;
-        let mut existing_rows = transaction
+        let mut edge_rows = transaction
             .execute(
                 query(
                     "MATCH (task:Task {id: $task_id})
                        <-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
-                     MATCH (blocker:Task {id: $blocker_id})
-                     WHERE task.status = 'RUNNING'
-                       AND task.lease_owner = $agent_id
-                       AND task.lease_token = $lease_token
-                       AND task.lease_until > timestamp()
-                       AND attempt.lease_token = $lease_token
-                       AND blocker.source_commit = $source_commit
-                       AND blocker.id <> task.id
-                       AND NOT EXISTS {
-                         MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
-                       }
-                     RETURN blocker.id AS id",
-                )
-                .param("task_id", task.id.as_str())
-                .param("attempt_id", task.attempt_id.as_str())
-                .param("agent_id", agent_id.as_str())
-                .param("lease_token", task.lease_token.as_str())
-                .param("blocker_id", blocker.id.as_str())
-                .param("source_commit", blocker.source_commit.as_str()),
-            )
-            .await?;
-        let existing_blocker_is_eligible =
-            existing_rows.next(transaction.handle()).await?.is_some();
-        drop(existing_rows);
-        let blocker_was_obsolete = if existing_blocker_is_eligible {
-            Self::rearm_obsolete_subtree(&mut transaction, &blocker.id).await?
-        } else {
-            false
-        };
-        let mut rows = transaction
-            .execute(
-                query(
-                    "MATCH (task:Task {id: $task_id})<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
                      WHERE task.status = 'RUNNING'
                        AND task.lease_owner = $agent_id
                        AND task.lease_token = $lease_token
@@ -1311,14 +1279,50 @@ impl TaskStore for Neo4jTaskStore {
                                    blocker.status = 'READY',
                                    blocker.obsolete = false,
                                    blocker.updated_at = timestamp()
-                     WITH task, attempt, blocker,
-                          $blocker_was_obsolete AS blocker_was_obsolete
+                     WITH task, blocker
                      WHERE blocker.source_commit = $source_commit
                        AND blocker.id <> task.id
                        AND NOT EXISTS {
                          MATCH (blocker)-[:DEPENDS_ON*1..]->(task)
                        }
                      MERGE (task)-[:DEPENDS_ON]->(blocker)
+                     SET blocker.version = coalesce(blocker.version, 0) + 1
+                     RETURN blocker.id AS id",
+                )
+                .param("task_id", task.id.as_str())
+                .param("attempt_id", task.attempt_id.as_str())
+                .param("agent_id", agent_id.as_str())
+                .param("lease_token", task.lease_token.as_str())
+                .param("blocker_id", blocker.id.as_str())
+                .param("blocker_kind", blocker.kind.as_str())
+                .param("blocker_trigger_kind", blocker.trigger.as_str())
+                .param("blocker_prompt", blocker.prompt.as_str())
+                .param("source_commit", blocker.source_commit.as_str())
+                .param("blocker_priority", blocker.priority)
+                .param("blocker_max_attempts", blocker.max_attempts),
+            )
+            .await?;
+        let edge_attached = edge_rows.next(transaction.handle()).await?.is_some();
+        drop(edge_rows);
+        if !edge_attached {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+        let blocker_was_obsolete =
+            Self::rearm_obsolete_subtree(&mut transaction, &blocker.id).await?;
+        let mut rows = transaction
+            .execute(
+                query(
+                    "MATCH (task:Task {id: $task_id})-[:DEPENDS_ON]->
+                       (blocker:Task {id: $blocker_id})
+                     MATCH (task)<-[:FOR_TASK]-(attempt:Attempt {id: $attempt_id})
+                     WHERE task.status = 'RUNNING'
+                       AND task.lease_owner = $agent_id
+                       AND task.lease_token = $lease_token
+                       AND task.lease_until > timestamp()
+                       AND attempt.lease_token = $lease_token
+                     WITH task, attempt, blocker,
+                          $blocker_was_obsolete AS blocker_was_obsolete
                      SET task.status = CASE
                              WHEN blocker.status = 'FAILED' THEN 'FAILED'
                              WHEN blocker_was_obsolete THEN 'BLOCKED'
@@ -1365,12 +1369,6 @@ impl TaskStore for Neo4jTaskStore {
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
                 .param("blocker_id", blocker.id.as_str())
-                .param("blocker_kind", blocker.kind.as_str())
-                .param("blocker_trigger_kind", blocker.trigger.as_str())
-                .param("blocker_prompt", blocker.prompt.as_str())
-                .param("source_commit", blocker.source_commit.as_str())
-                .param("blocker_priority", blocker.priority)
-                .param("blocker_max_attempts", blocker.max_attempts)
                 .param("blocker_was_obsolete", blocker_was_obsolete)
                 .param("reason", reason),
             )

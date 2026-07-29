@@ -169,7 +169,7 @@ mod tests {
             let task = tasks.get_mut(task_id.as_str()).expect("obsolete task");
             task.status = status;
             task.obsolete = false;
-            task.attempt_count = 0;
+            task.definition.max_attempts = task.attempt_count + 3;
             true
         }
     }
@@ -645,6 +645,7 @@ mod tests {
                 let task = tasks.get_mut(retired.as_str()).expect("retired task");
                 task.status = "COMPLETED";
                 task.obsolete = true;
+                task.attempt_count = 2;
             }
         }
         store
@@ -654,6 +655,7 @@ mod tests {
 
         let rearmed_child = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(rearmed_child.id, child.id);
+        assert_eq!(rearmed_child.attempt_number, 3);
         assert!(
             store
                 .complete(
@@ -667,6 +669,7 @@ mod tests {
         );
         let rearmed_parent = store.claim(&agent, 300).await?.into_claimed()?;
         assert_eq!(rearmed_parent.id, parent.id);
+        assert_eq!(rearmed_parent.attempt_number, 3);
         Ok(())
     }
 

@@ -170,6 +170,21 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
     );
 }
 
+#[test]
+fn hive_graph_clients_never_mix_schema_revisions() {
+    for manifest in [
+        "infra/k0s/manifests/hive/deployment.yaml",
+        "infra/k0s/manifests/hive/dispatcher.yaml",
+        "infra/k0s/manifests/hive/observer.yaml",
+    ] {
+        let deployment = read(manifest);
+        assert!(
+            deployment.contains("strategy:\n    type: Recreate"),
+            "{manifest} must drain its prior graph-schema revision before starting a new one"
+        );
+    }
+}
+
 fn assert_remote_compose_contract() {
     let compose = read("infra/compose.yaml");
     for required in [

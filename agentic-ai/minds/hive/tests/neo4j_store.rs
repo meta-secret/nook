@@ -759,6 +759,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         rearmed_claim.id, shared_blocker.id,
         "a future repair must rearm an obsolete blocker with the same stable id"
     );
+    assert_eq!(rearmed_claim.attempt_number, 2);
     assert_eq!(rearmed_claim.owning_repairs, vec![future_owner.id.clone()]);
     complete_without_artifact(
         &store,
@@ -818,6 +819,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     .await?;
 
     rearm::verify_completed_parent_gate(&store, &graph, &agent_a, &shared_blocker, &suffix).await?;
+    rearm::verify_block_serializes_with_retirement(&store, &graph, &agent_a, &suffix).await?;
 
     graph
         .run(

@@ -130,7 +130,7 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `7` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `8` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
@@ -146,10 +146,16 @@ Hive image digest and atomically rearming failed blocker dependencies. Version
 5 adds the current task scheduling indexes. Version 6 adds bounded, sanitized
 `TaskActivity` events for the observer. Version 7 backfills and maintains each
 task's newest activity timestamp so bounded overview polling does not aggregate
-the retained activity graph. To roll version 7 back, first stop every Hive
-worker and observer and back up the Neo4j data volume, then delete only the
-version-7 `HiveSchemaMigration` node and remove `latest_activity_at` from `Task`
-nodes. Keep
+the retained activity graph. Version 8 initializes the explicit `obsolete`
+retirement marker on every `Task` and `Attempt`; new writes always persist the
+boolean so obsolete dependency revival is durable and queryable.
+
+To roll version 8 back to a version-7 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
+only the version-8 `HiveSchemaMigration` node, remove `obsolete` from `Task` and
+`Attempt` nodes, and retain the version-7 marker and `latest_activity_at`.
+To roll version 7 back further, keep Hive stopped, delete only the version-7
+marker, and remove `latest_activity_at` from `Task` nodes. Keep
 `last_retry_release` so a later forward migration cannot repeat a recovery for
 the same deployed image.
 

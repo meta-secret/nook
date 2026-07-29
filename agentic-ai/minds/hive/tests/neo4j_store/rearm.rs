@@ -1,6 +1,7 @@
 use hive::model::{AgentId, ClaimedTask, CompletionArtifact, EnqueueTask, TaskId, TaskTrigger};
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
+use tokio::time::{Duration, sleep, timeout};
 
 fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
     EnqueueTask {
@@ -109,6 +110,90 @@ pub async fn verify_completed_parent_gate(
     Ok(())
 }
 
+pub async fn verify_block_serializes_with_retirement(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    agent: &AgentId,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let mut blocker = task(
+        format!("concurrent-retirement-blocker-{suffix}"),
+        Vec::new(),
+    );
+    blocker.kind = "blocker".to_owned();
+    let owner = task(format!("concurrent-retirement-owner-{suffix}"), Vec::new());
+    store.enqueue(&blocker).await?;
+    store.enqueue(&owner).await?;
+    let blocker_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(blocker_claim.id, blocker.id);
+    complete(
+        store,
+        &blocker_claim,
+        agent,
+        false,
+        "blocker initially completed",
+    )
+    .await?;
+    let owner_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(owner_claim.id, owner.id);
+
+    let mut retirement = graph.start_txn().await?;
+    retirement
+        .run(
+            query(
+                "MATCH (blocker:Task {id: $blocker_id})
+                 SET blocker.obsolete = true,
+                     blocker.version = blocker.version + 1",
+            )
+            .param("blocker_id", blocker.id.as_str()),
+        )
+        .await?;
+    let blocking_store = store.clone();
+    let blocking_agent = agent.clone();
+    let blocking_task = owner_claim.clone();
+    let blocking_definition = blocker.clone();
+    let blocked = tokio::spawn(async move {
+        blocking_store
+            .block(
+                &blocking_task,
+                &blocking_agent,
+                &blocking_definition,
+                "retirement committed while the edge was attaching",
+            )
+            .await
+    });
+    sleep(Duration::from_millis(100)).await;
+    retirement.commit().await?;
+    assert!(
+        timeout(Duration::from_secs(5), blocked)
+            .await
+            .map_err(|_| anyhow::anyhow!(
+                "blocker attachment remained locked after retirement"
+            ))???
+    );
+    let rearmed = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(rearmed.id, blocker.id);
+    assert_eq!(rearmed.attempt_number, 2);
+    complete(
+        store,
+        &rearmed,
+        agent,
+        false,
+        "concurrently retired blocker repaired",
+    )
+    .await?;
+    let resumed_owner = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(resumed_owner.id, owner.id);
+    complete(
+        store,
+        &resumed_owner,
+        agent,
+        false,
+        "owner resumed after concurrent retirement",
+    )
+    .await
+}
+
 pub async fn verify_release_retry(
     store: &Neo4jTaskStore,
     agent: &AgentId,
@@ -154,6 +239,7 @@ pub async fn verify_release_retry(
         rearmed_blocker.id, blocker.id,
         "release-scoped retry must rearm an obsolete dependency before its owner"
     );
+    assert_eq!(rearmed_blocker.attempt_number, 2);
     complete(
         store,
         &rearmed_blocker,
