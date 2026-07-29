@@ -437,6 +437,57 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn password_provider_switch_preserves_active_vault_metadata() {
+        let keys = nook_core::generate_vault_keys().expect("vault keys");
+        let entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id().expect("password id").as_str(),
+            "Recovery",
+            "2026-07-29T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )
+        .expect("password entry");
+        let mut manager = NookVaultManager::new();
+        manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
+        manager.vault.unlock = nook_core::VaultUnlock::Passwords {
+            entries: vec![entry.clone()],
+        };
+        manager.vault.password_entries = vec![entry.clone()];
+
+        manager
+            .prepare_storage_preserving_vault_metadata(
+                "icloud",
+                "oauth_token_for_metadata_test",
+                "private-target\twork-vault.yaml",
+            )
+            .await
+            .expect("switch to remote provider");
+        manager
+            .prepare_storage_preserving_vault_metadata("local", "", "")
+            .await
+            .expect("switch back to local provider");
+
+        assert!(matches!(
+            &manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Personal"
+        ));
+        assert_eq!(manager.vault.password_entries, vec![entry.clone()]);
+        assert_eq!(
+            manager.vault.unlock,
+            nook_core::VaultUnlock::Passwords {
+                entries: vec![entry]
+            }
+        );
+    }
+}
+
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
