@@ -86,6 +86,7 @@ test('uses the paired demo vault for authenticator enrollment', async ({
       </head>
       <body>
         <main id="app" data-bootstrap-sentinel="replacement-root">
+          <span data-bootstrap-sentinel-child hidden></span>
           <h1>Authenticator setup</h1>
           <p>Scan this authenticator QR code to finish 2FA enrollment.</p>
           <img
@@ -105,6 +106,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
+  const replacementChildCount = await page
+    .locator('[data-bootstrap-sentinel="replacement-root"]')
+    .evaluate((root) => root.children.length)
 
   await page.evaluate(() => {
     document
@@ -137,6 +141,11 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(
     page.locator('[data-bootstrap-sentinel="replacement-root"]'),
   ).toBeVisible()
+  expect(
+    await page
+      .locator('[data-bootstrap-sentinel="replacement-root"]')
+      .evaluate((root) => root.children.length),
+  ).toBe(replacementChildCount)
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Add 2FA from this page' }).click()
