@@ -11,6 +11,10 @@
   } from "$lib/components/ui/card";
 
   import type { VaultState } from "$lib/vault.svelte";
+  import {
+    PasswordFieldMountKind,
+    type PasswordFieldMount,
+  } from "./password-field-mount-state";
 
   let {
     vault,
@@ -29,13 +33,6 @@
   } = $props();
 
   let passwordInput = $state("");
-  enum PasswordFieldMountKind {
-    Unmounted = "unmounted",
-    Mounted = "mounted",
-  }
-  type PasswordFieldMount =
-    | { kind: PasswordFieldMountKind.Unmounted }
-    | { kind: PasswordFieldMountKind.Mounted; element: HTMLInputElement };
   let passwordField = $state<PasswordFieldMount>({
     kind: PasswordFieldMountKind.Unmounted,
   });
