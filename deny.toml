@@ -6,6 +6,13 @@ targets = [
 ]
 
 [advisories]
+ignore = [
+  # Pinned openai/codex -> rama-dns still carries hickory-proto 0.25.2.
+  # Upstream main has no fixed 0.25 release; remove both exceptions when Codex
+  # moves to hickory 0.26.1 or later.
+  "RUSTSEC-2026-0118",
+  "RUSTSEC-2026-0119",
+]
 unmaintained = "workspace"
 yanked = "deny"
 
@@ -36,6 +43,8 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
+  "https://github.com/helix-editor/nucleo",
   "https://github.com/openai-oss-forks/tokio-tungstenite",
   "https://github.com/openai-oss-forks/tungstenite-rs",
+  "https://github.com/openai/codex",
 ]

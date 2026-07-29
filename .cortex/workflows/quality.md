@@ -34,6 +34,12 @@ Use this workflow for quality, CI, and deployment changes.
      advisories, licenses, duplicate/forbidden crates, and trusted sources for
      the complete Cargo graph; [`rustsec/audit-check`](https://github.com/rustsec/audit-check)
      independently audits the lockfile against the RustSec advisory database
+     Advisory exceptions must name the RustSec IDs, identify the exact pinned
+     upstream graph, and state the dependency upgrade that removes them in both
+     `deny.toml` and the affected workspace's `.cargo/audit.toml`. The current
+     `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
+     RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove
+     it when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
    - `Rust ecosystem checks / Proptest, Insta, and Loom` —
      [`proptest`](https://proptest-rs.github.io/proptest/) generates and shrinks
      domain inputs so invariants cover more than hand-picked examples;

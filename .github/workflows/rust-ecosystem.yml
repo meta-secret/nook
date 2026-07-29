@@ -156,12 +156,15 @@ jobs:
         run: >-
           cargo clippy --manifest-path ../fuzz/Cargo.toml
           --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+      - name: Verify fuzz lockfile
+        working-directory: fuzz
+        run: cargo metadata --locked --format-version 1 --no-deps > /dev/null
       - name: Exercise wire parsers
         working-directory: nook-app
         env:
           FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
         run: >-
-          cargo fuzz run --locked --fuzz-dir ../fuzz
+          cargo fuzz run --fuzz-dir ../fuzz
           --target x86_64-unknown-linux-gnu
           wire-parsers -- -max_total_time=${FUZZ_SECONDS}
       - name: Preserve fuzz corpus and crash inputs
