@@ -1111,9 +1111,7 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
         assert_eq!(rust_wasm_boundary_violation_lines(source), vec![4, 6]);
     }
 
-    #[test]
-    fn reports_all_authored_null_while_ignoring_generated_declarations() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+    fn write_authored_null_fixture(root: &Path) -> anyhow::Result<()> {
         let web_root = root.join("nook-app/nook-web");
         let app_source = web_root.join("nook-web-app/src");
         let extension_source = web_root.join("nook-web-extension/src/content");
@@ -1150,81 +1148,91 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
             github_scripts.join("validate.cjs"),
             "const missing = null\n",
         )?;
+        Ok(())
+    }
 
+    fn expected_authored_null_violations() -> Vec<Violation> {
+        vec![
+            Violation {
+                path: PathBuf::from(".github/scripts/validate.cjs"),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 3,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 5,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 9,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 6,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 7,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 8,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 9,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 10,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-extension/scripts/build.ts"),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 2,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 3,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 4,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
+                ),
+                line: 1,
+            },
+        ]
+    }
+
+    #[test]
+    fn reports_all_authored_null_while_ignoring_generated_declarations() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        write_authored_null_fixture(&root)?;
         assert_eq!(
             typescript_null_absence_sentinels(&root)?,
-            vec![
-                Violation {
-                    path: PathBuf::from(".github/scripts/validate.cjs"),
-                    line: 1,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 3,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 5,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 9,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 6,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 7,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 8,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 9,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 10,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-extension/scripts/build.ts"),
-                    line: 1,
-                },
-                Violation {
-                    path: PathBuf::from(
-                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-                    ),
-                    line: 1,
-                },
-                Violation {
-                    path: PathBuf::from(
-                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-                    ),
-                    line: 2,
-                },
-                Violation {
-                    path: PathBuf::from(
-                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-                    ),
-                    line: 3,
-                },
-                Violation {
-                    path: PathBuf::from(
-                        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-                    ),
-                    line: 4,
-                },
-                Violation {
-                    path: PathBuf::from(
-                        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
-                    ),
-                    line: 1,
-                },
-            ]
+            expected_authored_null_violations()
         );
         fs::remove_dir_all(root)?;
         Ok(())
