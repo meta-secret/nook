@@ -162,19 +162,17 @@ mod tests {
 
     #[test]
     fn infers_supported_mnemonic_lengths() -> anyhow::Result<()> {
-        assert_eq!(
-            infer_bip39_mnemonic_length(
-                "abandon ability able about above absent absorb abstract absurd abuse access accident"
-            ),
-            Some(12)
-        );
-        assert_eq!(
-            infer_bip39_mnemonic_length(
-                "abandon ability able about above absent absorb abstract absurd abuse access accident \
-                 account accuse achieve acid acoustic acquire across act action actor actress actual"
-            ),
-            Some(24)
-        );
+        let twelve_word_length = infer_bip39_mnemonic_length(
+            "abandon ability able about above absent absorb abstract absurd abuse access accident",
+        )
+        .ok_or_else(|| std::io::Error::other("12-word mnemonic length must be recognized"))?;
+        assert_eq!(twelve_word_length, 12);
+        let twenty_four_word_length = infer_bip39_mnemonic_length(
+            "abandon ability able about above absent absorb abstract absurd abuse access accident \
+             account accuse achieve acid acoustic acquire across act action actor actress actual",
+        )
+        .ok_or_else(|| std::io::Error::other("24-word mnemonic length must be recognized"))?;
+        assert_eq!(twenty_four_word_length, 24);
         assert_eq!(infer_bip39_mnemonic_length("abandon ability"), None);
         Ok(())
     }
