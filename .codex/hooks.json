@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || node \".agents/skills/impeccable/scripts/hook.mjs\"",
-            "timeout": 5,
+            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || task impeccable:hook",
+            "timeout": 15,
             "statusMessage": "Checking UI changes"
           }
         ]
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || node \".agents/skills/impeccable/scripts/hook.mjs\"",
-            "timeout": 30,
+            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || task impeccable:hook",
+            "timeout": 45,
             "statusMessage": "Design deep pass"
           }
         ]
