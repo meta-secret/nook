@@ -183,6 +183,17 @@ fn hive_graph_clients_never_mix_schema_revisions() {
             "{manifest} must drain its prior graph-schema revision before starting a new one"
         );
     }
+    let worker_manifest = read("infra/k0s/manifests/hive/deployment.yaml");
+    for required in [
+        "terminationGracePeriodSeconds: 60",
+        "lifecycle:\n            preStop:\n              exec:\n                command: [\"/bin/sleep\", \"15\"]",
+    ] {
+        assert!(
+            worker_manifest.contains(required),
+            "Hive rollout must preserve worker lease release through coordinator shutdown: \
+             missing {required}"
+        );
+    }
     let deployment_tasks = read("infra/tasks/hive.yml");
     for required in [
         "for deployment in hive hive-workbench-dispatcher hive-observer",
