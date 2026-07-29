@@ -1,0 +1,175 @@
+use hive::model::{AgentId, ClaimedTask, CompletionArtifact, EnqueueTask, TaskId, TaskTrigger};
+use hive::{Neo4jTaskStore, TaskStore};
+use neo4rs::{Graph, query};
+
+fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
+    EnqueueTask {
+        id: TaskId::new(id).expect("valid task id"),
+        kind: "integration".to_owned(),
+        trigger: TaskTrigger::ManualCli,
+        prompt: "Exercise obsolete dependency rearming".to_owned(),
+        source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        priority: 0,
+        max_attempts: 3,
+        dependencies,
+    }
+}
+
+async fn complete(
+    store: &Neo4jTaskStore,
+    task: &ClaimedTask,
+    agent: &AgentId,
+    obsolete: bool,
+    summary: &str,
+) -> anyhow::Result<()> {
+    assert!(
+        store
+            .complete(
+                task,
+                agent,
+                obsolete,
+                summary,
+                &CompletionArtifact::NotProduced,
+            )
+            .await?
+    );
+    Ok(())
+}
+
+pub async fn verify_completed_parent_gate(
+    store: &Neo4jTaskStore,
+    graph: &Graph,
+    agent: &AgentId,
+    completed_parent: &EnqueueTask,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let retired_descendant_id = format!("retired-descendant-{suffix}");
+    graph
+        .run(
+            query(
+                "MATCH (parent:Task {id: $parent_id})
+                 CREATE (retired:Task {
+                   id: $retired_id,
+                   kind: 'blocker',
+                   trigger_kind: 'manual-cli',
+                   prompt: 'Retired descendant fixture',
+                   status: 'COMPLETED',
+                   obsolete: true,
+                   source_commit: parent.source_commit,
+                   priority: 0,
+                   attempt_count: 1,
+                   max_attempts: 3,
+                   last_retry_release: '',
+                   version: 0,
+                   created_at: timestamp(),
+                   updated_at: timestamp()
+                 })
+                 MERGE (parent)-[:DEPENDS_ON]->(retired)",
+            )
+            .param("parent_id", completed_parent.id.as_str())
+            .param("retired_id", retired_descendant_id.as_str()),
+        )
+        .await?;
+    let consumer = task(
+        format!("completed-parent-consumer-{suffix}"),
+        vec![completed_parent.id.clone()],
+    );
+    store.enqueue(&consumer).await?;
+    let consumer_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(consumer_claim.id, consumer.id);
+    let mut retired_rows = graph
+        .execute(
+            query(
+                "MATCH (retired:Task {id: $retired_id})
+                 RETURN retired.status AS status, retired.obsolete AS obsolete",
+            )
+            .param("retired_id", retired_descendant_id.as_str()),
+        )
+        .await?;
+    let retired_row = retired_rows
+        .next()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("retired descendant fixture was missing"))?;
+    assert_eq!(retired_row.get::<String>("status")?, "COMPLETED");
+    assert!(retired_row.get::<bool>("obsolete")?);
+    complete(
+        store,
+        &consumer_claim,
+        agent,
+        false,
+        "normally completed parent remained satisfied",
+    )
+    .await?;
+    graph
+        .run(
+            query("MATCH (retired:Task {id: $retired_id}) DETACH DELETE retired")
+                .param("retired_id", retired_descendant_id),
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn verify_release_retry(
+    store: &Neo4jTaskStore,
+    agent: &AgentId,
+    suffix: &str,
+) -> anyhow::Result<()> {
+    let mut blocker = task(format!("retry-obsolete-blocker-{suffix}"), Vec::new());
+    blocker.kind = "blocker".to_owned();
+    let mut owner = task(
+        format!("main-failure-retry-obsolete-{suffix}"),
+        vec![blocker.id.clone()],
+    );
+    owner.kind = "main-repair".to_owned();
+    owner.max_attempts = 1;
+    store.enqueue(&blocker).await?;
+    store.enqueue(&owner).await?;
+    let blocker_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(blocker_claim.id, blocker.id);
+    complete(
+        store,
+        &blocker_claim,
+        agent,
+        true,
+        "prerequisite retired for the original delivery",
+    )
+    .await?;
+    let owner_claim = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(owner_claim.id, owner.id);
+    assert!(
+        store
+            .fail(&owner_claim, agent, "delivery failed after retirement")
+            .await?
+    );
+    assert!(
+        store
+            .retry_failed_main_task(
+                &owner.id,
+                "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            )
+            .await?
+    );
+    let rearmed_blocker = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(
+        rearmed_blocker.id, blocker.id,
+        "release-scoped retry must rearm an obsolete dependency before its owner"
+    );
+    complete(
+        store,
+        &rearmed_blocker,
+        agent,
+        false,
+        "retired prerequisite repaired for retry",
+    )
+    .await?;
+    let resumed_owner = store.claim(agent, 300).await?.into_claimed()?;
+    assert_eq!(resumed_owner.id, owner.id);
+    complete(
+        store,
+        &resumed_owner,
+        agent,
+        false,
+        "release-scoped retry completed",
+    )
+    .await
+}

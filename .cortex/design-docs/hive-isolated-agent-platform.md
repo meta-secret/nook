@@ -191,20 +191,27 @@ chain and are not independent consumers. Claiming snapshots the complete sorted
 owner set; completion transactionally rechecks that exact set and refuses
 retirement if a Main repair or any non-Main consumer was attached while the
 blocker was running. Before completion, the worker independently runs the full
-delivery verifier for every owning repair; prompt compliance alone cannot
-retire a live prerequisite. A refused retirement releases the lease and retry
-consumption so another worker can re-evaluate the updated ownership. The
+deterministic branch, merged-PR, squash-merge, ancestry, and successful
+containing-Main proof for every owning repair. It intentionally does not require
+the owner's later review, deployment, or Workbench completion steps, because
+those remain part of the owning task's terminal delivery verifier and may wait
+on this blocker. Prompt compliance alone cannot retire a live prerequisite. A
+refused retirement releases the lease and retry consumption so another worker
+can re-evaluate the updated ownership. The
 schema-8 terminal result marks this exceptional path explicitly with
 `obsolete: true`, and Hive persists that marker on both the task and attempt.
 If a future task discovers or directly depends on the same stable blocker ID,
-Hive transactionally rearms its obsolete dependency subtree with a fresh
-attempt budget and derives each task's state from its direct dependencies
-instead of treating the retired chain as satisfied.
+Hive transactionally rearms the dependency subtree only when that requested
+root is itself obsolete. It uses a fresh attempt budget and derives each task's
+state from its direct dependencies instead of treating the retired chain as
+satisfied; a normally completed root remains satisfied even if historical
+obsolete descendants are still attached.
 Normal completion, including a real patch produced while owners change,
 bypasses the retirement-only guard and persists normally. The shared-owner,
 mixed-owner, late-owner, future-owner, and genuine-completion race cases are
 behavior-tested in
-`agentic-ai/minds/hive/tests/neo4j_store.rs`.
+`agentic-ai/minds/hive/tests/neo4j_store.rs` and its focused `rearm.rs`
+integration capability.
 
 ### Durable results
 
@@ -345,9 +352,9 @@ is not automatically rearmed on every dispatcher poll: after repairing the
 platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
 attempts and adds one bounded three-attempt budget per deployed Hive image. It
-atomically rearms failed blocker dependencies from leaves toward the Main
-repair, refuses an active task, and cannot repeat a recovery for the same image
-digest.
+atomically rearms obsolete dependency roots and then failed members from leaves
+toward the Main repair, recomputes readiness from the revived graph, refuses an
+active task, and cannot repeat a recovery for the same image digest.
 
 ### GitHub delivery recovery
 

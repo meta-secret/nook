@@ -9,6 +9,8 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
 
+#[path = "neo4j_store/rearm.rs"]
+mod rearm;
 #[path = "neo4j_store/schema.rs"]
 mod schema;
 
@@ -815,6 +817,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     )
     .await?;
 
+    rearm::verify_completed_parent_gate(&store, &graph, &agent_a, &shared_blocker, &suffix).await?;
+
     graph
         .run(
             query(
@@ -1054,6 +1058,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .await?
         );
     }
+
+    rearm::verify_release_retry(&store, &agent_a, &suffix).await?;
 
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
     repair.kind = "main-repair".to_owned();

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 
@@ -5,14 +6,14 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
-        .expect("clean isolated integration database");
+        .context("clean isolated integration database")?;
     graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 1})
              CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
         ))
         .await
-        .expect("create schema-1 fixture");
+        .context("create schema-1 fixture")?;
     assert!(
         store
             .migrate()
@@ -24,7 +25,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
-        .expect("clean schema migration fixture");
+        .context("clean schema migration fixture")?;
     graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 3})
@@ -68,7 +69,7 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
              })",
         ))
         .await
-        .expect("create schema-3 fixture");
+        .context("create schema-3 fixture")?;
     store.migrate().await?;
     let mut rows = graph
         .execute(query(
@@ -117,6 +118,6 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
     graph
         .run(query("MATCH (node) DETACH DELETE node"))
         .await
-        .expect("clean schema-8 migration fixture");
+        .context("clean schema-8 migration fixture")?;
     Ok(())
 }

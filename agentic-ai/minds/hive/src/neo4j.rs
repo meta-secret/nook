@@ -63,6 +63,23 @@ impl Neo4jTaskStore {
         transaction: &mut Txn,
         root_id: &TaskId,
     ) -> anyhow::Result<bool> {
+        let mut root_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $root_id})
+                     RETURN coalesce(root.obsolete, false) AS obsolete",
+                )
+                .param("root_id", root_id.as_str()),
+            )
+            .await?;
+        let root_was_obsolete = match root_rows.next(transaction.handle()).await? {
+            Some(row) => row.get::<bool>("obsolete")?,
+            None => false,
+        };
+        drop(root_rows);
+        if !root_was_obsolete {
+            return Ok(false);
+        }
         let mut rows = transaction
             .execute(
                 query(
@@ -81,7 +98,6 @@ impl Neo4jTaskStore {
             retired_ids.push(TaskId::new(row.get::<String>("id")?)?);
         }
         drop(rows);
-        let root_was_obsolete = retired_ids.iter().any(|retired| retired == root_id);
         for retired_id in retired_ids {
             transaction
                 .run(
@@ -192,8 +208,9 @@ impl Neo4jTaskStore {
                 digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
             })
             .context("release id must be a sha256 digest")?;
-        let mut rows = self
-            .graph
+        let release_id = format!("sha256:{digest}");
+        let mut transaction = self.graph.start_txn().await?;
+        let mut eligible_rows = transaction
             .execute(
                 query(
                     "MATCH (root:Task {id: $id})
@@ -204,6 +221,46 @@ impl Neo4jTaskStore {
                          MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
                                <-[:FOR_TASK]-(:Attempt {status: 'RUNNING'})
                        }
+                     RETURN root.id AS id",
+                )
+                .param("id", task_id.as_str())
+                .param("release_id", release_id.as_str()),
+            )
+            .await?;
+        let eligible = eligible_rows.next(transaction.handle()).await?.is_some();
+        drop(eligible_rows);
+        if !eligible {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+        let mut obsolete_rows = transaction
+            .execute(
+                query(
+                    "MATCH path =
+                       (root:Task {id: $id})-[:DEPENDS_ON*1..]->(retired:Task)
+                     WHERE retired.obsolete = true
+                     WITH retired, min(length(path)) AS depth
+                     RETURN retired.id AS id
+                     ORDER BY depth ASC",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        let mut obsolete_ids = Vec::new();
+        while let Some(row) = obsolete_rows.next(transaction.handle()).await? {
+            obsolete_ids.push(TaskId::new(row.get::<String>("id")?)?);
+        }
+        drop(obsolete_rows);
+        for obsolete_id in &obsolete_ids {
+            Self::rearm_obsolete_subtree(&mut transaction, obsolete_id).await?;
+        }
+        let mut rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})
+                     WHERE root.kind = 'main-repair'
+                       AND root.status = 'FAILED'
+                       AND coalesce(root.last_retry_release, '') <> $release_id
                      MATCH (root)-[:DEPENDS_ON*0..]->(member:Task)
                      WITH root, collect(DISTINCT member) AS members
                      UNWIND members AS member
@@ -228,10 +285,17 @@ impl Neo4jTaskStore {
                      RETURN DISTINCT root.id AS id",
                 )
                 .param("id", task_id.as_str())
-                .param("release_id", format!("sha256:{digest}")),
+                .param("release_id", release_id),
             )
             .await?;
-        Ok(rows.next().await?.is_some())
+        let retried = rows.next(transaction.handle()).await?.is_some();
+        drop(rows);
+        if retried {
+            transaction.commit().await?;
+        } else {
+            transaction.rollback().await?;
+        }
+        Ok(retried)
     }
 
     fn claimed_task(

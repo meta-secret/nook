@@ -6,7 +6,7 @@ use anyhow::Context;
 use serde::Deserialize;
 use tokio::process::Command;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryPullRequest {
     number: u64,
@@ -20,17 +20,17 @@ struct DeliveryPullRequest {
     status_check_rollup: Vec<DeliveryCheck>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 struct DeliveryLabel {
     name: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 struct DeliveryCommit {
     oid: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryCheck {
     name: String,
@@ -54,6 +54,34 @@ pub(crate) async fn verify_main_repair_delivery(
     branch: &str,
     task_id: &str,
 ) -> anyhow::Result<()> {
+    let (pull_request, successful_main_sha) =
+        main_repair_merge_and_main(repository, branch).await?;
+    validate_repository_checks(&pull_request, true)?;
+    validate_full_e2e_checks(&pull_request, true)?;
+    validate_review_and_deployment_readiness(repository, &pull_request).await?;
+    validate_workbench_completion(
+        repository,
+        task_id,
+        &pull_request,
+        successful_main_sha.as_str(),
+    )
+    .await?;
+    Ok(())
+}
+
+pub(crate) async fn verify_main_repair_merge_and_main(
+    repository: &Path,
+    branch: &str,
+) -> anyhow::Result<()> {
+    main_repair_merge_and_main(repository, branch)
+        .await
+        .map(|_| ())
+}
+
+async fn main_repair_merge_and_main(
+    repository: &Path,
+    branch: &str,
+) -> anyhow::Result<(DeliveryPullRequest, String)> {
     let pull_requests: Vec<DeliveryPullRequest> = serde_json::from_str(
         &gh_output(
             repository,
@@ -72,10 +100,11 @@ pub(crate) async fn verify_main_repair_delivery(
     )
     .context("GitHub returned invalid Hive pull request state")?;
     let pull_request = latest_delivery_generation(&pull_requests, branch)?
-        .context("Hive repair delivery is incomplete: no pull request generation exists")?;
+        .context("Hive repair delivery is incomplete: no pull request generation exists")?
+        .clone();
 
-    validate_hive_marker(pull_request)?;
-    validate_merged_hive_pull_request(pull_request)?;
+    validate_hive_marker(&pull_request)?;
+    validate_merged_hive_pull_request(&pull_request)?;
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
@@ -98,7 +127,7 @@ pub(crate) async fn verify_main_repair_delivery(
         "verify Main contains the Hive repair merge",
     )
     .await?;
-    validate_squash_merge(repository, pull_request).await?;
+    validate_squash_merge(repository, &pull_request).await?;
 
     let mut runs: Vec<DeliveryRun> = serde_json::from_str(
         &gh_output(
@@ -141,12 +170,9 @@ pub(crate) async fn verify_main_repair_delivery(
         }
         applicable_runs.push(run);
     }
-    let successful_main_sha = select_successful_main_run(&applicable_runs, &merge_commit.oid)?;
-    validate_repository_checks(pull_request, true)?;
-    validate_full_e2e_checks(pull_request, true)?;
-    validate_review_and_deployment_readiness(repository, pull_request).await?;
-    validate_workbench_completion(repository, task_id, pull_request, successful_main_sha).await?;
-    Ok(())
+    let successful_main_sha =
+        select_successful_main_run(&applicable_runs, &merge_commit.oid)?.to_owned();
+    Ok((pull_request, successful_main_sha))
 }
 
 fn select_successful_main_run<'a>(

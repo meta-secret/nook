@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::delivery::verify_main_repair_delivery;
+use crate::delivery::{verify_main_repair_delivery, verify_main_repair_merge_and_main};
 use crate::model::{
     ActivityLease, AgentId, Artifact, BlockerRequest, ClaimOutcome, ClaimedTask,
     CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
@@ -970,11 +970,11 @@ async fn verify_obsolete_owner_deliveries(
     owning_repairs: &[crate::model::TaskId],
 ) -> anyhow::Result<()> {
     for (owner, branch) in obsolete_owner_delivery_targets(owning_repairs) {
-        verify_main_repair_delivery(repository, &branch, owner.as_str())
+        verify_main_repair_merge_and_main(repository, &branch)
             .await
             .with_context(|| {
                 format!(
-                    "obsolete blocker retirement requires completed delivery for owning repair \
+                    "obsolete blocker retirement requires a merged repair and green Main for owner \
                      {owner}"
                 )
             })?;
