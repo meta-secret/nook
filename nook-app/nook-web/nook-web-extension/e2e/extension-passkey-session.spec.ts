@@ -437,7 +437,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         const entries = await readPersistedAppLogs(reopenedVaultPage)
         return (entries ?? []).filter(
           (entry) =>
-            entry.scope === 'vault' &&
+            entry.scope === 'vault-lifecycle' &&
             entry.message === 'extension identity adopted' &&
             entry.data?.includes(extensionDeviceId ?? '') === true,
         ).length
@@ -553,6 +553,54 @@ test('accepts the pairing grant after the extension session was locked', async (
     await expect(
       simplePage.getByTestId('extension-connect-consent').getByRole('alert'),
     ).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
+})
+
+test('reuses the offscreen session after the service worker restarts', async ({
+  browserName,
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+  test.skip(isHostedSmoke, 'Hosted smoke keeps a warm unlocked session')
+  testInfo.setTimeout(120_000)
+
+  const userDataDir = testInfo.outputPath('chromium-profile-worker-restart')
+  const context = await launchExtensionContext(userDataDir)
+  await context.addInitScript(installMockPasskeyRuntime)
+
+  try {
+    const popupPage = await setupPasskeyExtensionPopup(context)
+    const worker = await getServiceWorker(context)
+    const cdp = await context.newCDPSession(popupPage)
+    const { targetInfos } = await cdp.send('Target.getTargets')
+    const workerTarget = targetInfos.find(
+      (target) =>
+        target.type === 'service_worker' && target.url === worker.url(),
+    )
+    expect(workerTarget).toBeDefined()
+    await expect(
+      cdp.send('Target.closeTarget', {
+        targetId: workerTarget!.targetId,
+      }),
+    ).resolves.toEqual({ success: true })
+
+    await popupPage.reload()
+    await expect
+      .poll(
+        async () => {
+          const restartedTargets = await cdp.send('Target.getTargets')
+          return restartedTargets.targetInfos.some(
+            (target) =>
+              target.type === 'service_worker' && target.url === worker.url(),
+          )
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true)
+    await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible(
+      { timeout: 15_000 },
+    )
   } finally {
     await context.close()
   }

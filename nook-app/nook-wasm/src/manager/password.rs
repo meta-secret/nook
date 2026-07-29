@@ -31,7 +31,11 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        // Reading password envelopes from another provider is still a
+        // same-vault operation. Preserve the active vault metadata while the
+        // storage target changes; clearing it here used to erase vault_name
+        // immediately before enrollment payloads were issued.
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -430,6 +434,82 @@ impl NookVaultManager {
         self.append_vault_operations(operations).await?;
         self.flush_event_outbox().await?;
         self.persist_projection_cache().await
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-07-29T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
+        manager.vault.unlock = nook_core::VaultUnlock::Passwords {
+            entries: vec![entry.clone()],
+        };
+        manager.vault.password_entries = vec![entry.clone()];
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.last_synced_content =
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &manager.vault.meta.to_stored_records(),
+                &manager.vault.unlock,
+                &manager.vault.password_entries,
+                nook_core::VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
+                nook_core::VaultNameRef::Named("Personal"),
+                nook_core::VaultVersionWrite::Initial,
+                &manager.vault.architecture,
+            )?
+            .into_inner();
+
+        manager
+            .prepare_storage_preserving_vault_metadata(
+                "icloud",
+                "oauth_token_for_metadata_test",
+                "private-target\twork-vault.yaml",
+            )
+            .await?;
+        manager
+            .prepare_storage_preserving_vault_metadata("local", "", "")
+            .await?;
+
+        assert!(matches!(
+            &manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Personal"
+        ));
+        assert_eq!(manager.vault.password_entries, vec![entry.clone()]);
+        assert_eq!(
+            manager.vault.unlock,
+            nook_core::VaultUnlock::Passwords {
+                entries: vec![entry]
+            }
+        );
+
+        manager.sync_outbox.provider_id = "configured-provider".to_owned();
+        manager.sync_outbox.storage_mode = nook_core::StorageMode::Github;
+        manager.sync_outbox.access_token = "invalid-token".to_owned();
+        manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
+        assert!(manager.set_vault_name("Rejected rename").await.is_err());
+        assert!(matches!(
+            &manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Personal"
+        ));
+        assert_eq!(
+            nook_core::read_vault_name(&manager.vault.last_synced_content)?,
+            nook_core::VaultName::Named("Personal".to_owned())
+        );
+        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
+        Ok(())
     }
 }
 

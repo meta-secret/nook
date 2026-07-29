@@ -154,7 +154,7 @@ impl NookVaultManager {
             ));
         }
         args.label = args.label.trim().to_owned();
-        self.set_vault_name(&args.label);
+        self.assign_vault_name(&args.label);
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
         let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;

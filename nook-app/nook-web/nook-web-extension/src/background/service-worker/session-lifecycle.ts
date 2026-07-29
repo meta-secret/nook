@@ -25,10 +25,7 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
       // Manifest V3 permits only one offscreen document. A restarted service
       // worker may race with the existing session document; it is safe to use
       // that already-open document.
-      if (
-        error instanceof Error &&
-        error.message.includes('single offscreen')
-      ) {
+      if (String(error).includes('single offscreen')) {
         return
       }
       throw error

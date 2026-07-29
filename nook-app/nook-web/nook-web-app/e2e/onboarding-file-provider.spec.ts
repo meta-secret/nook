@@ -47,6 +47,17 @@ test.describe('file sync provider onboarding', () => {
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
+    for (const [name, page] of [
+      ['device A', deviceA],
+      ['device B', deviceB],
+    ] as const) {
+      page.on('console', (message) => {
+        const text = message.text()
+        if (text.includes('[nook]') || message.type() === 'error') {
+          console.log(`[${name} ${message.type()}] ${text}`)
+        }
+      })
+    }
     target = createSyncTarget('', 'onboarding-file', 'file')
   })
 

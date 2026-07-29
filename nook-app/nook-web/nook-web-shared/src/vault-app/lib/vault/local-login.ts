@@ -193,7 +193,7 @@ export async function createLocalVaultWithDeviceKeys(
     state.markVaultUnlocked();
     const storeId = requireManagerVaultStoreId(state.manager);
     state.activeVaultStoreId = storeId;
-    state.manager.setVaultName(trimmedLabel);
+    await state.enqueueStorage(() => state.manager!.setVaultName(trimmedLabel));
     await setLocalVaultLabel(storeId, trimmedLabel);
     await refreshLocalVaultCatalog(state);
     state.localLoginPrepared = true;
@@ -235,15 +235,35 @@ export async function renameLocalVaultLabel(
   state.errorMsg = "";
   state.dismissSuccess();
   state.isVerifying = true;
+  const previousLabel = state.localVaults.find(
+    (vault) => vault.storeId.trim() === trimmedStoreId,
+  )?.label;
+  let renameCommitted = false;
 
   try {
     await setLocalVaultLabel(trimmedStoreId, trimmedLabel);
     if (trimmedStoreId === state.activeVaultStoreId?.trim()) {
-      state.manager?.setVaultName(trimmedLabel);
+      await state.enqueueStorage(() =>
+        state.manager!.setVaultName(trimmedLabel),
+      );
     }
+    renameCommitted = true;
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));
   } catch (e: unknown) {
+    if (!renameCommitted && previousLabel !== undefined) {
+      try {
+        await setLocalVaultLabel(trimmedStoreId, previousLabel);
+        await refreshLocalVaultCatalog(state);
+      } catch (rollbackError: unknown) {
+        log.warn("local vault rename rollback failed", {
+          error:
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+        });
+      }
+    }
     state.errorMsg =
       e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
   } finally {

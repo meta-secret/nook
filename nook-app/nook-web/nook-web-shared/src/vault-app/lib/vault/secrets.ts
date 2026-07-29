@@ -516,9 +516,10 @@ export async function refreshSecretsFromSession(
     state.secrets = [];
     state.secretTotal = 0;
     state.secretPageOffset = 0;
+    state.secretPageRequestOffset = 0;
     return;
   }
-  await loadSecretPage(state, state.secretQuery, state.secretPageOffset);
+  await loadSecretPage(state, state.secretQuery, state.secretPageRequestOffset);
 }
 
 export async function loadSecretPage(
@@ -527,7 +528,14 @@ export async function loadSecretPage(
   requestedOffset = 0,
 ): Promise<void> {
   if (!state.manager) return;
-  const generation = state.secretPageGeneration;
+  // Publish the request immediately so maintenance refreshes queued behind it
+  // cannot re-submit the previous query or page.
+  state.secretQuery = query;
+  state.secretPageRequestOffset = requestedOffset;
+  // Each request supersedes every older page request. The storage queue
+  // serializes WASM access, but it does not prevent an earlier caller from
+  // applying its result after a newer search has already been requested.
+  const generation = ++state.secretPageGeneration;
   const page = await state.enqueueStorage(() =>
     state.manager!.queryPreparedSecretPage(
       query,
@@ -573,6 +581,7 @@ export async function loadSecretPage(
   state.secrets = records;
   state.secretTotal = total;
   state.secretPageOffset = offset;
+  state.secretPageRequestOffset = offset;
   state.secretQuery = query;
 }
 
@@ -589,6 +598,7 @@ export function applyConnectedSecretPage(
   state.secrets = records;
   state.secretTotal = total;
   state.secretPageOffset = offset;
+  state.secretPageRequestOffset = offset;
   state.secretQuery = query;
 }
 

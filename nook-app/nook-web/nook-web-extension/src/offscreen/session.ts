@@ -246,36 +246,19 @@ async function flushPasskeyEventToProviders(
   )
 }
 
-function resetSessionState(): void {
-  for (const offer of Array.from(pendingLoginSaveOffers.values())) {
-    clearLoginSaveOffer(offer)
-  }
-  pendingLoginSaveOffers.clear()
-  canceledWebsitePasskeyRequests.clear()
-  if (sessionTimer) {
-    clearTimeout(sessionTimer)
-    sessionTimer = undefined
-  }
-  sessionDeadlineAt = 0
-  sessionGeneration += 1
-  sessionMessageDispatcher?.replaceOperations(
-    new Error('Extension session reset.'),
-  )
-  if (manager) {
-    try {
-      manager.lockDeviceIdentity()
-      manager.free()
-    } catch {
-      // Ignore error during manager cleanup
-    }
-    manager = undefined
-  }
-}
-
 async function handleMessage(message: unknown): Promise<unknown> {
   switch (messageType(message)) {
     case 'nook:extension-session-reset': {
-      resetSessionState()
+      for (const offer of Array.from(pendingLoginSaveOffers.values())) {
+        clearLoginSaveOffer(offer)
+      }
+      pendingLoginSaveOffers.clear()
+      canceledWebsitePasskeyRequests.clear()
+      sessionMessageDispatcher?.replaceOperations(
+        new Error('Extension session reset.'),
+      )
+      const activeManager = await getManager()
+      activeManager.resetVaultSession()
       return { ok: true }
     }
     case 'nook:extension-session-migrate-auth-providers': {

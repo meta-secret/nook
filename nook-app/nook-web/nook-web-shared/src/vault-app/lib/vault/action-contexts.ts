@@ -277,6 +277,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "sentinelUnlockStatus"
   > & {
     secretPageGeneration: number;
+    secretPageRequestOffset: number;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
     publishExtensionEventLogUpdate(): Promise<void>;
     refreshVaultArchitectureFromManager(): void;

@@ -107,9 +107,10 @@ test('offer browser extension install on vault home and in Devices', async ({
       .locator('html')
       .getAttribute('data-demo-extension-message-types')) ?? '[]',
   ) as string[]
-  expect(
-    routedTypes.indexOf('nook:extension-paired-vault-identity-discovery'),
-  ).toBeLessThan(routedTypes.indexOf('nook:open-companion-launcher'))
+  expect(routedTypes).toEqual([
+    'nook:extension-paired-vault-identity-discovery',
+    'nook:open-companion-launcher',
+  ])
   // Launching the session-owned pairing operation must not optimistically
   // replace the verified extension identity before a new grant is accepted.
   await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
