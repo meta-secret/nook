@@ -17,6 +17,7 @@ struct DeliveryPullRequest {
     is_cross_repository: bool,
     labels: Vec<DeliveryLabel>,
     merge_commit: Option<DeliveryCommit>,
+    #[serde(default, deserialize_with = "null_to_default")]
     status_check_rollup: Vec<DeliveryCheck>,
 }
 
@@ -33,11 +34,24 @@ struct DeliveryCommit {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DeliveryCheck {
+    #[serde(default, alias = "context")]
     name: String,
+    #[serde(default)]
     status: String,
+    #[serde(default, alias = "state")]
     conclusion: String,
+    #[serde(default)]
     started_at: String,
+    #[serde(default)]
     workflow_name: String,
+}
+
+fn null_to_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 #[derive(Debug, Deserialize)]
@@ -765,6 +779,48 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn delivery_state_accepts_legacy_status_contexts_and_null_rollups() {
+        let with_context: DeliveryPullRequest = serde_json::from_str(
+            r#"{
+                "number": 42,
+                "title": "[Hive] repair",
+                "state": "MERGED",
+                "headRefName": "codex/hive-task",
+                "headRefOid": "head-42",
+                "isCrossRepository": false,
+                "labels": [{"name": "hive"}],
+                "mergeCommit": {"oid": "abc123"},
+                "statusCheckRollup": [{
+                    "__typename": "StatusContext",
+                    "context": "CodeRabbit",
+                    "state": "SUCCESS",
+                    "startedAt": "2026-07-28T01:00:00Z"
+                }]
+            }"#,
+        )
+        .expect("legacy commit statuses must not invalidate unrelated Hive delivery");
+        assert_eq!(with_context.status_check_rollup[0].name, "CodeRabbit");
+        assert_eq!(with_context.status_check_rollup[0].conclusion, "SUCCESS");
+        assert!(with_context.status_check_rollup[0].workflow_name.is_empty());
+
+        let without_checks: DeliveryPullRequest = serde_json::from_str(
+            r#"{
+                "number": 43,
+                "title": "[Hive] repair",
+                "state": "OPEN",
+                "headRefName": "codex/hive-task-g2",
+                "headRefOid": "head-43",
+                "isCrossRepository": false,
+                "labels": [],
+                "mergeCommit": null,
+                "statusCheckRollup": null
+            }"#,
+        )
+        .expect("a PR without indexed checks must remain parseable");
+        assert!(without_checks.status_check_rollup.is_empty());
     }
 
     #[test]
