@@ -624,7 +624,14 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(js_name = setVaultName)]
-    pub fn set_vault_name(&mut self, name: &str) {
+    pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
+        self.assign_vault_name(name);
+        self.persist_vault_change(Vec::new())
+            .await
+            .map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    fn assign_vault_name(&mut self, name: &str) {
         let trimmed = name.trim();
         self.vault.vault_name = if trimmed.is_empty() {
             VaultNameState::Unnamed

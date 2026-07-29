@@ -527,7 +527,10 @@ export async function loadSecretPage(
   requestedOffset = 0,
 ): Promise<void> {
   if (!state.manager) return;
-  const generation = state.secretPageGeneration;
+  // Each request supersedes every older page request. The storage queue
+  // serializes WASM access, but it does not prevent an earlier caller from
+  // applying its result after a newer search has already been requested.
+  const generation = ++state.secretPageGeneration;
   const page = await state.enqueueStorage(() =>
     state.manager!.queryPreparedSecretPage(
       query,

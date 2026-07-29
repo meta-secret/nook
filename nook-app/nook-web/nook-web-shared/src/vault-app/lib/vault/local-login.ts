@@ -193,7 +193,7 @@ export async function createLocalVaultWithDeviceKeys(
     state.markVaultUnlocked();
     const storeId = requireManagerVaultStoreId(state.manager);
     state.activeVaultStoreId = storeId;
-    state.manager.setVaultName(trimmedLabel);
+    await state.enqueueStorage(() => state.manager!.setVaultName(trimmedLabel));
     await setLocalVaultLabel(storeId, trimmedLabel);
     await refreshLocalVaultCatalog(state);
     state.localLoginPrepared = true;
@@ -239,7 +239,9 @@ export async function renameLocalVaultLabel(
   try {
     await setLocalVaultLabel(trimmedStoreId, trimmedLabel);
     if (trimmedStoreId === state.activeVaultStoreId?.trim()) {
-      state.manager?.setVaultName(trimmedLabel);
+      await state.enqueueStorage(() =>
+        state.manager!.setVaultName(trimmedLabel),
+      );
     }
     await refreshLocalVaultCatalog(state);
     state.showSuccess(state.t("toasts.vault_renamed"));

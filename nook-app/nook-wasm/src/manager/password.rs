@@ -31,7 +31,11 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        // Reading password envelopes from another provider is still a
+        // same-vault operation. Preserve the active vault metadata while the
+        // storage target changes; clearing it here used to erase vault_name
+        // immediately before enrollment payloads were issued.
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         let mut vault_missing = false;
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;

@@ -499,9 +499,7 @@ export async function connectWithEnrollmentCode(
       await state.enqueueStorage(() => state.manager!.vaultStoreId)
     ).trim();
     if (vaultName && vaultStoreId) {
-      await state.enqueueStorage(() => {
-        state.manager!.setVaultName(vaultName);
-      });
+      await state.enqueueStorage(() => state.manager!.setVaultName(vaultName));
       await setLocalVaultLabel(vaultStoreId, vaultName);
     }
     // Password enrollment downloads an existing vault into this browser. Make
@@ -547,6 +545,7 @@ export async function issueEnrollmentCode(
   // wait for any *already in-flight* `&mut self` storage future to release its
   // borrow before verify runs, or wasm-bindgen's borrow detector trips.
   state.isPasswordBusy = true;
+  log.info("enrollment code issue started", { providerId });
   try {
     // Wait for the queued wasm op to settle. We deliberately do NOT
     // `resetStorageChain()` on timeout: abandoning an in-flight `&mut self`
@@ -595,6 +594,7 @@ export async function issueEnrollmentCode(
     if (!verified) {
       throw new Error("Password does not match the vault.");
     }
+    log.info("enrollment password verified", { providerId });
     const selectedProvider = state.providers.find((p) => p.id === providerId);
     if (!selectedProvider) {
       throw new Error("Choose a sync provider.");
@@ -618,6 +618,11 @@ export async function issueEnrollmentCode(
     const usesSharedICloud =
       usesSharedProviderGrant &&
       selectedProvider.oauthFile?.preset === "icloud";
+    log.info("enrollment provider selected", {
+      providerId,
+      providerType: selectedProvider.type,
+      usesSharedProviderGrant,
+    });
     if (usesSharedProviderGrant && !usesSharedICloud && !sharedJoinerIdentity) {
       throw new Error(
         state.t("errors.validation.shared_joiner_identity_required"),
@@ -646,6 +651,7 @@ export async function issueEnrollmentCode(
         }
       } else {
         const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
+        log.info("shared enrollment grant started", { providerId });
         const grant = await prepareSharedStorageGrant({
           providerType: selectedProvider.type,
           oauthPreset: selectedProvider.oauthFile?.preset,
@@ -657,6 +663,10 @@ export async function issueEnrollmentCode(
             undefined,
           storageTargetId: selectedProvider.oauthFile?.folderId,
           accessToken,
+        });
+        log.info("shared enrollment grant prepared", {
+          providerId,
+          grantKind: grant.kind,
         });
         if (grant.kind === "unsupported") {
           throw new Error(state.t(grant.reasonKey));
@@ -718,9 +728,21 @@ export async function issueEnrollmentCode(
         : undefined,
       sharedStorageTargetId,
     );
-    const vaultName = takeWasmStringValue(
+    log.info("enrollment provider payload prepared", { providerId });
+    const managerVaultName = takeWasmStringValue(
       await state.enqueueStorage(() => state.manager!.vaultName),
     );
+    const catalogVaultName = state.localVaults
+      .find((entry) => entry.storeId === state.activeVaultStoreId)
+      ?.label?.trim();
+    // The local catalog is the durable browser-level label index. Keep it as
+    // the enrollment fallback while older/synced projections without
+    // `vault_name` are still supported.
+    const vaultName = managerVaultName ?? catalogVaultName;
+    log.info("enrollment vault name loaded", {
+      providerId,
+      hasVaultName: Boolean(vaultName),
+    });
     const payload = new NookEnrollmentIssueInput(
       provider,
       vaultName ?? "",
@@ -737,6 +759,7 @@ export async function issueEnrollmentCode(
     );
     state.enrollmentCode = code;
     state.activeEnrollmentEntryId = entryId;
+    log.info("enrollment code issued", { providerId });
     return code;
   } finally {
     state.isPasswordBusy = false;
