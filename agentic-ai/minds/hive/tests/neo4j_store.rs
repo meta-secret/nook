@@ -1312,6 +1312,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .expect("complete recovered parent")
     );
 
+    rearm::verify_blocked_release_retry(&store, &graph, &agent_a, &suffix).await?;
+
     let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());
     let expired_blocker = task(format!("expired-blocker-{suffix}"), Vec::new());
     store

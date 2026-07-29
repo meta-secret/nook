@@ -366,12 +366,15 @@ outcomes so replacement-Pod failures remain diagnosable. A failed Main-repair
 is not automatically rearmed on every dispatcher poll: after repairing the
 platform, the explicit
 `task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
-attempts and adds one bounded three-attempt budget per deployed Hive image. It
-atomically rearms obsolete dependency roots and then failed members from leaves
-toward the Main repair. It write-locks the reachable graph before inspecting
-retirement state and holds those locks through owner reactivation, recomputes
-readiness from the revived graph, refuses an active task, and cannot repeat a
-recovery for the same image digest.
+attempts and guarantees at least three post-release attempts per reachable
+member without reducing a larger operator-granted budget. It atomically rearms
+obsolete dependency roots, failed members, and historical blocked members from
+leaves toward the Main repair. Members whose prerequisites remain incomplete
+stay blocked with an operator-visible reason; dependency-free blocked leaves
+become runnable. It write-locks the reachable graph before inspecting retirement
+state and holds those locks through owner reactivation, recomputes readiness
+from the revived graph, refuses an active task, and cannot repeat a recovery for
+the same image digest.
 
 ### GitHub delivery recovery
 
