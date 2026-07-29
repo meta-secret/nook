@@ -39,6 +39,10 @@
     SettingsAccordionSection,
     SettingsSection,
   } from '$lib/vault/state/ui.svelte'
+  import {
+    LoginSetupKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
   import { OnboardingType, VaultType } from '$lib/vault-architecture'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
@@ -66,7 +70,7 @@
     isVerifying,
     isInitializing,
     addProviderOpen = false,
-    setupType = $bindable(omittedValue() as StorageProviderType | void),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     onIssueCode,
@@ -87,7 +91,7 @@
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | void
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     onIssueCode: (
@@ -120,7 +124,13 @@
   const hasCompatibleSyncProviders = $derived(
     compatibleSyncProviders.length > 0,
   )
-  const showSetup = $derived(Boolean(setupType))
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const addingProvider = $derived(addProviderOpen || showSetup)
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
@@ -631,7 +641,7 @@
             </button>
 
             {#if showSetup}
-              {#if setupType === 'oauth-file'}
+              {#if setupIs('oauth-file')}
                 <OAuthProviderSetupWizard
                   {vault}
                   bind:githubRepo
@@ -644,7 +654,7 @@
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupType === 'github'}
+              {:else if setupIs('github')}
                 <GitHubProviderSetupWizard
                   {vault}
                   bind:githubPat
@@ -655,7 +665,7 @@
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupType === 'local-folder'}
+              {:else if setupIs('local-folder')}
                 <LocalFolderProviderSetupWizard
                   {vault}
                   idPrefix="onboard"

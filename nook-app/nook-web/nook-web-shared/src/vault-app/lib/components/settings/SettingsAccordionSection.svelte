@@ -1,14 +1,12 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
-
   import type { Snippet } from 'svelte'
   import { ChevronDown } from '@lucide/svelte'
 
   let {
     title,
     subtitle,
-    section,
-    activeSection = $bindable<string | void>(omittedValue()),
+    open,
+    onToggle,
     disabled = false,
     testId,
     badge,
@@ -16,19 +14,13 @@
   }: {
     title: string
     subtitle?: string
-    section: string
-    activeSection?: string | void
+    open: boolean
+    onToggle: () => void
     disabled?: boolean
     testId?: string
     badge?: Snippet
     children?: Snippet
   } = $props()
-
-  const open = $derived(activeSection === section)
-
-  function handleToggle() {
-    activeSection = open ? omittedValue() : section
-  }
 </script>
 
 <section
@@ -44,7 +36,7 @@
       : 'border-l-transparent hover:bg-muted/25'}"
     aria-expanded={open}
     {disabled}
-    onclick={handleToggle}
+    onclick={onToggle}
   >
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-semibold text-foreground">{title}</span>

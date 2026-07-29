@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../explicit-state'
-
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
-
-  export type VaultSettingsAccordionSection = 'devices' | 'language' | 'danger'
+  import { SettingsAccordionSection } from '$lib/vault/state/ui.svelte'
 
   let deleteConfirmationOpen = $state(false)
 
@@ -25,9 +22,7 @@
     onDenyJoin,
     onRenameDevice,
     onRevokeDevice,
-    accordionSection = $bindable(
-      omittedValue() as VaultSettingsAccordionSection | void,
-    ),
+    accordionSection = $bindable(SettingsAccordionSection.Devices),
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -41,18 +36,23 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: VaultSettingsAccordionSection | void
+    accordionSection?: SettingsAccordionSection
   } = $props()
 
   const hasDevices = $derived(vaultMembers.length > 0)
+
+  function toggleSection(section: SettingsAccordionSection): void {
+    accordionSection =
+      accordionSection === section ? SettingsAccordionSection.Closed : section
+  }
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
   <SettingsAccordionSection
     title={vault.t('settings.devices')}
     subtitle={vault.t('settings.devices_desc')}
-    section="devices"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Devices}
+    onToggle={() => toggleSection(SettingsAccordionSection.Devices)}
     testId="vault-devices-section"
   >
     {#snippet badge()}
@@ -88,8 +88,8 @@
   <SettingsAccordionSection
     title={vault.t('settings.language')}
     subtitle={vault.t('settings.select_language')}
-    section="language"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Language}
+    onToggle={() => toggleSection(SettingsAccordionSection.Language)}
     testId="vault-language-section"
   >
     {#snippet badge()}
@@ -123,8 +123,8 @@
   <SettingsAccordionSection
     title={vault.t('settings.delete_local_title')}
     subtitle={vault.t('settings.delete_local_desc')}
-    section="danger"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Danger}
+    onToggle={() => toggleSection(SettingsAccordionSection.Danger)}
     testId="vault-danger-section"
   >
     {#snippet badge()}

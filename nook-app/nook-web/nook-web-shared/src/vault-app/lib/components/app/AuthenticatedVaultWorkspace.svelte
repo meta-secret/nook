@@ -131,7 +131,7 @@
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           addProviderOpen={vault.addProviderOpen}
-          bind:setupType={vault.loginSetupType}
+          loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
           passwordEntries={vault.passwordEntries}
@@ -176,7 +176,7 @@
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           addProviderOpen={vault.addProviderOpen}
-          bind:setupType={vault.loginSetupType}
+          loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
           onIssueCode={(entryId, pw, providerId) =>

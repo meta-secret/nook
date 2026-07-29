@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { StartSentinelGenesisArgs } from "$app-wasm";
-  import { APP_KIND } from "$lib/app-kind";
-  import LoginGate from "$lib/components/LoginGate.svelte";
-  import PasskeyAuthOverlay from "$lib/components/PasskeyAuthOverlay.svelte";
-  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
-  import type { VaultState } from "$lib/vault.svelte";
+  import type { StartSentinelGenesisArgs } from '$app-wasm'
+  import { APP_KIND } from '$lib/app-kind'
+  import LoginGate from '$lib/components/LoginGate.svelte'
+  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
+  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
@@ -27,37 +27,30 @@
     onCreateSentinelParticipantResponse,
     onDismissPasskey,
   }: {
-    vault: VaultState;
-    showAccessGate: boolean;
-    existingVaultNeedsDeviceUnlock: boolean;
-    usesExtensionDeviceIdentity: boolean;
-    showPasskeyOverlay: boolean;
-    sentinelInvitationRequest: string;
-    sentinelParticipantResponse: string;
-    sentinelOnboardingPackage: string;
-    onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>;
-    onUseEnrollmentCode: (code: string, password: string) => Promise<void>;
-    onAcceptSentinelOnboardingPackage: (
-      packageJson: string,
-    ) => Promise<void>;
-    onUnlockWithPassword: (
-      entryId: string,
-      password: string,
-    ) => Promise<void>;
-    onSwitchVault: () => Promise<void>;
-    onSentinelUnlocked: () => Promise<void>;
-    onCreateDeviceVault: (label: string) => Promise<void>;
-    onStartSentinelGenesis: (
-      args: StartSentinelGenesisArgs,
-    ) => Promise<boolean>;
-    onCreateSentinelParticipantKey: () => Promise<string>;
+    vault: VaultState
+    showAccessGate: boolean
+    existingVaultNeedsDeviceUnlock: boolean
+    usesExtensionDeviceIdentity: boolean
+    showPasskeyOverlay: boolean
+    sentinelInvitationRequest: string
+    sentinelParticipantResponse: string
+    sentinelOnboardingPackage: string
+    onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
+    onUseEnrollmentCode: (code: string, password: string) => Promise<void>
+    onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
+    onUnlockWithPassword: (entryId: string, password: string) => Promise<void>
+    onSwitchVault: () => Promise<void>
+    onSentinelUnlocked: () => Promise<void>
+    onCreateDeviceVault: (label: string) => Promise<void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
+    onCreateSentinelParticipantKey: () => Promise<string>
     onCreateSentinelParticipantResponse: (
       requestPayload: string,
-    ) => Promise<string>;
-    onDismissPasskey: () => void;
-  } = $props();
+    ) => Promise<string>
+    onDismissPasskey: () => void
+  } = $props()
 
-  const appVersion = "0.1.0";
+  const appVersion = '0.1.0'
 </script>
 
 <div class="space-y-6">
@@ -67,7 +60,7 @@
         {vault}
         appKind={APP_KIND}
         providers={vault.providers}
-        bind:setupType={vault.loginSetupType}
+        loginSetup={vault.loginSetup}
         bind:githubPat={vault.githubPat}
         bind:githubRepo={vault.githubRepo}
         addProviderOpen={vault.addProviderOpen}

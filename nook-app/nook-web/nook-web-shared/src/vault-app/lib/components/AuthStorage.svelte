@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     ShieldCheck,
     RefreshCw,
@@ -32,6 +30,10 @@
     providerSupportsReplication,
   } from '$lib/vault-architecture'
   import { formatProviderSyncStatus } from '$lib/provider-sync-status'
+  import {
+    LoginSetupKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
@@ -41,7 +43,7 @@
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    setupType = $bindable(omittedValue() as StorageProviderType | void),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
@@ -59,7 +61,7 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    setupType?: StorageProviderType | void
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     onReconnect: () => void | Promise<void>
@@ -94,15 +96,21 @@
     })
   }
 
-  const showSetup = $derived(Boolean(setupType))
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   const addingProvider = $derived(addProviderOpen || showSetup)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const setupCanConnect = $derived(
-    setupType === 'local' ||
-      (setupType === 'local-folder' &&
+    setupIs('local') ||
+      (setupIs('local-folder') &&
         Boolean(vault.localFolder?.handleId?.trim())) ||
-      (setupType === 'oauth-file' &&
+      (setupIs('oauth-file') &&
         Boolean(vault.oauthFile?.accessToken?.trim())) ||
-      (setupType === 'github' && Boolean(githubPat.trim())),
+      (setupIs('github') && Boolean(githubPat.trim())),
   )
 </script>
 
@@ -125,14 +133,13 @@
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
             {vault.t('auth_storage.connect_to_type', {
-              type:
-                setupType === 'github'
-                  ? vault.t('auth_storage.github')
-                  : setupType === 'oauth-file'
-                    ? vault.t('provider_picker.google_drive')
-                    : setupType === 'local-folder'
-                      ? vault.t('provider_picker.local_folder')
-                      : vault.t('auth_storage.this_device'),
+              type: setupIs('github')
+                ? vault.t('auth_storage.github')
+                : setupIs('oauth-file')
+                  ? vault.t('provider_picker.google_drive')
+                  : setupIs('local-folder')
+                    ? vault.t('provider_picker.local_folder')
+                    : vault.t('auth_storage.this_device'),
             })}
           {:else}
             {vault.t('settings.add_sync_provider')}
@@ -163,7 +170,7 @@
       class="space-y-4"
     >
       {#if showSetup}
-        {#if setupType === 'oauth-file'}
+        {#if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
             bind:githubRepo
@@ -176,7 +183,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupType === 'github'}
+        {:else if setupIs('github')}
           <GitHubProviderSetupWizard
             {vault}
             bind:githubPat
@@ -187,7 +194,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupType === 'local-folder'}
+        {:else if setupIs('local-folder')}
           <LocalFolderProviderSetupWizard
             {vault}
             idPrefix="settings"
@@ -340,7 +347,7 @@
         </fieldset>
       {/if}
 
-      {#if showSetup && setupType === 'local'}
+      {#if showSetup && setupIs('local')}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >

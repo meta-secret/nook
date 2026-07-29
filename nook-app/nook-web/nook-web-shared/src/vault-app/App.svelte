@@ -77,6 +77,7 @@
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { subscribeToLocalBrowserDataDeletion } from '$lib/browser-data'
+  import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
   const vault = new VaultState()
   const vaultSecurityRecommendations = $derived(
@@ -278,16 +279,17 @@
 
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
-      vault.loginRequiresExistingVault && vault.loginSetupActive
+      vault.loginRequiresExistingVault &&
+      vault.loginSetup.kind === LoginSetupKind.Active
     const existingVaultImportNeedsIdentity =
       vault.clientPolicy.existingVaultIdentityRecoveryRequired(
         vault.loginRequiresExistingVault,
-        vault.loginSetupActive,
+        vault.loginSetup.kind === LoginSetupKind.Active,
         vault.deviceProtectionReady,
       )
     if (
       vault.addProviderOpen &&
-      vault.loginSetupType &&
+      vault.loginSetup.kind === LoginSetupKind.Active &&
       !existingVaultImportNeedsIdentity
     ) {
       await vault.connectStagedProvider()
@@ -378,7 +380,7 @@
       await resumeExistingVaultImport()
       return
     }
-    if (vault.loginSetupType) {
+    if (vault.loginSetup.kind === LoginSetupKind.Active) {
       await vault.connectStagedProvider()
       return
     }
@@ -404,7 +406,7 @@
   }
 
   async function handleSettingsReconnect() {
-    if (vault.loginSetupType) {
+    if (vault.loginSetup.kind === LoginSetupKind.Active) {
       await vault.connectAndSyncStagedProvider()
       return
     }
@@ -475,8 +477,8 @@
   )
 
   function rememberExistingVaultImport(storeId: string): void {
-    const setupType = vault.loginSetupType
-    if (!setupType) return
+    if (vault.loginSetup.kind !== LoginSetupKind.Active) return
+    const setupType = vault.loginSetup.providerType
     pendingExistingVaultImportState = {
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
@@ -519,7 +521,7 @@
       await vault.prepareExistingVaultImportSlot()
     }
     vault.loginRequiresExistingVault = true
-    vault.loginSetupType = pending.setupType
+    vault.activateLoginSetup(pending.setupType)
     vault.storageMode = pending.setupType
     vault.githubPat = pending.githubPat
     vault.githubRepo = pending.githubRepo
@@ -606,7 +608,8 @@
     | ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
   > {
     const discoveringStagedImport =
-      vault.loginRequiresExistingVault && vault.loginSetupActive
+      vault.loginRequiresExistingVault &&
+      vault.loginSetup.kind === LoginSetupKind.Active
     extensionDiscoveryStoreId = storeId
     const discovery = await discoverPairedExtensionIdentity(storeId)
     if (
@@ -843,7 +846,10 @@
       vault.isInitializing ||
       vault.isVerifying ||
       (!vault.localVaultPresent &&
-        !(vault.loginRequiresExistingVault && vault.loginSetupType)) ||
+        !(
+          vault.loginRequiresExistingVault &&
+          vault.loginSetup.kind === LoginSetupKind.Active
+        )) ||
       !storeId ||
       extensionDiscoveryStoreId === storeId
     ) {

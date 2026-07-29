@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
@@ -42,12 +40,16 @@
     type VaultApplication,
   } from '$app-wasm'
   import { takeWasmStringValue } from '$lib/wasm-string-value'
+  import {
+    LoginSetupKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
     appKind,
     providers,
-    setupType = $bindable(omittedValue() as StorageProviderType | void),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
@@ -80,7 +82,7 @@
     vault: VaultState
     appKind: VaultApplication
     providers: StorageProvider[]
-    setupType?: StorageProviderType | void
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     isVerifying: boolean
@@ -132,7 +134,13 @@
   let showProviderSetupLink = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
-  const showSetup = $derived(Boolean(setupType))
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
@@ -194,12 +202,12 @@
   )
 
   const setupCanConnect = $derived(
-    setupType === 'local' ||
-      (setupType === 'local-folder' &&
+    setupIs('local') ||
+      (setupIs('local-folder') &&
         Boolean(vault.localFolder?.handleId?.trim())) ||
-      (setupType === 'oauth-file' &&
+      (setupIs('oauth-file') &&
         Boolean(vault.oauthFile?.accessToken?.trim())) ||
-      (setupType === 'github' && Boolean(githubPat.trim())),
+      (setupIs('github') && Boolean(githubPat.trim())),
   )
 
   function handleFirstConnectSubmit(e: Event) {
@@ -338,12 +346,11 @@
               {vault.t('login.open_vault_title')}
             {:else if showSetup}
               {vault.t('onboarding.connect_to', {
-                provider:
-                  setupType === 'github'
-                    ? 'GitHub'
-                    : setupType === 'local-folder'
-                      ? vault.t('provider_picker.local_folder')
-                      : vault.t('onboarding.local_storage'),
+                provider: setupIs('github')
+                  ? 'GitHub'
+                  : setupIs('local-folder')
+                    ? vault.t('provider_picker.local_folder')
+                    : vault.t('onboarding.local_storage'),
               })}
             {:else if addProviderOpen}
               {vault.t('onboarding.add_provider')}
@@ -363,7 +370,7 @@
             <CardDescription class="text-pretty">
               {vault.t('login.open_vault_subtitle')}
             </CardDescription>
-          {:else if showSetup && setupType === 'github'}
+          {:else if showSetup && setupIs('github')}
             <CardDescription class="text-pretty">
               {vault.t('onboarding.github_description')}
             </CardDescription>
@@ -429,8 +436,8 @@
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}
           </p>
-        {:else if showSetup && setupType}
-          {#if setupType === 'oauth-file'}
+        {:else if showSetup}
+          {#if setupIs('oauth-file')}
             <OAuthProviderSetupWizard
               {vault}
               bind:githubRepo
@@ -443,7 +450,7 @@
               {onCancelSetup}
               onConnect={onUnlock}
             />
-          {:else if setupType === 'github'}
+          {:else if setupIs('github')}
             <GitHubProviderSetupWizard
               {vault}
               bind:githubPat
@@ -458,9 +465,7 @@
               onConnect={onUnlock}
             >
               {#snippet beforeConnect()}
-                {#if vault.clientPolicy.remoteRecoveryPromptVisible(
-                  vault.remoteVaultRecoveryState,
-                )}
+                {#if vault.clientPolicy.remoteRecoveryPromptVisible(vault.remoteVaultRecoveryState)}
                   <RemoteVaultRecoveryPanel
                     {vault}
                     state={vault.remoteVaultRecoveryState}
@@ -472,7 +477,7 @@
                 {/if}
               {/snippet}
             </GitHubProviderSetupWizard>
-          {:else if setupType === 'local-folder'}
+          {:else if setupIs('local-folder')}
             <LocalFolderProviderSetupWizard
               {vault}
               idPrefix="login"

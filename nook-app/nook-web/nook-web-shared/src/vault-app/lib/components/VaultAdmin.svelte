@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
-
   import {
     Check,
     CheckCircle2,
@@ -35,6 +33,8 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
+  import type { LoginSetup } from '$lib/vault/state/provider.svelte'
+  import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
   import {
     ImportProviderSectionKind,
     VaultLabelEditorKind,
@@ -55,7 +55,7 @@
     isAuthenticated,
     isSaving,
     addProviderOpen = false,
-    setupType = $bindable(omittedValue() as StorageProviderType | void),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     passwordEntries,
@@ -81,14 +81,7 @@
     onImportChromePasswords,
     onImportGoogleAuthenticator,
     onImportProtonPass,
-    activeSection = $bindable(
-      omittedValue() as
-        | 'vaults'
-        | 'storage'
-        | 'passwords'
-        | 'import-export'
-        | void,
-    ),
+    activeSection = $bindable(AdminAccordionSection.Vaults),
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -98,7 +91,7 @@
     isAuthenticated: boolean
     isSaving: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | void
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     passwordEntries: NookPasswordEntrySummary[]
@@ -138,7 +131,7 @@
       migrationUris: string[],
     ) => Promise<NookImportResult>
     onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>
-    activeSection?: 'vaults' | 'storage' | 'passwords' | 'import-export' | void
+    activeSection?: AdminAccordionSection
   } = $props()
 
   let newVaultName = $state('')
@@ -157,17 +150,22 @@
   let activeImportProvider = $state<ImportProviderSection>({
     kind: ImportProviderSectionKind.Closed,
   })
-  const activeImportProviderBinding = {
-    get value(): string | void {
-      return activeImportProvider.kind === ImportProviderSectionKind.Open
-        ? activeImportProvider.providerId
-        : omittedValue()
-    },
-    set value(value: string | void) {
-      activeImportProvider = value
-        ? { kind: ImportProviderSectionKind.Open, providerId: value }
-        : { kind: ImportProviderSectionKind.Closed }
-    },
+  function toggleAdminSection(section: AdminAccordionSection): void {
+    activeSection =
+      activeSection === section ? AdminAccordionSection.Closed : section
+  }
+
+  function importProviderOpen(providerId: string): boolean {
+    return (
+      activeImportProvider.kind === ImportProviderSectionKind.Open &&
+      activeImportProvider.providerId === providerId
+    )
+  }
+
+  function toggleImportProvider(providerId: string): void {
+    activeImportProvider = importProviderOpen(providerId)
+      ? { kind: ImportProviderSectionKind.Closed }
+      : { kind: ImportProviderSectionKind.Open, providerId }
   }
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
@@ -289,8 +287,8 @@
   <SettingsAccordionSection
     title={vault.t('vault.admin_vaults_title')}
     subtitle={vault.t('vault.admin_vaults_desc')}
-    section="vaults"
-    bind:activeSection
+    open={activeSection === AdminAccordionSection.Vaults}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Vaults)}
     testId="vault-admin-vaults-section"
   >
     {#snippet badge()}
@@ -486,8 +484,8 @@
   <SettingsAccordionSection
     title={vault.t('settings.storage')}
     subtitle={vault.t('settings.storage_desc')}
-    section="storage"
-    bind:activeSection
+    open={activeSection === AdminAccordionSection.Storage}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Storage)}
     testId="storage-providers-section"
   >
     {#snippet badge()}
@@ -509,7 +507,7 @@
       {isVerifying}
       {isInitializing}
       {addProviderOpen}
-      bind:setupType
+      {loginSetup}
       bind:githubPat
       bind:githubRepo
       {onReconnect}
@@ -525,8 +523,8 @@
   <SettingsAccordionSection
     title={vault.t('settings.passwords')}
     subtitle={vault.t('settings.passwords_desc')}
-    section="passwords"
-    bind:activeSection
+    open={activeSection === AdminAccordionSection.Passwords}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Passwords)}
     testId="vault-unlock-section"
   >
     {#snippet badge()}
@@ -568,16 +566,16 @@
   <SettingsAccordionSection
     title={vault.t('settings.import_export')}
     subtitle={vault.t('settings.import_export_desc')}
-    section="import-export"
-    bind:activeSection
+    open={activeSection === AdminAccordionSection.ImportExport}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.ImportExport)}
     testId="vault-import-export-section"
   >
     <div class="space-y-2">
       <SettingsAccordionSection
         title={vault.t('apple_passwords_import.source')}
         subtitle={vault.t('apple_passwords_import.description')}
-        section="apple-passwords"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('apple-passwords')}
+        onToggle={() => toggleImportProvider('apple-passwords')}
         testId="apple-passwords-import-section"
       >
         <ApplePasswordsImportPanel
@@ -591,8 +589,8 @@
       <SettingsAccordionSection
         title={vault.t('chrome_passwords_import.source')}
         subtitle={vault.t('chrome_passwords_import.description')}
-        section="chrome-passwords"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('chrome-passwords')}
+        onToggle={() => toggleImportProvider('chrome-passwords')}
         testId="chrome-passwords-import-section"
       >
         <ChromePasswordsImportPanel
@@ -606,8 +604,8 @@
       <SettingsAccordionSection
         title={vault.t('google_authenticator_import.source')}
         subtitle={vault.t('google_authenticator_import.description')}
-        section="google-authenticator"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('google-authenticator')}
+        onToggle={() => toggleImportProvider('google-authenticator')}
         testId="google-authenticator-import-section"
       >
         <GoogleAuthenticatorImportPanel
@@ -621,8 +619,8 @@
       <SettingsAccordionSection
         title={vault.t('bitwarden_import.source')}
         subtitle={vault.t('bitwarden_import.description')}
-        section="bitwarden"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('bitwarden')}
+        onToggle={() => toggleImportProvider('bitwarden')}
         testId="bitwarden-import-section"
       >
         <BitwardenImportPanel
@@ -636,8 +634,8 @@
       <SettingsAccordionSection
         title={vault.t('lastpass_import.source')}
         subtitle={vault.t('lastpass_import.description')}
-        section="lastpass"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('lastpass')}
+        onToggle={() => toggleImportProvider('lastpass')}
         testId="lastpass-import-section"
       >
         <LastPassImportPanel
@@ -651,8 +649,8 @@
       <SettingsAccordionSection
         title={vault.t('onepassword_import.source')}
         subtitle={vault.t('onepassword_import.description')}
-        section="onepassword"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('onepassword')}
+        onToggle={() => toggleImportProvider('onepassword')}
         testId="onepassword-import-section"
       >
         <OnePasswordImportPanel
@@ -666,8 +664,8 @@
       <SettingsAccordionSection
         title={vault.t('proton_pass_import.source')}
         subtitle={vault.t('proton_pass_import.description')}
-        section="proton-pass"
-        bind:activeSection={activeImportProviderBinding.value}
+        open={importProviderOpen('proton-pass')}
+        onToggle={() => toggleImportProvider('proton-pass')}
         testId="proton-pass-import-section"
       >
         <ProtonPassImportPanel

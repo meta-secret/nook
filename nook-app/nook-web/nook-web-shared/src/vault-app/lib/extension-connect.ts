@@ -1,6 +1,6 @@
-import { omittedValue } from "../../explicit-state";
-import { stripBasePath } from "$lib/routes";
-import type { NookVaultManager } from "$app-wasm";
+import { omittedValue } from '../../explicit-state'
+import { stripBasePath } from '$lib/routes'
+import type { NookVaultManager } from '$app-wasm'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
   ExtensionPairedVaultIdentityHandoffRequestMessageType,
@@ -14,66 +14,66 @@ import {
   type ExtensionPairedVaultIdentityHandoffRequestMessage,
   type ExtensionPairedVaultUnlockRequestMessage,
   type OpenCompanionLauncherMessage,
-} from "$web-shared/extension/runtime-messages";
+} from '$web-shared/extension/runtime-messages'
 import type {
   ExtensionConnectRequestFor,
   PairedExtensionIdentityDiscoveryFor,
-} from "$web-shared/extension/extension-connect-types";
+} from '$web-shared/extension/extension-connect-types'
 
-export const EXTENSION_CONNECT_PATH = "/extension-connect";
+export const EXTENSION_CONNECT_PATH = '/extension-connect'
 
 export type ExtensionConnectScope =
-  | "vault-access"
-  | "password-filling"
-  | "passkey-management"
-  | "sync-provider-credentials";
+  | 'vault-access'
+  | 'password-filling'
+  | 'passkey-management'
+  | 'sync-provider-credentials'
 
 export type ExtensionConnectRequest =
-  ExtensionConnectRequestFor<ExtensionConnectScope>;
+  ExtensionConnectRequestFor<ExtensionConnectScope>
 export type PairedExtensionIdentityDiscovery =
-  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>;
+  PairedExtensionIdentityDiscoveryFor<ExtensionConnectRequest>
 
 const validScopes = new Set<ExtensionConnectScope>([
-  "vault-access",
-  "password-filling",
-  "passkey-management",
-  "sync-provider-credentials",
-]);
-const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
-const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
+  'vault-access',
+  'password-filling',
+  'passkey-management',
+  'sync-provider-credentials',
+])
+const extensionRuntimeIdAttribute = 'data-nook-extension-runtime-id'
+const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000
 
 export function isExtensionConnectPath(pathname: string): boolean {
-  const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
-  return normalized === EXTENSION_CONNECT_PATH;
+  const normalized = stripBasePath(pathname).replace(/\/$/, '') || '/'
+  return normalized === EXTENSION_CONNECT_PATH
 }
 
 function parseScopes(raw: string | void): ExtensionConnectScope[] {
-  const scopes = (raw ?? "")
-    .split(",")
+  const scopes = (raw ?? '')
+    .split(',')
     .map((scope) => scope.trim())
-    .filter(Boolean);
+    .filter(Boolean)
 
   return scopes.filter((scope): scope is ExtensionConnectScope =>
     validScopes.has(scope as ExtensionConnectScope),
-  );
+  )
 }
 
 export function extensionConnectRequestFromLocation(
   location: Location,
 ): ExtensionConnectRequest | void {
-  if (!isExtensionConnectPath(location.pathname)) return;
+  if (!isExtensionConnectPath(location.pathname)) return
 
-  const params = new URLSearchParams(location.search);
-  const deviceId = params.get("device_id")?.trim() ?? "";
-  const devicePublicKey = params.get("device_public_key")?.trim() ?? "";
+  const params = new URLSearchParams(location.search)
+  const deviceId = params.get('device_id')?.trim() ?? ''
+  const devicePublicKey = params.get('device_public_key')?.trim() ?? ''
   const deviceSigningPublicKey =
-    params.get("device_signing_public_key")?.trim() ?? "";
-  const extensionRuntimeId = params.get("extension_id")?.trim() ?? "";
+    params.get('device_signing_public_key')?.trim() ?? ''
+  const extensionRuntimeId = params.get('extension_id')?.trim() ?? ''
   const deviceLabel =
-    params.get("device_label")?.trim() ??
-    "Nook Extension - this browser profile";
-  const nonce = params.get("nonce")?.trim() ?? "";
-  const scopes = parseScopes(params.get("scopes")?.valueOf());
+    params.get('device_label')?.trim() ??
+    'Nook Extension - this browser profile'
+  const nonce = params.get('nonce')?.trim() ?? ''
+  const scopes = parseScopes(params.get('scopes')?.valueOf())
 
   if (
     !deviceId ||
@@ -83,11 +83,11 @@ export function extensionConnectRequestFromLocation(
     !nonce ||
     scopes.length === 0
   ) {
-    return;
+    return
   }
 
   return {
-    source: "extension-connect",
+    source: 'extension-connect',
     deviceId,
     devicePublicKey,
     deviceSigningPublicKey,
@@ -95,30 +95,39 @@ export function extensionConnectRequestFromLocation(
     deviceLabel,
     nonce,
     scopes,
-  };
+  }
 }
 
 function requestId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  )
 }
+
+enum ExtensionMessageDeliveryKind {
+  Unavailable = 'unavailable',
+  Received = 'received',
+}
+
+type ExtensionMessageDelivery =
+  | { kind: ExtensionMessageDeliveryKind.Unavailable }
+  | { kind: ExtensionMessageDeliveryKind.Received; response: unknown }
 
 export function readInstalledExtensionRuntimeId(): string | void {
   return (
     document.documentElement
       .getAttribute(extensionRuntimeIdAttribute)
       ?.trim() || omittedValue()
-  );
+  )
 }
 
 function sendExtensionMessage(
   extensionId: string,
   message: unknown,
-): Promise<unknown | void> {
+): Promise<ExtensionMessageDelivery> {
   return new Promise((resolve) => {
     const runtime = (
       globalThis as typeof globalThis & {
@@ -128,62 +137,74 @@ function sendExtensionMessage(
               extensionId: string,
               message: unknown,
               callback: (response?: unknown) => void,
-            ) => void;
-            lastError?: { message?: string };
-          };
-        };
+            ) => void
+            lastError?: { message?: string }
+          }
+        }
       }
-    ).chrome?.runtime;
+    ).chrome?.runtime
     if (!runtime?.sendMessage) {
-      resolve();
-      return;
+      resolve({ kind: ExtensionMessageDeliveryKind.Unavailable })
+      return
     }
 
-    let settled = false;
-    const finish = (response?: unknown) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      resolve(response);
-    };
+    let settled = false
+    const finishUnavailable = () => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timer)
+      resolve({ kind: ExtensionMessageDeliveryKind.Unavailable })
+    }
+    const finishReceived = (response: unknown) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timer)
+      resolve({ kind: ExtensionMessageDeliveryKind.Received, response })
+    }
     const timer = window.setTimeout(
-      () => finish(),
+      finishUnavailable,
       EXTENSION_MESSAGE_TIMEOUT_MS,
-    );
-    runtime.sendMessage(extensionId, message, (response) => {
+    )
+    runtime.sendMessage(extensionId, message, (...responses) => {
       if (runtime.lastError?.message) {
-        finish();
-        return;
+        finishUnavailable()
+        return
       }
-      finish(response);
-    });
-  });
+      if (responses.length === 0) {
+        finishUnavailable()
+        return
+      }
+      finishReceived(responses[0])
+    })
+  })
 }
 
 export async function openInstalledExtension(): Promise<boolean> {
-  const extensionRuntimeId = readInstalledExtensionRuntimeId();
-  if (!extensionRuntimeId) return false;
+  const extensionRuntimeId = readInstalledExtensionRuntimeId()
+  if (!extensionRuntimeId) return false
 
   const message: OpenCompanionLauncherMessage = {
     type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher,
-    payload: { intent: "pair" },
-  };
-  const response = await sendExtensionMessage(extensionRuntimeId, message);
+    payload: { intent: 'pair' },
+  }
+  const delivery = await sendExtensionMessage(extensionRuntimeId, message)
+  if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false
+  const response = delivery.response
   return (
     !!response &&
-    typeof response === "object" &&
-    "ok" in response &&
+    typeof response === 'object' &&
+    'ok' in response &&
     response.ok === true
-  );
+  )
 }
 
 async function discoverPairedExtensionIdentityOnce(
   vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery | void> {
-  const extensionRuntimeId = readInstalledExtensionRuntimeId();
-  if (!extensionRuntimeId) return Promise.resolve();
+  const extensionRuntimeId = readInstalledExtensionRuntimeId()
+  if (!extensionRuntimeId) return Promise.resolve()
 
-  const discoveryRequestId = requestId();
+  const discoveryRequestId = requestId()
   const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
     type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
     payload: {
@@ -191,15 +212,17 @@ async function discoverPairedExtensionIdentityOnce(
       vaultStoreId,
       expiresAt: Date.now() + EXTENSION_MESSAGE_TIMEOUT_MS,
     },
-  };
+  }
 
-  const statusMessage = await sendExtensionMessage(extensionRuntimeId, message);
+  const delivery = await sendExtensionMessage(extensionRuntimeId, message)
+  if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return
+  const statusMessage = delivery.response
   if (
     !isExtensionPairedVaultIdentityStatusMessage(statusMessage) ||
     statusMessage.payload.requestId !== discoveryRequestId ||
     statusMessage.payload.vaultStoreId !== vaultStoreId
   ) {
-    return;
+    return
   }
   if (
     statusMessage.payload.status !==
@@ -213,23 +236,23 @@ async function discoverPairedExtensionIdentityOnce(
         status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
         connectedVaultStoreId: statusMessage.payload.connectedVaultStoreId,
         connectedVaultName: statusMessage.payload.connectedVaultName,
-      };
+      }
     }
-    return { status: statusMessage.payload.status };
+    return { status: statusMessage.payload.status }
   }
   const scopes = statusMessage.payload.scopes.filter(
     (scope): scope is ExtensionConnectScope =>
       validScopes.has(scope as ExtensionConnectScope),
-  );
+  )
   if (scopes.length === 0) {
     return {
       status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-    };
+    }
   }
   return {
     status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
     request: {
-      source: "paired-vault",
+      source: 'paired-vault',
       vaultStoreId,
       deviceId: statusMessage.payload.deviceId,
       devicePublicKey: statusMessage.payload.devicePublicKey,
@@ -239,51 +262,53 @@ async function discoverPairedExtensionIdentityOnce(
       nonce: statusMessage.payload.nonce,
       scopes,
     },
-  };
+  }
 }
 
 export async function discoverPairedExtensionIdentity(
   vaultStoreId: string,
 ): Promise<PairedExtensionIdentityDiscovery> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const result = await discoverPairedExtensionIdentityOnce(vaultStoreId);
-    if (result) return result;
+    const result = await discoverPairedExtensionIdentityOnce(vaultStoreId)
+    if (result) return result
   }
   return {
     status: ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-  };
+  }
 }
 
 export async function requestPairedExtensionUnlock(
   vaultStoreId: string,
 ): Promise<boolean> {
-  const extensionId = readInstalledExtensionRuntimeId();
-  if (!extensionId) return false;
+  const extensionId = readInstalledExtensionRuntimeId()
+  if (!extensionId) return false
 
-  const unlockRequestId = requestId();
+  const unlockRequestId = requestId()
   const message: ExtensionPairedVaultUnlockRequestMessage = {
     type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
     payload: { requestId: unlockRequestId, vaultStoreId },
-  };
-  const response = await sendExtensionMessage(extensionId, message);
+  }
+  const delivery = await sendExtensionMessage(extensionId, message)
+  if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false
+  const response = delivery.response
   return (
     !!response &&
-    typeof response === "object" &&
-    "ok" in response &&
+    typeof response === 'object' &&
+    'ok' in response &&
     response.ok === true &&
-    "requestId" in response &&
+    'requestId' in response &&
     response.requestId === unlockRequestId &&
-    "vaultStoreId" in response &&
+    'vaultStoreId' in response &&
     response.vaultStoreId === vaultStoreId
-  );
+  )
 }
 
 type ExtensionIdentityHandoffResponse = {
-  ok?: boolean;
-  envelope?: unknown;
-  nextNonce?: unknown;
-  reason?: unknown;
-};
+  ok?: boolean
+  envelope?: unknown
+  nextNonce?: unknown
+  reason?: unknown
+}
 
 function requestIdentityEnvelope(
   request: ExtensionConnectRequest,
@@ -299,46 +324,44 @@ function requestIdentityEnvelope(
             extensionId: string,
             message: unknown,
             callback: (response?: ExtensionIdentityHandoffResponse) => void,
-          ) => void;
-          lastError?: { message?: string };
-        };
-      };
+          ) => void
+          lastError?: { message?: string }
+        }
+      }
     }
-  ).chrome?.runtime;
+  ).chrome?.runtime
   if (!runtime?.sendMessage) {
-    return Promise.reject(
-      new Error("extension-identity-messaging-unavailable"),
-    );
+    return Promise.reject(new Error('extension-identity-messaging-unavailable'))
   }
 
   return new Promise((resolve, reject) => {
     runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
-      const runtimeError = runtime.lastError?.message;
+      const runtimeError = runtime.lastError?.message
       if (runtimeError) {
-        reject(new Error(runtimeError));
-        return;
+        reject(new Error(runtimeError))
+        return
       }
       if (
         response?.ok === true &&
-        typeof response.envelope === "string" &&
-        typeof response.nextNonce === "string" &&
+        typeof response.envelope === 'string' &&
+        typeof response.nextNonce === 'string' &&
         response.nextNonce.length > 0
       ) {
         resolve({
           envelope: response.envelope,
           nextNonce: response.nextNonce,
-        });
-        return;
+        })
+        return
       }
       reject(
         new Error(
-          typeof response?.reason === "string"
+          typeof response?.reason === 'string'
             ? response.reason
-            : "extension-identity-handoff-rejected",
+            : 'extension-identity-handoff-rejected',
         ),
-      );
-    });
-  });
+      )
+    })
+  })
 }
 
 /** Adopt the unlocked extension identity without exposing private key material
@@ -348,19 +371,19 @@ export async function adoptExtensionIdentity(
   manager: NookVaultManager,
   request: ExtensionConnectRequest,
 ): Promise<void> {
-  const nonce = request.nonce;
-  const recipientPublicKey = manager.beginExtensionIdentityHandoff();
+  const nonce = request.nonce
+  const recipientPublicKey = manager.beginExtensionIdentityHandoff()
   const handoffPayload = {
     recipientPublicKey,
     nonce,
     expectedDeviceId: request.deviceId,
     expectedDevicePublicKey: request.devicePublicKey,
     expectedDeviceSigningPublicKey: request.deviceSigningPublicKey,
-  };
+  }
   const message:
     | ExtensionIdentityHandoffRequestMessage
     | ExtensionPairedVaultIdentityHandoffRequestMessage =
-    request.source === "paired-vault"
+    request.source === 'paired-vault'
       ? {
           type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
           payload: {
@@ -371,17 +394,17 @@ export async function adoptExtensionIdentity(
       : {
           type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest,
           payload: handoffPayload,
-        };
+        }
   const { envelope, nextNonce } = await requestIdentityEnvelope(
     request,
     message,
-  );
+  )
   manager.finishExtensionIdentityHandoff(
     envelope,
     nonce,
     request.deviceId,
     request.devicePublicKey,
     request.deviceSigningPublicKey,
-  );
-  request.nonce = nextNonce;
+  )
+  request.nonce = nextNonce
 }
