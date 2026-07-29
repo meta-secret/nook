@@ -190,7 +190,10 @@ containing Main run. Intermediate blocker nodes belong to the same prerequisite
 chain and are not independent consumers. Claiming snapshots the complete sorted
 owner set; completion transactionally rechecks that exact set and refuses
 retirement if a Main repair or any non-Main consumer was attached while the
-blocker was running. The shared-owner, mixed-owner, and late-owner cases are
+blocker was running. The terminal result marks this exceptional path explicitly
+with `obsolete: true`; normal completion, including a real patch produced while
+owners change, bypasses the retirement-only guard and persists normally. The
+shared-owner, mixed-owner, late-owner, and genuine-completion race cases are
 behavior-tested in
 `agentic-ai/minds/hive/tests/neo4j_store.rs`.
 

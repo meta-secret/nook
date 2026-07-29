@@ -502,6 +502,7 @@ mod tests {
             &self,
             _: &ClaimedTask,
             _: &AgentId,
+            _: bool,
             _: &str,
             _: &CompletionArtifact,
         ) -> anyhow::Result<bool> {

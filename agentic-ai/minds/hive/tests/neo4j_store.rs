@@ -98,6 +98,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &dependency_claim,
                 &agent_a,
+                false,
                 "dependency complete",
                 &CompletionArtifact::Produced(artifact.clone()),
             )
@@ -256,6 +257,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &stale_claim,
                 stale_agent,
+                false,
                 "stale completion",
                 &CompletionArtifact::NotProduced
             )
@@ -274,6 +276,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &retry_claim,
                 retry_agent,
+                false,
                 "retry complete",
                 &CompletionArtifact::Produced(dependent_artifact.clone()),
             )
@@ -301,6 +304,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &descendant_claim,
                 &agent_a,
+                false,
                 "descendant complete",
                 &CompletionArtifact::NotProduced
             )
@@ -335,6 +339,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .complete(
                     &claim,
                     &agent_a,
+                    false,
                     "branch complete",
                     &CompletionArtifact::Produced(branch_artifact.clone())
                 )
@@ -367,6 +372,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &diamond_claim,
                 &agent_a,
+                false,
                 "diamond complete",
                 &CompletionArtifact::NotProduced
             )
@@ -417,6 +423,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed,
                 &agent_b,
+                false,
                 "rollout recovery complete",
                 &CompletionArtifact::NotProduced
             )
@@ -473,6 +480,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &blocker_claim,
                 &agent_a,
+                false,
                 "blocker complete",
                 &CompletionArtifact::NotProduced
             )
@@ -492,6 +500,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed_original,
                 &agent_a,
+                false,
                 "original complete",
                 &CompletionArtifact::NotProduced
             )
@@ -571,6 +580,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &resumed_reused,
                 &agent_a,
+                false,
                 "completed reused-blocker task",
                 &CompletionArtifact::NotProduced,
             )
@@ -615,6 +625,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &cycle_claim,
                 &agent_a,
+                false,
                 "cycle root complete",
                 &CompletionArtifact::NotProduced
             )
@@ -632,6 +643,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &cycle_dependent_claim,
                 &agent_a,
+                false,
                 "cycle dependent complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -738,6 +750,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &shared_claim,
                 &agent_a,
+                true,
                 "shared prerequisite complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -751,6 +764,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .complete(
                     &owner_claim,
                     &agent_a,
+                    false,
                     "owning repair complete",
                     &CompletionArtifact::NotProduced,
                 )
@@ -783,6 +797,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &mixed_claim,
                 &agent_a,
+                false,
                 "mixed-owner prerequisite actually resolved",
                 &CompletionArtifact::NotProduced,
             )
@@ -796,7 +811,60 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .complete(
                     &owner_claim,
                     &agent_a,
+                    false,
                     "mixed owner complete",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+    }
+
+    let mut genuine_blocker = task(format!("genuine-race-blocker-{suffix}"), Vec::new());
+    genuine_blocker.kind = "blocker".to_owned();
+    let mut genuine_owner = task(
+        format!("main-failure-genuine-owner-{suffix}"),
+        vec![genuine_blocker.id.clone()],
+    );
+    genuine_owner.kind = "main-repair".to_owned();
+    store.enqueue(&genuine_blocker).await?;
+    store.enqueue(&genuine_owner).await?;
+    let genuine_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert_eq!(genuine_claim.id, genuine_blocker.id);
+    let mut genuine_late_owner = task(
+        format!("main-failure-genuine-late-owner-{suffix}"),
+        vec![genuine_blocker.id.clone()],
+    );
+    genuine_late_owner.kind = "main-repair".to_owned();
+    store.enqueue(&genuine_late_owner).await?;
+    let genuine_artifact = Artifact {
+        id: format!("genuine-race-artifact-{suffix}"),
+        kind: "git-patch".to_owned(),
+        uri: format!("hive://artifact/genuine-race-artifact-{suffix}"),
+        digest: "sha256:genuine-race".to_owned(),
+        content: "diff --git a/prerequisite b/prerequisite".to_owned(),
+    };
+    assert!(
+        store
+            .complete(
+                &genuine_claim,
+                &agent_a,
+                false,
+                "genuine prerequisite fixed despite a late owner",
+                &CompletionArtifact::Produced(genuine_artifact),
+            )
+            .await?,
+        "ordinary artifact completion must survive an owner race"
+    );
+    for owner in [&genuine_owner, &genuine_late_owner] {
+        let owner_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
+        assert_eq!(owner_claim.id, owner.id);
+        assert!(
+            store
+                .complete(
+                    &owner_claim,
+                    &agent_a,
+                    false,
+                    "genuine owner complete",
                     &CompletionArtifact::NotProduced,
                 )
                 .await?
@@ -836,6 +904,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &raced_claim,
                 &agent_a,
+                true,
                 "stale owner snapshot",
                 &CompletionArtifact::NotProduced,
             )
@@ -854,6 +923,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &refreshed_claim,
                 &agent_a,
+                true,
                 "fresh owner snapshot",
                 &CompletionArtifact::NotProduced,
             )
@@ -866,6 +936,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &parent_claim,
                 &agent_a,
+                true,
                 "parent blocker complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -879,6 +950,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 .complete(
                     &owner_claim,
                     &agent_a,
+                    false,
                     "late owner complete",
                     &CompletionArtifact::NotProduced,
                 )
@@ -1009,6 +1081,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &release_b_claim,
                 &agent_a,
+                false,
                 "platform repaired",
                 &CompletionArtifact::NotProduced,
             )
@@ -1106,6 +1179,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &recovered_blocker,
                 &agent_a,
+                false,
                 "sandbox dependency repaired",
                 &CompletionArtifact::NotProduced,
             )
@@ -1124,6 +1198,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &recovered_parent,
                 &agent_a,
+                false,
                 "dependent repair complete",
                 &CompletionArtifact::NotProduced,
             )
@@ -1300,6 +1375,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .complete(
                 &current_claim,
                 &agent_b,
+                false,
                 "late",
                 &CompletionArtifact::NotProduced,
             )

@@ -238,6 +238,20 @@ impl<S: TaskStore> Worker<S> {
                     {
                         return Ok(blocked_disposition(task, summary, blocker));
                     }
+                    if result.is_obsolete() {
+                        anyhow::ensure!(
+                            task.kind == "blocker",
+                            "only a blocker task may retire as obsolete"
+                        );
+                        anyhow::ensure!(
+                            !task.owning_repairs.is_empty(),
+                            "obsolete blocker retirement requires active owning Main repairs"
+                        );
+                        anyhow::ensure!(
+                            result.changed_files().is_empty(),
+                            "obsolete blocker retirement cannot report changed files"
+                        );
+                    }
                     if task.kind == "main-repair" {
                         verify_main_repair_delivery(
                             &repository,
@@ -261,9 +275,16 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
+                    if result.is_obsolete() {
+                        anyhow::ensure!(
+                            matches!(artifact, CompletionArtifact::NotProduced),
+                            "obsolete blocker retirement cannot persist a patch artifact"
+                        );
+                    }
                     Ok::<TaskDisposition, anyhow::Error>(TaskDisposition::Completed {
                         summary,
                         artifact,
+                        obsolete: result.is_obsolete(),
                     })
                 }
                 .await;
@@ -272,10 +293,14 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .context("task activity persistence panicked")??;
                 let terminal_result: anyhow::Result<()> = match task_result? {
-                    TaskDisposition::Completed { summary, artifact } => {
+                    TaskDisposition::Completed {
+                        summary,
+                        artifact,
+                        obsolete,
+                    } => {
                         if !self
                             .store
-                            .complete(task, &self.config.agent_id, &summary, &artifact)
+                            .complete(task, &self.config.agent_id, obsolete, &summary, &artifact)
                             .await?
                         {
                             return Err(WorkerCancellationRequested.into());
@@ -388,6 +413,7 @@ enum TaskDisposition {
     Completed {
         summary: String,
         artifact: CompletionArtifact,
+        obsolete: bool,
     },
     Blocked {
         blocker: EnqueueTask,
@@ -887,8 +913,10 @@ fn task_prompt(task: &ClaimedTask) -> String {
          replacement exact-head run, and follow it to a terminal result. Before doing work or \
          reporting another blocker, inspect every active owning Main repair listed below. Only when \
          every listed repair has already been merged and has a successful Main run containing its \
-         merge is this prerequisite obsolete: report completed with no changes and explain that it \
-         no longer blocks delivery, even when the requested capability remains unavailable. When \
+         merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
+         changes, and explain that it no longer blocks delivery, even when the requested capability \
+         remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
+         set `obsolete` to false. When \
          no owning repair is listed, or any listed repair is still live, do not use this \
          obsolescence rule. Never extend an obsolete blocker chain. Never report this task's own id \
          as its blocker and never create a duplicate repair PR. Report blocked only for a genuinely \
@@ -1172,6 +1200,7 @@ mod tests {
             summary: "changed files".to_owned(),
             changed_files: vec!["tracked.txt".to_owned(), "new.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         let artifact =
@@ -1234,6 +1263,7 @@ mod tests {
             summary: "published repair delivered".to_owned(),
             changed_files: vec!["repair.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
 
         assert!(matches!(
@@ -1364,6 +1394,7 @@ mod tests {
             summary: "task complete".to_owned(),
             changed_files: vec!["task.txt".to_owned()],
             tests: Vec::new(),
+            obsolete: false,
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {

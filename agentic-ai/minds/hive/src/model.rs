@@ -33,6 +33,8 @@ pub enum ModelError {
     EmptyBlockerTitle,
     #[error("a present blocker must include a prompt")]
     EmptyBlockerPrompt,
+    #[error("a blocked terminal result cannot retire an obsolete prerequisite")]
+    BlockedObsolete,
 }
 
 macro_rules! string_id {
@@ -259,6 +261,7 @@ pub enum TerminalResult {
         summary: String,
         changed_files: Vec<String>,
         tests: Vec<String>,
+        obsolete: bool,
     },
     Blocked {
         summary: String,
@@ -291,6 +294,7 @@ struct WireTerminalResult {
     summary: String,
     changed_files: Vec<String>,
     tests: Vec<String>,
+    obsolete: bool,
     blocker: WireBlockerResult,
 }
 
@@ -313,6 +317,7 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
             summary,
             changed_files,
             tests,
+            obsolete,
             blocker,
         } = wire;
         match status {
@@ -328,9 +333,13 @@ impl TryFrom<WireTerminalResult> for TerminalResult {
                     summary,
                     changed_files,
                     tests,
+                    obsolete,
                 })
             }
             WireTerminalStatus::Blocked => {
+                if obsolete {
+                    return Err(ModelError::BlockedObsolete);
+                }
                 if !blocker.present {
                     return Err(ModelError::BlockedWithoutBlocker);
                 }
@@ -385,6 +394,14 @@ impl TerminalResult {
             Self::Completed { tests, .. } | Self::Blocked { tests, .. } => tests,
         }
     }
+
+    #[must_use]
+    pub const fn is_obsolete(&self) -> bool {
+        match self {
+            Self::Completed { obsolete, .. } => *obsolete,
+            Self::Blocked { .. } => false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -416,6 +433,7 @@ mod tests {
             "summary": "Implemented the change",
             "changed_files": ["src/model.rs"],
             "tests": ["cargo test"],
+            "obsolete": false,
             "blocker": {
                 "present": false,
                 "id": "",
@@ -433,6 +451,7 @@ mod tests {
             "summary": "Implemented the change",
             "changed_files": [],
             "tests": [],
+            "obsolete": false,
             "blocker": {
                 "present": true,
                 "id": "repair-cache",
@@ -451,6 +470,7 @@ mod tests {
             "summary": "Waiting for prerequisite",
             "changed_files": [],
             "tests": [],
+            "obsolete": false,
             "blocker": {
                 "present": false,
                 "id": "",
@@ -464,6 +484,25 @@ mod tests {
         };
         assert!(error.to_string().contains("must report a blocker"));
 
+        let blocked_obsolete = serde_json::json!({
+            "status": "blocked",
+            "summary": "Contradictory result",
+            "changed_files": [],
+            "tests": [],
+            "obsolete": true,
+            "blocker": {
+                "present": true,
+                "id": "repair-cache",
+                "title": "Repair cache",
+                "prompt": "Restore the cache invariant"
+            }
+        });
+        let error = match serde_json::from_value::<TerminalResult>(blocked_obsolete) {
+            Ok(_) => anyhow::bail!("blocked obsolete result was accepted"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("cannot retire"));
+
         Ok(())
     }
 
@@ -474,6 +513,7 @@ mod tests {
             "summary": " ",
             "changed_files": [" "],
             "tests": [" "],
+            "obsolete": false,
             "blocker": {
                 "present": false,
                 "id": "",

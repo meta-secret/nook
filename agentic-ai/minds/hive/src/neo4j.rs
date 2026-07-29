@@ -916,6 +916,7 @@ impl TaskStore for Neo4jTaskStore {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool> {
@@ -933,8 +934,10 @@ impl TaskStore for Neo4jTaskStore {
                      WHERE active_owner.kind <> 'blocker'
                        AND active_owner.status IN ['READY', 'RUNNING', 'CANCELLING', 'BLOCKED']
                      WITH task, attempt, collect(DISTINCT active_owner) AS active_owners
-                     WHERE size($owning_repair_ids) = 0
+                     WHERE NOT $obsolete
                         OR (
+                          size($owning_repair_ids) > 0
+                          AND
                           size(active_owners) = size($owning_repair_ids)
                           AND all(
                             owner IN active_owners
@@ -960,6 +963,7 @@ impl TaskStore for Neo4jTaskStore {
                 .param("attempt_id", task.attempt_id.as_str())
                 .param("agent_id", agent_id.as_str())
                 .param("lease_token", task.lease_token.as_str())
+                .param("obsolete", obsolete)
                 .param(
                     "owning_repair_ids",
                     task.owning_repairs

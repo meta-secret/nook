@@ -59,6 +59,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
+        obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
     ) -> anyhow::Result<bool>;
@@ -390,6 +391,7 @@ mod tests {
             &self,
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
+            obsolete: bool,
             _summary: &str,
             _artifact: &CompletionArtifact,
         ) -> anyhow::Result<bool> {
@@ -403,8 +405,9 @@ mod tests {
                 })
                 .map(|(_, owner)| owner)
                 .collect::<Vec<_>>();
-            let retirement_guard_matches = claimed.owning_repairs.is_empty()
-                || (active_owners.len() == claimed.owning_repairs.len()
+            let retirement_guard_matches = !obsolete
+                || (!claimed.owning_repairs.is_empty()
+                    && active_owners.len() == claimed.owning_repairs.len()
                     && active_owners.iter().all(|owner| {
                         owner.definition.kind == "main-repair"
                             && claimed.owning_repairs.contains(&owner.definition.id)
@@ -592,6 +595,7 @@ mod tests {
                 .complete(
                     &blocker_claim,
                     &agent,
+                    false,
                     "blocker fixed",
                     &CompletionArtifact::NotProduced
                 )
@@ -623,12 +627,24 @@ mod tests {
         );
         assert!(
             !store
-                .complete(&stale, &agent_a, "late", &CompletionArtifact::NotProduced)
+                .complete(
+                    &stale,
+                    &agent_a,
+                    false,
+                    "late",
+                    &CompletionArtifact::NotProduced
+                )
                 .await?
         );
         assert!(
             store
-                .complete(&current, &agent_b, "done", &CompletionArtifact::NotProduced)
+                .complete(
+                    &current,
+                    &agent_b,
+                    false,
+                    "done",
+                    &CompletionArtifact::NotProduced
+                )
                 .await?
         );
         Ok(())
@@ -741,6 +757,7 @@ mod tests {
                 .complete(
                     &completed,
                     &agent,
+                    false,
                     "fixed",
                     &CompletionArtifact::NotProduced
                 )
