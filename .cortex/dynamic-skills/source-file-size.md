@@ -120,9 +120,9 @@ An exclusion must describe data provenance, not excuse authored source.
 ## Static Enforcement
 
 The repository-wide preflight scanner fails when any authored source file
-crosses its language limit or Rust unit tests live in an external module under
-`src`. Its failure message directs the agent to architectural decomposition and
-explicitly rejects test-file and arbitrary splits.
+crosses the uniform 1,000-line limit or Rust unit tests live in an external
+module under `src`. Its failure message directs the agent to architectural
+decomposition and explicitly rejects test-file and arbitrary splits.
 
 Static line counting cannot prove cohesion or dependency direction. Contract
 tests keep this critical guidance wired into `.cortex`, the executable skill,

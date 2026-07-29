@@ -41,8 +41,8 @@ pub struct ExternalUnitTestModuleViolation {
     pub test_module: PathBuf,
 }
 
-/// Finds authored source files whose physical line count exceeds the
-/// language-specific hard limit.
+/// Finds authored source files whose physical line count exceeds the uniform
+/// hard limit.
 ///
 /// # Errors
 ///
