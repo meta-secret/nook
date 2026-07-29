@@ -1,14 +1,16 @@
-import { omittedValue } from "../../explicit-state";
-import { NookStringValue, NookValueState } from "./nook-wasm/nook_wasm";
+import { NookStringValue, NookValueState } from './nook-wasm/nook_wasm'
 
-export function intoWasmStringValue(value: string | void): NookStringValue {
-  return !value ? NookStringValue.unavailable() : NookStringValue.value(value);
+export function intoWasmStringValue(value: string): NookStringValue {
+  return NookStringValue.value(value)
 }
 
-export function takeWasmStringValue(value: NookStringValue): string | void {
+export function requireWasmStringValue(value: NookStringValue): string {
   try {
-    return value.state === NookValueState.Value ? value.string : omittedValue();
+    if (value.state !== NookValueState.Value) {
+      throw new Error('required WASM string value is unavailable')
+    }
+    return value.string
   } finally {
-    value.free();
+    value.free()
   }
 }

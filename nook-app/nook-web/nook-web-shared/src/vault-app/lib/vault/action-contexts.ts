@@ -11,8 +11,10 @@ import type { VaultRuntimeState } from '$lib/vault/state/runtime.svelte'
 import type { VaultSecretsState } from '$lib/vault/state/secrets.svelte'
 import type { VaultSentinelState } from '$lib/vault/state/sentinel.svelte'
 import type { VaultSessionState } from '$lib/vault/state/session.svelte'
+import type { SyncConflictReview } from '$lib/vault/state/sync.svelte'
 import type { VaultUiState } from '$lib/vault/state/ui.svelte'
 import type { VaultArchitecture } from '$lib/vault-architecture'
+import type { ProviderSyncRevision } from '$lib/vault/sync-operation-state'
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,
@@ -149,7 +151,7 @@ interface SyncStateFields {
     storeIds: string[]
     message: string
   } | void
-  pendingSyncConflict: NookPendingSyncConflict | void
+  syncConflictReview: SyncConflictReview
   replacementConflicts: Array<{
     oldSecretId: string
     candidates: Array<{ eventId: string; secretId: string }>
@@ -216,7 +218,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | void,
+    revision: ProviderSyncRevision,
   ): Promise<void>
   wasmStorageArgs(): [string, string, string]
 }

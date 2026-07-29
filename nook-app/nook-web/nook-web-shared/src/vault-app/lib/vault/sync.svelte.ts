@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../explicit-state'
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from '$lib/vault/action-contexts'
 import { SvelteDate } from 'svelte/reactivity'
@@ -16,6 +15,7 @@ import {
   JoinEnrollmentState,
   NookEventLogSyncIssueState,
   NookPendingSyncConflict,
+  NookStringValue,
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
   VaultSyncConflictKind,
@@ -31,16 +31,21 @@ import type { ExtensionEventLogRecord } from '$web-shared/extension/runtime-mess
 import { intoWasmStringValue } from '$lib/wasm-string-value'
 import {
   ConflictProviderSaveKind,
+  EventOutboxTargetKind,
   LocalFolderInspectionKind,
+  ProviderSyncRevisionKind,
   type ConflictProviderSave,
+  type EventOutboxTarget,
   type LocalFolderInspection,
   type LocalFolderMultipleVaultsIssue,
+  type ProviderSyncRevision,
 } from '$lib/vault/sync-operation-state'
 import {
   AdminAccordionSection,
   SettingsSection,
 } from '$lib/vault/state/ui.svelte'
 import { StagedRemoteStorageKind } from '$lib/vault/state/provider.svelte'
+import { SyncConflictReviewKind } from '$lib/vault/state/sync.svelte'
 
 export * from '$lib/vault/sync-resolution'
 export { syncConflictLabel } from '$lib/vault/sync-conflict-label'
@@ -271,19 +276,37 @@ export async function publishExtensionEventLogUpdateForVault(
   }
 }
 
-export function remoteEventProviderArgs(
+export function eventOutboxTarget(
   state: SyncActionsContext,
   provider?: StorageProvider,
-): [string, string, string] | void {
-  if (provider?.type === LOCAL_FOLDER_PROVIDER_TYPE) return
-  if (provider) return state.providerWasmArgs(provider)
+): EventOutboxTarget {
+  if (provider?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
+    return { kind: EventOutboxTargetKind.LocalFolder, provider }
+  }
+  if (provider) {
+    return {
+      kind: EventOutboxTargetKind.Remote,
+      args: state.providerWasmArgs(provider),
+    }
+  }
   if (state.syncProviders[0]?.type === LOCAL_FOLDER_PROVIDER_TYPE) {
-    return
+    return {
+      kind: EventOutboxTargetKind.LocalFolder,
+      provider: state.syncProviders[0],
+    }
   }
   if (state.syncProviders.length > 0) {
-    return state.providerWasmArgs(state.syncProviders[0]!)
+    return {
+      kind: EventOutboxTargetKind.Remote,
+      args: state.providerWasmArgs(state.syncProviders[0]!),
+    }
   }
-  return state.hasRemoteCredentials() ? state.wasmStorageArgs() : omittedValue()
+  return state.hasRemoteCredentials()
+    ? {
+        kind: EventOutboxTargetKind.Remote,
+        args: state.wasmStorageArgs(),
+      }
+    : { kind: EventOutboxTargetKind.Unavailable }
 }
 
 export async function flushRemoteEventOutboxNow(
@@ -291,30 +314,22 @@ export async function flushRemoteEventOutboxNow(
   provider?: StorageProvider,
 ): Promise<void> {
   if (!state.manager) return
-  const folderProvider =
-    provider && provider.type === LOCAL_FOLDER_PROVIDER_TYPE
-      ? provider
-      : !provider &&
-          state.syncProviders[0] &&
-          state.syncProviders[0].type === LOCAL_FOLDER_PROVIDER_TYPE
-        ? state.syncProviders[0]
-        : omittedValue()
-  if (folderProvider) {
+  const target = eventOutboxTarget(state, provider)
+  if (target.kind === EventOutboxTargetKind.LocalFolder) {
     try {
-      await syncLocalFolderProvider(state, folderProvider)
+      await syncLocalFolderProvider(state, target.provider)
     } catch (error) {
       log.warn('local backup sync skipped', {
-        providerId: folderProvider.id,
+        providerId: target.provider.id,
         message: error instanceof Error ? error.message : String(error),
       })
     }
     return
   }
-  const args = remoteEventProviderArgs(state, provider)
-  if (!args) return
+  if (target.kind === EventOutboxTargetKind.Unavailable) return
   try {
     await state.enqueueStorage(() =>
-      state.manager!.flushEventOutboxForProvider(...args),
+      state.manager!.flushEventOutboxForProvider(...target.args),
     )
   } catch (error) {
     log.warn('event outbox flush skipped', {
@@ -328,7 +343,7 @@ export async function updateProviderSyncMetadata(
   state: SyncActionsContext,
   providerId: string,
   yaml: string,
-  revision: string | void,
+  revision: ProviderSyncRevision,
 ): Promise<void> {
   const managerStoreId = state.manager
     ? await state.enqueueStorage(() => state.manager!.vaultStoreId)
@@ -342,8 +357,12 @@ export async function updateProviderSyncMetadata(
     }),
     providerId,
     yaml,
-    intoWasmStringValue(revision),
-    intoWasmStringValue(managerStoreId || omittedValue()),
+    revision.kind === ProviderSyncRevisionKind.Tracked
+      ? intoWasmStringValue(revision.revision)
+      : NookStringValue.unavailable(),
+    managerStoreId
+      ? intoWasmStringValue(managerStoreId)
+      : NookStringValue.unavailable(),
     isoTimestamp(),
   ).providers
   await state.persistProviders()
@@ -448,7 +467,7 @@ async function stageProviderStoreMismatchConflict(
       args[0],
       args[1],
       args[2],
-      omittedValue(),
+      NookStringValue.unavailable(),
       localStoreId,
       remoteStoreId,
     ),
@@ -493,7 +512,7 @@ export async function stageStagedProviderSyncIssue(
         args[0],
         args[1],
         args[2],
-        omittedValue(),
+        NookStringValue.unavailable(),
         localStoreId,
         remoteStoreId,
       ),
@@ -525,11 +544,9 @@ export async function syncLocalFolderProvider(
     manager.syncLocalFolderProvider(handleId),
   )) as string
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(
-      provider.id,
-      localYaml,
-      omittedValue(),
-    )
+    await state.updateProviderSyncMetadata(provider.id, localYaml, {
+      kind: ProviderSyncRevisionKind.Untracked,
+    })
   }
 }
 
@@ -539,8 +556,11 @@ export function startVaultSync(state: SyncActionsContext) {
     log.debug('vault sync timer skipped (device identity locked)')
     return
   }
+  const syncIntervalConfig = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
-    intoWasmStringValue(import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS),
+    typeof syncIntervalConfig === 'string'
+      ? intoWasmStringValue(syncIntervalConfig)
+      : NookStringValue.unavailable(),
   )
   const needsRemoteUpdates =
     state.isAuthenticated ||
@@ -727,7 +747,7 @@ export function stageSyncConflict(
   state: SyncActionsContext,
   conflict: NookPendingSyncConflict,
 ) {
-  state.pendingSyncConflict = conflict
+  state.stageSyncConflict(conflict)
   state.errorMsg = ''
   log.warn('sync conflict staged', {
     provider: conflict.providerLabel,
@@ -773,14 +793,15 @@ async function resumeConnectAfterSyncConflict(
 export async function resolveSyncConflictImportRemote(
   state: SyncActionsContext,
 ): Promise<void> {
-  const conflict = state.pendingSyncConflict
+  const review = state.syncConflictReview
   if (
-    !conflict ||
-    conflict.kind !== VaultSyncConflictKind.StoreId ||
+    review.kind !== SyncConflictReviewKind.RequiresDecision ||
+    review.conflict.kind !== VaultSyncConflictKind.StoreId ||
     state.isVerifying
   ) {
     return
   }
+  const { conflict } = review
   const remoteStoreId = conflict.remoteStoreId()
   if (!remoteStoreId) return
 
@@ -833,7 +854,12 @@ export async function resolveSyncConflictImportRemote(
       await state.updateProviderSyncMetadata(
         providerId,
         conflict.remoteYaml,
-        conflict.remoteRevision,
+        conflict.remoteRevision
+          ? {
+              kind: ProviderSyncRevisionKind.Tracked,
+              revision: conflict.remoteRevision,
+            }
+          : { kind: ProviderSyncRevisionKind.Untracked },
       )
     } else {
       state.providers = state.providers.map((provider) =>
@@ -929,45 +955,47 @@ export async function syncProviderById(
     await state.updateProviderSyncMetadata(
       providerId,
       await readLocalVaultYaml(),
-      omittedValue(),
+      { kind: ProviderSyncRevisionKind.Untracked },
     )
     log.debug('provider sync finished', { providerId, type: provider.type })
     return
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e)
     const eventLogIssueResult = state.manager.takeEventLogSyncIssue()
-    const eventLogIssue =
-      eventLogIssueResult.state === NookEventLogSyncIssueState.Pending
-        ? eventLogIssueResult.issue()
-        : omittedValue()
-    eventLogIssueResult.free()
     const message = e instanceof Error ? e.message : String(e)
     let stagedStoreMismatch = false
     let localFolderInspection: LocalFolderInspection = {
       kind: LocalFolderInspectionKind.SingleVault,
     }
-    if (eventLogIssue?.isStoreMismatch) {
-      const localStoreId = eventLogIssue.localStoreId
-      const remoteStoreId = eventLogIssue.remoteStoreId
-      if (localStoreId && remoteStoreId) {
-        stagedStoreMismatch = await stageProviderStoreMismatchConflict(
-          state,
-          provider,
-          localStoreId,
-          remoteStoreId,
-        )
-      }
-    } else if (eventLogIssue?.isMultipleStores) {
-      localFolderInspection = {
-        kind: LocalFolderInspectionKind.MultipleVaults,
-        issue: localFolderMultipleVaultsIssueFromTypedIssue(
-          provider,
-          eventLogIssue.storeIds,
-          message,
-        ),
+    if (eventLogIssueResult.state === NookEventLogSyncIssueState.Pending) {
+      const eventLogIssue = eventLogIssueResult.issue()
+      try {
+        if (eventLogIssue.isStoreMismatch) {
+          const localStoreId = eventLogIssue.localStoreId
+          const remoteStoreId = eventLogIssue.remoteStoreId
+          if (localStoreId && remoteStoreId) {
+            stagedStoreMismatch = await stageProviderStoreMismatchConflict(
+              state,
+              provider,
+              localStoreId,
+              remoteStoreId,
+            )
+          }
+        } else if (eventLogIssue.isMultipleStores) {
+          localFolderInspection = {
+            kind: LocalFolderInspectionKind.MultipleVaults,
+            issue: localFolderMultipleVaultsIssueFromTypedIssue(
+              provider,
+              eventLogIssue.storeIds,
+              message,
+            ),
+          }
+        }
+      } finally {
+        eventLogIssue.free()
       }
     }
-    eventLogIssue?.free()
+    eventLogIssueResult.free()
     if (
       localFolderInspection.kind === LocalFolderInspectionKind.MultipleVaults
     ) {

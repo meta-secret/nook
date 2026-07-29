@@ -43,7 +43,7 @@
     SentinelGenesisPhase,
     type VaultApplication,
   } from '$app-wasm'
-  import { takeWasmStringValue } from '$lib/wasm-string-value'
+  import { requireWasmStringValue } from '$lib/wasm-string-value'
   import {
     LoginSetupKind,
     type LoginSetup,
@@ -262,10 +262,10 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={takeWasmStringValue(
+      passwordEntryId={requireWasmStringValue(
         peekEnrollmentEntryId(prefillEnrollmentCode),
       )}
-      passwordEntryLabel={takeWasmStringValue(
+      passwordEntryLabel={requireWasmStringValue(
         peekEnrollmentEntryLabel(prefillEnrollmentCode),
       )}
       {isVerifying}

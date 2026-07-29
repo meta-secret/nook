@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
@@ -103,15 +102,21 @@ describe('portable vault client policy', () => {
   })
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
+    const oauthBoundary: { githubPat?: string } = {}
     expect(() =>
-      stagedRemoteStorageArgs('oauth-file', omittedValue(), 'nook-events', {
-        preset: '' as OAuthFilePreset,
-        accessToken: 'token',
-        fileId: 'file-id',
-        fileName: 'stored-name',
-        driveMode: 'private',
-        iCloudMode: 'private',
-      }),
+      stagedRemoteStorageArgs(
+        'oauth-file',
+        oauthBoundary.githubPat,
+        'nook-events',
+        {
+          preset: '' as OAuthFilePreset,
+          accessToken: 'token',
+          fileId: 'file-id',
+          fileName: 'stored-name',
+          driveMode: 'private',
+          iCloudMode: 'private',
+        },
+      ),
     ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
   })
 })

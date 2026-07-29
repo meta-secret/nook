@@ -17,12 +17,12 @@ export enum ManualProviderSyncKind {
 export type ManualProviderSync =
   | { kind: ManualProviderSyncKind.Idle }
   | { kind: ManualProviderSyncKind.Running; providerId: string }
-enum SyncConflictReviewKind {
+export enum SyncConflictReviewKind {
   Clear = 'clear',
   RequiresDecision = 'requires-decision',
 }
 
-type SyncConflictReview =
+export type SyncConflictReview =
   | { kind: SyncConflictReviewKind.Clear }
   | {
       kind: SyncConflictReviewKind.RequiresDecision
@@ -94,17 +94,15 @@ export class VaultSyncState {
   private syncConflictState = $state<SyncConflictReview>({
     kind: SyncConflictReviewKind.Clear,
   })
-  get pendingSyncConflict(): NookPendingSyncConflict | void {
-    if (this.syncConflictState.kind === SyncConflictReviewKind.RequiresDecision)
-      return this.syncConflictState.conflict
-    return
+  get syncConflictReview(): SyncConflictReview {
+    return this.syncConflictState
   }
   get syncConflictRequiresDecision(): boolean {
     return (
       this.syncConflictState.kind === SyncConflictReviewKind.RequiresDecision
     )
   }
-  set pendingSyncConflict(value: NookPendingSyncConflict) {
+  stageSyncConflict(value: NookPendingSyncConflict): void {
     this.syncConflictState = {
       kind: SyncConflictReviewKind.RequiresDecision,
       conflict: value,

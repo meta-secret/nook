@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { omittedValue } from '../../../explicit-state'
   import { NookSecretTypeFilter } from '$app-wasm'
 
   import {
@@ -76,7 +75,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean, type?: SecretType | void) => void
+    onAddModeChange?: (open: boolean, selection: SecretTypeSelection) => void
   } = $props()
 
   let searchPattern = $derived(vault.secretQuery)
@@ -189,12 +188,7 @@
   })
 
   function notifyAddMode() {
-    onAddModeChange?.(
-      addSecretOpen,
-      formSelectedType.kind === SecretTypeSelectionKind.EditingFields
-        ? formSelectedType.itemType
-        : omittedValue(),
-    )
+    onAddModeChange?.(addSecretOpen, formSelectedType)
   }
 
   function selectTypeFilter(value: string | void) {
@@ -412,9 +406,7 @@
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
-        initialItem={editingItem.kind === SecretEditorKind.Editing
-          ? editingItem.record
-          : omittedValue()}
+        editor={editingItem}
       />
     </div>
   {:else}
@@ -441,7 +433,9 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            title={editsBlocked ? editBlockMessage : omittedValue()}
+            {...editsBlocked && editBlockMessage
+              ? { title: editBlockMessage }
+              : {}}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -576,9 +570,7 @@
                     expanded={Boolean(expandedSecrets[item.id])}
                     decrypted={decryptedSecrets[item.id]}
                     authenticatorCode={authenticatorCodes[item.id]}
-                    copiedKey={copiedKey.kind === ClipboardNoticeKind.Visible
-                      ? copiedKey.fieldKey
-                      : omittedValue()}
+                    copiedNotice={copiedKey}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}

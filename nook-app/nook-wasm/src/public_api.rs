@@ -836,16 +836,24 @@ pub fn first_compatible_provider_id(
 pub fn enrollment_provider_for_architecture(
     provider: nook_core::StorageProviderData,
     architecture: &NookVaultArchitecture,
-    shared_joiner_identity: Option<String>,
-    shared_storage_target_id: Option<String>,
+    shared_joiner_identity: &NookStringValue,
+    shared_storage_target_id: &NookStringValue,
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
+    let shared_joiner_identity = match shared_joiner_identity.as_ref() {
+        NookStringValueRef::Unavailable => None,
+        NookStringValueRef::Value(identity) => Some(identity),
+    };
+    let shared_storage_target_id = match shared_storage_target_id.as_ref() {
+        NookStringValueRef::Unavailable => None,
+        NookStringValueRef::Value(target_id) => Some(target_id),
+    };
     Ok(NookEnrollmentProvider::from_core(
         nook_core::enrollment_provider_for_architecture_with_storage_target(
             &provider,
             &architecture,
-            shared_joiner_identity.as_deref(),
-            shared_storage_target_id.as_deref(),
+            shared_joiner_identity,
+            shared_storage_target_id,
         )?,
     ))
 }

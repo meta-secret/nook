@@ -13,14 +13,17 @@ import {
   peekEnrollmentIssuedAt,
   VaultApplication,
 } from '$app-wasm'
-import { takeWasmStringValue } from '$lib/wasm-string-value'
+import {
+  intoWasmStringValue,
+  requireWasmStringValue,
+} from '$lib/wasm-string-value'
 
 await initNookWasm()
 
 function samplePayload(): NookEnrollmentIssueInput {
   return new NookEnrollmentIssueInput(
     NookEnrollmentProvider.local(),
-    'Local vault',
+    intoWasmStringValue('Local vault'),
     'entry-local',
     '2026-06-23T12:00:00Z',
   )
@@ -29,7 +32,7 @@ function samplePayload(): NookEnrollmentIssueInput {
 function githubPayload(): NookEnrollmentIssueInput {
   return new NookEnrollmentIssueInput(
     NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
-    'Team vault',
+    intoWasmStringValue('Team vault'),
     'entry-1',
     '2026-06-23T12:00:00Z',
   )
@@ -86,9 +89,11 @@ describe('enrollment-code links', () => {
   test('wasm peek helpers accept full enrollment links', async () => {
     const code = encryptEnrollmentPayload(samplePayload(), 'hunter2', 'Desk')
     const link = buildEnrollmentLink(code, 'https://nook.example')
-    expect(takeWasmStringValue(peekEnrollmentEntryId(link))).toBe('entry-local')
-    expect(takeWasmStringValue(peekEnrollmentEntryLabel(link))).toBe('Desk')
-    expect(takeWasmStringValue(peekEnrollmentIssuedAt(link))).toBe(
+    expect(requireWasmStringValue(peekEnrollmentEntryId(link))).toBe(
+      'entry-local',
+    )
+    expect(requireWasmStringValue(peekEnrollmentEntryLabel(link))).toBe('Desk')
+    expect(requireWasmStringValue(peekEnrollmentIssuedAt(link))).toBe(
       '2026-06-23T12:00:00Z',
     )
   })
@@ -101,11 +106,11 @@ describe('enrollment payloads', () => {
       'vault-pass-99',
       'Work laptop',
     )
-    expect(takeWasmStringValue(peekEnrollmentEntryId(code))).toBe('entry-1')
-    expect(takeWasmStringValue(peekEnrollmentEntryLabel(code))).toBe(
+    expect(requireWasmStringValue(peekEnrollmentEntryId(code))).toBe('entry-1')
+    expect(requireWasmStringValue(peekEnrollmentEntryLabel(code))).toBe(
       'Work laptop',
     )
-    expect(takeWasmStringValue(peekEnrollmentIssuedAt(code))).toBe(
+    expect(requireWasmStringValue(peekEnrollmentIssuedAt(code))).toBe(
       '2026-06-23T12:00:00Z',
     )
 
@@ -122,10 +127,10 @@ describe('enrollment payloads', () => {
     expect(decrypted.vaultName).toBe('Team vault')
     expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
     expect(decrypted.provider.type).toBe('github')
-    expect(takeWasmStringValue(decrypted.provider.githubPat)).toBe(
+    expect(requireWasmStringValue(decrypted.provider.githubPat)).toBe(
       'github_pat_11AAAAbbbbCCCC',
     )
-    expect(takeWasmStringValue(decrypted.provider.githubRepo)).toBe(
+    expect(requireWasmStringValue(decrypted.provider.githubRepo)).toBe(
       'team-vault',
     )
   })

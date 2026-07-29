@@ -3,6 +3,7 @@ import type { StorageProvider } from '$lib/auth-providers'
 import {
   findSharedGrantProvider,
   SharedGrantProviderKind,
+  SharedStorageTargetKind,
   shouldFlushSharedDriveGrant,
 } from '$lib/vault/password-unlock'
 
@@ -32,7 +33,10 @@ describe('shared enrollment provider selection', () => {
       findSharedGrantProvider(
         [privateDrive, otherSharedDrive],
         'google-drive',
-        'folder-required',
+        {
+          kind: SharedStorageTargetKind.Bound,
+          storageTargetId: 'folder-required',
+        },
       ),
     ).toEqual({ kind: SharedGrantProviderKind.AuthorizationRequired })
   })
@@ -44,7 +48,10 @@ describe('shared enrollment provider selection', () => {
       findSharedGrantProvider(
         [driveProvider('other', 'folder-other'), matchingDrive],
         'google-drive',
-        'folder-required',
+        {
+          kind: SharedStorageTargetKind.Bound,
+          storageTargetId: 'folder-required',
+        },
       ),
     ).toEqual({
       kind: SharedGrantProviderKind.Existing,

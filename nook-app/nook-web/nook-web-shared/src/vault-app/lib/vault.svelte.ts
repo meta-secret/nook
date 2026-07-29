@@ -58,6 +58,10 @@ import {
   type LocalProviderLookup,
   type StagedRemoteStorage,
 } from '$lib/vault/state/provider.svelte'
+import type {
+  EventOutboxTarget,
+  ProviderSyncRevision,
+} from '$lib/vault/sync-operation-state'
 
 export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0
@@ -585,16 +589,14 @@ export class VaultState extends VaultLifecycleState {
     void this.runFanOutSyncAfterLocalSave()
   }
 
-  remoteEventProviderArgs(
-    provider?: StorageProvider,
-  ): [string, string, string] | void {
-    return syncActions.remoteEventProviderArgs(this, provider)
+  eventOutboxTarget(provider?: StorageProvider): EventOutboxTarget {
+    return syncActions.eventOutboxTarget(this, provider)
   }
 
   async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | void,
+    revision: ProviderSyncRevision,
   ): Promise<void> {
     return syncActions.updateProviderSyncMetadata(
       this,

@@ -1,10 +1,11 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
+  DriveFileIdentityKind,
   DuplicateSyncProviderKind,
   findDuplicateSyncProvider,
   formatDriveStorageRef,
+  GithubPatDisplayKind,
   maskGithubPat,
   providerDefaultLabel,
   providerStorageDetail,
@@ -27,15 +28,27 @@ function githubProvider(
 
 describe('maskGithubPat', () => {
   test('masks fine-grained tokens with github_pat_ prefix', () => {
-    expect(maskGithubPat('github_pat_11AAAAAAAAAA')).toBe('github_pat_11A…')
+    expect(
+      maskGithubPat({
+        kind: GithubPatDisplayKind.Stored,
+        pat: 'github_pat_11AAAAAAAAAA',
+      }),
+    ).toBe('github_pat_11A…')
   })
 
   test('masks classic tokens with shorter prefix', () => {
-    expect(maskGithubPat('ghp_1234567890ABCDEF')).toBe('ghp_123456…')
+    expect(
+      maskGithubPat({
+        kind: GithubPatDisplayKind.Stored,
+        pat: 'ghp_1234567890ABCDEF',
+      }),
+    ).toBe('ghp_123456…')
   })
 
   test('handles missing token', () => {
-    expect(maskGithubPat(omittedValue())).toBe('No token saved')
+    expect(maskGithubPat({ kind: GithubPatDisplayKind.NoToken })).toBe(
+      'No token saved',
+    )
   })
 })
 
@@ -120,44 +133,58 @@ describe('providerStorageDetail', () => {
 
 describe('formatDriveStorageRef', () => {
   test('includes cached file id when present', () => {
-    expect(formatDriveStorageRef('abc123', 'work.yaml')).toBe(
-      'abc123\twork.yaml',
-    )
+    expect(
+      formatDriveStorageRef(
+        { kind: DriveFileIdentityKind.Existing, fileId: 'abc123' },
+        'work.yaml',
+      ),
+    ).toBe('abc123\twork.yaml')
   })
 
   test('omits empty file id for new vaults', () => {
-    expect(formatDriveStorageRef(omittedValue(), 'work.yaml')).toBe('work.yaml')
-    expect(formatDriveStorageRef('', DEFAULT_DRIVE_BACKUP_NAME)).toBe(
-      DEFAULT_DRIVE_BACKUP_NAME,
-    )
+    expect(
+      formatDriveStorageRef({ kind: DriveFileIdentityKind.New }, 'work.yaml'),
+    ).toBe('work.yaml')
+    expect(
+      formatDriveStorageRef(
+        { kind: DriveFileIdentityKind.New },
+        DEFAULT_DRIVE_BACKUP_NAME,
+      ),
+    ).toBe(DEFAULT_DRIVE_BACKUP_NAME)
   })
 
   test('formats without validating draft file names', () => {
-    expect(formatDriveStorageRef(' abc ', ' work vault.yaml ')).toBe(
-      'abc\twork vault.yaml',
-    )
+    expect(
+      formatDriveStorageRef(
+        { kind: DriveFileIdentityKind.Existing, fileId: ' abc ' },
+        ' work vault.yaml ',
+      ),
+    ).toBe('abc\twork vault.yaml')
   })
 })
 
 describe('providerDefaultLabel', () => {
   test('includes repo name for non-default GitHub repositories', () => {
-    expect(providerDefaultLabel('github', 'team-vault')).toBe(
+    expect(providerDefaultLabel('github', { detail: 'team-vault' })).toBe(
       'GitHub · team-vault',
     )
   })
 
   test('includes file name for non-default Google Drive vaults', () => {
-    expect(providerDefaultLabel('oauth-file', 'work.yaml')).toBe(
+    expect(providerDefaultLabel('oauth-file', { detail: 'work.yaml' })).toBe(
       'Google Drive · work.yaml',
     )
     expect(providerDefaultLabel('oauth-file')).toBe('Google Drive')
   })
 
   test('includes file name for non-default iCloud vaults', () => {
-    expect(providerDefaultLabel('oauth-file', 'work.yaml', 'icloud')).toBe(
-      'iCloud · work.yaml',
-    )
-    expect(providerDefaultLabel('oauth-file', omittedValue(), 'icloud')).toBe(
+    expect(
+      providerDefaultLabel('oauth-file', {
+        detail: 'work.yaml',
+        oauthPreset: 'icloud',
+      }),
+    ).toBe('iCloud · work.yaml')
+    expect(providerDefaultLabel('oauth-file', { oauthPreset: 'icloud' })).toBe(
       'iCloud',
     )
   })

@@ -620,7 +620,10 @@ export async function ensureProviderSaved(
       provider = {
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, repo, oauthPreset),
+        label: providerDefaultLabel(type, {
+          detail: repo,
+          oauthPreset,
+        }),
         githubPat: pat,
         githubRepo: repo,
         ...providerStoreFields,
@@ -643,7 +646,10 @@ export async function ensureProviderSaved(
       provider = {
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, driveFile, oauthPreset),
+        label: providerDefaultLabel(type, {
+          detail: driveFile,
+          oauthPreset,
+        }),
         oauthFile,
         ...providerStoreFields,
         createdAt: isoTimestamp(),
@@ -660,11 +666,10 @@ export async function ensureProviderSaved(
       provider = {
         id: generateId(),
         type,
-        label: providerDefaultLabel(
-          type,
-          localFolder.directoryName,
+        label: providerDefaultLabel(type, {
+          detail: localFolder.directoryName,
           oauthPreset,
-        ),
+        }),
         localFolder,
         ...providerStoreFields,
         createdAt: isoTimestamp(),

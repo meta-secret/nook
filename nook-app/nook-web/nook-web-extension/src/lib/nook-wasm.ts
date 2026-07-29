@@ -3,10 +3,7 @@ import {
   generatePasswordWithOptions,
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
-import {
-  intoWasmStringValue,
-  takeWasmStringValue,
-} from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
+import { intoWasmStringValue } from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
 import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
@@ -18,6 +15,8 @@ import {
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
   parseAppLocale as wasmParseAppLocale,
+  NookStringValue,
+  NookValueState,
   resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
   VaultApplication,
@@ -39,6 +38,24 @@ let extensionWasmStartup: ExtensionWasmStartup = {
 
 export type { NookAppLocale } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 export { DeviceMode, DeviceProtectionStatus }
+
+export enum StoredAppLocaleInputKind {
+  Missing = 'missing',
+  Stored = 'stored',
+}
+
+export type StoredAppLocaleInput =
+  | { kind: StoredAppLocaleInputKind.Missing }
+  | { kind: StoredAppLocaleInputKind.Stored; value: string }
+
+export enum StoredAppLocaleParseKind {
+  Unsupported = 'unsupported',
+  Supported = 'supported',
+}
+
+export type StoredAppLocaleParse =
+  | { kind: StoredAppLocaleParseKind.Unsupported }
+  | { kind: StoredAppLocaleParseKind.Supported; locale: NookAppLocale }
 
 export function ensureNookWasm() {
   if (extensionWasmStartup.kind === ExtensionWasmStartupKind.Initializing) {
@@ -362,12 +379,24 @@ export async function generateSuggestedPassword(
 }
 
 export async function parseStoredAppLocale(
-  value: string | void,
-): Promise<NookAppLocale | void> {
+  input: StoredAppLocaleInput,
+): Promise<StoredAppLocaleParse> {
   await ensureNookWasm()
-  return takeWasmStringValue(
-    wasmParseAppLocale(intoWasmStringValue(value)),
-  ) as NookAppLocale | void
+  const parsed = wasmParseAppLocale(
+    input.kind === StoredAppLocaleInputKind.Stored
+      ? intoWasmStringValue(input.value)
+      : NookStringValue.unavailable(),
+  )
+  try {
+    return parsed.state === NookValueState.Value
+      ? {
+          kind: StoredAppLocaleParseKind.Supported,
+          locale: parsed.string as NookAppLocale,
+        }
+      : { kind: StoredAppLocaleParseKind.Unsupported }
+  } finally {
+    parsed.free()
+  }
 }
 
 export async function resolveAppLocaleFromTags(

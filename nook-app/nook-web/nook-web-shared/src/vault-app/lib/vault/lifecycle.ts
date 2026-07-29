@@ -7,6 +7,8 @@ import {
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
   hasActiveLocalVault,
+  NookStringValue,
+  NookValueState,
   parseAppLocale,
   prepareNewLocalVaultSlot,
   setActiveVault,
@@ -19,10 +21,7 @@ import {
   setupDeviceProtection,
   unlockDeviceProtection,
 } from '$lib/passkey-device-protection'
-import {
-  intoWasmStringValue,
-  takeWasmStringValue,
-} from '$lib/wasm-string-value'
+import { intoWasmStringValue } from '$lib/wasm-string-value'
 import { JoinEnrollmentState } from '$app-wasm'
 import * as localLoginActions from '$lib/vault/local-login'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
@@ -30,19 +29,44 @@ import { LocalProviderLookupKind } from '$lib/vault/state/provider.svelte'
 
 const log = createLogger('vault-lifecycle')
 
+enum SavedAppLocaleKind {
+  Missing = 'missing',
+  Supported = 'supported',
+}
+
+type SavedAppLocale =
+  | { kind: SavedAppLocaleKind.Missing }
+  | { kind: SavedAppLocaleKind.Supported; locale: NookAppLocale }
+
+function savedAppLocale(): SavedAppLocale {
+  const stored = localStorage.getItem('nook_locale')
+  const parsed = parseAppLocale(
+    stored ? intoWasmStringValue(stored) : NookStringValue.unavailable(),
+  )
+  try {
+    return parsed.state === NookValueState.Value
+      ? {
+          kind: SavedAppLocaleKind.Supported,
+          locale: parsed.string as NookAppLocale,
+        }
+      : { kind: SavedAppLocaleKind.Missing }
+  } finally {
+    parsed.free()
+  }
+}
+
 export async function initOnce(state: VaultState): Promise<void> {
   log.info('app init started')
   state.isInitializing = true
   let deviceIdentityUnlocked = false
   if (!state.isVerifying) state.errorMsg = ''
   try {
-    const savedLocale = takeWasmStringValue(
-      parseAppLocale(
-        intoWasmStringValue(localStorage.getItem('nook_locale')?.valueOf()),
-      ),
-    ) as NookAppLocale | void
+    const localeState = savedAppLocale()
     const browserLocale = state.browserLocale.appLocale() as NookAppLocale
-    const locale = savedLocale ?? browserLocale
+    const locale =
+      localeState.kind === SavedAppLocaleKind.Supported
+        ? localeState.locale
+        : browserLocale
     await state.updateLocale(locale)
     await state.refreshLocalVaultCatalog()
     state.manager = await getVaultManager()

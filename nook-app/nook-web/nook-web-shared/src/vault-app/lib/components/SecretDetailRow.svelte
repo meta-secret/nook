@@ -26,6 +26,10 @@
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
   import SeedPhraseGrid from './SeedPhraseGrid.svelte'
+  import {
+    ClipboardNoticeKind,
+    type ClipboardNotice,
+  } from './secret-vault-state'
 
   let {
     item,
@@ -33,7 +37,7 @@
     expanded,
     decrypted,
     authenticatorCode,
-    copiedKey,
+    copiedNotice = { kind: ClipboardNoticeKind.Hidden },
     onToggleExpand,
     onToggleReveal,
     onEditItem,
@@ -50,7 +54,7 @@
     expanded: boolean
     decrypted: NookSecretRecord | void
     authenticatorCode?: AuthenticatorCodeView | void
-    copiedKey: string | void
+    copiedNotice?: ClipboardNotice
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => Promise<void>
     onEditItem: (item: NookSecretListItem) => Promise<void>
@@ -67,6 +71,13 @@
     /** Use the title row as the card header (no duplicate group header). */
     titleAsHeader?: boolean
   } = $props()
+
+  function isCopied(fieldKey: string): boolean {
+    return (
+      copiedNotice.kind === ClipboardNoticeKind.Visible &&
+      copiedNotice.fieldKey === fieldKey
+    )
+  }
 
   const summary = $derived.by(() => {
     if (item.type === SecretType.Login) {
@@ -340,7 +351,7 @@
                   aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-website`}<Check
+                  {#if isCopied(`${item.id}-website`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -366,7 +377,7 @@
                   aria-label={vault.t('vault.copy_username')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-username`}<Check
+                  {#if isCopied(`${item.id}-username`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -393,7 +404,7 @@
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
-                {#if copiedKey === `${item.id}-secret`}<Check
+                {#if isCopied(`${item.id}-secret`)}<Check
                     class="size-3 text-emerald-500"
                   />{:else}<Copy class="size-3" />{/if}
               </button>
@@ -431,7 +442,7 @@
                   aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-website`}<Check
+                  {#if isCopied(`${item.id}-website`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -458,7 +469,7 @@
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
-                {#if copiedKey === `${item.id}-secret`}<Check
+                {#if isCopied(`${item.id}-secret`)}<Check
                     class="size-3 text-emerald-500"
                   />{:else}<Copy class="size-3" />{/if}
               </button>
@@ -483,7 +494,7 @@
                   aria-label={vault.t('vault.copy_expiration_date')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-expires`}<Check
+                  {#if isCopied(`${item.id}-expires`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -509,7 +520,7 @@
                   aria-label={vault.t('vault.copy_account_name')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-name`}<Check
+                  {#if isCopied(`${item.id}-name`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -528,7 +539,7 @@
                 aria-label={vault.t('vault.copy_secret')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
-                {#if copiedKey === `${item.id}-secret`}<Check
+                {#if isCopied(`${item.id}-secret`)}<Check
                     class="size-3 text-emerald-500"
                   />{:else}<Copy class="size-3" />{/if}
               </button>
@@ -575,7 +586,7 @@
                   aria-label={vault.t('vault.copy_current_code')}
                   class="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  {#if copiedKey === `${item.id}-current-code`}<Check
+                  {#if isCopied(`${item.id}-current-code`)}<Check
                       class="size-3.5 text-emerald-500"
                     />{:else}<Copy class="size-3.5" />{/if}
                 </button>
@@ -617,7 +628,7 @@
                   aria-label={vault.t('vault.copy_website_url')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-website`}<Check
+                  {#if isCopied(`${item.id}-website`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -643,7 +654,7 @@
                 aria-label={vault.t('vault.copy_authenticator_secret')}
                 class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >
-                {#if copiedKey === `${item.id}-secret`}<Check
+                {#if isCopied(`${item.id}-secret`)}<Check
                     class="size-3 text-emerald-500"
                   />{:else}<Copy class="size-3" />{/if}
               </button>
@@ -677,7 +688,7 @@
                           aria-label={vault.t('vault.copy_backup_code')}
                           class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
                         >
-                          {#if copiedKey === `${item.id}-backup-${backupIndex}`}<Check
+                          {#if isCopied(`${item.id}-backup-${backupIndex}`)}<Check
                               class="size-3 text-emerald-500"
                             />{:else}<Copy class="size-3" />{/if}
                         </button>
@@ -773,7 +784,7 @@
                   aria-label={vault.t('vault.copy_cardholder_name')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-cardholder`}<Check
+                  {#if isCopied(`${item.id}-cardholder`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -810,7 +821,7 @@
                   aria-label={vault.t('vault.copy_card_number')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
-                  {#if copiedKey === `${item.id}-card-number`}<Check
+                  {#if isCopied(`${item.id}-card-number`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -840,7 +851,7 @@
                   aria-label={vault.t('vault.copy_expiration')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
-                  {#if copiedKey === `${item.id}-expiration`}<Check
+                  {#if isCopied(`${item.id}-expiration`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -869,7 +880,7 @@
                   aria-label={vault.t('vault.copy_cvv')}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
-                  {#if copiedKey === `${item.id}-cvv`}<Check
+                  {#if isCopied(`${item.id}-cvv`)}<Check
                       class="size-3 text-emerald-500"
                     />{:else}<Copy class="size-3" />{/if}
                 </button>
@@ -974,7 +985,7 @@
                 aria-label={vault.t('vault.copy_note')}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
-                {#if copiedKey === `${item.id}-secret`}<Check
+                {#if isCopied(`${item.id}-secret`)}<Check
                     class="size-3 text-emerald-500"
                   />{:else}<Copy class="size-3" />{/if}
               </button>

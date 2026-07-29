@@ -1,12 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import {
-    buildSecretYaml,
-    generateSecretId,
-    SecretType,
-    type NookSecretRecord,
-  } from '$lib/nook'
+  import { buildSecretYaml, generateSecretId, SecretType } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SecretTypeSelectionKind,
@@ -16,6 +11,7 @@
   import SecretFields from './add-secret/SecretFields.svelte'
   import { SecretFormState } from './add-secret/secret-form-state.svelte'
   import SecretTypePicker from './add-secret/SecretTypePicker.svelte'
+  import { SecretEditorKind, type SecretEditor } from './secret-vault-state'
 
   let {
     vault,
@@ -24,7 +20,7 @@
     onReplaceSecret,
     onGeneratePassword,
     onCancel,
-    initialItem,
+    editor = { kind: SecretEditorKind.Creating },
     selectedTypeState = $bindable<SecretTypeSelection>({
       kind: SecretTypeSelectionKind.ChoosingType,
     }),
@@ -45,12 +41,12 @@
       symbols: boolean,
     ) => string
     onCancel: () => void
-    initialItem?: NookSecretRecord | void
+    editor?: SecretEditor
     selectedTypeState?: SecretTypeSelection
   } = $props()
 
   const state = new SecretFormState()
-  const isEditMode = $derived(Boolean(initialItem))
+  const isEditMode = $derived(editor.kind === SecretEditorKind.Editing)
 
   const typeTitle = $derived.by(() => {
     if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields) {
@@ -91,8 +87,8 @@
   })
 
   $effect(() => {
-    const item = initialItem
-    if (!item) return
+    if (editor.kind !== SecretEditorKind.Editing) return
+    const item = editor.record
     selectedTypeState = {
       kind: SecretTypeSelectionKind.EditingFields,
       itemType: item.type,
@@ -123,7 +119,7 @@
 
     let dataYaml: string
     try {
-      dataYaml = buildSecretYaml(state.toInput(selectedType, initialItem))
+      dataYaml = buildSecretYaml(state.toInput(selectedType, editor))
     } catch (error) {
       state.submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),
@@ -131,8 +127,12 @@
       return
     }
 
-    if (isEditMode && initialItem && onReplaceSecret) {
-      await onReplaceSecret(initialItem.id, selectedType, dataYaml)
+    if (
+      editor.kind === SecretEditorKind.Editing &&
+      isEditMode &&
+      onReplaceSecret
+    ) {
+      await onReplaceSecret(editor.record.id, selectedType, dataYaml)
     } else {
       await onAddSecret(generateSecretId(), selectedType, dataYaml)
     }

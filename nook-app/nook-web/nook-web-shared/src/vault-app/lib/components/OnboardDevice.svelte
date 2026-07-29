@@ -42,7 +42,7 @@
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
   import { OnboardingType, VaultType } from '$lib/vault-architecture'
-  import { takeWasmStringValue } from '$lib/wasm-string-value'
+  import { requireWasmStringValue } from '$lib/wasm-string-value'
   import {
     CompatibleProviderSelectionKind,
     firstCompatibleProvider,
@@ -230,7 +230,7 @@
   )
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode)) ?? ''
+    return requireWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode))
   })
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,

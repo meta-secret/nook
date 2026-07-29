@@ -2,6 +2,9 @@ import {
   getResolvedTranslationCatalog,
   parseStoredAppLocale,
   resolveAppLocaleFromTags,
+  StoredAppLocaleInputKind,
+  StoredAppLocaleParseKind,
+  type StoredAppLocaleInput,
   type NookAppLocale,
 } from './nook-wasm'
 import { translateFromCatalog } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -13,19 +16,23 @@ export type ExtensionI18n = {
   t: (key: string, replacements?: Record<string, string>) => string
 }
 
-function readSavedLocale(): string | void {
+function readSavedLocale(): StoredAppLocaleInput {
   try {
-    return localStorage.getItem(NOOK_LOCALE_STORAGE_KEY)?.valueOf()
+    const value = localStorage.getItem(NOOK_LOCALE_STORAGE_KEY)
+    return value
+      ? { kind: StoredAppLocaleInputKind.Stored, value }
+      : { kind: StoredAppLocaleInputKind.Missing }
   } catch {
-    return
+    return { kind: StoredAppLocaleInputKind.Missing }
   }
 }
 
-function chromeUiLanguage(): string | void {
+function chromeUiLanguages(): string[] {
   try {
-    return chrome.i18n?.getUILanguage?.()
+    const language = chrome.i18n?.getUILanguage?.()
+    return language ? [language] : []
   } catch {
-    return
+    return []
   }
 }
 
@@ -39,18 +46,18 @@ function navigatorLanguages(): string[] {
   )
 }
 
-function uniqueLanguageTags(tags: Array<string | void>): string[] {
-  return [...new Set(tags.filter((tag): tag is string => Boolean(tag)))]
+function uniqueLanguageTags(tags: string[]): string[] {
+  return [...new Set(tags)]
 }
 
 export async function resolveExtensionLocale(): Promise<NookAppLocale> {
   const savedLocale = await parseStoredAppLocale(readSavedLocale())
-  if (savedLocale) {
-    return savedLocale
+  if (savedLocale.kind === StoredAppLocaleParseKind.Supported) {
+    return savedLocale.locale
   }
 
   return resolveAppLocaleFromTags(
-    uniqueLanguageTags([chromeUiLanguage(), ...navigatorLanguages()]),
+    uniqueLanguageTags([...chromeUiLanguages(), ...navigatorLanguages()]),
   )
 }
 

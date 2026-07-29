@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookBrowserLocale,
@@ -15,7 +14,7 @@ import initNookWasm, {
 import { HELP_SECTIONS } from '$lib/help-content'
 import {
   intoWasmStringValue,
-  takeWasmStringValue,
+  requireWasmStringValue,
 } from '$lib/wasm-string-value'
 
 beforeAll(async () => {
@@ -57,22 +56,20 @@ describe('locale', () => {
   })
 
   test('parseAppLocale accepts only supported values', () => {
-    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('en')))).toBe(
-      'en',
-    )
-    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('ru')))).toBe(
-      'ru',
-    )
+    expect(
+      requireWasmStringValue(parseAppLocale(intoWasmStringValue('en'))),
+    ).toBe('en')
+    expect(
+      requireWasmStringValue(parseAppLocale(intoWasmStringValue('ru'))),
+    ).toBe('ru')
     expectUnavailableWasmString(parseAppLocale(intoWasmStringValue('de')))
-    expectUnavailableWasmString(
-      parseAppLocale(intoWasmStringValue(omittedValue())),
-    )
+    expectUnavailableWasmString(parseAppLocale(NookStringValue.unavailable()))
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
+    expect(requireWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
+    expect(requireWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
+    expect(requireWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
     expectUnavailableWasmString(resolveAppLocaleFromTag('de-DE'))
   })
 

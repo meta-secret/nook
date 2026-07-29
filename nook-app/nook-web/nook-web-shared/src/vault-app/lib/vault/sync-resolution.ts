@@ -3,6 +3,7 @@ import { RemoteVaultRecoveryState } from '$app-wasm'
 import { createLogger } from '$lib/log'
 import type { NookSecretRecord } from '$lib/nook'
 import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+import { SyncConflictReviewKind } from '$lib/vault/state/sync.svelte'
 
 const log = createLogger('vault-sync-resolution')
 
@@ -88,8 +89,13 @@ export async function refreshReplacementConflicts(
 export async function resolveSyncConflictKeepLocal(
   state: SyncActionsContext,
 ): Promise<void> {
-  const conflict = state.pendingSyncConflict
-  if (!conflict || state.isVerifying) return
+  const review = state.syncConflictReview
+  if (
+    review.kind !== SyncConflictReviewKind.RequiresDecision ||
+    state.isVerifying
+  )
+    return
+  const { conflict } = review
 
   state.isVerifying = true
   state.errorMsg = ''
@@ -104,8 +110,13 @@ export async function resolveSyncConflictKeepLocal(
 export async function resolveSyncConflictKeepRemote(
   state: SyncActionsContext,
 ): Promise<void> {
-  const conflict = state.pendingSyncConflict
-  if (!conflict || state.isVerifying) return
+  const review = state.syncConflictReview
+  if (
+    review.kind !== SyncConflictReviewKind.RequiresDecision ||
+    state.isVerifying
+  )
+    return
+  const { conflict } = review
 
   log.info('sync conflict resolved (keep remote)', {
     provider: conflict.providerLabel,

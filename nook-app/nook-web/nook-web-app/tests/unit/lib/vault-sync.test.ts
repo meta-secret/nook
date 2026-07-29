@@ -1,13 +1,17 @@
-import { omittedValue } from '../../../../nook-web-shared/src/explicit-state'
 import { describe, expect, test } from 'vitest'
 import {
   NookClientRunModeUtil,
   NookPendingSyncConflict,
   NookRuntimeConfig,
+  NookStringValue,
   type NookPendingSyncConflict as PendingSyncConflict,
 } from '$app-wasm'
 import { syncConflictLabel } from '$lib/vault/sync.svelte'
 import { intoWasmStringValue } from '$lib/wasm-string-value'
+import {
+  SyncConflictReviewKind,
+  type SyncConflictReview,
+} from '$lib/vault/state/sync.svelte'
 
 function buildConflict(kind?: string): PendingSyncConflict {
   return kind === 'store_id'
@@ -19,7 +23,7 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        omittedValue(),
+        NookStringValue.unavailable(),
         'store-local',
         'store-remote',
       )
@@ -33,13 +37,13 @@ function buildConflict(kind?: string): PendingSyncConflict {
         'github',
         'token',
         'owner/repo',
-        omittedValue(),
+        NookStringValue.unavailable(),
       )
 }
 
-function labelFor(conflict: PendingSyncConflict | void): string {
+function labelFor(review: SyncConflictReview): string {
   return syncConflictLabel({
-    pendingSyncConflict: conflict,
+    syncConflictReview: review,
     t: (key, values) => `${key}:${values?.provider ?? ''}`,
   })
 }
@@ -78,18 +82,24 @@ describe('resolveVaultSyncIntervalMs', () => {
 
 describe('syncConflictLabel', () => {
   test('returns an empty label when no conflict is staged', () => {
-    expect(labelFor(omittedValue())).toBe('')
+    expect(labelFor({ kind: SyncConflictReviewKind.Clear })).toBe('')
   })
 
   test('uses the content conflict banner for normal conflicts', () => {
-    expect(labelFor(buildConflict())).toBe(
-      'auth_storage.sync_conflict_banner:GitHub',
-    )
+    expect(
+      labelFor({
+        kind: SyncConflictReviewKind.RequiresDecision,
+        conflict: buildConflict(),
+      }),
+    ).toBe('auth_storage.sync_conflict_banner:GitHub')
   })
 
   test('uses the store-id conflict banner for store mismatches', () => {
-    expect(labelFor(buildConflict('store_id'))).toBe(
-      'auth_storage.sync_conflict_store_id_banner:GitHub',
-    )
+    expect(
+      labelFor({
+        kind: SyncConflictReviewKind.RequiresDecision,
+        conflict: buildConflict('store_id'),
+      }),
+    ).toBe('auth_storage.sync_conflict_store_id_banner:GitHub')
   })
 })

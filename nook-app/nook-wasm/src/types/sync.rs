@@ -422,13 +422,16 @@ impl NookEnrollmentIssueInput {
     #[wasm_bindgen(constructor)]
     pub fn new(
         provider: NookEnrollmentProvider,
-        vault_name: String,
+        vault_name: &NookStringValue,
         entry_id: String,
         issued_at: String,
     ) -> Self {
         Self {
             provider,
-            vault_name,
+            vault_name: match vault_name.as_ref() {
+                NookStringValueRef::Unavailable => String::new(),
+                NookStringValueRef::Value(name) => name.to_owned(),
+            },
             entry_id,
             issued_at,
         }

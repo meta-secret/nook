@@ -15,6 +15,10 @@
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { SecretType } from '$lib/nook'
+  import {
+    SecretTypeSelectionKind,
+    type SecretTypeSelection,
+  } from '$lib/components/secret-form-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     AdminAccordionSection,
@@ -64,11 +68,14 @@
       secretsAddFormType.itemType === SecretType.SecureNote,
   )
 
-  function setAddMode(open: boolean, type: SecretType | void) {
+  function setAddMode(open: boolean, selection: SecretTypeSelection) {
     secretsAddOpen = open
     secretsAddFormType =
-      open && type
-        ? { kind: SecretEditorModeKind.Adding, itemType: type }
+      open && selection.kind === SecretTypeSelectionKind.EditingFields
+        ? {
+            kind: SecretEditorModeKind.Adding,
+            itemType: selection.itemType,
+          }
         : { kind: SecretEditorModeKind.Closed }
     onEditorOpenChange(open)
   }
