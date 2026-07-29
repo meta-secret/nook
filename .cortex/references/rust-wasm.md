@@ -11,6 +11,13 @@
 - **Fast local iteration:** `task wasm:build:fast` regenerates the web pkg on the mounted worktree in dev/no-opt mode. It uses the existing `nook-web:local` image and bind-mounts the worktree; run `task setup` once first if that image does not exist. `task wasm:build:prod` is the explicit optimized local path.
 - **CI** does not rely on defaults: PR and main CI call Task with `WASM_BUILD_MODE=dev` to skip `wasm-opt`; release alone calls Task with `WASM_BUILD_MODE=prod` so stable artifacts are optimized exactly once.
 - **Tests:** PR/main verification runs `task wasm:test`, which executes default wasm-bindgen tests in Node via `wasm-pack test --node --release nook-wasm`. Keeping the Node tests in release mode reuses the release dependency lineage. The Docker graph compiles that release test unit graph as a sibling of `wasm-pack build` so the Node-test join does not rebuild workspace crates after the lib-only export path. Browser-only IndexedDB tests are feature-gated behind `browser-wasm-tests` and run manually with `task wasm:test:browser`.
+- **Rust quality capabilities:** the dedicated `Rust ecosystem checks` workflow
+  supplements Clippy, unit tests, and coverage with cargo-deny and RustSec
+  dependency policy, Proptest generated invariants, Insta snapshots, Loom
+  concurrency permutations, cargo-fuzz parser campaigns, Kani bounded proofs,
+  and pinned Dylint libraries. See
+  [quality.md](../workflows/quality.md#quality-and-release) for the selection
+  rules and cost tiers.
 - The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. **Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`, installed to `/usr/local/bin`) so wasm-pack runs post-link optimization with a correct, local `wasm-opt` and never downloads it at build time (a modern version is required — old Debian binaryen corrupts `externref` tables).
 
 ## 3. Session state (`NookVaultManager`)

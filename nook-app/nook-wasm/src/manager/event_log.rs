@@ -1193,6 +1193,11 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the contract records a typed sync issue before rejecting the remote store"
+    )]
     fn rejected_event_log_classification_is_available_as_a_typed_issue() {
         let mut manager = NookVaultManager::new();
         let classification = RemoteEventLogClassification::DifferentStore {
@@ -1200,11 +1205,10 @@ mod tests {
             remote_store_id: "store_remote1234".to_owned(),
         };
 
-        assert!(
-            manager
-                .guard_remote_event_log_classification("Sync provider", &classification)
-                .is_err()
-        );
+        match manager.guard_remote_event_log_classification("Sync provider", &classification) {
+            Ok(()) => panic!("different remote store must be rejected"),
+            Err(_) => {}
+        }
         let issue = manager
             .take_event_log_sync_issue()
             .issue()

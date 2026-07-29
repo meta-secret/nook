@@ -135,12 +135,12 @@ pub fn union_remote_events(
             accepted.queue_outbox(&provider_id, event_id, bytes);
         }
     }
-    *local = accepted;
     let imported = candidates
         .into_iter()
         .filter(|event_id| !quarantined.contains(event_id))
         .collect();
-    let _ = local.load_graph(store_id)?;
+    let _ = accepted.load_graph(store_id)?;
+    *local = accepted;
     Ok(imported)
 }
 
@@ -630,6 +630,35 @@ mod tests {
         assert!(local.get_bytes(&genesis_id).is_some());
         assert!(local.get_bytes(&child_id).is_none());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn union_graph_failure_preserves_existing_events_and_outbox() -> EventResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let remote = genesis(&signing_key)?;
+        let remote_id = remote.id()?;
+        let remote_bytes = serialize_event_storage_yaml(&remote)?;
+        let existing_id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
+        let existing_bytes = b"not event yaml".to_vec();
+
+        let mut local = LocalEventStore::new();
+        local.put_event(existing_id.clone(), existing_bytes.clone());
+        local.queue_outbox("drive", existing_id.clone(), existing_bytes.clone());
+        let before_event_ids = local.event_ids();
+        let before_outbox = local.pending_outbox("drive");
+
+        let err = union_remote_events(&mut local, &[(remote_id.clone(), remote_bytes)], STORE)
+            .expect_err("invalid existing graph should reject the staged union");
+
+        assert!(matches!(err, EventError::ParseStoredEvent(_)));
+        assert_eq!(local.event_ids(), before_event_ids);
+        assert_eq!(
+            local.get_bytes(&existing_id),
+            Some(existing_bytes.as_slice())
+        );
+        assert_eq!(local.pending_outbox("drive"), before_outbox);
+        assert!(local.get_bytes(&remote_id).is_none());
         Ok(())
     }
 

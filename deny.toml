@@ -1,0 +1,50 @@
+[graph]
+all-features = true
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "wasm32-unknown-unknown",
+]
+
+[advisories]
+ignore = [
+  # Pinned openai/codex -> rama-dns still carries hickory-proto 0.25.2.
+  # Upstream main has no fixed 0.25 release; remove both exceptions when Codex
+  # moves to hickory 0.26.1 or later.
+  "RUSTSEC-2026-0118",
+  "RUSTSEC-2026-0119",
+]
+unmaintained = "workspace"
+yanked = "deny"
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "NCSA",
+  "Unicode-3.0",
+  "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = [
+  "https://github.com/helix-editor/nucleo",
+  "https://github.com/openai-oss-forks/tokio-tungstenite",
+  "https://github.com/openai-oss-forks/tungstenite-rs",
+  "https://github.com/openai/codex",
+]

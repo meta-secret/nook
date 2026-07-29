@@ -13,7 +13,10 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
   assert.equal(audit.ready, true);
   assert.deepEqual(audit.reasons, []);
   assert.equal(audit.externalReviewPolicy, "inspect-existing-feedback-without-waiting");
-  assert.deepEqual(audit.requiredWorkflows.map((workflow) => workflow.workflowName), ["PR"]);
+  assert.deepEqual(
+    audit.requiredWorkflows.map((workflow) => workflow.workflowName),
+    ["Rust ecosystem checks", "PR"],
+  );
   assert.equal(audit.exactHeadDeployment?.state, "success");
 });
 

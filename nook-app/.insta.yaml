@@ -1,0 +1,6 @@
+behavior:
+  update: no
+  output: diff
+
+test:
+  runner: nextest
