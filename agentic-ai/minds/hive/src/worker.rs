@@ -270,10 +270,8 @@ impl<S: TaskStore> Worker<S> {
                     {
                         return Ok(blocked_disposition(task, summary, blocker));
                     }
-                    if result.is_obsolete() {
-                        if task.kind != "blocker" {
-                            crate::hive_bail!("only a blocker task may retire as obsolete");
-                        }
+                    let obsolete = completion_is_obsolete(task, &result);
+                    if obsolete {
                         if task.owning_repairs.is_empty() {
                             crate::hive_bail!(
                                 "obsolete blocker retirement requires active owning Main repairs"
@@ -309,8 +307,7 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
-                    if result.is_obsolete() && !matches!(artifact, CompletionArtifact::NotProduced)
-                    {
+                    if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
                         crate::hive_bail!(
                             "obsolete blocker retirement cannot persist a patch artifact"
                         );
@@ -318,7 +315,7 @@ impl<S: TaskStore> Worker<S> {
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
                         artifact,
-                        obsolete: result.is_obsolete(),
+                        obsolete,
                     })
                 }
                 .await;
@@ -536,8 +533,8 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        obsolete_owner_delivery_targets, persistable_patch, prepare_workspace, task_prompt,
-        validate_dependency_artifacts,
+        completion_is_obsolete, obsolete_owner_delivery_targets, persistable_patch,
+        prepare_workspace, task_prompt, validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -553,6 +550,33 @@ mod tests {
         assert!(bounded.is_char_boundary(bounded.len()));
         assert!(bounded.len() <= MAX_PERSISTED_RESULT_BYTES + "\n[truncated]".len());
         assert!(bounded.ends_with("[truncated]"));
+    }
+
+    #[test]
+    fn obsolete_completion_is_normalized_for_non_blocker_tasks() -> anyhow::Result<()> {
+        let mut task = ClaimedTask {
+            id: TaskId::new("main-failure-recovery")?,
+            kind: "main-repair".to_owned(),
+            prompt: "verify the delivered repair".to_owned(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            attempt_id: AttemptId::new("attempt-1")?,
+            attempt_number: 1,
+            lease_token: LeaseToken::new("lease-1")?,
+            owning_repairs: Vec::new(),
+            dependency_context: Vec::new(),
+            dependency_artifacts: Vec::new(),
+        };
+        let result = TerminalResult::Completed {
+            summary: "repair delivered".to_owned(),
+            changed_files: Vec::new(),
+            tests: Vec::new(),
+            obsolete: true,
+        };
+
+        assert!(!completion_is_obsolete(&task, &result));
+        task.kind = "blocker".to_owned();
+        assert!(completion_is_obsolete(&task, &result));
+        Ok(())
     }
 
     #[test]
