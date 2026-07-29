@@ -414,10 +414,9 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 ## Validation
 
-Run the smallest relevant Rust and web checks for the touched boundary only when
-debugging. For implementation tasks, run `task format`, push or update the PR
-when the iteration is ready for final validation, and monitor GitHub Actions.
-Do not require local `task check` / `task ci:pr` for merge. `task preflight`
+Run the smallest relevant Rust and web checks through `task remote`. For
+implementation tasks, run `task format`, commit and push, then explicitly
+trigger complete validation with `task pr:validate`. `task preflight`
 rejects known TypeScript domain mirrors, local aliases of generated `Nook*`
 types, same-argument forwarding functions around generated WASM imports,
 unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.

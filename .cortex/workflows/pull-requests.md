@@ -12,18 +12,18 @@ blocked handoff:
 1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch,
    and define the PR title/body/scope before coding.
 2. **Implement functionality** — make the requested code/docs/tests changes on
-   the feature branch. Optional focused local debug commands are allowed; they
-   are never a merge gate.
+   the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
 3. **Push and create/update the PR** — run `task format` (and the UI demo
    contract when UI paths change), push a coherent commit, and open the PR;
    later fixes update that same PR.
-4. **Preflight and validate on GitHub Actions** — run
-   `task pr:preflight PR=<number>` and inspect the path-applicable
+4. **Iterate and validate on GitHub Actions** — run focused
+   `task remote TASK_NAME=<name>` jobs as useful. When the head is ready, run
+   `task pr:preflight PR=<number>` and `task pr:validate PR=<number>`, then inspect the path-applicable
    `PR / Verify and preview` and `Web research / Build and deploy research
    catalog` workflows. Do **not** run a required local `task check` / `task ci:pr`.
 5. **Fix Nook's failed PR workflow** — inspect failed logs, consult app logs for
    web/e2e failures, fix, `task format`, and push the completed fix; the
-   synchronize event re-evaluates the repository-owned check.
+   agent explicitly triggers complete validation for the replacement head.
 6. **Settle existing review feedback** — inspect current comments and reviews,
    reply to every actionable human or automated finding, and resolve each
    thread. Do not request or wait for optional reviewers.
@@ -56,12 +56,14 @@ flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Implement]
   I --> E[3 Format + push + open/update PR]
-  E --> F[4 Monitor applicable Nook PR checks on GHA]
+  E --> X[4 Focused task remote jobs as useful]
+  X --> V[5 Explicit task pr:validate]
+  V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
-  G -->|no| H[5 Read app logs + fix + task format]
-  H --> PUSH[6 Push completed fix]
-  PUSH --> F
-  G -->|yes| C[7 Address comments]
+  G -->|no| H[7 Read app logs + fix + task format]
+  H --> PUSH[8 Push completed fix]
+  PUSH --> X
+  G -->|yes| C[9 Address comments]
   C --> R[Run exact-head readiness audit]
   R -->|blocked| H
   R -->|ready| M[Squash merge PR]
@@ -89,10 +91,11 @@ around getting that PR green and merged.
 
 ### 2. Implement
 
-### 3. Push at the final-validation boundary
+### 3. Push an exact remote-executable commit
 
 When the branch has a coherent implementation commit, run pre-push hygiene, then
-commit and push/open or update the PR. This starts remote CI immediately. Never
+commit and push/open or update the PR. This makes the exact source available to
+focused hosted tasks; it does not start complete PR validation. Never
 run `task check`, a full test suite, build, e2e, or post-fix product validation
 as a required local gate before or after the push. This is not a license to push
 half-finished or unformatted work: always run `task format` (host-applied)
@@ -109,26 +112,24 @@ gh pr create --title "…" --body "…"
 
 See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-After the final push, inspect feedback already present and handle every
+After each push, run useful focused remote tasks. After the final push,
+explicitly trigger complete validation, inspect feedback already present, and handle every
 actionable finding. Do not request or wait for external reviewers. See
 [code-review.md](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching
 grace period.
 
-### 5. Validation — GitHub Actions only
+### 5. Hosted iteration and explicit validation
 
-**Remote PR CI is the sole product validation pipeline.** `pr.yml` uses
-GitHub-hosted `ubuntu-latest`, validates the exact pushed head, and restores
-main-seeded, lineage-specific BuildKit caches through GitHub's cache service.
-Follow-up pushes may also reuse the PR branch cache. Push each coherent ready
-change immediately so the repository checks start or refresh. **Do not require
-local Docker product gates** (`task check`, `task ci:pr`, full e2e) for merge or
-handoff. Optional local Task commands may help debug a red remote finding, but
-they must not delay the next completed-fix push.
+**GitHub-hosted execution is the normal build/test path.** `remote.yml` runs
+allowlisted focused tasks repeatedly against an exact pushed branch head.
+`pr.yml` is the sole merge-validation pipeline and runs only when an agent
+explicitly applies a validation label through `task pr:validate`.
 
 ```text
-implement/fix → task format (+ ui-demo-contract when UI) → commit → push/update PR → applicable PR workflows
+implement/fix → task format → commit → push/update PR → focused task remote jobs
+→ task pr:validate → complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
@@ -139,68 +140,53 @@ task format          # host-applied format — the only required local product a
 
 Always run `task format` again before every fix re-push.
 
-Optional scoped debug commands (never merge gates):
+Focused hosted commands (never merge gates):
 
 ```bash
-task web:check && task web:test           # web-only debug
-task rust:test                            # portable Rust crate nextest only
-task rust:coverage:check                  # coverage floor (CI also enforces)
-E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
+task remote TASK_NAME=web:check
+task remote TASK_NAME=web:test
+task remote TASK_NAME=rust:test
+task remote TASK_NAME=rust:coverage
 ```
 
-Optional full mirrors for humans / deep debugging only:
+Complete validation:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build (no browser e2e) — optional
-task ci:pr:e2e
-task web:test:e2e
+task pr:validate PR=<number>
+# Main-fix PR:
+task pr:validate PR=<number> FULL_E2E=1
 ```
 
-| When                            | Command                                 | Why                                                        |
-| ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| Before every push               | `task format`                           | Only required local product action                         |
-| UI-facing path changes          | `ui-demo-contract.sh`                   | Cheap hygiene to avoid Verify demo misses                  |
-| While debugging e2e (optional)  | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
-| Final validation boundary       | `git push` / `gh pr create`            | Start remote CI; sole product gate                         |
-| After remote CI failure         | fix → `task format` → push              | Refresh `pr.yml`; do not require local `task ci:pr`        |
+| When                       | Command                                          | Why                                             |
+| -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
+| Before every push          | `task format`                                    | Only required local product action              |
+| UI-facing path changes     | `ui-demo-contract.sh`                            | Cheap hygiene before hosted execution           |
+| Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one hosted worker for the selected task     |
+| Final validation boundary  | `task pr:validate PR=<number>`                   | Start the complete exact-head PR gate           |
+| After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci)
 and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 
 Workflow cancellation must follow the scopes in
 [ci-pipeline.md § Workflow concurrency policy](ci-pipeline.md#workflow-concurrency-policy).
-PR validation cancels only an older run for the same PR; unrelated PRs keep
-independent required checks. Any cancellable live-provider job must also keep
+Explicit validation cancels only an older labeled run for the same PR; unrelated
+PRs keep independent required checks. Any cancellable live-provider job must also keep
 its external-resource cleanup in a separate `if: always()` step so an
 interrupted test process cannot leak provider state.
 
-### 5.1. E2e (remote for Main fixes; optional local debug)
+### 5.1. Main-fix browser validation
 
 Normal PR CI omits browser e2e. A PR fixing a failure observed on `main` must
-carry the `ci:full-e2e` label; the PR workflow then runs the Main-equivalent
-local-provider, split-app isolation, and extension browser suites before merge.
-Apply the label before the final readiness audit:
+trigger the `ci:full-e2e` validation path, which runs the Main-equivalent
+local-provider and extension browser suites before merge:
 
 ```bash
-gh pr edit <number> --add-label ci:full-e2e
+task pr:validate PR=<number> FULL_E2E=1
 ```
 
-Agents must not require full local e2e before merge. If you choose a local
-repro while debugging, use a single spec:
-
-```bash
-E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
-```
-
-Optional full local-provider project or web + extension wrapper (humans / deep
-debug only):
-
-```bash
-task web:test:e2e          # full local-provider e2e project in Docker
-task ci:pr:e2e
-```
-
-Skip local e2e entirely for isolated Rust-only or docs-only changes.
+Agents do not run full e2e locally. Use the remote catalog for focused browser
+feedback and the explicit Main-fix gate for merge validation.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
@@ -240,12 +226,13 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 ```
 
 If the branch is behind `origin/main`, merge the base branch into the PR branch,
-push; the synchronize event re-evaluates Nook's workflows from the new head SHA.
+push, then explicitly validate Nook's workflows on the new head SHA.
 Do not merge until this freshness check passes:
 
 ```bash
 git merge origin/main --no-edit
 git push origin HEAD
+task pr:validate PR=<number>
 task pr:ready PR=<number>
 ```
 
@@ -298,10 +285,9 @@ findings. Fix those problems in code; do not silence the gate. See
    Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` /
    `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
-4. Run `task format`, then push the completed fix so Nook's PR workflow restarts.
-5. Return to monitoring Nook's applicable PR checks. Do **not** require
-   `task ci:pr` or `task check` before the next push or merge. Optional
-   single-spec local repro is allowed while debugging.
+4. Run `task format`, commit, and push the completed fix.
+5. Run useful focused `task remote` jobs, then `task pr:validate` and return to
+   monitoring Nook's complete exact-head PR checks.
 6. Never request or wait for external review services.
 
 If the failure was obviously fmt-only, `task format` before re-push is enough.
@@ -393,11 +379,13 @@ Rules:
 See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 
 1. Fetch `origin/main`; branch from it.
-2. Implement; run `task format` (+ UI demo contract when UI); push/open/update the PR.
-3. Monitor Nook's applicable repository-owned PR workflows on GitHub Actions.
+2. Implement; run `task format` (+ UI demo contract when UI); commit and push/open/update the PR.
+3. Use focused `task remote` jobs, then explicitly run `task pr:validate` on the
+   ready head and monitor its repository-owned checks.
 4. Never request or wait for optional external reviews/checks.
 5. Address and resolve every actionable comment already present.
-6. On failure: fix → `task format` → push completed fix → wait for CI refresh.
+6. On failure: fix → `task format` → commit/push → focused remote proof as
+   useful → explicitly trigger complete validation again.
 7. **Squash merge** into `main` immediately after the exact-head readiness audit
    succeeds; green checks alone are insufficient.
 8. Delete the branch (optional).

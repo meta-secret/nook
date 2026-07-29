@@ -12,8 +12,9 @@ Use this workflow for feature work that touches more than one package.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` or `nook-app/nook-web/.task/`, Docker tasks under `nook-app/docker/Taskfile.yml`, cross-package app/CI tasks under `nook-app/.task/`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
-9. Run `task format`, push, and prove the change with green GitHub Actions
-   (`pr.yml`). Do not require local `task check` for merge.
+9. Run `task format`, commit and push, use focused hosted tasks as useful, then
+   explicitly trigger and prove the exact head with green `pr.yml`. Do not run
+   local `task check` for agent work.
 
 Dependency direction must stay:
 

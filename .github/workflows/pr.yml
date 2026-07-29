@@ -7,13 +7,16 @@
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline. Agent statistics
 # live in meta-secret/nook-workbench.
-# Superseded runs (new push or PR close) are cancelled via concurrency below.
+# Validation is requested explicitly by adding a label. Ordinary pushes do not
+# spend hosted workers. A later push invalidates the prior head's checks, so the
+# label must be toggled again before merge. PR close still cancels an in-flight
+# validation through the concurrency group below.
 
 name: PR
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled, closed]
+    types: [labeled, closed]
     paths-ignore:
       - .cortex/**
       - .cursor/**
@@ -37,9 +40,31 @@ env:
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  validation-request:
+    name: Validate explicit CI request
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject unsupported label events
+        env:
+          REQUESTED_LABEL: ${{ github.event.label.name }}
+        run: |
+          case "$REQUESTED_LABEL" in
+            ci:validate|ci:full-e2e) ;;
+            *)
+              echo "Unsupported PR validation label: $REQUESTED_LABEL" >&2
+              exit 1
+              ;;
+          esac
+
   rust:
     name: Native Rust verification
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -149,7 +174,11 @@ jobs:
 
   wasm:
     name: WASM verification and artifact
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -265,7 +294,11 @@ jobs:
 
   verify:
     name: Verify and preview
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: validation-request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -783,7 +816,10 @@ jobs:
 
   coverage:
     name: Rust coverage report
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
     needs: rust
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit

@@ -11,7 +11,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                                           | PR open/sync/label                          | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
+| [`remote.yml`](../../.github/workflows/remote.yml)                                   | Manual allowlisted task dispatch            | One selected focused Taskfile command on an independent GitHub-hosted runner; read-only Main cache lineage; no merge authorization | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                                           | Explicit `ci:validate` / `ci:full-e2e` label | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)                                       | Push to `main`                              | On `ubuntu-latest`: native Rust → WASM → browser-free web verify run read-only, then each serially exports its already-solved local BuildKit graph after lane validation; local-provider web e2e, extension e2e, and headless UI demos consume the verified WASM handoff on separate read-only runners (90-day artifact + 10 largest recordings on the merged PR's Linear issue); deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e | No                                        |
@@ -26,7 +27,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 ```mermaid
 flowchart LR
-  PR[Pull request] --> pr_yml[pr.yml]
+  branch[Exact pushed branch head] --> remote_yml[remote.yml focused task]
+  PR[Ready pull request] --> label[Validation label]
+  label --> pr_yml[pr.yml]
   pr_yml --> preview[Cloudflare isolated aliases]
   pr_yml --> pr_deployment[github-pages deployment status]
 
@@ -469,7 +472,7 @@ checked-out synthetic merge, because Main can advance after the event snapshot;
 it also must not use a two-dot snapshot diff, because a behind-base branch would
 then count Main-only changes as pull request changes.
 
-## Local vs remote CI
+## Agent host vs GitHub-hosted execution
 
 **Delivery CI uses GitHub-hosted runners with remote BuildKit layers.** PR,
 main, and release run on fresh `ubuntu-latest` VMs. The shared Docker setup
@@ -492,11 +495,15 @@ while missing or unchanged base coverage reuses the current artifact for
 comparison without another Docker solve. Use remote CI as the **sole PR product
 validation gate**.
 
-Agents wait only for the applicable repository-owned PR checks (`PR / Verify and
-preview`, plus `Web research / Build and deploy research catalog` when its paths
-change). Every actionable comment already present must be addressed and
-resolved. Codex, Claude, Cursor, CodeRabbit, and other optional external
-services are never requested or awaited when no feedback is present.
+Agents use `task remote TASK_NAME=<name>` for focused build/test feedback. When
+the branch is ready, they run `task pr:validate PR=<number>` (or
+`FULL_E2E=1`) and wait only for the applicable repository-owned exact-head PR
+checks. Ordinary pushes do not start `pr.yml`. Every later push requires another
+explicit validation before readiness.
+
+Every actionable comment already present must be addressed and resolved. Codex,
+Claude, Cursor, CodeRabbit, and other optional external services are never
+requested or awaited when no feedback is present.
 The local ci-agent image tag is derived from the worktree path, preventing
 parallel worktrees from replacing each other's review/readiness binaries.
 
@@ -569,42 +576,28 @@ exact-commit query to every mutable artifact URL and retries convergence on PR,
 main, and release. This prevents a fresh metadata response from being paired
 with an older edge-cached archive that reused the same channel filename.
 
-**The GitHub Actions PR workflow is the sole product validation pipeline.** Its
-checks validate the exact pushed PR head, so a coherent ready change must be
-formatted with `task format`, committed, and pushed immediately to trigger or
-refresh `pr.yml`. Do not delay that push for a local product gate, benchmark,
-PR metadata update, or other follow-up work.
+**GitHub Actions is both the agent build/test environment and the sole merge
+validation pipeline.** A coherent experiment must be formatted, committed, and
+pushed before `task remote` dispatches it. Complete `pr.yml` validation starts
+only when `task pr:validate` toggles a validation label.
 
-**Local Docker is optional debug tooling.** Rust/WASM and web image lineages can
-stay warm on a developer machine, and Task mirrors (`task check`, `task ci:pr`,
-e2e) remain available for humans and focused reproduction. Agents must **not**
-require those commands for merge or handoff. After pushing, monitor remote CI.
-Never serialize a full local product gate before or after the push as a
-workflow requirement.
-
-**E2e debug — one spec at a time (optional).** During a fix/debug session, do
-not re-run the full e2e suite after every change. If you choose a local repro,
-run individual specs:
-
-```bash
-E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
-```
-
-After targeted fixes, `task format`, push/open/update the PR, and let remote CI
-validate.
+**Local Docker product execution is not the agent path.** Agents do not run
+Task mirrors (`task check`, `task ci:pr`, builds, tests, or e2e) locally.
+Interactive development servers and browser sessions remain local when their
+persistent state is intrinsic to the investigation.
 
 **Agent efficiency rules:**
 
 1. **Before product validation** — `task format` (+ UI demo contract when UI),
-   then push/open/update the PR once the iteration is functionally complete so
-   remote CI can start.
-2. **No required local product gate** — do not run `task check` / `task ci:pr`
-   as a merge requirement. Optional `E2E_SPEC=… task web:test:e2e:file` is
-   allowed while debugging a specific e2e failure.
+   then commit and push/open/update the PR so the exact head can run remotely.
+2. **Focused hosted iteration** — dispatch only the useful allowlisted remote
+   tasks; independent tasks may occupy independent workers.
 3. **After any remote CI failure** — read test output and static-analysis errors,
    then **persisted app logs** (see below), fix, `task format`, push the
-   completed fix, then wait for remote CI to refresh. Do not require a local
-   `task ci:pr` mirror before merge.
+   completed fix, then dispatch focused work or explicitly trigger complete
+   validation again.
+4. **Complete gate only when ready** — run `task pr:validate`; a push never
+   refreshes that gate automatically.
 
 ## Runner cleanup
 
@@ -630,14 +623,15 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
   the CI artifact/report before changing code. The attachment is created for
   every e2e result; failures also print the same entries to test output.
-- **Local repro:** `E2E_SPEC=… task web:test:e2e:file`, then `fetchAppLogs(page)`
-  or open `/app-logs?minLevel=debug&limit=1000`.
+- **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
+  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
+  the hosted remote catalog.
 - **Human inspection:** `/logs` in the running app.
 
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull-requests.md § Validation](pull-requests.md#5-validation-github-actions-only)
+See [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation)
 and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
@@ -779,9 +773,20 @@ merge, and final Workbench completion update. Agent secrets:
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** push after `task format` and let GitHub Actions own product validation; optional local `task ci:pr` / e2e is debug-only, never a merge gate.
+3. **Do** format, commit, push, use focused `task remote` jobs, and explicitly
+   trigger complete validation with `task pr:validate`; never run heavy agent
+   product work locally.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds. UI-changing PRs additionally record only their changed headless demo specs. PRs repairing a Main failure carry `ci:full-e2e` and run the Main-equivalent deterministic browser suites before merge; Main runs the same local-provider and extension **e2e**. Every actionable unsuccessful Main run, including browser E2E and UI-demo failures, is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification. Credentialed **sync-live** checks are explicit manual runs.
+5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks,
+   lint, formatting, and builds. UI-changing PRs additionally record only their
+   changed headless demo specs. Main-fix validation uses
+   `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent
+   deterministic browser suites before merge; Main runs the same local-provider
+   and extension **e2e**. Every actionable unsuccessful Main run, including
+   browser E2E and UI-demo failures, is reconciled through one
+   `automation: hive` Workbench incident into an isolated task that owns the
+   repair PR, review loop, squash merge, and replacement Main verification.
+   Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).

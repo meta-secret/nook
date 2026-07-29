@@ -49,8 +49,8 @@ When the user says `Use <skill-name> and refactor <scope>`:
 4. Add or update tests when behavior or a durable invariant changes.
 5. Use focused development validation as needed. For implementation tasks,
    follow [coding-bro](../coding-bro/SKILL.md): `task format`, commit and push
-   the coherent change, then monitor GitHub Actions (no required local product
-   gate).
+   the coherent change, run focused `task remote` jobs, then explicitly trigger
+   complete validation with `task pr:validate`.
 
 ## Output
 
