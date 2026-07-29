@@ -39,6 +39,7 @@ jobs:
         with:
           manifest-path: nook-app/Cargo.toml
           command: check
+          log-level: error
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -55,6 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install workspace linker
+        run: sudo apt-get update && sudo apt-get install --yes mold
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: nook-app
@@ -80,7 +83,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: taiki-e/install-action@cargo-fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz@0.13.2
       - name: Exercise wire parsers
         run: cargo fuzz run wire-parsers --manifest-path fuzz/Cargo.toml -- -max_total_time=20
 
@@ -94,7 +99,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: model-checking/kani-github-action@v0.67
+      - uses: model-checking/kani-github-action@v1.1
         with:
           working-directory: nook-app
           args: --package nook-replication

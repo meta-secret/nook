@@ -9,9 +9,7 @@ fn repository_root() -> PathBuf {
 }
 
 fn read(relative_path: &str) -> anyhow::Result<String> {
-    Ok(fs::read_to_string(
-        repository_root().join(relative_path),
-    )?)
+    Ok(fs::read_to_string(repository_root().join(relative_path))?)
 }
 
 #[test]

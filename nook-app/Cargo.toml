@@ -34,7 +34,7 @@ default-unwind = "8"
 [workspace.metadata.dylint]
 libraries = [
     { git = "https://github.com/trailofbits/dylint", tag = "v6.0.1", pattern = [
-        "examples/restriction/non_local_effect_before_error_return",
+        "examples/general/non_local_effect_before_unhandled_error",
     ] },
 ]
 
