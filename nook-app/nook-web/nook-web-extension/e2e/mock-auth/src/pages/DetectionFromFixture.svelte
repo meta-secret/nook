@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { omittedValue } from '../../../../../nook-web-shared/src/explicit-state'
-
+  import {
+    DetectionFixtureRenderKind,
+    type DetectionFixtureRenderState,
+  } from '../lib/detection-fixture-state'
   import { completePlainLogin } from '../lib/plain-login'
   import {
     getSiteFixture,
@@ -19,17 +21,30 @@
   let stepIndex = $state(0)
   let error = $state('')
 
-  const fixture = $derived(
-    templateId
+  const renderState: DetectionFixtureRenderState = $derived.by(() => {
+    const selectedFixture = templateId
       ? getTemplateFixture(templateId)
       : siteId
         ? getSiteFixture(siteId)
-        : omittedValue(),
-  )
+        : false
+    if (!selectedFixture) {
+      return { kind: DetectionFixtureRenderKind.Missing }
+    }
+    const selectedStep = selectedFixture.steps.find(
+      (_candidate, index) => index === stepIndex,
+    )
+    return selectedStep
+      ? {
+          kind: DetectionFixtureRenderKind.Ready,
+          fixture: selectedFixture,
+          step: selectedStep,
+        }
+      : { kind: DetectionFixtureRenderKind.Missing }
+  })
   const label = $derived(templateId ?? siteId ?? 'unknown')
-  const step = $derived(fixture?.steps[stepIndex])
   const wrapAriaHidden = $derived(
-    Boolean(fixture?.quirks.includes('aria-hidden-ancestor')),
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('aria-hidden-ancestor'),
   )
 
   function fieldSelector(field: SiteFixtureField): string {
@@ -43,9 +58,10 @@
   }
 
   function readUsername(form: HTMLFormElement): string {
-    const current = step
-    if (!current) return ''
-    const identity = current.fields.find((field) => field.type !== 'password')
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const identity = renderState.step.fields.find(
+      (field) => field.type !== 'password',
+    )
     if (!identity) return ''
     return (
       form.querySelector<HTMLInputElement>(fieldSelector(identity))?.value ?? ''
@@ -53,9 +69,10 @@
   }
 
   function readPassword(form: HTMLFormElement): string {
-    const current = step
-    if (!current) return ''
-    const password = current.fields.find((field) => field.type === 'password')
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const password = renderState.step.fields.find(
+      (field) => field.type === 'password',
+    )
     if (!password) return ''
     return (
       form.querySelector<HTMLInputElement>(fieldSelector(password))?.value ?? ''
@@ -64,7 +81,8 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    if (!fixture || !step) return
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
+    const { fixture, step } = renderState
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
     const hasPassword = step.fields.some((field) => field.type === 'password')
@@ -85,7 +103,8 @@
   }
 
   function onButtonAdvance() {
-    if (!fixture) return
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
+    const { fixture } = renderState
     if (stepIndex < fixture.steps.length - 1) {
       stepIndex += 1
       error = ''
@@ -93,13 +112,15 @@
   }
 </script>
 
-{#if !fixture || !step}
+{#if renderState.kind === DetectionFixtureRenderKind.Missing}
   <main>
     <h1>Unknown site fixture</h1>
     <p data-testid="mock-auth-scenario">missing-fixture</p>
     <p class="error" role="alert">No fixture for {label}</p>
   </main>
 {:else if wrapAriaHidden}
+  {@const fixture = renderState.fixture}
+  {@const step = renderState.step}
   <div aria-hidden="true">
     <main>
       <h1>{label}</h1>
@@ -144,6 +165,8 @@
     </main>
   </div>
 {:else}
+  {@const fixture = renderState.fixture}
+  {@const step = renderState.step}
   <main>
     <h1>{label}</h1>
     <p data-testid="mock-auth-scenario">{label}-login</p>
