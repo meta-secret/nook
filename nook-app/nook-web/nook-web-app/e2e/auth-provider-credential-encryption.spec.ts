@@ -67,6 +67,16 @@ test.describe('sync provider credential encryption', () => {
       },
     ])
 
+    // Re-enter through the supported unlock flow so the manager has the
+    // unwrapped device identity needed to inspect the persisted credential.
+    await page.reload()
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await waitForAuthProvidersE2eHook(page)
     await waitForStorageChainIdle(page)
     await waitForVaultSyncIdle(page)
