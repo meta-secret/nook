@@ -118,9 +118,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: llvm-tools-preview,rustc-dev
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-dylint@6.0.1,dylint-link@6.0.1
+      - name: Install Dylint
+        run: cargo install cargo-dylint --version 6.0.1 --locked
       - name: Run configured lint libraries
         working-directory: nook-app
         run: cargo dylint --all -- --all-targets

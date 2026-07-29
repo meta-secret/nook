@@ -282,18 +282,20 @@ mod loom_tests {
 mod kani_proofs {
     #[kani::proof]
     fn duplicate_insert_never_replaces_immutable_bytes() {
-        let event_id = kani::any::<u8>();
-        let byte = kani::any::<u8>();
+        let same_payload = kani::any::<bool>();
         let mut store = super::ReplicaStore::new();
 
         assert_eq!(
-            store.put_event(event_id, vec![byte]),
+            store.put_event(1_u8, vec![7]),
             super::ReplicaInsertStatus::Inserted
         );
-        assert_eq!(
-            store.put_event(event_id, vec![byte]),
+        let second_payload = if same_payload { 7 } else { 9 };
+        let expected_status = if same_payload {
             super::ReplicaInsertStatus::Duplicate
-        );
-        assert_eq!(store.get_bytes(&event_id), Some([byte].as_slice()));
+        } else {
+            super::ReplicaInsertStatus::Conflict
+        };
+        assert_eq!(store.put_event(1_u8, vec![second_payload]), expected_status);
+        assert_eq!(store.get_bytes(&1_u8), Some([7].as_slice()));
     }
 }
