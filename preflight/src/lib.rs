@@ -1217,12 +1217,6 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
                 ),
                 line: 4,
             },
-            Violation {
-                path: PathBuf::from(
-                    "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
-                ),
-                line: 1,
-            },
         ]
     }
 
