@@ -21,6 +21,7 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+expect_used = "deny"
 unwrap_used = "deny"
 
 # Compile all dependencies with optimizations even in dev/test mode.

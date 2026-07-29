@@ -245,7 +245,7 @@ mod pending_sync_conflict_tests {
     use super::*;
 
     #[test]
-    fn pending_store_id_factory_marks_unsaved_provider() {
+    fn pending_store_id_factory_marks_unsaved_provider() -> Result<(), wasm_bindgen::JsError> {
         let conflict = NookPendingSyncConflict::pending_store_id(
             "GitHub".to_owned(),
             "local".to_owned(),
@@ -260,14 +260,9 @@ mod pending_sync_conflict_tests {
 
         assert!(conflict.is_pending_provider());
         assert_eq!(conflict.provider_label(), "GitHub");
-        assert_eq!(
-            conflict.local_store_id().expect("local store id"),
-            "store_local12345"
-        );
-        assert_eq!(
-            conflict.remote_store_id().expect("remote store id"),
-            "store_remote1234"
-        );
+        assert_eq!(conflict.local_store_id()?, "store_local12345");
+        assert_eq!(conflict.remote_store_id()?, "store_remote1234");
+        Ok(())
     }
 }
 

@@ -423,7 +423,9 @@ pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violatio
         let relative_path_string = relative_path.to_string_lossy();
         let contents = fs::read_to_string(&path)?;
         let lines = contents.lines().collect::<Vec<_>>();
-        for line_number in typescript_null_token_lines(&contents, path.extension()) {
+        for line_number in
+            typescript_null_token_lines(&contents, path.extension()).map_err(io::Error::other)?
+        {
             let line = lines
                 .get(line_number.saturating_sub(1))
                 .copied()
@@ -444,7 +446,10 @@ pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violatio
     Ok(violations)
 }
 
-fn typescript_null_token_lines(source: &str, extension: Option<&std::ffi::OsStr>) -> Vec<usize> {
+fn typescript_null_token_lines(
+    source: &str,
+    extension: Option<&std::ffi::OsStr>,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     if extension.is_some_and(|value| value == "svelte") {
         return svelte_null_token_lines(source);
     }
@@ -452,34 +457,33 @@ fn typescript_null_token_lines(source: &str, extension: Option<&std::ffi::OsStr>
     typescript_code_null_token_lines(source, 1)
 }
 
-fn typescript_code_null_token_lines(source: &str, first_line: usize) -> Vec<usize> {
+fn typescript_code_null_token_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-        .expect("bundled TypeScript grammar must load");
+    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
     collect_null_nodes(tree.root_node(), first_line, &mut lines);
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
-fn svelte_null_token_lines(source: &str) -> Vec<usize> {
+fn svelte_null_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_svelte_next::LANGUAGE.into())
-        .expect("bundled Svelte grammar must load");
+    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
-    collect_svelte_typescript_fragments(tree.root_node(), source, &mut lines);
+    collect_svelte_typescript_fragments(tree.root_node(), source, &mut lines)?;
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
 fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
@@ -497,7 +501,7 @@ fn collect_svelte_typescript_fragments(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
-) {
+) -> Result<(), tree_sitter::LanguageError> {
     if (node.kind() == "raw_text"
         && node
             .parent()
@@ -508,15 +512,16 @@ fn collect_svelte_typescript_fragments(
             lines.extend(typescript_code_null_token_lines(
                 fragment,
                 node.start_position().row + 1,
-            ));
+            )?);
         }
-        return;
+        return Ok(());
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_typescript_fragments(child, source, lines);
+        collect_svelte_typescript_fragments(child, source, lines)?;
     }
+    Ok(())
 }
 
 /// Reject declarations that make a raw JavaScript value look typed only in the
@@ -1089,8 +1094,9 @@ mod tests {
     #[test]
     fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
-        let error =
-            dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
+        let error = dockerfile_cache_mounts(&root)
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("lib test should reject invalid input"))?;
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
         fs::remove_dir_all(root)?;
         Ok(())

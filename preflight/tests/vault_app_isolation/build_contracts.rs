@@ -1,7 +1,8 @@
 use super::*;
 
 #[test]
-fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount() {
+fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
+-> anyhow::Result<()> {
     let root = repository_root();
     let wasm_tasks = read(&root, "nook-app/nook-web/.task/wasm.yml");
     assert!(
@@ -38,10 +39,11 @@ fn fast_wasm_build_reuses_manifest_keyed_dependencies_outside_the_source_mount()
             && dockerfile.contains("ENV CARGO_TARGET_DIR=/opt/nook/cargo-target"),
         "the fast image must preserve its compiled dependency graph outside /meta-secret/nook"
     );
+    Ok(())
 }
 
 #[test]
-fn agent_prs_cannot_be_merged_automatically() {
+fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
     let root = repository_root();
     assert!(
         !root.join(".github/workflows/agent-pr-monitor.yml").exists(),
@@ -74,10 +76,11 @@ fn agent_prs_cannot_be_merged_automatically() {
             );
         }
     }
+    Ok(())
 }
 
 #[test]
-fn ci_agent_docker_builds_are_not_hidden_by_image_existence() {
+fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
     let docker_build = section(
@@ -92,10 +95,11 @@ fn ci_agent_docker_builds_are_not_hidden_by_image_existence() {
         !docker_build.contains("status:"),
         "an existing image must not suppress rebuilds after ci-agent source changes"
     );
+    Ok(())
 }
 
 #[test]
-fn pr_audit_wrappers_accept_pat_only_authentication() {
+fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
     let token_fallback =
@@ -106,13 +110,15 @@ fn pr_audit_wrappers_accept_pat_only_authentication() {
         3,
         "preflight, readiness, and review wrappers must accept NOOK_GITHUB_PAT before consulting gh auth"
     );
+    Ok(())
 }
 
 #[test]
-fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() {
+fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() -> anyhow::Result<()> {
     let root = repository_root();
     assert_shared_wasm_build_contract(&root);
     assert_vault_runtime_boundary_contract(&root);
+    Ok(())
 }
 
 fn assert_shared_wasm_build_contract(root: &Path) {
@@ -244,7 +250,7 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
 }
 
 #[test]
-fn extension_and_release_contract_preserve_origin_isolation() {
+fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<()> {
     let root = repository_root();
     let manifest = read(
         &root,
@@ -310,10 +316,11 @@ fn extension_and_release_contract_preserve_origin_isolation() {
             && deploy.contains("npx --yes wrangler@4"),
         "Wrangler must run inside an explicit Node container on the self-hosted runner"
     );
+    Ok(())
 }
 
 #[test]
-fn development_and_release_wasm_build_modes_stay_separate() {
+fn development_and_release_wasm_build_modes_stay_separate() -> anyhow::Result<()> {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     assert!(main.contains("WASM_BUILD_MODE=dev"));
@@ -328,10 +335,11 @@ fn development_and_release_wasm_build_modes_stay_separate() {
         !release.contains("WASM_BUILD_MODE=dev"),
         "release artifacts must remain production-optimized"
     );
+    Ok(())
 }
 
 #[test]
-fn development_cloudflare_deploy_preserves_isolated_origins() {
+fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<()> {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     for required in [
@@ -415,10 +423,11 @@ fn development_cloudflare_deploy_preserves_isolated_origins() {
         ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
         "repo-relative Cloudflare artifact directories must resolve from the repository root"
     );
+    Ok(())
 }
 
 #[test]
-fn focused_playwright_task_runs_only_matching_projects() {
+fn focused_playwright_task_runs_only_matching_projects() -> anyhow::Result<()> {
     let root = repository_root();
     let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
     let focused = section(
@@ -434,10 +443,11 @@ fn focused_playwright_task_runs_only_matching_projects() {
         !focused.contains("bun run test:e2e --") && !focused.contains("--project=e2e"),
         "focused e2e must not expand into the full stable/unstable scripts or select a nonexistent project"
     );
+    Ok(())
 }
 
 #[test]
-fn extension_e2e_waits_for_a_persistent_x_server() {
+fn extension_e2e_waits_for_a_persistent_x_server() -> anyhow::Result<()> {
     let root = repository_root();
     let wrapper = read(
         &root,
@@ -474,20 +484,22 @@ fn extension_e2e_waits_for_a_persistent_x_server() {
         playwright.contains("workers: isCi ? 1 : omittedValue()"),
         "hosted headed extension tests must not compete for Chromium/Xvfb resources"
     );
+    Ok(())
 }
 
 #[test]
-fn main_failures_do_not_trigger_an_ai_repair_agent() {
+fn main_failures_do_not_trigger_an_ai_repair_agent() -> anyhow::Result<()> {
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     assert!(
         !main.contains("\n  ci-fix:") && !main.contains("task ci-agent:fix"),
         "main failures must remain visible for manual handling"
     );
+    Ok(())
 }
 
 #[test]
-fn scheduled_nightly_live_sync_is_retired() {
+fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     let root = repository_root();
     assert!(
         !root.join(".github/workflows/e2e-nightly.yml").exists(),
@@ -505,10 +517,11 @@ fn scheduled_nightly_live_sync_is_retired() {
             && manual_e2e.contains("github.rest.repos.delete({ owner: user.login, repo })"),
         "manual PR e2e must retain explicit GitHub live-provider validation with cancellation-safe cleanup"
     );
+    Ok(())
 }
 
 #[test]
-fn delivery_avoids_a_shared_buildkit_container() {
+fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
@@ -562,20 +575,18 @@ fn delivery_avoids_a_shared_buildkit_container() {
             && !wrapper.contains("trap cleanup EXIT"),
         "delivery must not default to or persist a shared nook-pr BuildKit container"
     );
+    Ok(())
 }
 
 #[test]
-fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() {
+fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyhow::Result<()> {
     let root = repository_root();
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock must follow the Unix epoch")
-        .as_nanos();
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let temp = std::env::temp_dir().join(format!(
         "nook-buildkit-health-{}-{unique}",
         std::process::id()
     ));
-    fs::create_dir_all(&temp).expect("create BuildKit health test directory");
+    fs::create_dir_all(&temp)?;
 
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
@@ -593,13 +604,10 @@ if [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
   wait "$child_pid"
 fi
 "#,
-    )
-    .expect("write fake Docker command");
-    let mut permissions = fs::metadata(&fake_docker)
-        .expect("stat fake Docker command")
-        .permissions();
+    )?;
+    let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(&fake_docker, permissions).expect("make fake Docker executable");
+    fs::set_permissions(&fake_docker, permissions)?;
 
     let started = Instant::now();
     let output = Command::new("bash")
@@ -612,8 +620,7 @@ fi
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
         .env("NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS", "1")
         .env("NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS", "2")
-        .output()
-        .expect("run BuildKit health wrapper");
+        .output()?;
     let elapsed = started.elapsed();
 
     assert!(
@@ -625,22 +632,18 @@ fi
         elapsed < Duration::from_secs(12),
         "one-second probe timeout took {elapsed:?}"
     );
-    assert_eq!(
-        fs::read_to_string(&command_marker).expect("wrapped command marker"),
-        "ok"
-    );
-    let child_pid = fs::read_to_string(&child_pid_file).expect("timed Docker child pid");
+    assert_eq!(fs::read_to_string(&command_marker)?, "ok");
+    let child_pid = fs::read_to_string(&child_pid_file)?;
     assert!(
         !Command::new("kill")
             .args(["-0", child_pid.trim()])
-            .output()
-            .expect("check timed Docker child")
+            .output()?
             .status
             .success(),
         "timed Docker child {child_pid:?} survived process-group cleanup"
     );
 
-    let calls = fs::read_to_string(&docker_log).expect("fake Docker call log");
+    let calls = fs::read_to_string(&docker_log)?;
     for required in [
         "buildx inspect nook-pr-timeout-test --bootstrap",
         "rm --force buildx_buildkit_nook-pr-timeout-test0",
@@ -654,21 +657,19 @@ fi
         );
     }
 
-    fs::remove_dir_all(temp).expect("remove BuildKit health test directory");
+    fs::remove_dir_all(temp)?;
+    Ok(())
 }
 
 #[test]
-fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() {
+fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow::Result<()> {
     let root = repository_root();
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock must follow the Unix epoch")
-        .as_nanos();
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let temp = std::env::temp_dir().join(format!(
         "nook-buildkit-daemon-{}-{unique}",
         std::process::id()
     ));
-    fs::create_dir_all(&temp).expect("create BuildKit daemon test directory");
+    fs::create_dir_all(&temp)?;
 
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
@@ -683,13 +684,10 @@ if [ "${1:-}" = context ] && [ "${2:-}" = show ]; then
   exit 0
 fi
 "#,
-    )
-    .expect("write fake Docker command");
-    let mut permissions = fs::metadata(&fake_docker)
-        .expect("stat fake Docker command")
-        .permissions();
+    )?;
+    let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(&fake_docker, permissions).expect("make fake Docker executable");
+    fs::set_permissions(&fake_docker, permissions)?;
 
     let output = Command::new("bash")
         .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
@@ -704,19 +702,15 @@ fi
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env_remove("NOOK_PR_BUILDX_BUILDER")
         .env_remove("BUILDX_BUILDER")
-        .output()
-        .expect("run local BuildKit wrapper");
+        .output()?;
 
     assert!(
         output.status.success(),
         "wrapper failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        fs::read_to_string(&command_marker).expect("wrapped builder marker"),
-        "desktop-linux"
-    );
-    let calls = fs::read_to_string(&docker_log).expect("fake Docker call log");
+    assert_eq!(fs::read_to_string(&command_marker)?, "desktop-linux");
+    let calls = fs::read_to_string(&docker_log)?;
     assert!(
         calls.contains("context show"),
         "local delivery must resolve the active docker-context builder"
@@ -735,8 +729,7 @@ fi
         .args(["true"])
         .env("DOCKER", &fake_docker)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
-        .output()
-        .expect("refuse shared BuildKit builder");
+        .output()?;
     assert!(
         !refused.status.success(),
         "shared nook-pr builder must be refused"
@@ -746,11 +739,12 @@ fi
         "refusal must name the shared builder hazard"
     );
 
-    fs::remove_dir_all(temp).expect("remove BuildKit daemon test directory");
+    fs::remove_dir_all(temp)?;
+    Ok(())
 }
 
 #[test]
-fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() {
+fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> anyhow::Result<()> {
     let root = repository_root();
     let workflow = read(&root, ".github/workflows/rust-dependency-updates.yml");
     for required in [
@@ -780,10 +774,11 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() {
             "dependency update agent prompt missing required contract: {required}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
+fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Result<()> {
     let root = repository_root();
     let dependency_dockerfile = read(&root, "nook-app/docker/base.Dockerfile");
     let source_dockerfile = read(&root, "nook-app/nook-core/Dockerfile");
@@ -835,10 +830,11 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
             "mounted WASM builds must hash portable source and manifests: {required}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
+fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Result<()> {
     let root = repository_root();
     let release = read(&root, ".github/workflows/release.yml");
     assert_eq!(
@@ -920,4 +916,5 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
             "{config} must use the e2e image's system Chromium"
         );
     }
+    Ok(())
 }

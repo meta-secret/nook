@@ -522,11 +522,11 @@ mod wasm_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn password_unlock_requires_event_log() {
-        let keys = nook_core::generate_vault_keys().expect("vault keys");
+    async fn password_unlock_requires_event_log() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
         let mut database = nook_core::Database::new();
         let secret_id = nook_core::SecretId::from_vault_record(
-            format!("secret_{}", nook_core::generate_id().expect("secret id")).as_str(),
+            format!("secret_{}", nook_core::generate_id()?).as_str(),
         );
         database.insert(
             secret_id,
@@ -535,22 +535,17 @@ mod wasm_tests {
                 note: "event log required".to_owned(),
             }),
         );
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key).expect("vault crypto");
-        let records = database
-            .to_stored_records_with_crypto(&crypto)
-            .expect("stored records");
+        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
+        let records = database.to_stored_records_with_crypto(&crypto)?;
         let password_entry = nook_core::create_password_entry_with_work_factor(
             &keys,
-            nook_core::generate_id().expect("password id").as_str(),
+            nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-07-13T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N,
-        )
-        .expect("password entry");
-        let store_id = nook_core::generate_store_id()
-            .expect("store id")
-            .to_string();
+        )?;
+        let store_id = nook_core::generate_store_id()?.to_string();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
             &nook_core::VaultUnlock::Keys,
@@ -558,14 +553,9 @@ mod wasm_tests {
             nook_core::VaultStoreIdentityRef::Assigned(&store_id),
             nook_core::VaultNameRef::Named("Projection rejection test"),
             nook_core::VaultVersionWrite::Initial,
-        )
-        .expect("projection yaml");
-        import_vault_blob(yaml.as_str(), Some("Projection rejection test"))
-            .await
-            .expect("store projection");
-        switch_active_vault(&store_id)
-            .await
-            .expect("select projection");
+        )?;
+        import_vault_blob(yaml.as_str(), Some("Projection rejection test")).await?;
+        switch_active_vault(&store_id).await?;
 
         let mut manager = NookVaultManager::new();
         let result = manager
@@ -580,5 +570,6 @@ mod wasm_tests {
             .await;
         assert!(result.is_err(), "missing event log must be rejected");
         assert!(manager.device.identity_private_key.is_empty());
+        Ok(())
     }
 }

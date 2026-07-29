@@ -21,10 +21,9 @@ mod tests {
     }
 
     #[test]
-    fn catalog_has_exactly_one_thousand_unique_ranked_sites() {
+    fn catalog_has_exactly_one_thousand_unique_ranked_sites() -> anyhow::Result<()> {
         let sites: Vec<PopularLoginSite> =
-            serde_json::from_str(include_str!("../../data/popular_login_sites.json"))
-                .expect("bundled popular_login_sites.json must deserialize");
+            serde_json::from_str(include_str!("../../data/popular_login_sites.json"))?;
         assert_eq!(sites.len(), 1000, "catalog must contain exactly 1000 sites");
         let mut ids = HashSet::new();
         let mut ranks = HashSet::new();
@@ -58,5 +57,6 @@ mod tests {
                 site.rank
             );
         }
+        Ok(())
     }
 }

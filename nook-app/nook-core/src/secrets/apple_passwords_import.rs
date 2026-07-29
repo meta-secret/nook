@@ -259,13 +259,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_apple_csv_headers() {
+    fn rejects_non_apple_csv_headers() -> anyhow::Result<()> {
         let error = plan_apple_passwords_import("name,login,secret\nExample,alice,password\n")
-            .expect_err("apple passwords import test should reject invalid input");
+            .err()
+            .ok_or_else(|| {
+                anyhow::anyhow!("apple passwords import test should reject invalid input")
+            })?;
 
         assert!(matches!(
             error,
             ApplePasswordsImportError::MissingColumn("Title")
         ));
+        Ok(())
     }
 }

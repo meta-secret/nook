@@ -30,10 +30,12 @@ fn is_sentinel_ceremony_required(err: &NookError) -> bool {
 mod tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox() {
+    async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox()
+    -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = nook_core::StorageMode::GoogleDrive;
         manager.storage.access_token = "rejected-token".to_owned();
@@ -43,10 +45,7 @@ mod tests {
         manager.sync_outbox.repo_arg = "rejected-file".to_owned();
         manager.vault.vault_name = VaultNameState::Named("Local vault".to_owned());
 
-        manager
-            .restore_local_after_provider_assessment()
-            .await
-            .expect("restore local storage");
+        manager.restore_local_after_provider_assessment().await?;
 
         assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
         assert!(manager.storage.access_token.is_empty());
@@ -61,22 +60,23 @@ mod tests {
             &manager.vault.vault_name,
             VaultNameState::Named(name) if name == "Local vault"
         ));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn remote_store_discovery_drops_stale_vault_session_state() {
+    async fn remote_store_discovery_drops_stale_vault_session_state() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_stale12345".to_owned();
         manager.vault.vault_name = VaultNameState::Named("Stale vault".to_owned());
 
         let discovered = manager
             .discover_remote_vault_store_id("local".to_owned(), String::new(), String::new())
-            .await
-            .expect("discover local storage");
+            .await?;
 
         assert!(discovered.is_empty());
         assert!(manager.vault.store_id.is_empty());
         assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
+        Ok(())
     }
 }
 

@@ -15,7 +15,6 @@ name = "hive"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.103"
 async-trait = "0.1.89"
 axum = "0.8.8"
 clap = { version = "4.6.4", features = ["derive", "env"] }
@@ -33,3 +32,6 @@ time = { version = "0.3.54", features = ["formatting"] }
 tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tower-http = { version = "0.6.8", features = ["fs", "trace"] }
 uuid = { version = "1.24.0", features = ["v4"] }
+
+[dev-dependencies]
+anyhow = "1.0.103"

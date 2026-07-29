@@ -41,10 +41,15 @@ When you see `Option<T>`, ask:
   state-specific values on the owning variant.
 - Do not create a one-variant wrapper enum just to avoid `Option<T>`. If callers
   genuinely ask a lookup question, `Option<T>` is the precise Rust result.
-- Do not call `.unwrap()` in authored Rust. Production code returns, propagates,
-  or explicitly classifies failure. Tests prefer `Result`/`?`; when the test is
-  asserting a fixture invariant, use `expect` with enough context to identify
-  the failed setup.
+- Do not call `.unwrap()`, `.expect(...)`, or `.expect_err(...)` in authored
+  Rust. Production code returns, propagates, or explicitly classifies failure.
+  Every fallible test
+  returns a concrete or `anyhow::Result` and propagates with `?`, including
+  locally constructed fixtures.
+- Keep `anyhow` test-only. Production libraries, binaries, examples, and build
+  scripts use concrete `thiserror` enums with operation-specific variants and
+  typed sources. Only `#[cfg(test)]` unit tests and integration tests under
+  `tests/` may use `anyhow`, and crates declare it under `[dev-dependencies]`.
 - Do not use `String` for typed domain values such as timestamps, YAML payloads,
   YAML payloads, storage/provider types, vault/store ids, event ids, or secret
   keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
@@ -240,16 +245,18 @@ whether a value exists.
 
 - Add or update tests for each new enum state.
 - Make fallible Rust tests return `Result<(), E>` and use `?` for setup and
-  verification. Do not silence `unwrap_used` by mechanically replacing
-  `.unwrap()` with `.expect(...)`; reserve `expect` for a deliberately asserted
-  infallible local invariant.
+  verification. Panic shortcuts are prohibited; do not replace one with
+  another or hide it behind a helper.
 - Do not use `Box<dyn std::error::Error>` as a catch-all test error. Return the
   concrete crate error for one error family, or `anyhow::Result` when the test
   intentionally combines unrelated error types.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
-- Run Clippy for all targets with `clippy::unwrap_used` denied and verify a
-  repository search has no authored `.unwrap()` calls.
+- Run Clippy for all targets with `clippy::expect_used` and
+  `clippy::unwrap_used` denied, and verify a repository search has no authored
+  `.expect(...)`, `.expect_err(...)`, or `.unwrap()` calls. Run the
+  syntax-aware preflight that rejects production `anyhow` paths and non-dev
+  Cargo dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p

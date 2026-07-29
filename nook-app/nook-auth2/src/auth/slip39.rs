@@ -251,9 +251,8 @@ fn fill_random(bytes: &mut [u8]) -> MultiDeviceResult<()> {
 }
 
 fn share_digest(random_part: &[u8], secret: &[u8]) -> [u8; DIGEST_BYTES] {
-    hmac_sha256(random_part, secret)[..DIGEST_BYTES]
-        .try_into()
-        .expect("digest prefix length is fixed")
+    let digest = hmac_sha256(random_part, secret);
+    [digest[0], digest[1], digest[2], digest[3]]
 }
 
 // Minimal local HMAC avoids adding a second public crypto dependency merely
@@ -641,9 +640,10 @@ mod tests {
 
     #[test]
     fn sentinel_round_trip_is_current_ext_one_and_any_quorum_recovers() -> anyhow::Result<()> {
-        let root = core::array::from_fn(|index| {
-            u8::try_from(index).expect("fixed secret index must fit into u8")
-        });
+        let mut root = [0_u8; 32];
+        for (index, byte) in root.iter_mut().enumerate() {
+            *byte = u8::try_from(index)?;
+        }
         let shares = split_sentinel_secret(&root, 3, 5)?;
         assert_eq!(shares.len(), 5);
         assert!(

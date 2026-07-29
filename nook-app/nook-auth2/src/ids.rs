@@ -63,6 +63,11 @@ impl DeviceId {
     }
 
     #[must_use]
+    pub(crate) fn from_sha256_prefix(prefix: [u8; 8]) -> Self {
+        Self(hex::encode(prefix))
+    }
+
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -91,6 +96,11 @@ impl AsRef<str> for DeviceId {
 pub struct StoreId(String);
 
 impl StoreId {
+    #[must_use]
+    pub fn before_genesis_placeholder() -> Self {
+        Self("store_abcdefghijk".to_owned())
+    }
+
     #[must_use]
     pub fn from_token(token: &CompactToken) -> Self {
         Self(format!("{STORE_ID_PREFIX}{}", token.as_str()))
@@ -178,6 +188,11 @@ impl AuthKeyId {
 
     pub fn from_digest_hex(digest_hex: &str) -> ValidationResult<Self> {
         format_auth_key_id(digest_hex)
+    }
+
+    #[must_use]
+    pub(crate) fn from_sha256_digest(digest: &[u8; 32]) -> Self {
+        Self(format!("{AUTH_KEY_ID_PREFIX}{}", hex::encode(digest)))
     }
 
     #[must_use]

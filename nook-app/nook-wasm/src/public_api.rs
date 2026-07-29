@@ -354,14 +354,13 @@ fn authenticator_from_secret(
 #[wasm_bindgen(js_name = vaultPasswordMinLength)]
 #[must_use]
 pub fn vault_password_min_length() -> u32 {
-    u32::try_from(nook_core::vault_password_min_length()).expect("password minimum fits in u32")
+    u32::try_from(nook_core::vault_password_min_length()).unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen(js_name = vaultPasswordRecommendedMinLength)]
 #[must_use]
 pub fn vault_password_recommended_min_length() -> u32 {
-    u32::try_from(nook_core::vault_password_recommended_min_length())
-        .expect("password recommended minimum fits in u32")
+    u32::try_from(nook_core::vault_password_recommended_min_length()).unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen(js_name = isVaultPasswordLongEnough)]

@@ -603,7 +603,8 @@ mod wasm_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn extension_pairing_state_round_trips_as_a_plain_object() {
+    fn extension_pairing_state_round_trips_as_a_plain_object() -> Result<(), wasm_bindgen::JsValue>
+    {
         let key = "nook:extension-pairing-grant:store-test";
         let input = serde_json::json!({
             (key): {
@@ -626,23 +627,25 @@ mod wasm_tests {
             &input,
             &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
         )
-        .expect("serialize pairing input")
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?
         .unchecked_into::<js_sys::Object>();
-        let state = NookExtensionPairingState::from_object(&input).expect("validate pairing input");
-        let output = state.to_object().expect("serialize pairing output");
+        let state =
+            NookExtensionPairingState::from_object(&input).map_err(wasm_bindgen::JsValue::from)?;
+        let output = state.to_object().map_err(wasm_bindgen::JsValue::from)?;
 
-        assert!(js_sys::Reflect::has(&output, &key.into()).expect("inspect output key"));
+        assert!(js_sys::Reflect::has(&output, &key.into())?);
         assert!(!output.is_instance_of::<js_sys::Map>());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn provider_storage_modes_round_trip_in_wasm() {
+    fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsValue> {
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
                 Some(nook_core::OauthFilePreset::GoogleDrive),
             )
-            .expect("google-drive storage mode"),
+            .map_err(wasm_bindgen::JsValue::from)?,
             "google-drive"
         );
         assert_eq!(
@@ -650,31 +653,40 @@ mod wasm_tests {
                 nook_core::StorageProviderType::OauthFile,
                 Some(nook_core::OauthFilePreset::ICloud),
             )
-            .expect("icloud storage mode"),
+            .map_err(wasm_bindgen::JsValue::from)?,
             "icloud"
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn totp_helpers_match_core_authenticator_for_fixture_seed() {
+    fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsValue>
+    {
         let secret = "JBSWY3DPEHPK3PXP";
         let unix_seconds = 1_721_520_000_u64;
-        let code = generate_totp_code(secret, unix_seconds).expect("totp code");
+        let code = generate_totp_code(secret, unix_seconds).map_err(wasm_bindgen::JsValue::from)?;
         assert_eq!(code.len(), 6);
         assert!(code.bytes().all(|b| b.is_ascii_digit()));
-        assert!(verify_totp_code(secret, &code, unix_seconds).expect("verify"));
-        assert!(!verify_totp_code(secret, "000000", unix_seconds).expect("reject"));
+        assert!(
+            verify_totp_code(secret, &code, unix_seconds).map_err(wasm_bindgen::JsValue::from)?
+        );
+        assert!(
+            !verify_totp_code(secret, "000000", unix_seconds)
+                .map_err(wasm_bindgen::JsValue::from)?
+        );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn authentication_workflow_snapshot_preserves_core_policy() {
+    fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsValue>
+    {
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let snapshot = authentication_workflow_snapshot(&observations)
             .snapshot()
-            .expect("login workflow");
+            .map_err(wasm_bindgen::JsValue::from)?;
 
         assert_eq!(snapshot.kind_name(), "login");
         assert_eq!(snapshot.stage_name(), "credentials");
@@ -683,6 +695,7 @@ mod wasm_tests {
         assert_eq!(snapshot.total_steps(), 3);
         assert!(snapshot.requires_human_approval());
         assert_eq!(snapshot.observation_index(), 0);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -766,7 +779,7 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn page_resolves_brand_authenticator_onto_site_host() {
+    fn page_resolves_brand_authenticator_onto_site_host() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: vec![
                 nook_core::SecretListItem {
@@ -789,17 +802,17 @@ mod wasm_tests {
             total: 2,
             offset: 0,
             limit: 50,
-        })
-        .expect("metadata page");
+        })?;
 
         let items = page.take_items();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].group_key(), "namecheap.com");
         assert_eq!(items[1].group_key(), "namecheap.com");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn page_transfers_metadata_items_only_once() {
+    fn page_transfers_metadata_items_only_once() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: vec![nook_core::SecretListItem {
                 id: nook_core::SecretId::from_vault_record("secret_note"),
@@ -810,13 +823,13 @@ mod wasm_tests {
             total: 1,
             offset: 0,
             limit: 50,
-        })
-        .expect("metadata page");
+        })?;
 
         let items = page.take_items();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title(), "Recovery");
         assert!(page.take_items().is_empty());
+        Ok(())
     }
 }
 

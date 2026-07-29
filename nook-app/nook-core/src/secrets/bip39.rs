@@ -85,10 +85,11 @@ mod tests {
     const VALID_12: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     #[test]
-    fn accepts_standard_bip39_test_vectors() {
+    fn accepts_standard_bip39_test_vectors() -> anyhow::Result<()> {
         assert!(validate_bip39_mnemonic(VALID_12).is_ok());
-        let mnemonic_24 = Mnemonic::from_entropy(&[0u8; 32]).expect("24-word mnemonic");
+        let mnemonic_24 = Mnemonic::from_entropy(&[0u8; 32])?;
         assert!(validate_bip39_mnemonic(&mnemonic_24.to_string()).is_ok());
+        Ok(())
     }
 
     #[test]

@@ -276,7 +276,7 @@ mod tests {
     };
 
     #[test]
-    fn encrypted_unlock_rejects_user_rows_without_a_secret_type() {
+    fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
             key: crate::SecretId::from_vault_record("secret_missing_type"),
             secret_type: None,
@@ -286,12 +286,14 @@ mod tests {
         };
 
         let error = validate_user_secret_types(&[record])
-            .expect_err("vault connect test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("vault connect test should reject invalid input"))?;
 
         assert!(matches!(
             error,
             crate::VaultError::Database(crate::DatabaseError::MissingSecretType { .. })
         ));
+        Ok(())
     }
 
     #[test]
@@ -317,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_yaml_rejects_full_device_key_envelopes_before_write() -> VaultResult<()> {
+    fn sentinel_yaml_rejects_full_device_key_envelopes_before_write() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let records = vec![genesis_auth_record(
@@ -345,7 +347,8 @@ mod tests {
             crate::VaultVersionWrite::Initial,
             &architecture,
         )
-        .expect_err("vault connect test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("vault connect test should reject invalid input"))?;
 
         assert!(matches!(
             error,

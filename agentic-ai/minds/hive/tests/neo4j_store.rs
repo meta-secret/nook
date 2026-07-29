@@ -1,5 +1,6 @@
 use std::env;
 
+use anyhow::Context;
 use hive::model::{
     ActivityKind, ActivityLease, AgentId, Artifact, ClaimOutcome, CompletionArtifact, EnqueueTask,
     TaskActivity, TaskId, TaskTrigger,
@@ -9,9 +10,9 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{ConfigBuilder, Graph, query};
 use uuid::Uuid;
 
-fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
-    EnqueueTask {
-        id: TaskId::new(id).expect("valid task id"),
+fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
+    Ok(EnqueueTask {
+        id: TaskId::new(id)?,
         kind: "integration".to_owned(),
         trigger: TaskTrigger::ManualCli,
         prompt: "Exercise the production task store".to_owned(),
@@ -19,7 +20,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
         priority: 0,
         max_attempts: 3,
         dependencies,
-    }
+    })
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -43,47 +44,32 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     graph.run(query("MATCH (node) DETACH DELETE node")).await?;
 
     let suffix = Uuid::new_v4().simple().to_string();
-    let dependency = task(format!("dependency-{suffix}"), Vec::new());
-    let dependent = task(format!("dependent-{suffix}"), vec![dependency.id.clone()]);
-    store
-        .enqueue(&dependency)
-        .await
-        .expect("enqueue dependency");
-    let mut mismatched = task(format!("mismatched-{suffix}"), vec![dependency.id.clone()]);
+    let dependency = task(format!("dependency-{suffix}"), Vec::new())?;
+    let dependent = task(format!("dependent-{suffix}"), vec![dependency.id.clone()])?;
+    store.enqueue(&dependency).await?;
+    let mut mismatched = task(format!("mismatched-{suffix}"), vec![dependency.id.clone()])?;
     mismatched.source_commit = "fedcba9876543210fedcba9876543210fedcba98".to_owned();
     assert!(
         store.enqueue(&mismatched).await.is_err(),
         "one dependency DAG must target exactly one repository revision"
     );
-    store.enqueue(&dependent).await.expect("enqueue dependent");
+    store.enqueue(&dependent).await?;
     assert!(
         store.enqueue(&dependency).await.is_err(),
         "duplicate enqueue must not reset task state"
     );
 
-    let agent_a = AgentId::new(format!("agent-a-{suffix}")).expect("valid agent");
-    let agent_b = AgentId::new(format!("agent-b-{suffix}")).expect("valid agent");
-    let agent_c = AgentId::new(format!("agent-c-{suffix}")).expect("valid agent");
+    let agent_a = AgentId::new(format!("agent-a-{suffix}"))?;
+    let agent_b = AgentId::new(format!("agent-b-{suffix}"))?;
+    let agent_c = AgentId::new(format!("agent-c-{suffix}"))?;
     for agent in [&agent_a, &agent_b, &agent_c] {
-        store
-            .register_agent(agent, agent.as_str())
-            .await
-            .expect("register agent");
+        store.register_agent(agent, agent.as_str()).await?;
     }
 
-    let dependency_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim dependency")
-        .into_claimed()
-        .expect("dependency available");
+    let dependency_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(dependency_claim.id, dependency.id);
     assert!(
-        store
-            .claim(&agent_b, 300)
-            .await
-            .expect("blocked claim")
-            .is_idle(),
+        store.claim(&agent_b, 300).await?.is_idle(),
         "dependent task must remain blocked"
     );
     let artifact = Artifact {
@@ -101,8 +87,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "dependency complete",
                 &CompletionArtifact::Produced(artifact.clone()),
             )
-            .await
-            .expect("complete dependency")
+            .await?
     );
     let mut promoted_rows = graph
         .execute(
@@ -131,30 +116,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("attempt_id", dependency_claim.attempt_id.as_str()),
         )
-        .await
-        .expect("query durable artifact");
+        .await?;
     let artifact_row = artifact_rows
         .next()
-        .await
-        .expect("read durable artifact")
-        .expect("artifact row");
-    assert_eq!(
-        artifact_row
-            .get::<String>("digest")
-            .expect("artifact digest"),
-        artifact.digest
-    );
-    assert_eq!(
-        artifact_row
-            .get::<String>("content")
-            .expect("artifact content"),
-        artifact.content
-    );
+        .await?
+        .context("completed dependency must produce an artifact row")?;
+    assert_eq!(artifact_row.get::<String>("digest")?, artifact.digest);
+    assert_eq!(artifact_row.get::<String>("content")?, artifact.content);
 
     let (claim_b_result, claim_c_result) =
         tokio::join!(store.claim(&agent_b, 300), store.claim(&agent_c, 300));
-    let claim_b = claim_b_result.expect("agent b claim");
-    let claim_c = claim_c_result.expect("agent c claim");
+    let claim_b = claim_b_result?;
+    let claim_c = claim_c_result?;
     let (stale_claim, stale_agent, retry_agent) = match (claim_b, claim_c) {
         (ClaimOutcome::Claimed(claim), ClaimOutcome::NoTask) => (claim, &agent_b, &agent_c),
         (ClaimOutcome::NoTask, ClaimOutcome::Claimed(claim)) => (claim, &agent_c, &agent_b),
@@ -177,8 +150,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                         detail: format!("bounded command {sequence}"),
                     },
                 )
-                .await
-                .expect("record durable activity")
+                .await?
         );
     }
     let mut activity_count_rows = graph
@@ -189,22 +161,19 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("task_id", stale_claim.id.as_str()),
         )
-        .await
-        .expect("query bounded task activity");
+        .await?;
     let activity_count = activity_count_rows
         .next()
-        .await
-        .expect("read activity count")
-        .expect("activity count row")
-        .get::<i64>("count")
-        .expect("activity count");
+        .await?
+        .context("claimed task must have an activity count row")?
+        .get::<i64>("count")?;
     assert_eq!(activity_count, 200, "durable activity must remain bounded");
     let snapshot = store.observer_snapshot("en").await?;
     let observed = snapshot
         .tasks
         .iter()
         .find(|task| task.id == stale_claim.id.as_str())
-        .expect("claimed task in observer projection");
+        .context("observer snapshot must contain the claimed task")?;
     assert_eq!(observed.trigger, "Manual dispatch · Hive CLI");
     assert_eq!(observed.activity.len(), 100);
     assert!(
@@ -222,20 +191,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", dependent.id.as_str()),
         )
-        .await
-        .expect("expire lease");
-    let retry_claim = store
-        .claim(retry_agent, 300)
-        .await
-        .expect("retry claim")
-        .into_claimed()
-        .expect("expired task is claimable");
+        .await?;
+    let retry_claim = store.claim(retry_agent, 300).await?.into_claimed()?;
     assert_eq!(retry_claim.attempt_number, 2);
     assert!(
         !store
             .heartbeat(&stale_claim.id, stale_agent, &stale_claim.lease_token, 300,)
-            .await
-            .expect("stale heartbeat")
+            .await?
     );
     assert!(
         !store
@@ -248,8 +210,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                     detail: String::new(),
                 },
             )
-            .await
-            .expect("stale activity")
+            .await?
     );
     assert!(
         !store
@@ -259,8 +220,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "stale completion",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("stale completion")
+            .await?
     );
     let dependent_artifact = Artifact {
         id: format!("dependent-artifact-{suffix}"),
@@ -277,20 +237,11 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "retry complete",
                 &CompletionArtifact::Produced(dependent_artifact.clone()),
             )
-            .await
-            .expect("current completion")
+            .await?
     );
-    let descendant = task(format!("descendant-{suffix}"), vec![dependent.id.clone()]);
-    store
-        .enqueue(&descendant)
-        .await
-        .expect("enqueue descendant");
-    let descendant_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim descendant")
-        .into_claimed()
-        .expect("descendant available");
+    let descendant = task(format!("descendant-{suffix}"), vec![dependent.id.clone()])?;
+    store.enqueue(&descendant).await?;
+    let descendant_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(
         descendant_claim.dependency_artifacts,
         vec![artifact.clone(), dependent_artifact],
@@ -304,24 +255,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "descendant complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete descendant")
+            .await?
     );
 
-    let left = task(format!("left-{suffix}"), vec![dependency.id.clone()]);
-    let right = task(format!("right-{suffix}"), vec![dependency.id.clone()]);
-    store.enqueue(&left).await.expect("enqueue left branch");
-    store.enqueue(&right).await.expect("enqueue right branch");
+    let left = task(format!("left-{suffix}"), vec![dependency.id.clone()])?;
+    let right = task(format!("right-{suffix}"), vec![dependency.id.clone()])?;
+    store.enqueue(&left).await?;
+    store.enqueue(&right).await?;
     for (branch, branch_artifact_id) in [
         (&left, format!("left-artifact-{suffix}")),
         (&right, format!("right-artifact-{suffix}")),
     ] {
-        let claim = store
-            .claim(&agent_a, 300)
-            .await
-            .expect("claim branch")
-            .into_claimed()
-            .expect("branch available");
+        let claim = store.claim(&agent_a, 300).await?.into_claimed()?;
         assert_eq!(claim.id, branch.id);
         let branch_artifact = Artifact {
             id: branch_artifact_id.clone(),
@@ -338,21 +283,15 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                     "branch complete",
                     &CompletionArtifact::Produced(branch_artifact.clone())
                 )
-                .await
-                .expect("complete branch")
+                .await?
         );
     }
     let diamond = task(
         format!("diamond-{suffix}"),
         vec![left.id.clone(), right.id.clone()],
-    );
-    store.enqueue(&diamond).await.expect("enqueue diamond");
-    let diamond_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim diamond")
-        .into_claimed()
-        .expect("diamond available");
+    )?;
+    store.enqueue(&diamond).await?;
+    let diamond_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(
         diamond_claim
             .dependency_artifacts
@@ -370,8 +309,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "diamond complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete diamond")
+            .await?
     );
 
     let mut rows = graph
@@ -383,34 +321,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", dependent.id.as_str()),
         )
-        .await
-        .expect("read attempts");
+        .await?;
     let mut statuses = Vec::new();
-    while let Some(row) = rows.next().await.expect("attempt row") {
-        statuses.push(row.get::<String>("status").expect("attempt status"));
+    while let Some(row) = rows.next().await? {
+        statuses.push(row.get::<String>("status")?);
     }
     assert_eq!(statuses, ["EXPIRED", "COMPLETED"]);
 
-    let rollout = task(format!("rollout-{suffix}"), Vec::new());
-    store.enqueue(&rollout).await.expect("enqueue rollout task");
-    let interrupted = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim rollout task")
-        .into_claimed()
-        .expect("rollout task available");
-    assert!(
-        store
-            .release(&interrupted, &agent_a)
-            .await
-            .expect("release rollout task")
-    );
-    let resumed = store
-        .claim(&agent_b, 300)
-        .await
-        .expect("reclaim rollout task")
-        .into_claimed()
-        .expect("released task available");
+    let rollout = task(format!("rollout-{suffix}"), Vec::new())?;
+    store.enqueue(&rollout).await?;
+    let interrupted = store.claim(&agent_a, 300).await?.into_claimed()?;
+    assert!(store.release(&interrupted, &agent_a).await?);
+    let resumed = store.claim(&agent_b, 300).await?.into_claimed()?;
     assert_eq!(resumed.attempt_number, 1);
     assert!(
         store
@@ -420,8 +342,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "rollout recovery complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete released task")
+            .await?
     );
     let mut rollout_rows = graph
         .execute(
@@ -432,24 +353,18 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", rollout.id.as_str()),
         )
-        .await
-        .expect("read rollout attempts");
+        .await?;
     let mut rollout_statuses = Vec::new();
-    while let Some(row) = rollout_rows.next().await.expect("rollout attempt row") {
-        rollout_statuses.push(row.get::<String>("status").expect("rollout status"));
+    while let Some(row) = rollout_rows.next().await? {
+        rollout_statuses.push(row.get::<String>("status")?);
     }
     assert_eq!(rollout_statuses, ["COMPLETED", "INTERRUPTED"]);
 
-    let original = task(format!("blocked-original-{suffix}"), Vec::new());
-    let mut blocker = task(format!("blocker-{suffix}"), Vec::new());
+    let original = task(format!("blocked-original-{suffix}"), Vec::new())?;
+    let mut blocker = task(format!("blocker-{suffix}"), Vec::new())?;
     blocker.priority = 100;
-    store.enqueue(&original).await.expect("enqueue original");
-    let original_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim original")
-        .into_claimed()
-        .expect("original available");
+    store.enqueue(&original).await?;
+    let original_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
         store
             .block(
@@ -458,15 +373,9 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &blocker,
                 "requires a prerequisite repair",
             )
-            .await
-            .expect("persist blocker")
+            .await?
     );
-    let blocker_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim blocker")
-        .into_claimed()
-        .expect("blocker available");
+    let blocker_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(blocker_claim.id, blocker.id);
     assert!(
         store
@@ -476,15 +385,9 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "blocker complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete blocker")
+            .await?
     );
-    let resumed_original = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("resume original")
-        .into_claimed()
-        .expect("original resumed");
+    let resumed_original = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(resumed_original.id, original.id);
     assert_eq!(resumed_original.attempt_number, 1);
     assert!(
@@ -495,12 +398,11 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "original complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete resumed original")
+            .await?
     );
 
-    let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new());
-    let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new());
+    let cancelled_root = task(format!("cancelled-root-{suffix}"), Vec::new())?;
+    let cancelled_blocker = task(format!("cancelled-blocker-{suffix}"), Vec::new())?;
     store.enqueue(&cancelled_root).await?;
     let cancelled_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
@@ -520,17 +422,9 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(store.claim(&agent_a, 300).await?.is_idle());
 
-    let reused = task(format!("reused-blocker-original-{suffix}"), Vec::new());
-    store
-        .enqueue(&reused)
-        .await
-        .expect("enqueue reused original");
-    let reused_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim reused original")
-        .into_claimed()
-        .expect("reused original available");
+    let reused = task(format!("reused-blocker-original-{suffix}"), Vec::new())?;
+    store.enqueue(&reused).await?;
+    let reused_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
         store
             .block(
@@ -539,8 +433,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &blocker,
                 "requires the already-completed prerequisite repair",
             )
-            .await
-            .expect("persist completed blocker dependency")
+            .await?
     );
     let mut reused_state_rows = graph
         .execute(
@@ -558,12 +451,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .ok_or_else(|| anyhow::anyhow!("completed-blocker reuse row was missing"))?;
     assert_eq!(reused_state.get::<String>("status")?, "READY");
     assert!(reused_state.get::<bool>("cleared_blocked_reason")?);
-    let resumed_reused = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("resume task with completed blocker")
-        .into_claimed()
-        .expect("task with completed blocker is ready");
+    let resumed_reused = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(resumed_reused.id, reused.id);
     assert_eq!(resumed_reused.attempt_number, 1);
     assert!(
@@ -574,29 +462,17 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "completed reused-blocker task",
                 &CompletionArtifact::NotProduced,
             )
-            .await
-            .expect("complete reused-blocker task")
+            .await?
     );
 
-    let cycle_root = task(format!("cycle-root-{suffix}"), Vec::new());
+    let cycle_root = task(format!("cycle-root-{suffix}"), Vec::new())?;
     let cycle_dependent = task(
         format!("cycle-dependent-{suffix}"),
         vec![cycle_root.id.clone()],
-    );
-    store
-        .enqueue(&cycle_root)
-        .await
-        .expect("enqueue cycle root");
-    store
-        .enqueue(&cycle_dependent)
-        .await
-        .expect("enqueue cycle dependent");
-    let cycle_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim cycle root")
-        .into_claimed()
-        .expect("cycle root available");
+    )?;
+    store.enqueue(&cycle_root).await?;
+    store.enqueue(&cycle_dependent).await?;
+    let cycle_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     let mut existing_dependent = cycle_dependent.clone();
     existing_dependent.dependencies.clear();
     assert!(
@@ -607,8 +483,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &existing_dependent,
                 "must reject a dependency cycle",
             )
-            .await
-            .expect("reject dependency cycle")
+            .await?
     );
     assert!(
         store
@@ -618,15 +493,9 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "cycle root complete",
                 &CompletionArtifact::NotProduced
             )
-            .await
-            .expect("complete cycle root")
+            .await?
     );
-    let cycle_dependent_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim cycle dependent")
-        .into_claimed()
-        .expect("cycle dependent available");
+    let cycle_dependent_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
         store
             .complete(
@@ -635,35 +504,22 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "cycle dependent complete",
                 &CompletionArtifact::NotProduced,
             )
-            .await
-            .expect("complete cycle dependent")
+            .await?
     );
 
-    let mut exhausted = task(format!("exhausted-{suffix}"), Vec::new());
+    let mut exhausted = task(format!("exhausted-{suffix}"), Vec::new())?;
     exhausted.max_attempts = 1;
     let stranded = task(
         format!("exhausted-dependent-{suffix}"),
         vec![exhausted.id.clone()],
-    );
-    store
-        .enqueue(&exhausted)
-        .await
-        .expect("enqueue exhausted task");
-    store
-        .enqueue(&stranded)
-        .await
-        .expect("enqueue exhausted dependent");
-    let exhausted_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim exhausted task")
-        .into_claimed()
-        .expect("exhausted task available");
+    )?;
+    store.enqueue(&exhausted).await?;
+    store.enqueue(&stranded).await?;
+    let exhausted_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
         store
             .fail(&exhausted_claim, &agent_a, "terminal failure")
-            .await
-            .expect("fail exhausted task")
+            .await?
     );
     let mut failed_rows = graph
         .execute(
@@ -675,14 +531,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .param("failed_id", exhausted.id.as_str())
             .param("dependent_id", stranded.id.as_str()),
         )
-        .await
-        .expect("read propagated failures");
+        .await?;
     let mut failed_statuses = Vec::new();
-    while let Some(row) = failed_rows.next().await.expect("failed task row") {
-        failed_statuses.push((
-            row.get::<String>("id").expect("failed task id"),
-            row.get::<String>("status").expect("failed task status"),
-        ));
+    while let Some(row) = failed_rows.next().await? {
+        failed_statuses.push((row.get::<String>("id")?, row.get::<String>("status")?));
     }
     assert_eq!(failed_statuses.len(), 2);
     assert!(
@@ -700,7 +552,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     let late_dependent = task(
         format!("late-failed-dependent-{suffix}"),
         vec![exhausted.id.clone()],
-    );
+    )?;
     store.enqueue(&late_dependent).await?;
     let late_dependency_alert = store
         .observer_snapshot("en")
@@ -711,29 +563,23 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .ok_or_else(|| anyhow::anyhow!("late dependency alert was missing"))?;
     assert_eq!(late_dependency_alert.kind, AlertKind::DependencyFailed);
 
-    let mut repair = task(format!("main-failure-{suffix}"), Vec::new());
+    let mut repair = task(format!("main-failure-{suffix}"), Vec::new())?;
     repair.kind = "main-repair".to_owned();
     repair.max_attempts = 1;
-    store.enqueue(&repair).await.expect("enqueue Main repair");
-    let ClaimOutcome::Claimed(repair_claim) =
-        store.claim(&agent_a, 300).await.expect("claim Main repair")
-    else {
+    store.enqueue(&repair).await?;
+    let ClaimOutcome::Claimed(repair_claim) = store.claim(&agent_a, 300).await? else {
         panic!("Main repair must be available");
     };
     assert!(
         store
             .fail(&repair_claim, &agent_a, "invalid structured output schema")
-            .await
-            .expect("exhaust Main repair")
+            .await?
     );
-    let status = store
-        .queue_status(200)
-        .await
-        .expect("inspect durable queue");
+    let status = store.queue_status(200).await?;
     let failed_repair = status
         .iter()
         .find(|task| task.id == repair.id.as_str())
-        .expect("failed Main repair status");
+        .context("queue status must contain the failed Main repair")?;
     assert_eq!(failed_repair.status, "FAILED");
     assert_eq!(failed_repair.latest_attempt_status, "FAILED");
     assert!(
@@ -747,8 +593,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &repair.id,
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             )
-            .await
-            .expect("retry failed Main repair")
+            .await?
     );
     assert!(
         !store
@@ -756,16 +601,11 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &repair.id,
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             )
-            .await
-            .expect("refuse duplicate retry"),
+            .await?,
         "one release must not grant an unbounded retry budget"
     );
     for attempt_number in 2..=4 {
-        let ClaimOutcome::Claimed(retried_claim) = store
-            .claim(&agent_a, 300)
-            .await
-            .expect("claim retried Main repair")
-        else {
+        let ClaimOutcome::Claimed(retried_claim) = store.claim(&agent_a, 300).await? else {
             panic!("retried Main repair must be available");
         };
         assert_eq!(retried_claim.id, repair.id);
@@ -777,18 +617,14 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                     &agent_a,
                     &format!("repair attempt {attempt_number} failed"),
                 )
-                .await
-                .expect("fail retried Main repair")
+                .await?
         );
     }
-    let status = store
-        .queue_status(200)
-        .await
-        .expect("inspect retried Main repair attempts");
+    let status = store.queue_status(200).await?;
     let failed_repair = status
         .iter()
         .find(|task| task.id == repair.id.as_str())
-        .expect("retried Main repair status");
+        .context("queue status must contain the retried Main repair")?;
     assert_eq!(failed_repair.latest_attempt_status, "FAILED");
     assert_eq!(failed_repair.previous_attempt_status, "FAILED");
     assert!(
@@ -807,8 +643,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &repair.id,
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             )
-            .await
-            .expect("refuse a second budget on one release"),
+            .await?,
         "an exhausted recovery budget must not be rearmed by the same release"
     );
     assert!(
@@ -817,16 +652,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &repair.id,
                 "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             )
-            .await
-            .expect("allow recovery after a new Hive repair release"),
+            .await?,
         "a distinct repaired release must receive one bounded budget"
     );
-    let release_b_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim repair on release b")
-        .into_claimed()
-        .expect("repair available on release b");
+    let release_b_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(release_b_claim.id, repair.id);
     assert_eq!(release_b_claim.attempt_number, 5);
     assert!(
@@ -837,11 +666,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "platform repaired",
                 &CompletionArtifact::NotProduced,
             )
-            .await
-            .expect("complete repair on release b")
+            .await?
     );
 
-    let mut retired_repair = task(format!("retired-main-failure-{suffix}"), Vec::new());
+    let mut retired_repair = task(format!("retired-main-failure-{suffix}"), Vec::new())?;
     retired_repair.kind = "main-repair".to_owned();
     retired_repair.max_attempts = 1;
     store.enqueue(&retired_repair).await?;
@@ -866,18 +694,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "policy-retired failed generations must not be rearmed"
     );
 
-    let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new());
+    let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new())?;
     reused_failed_parent.kind = "main-repair".to_owned();
-    store
-        .enqueue(&reused_failed_parent)
-        .await
-        .expect("enqueue parent that discovers an exhausted blocker");
-    let reused_failed_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim parent that discovers an exhausted blocker")
-        .into_claimed()
-        .expect("parent available");
+    store.enqueue(&reused_failed_parent).await?;
+    let reused_failed_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(
         store
             .block(
@@ -886,8 +706,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &exhausted,
                 "reuse an already exhausted blocker",
             )
-            .await
-            .expect("bind exhausted blocker")
+            .await?
     );
     let mut reused_failed_rows = graph
         .execute(
@@ -897,16 +716,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", reused_failed_parent.id.as_str()),
         )
-        .await
-        .expect("read reused exhausted-blocker parent");
+        .await?;
     assert_eq!(
         reused_failed_rows
             .next()
-            .await
-            .expect("read reused exhausted-blocker row")
-            .expect("reused exhausted-blocker row")
-            .get::<String>("status")
-            .expect("reused exhausted-blocker status"),
+            .await?
+            .context("reused failed parent must have a status row")?
+            .get::<String>("status")?,
         "FAILED"
     );
     assert!(
@@ -915,16 +731,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &reused_failed_parent.id,
                 "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             )
-            .await
-            .expect("recover failed dependency chain"),
+            .await?,
         "a repaired release must rearm the failed blocker chain"
     );
-    let recovered_blocker = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim recovered blocker")
-        .into_claimed()
-        .expect("recovered blocker available");
+    let recovered_blocker = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(recovered_blocker.id, exhausted.id);
     assert!(
         store
@@ -934,15 +744,9 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "sandbox dependency repaired",
                 &CompletionArtifact::NotProduced,
             )
-            .await
-            .expect("complete recovered blocker")
+            .await?
     );
-    let recovered_parent = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim recovered parent")
-        .into_claimed()
-        .expect("recovered parent available");
+    let recovered_parent = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(recovered_parent.id, reused_failed_parent.id);
     assert!(
         store
@@ -952,22 +756,13 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 "dependent repair complete",
                 &CompletionArtifact::NotProduced,
             )
-            .await
-            .expect("complete recovered parent")
+            .await?
     );
 
-    let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new());
-    let expired_blocker = task(format!("expired-blocker-{suffix}"), Vec::new());
-    store
-        .enqueue(&expired_block_parent)
-        .await
-        .expect("enqueue expired blocker parent");
-    let expired_block_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim expired blocker parent")
-        .into_claimed()
-        .expect("expired blocker parent available");
+    let expired_block_parent = task(format!("expired-block-parent-{suffix}"), Vec::new())?;
+    let expired_blocker = task(format!("expired-blocker-{suffix}"), Vec::new())?;
+    store.enqueue(&expired_block_parent).await?;
+    let expired_block_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     graph
         .run(
             query(
@@ -976,8 +771,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", expired_block_parent.id.as_str()),
         )
-        .await
-        .expect("expire blocker-reporting lease");
+        .await?;
     assert!(
         !store
             .block(
@@ -986,8 +780,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
                 &expired_blocker,
                 "stale worker must not mutate dependencies",
             )
-            .await
-            .expect("reject blocker after lease expiry")
+            .await?
     );
     graph
         .run(
@@ -1000,29 +793,17 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", expired_block_parent.id.as_str()),
         )
-        .await
-        .expect("retire expired blocker fixture");
+        .await?;
 
-    let mut lease_exhausted = task(format!("lease-exhausted-{suffix}"), Vec::new());
+    let mut lease_exhausted = task(format!("lease-exhausted-{suffix}"), Vec::new())?;
     lease_exhausted.max_attempts = 1;
     let lease_stranded = task(
         format!("lease-exhausted-dependent-{suffix}"),
         vec![lease_exhausted.id.clone()],
-    );
-    store
-        .enqueue(&lease_exhausted)
-        .await
-        .expect("enqueue final-lease task");
-    store
-        .enqueue(&lease_stranded)
-        .await
-        .expect("enqueue final-lease dependent");
-    let lease_claim = store
-        .claim(&agent_a, 300)
-        .await
-        .expect("claim final-lease task")
-        .into_claimed()
-        .expect("final-lease task available");
+    )?;
+    store.enqueue(&lease_exhausted).await?;
+    store.enqueue(&lease_stranded).await?;
+    let lease_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(lease_claim.id, lease_exhausted.id);
     graph
         .run(
@@ -1032,15 +813,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             )
             .param("id", lease_exhausted.id.as_str()),
         )
-        .await
-        .expect("expire final lease");
-    assert!(
-        store
-            .claim(&agent_b, 300)
-            .await
-            .expect("final lease expiry transition")
-            .is_idle()
-    );
+        .await?;
+    assert!(store.claim(&agent_b, 300).await?.is_idle());
     let mut lease_failed_rows = graph
         .execute(
             query(
@@ -1051,18 +825,10 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .param("failed_id", lease_exhausted.id.as_str())
             .param("dependent_id", lease_stranded.id.as_str()),
         )
-        .await
-        .expect("read final-lease propagated failures");
+        .await?;
     let mut lease_failed_statuses = Vec::new();
-    while let Some(row) = lease_failed_rows
-        .next()
-        .await
-        .expect("final-lease failed row")
-    {
-        lease_failed_statuses.push(
-            row.get::<String>("status")
-                .expect("final-lease failed status"),
-        );
+    while let Some(row) = lease_failed_rows.next().await? {
+        lease_failed_statuses.push(row.get::<String>("status")?);
     }
     assert_eq!(lease_failed_statuses.len(), 2);
     assert!(
@@ -1072,7 +838,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         "final lease failure must propagate to every descendant: {lease_failed_statuses:?}"
     );
 
-    let cancelling = task(format!("cancelling-{suffix}"), Vec::new());
+    let cancelling = task(format!("cancelling-{suffix}"), Vec::new())?;
     store.enqueue(&cancelling).await?;
     let cancelling_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert_eq!(cancelling_claim.id, cancelling.id);
@@ -1098,7 +864,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
     assert!(store.cancellation_targets(&cancelling.id).await?.is_empty());
 
-    let forced = task(format!("forced-cancellation-{suffix}"), Vec::new());
+    let forced = task(format!("forced-cancellation-{suffix}"), Vec::new())?;
     store.enqueue(&forced).await?;
     let prior_claim = store.claim(&agent_a, 300).await?.into_claimed()?;
     assert!(store.fail(&prior_claim, &agent_a, "prior failure").await?);
@@ -1131,29 +897,23 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             .await?
     );
 
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean isolated integration database");
+    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
     graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 1})
              CREATE (:Task {id: 'legacy-without-source-commit', status: 'READY'})",
         ))
-        .await
-        .expect("create schema-1 fixture");
+        .await?;
     assert!(
         store
             .migrate()
             .await
-            .expect_err("schema-1 legacy tasks must block schema 2")
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("schema-1 legacy tasks must block schema 2"))?
             .to_string()
             .contains("without source_commit")
     );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean schema migration fixture");
+    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
     graph
         .run(query(
             "CREATE (:HiveSchemaMigration {version: 3})
@@ -1182,8 +942,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
              })
              CREATE (activity)-[:FOR_TASK]->(activity_task)",
         ))
-        .await
-        .expect("create schema-3 fixture");
+        .await?;
     store.migrate().await?;
     let mut schema_seven_rows = graph
         .execute(query(
@@ -1200,17 +959,8 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         .next()
         .await?
         .ok_or_else(|| anyhow::anyhow!("schema-7 migration row was missing"))?;
-    assert_eq!(
-        schema_seven
-            .get::<String>("last_retry_release")
-            .expect("initialized release marker"),
-        ""
-    );
-    assert!(
-        schema_seven
-            .get::<bool>("removed_legacy_marker")
-            .expect("removed legacy marker")
-    );
+    assert_eq!(schema_seven.get::<String>("last_retry_release")?, "");
+    assert!(schema_seven.get::<bool>("removed_legacy_marker")?);
     assert_eq!(schema_seven.get::<i64>("latest_activity_at")?, 123456);
     assert_eq!(schema_seven.get::<i64>("version")?, 7);
     let mut rollback_marker_rows = graph
@@ -1218,21 +968,15 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
             "MATCH (task:Task {id: 'schema-4-rollback-task'})
              RETURN task.last_retry_release AS last_retry_release",
         ))
-        .await
-        .expect("read retained schema-4 rollback marker");
+        .await?;
     assert_eq!(
         rollback_marker_rows
             .next()
-            .await
-            .expect("read schema-4 rollback row")
-            .expect("schema-4 rollback row")
-            .get::<String>("last_retry_release")
-            .expect("retained schema-4 rollback marker"),
+            .await?
+            .context("rolled-back task must have a retry marker row")?
+            .get::<String>("last_retry_release")?,
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     );
-    graph
-        .run(query("MATCH (node) DETACH DELETE node"))
-        .await
-        .expect("clean schema-4 migration fixture");
+    graph.run(query("MATCH (node) DETACH DELETE node")).await?;
     Ok(())
 }

@@ -4,6 +4,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
+use nook_auth2::{ValidationError, ValidationResult};
 pub use nook_event_log::SecretFingerprint;
 
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
@@ -237,23 +238,22 @@ fn fingerprint(
     canonical: &[u8],
     scheme: &str,
     secrets_key: &SymmetricKey,
-) -> SecretFingerprint {
+) -> ValidationResult<SecretFingerprint> {
     let mut mac = Hmac::<Sha256>::new_from_slice(secrets_key.as_str().as_bytes())
-        .expect("HMAC accepts keys of any length");
+        .map_err(|_| ValidationError::SecretFingerprintKeyInvalid)?;
     mac.update(domain);
     mac.update(canonical);
-    SecretFingerprint::from_trusted(format!(
+    Ok(SecretFingerprint::from_trusted(format!(
         "{scheme}{}",
         hex::encode(mac.finalize().into_bytes())
-    ))
+    )))
 }
 
 /// Compute the logical item identity without its password or provider metadata.
-#[must_use]
 pub fn secret_identity_fingerprint(
     value: &SecretValue,
     secrets_key: &SymmetricKey,
-) -> SecretFingerprint {
+) -> ValidationResult<SecretFingerprint> {
     fingerprint(
         IDENTITY_DOMAIN,
         &canonical_identity(value),
@@ -263,8 +263,10 @@ pub fn secret_identity_fingerprint(
 }
 
 /// Compute one secret-value version, bound to its logical item identity.
-#[must_use]
-pub fn secret_fingerprint(value: &SecretValue, secrets_key: &SymmetricKey) -> SecretFingerprint {
+pub fn secret_fingerprint(
+    value: &SecretValue,
+    secrets_key: &SymmetricKey,
+) -> ValidationResult<SecretFingerprint> {
     fingerprint(
         VERSION_DOMAIN,
         &canonical_secret_version(value),
@@ -367,11 +369,11 @@ mod tests {
             secret_fingerprint(&value, &key('b')?)
         );
         assert!(
-            secret_identity_fingerprint(&value, &key('a')?)
+            secret_identity_fingerprint(&value, &key('a')?)?
                 .as_str()
                 .starts_with(IDENTITY_FINGERPRINT_SCHEME)
         );
-        assert!(secret_fingerprint(&value, &key('a')?).is_current_secret_version());
+        assert!(secret_fingerprint(&value, &key('a')?)?.is_current_secret_version());
         assert!(
             !SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)))
                 .is_current_secret_version()

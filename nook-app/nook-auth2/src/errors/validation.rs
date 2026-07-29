@@ -156,6 +156,9 @@ pub enum ValidationError {
     #[error("errors.validation.symmetric_key_invalid")]
     SymmetricKeyInvalid,
 
+    #[error("errors.validation.secret_fingerprint_key_invalid")]
+    SecretFingerprintKeyInvalid,
+
     #[error("errors.validation.age_armored_invalid")]
     AgeArmoredInvalid,
 

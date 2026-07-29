@@ -43,7 +43,7 @@ mod tests {
     use nook_core::VaultApplication;
 
     #[test]
-    fn application_configuration_is_idempotent_and_immutable() {
+    fn application_configuration_is_idempotent_and_immutable() -> anyhow::Result<()> {
         std::thread::spawn(|| {
             configure_vault_application(VaultApplication::Simple);
             configure_vault_application(VaultApplication::Simple);
@@ -56,6 +56,7 @@ mod tests {
             assert_eq!(configured_vault_application(), VaultApplication::Simple);
         })
         .join()
-        .expect("application capability test thread must finish");
+        .map_err(|_| anyhow::anyhow!("application configuration test thread panicked"))?;
+        Ok(())
     }
 }

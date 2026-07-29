@@ -28,6 +28,12 @@ pub enum VaultFormatError {
     #[error("Failed to parse stored YAML: expected secrets/auth/joins/members sections")]
     YamlMissingSections,
 
+    #[error("Failed to parse a stored auth record: {0}")]
+    InvalidAuthRecord(String),
+
+    #[error("Failed to serialize a stored auth record")]
+    JsonSerialize(#[source] serde_json::Error),
+
     #[error("Failed to parse stored YAML for unlock mode")]
     YamlParseUnlock(#[source] serde_yaml::Error),
 

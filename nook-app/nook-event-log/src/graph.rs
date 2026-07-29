@@ -72,8 +72,7 @@ impl EventGraph {
         expected_store_id: &str,
     ) -> EventResult<EventInsertStatus> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(expected_store_id)?)?;
-        if self.events.contains_key(&event_id) {
-            let existing = self.events.get(&event_id).expect("present");
+        if let Some(existing) = self.events.get(&event_id) {
             if existing.body.to_canonical_bytes()? == event.body.to_canonical_bytes()? {
                 return Ok(EventInsertStatus::Duplicate);
             }
@@ -210,7 +209,12 @@ impl EventGraph {
                 if self.causal.quarantined().contains_key(&id) {
                     continue;
                 }
-                let event = self.events.get(&id).expect("event id from map");
+                let event = self
+                    .events
+                    .get(&id)
+                    .ok_or_else(|| EventError::MissingEvent {
+                        event_id: id.as_str().to_owned(),
+                    })?;
                 if !self.event_ancestors_present(event) {
                     continue;
                 }

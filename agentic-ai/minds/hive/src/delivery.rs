@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 
-use anyhow::Context;
+use crate::HiveContext;
 use serde::Deserialize;
 use tokio::process::Command;
 
@@ -53,7 +53,7 @@ pub(crate) async fn verify_main_repair_delivery(
     repository: &Path,
     branch: &str,
     task_id: &str,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let pull_requests: Vec<DeliveryPullRequest> = serde_json::from_str(
         &gh_output(
             repository,
@@ -70,9 +70,9 @@ pub(crate) async fn verify_main_repair_delivery(
         )
         .await?,
     )
-    .context("GitHub returned invalid Hive pull request state")?;
+    .hive_context("GitHub returned invalid Hive pull request state")?;
     let pull_request = latest_delivery_generation(&pull_requests, branch)?
-        .context("Hive repair delivery is incomplete: no pull request generation exists")?;
+        .hive_context("Hive repair delivery is incomplete: no pull request generation exists")?;
 
     validate_hive_marker(pull_request)?;
     validate_merged_hive_pull_request(pull_request)?;
@@ -82,7 +82,7 @@ pub(crate) async fn verify_main_repair_delivery(
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
-        .context("merged Hive pull request has no merge commit")?;
+        .hive_context("merged Hive pull request has no merge commit")?;
 
     run_git_status(
         repository,
@@ -121,7 +121,7 @@ pub(crate) async fn verify_main_repair_delivery(
         )
         .await?,
     )
-    .context("GitHub returned invalid Main workflow state")?;
+    .hive_context("GitHub returned invalid Main workflow state")?;
     runs.sort_by(|left, right| left.created_at.cmp(&right.created_at));
     let mut applicable_runs = Vec::new();
     for run in runs {
@@ -138,7 +138,7 @@ pub(crate) async fn verify_main_repair_delivery(
             .stderr(Stdio::null())
             .status()
             .await
-            .context("failed to inspect Main workflow ancestry")?;
+            .hive_context("failed to inspect Main workflow ancestry")?;
         if !contains_merge.success() {
             continue;
         }
@@ -152,7 +152,7 @@ pub(crate) async fn verify_main_repair_delivery(
 fn select_successful_main_run<'a>(
     runs: &'a [DeliveryRun],
     merge_commit: &str,
-) -> anyhow::Result<&'a str> {
+) -> crate::HiveResult<&'a str> {
     for run in runs {
         if run.status != "completed" {
             continue;
@@ -163,13 +163,13 @@ fn select_successful_main_run<'a>(
         if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
             continue;
         }
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery failed on Main: run at {} concluded {}",
             run.head_sha,
             run.conclusion
         );
     }
-    anyhow::bail!(
+    crate::hive_bail!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
         merge_commit
     )
@@ -178,7 +178,7 @@ fn select_successful_main_run<'a>(
 fn latest_delivery_generation<'a>(
     pull_requests: &'a [DeliveryPullRequest],
     branch: &str,
-) -> anyhow::Result<Option<&'a DeliveryPullRequest>> {
+) -> crate::HiveResult<Option<&'a DeliveryPullRequest>> {
     let mut generations = pull_requests
         .iter()
         .filter(|pull_request| !pull_request.is_cross_repository)
@@ -197,7 +197,7 @@ fn latest_delivery_generation<'a>(
         .skip(1)
         .any(|(generation, _)| *generation == latest_generation)
     {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is ambiguous: multiple PRs use generation {latest_generation}"
         );
     }
@@ -214,15 +214,15 @@ fn delivery_generation(base: &str, candidate: &str) -> Option<u64> {
         .filter(|generation| *generation >= 2)
 }
 
-fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if !pull_request.title.starts_with("[Hive] ") {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} lacks the `[Hive]` title marker",
             pull_request.number
         );
     }
     if !pull_request.labels.iter().any(|label| label.name == "hive") {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} lacks the `hive` label",
             pull_request.number
         );
@@ -233,18 +233,18 @@ fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> anyhow::Result<()
 async fn validate_squash_merge(
     repository: &Path,
     pull_request: &DeliveryPullRequest,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
-        .context("merged Hive pull request has no merge commit")?;
+        .hive_context("merged Hive pull request has no merge commit")?;
     let parents = git_output(
         repository,
         &["show", "-s", "--format=%P", merge_commit.oid.as_str()],
     )
     .await?;
     if parents.split_whitespace().count() != 1 {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery violated squash-only history: merge {} has multiple parents",
             merge_commit.oid
         );
@@ -256,7 +256,7 @@ async fn validate_squash_merge(
     .await?;
     let expected_suffix = format!("(#{})", pull_request.number);
     if !subject.ends_with(&expected_suffix) {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery violated squash-only history: merge {} lacks PR suffix {}",
             merge_commit.oid,
             expected_suffix
@@ -265,16 +265,16 @@ async fn validate_squash_merge(
     Ok(())
 }
 
-fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if pull_request.state != "MERGED" {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} is {}",
             pull_request.number,
             pull_request.state
         );
     }
     if pull_request.merge_commit.is_none() {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} has no squash merge",
             pull_request.number
         );
@@ -282,13 +282,13 @@ fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> anyh
     Ok(())
 }
 
-fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if !pull_request
         .labels
         .iter()
         .any(|label| label.name == "ci:full-e2e")
     {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks `ci:full-e2e`",
             pull_request.number,
             pull_request.head_ref_oid
@@ -304,7 +304,7 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
             .filter(|check| check.name == required_check)
             .any(successful_check);
         if !successful {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number,
                 pull_request.head_ref_oid,
@@ -315,14 +315,14 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
     Ok(())
 }
 
-fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     let verify_succeeded = pull_request
         .status_check_rollup
         .iter()
         .filter(|check| check.name == "Verify and preview")
         .any(successful_check);
     if !verify_succeeded {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
             pull_request.number,
             pull_request.head_ref_oid
@@ -342,7 +342,7 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Res
             continue;
         }
         if checks.iter().any(|check| check.status != "COMPLETED") {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Hive repair delivery is incomplete: repository check `{name}` is still running"
             );
         }
@@ -350,7 +350,7 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Res
             .iter()
             .find(|check| !matches!(check.conclusion.as_str(), "SKIPPED" | "NEUTRAL"))
         {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
                 check.conclusion
             );
@@ -366,19 +366,19 @@ fn successful_check(check: &DeliveryCheck) -> bool {
 async fn validate_review_and_deployment_readiness(
     repository: &Path,
     pull_request: &DeliveryPullRequest,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let number = pull_request.number.to_string();
     let repository_state: serde_json::Value = serde_json::from_str(
         &gh_output(repository, &["repo", "view", "--json", "nameWithOwner"]).await?,
     )
-    .context("GitHub returned invalid repository identity")?;
+    .hive_context("GitHub returned invalid repository identity")?;
     let name_with_owner = repository_state
         .get("nameWithOwner")
         .and_then(serde_json::Value::as_str)
-        .context("GitHub repository identity omitted nameWithOwner")?;
+        .hive_context("GitHub repository identity omitted nameWithOwner")?;
     let (owner, name) = name_with_owner
         .split_once('/')
-        .context("GitHub repository identity is malformed")?;
+        .hive_context("GitHub repository identity is malformed")?;
     let mut unresolved = 0;
     let mut cursor: Option<String> = None;
     loop {
@@ -399,14 +399,14 @@ async fn validate_review_and_deployment_readiness(
         let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
         let review: serde_json::Value =
             serde_json::from_str(&gh_output(repository, &references).await?)
-                .context("GitHub returned invalid Hive review state")?;
+                .hive_context("GitHub returned invalid Hive review state")?;
         let threads = review
             .pointer("/data/repository/pullRequest/reviewThreads")
-            .context("GitHub review response omitted review threads")?;
+            .hive_context("GitHub review response omitted review threads")?;
         unresolved += threads
             .get("nodes")
             .and_then(serde_json::Value::as_array)
-            .context("GitHub review response omitted review thread nodes")?
+            .hive_context("GitHub review response omitted review thread nodes")?
             .iter()
             .filter(|thread| {
                 thread
@@ -426,13 +426,13 @@ async fn validate_review_and_deployment_readiness(
             .pointer("/pageInfo/endCursor")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
-        anyhow::ensure!(
+        crate::hive_ensure!(
             cursor.is_some(),
             "GitHub review pagination omitted its cursor"
         );
     }
     if unresolved > 0 {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
             pull_request.number,
             unresolved
@@ -458,11 +458,11 @@ async fn validate_review_and_deployment_readiness(
         )
         .await?,
     )
-    .context("GitHub returned invalid deployment state")?;
+    .hive_context("GitHub returned invalid deployment state")?;
     let mut state = None;
     for deployment_id in deployments
         .as_array()
-        .context("GitHub deployment response is not an array")?
+        .hive_context("GitHub deployment response is not an array")?
         .iter()
         .filter_map(|deployment| deployment.get("id").and_then(serde_json::Value::as_u64))
     {
@@ -480,7 +480,7 @@ async fn validate_review_and_deployment_readiness(
             )
             .await?,
         )
-        .context("GitHub returned invalid deployment status")?;
+        .hive_context("GitHub returned invalid deployment status")?;
         state = statuses
             .as_array()
             .and_then(|items| items.first())
@@ -492,7 +492,7 @@ async fn validate_review_and_deployment_readiness(
         }
     }
     if state.as_deref() != Some("success") {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
             pull_request.number,
             state.as_deref()
@@ -501,7 +501,7 @@ async fn validate_review_and_deployment_readiness(
     Ok(())
 }
 
-async fn validate_non_thread_feedback(repository: &Path, number: u64) -> anyhow::Result<()> {
+async fn validate_non_thread_feedback(repository: &Path, number: u64) -> crate::HiveResult<()> {
     for surface in ["issues/{number}/comments", "pulls/{number}/reviews"] {
         let endpoint = format!(
             "repos/{{owner}}/{{repo}}/{}",
@@ -514,7 +514,7 @@ async fn validate_non_thread_feedback(repository: &Path, number: u64) -> anyhow:
             )
             .await?,
         )
-        .context("GitHub returned invalid paginated feedback")?;
+        .hive_context("GitHub returned invalid paginated feedback")?;
         let actionable = pages
             .as_array()
             .into_iter()
@@ -523,7 +523,7 @@ async fn validate_non_thread_feedback(repository: &Path, number: u64) -> anyhow:
             .filter_map(|item| item.get("body").and_then(serde_json::Value::as_str))
             .any(is_actionable_feedback);
         if actionable {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
             );
         }
@@ -552,9 +552,9 @@ async fn validate_workbench_completion(
     task_id: &str,
     pull_request: &DeliveryPullRequest,
     main_sha: &str,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let task_base = task_id.split("-run-").next().unwrap_or(task_id);
-    anyhow::ensure!(
+    crate::hive_ensure!(
         task_base.starts_with("main-failure-"),
         "Hive repair task id does not identify its Workbench incident"
     );
@@ -571,63 +571,63 @@ async fn validate_workbench_completion(
         ],
     )
     .await
-    .context("read Hive Workbench completion record")?;
+    .hive_context("read Hive Workbench completion record")?;
     let completed_status = incident.lines().any(|line| {
         matches!(
             line.trim(),
             "status: completed" | "status: complete" | "status: done"
         )
     });
-    anyhow::ensure!(
+    crate::hive_ensure!(
         completed_status,
         "Hive repair delivery is incomplete: Workbench incident {task_base}.md is not completed"
     );
-    anyhow::ensure!(
+    crate::hive_ensure!(
         incident.contains(&format!("#{}", pull_request.number))
             || incident.contains(&format!("/pull/{}", pull_request.number)),
         "Hive repair delivery is incomplete: Workbench incident does not link PR #{}",
         pull_request.number
     );
-    anyhow::ensure!(
+    crate::hive_ensure!(
         incident.contains(main_sha),
         "Hive repair delivery is incomplete: Workbench incident does not record green Main SHA {main_sha}"
     );
-    anyhow::ensure!(
+    crate::hive_ensure!(
         incident.to_ascii_lowercase().contains("worklog"),
         "Hive repair delivery is incomplete: Workbench incident has no linked worklog"
     );
     Ok(())
 }
 
-async fn gh_output(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
+async fn gh_output(repository: &Path, arguments: &[&str]) -> crate::HiveResult<String> {
     let output = Command::new("gh")
         .args(arguments)
         .current_dir(repository)
         .stdin(Stdio::null())
         .output()
         .await
-        .context("failed to execute gh")?;
+        .hive_context("failed to execute gh")?;
     if !output.status.success() {
-        anyhow::bail!("gh {:?} failed with status {}", arguments, output.status);
+        crate::hive_bail!("gh {:?} failed with status {}", arguments, output.status);
     }
     String::from_utf8(output.stdout)
-        .context("gh output is not UTF-8")
+        .hive_context("gh output is not UTF-8")
         .map(|value| value.trim().to_owned())
 }
 
-async fn git_output(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
+async fn git_output(repository: &Path, arguments: &[&str]) -> crate::HiveResult<String> {
     let output = Command::new("git")
         .args(arguments)
         .current_dir(repository)
         .stdin(Stdio::null())
         .output()
         .await
-        .context("failed to execute git")?;
+        .hive_context("failed to execute git")?;
     if !output.status.success() {
-        anyhow::bail!("git {:?} failed with status {}", arguments, output.status);
+        crate::hive_bail!("git {:?} failed with status {}", arguments, output.status);
     }
     String::from_utf8(output.stdout)
-        .context("git output is not UTF-8")
+        .hive_context("git output is not UTF-8")
         .map(|value| value.trim().to_owned())
 }
 
@@ -635,7 +635,7 @@ async fn run_git_status(
     repository: &Path,
     arguments: &[&str],
     operation: &str,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let status = Command::new("git")
         .args(arguments)
         .current_dir(repository)
@@ -644,15 +644,17 @@ async fn run_git_status(
         .stderr(Stdio::inherit())
         .status()
         .await
-        .with_context(|| format!("failed to {operation}"))?;
+        .with_hive_context(|| format!("failed to {operation}"))?;
     if !status.success() {
-        anyhow::bail!("{operation} failed with status {status}");
+        crate::hive_bail!("{operation} failed with status {status}");
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::HiveContext;
+
     use super::{
         DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, DeliveryRun,
         delivery_generation, latest_delivery_generation, select_successful_main_run,
@@ -710,29 +712,37 @@ mod tests {
     }
 
     #[test]
-    fn delivery_requires_a_merged_pull_request() {
+    fn delivery_requires_a_merged_pull_request() -> anyhow::Result<()> {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "OPEN", None))
-            .expect_err("an open pull request cannot complete a Hive task");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!("an open pull request cannot complete a Hive task")
+            })?;
 
         assert!(error.to_string().contains("PR #42 is OPEN"));
+        Ok(())
     }
 
     #[test]
-    fn delivery_requires_the_squash_merge_commit() {
+    fn delivery_requires_the_squash_merge_commit() -> anyhow::Result<()> {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", None))
-            .expect_err("a merge without its commit cannot prove Main delivery");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!("a merge without its commit cannot prove Main delivery")
+            })?;
 
         assert!(error.to_string().contains("no squash merge"));
+        Ok(())
     }
 
     #[test]
-    fn delivery_accepts_a_merged_pull_request_with_its_commit() {
-        validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", Some("abc123")))
-            .expect("the merged pull request should pass the local delivery invariant");
+    fn delivery_accepts_a_merged_pull_request_with_its_commit() -> crate::HiveResult<()> {
+        validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", Some("abc123")))?;
+        Ok(())
     }
 
     #[test]
-    fn latest_follow_up_generation_is_selected() {
+    fn latest_follow_up_generation_is_selected() -> crate::HiveResult<()> {
         let pull_requests = vec![
             pull_request(40, "codex/hive-task", "CLOSED", None),
             pull_request(42, "codex/hive-task-g3", "MERGED", Some("abc123")),
@@ -740,32 +750,36 @@ mod tests {
             pull_request(99, "codex/hive-other", "MERGED", Some("unrelated")),
         ];
 
-        let latest = latest_delivery_generation(&pull_requests, "codex/hive-task")
-            .expect("delivery generations should be unambiguous")
-            .expect("the latest delivery generation should be found");
+        let latest = latest_delivery_generation(&pull_requests, "codex/hive-task")?
+            .hive_context("latest delivery generation must be present")?;
 
         assert_eq!(latest.number, 42);
         assert_eq!(
             delivery_generation("codex/hive-task", "codex/hive-task-g1"),
             None
         );
+        Ok(())
     }
 
     #[test]
-    fn duplicate_delivery_generations_are_rejected() {
+    fn duplicate_delivery_generations_are_rejected() -> anyhow::Result<()> {
         let pull_requests = vec![
             pull_request(41, "codex/hive-task-g2", "CLOSED", None),
             pull_request(42, "codex/hive-task-g2", "MERGED", Some("abc123")),
         ];
 
         let error = latest_delivery_generation(&pull_requests, "codex/hive-task")
-            .expect_err("duplicate generations cannot identify one delivery");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!("duplicate generations cannot identify one delivery")
+            })?;
 
         assert!(error.to_string().contains("multiple PRs use generation 2"));
+        Ok(())
     }
 
     #[test]
-    fn cross_repository_generation_is_ignored() {
+    fn cross_repository_generation_is_ignored() -> crate::HiveResult<()> {
         let mut fork = pull_request(99, "codex/hive-task-g99", "OPEN", None);
         fork.is_cross_repository = true;
         let pull_requests = vec![
@@ -773,28 +787,32 @@ mod tests {
             fork,
         ];
 
-        let latest = latest_delivery_generation(&pull_requests, "codex/hive-task")
-            .expect("same-repository generations should be unambiguous")
-            .expect("the legitimate generation should be found");
+        let latest = latest_delivery_generation(&pull_requests, "codex/hive-task")?
+            .hive_context("same-repository delivery generation must be present")?;
 
         assert_eq!(latest.number, 42);
+        Ok(())
     }
 
     #[test]
-    fn delivery_requires_the_full_e2e_label() {
+    fn delivery_requires_the_full_e2e_label() -> anyhow::Result<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request
             .labels
             .retain(|label| label.name != "ci:full-e2e");
 
         let error = validate_full_e2e_checks(&pull_request)
-            .expect_err("a Hive repair without the opt-in label cannot complete");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!("a Hive repair without the opt-in label cannot complete")
+            })?;
 
         assert!(error.to_string().contains("lacks `ci:full-e2e`"));
+        Ok(())
     }
 
     #[test]
-    fn merge_triggered_skipped_e2e_does_not_hide_pre_merge_success() {
+    fn merge_triggered_skipped_e2e_does_not_hide_pre_merge_success() -> crate::HiveResult<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Full extension e2e (main fix)".to_owned(),
@@ -804,12 +822,12 @@ mod tests {
             workflow_name: "PR".to_owned(),
         });
 
-        validate_full_e2e_checks(&pull_request)
-            .expect("a successful exact-head run remains valid after the merge-triggered skip");
+        validate_full_e2e_checks(&pull_request)?;
+        Ok(())
     }
 
     #[test]
-    fn repository_workflow_failure_without_success_is_rejected() {
+    fn repository_workflow_failure_without_success_is_rejected() -> anyhow::Result<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
@@ -820,8 +838,14 @@ mod tests {
         });
 
         let error = validate_repository_checks(&pull_request)
-            .expect_err("a failed applicable repository workflow cannot complete a Hive task");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!(
+                    "a failed applicable repository workflow cannot complete a Hive task"
+                )
+            })?;
         assert!(error.to_string().contains("Hive Rust"));
+        Ok(())
     }
 
     fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {
@@ -834,37 +858,36 @@ mod tests {
     }
 
     #[test]
-    fn failed_repair_run_is_not_hidden_by_a_successful_descendant() {
+    fn failed_repair_run_is_not_hidden_by_a_successful_descendant() -> anyhow::Result<()> {
         let runs = vec![
             run("repair", "failure", "2026-07-28T01:00:00Z"),
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
         let error = select_successful_main_run(&runs, "merge")
-            .expect_err("an explicit failure must remain terminal");
+            .err()
+            .ok_or_else(|| crate::hive_error!("an explicit failure must remain terminal"))?;
         assert!(error.to_string().contains("repair"));
+        Ok(())
     }
 
     #[test]
-    fn cancelled_run_can_coalesce_into_a_successful_descendant() {
+    fn cancelled_run_can_coalesce_into_a_successful_descendant() -> crate::HiveResult<()> {
         let runs = vec![
             run("repair", "cancelled", "2026-07-28T01:00:00Z"),
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
-        assert_eq!(
-            select_successful_main_run(&runs, "merge").expect("coalesced Main should pass"),
-            "descendant"
-        );
+        assert_eq!(select_successful_main_run(&runs, "merge")?, "descendant");
+        Ok(())
     }
 
     #[test]
-    fn first_successful_completed_descendant_is_selected_chronologically() {
+    fn first_successful_completed_descendant_is_selected_chronologically() -> crate::HiveResult<()>
+    {
         let runs = vec![
             run("first", "success", "2026-07-28T01:00:00Z"),
             run("second", "success", "2026-07-28T02:00:00Z"),
         ];
-        assert_eq!(
-            select_successful_main_run(&runs, "merge").expect("Main should pass"),
-            "first"
-        );
+        assert_eq!(select_successful_main_run(&runs, "merge")?, "first");
+        Ok(())
     }
 }

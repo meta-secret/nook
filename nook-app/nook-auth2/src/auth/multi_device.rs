@@ -458,14 +458,12 @@ impl DeviceIdentity {
 
     #[must_use]
     pub fn public_key(&self) -> DevicePublicKey {
-        DevicePublicKey::parse(&self.identity.to_public().to_string())
-            .expect("generated public key is valid")
+        DevicePublicKey::from_trusted(self.identity.to_public().to_string())
     }
 
     #[must_use]
     pub fn secret_string(&self) -> DeviceIdentitySecret {
-        DeviceIdentitySecret::parse(self.identity.to_string().expose_secret())
-            .expect("generated identity secret is valid")
+        DeviceIdentitySecret::from_trusted(self.identity.to_string().expose_secret().to_owned())
     }
 
     #[must_use]
@@ -504,7 +502,9 @@ impl DeviceIdentity {
 
 pub fn device_id_from_public(recipient: &Recipient) -> DeviceId {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
-    DeviceId::parse(&hex::encode(&hash[..8])).expect("sha256 prefix is valid device id")
+    let mut prefix = [0_u8; 8];
+    prefix.copy_from_slice(&hash[..8]);
+    DeviceId::from_sha256_prefix(prefix)
 }
 
 pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<DeviceId> {
@@ -519,7 +519,9 @@ pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceRes
 #[must_use]
 pub fn device_auth_id_from_public(recipient: &Recipient) -> AuthKeyId {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
-    crate::format_auth_key_id(&hex::encode(hash)).expect("sha256 hex is valid auth digest")
+    let mut digest = [0_u8; 32];
+    digest.copy_from_slice(&hash);
+    AuthKeyId::from_sha256_digest(&digest)
 }
 
 pub fn encrypt_for_recipient(

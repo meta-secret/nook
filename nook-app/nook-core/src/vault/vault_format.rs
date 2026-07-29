@@ -156,22 +156,22 @@ struct StoredVaultYaml {
     password_entries: Vec<PasswordUnlockEntry>,
 }
 
-fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
+fn stored_record_to_auth(record: &StoredSecretRecord) -> VaultFormatResult<AuthYamlRecord> {
     let envelopes = crate::parse_auth_envelopes(record.value.as_str())
-        .expect("auth record must parse before YAML serialization");
-    AuthYamlRecord {
+        .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
+    Ok(AuthYamlRecord {
         pk_id: crate::normalize_auth_key_id(record.key.as_str())
             .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
         secrets_key: envelopes.secrets_key.as_str().to_owned(),
         members_key: envelopes.members_key.as_str().to_owned(),
-    }
+    })
 }
 
-fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
+fn auth_to_stored_record(record: AuthYamlRecord) -> VaultFormatResult<StoredSecretRecord> {
     let pk_id = crate::normalize_auth_key_id(&record.pk_id)
         .map(|id| id.to_string())
         .unwrap_or(record.pk_id);
-    StoredSecretRecord {
+    Ok(StoredSecretRecord {
         key: SecretId::from_vault_record(&pk_id),
         secret_type: None,
         value: StoredRecordPayload::from_trusted(
@@ -179,25 +179,23 @@ fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
                 secrets_key: AgeArmoredCiphertext::from_trusted_armored(record.secrets_key),
                 members_key: AgeArmoredCiphertext::from_trusted_armored(record.members_key),
             })
-            .expect("auth envelopes must serialize"),
+            .map_err(VaultFormatError::JsonSerialize)?,
         ),
-    }
+    })
 }
 
-fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
+fn members_to_stored_record(record: MembersYamlRecord) -> VaultFormatResult<StoredSecretRecord> {
     let pk_id = crate::normalize_auth_key_id(&record.pk_id)
         .map(|id| id.to_string())
         .unwrap_or(record.pk_id);
-    StoredSecretRecord {
-        key: SecretId::from_vault_record(&crate::member_stored_key(
-            &AuthKeyId::parse(&pk_id).expect("member pk_id must parse"),
-        )),
+    Ok(StoredSecretRecord {
+        key: SecretId::from_vault_record(&crate::member_stored_key(&AuthKeyId::parse(&pk_id)?)),
         secret_type: None,
         value: StoredRecordPayload::from_trusted(record.ciphertext),
-    }
+    })
 }
 
-fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
+fn partition_yaml_records(records: &[StoredSecretRecord]) -> VaultFormatResult<StoredVaultYaml> {
     let mut vault = StoredVaultYaml::default();
     for record in records {
         // Device-protection wrappers are browser-local state. Keep this final
@@ -229,7 +227,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
                 ciphertext: record.value.as_str().to_owned(),
             });
         } else if is_auth_stored_record(record) {
-            vault.auth.push(stored_record_to_auth(record));
+            vault.auth.push(stored_record_to_auth(record)?);
         } else if is_sentinel_share_stored_record(record) {
             vault.sentinel_shares.push(record.clone());
         } else {
@@ -241,7 +239,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
             secret.key = id;
         }
     }
-    vault
+    Ok(vault)
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -377,7 +375,7 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
     architecture: &VaultArchitecture,
 ) -> VaultFormatResult<VaultYamlBlob> {
     architecture.validate_records(records)?;
-    let mut vault = partition_yaml_records(records);
+    let mut vault = partition_yaml_records(records)?;
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = match vault_version {
         VaultVersionWrite::Initial => 0,
@@ -528,9 +526,21 @@ pub fn deserialize_stored_yaml_with_unlock(
     let unlock = vault.unlock.clone();
 
     let mut records = vault.secrets;
-    records.extend(vault.auth.into_iter().map(auth_to_stored_record));
+    records.extend(
+        vault
+            .auth
+            .into_iter()
+            .map(auth_to_stored_record)
+            .collect::<VaultFormatResult<Vec<_>>>()?,
+    );
     records.extend(vault.joins);
-    records.extend(vault.members.into_iter().map(members_to_stored_record));
+    records.extend(
+        vault
+            .members
+            .into_iter()
+            .map(members_to_stored_record)
+            .collect::<VaultFormatResult<Vec<_>>>()?,
+    );
     records.extend(vault.sentinel_shares);
     Ok((records, unlock))
 }
@@ -736,13 +746,11 @@ mod tests {
                 members_key:
                     "-----BEGIN AGE ENCRYPTED FILE-----\nmembers\n-----END AGE ENCRYPTED FILE-----"
                         .to_owned(),
-            }),
+            })?,
             StoredSecretRecord {
                 key: sid(join_id),
                 secret_type: None,
-                value: StoredRecordPayload::from_trusted(
-                    serde_json::to_string(&join_request).expect("join request must serialize"),
-                ),
+                value: StoredRecordPayload::from_trusted(serde_json::to_string(&join_request)?),
             },
         ];
 
@@ -926,7 +934,8 @@ architecture:
 secrets: []
 ";
         let error = read_vault_architecture(invalid)
-            .expect_err("vault format test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("vault format test should reject invalid input"))?;
         let source = error
             .source()
             .ok_or_else(|| std::io::Error::other("test source value must exist"))?
@@ -1058,7 +1067,8 @@ secrets: []
     fn unsupported_schema_version_is_rejected() -> anyhow::Result<()> {
         let future = "schema_version: 99\nunlock:\n  type: keys\nsecrets: []\n";
         let err = deserialize_stored_yaml(future)
-            .expect_err("vault format test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("vault format test should reject invalid input"))?;
         assert!(matches!(
             err,
             VaultFormatError::UnsupportedSchemaVersion {
@@ -1078,7 +1088,7 @@ secrets: []
                 .to_owned(),
             members_key: "-----BEGIN AGE ENCRYPTED FILE-----\nm\n-----END AGE ENCRYPTED FILE-----"
                 .to_owned(),
-        });
+        })?;
 
         let yaml = serialize_stored_yaml(std::slice::from_ref(&record))?;
         assert!(yaml.as_str().contains("secrets_key:"));

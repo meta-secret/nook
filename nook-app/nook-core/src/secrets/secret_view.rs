@@ -875,6 +875,7 @@ pub fn build_secret_yaml_from_form(
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use crate::{
@@ -902,7 +903,7 @@ mod tests {
     }
 
     #[test]
-    fn website_host_strips_url_credentials_query_and_fragment() {
+    fn website_host_strips_url_credentials_query_and_fragment() -> anyhow::Result<()> {
         for (url, expected) in [
             ("https://example.com?next=/vault", "example.com"),
             ("https://user@example.com/", "example.com"),
@@ -917,6 +918,7 @@ mod tests {
 
             assert_eq!(item.website_host(), expected, "{url}");
         }
+        Ok(())
     }
 
     #[test]
@@ -967,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn list_item_keeps_login_metadata_and_drops_sensitive_fields() {
+    fn list_item_keeps_login_metadata_and_drops_sensitive_fields() -> anyhow::Result<()> {
         let item = login_record().list_item();
 
         assert_eq!(item.secret_type(), SecretType::Login);
@@ -982,6 +984,7 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("correct horse battery staple"));
+        Ok(())
     }
 
     #[test]
@@ -997,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn list_item_exposes_only_derived_seed_word_count() {
+    fn list_item_exposes_only_derived_seed_word_count() -> anyhow::Result<()> {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_seed"),
             secret_type: SecretType::SeedPhrase,
@@ -1017,6 +1020,7 @@ mod tests {
             }
         );
         assert!(!format!("{item:?}").contains("abandon"));
+        Ok(())
     }
 
     #[test]
@@ -1186,13 +1190,15 @@ mod tests {
     }
 
     #[test]
-    fn build_secret_yaml_rejects_manual_passkey_creation() {
+    fn build_secret_yaml_rejects_manual_passkey_creation() -> anyhow::Result<()> {
         let error = build_secret_yaml(SecretType::Passkey, &serde_json::json!({}))
-            .expect_err("secret view test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("secret view test should reject invalid input"))?;
         assert!(matches!(
             error,
             SecretPayloadError::PasskeyCreationRequiresAuthenticator
         ));
+        Ok(())
     }
 
     #[test]

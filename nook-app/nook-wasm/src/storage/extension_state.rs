@@ -238,7 +238,7 @@ mod wasm_idb_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn writes_reads_and_removes_extension_pairing_state() {
+    async fn writes_reads_and_removes_extension_pairing_state() -> anyhow::Result<()> {
         let vault_store_id = format!("store-test-{}", js_sys::Date::now());
         let key = format!("{GRANT_KEY_PREFIX}{vault_store_id}");
         let mut entries = HashMap::new();
@@ -260,20 +260,11 @@ mod wasm_idb_tests {
                 last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
             }),
         );
-        write_all(&entries).await.expect("write extension state");
-        assert_eq!(
-            read_all().await.expect("read extension state").get(&key),
-            entries.get(&key)
-        );
-        remove(std::slice::from_ref(&key))
-            .await
-            .expect("remove extension state");
-        assert!(
-            !read_all()
-                .await
-                .expect("read removed extension state")
-                .contains_key(&key)
-        );
+        write_all(&entries).await?;
+        assert_eq!(read_all().await?.get(&key), entries.get(&key));
+        remove(std::slice::from_ref(&key)).await?;
+        assert!(!read_all().await?.contains_key(&key));
+        Ok(())
     }
 }
 

@@ -241,11 +241,11 @@ where
             let ready = remaining
                 .iter()
                 .filter(|id| {
-                    self.parents
-                        .get(*id)
-                        .expect("remaining identifiers are indexed")
-                        .iter()
-                        .all(|parent| ordered.contains(parent) || !remaining.contains(parent))
+                    self.parents.get(*id).is_some_and(|parents| {
+                        parents
+                            .iter()
+                            .all(|parent| ordered.contains(parent) || !remaining.contains(parent))
+                    })
                 })
                 .cloned()
                 .collect::<Vec<_>>();

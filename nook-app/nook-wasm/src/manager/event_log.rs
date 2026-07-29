@@ -471,9 +471,9 @@ impl NookVaultManager {
         if !self.vault.store_id.is_empty() {
             let local = load_local_event_store(&self.vault.store_id).await?;
             for event_id in local.missing_event_ids(&remote_ids) {
-                let bytes = local
-                    .get_bytes(&event_id)
-                    .expect("missing event id came from local event store");
+                let bytes = local.get_bytes(&event_id).ok_or_else(|| {
+                    NookError::Database(format!("Local event {event_id} is missing"))
+                })?;
                 self.put_current_provider_event_if_absent(&event_id, bytes)
                     .await?;
                 remote_ids.insert(event_id);
@@ -1193,7 +1193,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rejected_event_log_classification_is_available_as_a_typed_issue() {
+    fn rejected_event_log_classification_is_available_as_a_typed_issue() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         let classification = RemoteEventLogClassification::DifferentStore {
             local_store_id: "store_local12345".to_owned(),
@@ -1205,13 +1205,11 @@ mod tests {
                 .guard_remote_event_log_classification("Sync provider", &classification)
                 .is_err()
         );
-        let issue = manager
-            .take_event_log_sync_issue()
-            .issue()
-            .expect("typed sync issue");
+        let issue = manager.take_event_log_sync_issue().issue()?;
         assert!(issue.is_store_mismatch());
         assert_eq!(issue.local_store_id().as_deref(), Some("store_local12345"));
         assert_eq!(issue.remote_store_id().as_deref(), Some("store_remote1234"));
+        Ok(())
     }
 }
 

@@ -562,7 +562,7 @@ async fn record_local_execution(
     command: &[String],
     exit_code: i32,
     duration: std::time::Duration,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let Some(category) = local_execution_category(command) else {
         return Ok(());
     };
@@ -1038,9 +1038,10 @@ fn inspection_file_hints(command: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::HiveContext;
 
     #[test]
-    fn configures_an_ephemeral_read_only_core_thread() -> anyhow::Result<()> {
+    fn configures_an_ephemeral_read_only_core_thread() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
@@ -1083,7 +1084,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> anyhow::Result<()> {
+    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned());
 
@@ -1093,7 +1094,7 @@ mod tests {
     }
 
     #[test]
-    fn trusted_task_thread_receives_direct_github_access() -> anyhow::Result<()> {
+    fn trusted_task_thread_receives_direct_github_access() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let github_token = "test-token".to_owned();
         let mut options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
@@ -1127,10 +1128,9 @@ mod tests {
     }
 
     #[test]
-    fn task_output_schema_uses_the_strict_structured_output_subset() {
-        let schema: serde_json::Value =
-            serde_json::from_str(TASK_OUTPUT_SCHEMA).expect("valid task output schema");
-        let serialized = serde_json::to_string(&schema).expect("serialize task output schema");
+    fn task_output_schema_uses_the_strict_structured_output_subset() -> crate::HiveResult<()> {
+        let schema: serde_json::Value = serde_json::from_str(TASK_OUTPUT_SCHEMA)?;
+        let serialized = serde_json::to_string(&schema)?;
         for unsupported in [
             "\"oneOf\"",
             "\"allOf\"",
@@ -1146,7 +1146,7 @@ mod tests {
         }
         let blocker = schema
             .pointer("/properties/blocker")
-            .expect("blocker object schema");
+            .hive_context("task output schema must define blocker")?;
         assert_eq!(
             blocker.get("type").and_then(serde_json::Value::as_str),
             Some("object")
@@ -1158,10 +1158,11 @@ mod tests {
                 .map(Vec::len),
             Some(4)
         );
+        Ok(())
     }
 
     #[test]
-    fn trusted_execution_options_disable_the_inner_permission_profile() -> anyhow::Result<()> {
+    fn trusted_execution_options_disable_the_inner_permission_profile() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         let config = new_config(&options)?;
@@ -1175,7 +1176,7 @@ mod tests {
     }
 
     #[test]
-    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() -> anyhow::Result<()> {
+    fn progress_reporter_streams_reasoning_and_deduplicates_plan_status() -> crate::HiveResult<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
 
         progress.reasoning_delta("Inspecting ")?;
@@ -1193,7 +1194,7 @@ mod tests {
     }
 
     #[test]
-    fn inspection_progress_hides_shell_commands_behind_readable_steps() -> anyhow::Result<()> {
+    fn inspection_progress_hides_shell_commands_behind_readable_steps() -> crate::HiveResult<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let commands = [
             vec![
@@ -1228,7 +1229,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_inspection_includes_the_command_for_debugging() -> anyhow::Result<()> {
+    fn failed_inspection_includes_the_command_for_debugging() -> crate::HiveResult<()> {
         let mut progress = ProgressReporter::new(Vec::new(), false);
         let command = vec!["/bin/zsh".into(), "-lc".into(), "rg missing-file".into()];
 
@@ -1241,7 +1242,7 @@ mod tests {
     }
 
     #[test]
-    fn task_progress_logs_only_fixed_secret_safe_metadata() -> anyhow::Result<()> {
+    fn task_progress_logs_only_fixed_secret_safe_metadata() -> crate::HiveResult<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
 
         progress.line("36", "●", "start", "Agent started")?;
@@ -1263,7 +1264,7 @@ mod tests {
     }
 
     #[test]
-    fn task_progress_does_not_reveal_failed_commands_or_output() -> anyhow::Result<()> {
+    fn task_progress_does_not_reveal_failed_commands_or_output() -> crate::HiveResult<()> {
         let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
 
         progress.command_finished(

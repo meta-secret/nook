@@ -84,7 +84,7 @@ pub enum ProjectionEpoch {
 impl Default for VaultProjection {
     fn default() -> Self {
         Self {
-            store_id: StoreId::parse("store_abcdefghijk").expect("valid default store id"),
+            store_id: StoreId::before_genesis_placeholder(),
             epoch: ProjectionEpoch::BeforeGenesis,
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),

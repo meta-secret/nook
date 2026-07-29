@@ -89,13 +89,13 @@ enum ImportItemOutcome {
 fn coalesce_import_items(
     items: Vec<nook_core::SecretValue>,
     secrets_key: &nook_core::SymmetricKey,
-) -> (Vec<nook_core::SecretValue>, usize) {
+) -> Result<(Vec<nook_core::SecretValue>, usize), NookError> {
     let mut coalesced: Vec<nook_core::SecretValue> = Vec::with_capacity(items.len());
     let mut indexes: HashMap<nook_core::SecretFingerprint, usize> =
         HashMap::with_capacity(items.len());
     let mut duplicates = 0;
     for mut value in items {
-        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
+        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
         if let Some(index) = indexes.get(&fingerprint).copied() {
             let enriched = nook_core::enrich_secret(&coalesced[index], &value);
             coalesced[index].zeroize_plaintext();
@@ -107,7 +107,7 @@ fn coalesce_import_items(
             coalesced.push(value);
         }
     }
-    (coalesced, duplicates)
+    Ok((coalesced, duplicates))
 }
 
 fn reconcile_import_item(
@@ -117,8 +117,8 @@ fn reconcile_import_item(
     crypto: &nook_core::VaultCrypto,
     secrets_key: &nook_core::SymmetricKey,
 ) -> Result<ImportItemOutcome, NookError> {
-    let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key);
-    let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
+    let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key)?;
+    let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
     if let Some((record, _)) = existing_by_identity
         .get(&identity_fingerprint)
         .and_then(|records| {
@@ -251,7 +251,7 @@ impl NookVaultManager {
         }
 
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key);
+        let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key)?;
         let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self.vault.crypto.get()?;
         let existing_by_identity = group_import_fingerprints(dedup_state, items.len());
@@ -329,7 +329,7 @@ mod import_tests {
             }),
         ];
 
-        let (items, duplicates) = coalesce_import_items(items, &key()?);
+        let (items, duplicates) = coalesce_import_items(items, &key()?)?;
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
         let nook_core::SecretValue::SecureNote(note) = &items[0] else {
@@ -526,8 +526,8 @@ impl NookVaultManager {
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
         typed_value.zeroize_plaintext();
 
         let armored = self.vault.crypto.get()?.encrypt_value(&data)?;
@@ -727,8 +727,8 @@ impl NookVaultManager {
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
         typed_value.zeroize_plaintext();
         let crypto = self.vault.crypto.get()?;
         nook_core::replace_encrypted_secret(
@@ -990,28 +990,25 @@ mod wasm_tests {
         event: SignedEvent,
     }
 
-    fn get(target: &js_sys::Object, field: &str) -> js_sys::Object {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
-            .unchecked_into()
+    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsValue> {
+        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))?.unchecked_into())
     }
 
-    fn get_number(target: &js_sys::Object, field: &str) -> f64 {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
+    fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsValue> {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))?
             .as_f64()
-            .expect("js number")
+            .ok_or_else(|| wasm_bindgen::JsValue::from_str("field is not a number"))
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> String {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
+    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsValue> {
+        js_sys::Reflect::get(target, &js_sys::JsString::from(field))?
             .as_string()
-            .expect("js string")
+            .ok_or_else(|| wasm_bindgen::JsValue::from_str("field is not a string"))
     }
 
     #[wasm_bindgen_test]
-    fn event_log_export_serializes_flattened_signed_events_as_plain_objects() {
+    fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
+    -> Result<(), wasm_bindgen::JsValue> {
         let value = serialize_js_array(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
@@ -1019,12 +1016,13 @@ mod wasm_tests {
                 signature: "ed25519:test-signature".to_owned(),
             },
         }])
-        .expect("serialize event-log records");
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
         let record: js_sys::Object = value.get(0).unchecked_into();
-        let event = get(&record, "event");
+        let event = get(&record, "event")?;
 
-        assert_eq!(get_number(&event, "schema_version"), 1.0);
-        assert_eq!(get_string(&event, "signature"), "ed25519:test-signature");
+        assert_eq!(get_number(&event, "schema_version")?, 1.0);
+        assert_eq!(get_string(&event, "signature")?, "ed25519:test-signature");
+        Ok(())
     }
 
     /// WASM-side contract for file-sync reconnect after offline concurrent creates
@@ -1032,7 +1030,7 @@ mod wasm_tests {
     /// Full multi-provider scenario coverage lives in
     /// `nook-core/tests/event_log_file_sync_replication.rs`.
     #[wasm_bindgen_test]
-    fn concurrent_same_identity_logins_both_survive_after_event_union() {
+    fn concurrent_same_identity_logins_both_survive_after_event_union() -> anyhow::Result<()> {
         use nook_core::{
             LoginSecret, SecretId, SecretType, SecretValue, SigningIdentity, VaultCrypto,
             VaultEventSession, VaultOperation, encrypted_secret_from_armored, generate_store_id,
@@ -1048,56 +1046,51 @@ mod wasm_tests {
             secrets_key: &nook_core::SymmetricKey,
             secret_id: &str,
             password: &str,
-        ) {
+        ) -> anyhow::Result<()> {
             let value = SecretValue::Login(LoginSecret {
                 website_url: "https://login-a-1.example.com".to_owned(),
                 username: "alice".to_owned(),
                 password: password.to_owned(),
                 notes: String::new(),
             });
-            let identity = secret_identity_fingerprint(&value, secrets_key);
-            let version = secret_fingerprint(&value, secrets_key);
-            let ciphertext = crypto
-                .encrypt_value(value.to_yaml().expect("login yaml").as_str())
-                .expect("encrypt login");
-            session
-                .append_operations(
-                    vec![VaultOperation::SecretCreated {
-                        secret: encrypted_secret_from_armored(
-                            &SecretId::from_vault_record(secret_id),
-                            SecretType::Login,
-                            ciphertext.as_str(),
-                            identity,
-                            version,
-                        ),
-                    }],
-                    TS,
-                    Some("local-folder"),
-                )
-                .expect("append login");
+            let identity = secret_identity_fingerprint(&value, secrets_key)?;
+            let version = secret_fingerprint(&value, secrets_key)?;
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            session.append_operations(
+                vec![VaultOperation::SecretCreated {
+                    secret: encrypted_secret_from_armored(
+                        &SecretId::from_vault_record(secret_id),
+                        SecretType::Login,
+                        ciphertext.as_str(),
+                        identity,
+                        version,
+                    ),
+                }],
+                TS,
+                Some("local-folder"),
+            )?;
+            Ok(())
         }
 
-        let keys = generate_vault_keys().expect("vault keys");
-        let store_id = generate_store_id().expect("store id");
-        let (signing, signing_seed) = SigningIdentity::generate().expect("signing");
-        let crypto = VaultCrypto::new(&keys.secrets_key).expect("crypto");
+        let keys = generate_vault_keys()?;
+        let store_id = generate_store_id()?;
+        let (signing, signing_seed) = SigningIdentity::generate()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
 
         let mut device_a = VaultEventSession::new(
             store_id.to_string(),
             signing.clone(),
             signing_seed.clone().into_inner(),
         );
-        device_a
-            .append_operations(
-                vec![VaultOperation::VaultImported {
-                    source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
-                    secrets: Vec::new(),
-                    password_entries: Vec::new(),
-                }],
-                TS,
-                Some("local-folder"),
-            )
-            .expect("genesis");
+        device_a.append_operations(
+            vec![VaultOperation::VaultImported {
+                source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            }],
+            TS,
+            Some("local-folder"),
+        )?;
 
         let mut device_b =
             VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
@@ -1112,9 +1105,7 @@ mod wasm_tests {
                     .map(|bytes| (id, bytes.to_vec()))
             })
             .collect();
-        device_b
-            .union_remote(&genesis_events)
-            .expect("device-b joins vault-a");
+        device_b.union_remote(&genesis_events)?;
 
         let shared_head = device_a.heads[0].clone();
         // Disconnect: each device appends offline from the same head.
@@ -1125,7 +1116,7 @@ mod wasm_tests {
             &keys.secrets_key,
             "secret_logina1aaaa",
             "password-from-device-a",
-        );
+        )?;
         device_b.heads = vec![shared_head];
         append_login(
             &mut device_b,
@@ -1133,7 +1124,7 @@ mod wasm_tests {
             &keys.secrets_key,
             "secret_logina1bbbb",
             "password-from-device-b",
-        );
+        )?;
 
         // Reconnect via file-sync style set-union.
         let a_events: Vec<_> = device_a
@@ -1158,28 +1149,21 @@ mod wasm_tests {
                     .map(|bytes| (id, bytes.to_vec()))
             })
             .collect();
-        device_a.union_remote(&b_events).expect("union b into a");
-        device_b.union_remote(&a_events).expect("union a into b");
+        device_a.union_remote(&b_events)?;
+        device_b.union_remote(&a_events)?;
 
-        let graph = device_a
-            .store
-            .load_graph(device_a.store_id.as_str())
-            .expect("graph");
-        let projection = device_a.project().expect("project");
+        let graph = device_a.store.load_graph(device_a.store_id.as_str())?;
+        let projection = device_a.project()?;
         let live = projection.live_secrets(&graph);
         assert_eq!(live.len(), 2);
         assert!(!projection.has_blocking_conflicts());
 
         let mut passwords = BTreeSet::new();
         for record in live.values() {
-            let plaintext = crypto
-                .decrypt_value(
-                    &nook_core::AgeArmoredCiphertext::parse(record.value.as_str())
-                        .expect("age ciphertext"),
-                )
-                .expect("decrypt");
-            let value =
-                SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str()).expect("yaml");
+            let plaintext = crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::parse(
+                record.value.as_str(),
+            )?)?;
+            let value = SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str())?;
             let SecretValue::Login(login) = value else {
                 panic!("expected login");
             };
@@ -1200,5 +1184,6 @@ mod wasm_tests {
             .map(|secret| secret.identity_fingerprint.as_str().to_owned())
             .collect();
         assert_eq!(identities.len(), 1, "same login identity on both records");
+        Ok(())
     }
 }

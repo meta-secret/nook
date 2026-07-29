@@ -241,20 +241,20 @@ impl AuthenticatorSecret {
         let counter_bytes = counter.to_be_bytes();
         let digest = match self.algorithm {
             TotpAlgorithm::Sha1 => {
-                let mut mac =
-                    Hmac::<Sha1>::new_from_slice(&key).expect("HMAC accepts any key length");
+                let mut mac = Hmac::<Sha1>::new_from_slice(&key)
+                    .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
                 mac.update(&counter_bytes);
                 mac.finalize().into_bytes().to_vec()
             }
             TotpAlgorithm::Sha256 => {
-                let mut mac =
-                    Hmac::<Sha256>::new_from_slice(&key).expect("HMAC accepts any key length");
+                let mut mac = Hmac::<Sha256>::new_from_slice(&key)
+                    .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
                 mac.update(&counter_bytes);
                 mac.finalize().into_bytes().to_vec()
             }
             TotpAlgorithm::Sha512 => {
-                let mut mac =
-                    Hmac::<Sha512>::new_from_slice(&key).expect("HMAC accepts any key length");
+                let mut mac = Hmac::<Sha512>::new_from_slice(&key)
+                    .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
                 mac.update(&counter_bytes);
                 mac.finalize().into_bytes().to_vec()
             }
@@ -494,7 +494,7 @@ fn decode_base32(value: &str) -> Result<Vec<u8>, ValidationError> {
             bits -= 8;
             output.push(
                 u8::try_from((buffer >> bits) & 0xff)
-                    .expect("masked Base32 output always fits in one byte"),
+                    .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?,
             );
             buffer &= (1_u32 << bits) - 1;
         }

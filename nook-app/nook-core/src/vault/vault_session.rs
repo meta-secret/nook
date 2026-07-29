@@ -1,6 +1,6 @@
 //! Ciphertext-backed session access for projected or stored user records.
 
-use crate::errors::VaultResult;
+use crate::errors::{SessionError, VaultResult};
 use crate::{
     Database, SecretId, SecretListItem, SecretRecord, SecretType, SecretValue, StoredRecordPayload,
     StoredSecretRecord, VaultCrypto, VaultMetaState,
@@ -100,8 +100,9 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
             .skip(offset)
             .take(limit)
             .map(|id| {
-                let (secret_type, payload) =
-                    secrets.get(&id).expect("secret id came from the same map");
+                let (secret_type, payload) = secrets
+                    .get(&id)
+                    .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
                 let mut record = decrypt_secret_record(&id, *secret_type, payload, crypto)?;
                 let item = record.list_item();
                 record.zeroize_plaintext();
@@ -119,7 +120,9 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     let mut total = 0;
     let mut records = Vec::with_capacity(limit);
     for id in ids {
-        let (secret_type, payload) = secrets.get(&id).expect("secret id came from the same map");
+        let (secret_type, payload) = secrets
+            .get(&id)
+            .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
         if !secret_type_filter.matches(*secret_type) {
             continue;
         }
@@ -403,14 +406,15 @@ mod tests {
     }
 
     #[test]
-    fn explicit_decrypt_rejects_unknown_record() -> VaultResult<()> {
+    fn explicit_decrypt_rejects_unknown_record() -> anyhow::Result<()> {
         let keys = generate_vault_keys()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::new();
         let id = SecretId::from_vault_record("secret_missing");
 
         let error = decrypt_encrypted_secret(&secrets, &crypto, &id)
-            .expect_err("vault session test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("vault session test should reject invalid input"))?;
 
         assert!(matches!(
             error,

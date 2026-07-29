@@ -4,7 +4,7 @@ use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use crate::HiveContext;
 use async_trait::async_trait;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -302,12 +302,12 @@ fn default_locale() -> String {
 
 #[async_trait]
 pub trait ObserverStore: Clone + Send + Sync + 'static {
-    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value>;
+    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value>;
     async fn observer_task_value(
         &self,
         task_id: &str,
         locale: &str,
-    ) -> anyhow::Result<Option<Value>>;
+    ) -> crate::HiveResult<Option<Value>>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -331,7 +331,7 @@ pub struct ObserverCoordinatorStore {
 }
 
 impl ObserverCoordinatorStore {
-    pub async fn connect(path: &FilePath) -> anyhow::Result<Self> {
+    pub async fn connect(path: &FilePath) -> crate::HiveResult<Self> {
         let stream = loop {
             match UnixStream::connect(path).await {
                 Ok(stream) => break stream,
@@ -339,7 +339,7 @@ impl ObserverCoordinatorStore {
                     tokio::time::sleep(Duration::from_millis(250)).await;
                 }
                 Err(error) => {
-                    return Err(error).with_context(|| {
+                    return Err(error).with_hive_context(|| {
                         format!("connect to Hive observer coordinator {}", path.display())
                     });
                 }
@@ -350,7 +350,7 @@ impl ObserverCoordinatorStore {
         })
     }
 
-    async fn request(&self, request: ObserverRequest) -> anyhow::Result<ObserverResponse> {
+    async fn request(&self, request: ObserverRequest) -> crate::HiveResult<ObserverResponse> {
         let mut channel = self.channel.lock().await;
         channel
             .get_mut()
@@ -360,10 +360,10 @@ impl ObserverCoordinatorStore {
         channel.get_mut().flush().await?;
         let mut response = String::new();
         if channel.read_line(&mut response).await? == 0 {
-            anyhow::bail!("Hive observer coordinator closed its private channel");
+            crate::hive_bail!("Hive observer coordinator closed its private channel");
         }
         match serde_json::from_str(&response)? {
-            ObserverResponse::Error(error) => Err(anyhow::anyhow!(error)),
+            ObserverResponse::Error(error) => Err(crate::HiveError::message(error)),
             response => Ok(response),
         }
     }
@@ -371,7 +371,7 @@ impl ObserverCoordinatorStore {
 
 #[async_trait]
 impl ObserverStore for ObserverCoordinatorStore {
-    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value> {
+    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
         match self
             .request(ObserverRequest::Snapshot {
                 locale: locale.to_owned(),
@@ -379,7 +379,7 @@ impl ObserverStore for ObserverCoordinatorStore {
             .await?
         {
             ObserverResponse::Snapshot(snapshot) => Ok(snapshot),
-            response => anyhow::bail!("unexpected observer coordinator response: {response:?}"),
+            response => crate::hive_bail!("unexpected observer coordinator response: {response:?}"),
         }
     }
 
@@ -387,7 +387,7 @@ impl ObserverStore for ObserverCoordinatorStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> anyhow::Result<Option<Value>> {
+    ) -> crate::HiveResult<Option<Value>> {
         match self
             .request(ObserverRequest::Task {
                 task_id: task_id.to_owned(),
@@ -396,7 +396,7 @@ impl ObserverStore for ObserverCoordinatorStore {
             .await?
         {
             ObserverResponse::Task(task) => Ok(task),
-            response => anyhow::bail!("unexpected observer coordinator response: {response:?}"),
+            response => crate::hive_bail!("unexpected observer coordinator response: {response:?}"),
         }
     }
 }
@@ -410,7 +410,7 @@ pub async fn run_observer<S: ObserverStore>(
     store: S,
     address: SocketAddr,
     dashboard: PathBuf,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let index = dashboard.join("index.html");
     let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
     let app = Router::new()
@@ -421,27 +421,27 @@ pub async fn run_observer<S: ObserverStore>(
         .with_state(ObserverState { store });
     let listener = tokio::net::TcpListener::bind(address)
         .await
-        .with_context(|| format!("bind Hive observer to {address}"))?;
+        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
     axum::serve(listener, app)
         .await
-        .context("serve Hive observer")
+        .hive_context("serve Hive observer")
 }
 
 pub async fn run_observer_coordinator(
     socket: PathBuf,
     store: Neo4jTaskStore,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     store.migrate().await?;
     if let Some(parent) = socket.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
     remove_socket_if_present(&socket).await?;
     let listener = UnixListener::bind(&socket)
-        .with_context(|| format!("bind Hive observer coordinator {}", socket.display()))?;
+        .with_hive_context(|| format!("bind Hive observer coordinator {}", socket.display()))?;
     let (stream, _) = listener
         .accept()
         .await
-        .context("accept Hive observer channel")?;
+        .hive_context("accept Hive observer channel")?;
     drop(listener);
     remove_socket_if_present(&socket).await?;
 
@@ -457,7 +457,7 @@ pub async fn run_observer_coordinator(
                 .observer_task_value(&task_id, &locale)
                 .await
                 .map(ObserverResponse::Task),
-            Err(error) => Err(anyhow::anyhow!("decode observer request: {error}")),
+            Err(error) => Err(crate::hive_error!("decode observer request: {error}")),
         }
         .unwrap_or_else(|error| ObserverResponse::Error(format!("{error:#}")));
         writer.write_all(&serde_json::to_vec(&response)?).await?;
@@ -467,11 +467,13 @@ pub async fn run_observer_coordinator(
     Ok(())
 }
 
-async fn remove_socket_if_present(path: &FilePath) -> anyhow::Result<()> {
+async fn remove_socket_if_present(path: &FilePath) -> crate::HiveResult<()> {
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("remove stale socket {}", path.display())),
+        Err(error) => {
+            Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+        }
     }
 }
 
@@ -515,8 +517,8 @@ impl ObserverError {
     }
 }
 
-impl From<anyhow::Error> for ObserverError {
-    fn from(_error: anyhow::Error) -> Self {
+impl From<crate::HiveError> for ObserverError {
+    fn from(_error: crate::HiveError) -> Self {
         Self {
             status: StatusCode::SERVICE_UNAVAILABLE,
             message: "Hive observer is unavailable".to_owned(),
@@ -535,7 +537,7 @@ impl IntoResponse for ObserverError {
 }
 
 impl Neo4jTaskStore {
-    pub async fn observer_snapshot(&self, locale: &str) -> anyhow::Result<ObserverSnapshot> {
+    pub async fn observer_snapshot(&self, locale: &str) -> crate::HiveResult<ObserverSnapshot> {
         let overview_tasks = self.observer_tasks("", TASK_LIMIT, locale, false).await?;
         let mut attention_tasks = self
             .observer_tasks("", ALERT_LIMIT as i64 + 1, locale, true)
@@ -571,7 +573,7 @@ impl Neo4jTaskStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> anyhow::Result<Option<ObservedTask>> {
+    ) -> crate::HiveResult<Option<ObservedTask>> {
         let mut tasks = self.observer_tasks(task_id, 1, locale, false).await?;
         self.attach_dependencies(&mut tasks).await?;
         self.attach_triggers(&mut tasks, locale).await?;
@@ -579,7 +581,7 @@ impl Neo4jTaskStore {
         Ok(tasks.pop())
     }
 
-    async fn observer_agents(&self) -> anyhow::Result<Vec<ObservedAgent>> {
+    async fn observer_agents(&self) -> crate::HiveResult<Vec<ObservedAgent>> {
         let mut rows = self
             .graph
             .execute(
@@ -608,7 +610,7 @@ impl Neo4jTaskStore {
         Ok(agents)
     }
 
-    async fn observer_active_task_count(&self) -> anyhow::Result<i64> {
+    async fn observer_active_task_count(&self) -> crate::HiveResult<i64> {
         let mut rows = self
             .graph
             .execute(query(
@@ -620,7 +622,7 @@ impl Neo4jTaskStore {
         let row = rows
             .next()
             .await?
-            .context("active task count query returned no row")?;
+            .hive_context("active task count query returned no row")?;
         Ok(row.get("count")?)
     }
 
@@ -630,7 +632,7 @@ impl Neo4jTaskStore {
         limit: i64,
         locale: &str,
         attention_only: bool,
-    ) -> anyhow::Result<Vec<ObservedTask>> {
+    ) -> crate::HiveResult<Vec<ObservedTask>> {
         let mut rows = self
             .graph
             .execute(
@@ -774,7 +776,7 @@ impl Neo4jTaskStore {
         Ok(tasks)
     }
 
-    async fn attach_dependencies(&self, tasks: &mut [ObservedTask]) -> anyhow::Result<()> {
+    async fn attach_dependencies(&self, tasks: &mut [ObservedTask]) -> crate::HiveResult<()> {
         let mut by_id = tasks
             .iter()
             .enumerate()
@@ -815,7 +817,7 @@ impl Neo4jTaskStore {
         &self,
         tasks: &mut [ObservedTask],
         locale: &str,
-    ) -> anyhow::Result<()> {
+    ) -> crate::HiveResult<()> {
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         for task in tasks {
@@ -841,7 +843,7 @@ impl Neo4jTaskStore {
         &self,
         tasks: &mut [ObservedTask],
         locale: &str,
-    ) -> anyhow::Result<()> {
+    ) -> crate::HiveResult<()> {
         let by_id = tasks
             .iter()
             .enumerate()
@@ -970,7 +972,7 @@ fn derive_alerts(tasks: &[ObservedTask], now: i64, locale: &str) -> Vec<Observed
 
 #[async_trait]
 impl ObserverStore for Neo4jTaskStore {
-    async fn observer_snapshot_value(&self, locale: &str) -> anyhow::Result<Value> {
+    async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
         Ok(serde_json::to_value(self.observer_snapshot(locale).await?)?)
     }
 
@@ -978,7 +980,7 @@ impl ObserverStore for Neo4jTaskStore {
         &self,
         task_id: &str,
         locale: &str,
-    ) -> anyhow::Result<Option<Value>> {
+    ) -> crate::HiveResult<Option<Value>> {
         self.observer_task(task_id, locale)
             .await?
             .map(serde_json::to_value)
@@ -1059,16 +1061,14 @@ mod tests {
     }
 
     #[test]
-    fn observer_protocol_exposes_only_bounded_read_operations() {
+    fn observer_protocol_exposes_only_bounded_read_operations() -> crate::HiveResult<()> {
         let snapshot = serde_json::to_string(&ObserverRequest::Snapshot {
             locale: "en".to_owned(),
-        })
-        .expect("serialize observer snapshot");
+        })?;
         let task = serde_json::to_string(&ObserverRequest::Task {
             task_id: "task-1".to_owned(),
             locale: "en".to_owned(),
-        })
-        .expect("serialize observer task");
+        })?;
         for payload in [snapshot, task] {
             assert!(!payload.contains("migrate"));
             assert!(!payload.contains("claim"));
@@ -1076,6 +1076,7 @@ mod tests {
             assert!(!payload.contains("enqueue"));
             assert!(!payload.contains("activity"));
         }
+        Ok(())
     }
 
     #[test]

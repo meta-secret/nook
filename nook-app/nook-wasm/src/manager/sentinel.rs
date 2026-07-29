@@ -739,9 +739,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn genesis_status_exposes_public_roster_without_persisting_a_vault() {
-        let identity = nook_core::DeviceIdentity::generate().expect("identity");
-        let (signing, _) = nook_core::SigningIdentity::generate().expect("signing identity");
+    fn genesis_status_exposes_public_roster_without_persisting_a_vault() -> anyhow::Result<()> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
         let session = nook_core::start_sentinel_genesis(
             &identity,
             &signing,
@@ -750,8 +750,7 @@ mod tests {
                 participant_count: 3,
                 threshold: 2,
             },
-        )
-        .expect("session");
+        )?;
         let mut manager = NookVaultManager::new();
         manager.sentinel_genesis = CeremonyState::Active(session);
 
@@ -762,6 +761,7 @@ mod tests {
         );
         assert_eq!(status.participants().len(), 1);
         assert!(manager.vault.store_id.is_empty());
+        Ok(())
     }
 
     #[test]
@@ -772,11 +772,12 @@ mod tests {
     }
 
     #[test]
-    fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold() {
+    fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold()
+    -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         for (device_id, share_index) in [("0123456789abcdef", 1), ("fedcba9876543210", 2)] {
             manager.vault.meta.sentinel_shares.insert(
-                nook_core::DeviceId::parse(device_id).expect("device id"),
+                nook_core::DeviceId::parse(device_id)?,
                 nook_core::SentinelShareEnvelope {
                     version: 2,
                     threshold: 3,
@@ -789,25 +790,19 @@ mod tests {
             );
         }
 
-        manager
-            .ensure_sentinel_architecture_from_shares()
-            .expect("infer architecture");
-        let policy = manager
-            .vault
-            .architecture
-            .sentinel
-            .policy()
-            .expect("sentinel policy");
+        manager.ensure_sentinel_architecture_from_shares()?;
+        let policy = manager.vault.architecture.sentinel.policy()?;
         assert_eq!(policy.threshold, 3);
         assert_eq!(policy.required_participants, 5);
         assert_eq!(policy.ready_participants, 2);
+        Ok(())
     }
 
     #[test]
-    fn architecture_rejects_share_policy_above_participant_limit() {
+    fn architecture_rejects_share_policy_above_participant_limit() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.vault.meta.sentinel_shares.insert(
-            nook_core::DeviceId::parse("0123456789abcdef").expect("device id"),
+            nook_core::DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
                 version: 2,
                 threshold: 2,
@@ -826,10 +821,11 @@ mod tests {
             manager.vault.architecture.sentinel,
             nook_core::SentinelConfiguration::Disabled
         );
+        Ok(())
     }
 
     #[test]
-    fn one_local_share_is_openable_before_reconstruction_quorum() {
+    fn one_local_share_is_openable_before_reconstruction_quorum() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,
@@ -840,7 +836,7 @@ mod tests {
             },
         );
         manager.vault.meta.sentinel_shares.insert(
-            nook_core::DeviceId::parse("0123456789abcdef").expect("device id"),
+            nook_core::DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
                 version: 2,
                 threshold: 3,
@@ -853,5 +849,6 @@ mod tests {
             manager.sentinel_unlock_status(),
             nook_core::SentinelVaultUnlockState::CeremonyRequired
         );
+        Ok(())
     }
 }

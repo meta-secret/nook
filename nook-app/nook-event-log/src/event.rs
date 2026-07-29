@@ -334,6 +334,7 @@ pub fn build_genesis_import_event(
 mod tests {
     use super::*;
     use crate::test_support::{actor, public_key, signing_key as test_signing_key};
+    use anyhow::Context;
     use ed25519_dalek::SigningKey;
 
     fn empty_genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
@@ -368,7 +369,8 @@ mod tests {
 
         let err = event
             .validate_envelope(&StoreId::parse("store_testtoken11")?)
-            .expect_err("event test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("event test should reject invalid input"))?;
         assert!(matches!(
             err,
             EventError::UnsupportedSchemaVersion { version: 1 }
@@ -464,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypted_secret_payload_requires_non_empty_fingerprints() {
+    fn encrypted_secret_payload_requires_non_empty_fingerprints() -> anyhow::Result<()> {
         let valid = serde_json::json!({
             "id": "secret_abc12345678",
             "type": "login",
@@ -477,16 +479,17 @@ mod tests {
         let mut missing = valid.clone();
         missing
             .as_object_mut()
-            .expect("payload object")
+            .context("encrypted secret fixture must be an object")?
             .remove("identity_fingerprint");
         assert!(serde_json::from_value::<EncryptedSecretPayload>(missing).is_err());
 
         let mut empty = valid;
         empty
             .as_object_mut()
-            .expect("payload object")
+            .context("encrypted secret fixture must be an object")?
             .insert("fingerprint".to_owned(), serde_json::json!(""));
         assert!(serde_json::from_value::<EncryptedSecretPayload>(empty).is_err());
+        Ok(())
     }
 
     #[test]
@@ -496,7 +499,7 @@ mod tests {
         let mut missing = serde_json::to_value(&valid)?;
         missing
             .as_object_mut()
-            .expect("event object")
+            .context("event fixture must be an object")?
             .remove("actor_signing_public_key");
         assert!(serde_json::from_value::<VaultEvent>(missing).is_err());
 
@@ -506,7 +509,8 @@ mod tests {
         assert!(matches!(
             unavailable
                 .validate_envelope(&StoreId::parse("store_testtoken11")?)
-                .expect_err("event test should reject invalid input"),
+                .err()
+                .ok_or_else(|| anyhow::anyhow!("event test should reject invalid input"))?,
             EventError::MissingActorSigningPublicKey
         ));
         Ok(())

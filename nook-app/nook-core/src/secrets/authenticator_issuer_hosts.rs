@@ -49,9 +49,16 @@ impl<'de> Deserialize<'de> for AuthenticatorIssuerHosts {
     }
 }
 
-static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHosts> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../data/authenticator_issuer_hosts.json"))
-        .expect("bundled authenticator_issuer_hosts.json must deserialize")
+enum AuthenticatorIssuerHostsState {
+    Ready(AuthenticatorIssuerHosts),
+    InvalidBundledCatalog,
+}
+
+static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHostsState> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../data/authenticator_issuer_hosts.json")).map_or(
+        AuthenticatorIssuerHostsState::InvalidBundledCatalog,
+        AuthenticatorIssuerHostsState::Ready,
+    )
 });
 
 fn issuer_looks_like_host(issuer: &str) -> bool {
@@ -74,7 +81,12 @@ pub fn mapped_host_for_issuer(issuer: &str) -> Option<&'static str> {
     if key.is_empty() {
         return None;
     }
-    ISSUER_HOSTS.by_issuer.get(&key).map(String::as_str)
+    match &*ISSUER_HOSTS {
+        AuthenticatorIssuerHostsState::Ready(hosts) => {
+            hosts.by_issuer.get(&key).map(String::as_str)
+        }
+        AuthenticatorIssuerHostsState::InvalidBundledCatalog => None,
+    }
 }
 
 /// Resolve a website host for authenticator clustering / optional URL inference.
@@ -105,10 +117,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deserializes_issuer_map_with_normalized_keys() {
+    fn deserializes_issuer_map_with_normalized_keys() -> anyhow::Result<()> {
         let hosts: AuthenticatorIssuerHosts =
-            serde_json::from_str(r#"{ "OpenAI": "openai.com", "Epic Games": "epicgames.com" }"#)
-                .expect("valid issuers deserialize");
+            serde_json::from_str(r#"{ "OpenAI": "openai.com", "Epic Games": "epicgames.com" }"#)?;
         assert_eq!(
             hosts.by_issuer.get("openai").map(String::as_str),
             Some("openai.com")
@@ -122,6 +133,7 @@ mod tests {
             serde_json::from_str::<AuthenticatorIssuerHosts>(r#"{ "": "openai.com" }"#).is_err()
         );
         assert!(serde_json::from_str::<AuthenticatorIssuerHosts>(r#"{ "openai": "" }"#).is_err());
+        Ok(())
     }
 
     #[test]

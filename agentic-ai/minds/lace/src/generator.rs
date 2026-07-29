@@ -307,7 +307,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_yaml_generator_with_quote() {
+    fn test_yaml_generator_with_quote() -> GeneratorResult<()> {
         let yaml = r#"
 graph:
   architecture:
@@ -357,7 +357,7 @@ graph:
         - error_log
 "#;
 
-        let code = generate_rust_code(yaml).expect("Failed to generate code with quote");
+        let code = generate_rust_code(yaml)?;
         assert!(code.contains("pub mod architecture"));
         assert!(code.contains("pub struct ArchitectureTask"));
         assert!(code.contains("pub struct BackendTask"));
@@ -366,23 +366,26 @@ graph:
         assert!(code.contains("pub struct UnitTestError"));
         assert!(code.contains("pub test_logs: String"));
         assert!(code.contains("pub passed: bool"));
+        Ok(())
     }
 
     #[test]
-    fn test_generate_from_actual_graph_yaml() {
+    fn test_generate_from_actual_graph_yaml() -> GeneratorResult<()> {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../graph.yaml");
         if std::path::Path::new(path).exists() {
-            let code = generate_from_file(path).expect("Failed to generate from graph.yaml");
+            let code = generate_from_file(path)?;
             assert!(code.contains("pub mod unit_test"));
             assert!(code.contains("pub struct UnitTestTask"));
         }
+        Ok(())
     }
 
     #[test]
-    fn regenerate_graph_rs() {
+    fn regenerate_graph_rs() -> GeneratorResult<()> {
         let yaml_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../graph.yaml");
         let target_rs = concat!(env!("CARGO_MANIFEST_DIR"), "/src/graph.rs");
-        let code = generate_from_file(yaml_path).expect("Failed to generate code from graph.yaml");
-        std::fs::write(target_rs, code).expect("Failed to write generated code to graph.rs");
+        let code = generate_from_file(yaml_path)?;
+        std::fs::write(target_rs, code)?;
+        Ok(())
     }
 }

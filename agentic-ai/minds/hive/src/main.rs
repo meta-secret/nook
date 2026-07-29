@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
+use hive::HiveContext;
 use hive::auth::run_auth_broker;
 use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
@@ -185,12 +185,13 @@ enum QueueAction {
     },
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> hive::HiveResult<()> {
     install_rustls_crypto_provider()?;
-    arg0_dispatch_or_else(run_main)
+    arg0_dispatch_or_else(|paths| async move { run_main(paths).await.map_err(Into::into) })
+        .map_err(|error| hive::HiveError::message(error.to_string()))
 }
 
-async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
+async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -203,7 +204,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for queue operations")?;
+                .hive_context("NEO4J_PASSWORD is required for queue operations")?;
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
@@ -222,7 +223,9 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 } => {
                     let task_id = TaskId::new(task_id)?;
                     if !store.retry_failed_main_task(&task_id, &release_id).await? {
-                        anyhow::bail!("task {task_id} is not a retryable failed Main-repair task");
+                        hive::hive_bail!(
+                            "task {task_id} is not a retryable failed Main-repair task"
+                        );
                     }
                     println!(
                         "requeued failed chain for {task_id} with 3 additional attempts on {release_id}"
@@ -243,7 +246,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for the observer coordinator")?;
+                .hive_context("NEO4J_PASSWORD is required for the observer coordinator")?;
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
@@ -253,7 +256,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for the coordinator")?;
+                .hive_context("NEO4J_PASSWORD is required for the coordinator")?;
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
@@ -267,7 +270,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
+                .hive_context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
@@ -291,10 +294,10 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
         } => {
             let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
             if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
-                anyhow::bail!("heartbeat interval must be positive and shorter than the lease");
+                hive::hive_bail!("heartbeat interval must be positive and shorter than the lease");
             }
             if poll_min_seconds == 0 || poll_min_seconds > poll_max_seconds {
-                anyhow::bail!("poll interval must be positive and ordered");
+                hive::hive_bail!("poll interval must be positive and ordered");
             }
             let arg0_paths = with_linux_sandbox_override(arg0_paths, codex_linux_sandbox_exe);
             Worker::new(
@@ -322,7 +325,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for migration")?;
+                .hive_context("NEO4J_PASSWORD is required for migration")?;
             Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                 .await?
                 .migrate()
@@ -340,7 +343,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
-                .context("NEO4J_PASSWORD is required for enqueue")?;
+                .hive_context("NEO4J_PASSWORD is required for enqueue")?;
             let store =
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
                     .await?;
@@ -349,7 +352,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                 .into_iter()
                 .map(TaskId::new)
                 .collect::<Result<Vec<_>, _>>()
-                .context("invalid dependency id")?;
+                .hive_context("invalid dependency id")?;
             store
                 .enqueue(&EnqueueTask {
                     id: TaskId::new(id)?,
@@ -381,12 +384,13 @@ mod tests {
     use super::{Arg0DispatchPaths, PathBuf, install_rustls_crypto_provider};
 
     #[test]
-    fn production_tls_crypto_provider_is_available() {
-        install_rustls_crypto_provider().expect("AWS-LC provider should install");
+    fn production_tls_crypto_provider_is_available() -> hive::HiveResult<()> {
+        install_rustls_crypto_provider()?;
 
         let _client = rustls::ClientConfig::builder()
             .with_root_certificates(rustls::RootCertStore::empty())
             .with_no_client_auth();
+        Ok(())
     }
 
     #[test]

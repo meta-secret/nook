@@ -390,7 +390,7 @@ mod tests {
     use super::{EnqueueTask, ModelError, TaskId, TaskTrigger, TerminalResult};
 
     #[test]
-    fn enqueue_rejects_self_dependency() -> anyhow::Result<()> {
+    fn enqueue_rejects_self_dependency() -> crate::HiveResult<()> {
         let task_id = TaskId::new("task-1")?;
         let task = EnqueueTask {
             id: task_id.clone(),
@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_result_validates_wire_status_and_blocker_state() -> anyhow::Result<()> {
+    fn terminal_result_validates_wire_status_and_blocker_state() -> crate::HiveResult<()> {
         let completed = serde_json::json!({
             "status": "completed",
             "summary": "Implemented the change",
@@ -439,7 +439,7 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(completed_with_blocker) {
-            Ok(_) => anyhow::bail!("completed result with a blocker was accepted"),
+            Ok(_) => crate::hive_bail!("completed result with a blocker was accepted"),
             Err(error) => error,
         };
         assert!(error.to_string().contains("must not report a blocker"));
@@ -457,7 +457,7 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_without_blocker) {
-            Ok(_) => anyhow::bail!("blocked result without a blocker was accepted"),
+            Ok(_) => crate::hive_bail!("blocked result without a blocker was accepted"),
             Err(error) => error,
         };
         assert!(error.to_string().contains("must report a blocker"));
@@ -466,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_result_rejects_empty_content_entries() -> anyhow::Result<()> {
+    fn terminal_result_rejects_empty_content_entries() -> crate::HiveResult<()> {
         let terminal_result = serde_json::json!({
             "status": "completed",
             "summary": " ",
@@ -481,7 +481,7 @@ mod tests {
         });
 
         let error = match serde_json::from_value::<TerminalResult>(terminal_result) {
-            Ok(_) => anyhow::bail!("empty terminal content was accepted"),
+            Ok(_) => crate::hive_bail!("empty terminal content was accepted"),
             Err(error) => error,
         };
         assert!(error.to_string().contains("summary must not be empty"));

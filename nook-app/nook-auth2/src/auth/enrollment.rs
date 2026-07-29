@@ -637,6 +637,7 @@ fn decode_uri_component(value: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -673,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn enrollment_link_roundtrip_normalizes_hash_and_query_forms() {
+    fn enrollment_link_roundtrip_normalizes_hash_and_query_forms() -> anyhow::Result<()> {
         let code = "abc-123_DEF";
         let link = build_enrollment_link(code, "https://nook.example/");
         assert_eq!(link, "https://nook.example/#enroll=abc-123_DEF");
@@ -684,6 +685,7 @@ mod tests {
         );
         assert_eq!(normalize_enrollment_code("#enroll=abc%2F123"), "abc/123");
         assert_eq!(normalize_enrollment_code("  raw-code  "), "raw-code");
+        Ok(())
     }
 
     #[test]
@@ -702,7 +704,8 @@ mod tests {
     fn rejects_wrong_password() -> anyhow::Result<()> {
         let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")?;
         let err = decrypt_enrollment_payload(&code, "wrong-pass")
-            .expect_err("enrollment test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(
             err.to_string(),
             "Vault password does not decrypt this enrollment code."
@@ -716,7 +719,8 @@ mod tests {
             serde_json::to_vec(&json!({"provider": {"type": "local"}}))?.as_slice(),
         );
         let err = decrypt_enrollment_payload(&malformed, "pw")
-            .expect_err("enrollment test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(err.to_string(), "Invalid enrollment code.");
         assert!(peek_enrollment_entry_id(&malformed).is_err());
         Ok(())

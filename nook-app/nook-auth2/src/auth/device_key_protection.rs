@@ -94,7 +94,7 @@ pub fn derive_device_identity_from_passkey_prf(
     let mut secret_bytes = Zeroizing::new([0u8; 32]);
     hkdf.expand(DETERMINISTIC_IDENTITY_HKDF_INFO, secret_bytes.as_mut())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
-    let mut encoded = encode_age_identity_secret(secret_bytes.as_ref());
+    let mut encoded = encode_age_identity_secret(secret_bytes.as_ref())?;
     let secret = DeviceIdentitySecret::parse(&encoded)
         .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity);
     encoded.zeroize();
@@ -768,12 +768,12 @@ fn encode(bytes: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-fn encode_age_identity_secret(secret_bytes: &[u8]) -> String {
+fn encode_age_identity_secret(secret_bytes: &[u8]) -> DeviceKeyProtectionResult<String> {
     let base32 = secret_bytes.to_base32();
     let mut encoded = bech32::encode(AGE_SECRET_KEY_PREFIX, base32, Variant::Bech32)
-        .expect("age secret key HRP is valid");
+        .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
     encoded.make_ascii_uppercase();
-    encoded
+    Ok(encoded)
 }
 
 fn decode_field(name: &'static str, encoded: &str) -> DeviceKeyProtectionResult<Vec<u8>> {

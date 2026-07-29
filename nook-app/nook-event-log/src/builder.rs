@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn build_signed_event_roundtrip() -> EventResult<()> {
+    fn build_signed_event_roundtrip() -> anyhow::Result<()> {
         let (signing, _) = SigningIdentity::generate()?;
         let actor = signing.actor_id()?;
         let store_id = StoreId::parse("store_testtoken11")?;
@@ -143,11 +143,7 @@ mod tests {
             operations: vec![VaultOperation::VaultCleared],
         })?;
         assert!(!bytes.is_empty());
-        assert!(
-            std::str::from_utf8(&bytes)
-                .expect("event YAML is UTF-8")
-                .starts_with("schema_version:")
-        );
+        assert!(std::str::from_utf8(&bytes)?.starts_with("schema_version:"));
         assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
         assert_eq!(parse_event_storage_bytes(&bytes)?.id()?, event.id()?);
@@ -155,13 +151,15 @@ mod tests {
     }
 
     #[test]
-    fn observed_heads_rejects_invalid_parent_id() {
+    fn observed_heads_rejects_invalid_parent_id() -> anyhow::Result<()> {
         let err = ObservedHeads::parse(&["not-an-event-id".to_owned()])
-            .expect_err("builder test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("builder test should reject invalid input"))?;
         assert!(matches!(
             err,
             crate::EventError::EventIdMissingPrefix { .. }
         ));
+        Ok(())
     }
 
     #[test]

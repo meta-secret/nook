@@ -125,10 +125,11 @@ mod tests {
                 .secrets
                 .contains_key(&SecretId::from_vault_record("secret_SMypl8K0w9Y"))
         );
+        let replacement_id = SecretId::from_vault_record("secret_TMypl8K0w9Y");
         let (_, payload) = state
             .secrets
-            .get(&SecretId::from_vault_record("secret_TMypl8K0w9Y"))
-            .expect("replacement");
+            .get(&replacement_id)
+            .ok_or(SessionError::SecretNotFound { id: replacement_id })?;
         assert!(payload.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
         assert!(!payload.as_str().contains("new-password"));
         Ok(())

@@ -75,8 +75,8 @@ fn append_secure_note(
         note: note.to_owned(),
     });
     let secrets_key = SymmetricKey::parse(&device.secrets_key)?;
-    let identity_fingerprint = secret_identity_fingerprint(&value, &secrets_key);
-    let fingerprint = secret_fingerprint(&value, &secrets_key);
+    let identity_fingerprint = secret_identity_fingerprint(&value, &secrets_key)?;
+    let fingerprint = secret_fingerprint(&value, &secrets_key)?;
     let yaml = value.to_yaml()?;
     let ciphertext = device.crypto.encrypt_value(yaml.as_str())?;
     device.append_signed(vec![VaultOperation::SecretCreated {

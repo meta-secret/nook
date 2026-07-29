@@ -116,17 +116,22 @@ rule with `void 0`, `null`, casts, fake defaults, decorative wrappers, or
 sentinel strings. Full contract:
 [dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
 
-Authored Rust must not call `.unwrap()`. Production paths propagate or classify
-failure. Rust tests that perform fallible setup or verification return
-`Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to
-`.expect(...)` is forbidden. Keep `expect` only when the test is deliberately
-asserting an infallible local construction and the panic itself documents that
-specific invariant. Do not erase test errors behind
+Authored Rust must not call `.unwrap()` or `.expect(...)`. Production paths
+propagate or classify failure. Rust tests that perform fallible setup or
+verification return `Result<(), E>` and propagate with `?`; panic-based setup
+and verification are forbidden even for locally constructed fixtures. Do not
+erase test errors behind
 `Box<dyn std::error::Error>`: use the concrete crate error when one error family
 is involved, or `anyhow::Result` when a test composes unrelated fallible APIs.
-Workspace Clippy configuration enforces `unwrap_used` across all targets, and
-reviews treat repetitive test `expect` chains or boxed dynamic test errors as
-refactoring debt rather than acceptable test setup.
+Workspace Clippy configuration denies both `expect_used` and `unwrap_used`
+across all targets.
+
+Production Rust must not depend on, import, return, or invoke `anyhow`.
+Libraries, binaries, examples, and build scripts expose concrete error enums
+whose variants identify the failed operation and preserve typed sources.
+`anyhow` is permitted only in `#[cfg(test)]` unit-test code and integration
+tests under `tests/`, and it belongs in `[dev-dependencies]`. Repository
+preflight parses authored Rust and Cargo manifests to enforce that boundary.
 
 ## ⛔ Non-negotiable: squash merge every PR
 

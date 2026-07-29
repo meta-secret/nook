@@ -574,16 +574,18 @@ mod tests {
     }
 
     #[test]
-    fn password_is_required_for_password_protected_exports() {
+    fn password_is_required_for_password_protected_exports() -> anyhow::Result<()> {
         let error = plan_bitwarden_import(
             r#"{"encrypted":true,"passwordProtected":true,"salt":"salt","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"2.a|b|c","data":"2.a|b|c"}"#,
         )
-        .expect_err("bitwarden import test should reject invalid input");
+        .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(error, BitwardenImportError::PasswordRequired));
+        Ok(())
     }
 
     #[test]
-    fn recognizes_current_bitwarden_million_iteration_encrypted_export_envelope() {
+    fn recognizes_current_bitwarden_million_iteration_encrypted_export_envelope()
+    -> anyhow::Result<()> {
         // Mirrors a current real-world password-protected export without
         // retaining the user's encrypted vault payload in the repository.
         let error = plan_bitwarden_import(
@@ -597,21 +599,23 @@ mod tests {
                 "data": "2.EBESExQVFhcYGRobHB0eHw==|AAAAAAAAAAAAAAAAAAAAAA==|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
             }"#,
         )
-        .expect_err("bitwarden import test should reject invalid input");
+        .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(error, BitwardenImportError::PasswordRequired));
+        Ok(())
     }
 
     #[test]
-    fn rejects_account_restricted_exports() {
+    fn rejects_account_restricted_exports() -> anyhow::Result<()> {
         let error = plan_bitwarden_import_with_password(
             r#"{"encrypted":true,"passwordProtected":false,"salt":"","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"","data":""}"#,
             Some("password"),
         )
-        .expect_err("bitwarden import test should reject invalid input");
+        .err().ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(
             error,
             BitwardenImportError::AccountRestrictedExport
         ));
+        Ok(())
     }
 
     #[test]
@@ -659,12 +663,14 @@ mod tests {
     }
 
     #[test]
-    fn rejects_wrong_password_for_encrypted_fixture() {
+    fn rejects_wrong_password_for_encrypted_fixture() -> anyhow::Result<()> {
         let error = plan_bitwarden_import_with_password(
             include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
             Some("wrong password"),
         )
-        .expect_err("bitwarden import test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("bitwarden import test should reject invalid input"))?;
         assert!(matches!(error, BitwardenImportError::InvalidPassword));
+        Ok(())
     }
 }

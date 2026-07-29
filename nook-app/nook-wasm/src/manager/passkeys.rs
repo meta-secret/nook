@@ -139,8 +139,8 @@ impl NookVaultManager {
     ) -> Result<nook_core::EncryptedSecretPayload, NookError> {
         let mut value = nook_core::SecretValue::Passkey(passkey.clone());
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key);
+        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key)?;
         let mut yaml = value.to_yaml()?;
         let ciphertext = self.vault.crypto.get()?.encrypt_value(yaml.as_str())?;
         yaml.zeroize_plaintext();

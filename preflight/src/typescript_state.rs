@@ -25,7 +25,7 @@ pub fn typescript_implicit_application_state(root: &Path) -> io::Result<Vec<Viol
     let mut violations = Vec::new();
     for path in files {
         let contents = fs::read_to_string(&path)?;
-        for line in undefined_token_lines(&contents, path.extension()) {
+        for line in undefined_token_lines(&contents, path.extension()).map_err(io::Error::other)? {
             violations.push(Violation {
                 path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                 line,
@@ -52,7 +52,9 @@ pub fn typescript_mutable_void_state(root: &Path) -> io::Result<Vec<Violation>> 
     let mut violations = Vec::new();
     for path in files {
         let contents = fs::read_to_string(&path)?;
-        for line in mutable_void_state_lines(&contents, path.extension()) {
+        for line in
+            mutable_void_state_lines(&contents, path.extension()).map_err(io::Error::other)?
+        {
             violations.push(Violation {
                 path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                 line,
@@ -76,7 +78,9 @@ pub fn typescript_generic_optional_state(root: &Path) -> io::Result<Vec<Violatio
     let mut violations = Vec::new();
     for path in files {
         let contents = fs::read_to_string(&path)?;
-        for line in generic_optional_state_lines(&contents, path.extension()) {
+        for line in
+            generic_optional_state_lines(&contents, path.extension()).map_err(io::Error::other)?
+        {
             violations.push(Violation {
                 path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                 line,
@@ -141,70 +145,82 @@ fn is_excluded_directory(path: &Path) -> bool {
         })
 }
 
-fn undefined_token_lines(source: &str, extension: Option<&std::ffi::OsStr>) -> Vec<usize> {
+fn undefined_token_lines(
+    source: &str,
+    extension: Option<&std::ffi::OsStr>,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     if extension.is_some_and(|value| value == "svelte") {
         return svelte_undefined_token_lines(source);
     }
     typescript_code_undefined_token_lines(source, 1)
 }
 
-fn typescript_code_undefined_token_lines(source: &str, first_line: usize) -> Vec<usize> {
+fn typescript_code_undefined_token_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-        .expect("bundled TypeScript grammar must load");
+    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
     collect_undefined_nodes(tree.root_node(), source, first_line, &mut lines);
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
-fn mutable_void_state_lines(source: &str, extension: Option<&std::ffi::OsStr>) -> Vec<usize> {
+fn mutable_void_state_lines(
+    source: &str,
+    extension: Option<&std::ffi::OsStr>,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     if extension.is_some_and(|value| value == "svelte") {
         return svelte_mutable_void_state_lines(source);
     }
     typescript_code_mutable_void_state_lines(source, 1)
 }
 
-fn typescript_code_mutable_void_state_lines(source: &str, first_line: usize) -> Vec<usize> {
+fn typescript_code_mutable_void_state_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-        .expect("bundled TypeScript grammar must load");
+    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
     collect_mutable_void_nodes(tree.root_node(), source, first_line, &mut lines);
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
-fn generic_optional_state_lines(source: &str, extension: Option<&std::ffi::OsStr>) -> Vec<usize> {
+fn generic_optional_state_lines(
+    source: &str,
+    extension: Option<&std::ffi::OsStr>,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     if extension.is_some_and(|value| value == "svelte") {
         return svelte_generic_optional_state_lines(source);
     }
     typescript_code_generic_optional_state_lines(source, 1)
 }
 
-fn typescript_code_generic_optional_state_lines(source: &str, first_line: usize) -> Vec<usize> {
+fn typescript_code_generic_optional_state_lines(
+    source: &str,
+    first_line: usize,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-        .expect("bundled TypeScript grammar must load");
+    parser.set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
     collect_generic_optional_state_nodes(tree.root_node(), source, first_line, &mut lines);
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
 fn collect_generic_optional_state_nodes(
@@ -342,43 +358,39 @@ fn is_undefined_string(node: tree_sitter::Node<'_>, source: &str) -> bool {
         })
 }
 
-fn svelte_undefined_token_lines(source: &str) -> Vec<usize> {
+fn svelte_undefined_token_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_svelte_next::LANGUAGE.into())
-        .expect("bundled Svelte grammar must load");
+    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
-    collect_svelte_script_fragments(tree.root_node(), source, &mut lines);
+    collect_svelte_script_fragments(tree.root_node(), source, &mut lines)?;
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
-fn svelte_mutable_void_state_lines(source: &str) -> Vec<usize> {
+fn svelte_mutable_void_state_lines(source: &str) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_svelte_next::LANGUAGE.into())
-        .expect("bundled Svelte grammar must load");
+    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
-    collect_svelte_mutable_void_fragments(tree.root_node(), source, &mut lines);
+    collect_svelte_mutable_void_fragments(tree.root_node(), source, &mut lines)?;
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
-fn svelte_generic_optional_state_lines(source: &str) -> Vec<usize> {
+fn svelte_generic_optional_state_lines(
+    source: &str,
+) -> Result<Vec<usize>, tree_sitter::LanguageError> {
     let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_svelte_next::LANGUAGE.into())
-        .expect("bundled Svelte grammar must load");
+    parser.set_language(&tree_sitter_svelte_next::LANGUAGE.into())?;
     let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut lines = Vec::new();
     collect_svelte_script_fragments_with(
@@ -386,39 +398,40 @@ fn svelte_generic_optional_state_lines(source: &str) -> Vec<usize> {
         source,
         &mut lines,
         typescript_code_generic_optional_state_lines,
-    );
+    )?;
     lines.sort_unstable();
     lines.dedup();
-    lines
+    Ok(lines)
 }
 
 fn collect_svelte_script_fragments_with(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
-    scan: fn(&str, usize) -> Vec<usize>,
-) {
+    scan: fn(&str, usize) -> Result<Vec<usize>, tree_sitter::LanguageError>,
+) -> Result<(), tree_sitter::LanguageError> {
     if node.kind() == "raw_text"
         && node
             .parent()
             .is_some_and(|parent| parent.kind() == "script_element")
     {
         if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(scan(fragment, node.start_position().row + 1));
+            lines.extend(scan(fragment, node.start_position().row + 1)?);
         }
-        return;
+        return Ok(());
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_script_fragments_with(child, source, lines, scan);
+        collect_svelte_script_fragments_with(child, source, lines, scan)?;
     }
+    Ok(())
 }
 
 fn collect_svelte_mutable_void_fragments(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
-) {
+) -> Result<(), tree_sitter::LanguageError> {
     if node.kind() == "raw_text"
         && node
             .parent()
@@ -428,21 +441,22 @@ fn collect_svelte_mutable_void_fragments(
             lines.extend(typescript_code_mutable_void_state_lines(
                 fragment,
                 node.start_position().row + 1,
-            ));
+            )?);
         }
-        return;
+        return Ok(());
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_mutable_void_fragments(child, source, lines);
+        collect_svelte_mutable_void_fragments(child, source, lines)?;
     }
+    Ok(())
 }
 
 fn collect_svelte_script_fragments(
     node: tree_sitter::Node<'_>,
     source: &str,
     lines: &mut Vec<usize>,
-) {
+) -> Result<(), tree_sitter::LanguageError> {
     if node.kind() == "raw_text"
         && node
             .parent()
@@ -452,9 +466,9 @@ fn collect_svelte_script_fragments(
             lines.extend(typescript_code_undefined_token_lines(
                 fragment,
                 node.start_position().row + 1,
-            ));
+            )?);
         }
-        return;
+        return Ok(());
     }
     if node.child_count() == 0
         && node
@@ -462,12 +476,13 @@ fn collect_svelte_script_fragments(
             .is_ok_and(|text| text == "undefined")
     {
         lines.push(node.start_position().row + 1);
-        return;
+        return Ok(());
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_svelte_script_fragments(child, source, lines);
+        collect_svelte_script_fragments(child, source, lines)?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -478,7 +493,7 @@ mod tests {
     };
 
     #[test]
-    fn reports_every_code_and_type_token_but_not_prose() {
+    fn reports_every_code_and_type_token_but_not_prose() -> Result<(), tree_sitter::LanguageError> {
         let source = r#"
 // undefined is discussed here
 type State = { kind: 'empty' } | { kind: 'ready'; value: string }
@@ -492,13 +507,15 @@ const parenthesized = typeof(value)===`undefined`
 "#;
 
         assert_eq!(
-            typescript_code_undefined_token_lines(source, 1),
+            typescript_code_undefined_token_lines(source, 1)?,
             vec![5, 6, 8, 9, 10]
         );
+        Ok(())
     }
 
     #[test]
-    fn reports_mutable_void_slots_but_not_returns_or_nested_boundary_results() {
+    fn reports_mutable_void_slots_but_not_returns_or_nested_boundary_results()
+    -> Result<(), tree_sitter::LanguageError> {
         let source = r"
 let timer: ReturnType<typeof setTimeout> | void
 const parser = (): string | void => {}
@@ -507,13 +524,15 @@ let selected = $state<string | void>()
 ";
 
         assert_eq!(
-            typescript_code_mutable_void_state_lines(source, 1),
+            typescript_code_mutable_void_state_lines(source, 1)?,
             vec![2, 5]
         );
+        Ok(())
     }
 
     #[test]
-    fn reports_generic_option_style_state_names_but_not_prose() {
+    fn reports_generic_option_style_state_names_but_not_prose()
+    -> Result<(), tree_sitter::LanguageError> {
         let source = r"
 // ValueState and EMPTY_VALUE are discussed here
 type ValueState<T> = { kind: 'empty' } | { kind: 'present'; value: T }
@@ -522,8 +541,9 @@ const state = presentValue(value)
 ";
 
         assert_eq!(
-            typescript_code_generic_optional_state_lines(source, 1),
+            typescript_code_generic_optional_state_lines(source, 1)?,
             vec![3, 4, 5]
         );
+        Ok(())
     }
 }

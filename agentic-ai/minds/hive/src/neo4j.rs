@@ -1,4 +1,4 @@
-use anyhow::Context;
+use crate::HiveContext;
 use async_trait::async_trait;
 use neo4rs::{ConfigBuilder, Graph, Row, query};
 use serde::Serialize;
@@ -44,7 +44,7 @@ pub struct QueueTaskStatus {
 }
 
 impl Neo4jTaskStore {
-    pub async fn connect(uri: &str, username: &str, password: &str) -> anyhow::Result<Self> {
+    pub async fn connect(uri: &str, username: &str, password: &str) -> crate::HiveResult<Self> {
         install_rustls_crypto_provider()?;
         let config = ConfigBuilder::default()
             .uri(uri)
@@ -52,16 +52,16 @@ impl Neo4jTaskStore {
             .password(password)
             .db("neo4j")
             .build()
-            .context("invalid Neo4j configuration")?;
+            .hive_context("invalid Neo4j configuration")?;
         let graph = Graph::connect(config)
             .await
-            .context("failed to connect to Neo4j")?;
+            .hive_context("failed to connect to Neo4j")?;
         Ok(Self { graph })
     }
 
-    pub async fn queue_status(&self, limit: i64) -> anyhow::Result<Vec<QueueTaskStatus>> {
+    pub async fn queue_status(&self, limit: i64) -> crate::HiveResult<Vec<QueueTaskStatus>> {
         if !(1..=200).contains(&limit) {
-            anyhow::bail!("queue status limit must be between 1 and 200");
+            crate::hive_bail!("queue status limit must be between 1 and 200");
         }
         let mut rows = self
             .graph
@@ -119,13 +119,13 @@ impl Neo4jTaskStore {
         &self,
         task_id: &TaskId,
         release_id: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let digest = release_id
             .strip_prefix("sha256:")
             .filter(|digest| {
                 digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
             })
-            .context("release id must be a sha256 digest")?;
+            .hive_context("release id must be a sha256 digest")?;
         let mut rows = self
             .graph
             .execute(
@@ -172,7 +172,7 @@ impl Neo4jTaskStore {
         row: Row,
         attempt_id: AttemptId,
         lease_token: LeaseToken,
-    ) -> anyhow::Result<ClaimedTask> {
+    ) -> crate::HiveResult<ClaimedTask> {
         let dependency_ids: Vec<String> = row.get("dependency_ids")?;
         let dependency_summaries: Vec<String> = row.get("dependency_summaries")?;
         let dependency_context = dependency_ids
@@ -184,7 +184,7 @@ impl Neo4jTaskStore {
                     summary,
                 })
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<crate::HiveResult<Vec<_>>>()?;
         let artifact_ids: Vec<String> = row.get("artifact_ids")?;
         let artifact_kinds: Vec<String> = row.get("artifact_kinds")?;
         let artifact_uris: Vec<String> = row.get("artifact_uris")?;
@@ -221,7 +221,7 @@ impl Neo4jTaskStore {
 
 #[async_trait]
 impl TaskStore for Neo4jTaskStore {
-    async fn migrate(&self) -> anyhow::Result<()> {
+    async fn migrate(&self) -> crate::HiveResult<()> {
         let mut rows = self
             .graph
             .execute(query(
@@ -235,7 +235,7 @@ impl TaskStore for Neo4jTaskStore {
             .and_then(|row| row.get::<i64>("version").ok())
             .unwrap_or(0);
         if installed_version > LATEST_SCHEMA_VERSION {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
             );
         }
@@ -254,7 +254,7 @@ impl TaskStore for Neo4jTaskStore {
                 .and_then(|row| row.get::<i64>("legacy_tasks").ok())
                 .unwrap_or(0);
             if legacy_tasks > 0 {
-                anyhow::bail!(
+                crate::hive_bail!(
                     "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
                      drain or remove those legacy tasks before upgrading to schema 2"
                 );
@@ -268,7 +268,7 @@ impl TaskStore for Neo4jTaskStore {
                      SET task.manual_retry_used = false",
                 ))
                 .await
-                .context("failed to initialize schema-3 manual retry state")?;
+                .hive_context("failed to initialize schema-3 manual retry state")?;
         }
         if installed_version < 4 {
             self.graph
@@ -279,7 +279,7 @@ impl TaskStore for Neo4jTaskStore {
                      REMOVE task.manual_retry_used",
                 ))
                 .await
-                .context("failed to initialize schema-4 release-scoped retry state")?;
+                .hive_context("failed to initialize schema-4 release-scoped retry state")?;
         }
         if installed_version < 7 {
             self.graph
@@ -291,13 +291,13 @@ impl TaskStore for Neo4jTaskStore {
                      SET task.latest_activity_at = latest_activity_at",
                 ))
                 .await
-                .context("failed to backfill schema-7 latest activity state")?;
+                .hive_context("failed to backfill schema-7 latest activity state")?;
         }
         for statement in CONSTRAINTS {
             self.graph
                 .run(query(statement))
                 .await
-                .with_context(|| format!("failed to apply graph migration: {statement}"))?;
+                .with_hive_context(|| format!("failed to apply graph migration: {statement}"))?;
         }
         self.graph
             .run(
@@ -311,7 +311,7 @@ impl TaskStore for Neo4jTaskStore {
         Ok(())
     }
 
-    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> anyhow::Result<()> {
+    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()> {
         self.graph
             .run(
                 query(
@@ -325,10 +325,10 @@ impl TaskStore for Neo4jTaskStore {
                 .param("pod_name", pod_name),
             )
             .await
-            .context("failed to register Hive agent")
+            .hive_context("failed to register Hive agent")
     }
 
-    async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
+    async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
         task.validate()?;
         let mut transaction = self.graph.start_txn().await?;
         let enqueue_token = Uuid::new_v4().to_string();
@@ -366,7 +366,7 @@ impl TaskStore for Neo4jTaskStore {
             .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
         if !created {
             transaction.rollback().await?;
-            anyhow::bail!("task {} already exists", task.id);
+            crate::hive_bail!("task {} already exists", task.id);
         }
 
         for dependency in &task.dependencies {
@@ -382,10 +382,10 @@ impl TaskStore for Neo4jTaskStore {
                     .param("dependency", dependency.as_str()),
                 )
                 .await
-                .with_context(|| format!("dependency {} does not exist", dependency))?;
+                .with_hive_context(|| format!("dependency {} does not exist", dependency))?;
             if rows.next(transaction.handle()).await?.is_none() {
                 transaction.rollback().await?;
-                return Err(anyhow::anyhow!(
+                return Err(crate::hive_error!(
                     "dependency {dependency} does not exist or targets a different source commit"
                 ));
             }
@@ -420,7 +420,7 @@ impl TaskStore for Neo4jTaskStore {
         &self,
         source_commit: &str,
         kind: &str,
-    ) -> anyhow::Result<Option<TaskId>> {
+    ) -> crate::HiveResult<Option<TaskId>> {
         let mut rows = self
             .graph
             .execute(
@@ -441,11 +441,11 @@ impl TaskStore for Neo4jTaskStore {
             .await?;
         rows.next()
             .await?
-            .map(|row| TaskId::new(row.get::<String>("id")?).map_err(anyhow::Error::msg))
+            .map(|row| Ok(TaskId::new(row.get::<String>("id")?)?))
             .transpose()
     }
 
-    async fn cancel(&self, task_id: &TaskId, reason: &str) -> anyhow::Result<bool> {
+    async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -503,7 +503,7 @@ impl TaskStore for Neo4jTaskStore {
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -538,7 +538,7 @@ impl TaskStore for Neo4jTaskStore {
     async fn cancellation_targets(
         &self,
         task_id: &TaskId,
-    ) -> anyhow::Result<Vec<CancellationTarget>> {
+    ) -> crate::HiveResult<Vec<CancellationTarget>> {
         let mut rows = self
             .graph
             .execute(
@@ -558,14 +558,14 @@ impl TaskStore for Neo4jTaskStore {
         let mut targets = Vec::new();
         while let Some(row) = rows.next().await? {
             targets.push(CancellationTarget {
-                task_id: TaskId::new(row.get::<String>("task_id")?).map_err(anyhow::Error::msg)?,
+                task_id: TaskId::new(row.get::<String>("task_id")?)?,
                 pod_name: row.get("pod_name")?,
             });
         }
         Ok(targets)
     }
 
-    async fn finalize_cancellation(&self, task_id: &TaskId) -> anyhow::Result<bool> {
+    async fn finalize_cancellation(&self, task_id: &TaskId) -> crate::HiveResult<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -594,7 +594,11 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
-    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
+    async fn claim(
+        &self,
+        agent_id: &AgentId,
+        lease_seconds: i64,
+    ) -> crate::HiveResult<ClaimOutcome> {
         for retry in 0..CLAIM_RETRY_LIMIT {
             let result = async {
                 let attempt_id =
@@ -758,14 +762,10 @@ impl TaskStore for Neo4jTaskStore {
 
             match result {
                 Ok(claimed) => return Ok(claimed),
-                Err(error) if transient_claim_retry_delay(retry, &error).is_some() => {
-                    tokio::time::sleep(
-                        transient_claim_retry_delay(retry, &error)
-                            .expect("retry guard proved a delay exists"),
-                    )
-                    .await;
-                }
-                Err(error) => return Err(error),
+                Err(error) => match transient_claim_retry_delay(retry, &error) {
+                    Some(delay) => tokio::time::sleep(delay).await,
+                    None => return Err(error),
+                },
             }
         }
         unreachable!("bounded claim retry loop always returns")
@@ -777,7 +777,7 @@ impl TaskStore for Neo4jTaskStore {
         agent_id: &AgentId,
         lease_token: &LeaseToken,
         lease_seconds: i64,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -808,7 +808,7 @@ impl TaskStore for Neo4jTaskStore {
         lease: &ActivityLease,
         agent_id: &AgentId,
         activity: &TaskActivity,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let id = Uuid::new_v4().to_string();
         let mut rows = self
             .graph
@@ -851,7 +851,7 @@ impl TaskStore for Neo4jTaskStore {
         Ok(rows.next().await?.is_some())
     }
 
-    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool> {
+    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> crate::HiveResult<bool> {
         let mut rows = self
             .graph
             .execute(
@@ -890,7 +890,7 @@ impl TaskStore for Neo4jTaskStore {
         agent_id: &AgentId,
         summary: &str,
         artifact: &CompletionArtifact,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
             .execute(
@@ -975,7 +975,7 @@ impl TaskStore for Neo4jTaskStore {
         task: &ClaimedTask,
         agent_id: &AgentId,
         error: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         let mut transaction = self.graph.start_txn().await?;
         let mut rows = transaction
             .execute(
@@ -1041,13 +1041,13 @@ impl TaskStore for Neo4jTaskStore {
         agent_id: &AgentId,
         blocker: &EnqueueTask,
         reason: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         blocker.validate()?;
         if blocker.source_commit != task.source_commit {
-            anyhow::bail!("a blocker must target the same pinned repository revision");
+            crate::hive_bail!("a blocker must target the same pinned repository revision");
         }
         if !blocker.dependencies.is_empty() {
-            anyhow::bail!("a newly discovered blocker must not have undeclared dependencies");
+            crate::hive_bail!("a newly discovered blocker must not have undeclared dependencies");
         }
         let mut rows = self
             .graph

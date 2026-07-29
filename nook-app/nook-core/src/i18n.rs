@@ -288,11 +288,11 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_translation_catalogs_overlay_wins_recursively() {
+    fn test_merge_translation_catalogs_overlay_wins_recursively() -> anyhow::Result<()> {
         let base = r#"{"provider_picker":{"this_device":"Это устройство","github":"GitHub"}}"#;
         let overlay =
             r#"{"provider_picker":{"github":"GitHub updated","google_drive":"Google Drive"}}"#;
-        let merged = merge_translation_catalogs(base, overlay).expect("catalogs merge");
+        let merged = merge_translation_catalogs(base, overlay)?;
         assert_eq!(
             lookup_translation(&merged, "provider_picker.this_device").as_deref(),
             Some("Это устройство")
@@ -305,6 +305,7 @@ mod tests {
             lookup_translation(&merged, "provider_picker.google_drive").as_deref(),
             Some("Google Drive")
         );
+        Ok(())
     }
 
     #[test]

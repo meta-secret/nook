@@ -179,61 +179,56 @@ mod wasm_idb_tests {
         github_snapshot_with_id("gh-wasm", pat)
     }
 
-    async fn clear_auth_snapshot() {
+    async fn clear_auth_snapshot() -> anyhow::Result<()> {
         write_snapshot(&AuthProvidersSnapshotData {
             providers: Vec::new(),
             active_vault_store_id: None,
         })
-        .await
-        .expect("clear auth snapshot");
+        .await?;
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn save_seals_github_pat_in_indexed_db() {
+    async fn save_seals_github_pat_in_indexed_db() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11WASMtestSECRET";
-        save_auth_providers(&identity, &github_snapshot(pat))
-            .await
-            .expect("save");
-        let raw = read_raw_snapshot().await.expect("read raw");
-        let stored_pat = raw["providers"][0]["githubPat"]
-            .as_str()
-            .expect("githubPat");
+        save_auth_providers(&identity, &github_snapshot(pat)).await?;
+        let raw = read_raw_snapshot().await?;
+        let stored_pat = raw["providers"][0]["githubPat"].as_str()?;
         assert!(nook_core::is_sealed_credential(stored_pat));
         assert!(!stored_pat.contains("WASMtestSECRET"));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn load_decrypts_sealed_github_pat() {
+    async fn load_decrypts_sealed_github_pat() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_22LOADroundTRIP";
-        save_auth_providers(&identity, &github_snapshot(pat))
-            .await
-            .expect("save");
-        let loaded = load_auth_providers(&identity).await.expect("load");
+        save_auth_providers(&identity, &github_snapshot(pat)).await?;
+        let loaded = load_auth_providers(&identity).await?;
         assert_eq!(
             loaded.snapshot.providers[0].github_pat.as_deref(),
             Some(pat)
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn load_rejects_plaintext_credentials() {
+    async fn load_rejects_plaintext_credentials() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_33PLAINTEXT";
-        write_snapshot(&github_snapshot(pat))
-            .await
-            .expect("write plaintext");
+        write_snapshot(&github_snapshot(pat)).await?;
         assert!(load_auth_providers(&identity).await.is_err());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn save_seals_oauth_tokens_in_indexed_db() {
+    async fn save_seals_oauth_tokens_in_indexed_db() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let access = "ya29.wasm-oauth-access";
         let refresh = "1//wasm-refresh-secret";
         let snapshot = AuthProvidersSnapshotData {
@@ -263,31 +258,28 @@ mod wasm_idb_tests {
             }],
             active_vault_store_id: None,
         };
-        save_auth_providers(&identity, &snapshot)
-            .await
-            .expect("save");
-        let raw = read_raw_snapshot().await.expect("read raw");
+        save_auth_providers(&identity, &snapshot).await?;
+        let raw = read_raw_snapshot().await?;
         let oauth = &raw["providers"][0]["oauthFile"];
-        let stored_access = oauth["accessToken"].as_str().expect("accessToken");
-        let stored_refresh = oauth["refreshToken"].as_str().expect("refreshToken");
+        let stored_access = oauth["accessToken"].as_str()?;
+        let stored_refresh = oauth["refreshToken"].as_str()?;
         assert!(nook_core::is_sealed_credential(stored_access));
         assert!(nook_core::is_sealed_credential(stored_refresh));
         assert!(!stored_access.contains(access));
         assert!(!stored_refresh.contains(refresh));
 
-        let loaded = load_auth_providers(&identity).await.expect("load");
-        let loaded_oauth = loaded.snapshot.providers[0]
-            .oauth_file
-            .as_ref()
-            .expect("oauth");
+        let loaded = load_auth_providers(&identity).await?;
+        let loaded_oauth = loaded.snapshot.providers[0].oauth_file.as_ref()?;
         assert_eq!(loaded_oauth.access_token, access);
         assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() {
+    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() -> anyhow::Result<()>
+    {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_existing");
         existing.providers[0].store_id = Some("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
@@ -296,18 +288,14 @@ mod wasm_idb_tests {
         retained.store_id = Some("store-other".to_owned());
         existing.providers.push(retained);
         existing.active_vault_store_id = Some("store-incoming".to_owned());
-        save_auth_providers(&identity, &existing)
-            .await
-            .expect("save existing");
+        save_auth_providers(&identity, &existing).await?;
 
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
         incoming.active_vault_store_id = Some("store-incoming".to_owned());
-        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
-        save_presealed_auth_providers(&incoming)
-            .await
-            .expect("merge presealed");
+        seal_provider_credentials(&identity, &mut incoming)?;
+        save_presealed_auth_providers(&incoming).await?;
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
         let mut provider_ids = stored
             .providers
@@ -321,21 +309,21 @@ mod wasm_idb_tests {
             Some("store-incoming")
         );
         assert!(provider_credentials_are_presealed(&stored));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_save_rejects_existing_plaintext_provider_rows() {
+    async fn presealed_save_rejects_existing_plaintext_provider_rows() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
         write_snapshot(&github_snapshot_with_id(
             "gh-plaintext",
             "github_pat_plaintext",
         ))
-        .await
-        .expect("write plaintext");
+        .await?;
 
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
-        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
+        seal_provider_credentials(&identity, &mut incoming)?;
         let result = save_presealed_auth_providers(&incoming).await;
         assert!(matches!(
             result,
@@ -343,17 +331,18 @@ mod wasm_idb_tests {
                 if message == "auth-provider-credential-must-be-encrypted"
         ));
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         assert_eq!(
             raw["providers"][0]["githubPat"].as_str(),
             Some("github_pat_plaintext")
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_empty_save_clears_only_the_incoming_vault() {
+    async fn presealed_empty_save_clears_only_the_incoming_vault() -> anyhow::Result<()> {
         clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_removed");
         existing.providers[0].store_id = Some("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
@@ -362,18 +351,15 @@ mod wasm_idb_tests {
         retained.store_id = Some("store-other".to_owned());
         existing.providers.push(retained);
         existing.active_vault_store_id = Some("store-incoming".to_owned());
-        save_auth_providers(&identity, &existing)
-            .await
-            .expect("save existing");
+        save_auth_providers(&identity, &existing).await?;
 
         save_presealed_auth_providers(&AuthProvidersSnapshotData {
             providers: Vec::new(),
             active_vault_store_id: Some("store-incoming".to_owned()),
         })
-        .await
-        .expect("replace with empty provider set");
+        .await?;
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
         assert_eq!(stored.providers.len(), 1);
         assert_eq!(stored.providers[0].id, "gh-retained");
@@ -381,5 +367,6 @@ mod wasm_idb_tests {
             stored.active_vault_store_id.as_deref(),
             Some("store-incoming")
         );
+        Ok(())
     }
 }

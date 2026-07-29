@@ -190,13 +190,10 @@ pub fn canonicalize_json(value: &Value) -> Value {
     match value {
         Value::Object(map) => {
             let mut sorted = Map::new();
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            for key in keys {
-                sorted.insert(
-                    key.clone(),
-                    canonicalize_json(map.get(key).expect("key present")),
-                );
+            let mut entries = map.iter().collect::<Vec<_>>();
+            entries.sort_by_key(|(key, _)| *key);
+            for (key, item) in entries {
+                sorted.insert(key.clone(), canonicalize_json(item));
             }
             Value::Object(sorted)
         }

@@ -233,13 +233,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unrelated_csv_headers() {
+    fn rejects_unrelated_csv_headers() -> anyhow::Result<()> {
         let error = plan_chrome_passwords_import("service,login,secret\nExample,alice,password\n")
-            .expect_err("chrome passwords import test should reject invalid input");
+            .err()
+            .ok_or_else(|| {
+                anyhow::anyhow!("chrome passwords import test should reject invalid input")
+            })?;
 
         assert!(matches!(
             error,
             ChromePasswordsImportError::MissingColumn("url")
         ));
+        Ok(())
     }
 }

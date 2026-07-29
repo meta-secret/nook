@@ -94,6 +94,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::CreditCardExpirationInvalid
             | ValidationError::CreditCardCvvInvalid
             | ValidationError::SymmetricKeyInvalid
+            | ValidationError::SecretFingerprintKeyInvalid
             | ValidationError::AgeArmoredInvalid
             | ValidationError::DevicePublicKeyInvalid
             | ValidationError::DeviceIdentitySecretInvalid

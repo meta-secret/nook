@@ -406,7 +406,8 @@ mod tests {
     #[test]
     fn short_password_rejected() -> anyhow::Result<()> {
         let err = attach_password_envelope(&sample_keys()?, "abc")
-            .expect_err("password envelope test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("password envelope test should reject invalid input"))?;
         assert!(err.to_string().contains("at least"));
         Ok(())
     }
