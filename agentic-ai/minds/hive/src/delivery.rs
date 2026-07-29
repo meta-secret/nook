@@ -76,9 +76,6 @@ pub(crate) async fn verify_main_repair_delivery(
 
     validate_hive_marker(pull_request)?;
     validate_merged_hive_pull_request(pull_request)?;
-    validate_repository_checks(pull_request)?;
-    validate_full_e2e_checks(pull_request)?;
-    validate_review_and_deployment_readiness(repository, pull_request).await?;
     let merge_commit = pull_request
         .merge_commit
         .as_ref()
@@ -145,6 +142,9 @@ pub(crate) async fn verify_main_repair_delivery(
         applicable_runs.push(run);
     }
     let successful_main_sha = select_successful_main_run(&applicable_runs, &merge_commit.oid)?;
+    validate_repository_checks(pull_request, true)?;
+    validate_full_e2e_checks(pull_request, true)?;
+    validate_review_and_deployment_readiness(repository, pull_request).await?;
     validate_workbench_completion(repository, task_id, pull_request, successful_main_sha).await?;
     Ok(())
 }
@@ -282,7 +282,10 @@ fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> anyh
     Ok(())
 }
 
-fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
+fn validate_full_e2e_checks(
+    pull_request: &DeliveryPullRequest,
+    successful_main_contains_merge: bool,
+) -> anyhow::Result<()> {
     if !pull_request
         .labels
         .iter()
@@ -298,12 +301,12 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
         "Full browser e2e (main fix)",
         "Full extension e2e (main fix)",
     ] {
-        let successful = pull_request
+        let matching = pull_request
             .status_check_rollup
             .iter()
             .filter(|check| check.name == required_check)
-            .any(successful_check);
-        if !successful {
+            .collect::<Vec<_>>();
+        if !successful_or_merge_cancelled(&matching, successful_main_contains_merge) {
             anyhow::bail!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number,
@@ -315,13 +318,16 @@ fn validate_full_e2e_checks(pull_request: &DeliveryPullRequest) -> anyhow::Resul
     Ok(())
 }
 
-fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Result<()> {
-    let verify_succeeded = pull_request
+fn validate_repository_checks(
+    pull_request: &DeliveryPullRequest,
+    successful_main_contains_merge: bool,
+) -> anyhow::Result<()> {
+    let verify_checks = pull_request
         .status_check_rollup
         .iter()
         .filter(|check| check.name == "Verify and preview")
-        .any(successful_check);
-    if !verify_succeeded {
+        .collect::<Vec<_>>();
+    if !successful_or_merge_cancelled(&verify_checks, successful_main_contains_merge) {
         anyhow::bail!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
             pull_request.number,
@@ -338,7 +344,7 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Res
         }
     }
     for (name, checks) in repository_checks {
-        if checks.iter().any(|check| successful_check(check)) {
+        if successful_or_merge_cancelled(&checks, successful_main_contains_merge) {
             continue;
         }
         if checks.iter().any(|check| check.status != "COMPLETED") {
@@ -361,6 +367,26 @@ fn validate_repository_checks(pull_request: &DeliveryPullRequest) -> anyhow::Res
 
 fn successful_check(check: &DeliveryCheck) -> bool {
     check.status == "COMPLETED" && check.conclusion == "SUCCESS"
+}
+
+fn successful_or_merge_cancelled(
+    checks: &[&DeliveryCheck],
+    successful_main_contains_merge: bool,
+) -> bool {
+    if checks.iter().any(|check| successful_check(check)) {
+        return true;
+    }
+    successful_main_contains_merge
+        && checks
+            .iter()
+            .any(|check| check.status == "COMPLETED" && check.conclusion == "CANCELLED")
+        && checks.iter().all(|check| {
+            check.status == "COMPLETED"
+                && matches!(
+                    check.conclusion.as_str(),
+                    "CANCELLED" | "SKIPPED" | "NEUTRAL"
+                )
+        })
 }
 
 async fn validate_review_and_deployment_readiness(
@@ -787,7 +813,7 @@ mod tests {
             .labels
             .retain(|label| label.name != "ci:full-e2e");
 
-        let error = validate_full_e2e_checks(&pull_request)
+        let error = validate_full_e2e_checks(&pull_request, false)
             .expect_err("a Hive repair without the opt-in label cannot complete");
 
         assert!(error.to_string().contains("lacks `ci:full-e2e`"));
@@ -804,7 +830,7 @@ mod tests {
             workflow_name: "PR".to_owned(),
         });
 
-        validate_full_e2e_checks(&pull_request)
+        validate_full_e2e_checks(&pull_request, false)
             .expect("a successful exact-head run remains valid after the merge-triggered skip");
     }
 
@@ -819,9 +845,33 @@ mod tests {
             workflow_name: "Hive".to_owned(),
         });
 
-        let error = validate_repository_checks(&pull_request)
+        let error = validate_repository_checks(&pull_request, false)
             .expect_err("a failed applicable repository workflow cannot complete a Hive task");
         assert!(error.to_string().contains("Hive Rust"));
+    }
+
+    #[test]
+    fn successful_main_accepts_checks_cancelled_by_the_squash_merge() {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        for check in &mut pull_request.status_check_rollup {
+            check.conclusion = "CANCELLED".to_owned();
+        }
+
+        validate_repository_checks(&pull_request, true)
+            .expect("green exact-merge Main replaces merge-cancelled preview proof");
+        validate_full_e2e_checks(&pull_request, true)
+            .expect("green exact-merge Main replaces merge-cancelled e2e proof");
+    }
+
+    #[test]
+    fn successful_main_does_not_hide_a_failed_pr_check() {
+        let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
+        pull_request.status_check_rollup[0].conclusion = "FAILURE".to_owned();
+        pull_request.status_check_rollup[1].conclusion = "CANCELLED".to_owned();
+
+        let error = validate_full_e2e_checks(&pull_request, true)
+            .expect_err("a failed exact-head e2e run remains a delivery failure");
+        assert!(error.to_string().contains("Full browser e2e"));
     }
 
     fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {

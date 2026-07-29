@@ -869,10 +869,14 @@ fn task_prompt(task: &ClaimedTask) -> String {
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
          belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Never report this task's \
-         own id as its blocker and never create a duplicate repair PR. Report blocked only for a \
-         genuinely separate prerequisite, using a distinct stable blocker id and an actionable \
-         prompt that another worker can complete."
+         replacement exact-head run, and follow it to a terminal result. Before doing work or \
+         reporting another blocker, re-check whether the repair that created this prerequisite \
+         has already been merged and has a successful Main run containing its merge. If so, this \
+         prerequisite is obsolete: report completed with no changes and explain that it no longer \
+         blocks delivery, even when the requested capability remains unavailable. Never extend an \
+         obsolete blocker chain. Never report this task's own id as its blocker and never create a \
+         duplicate repair PR. Report blocked only for a genuinely separate prerequisite, using a \
+         distinct stable blocker id and an actionable prompt that another worker can complete."
             .to_owned()
     } else {
         String::new()
@@ -993,6 +997,8 @@ mod tests {
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("Never report this task's own id as its blocker"));
+        assert!(prompt.contains("this prerequisite is obsolete"));
+        assert!(prompt.contains("Never extend an obsolete blocker chain"));
         Ok(())
     }
 
