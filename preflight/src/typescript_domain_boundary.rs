@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    HashSet, Path, RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS, RUST_WASM_UNCHECKED_TYPE_MARKERS,
+    TYPESCRIPT_DOMAIN_ALIAS_NAMES, TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES, TYPESCRIPT_DOMAIN_MIRRORS,
+    Violation, collect_files_with_extension, fs, io,
+};
 
 /// Finds TypeScript declarations that duplicate Rust-owned domain boundaries.
 ///

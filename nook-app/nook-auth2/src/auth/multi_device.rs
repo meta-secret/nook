@@ -78,7 +78,7 @@ pub fn is_reserved_device_label(key: &str) -> bool {
 
 #[must_use]
 pub fn dec_auth_id(identity: &DeviceIdentity) -> AuthKeyId {
-    device_auth_id_from_public(&identity.identity.to_public())
+    identity.auth_id()
 }
 
 pub fn dec_auth_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AuthKeyId> {

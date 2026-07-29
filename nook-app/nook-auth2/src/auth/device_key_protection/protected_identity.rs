@@ -248,7 +248,7 @@ fn decrypt_device_identity(
     DeviceIdentitySecret::parse(text).map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)
 }
 
-fn unwrap_passkey_wrapped_device_identity(
+pub(super) fn unwrap_passkey_wrapped_device_identity(
     record: &PasskeyWrappedLocalDeviceIdentity,
     prf_output: &[u8],
 ) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
@@ -297,7 +297,7 @@ fn validate_passkey_metadata(
     Ok(())
 }
 
-fn validate_credential_id(credential_id: &[u8]) -> DeviceKeyProtectionResult<()> {
+pub(super) fn validate_credential_id(credential_id: &[u8]) -> DeviceKeyProtectionResult<()> {
     if credential_id.is_empty() {
         return Err(DeviceKeyProtectionError::CredentialIdEmpty);
     }
@@ -314,7 +314,9 @@ fn validate_user_handle(user_handle: &[u8]) -> DeviceKeyProtectionResult<()> {
     Ok(())
 }
 
-fn validate_prf_input(prf_input: &[u8]) -> DeviceKeyProtectionResult<[u8; PRF_INPUT_LEN]> {
+pub(super) fn validate_prf_input(
+    prf_input: &[u8],
+) -> DeviceKeyProtectionResult<[u8; PRF_INPUT_LEN]> {
     if prf_input.len() != PRF_INPUT_LEN {
         return Err(DeviceKeyProtectionError::PrfInputInvalid);
     }
@@ -323,7 +325,7 @@ fn validate_prf_input(prf_input: &[u8]) -> DeviceKeyProtectionResult<[u8; PRF_IN
     Ok(input)
 }
 
-fn validate_recovery_inputs(
+pub(super) fn validate_recovery_inputs(
     user_handle: &[u8],
     prf_output: &[u8],
 ) -> DeviceKeyProtectionResult<()> {
@@ -410,7 +412,7 @@ fn encode(bytes: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-fn encode_age_identity_secret(secret_bytes: &[u8]) -> DeviceKeyProtectionResult<String> {
+pub(super) fn encode_age_identity_secret(secret_bytes: &[u8]) -> DeviceKeyProtectionResult<String> {
     let base32 = secret_bytes.to_base32();
     let mut encoded = bech32::encode(AGE_SECRET_KEY_PREFIX, base32, Variant::Bech32)
         .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;

@@ -42,7 +42,7 @@ pub fn member_stored_key(pk_id: &AuthKeyId) -> String {
 /// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
-fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
+pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
     if stored_key == member_stored_key(entry_pk_id) {
         return true;
     }
