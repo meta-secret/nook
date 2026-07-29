@@ -443,17 +443,16 @@ mod metadata_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    async fn password_provider_switch_preserves_active_vault_metadata() {
-        let keys = nook_core::generate_vault_keys().expect("vault keys");
+    async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
         let entry = nook_core::create_password_entry_with_work_factor(
             &keys,
-            nook_core::generate_id().expect("password id").as_str(),
+            nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-07-29T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N,
-        )
-        .expect("password entry");
+        )?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
         manager.vault.unlock = nook_core::VaultUnlock::Passwords {
@@ -467,12 +466,10 @@ mod metadata_tests {
                 "oauth_token_for_metadata_test",
                 "private-target\twork-vault.yaml",
             )
-            .await
-            .expect("switch to remote provider");
+            .await?;
         manager
             .prepare_storage_preserving_vault_metadata("local", "", "")
-            .await
-            .expect("switch back to local provider");
+            .await?;
 
         assert!(matches!(
             &manager.vault.vault_name,
@@ -485,6 +482,18 @@ mod metadata_tests {
                 entries: vec![entry]
             }
         );
+
+        manager.sync_outbox.provider_id = "configured-provider".to_owned();
+        manager.sync_outbox.storage_mode = nook_core::StorageMode::Github;
+        manager.sync_outbox.access_token = "invalid-token".to_owned();
+        manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
+        assert!(manager.set_vault_name("Rejected rename").await.is_err());
+        assert!(matches!(
+            &manager.vault.vault_name,
+            super::super::VaultNameState::Named(name) if name == "Personal"
+        ));
+        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
+        Ok(())
     }
 }
 

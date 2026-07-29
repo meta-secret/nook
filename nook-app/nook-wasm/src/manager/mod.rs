@@ -625,10 +625,13 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = setVaultName)]
     pub async fn set_vault_name(&mut self, name: &str) -> Result<(), JsError> {
+        let previous_name = self.vault.vault_name.clone();
         self.assign_vault_name(name);
-        self.persist_vault_change(Vec::new())
-            .await
-            .map_err(|error| JsError::new(&error.to_string()))
+        if let Err(error) = self.persist_vault_change(Vec::new()).await {
+            self.vault.vault_name = previous_name;
+            return Err(JsError::new(&error.to_string()));
+        }
+        Ok(())
     }
 
     fn assign_vault_name(&mut self, name: &str) {
