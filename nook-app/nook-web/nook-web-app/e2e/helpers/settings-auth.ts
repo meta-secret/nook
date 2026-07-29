@@ -16,6 +16,7 @@ import {
   forceVaultQuiescentForE2e,
   installGoogleOAuthMock,
   waitForGoogleOAuthSignedIn,
+  waitForStorageChainIdle,
   waitForVaultOperationsIdle,
 } from './vault-runtime'
 
@@ -262,24 +263,29 @@ export async function submitOnboardEnrollmentCode(
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('onboard-password-input').fill(password)
-  await page.getByTestId('onboard-device-submit').click()
-
   const linkInput = page.getByTestId('onboarding-link-url')
   const generating = page.getByTestId('onboard-generating')
   const error = page.getByTestId('onboard-error')
-  await expect(linkInput.or(error).or(generating)).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  if (await error.isVisible()) {
-    throw new Error(
-      `Onboard enrollment failed: ${(await error.textContent())?.trim() ?? 'unknown error'}`,
-    )
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.getByTestId('onboard-password-input').fill(password)
+    await page.getByTestId('onboard-device-submit').click()
+    await expect(linkInput.or(error).or(generating)).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(linkInput.or(error)).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    if (await linkInput.isVisible()) return linkInput
+
+    const message = (await error.textContent())?.trim() ?? 'unknown error'
+    if (attempt === 0 && message === 'Vault storage is busy. Try again.') {
+      await waitForStorageChainIdle(page)
+      await forceVaultQuiescentForE2e(page)
+      continue
+    }
+    throw new Error(`Onboard enrollment failed: ${message}`)
   }
-  await expect(linkInput).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  return linkInput
+  throw new Error('Onboard enrollment did not produce a link.')
 }
 
 /** Raw enrollment payload from a full onboarding URL or hash link. */
