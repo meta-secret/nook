@@ -871,7 +871,7 @@ impl NookWebsiteLoginSavePlan {
     }
 
     #[wasm_bindgen(getter)]
-    pub const fn decision(&self) -> NookWebsiteLoginSaveDecision {
+    pub fn decision(&self) -> NookWebsiteLoginSaveDecision {
         self.decision
     }
 
