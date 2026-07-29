@@ -116,10 +116,7 @@ fn collect_implicit_state_nodes(
     }
 }
 
-fn lexical_declaration_models_implicit_state(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-) -> bool {
+fn lexical_declaration_models_implicit_state(node: tree_sitter::Node<'_>, source: &str) -> bool {
     let mut cursor = node.walk();
     node.named_children(&mut cursor)
         .filter(|child| child.kind() == "variable_declarator")
@@ -142,13 +139,11 @@ fn declarator_models_implicit_state(node: tree_sitter::Node<'_>, source: &str) -
     let type_is_implicit = node
         .child_by_field_name("type")
         .is_some_and(|type_node| node_has_exact_token(type_node, source, "undefined"));
-    let value_is_implicit = node
-        .child_by_field_name("value")
-        .is_some_and(|value| {
-            node_has_empty_svelte_state_call(value, source)
-                || state_call_contains_undefined(value, source)
-                || value_is_undefined(value, source)
-        });
+    let value_is_implicit = node.child_by_field_name("value").is_some_and(|value| {
+        node_has_empty_svelte_state_call(value, source)
+            || state_call_contains_undefined(value, source)
+            || value_is_undefined(value, source)
+    });
     type_is_implicit || value_is_implicit
 }
 
@@ -179,12 +174,9 @@ fn node_has_exact_token(node: tree_sitter::Node<'_>, source: &str, token: &str) 
 
 fn node_has_empty_svelte_state_call(node: tree_sitter::Node<'_>, source: &str) -> bool {
     if node.kind() == "call_expression" {
-        let function = node.child_by_field_name("function").and_then(|child| {
-            child
-                .utf8_text(source.as_bytes())
-                .ok()
-                .map(str::to_owned)
-        });
+        let function = node
+            .child_by_field_name("function")
+            .and_then(|child| child.utf8_text(source.as_bytes()).ok().map(str::to_owned));
         let arguments = node
             .child_by_field_name("arguments")
             .and_then(|child| child.utf8_text(source.as_bytes()).ok());
