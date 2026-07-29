@@ -393,7 +393,17 @@ fn string_literal_value<'a>(node: tree_sitter::Node<'_>, source: &'a str) -> Opt
 }
 
 fn is_string_literal_expression(node: tree_sitter::Node<'_>) -> bool {
-    matches!(node.kind(), "string" | "template_string")
+    node.kind() == "string"
+        || (node.kind() == "template_string" && !contains_template_substitution(node))
+}
+
+fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
+    if node.kind() == "template_substitution" {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .any(contains_template_substitution)
 }
 
 fn union_contains_direct_string_literal(node: tree_sitter::Node<'_>, source: &str) -> bool {
@@ -940,6 +950,7 @@ if (state.kind === 'closed') console.log('closed')
 if ('closed' !== state.kind) console.log('open')
 if (provider.type === 'local') console.log('unrelated enum value')
 if (server.transport.type !== 'stdio') console.log('external protocol')
+const progress = { status: `${completedCount} complete` }
 const description = { label: 'static copy' }
 const externalKind = state.kind ?? 'external-value'
 type SelectedFields = Pick<SessionState, 'kind' | 'handle'>
