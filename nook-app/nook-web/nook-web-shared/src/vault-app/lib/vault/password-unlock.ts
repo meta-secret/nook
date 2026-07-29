@@ -251,16 +251,29 @@ export function clearEnrollmentCode(state: VaultState) {
   state.clearActiveEnrollmentEntry()
 }
 
+enum SavedEnrollmentProviderKind {
+  Local = 'local',
+  Remote = 'remote',
+}
+
+type SavedEnrollmentProvider =
+  | { kind: SavedEnrollmentProviderKind.Local }
+  | { kind: SavedEnrollmentProviderKind.Remote; provider: StorageProvider }
+
 function applySavedEnrollmentProvider(
   state: VaultState,
-  provider: StorageProvider | void,
+  selection: SavedEnrollmentProvider,
 ) {
-  if (!provider || provider.type === 'local') {
+  if (
+    selection.kind === SavedEnrollmentProviderKind.Local ||
+    selection.provider.type === 'local'
+  ) {
     state.storageMode = 'local'
-    state.loginSetupType = 'local'
+    state.activateLoginSetup('local')
     return
   }
 
+  const { provider } = selection
   state.storageMode = provider.type
   state.clearLoginSetup()
   if (provider.type === 'github') {
@@ -271,6 +284,9 @@ function applySavedEnrollmentProvider(
     return
   }
   if (provider.type === 'oauth-file') {
+    if (!provider.oauthFile) {
+      throw new Error('OAuth enrollment provider is missing its configuration.')
+    }
     state.oauthFile = provider.oauthFile
     state.githubPat = ''
     state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo
@@ -278,6 +294,11 @@ function applySavedEnrollmentProvider(
     return
   }
 
+  if (!provider.localFolder) {
+    throw new Error(
+      'Local-folder enrollment provider is missing its configuration.',
+    )
+  }
   state.localFolder = provider.localFolder
   state.githubPat = ''
   state.clearOauthFile()
@@ -372,7 +393,7 @@ export async function connectWithEnrollmentCode(
       state.storageMode = 'github'
       state.githubPat = githubPat
       state.githubRepo = githubRepo
-      state.loginSetupType = 'github'
+      state.activateLoginSetup('github')
       enrollmentStorageArgs = ['github', githubPat, githubRepo]
     } else if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
       const preset = (takeWasmStringValue(payload.provider.oauthPreset) ??
@@ -464,9 +485,12 @@ export async function connectWithEnrollmentCode(
           oauthFile: { ...provider.oauthFile, folderId: storageTargetId },
         }
       }
-      applySavedEnrollmentProvider(state, provider)
+      applySavedEnrollmentProvider(state, {
+        kind: SavedEnrollmentProviderKind.Remote,
+        provider,
+      })
       if (sharedProviderNeedsSave) {
-        state.loginSetupType = 'oauth-file'
+        state.activateLoginSetup('oauth-file')
       }
       enrollmentStorageArgs = state.providerWasmArgs(provider)
     } else if (payload.provider.type === OAUTH_FILE_PROVIDER_TYPE) {
@@ -490,7 +514,7 @@ export async function connectWithEnrollmentCode(
         createdAt: isoTimestamp(),
       }
       state.storageMode = 'oauth-file'
-      state.loginSetupType = 'oauth-file'
+      state.activateLoginSetup('oauth-file')
       state.oauthFile = oauthProvider.oauthFile
       state.githubPat = ''
       state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo
@@ -499,14 +523,21 @@ export async function connectWithEnrollmentCode(
     } else {
       await state.loadProviders()
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state)
-      const provider = hasLocalPasswordEntries
-        ? omittedValue()
+      const candidate = hasLocalPasswordEntries
+        ? false
         : (state.syncProviders[0] ??
-          state.providers.find((candidate) => candidate.type !== 'local'))
-      applySavedEnrollmentProvider(state, provider)
+          state.providers.find((provider) => provider.type !== 'local'))
+      const selection: SavedEnrollmentProvider =
+        candidate && candidate.type !== 'local'
+          ? {
+              kind: SavedEnrollmentProviderKind.Remote,
+              provider: candidate,
+            }
+          : { kind: SavedEnrollmentProviderKind.Local }
+      applySavedEnrollmentProvider(state, selection)
       enrollmentStorageArgs =
-        provider && provider.type !== 'local'
-          ? state.providerWasmArgs(provider)
+        selection.kind === SavedEnrollmentProviderKind.Remote
+          ? state.providerWasmArgs(selection.provider)
           : ['local', '', '']
     }
 

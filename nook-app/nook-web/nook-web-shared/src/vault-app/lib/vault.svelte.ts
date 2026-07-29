@@ -53,7 +53,11 @@ import {
   SettingsAccordionSection,
   SettingsSection,
 } from '$lib/vault/state/ui.svelte'
-import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+import {
+  LoginSetupKind,
+  type LocalProviderLookup,
+  type StagedRemoteStorage,
+} from '$lib/vault/state/provider.svelte'
 
 export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0
@@ -173,7 +177,7 @@ export class VaultState extends VaultLifecycleState {
     return providersActions.shouldUseJoinProviderForConnect(this)
   }
 
-  stagedRemoteStorageArgs(): [string, string, string] | void {
+  stagedRemoteStorageArgs(): StagedRemoteStorage {
     return providersActions.stagedRemoteStorageArgs(this)
   }
 
@@ -229,7 +233,7 @@ export class VaultState extends VaultLifecycleState {
     }, 5000)
   }
 
-  get localProvider(): StorageProvider | void {
+  get localProvider(): LocalProviderLookup {
     return providersActions.localProvider(this)
   }
 

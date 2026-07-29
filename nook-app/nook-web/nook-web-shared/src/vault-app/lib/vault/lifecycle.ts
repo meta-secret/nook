@@ -26,6 +26,7 @@ import {
 import { JoinEnrollmentState } from '$app-wasm'
 import * as localLoginActions from '$lib/vault/local-login'
 import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
+import { LocalProviderLookupKind } from '$lib/vault/state/provider.svelte'
 
 const log = createLogger('vault-lifecycle')
 
@@ -171,7 +172,10 @@ export async function continueInitializationAfterDeviceUnlock(
   const autoUnlock = !hasPendingEnrollment && state.shouldAutoUnlock()
   if (autoUnlock) {
     await state.loadDb()
-    if (!state.isAuthenticated && state.localProvider) {
+    if (
+      !state.isAuthenticated &&
+      state.localProvider.kind === LocalProviderLookupKind.Found
+    ) {
       void state.refreshPasswordEntriesList()
     }
   } else {

@@ -107,14 +107,39 @@ export type VaultCreationQueue =
       request: PendingVaultCreation
     }
 
+export enum ExistingVaultProviderSnapshotKind {
+  Local = 'local',
+  Github = 'github',
+  OAuthFile = 'oauth-file',
+  LocalFolder = 'local-folder',
+}
+
+export type ExistingVaultProviderSnapshot =
+  | {
+      kind: ExistingVaultProviderSnapshotKind.Local
+      setupType: StorageProviderType
+    }
+  | {
+      kind: ExistingVaultProviderSnapshotKind.Github
+      setupType: StorageProviderType
+      githubPat: string
+      githubRepo: string
+    }
+  | {
+      kind: ExistingVaultProviderSnapshotKind.OAuthFile
+      setupType: StorageProviderType
+      oauthFile: OAuthFileConfig
+    }
+  | {
+      kind: ExistingVaultProviderSnapshotKind.LocalFolder
+      setupType: StorageProviderType
+      localFolder: LocalFolderConfig
+    }
+
 export type PendingExistingVaultImport = {
   storeId: string
   previousActiveStoreId: string | void
-  setupType: StorageProviderType
-  githubPat: string
-  githubRepo: string
-  oauthFile: OAuthFileConfig | void
-  localFolder: LocalFolderConfig | void
+  provider: ExistingVaultProviderSnapshot
 }
 
 export enum ExistingVaultImportQueueKind {

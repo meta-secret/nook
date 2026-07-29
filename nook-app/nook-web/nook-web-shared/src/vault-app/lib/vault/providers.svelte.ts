@@ -1,4 +1,3 @@
-import { omittedValue } from '../../../explicit-state'
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { generateId, isoTimestamp, type VaultAccessStatus } from '$lib/nook'
@@ -40,7 +39,13 @@ import {
   type NookStorageConnectArgs,
 } from '$app-wasm'
 import { createLogger } from '$lib/log'
-import { LoginSetupKind } from '$lib/vault/state/provider.svelte'
+import {
+  LocalProviderLookupKind,
+  LoginSetupKind,
+  StagedRemoteStorageKind,
+  type LocalProviderLookup,
+  type StagedRemoteStorage,
+} from '$lib/vault/state/provider.svelte'
 enum OAuthProviderUpdateKind {
   NotRequired = 'not-required',
   Required = 'required',
@@ -49,6 +54,15 @@ enum OAuthProviderUpdateKind {
 type OAuthProviderUpdate =
   | { kind: OAuthProviderUpdateKind.NotRequired }
   | { kind: OAuthProviderUpdateKind.Required; providerId: string }
+
+enum ProviderSaveStoreIdKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+type ProviderSaveStoreId =
+  | { kind: ProviderSaveStoreIdKind.Unavailable }
+  | { kind: ProviderSaveStoreIdKind.Available; storeId: string }
 
 export const VAULT_ASSESS_TIMEOUT_ERROR_NAME = 'VaultAssessTimeoutError'
 
@@ -111,19 +125,27 @@ export function wasmStorageArgs(
   state: ProviderActionsContext,
 ): [string, string, string] {
   const syncProvider = syncProviders(state)[0]
+  const boundary = {
+    ...(syncProvider ? { syncProvider: $state.snapshot(syncProvider) } : {}),
+    ...(state.oauthFile
+      ? {
+          oauthRemoteRef: oauthRemoteStorageRef(
+            $state.snapshot(state.oauthFile),
+          ),
+        }
+      : {}),
+  }
   return takeStorageArgsTuple(
     wasmStorageArgsCore(
       state.localVaultPresent,
       state.isAuthenticated,
-      syncProvider ? $state.snapshot(syncProvider) : omittedValue(),
+      boundary.syncProvider,
       state.storageMode,
       state.githubPat,
       state.githubRepo,
       state.oauthFile?.preset,
       state.oauthFile?.accessToken,
-      state.oauthFile
-        ? oauthRemoteStorageRef($state.snapshot(state.oauthFile))
-        : omittedValue(),
+      boundary.oauthRemoteRef,
       state.oauthFile?.fileName,
     ),
   )
@@ -156,15 +178,25 @@ export function shouldUseJoinProviderForConnect(
 
 export function stagedRemoteStorageArgs(
   state: ProviderActionsContext,
-): [string, string, string] | void {
+): StagedRemoteStorage {
   const type = stagedProviderType(state)
+  const boundary = {
+    ...(state.githubPat ? { githubPat: state.githubPat } : {}),
+    ...(state.githubRepo ? { githubRepo: state.githubRepo } : {}),
+    ...(state.oauthFile ? { oauthFile: $state.snapshot(state.oauthFile) } : {}),
+  }
   const args = stagedRemoteStorageArgsCore(
     type,
-    state.githubPat || omittedValue(),
-    state.githubRepo || omittedValue(),
-    state.oauthFile ? $state.snapshot(state.oauthFile) : omittedValue(),
+    boundary.githubPat,
+    boundary.githubRepo,
+    boundary.oauthFile,
   )
-  return args ? takeStorageArgsTuple(args) : omittedValue()
+  return args
+    ? {
+        kind: StagedRemoteStorageKind.Available,
+        args: takeStorageArgsTuple(args),
+      }
+    : { kind: StagedRemoteStorageKind.Unavailable }
 }
 
 export function stagedProviderLabel(state: ProviderActionsContext): string {
@@ -228,14 +260,17 @@ export function refreshLocalFolderBackupSupport(
 
 export function localProvider(
   state: ProviderActionsContext,
-): StorageProvider | void {
+): LocalProviderLookup {
   const id = localProviderIdForActiveVault(
     providerSnapshot(state),
     state.activeVaultStoreId,
   )
-  return id
-    ? state.providers.find((provider) => provider.id === id)
-    : omittedValue()
+  const provider = id
+    ? state.providers.find((candidate) => candidate.id === id)
+    : false
+  return provider
+    ? { kind: LocalProviderLookupKind.Found, provider }
+    : { kind: LocalProviderLookupKind.Missing }
 }
 
 export function activeProviders(
@@ -315,18 +350,18 @@ export async function handleRemoteVaultAssessStatus(
 /** Store id for persisting a sync provider row before or after wasm connect. */
 async function vaultStoreIdForProviderSave(
   state: ProviderActionsContext,
-): Promise<string | void> {
+): Promise<ProviderSaveStoreId> {
   const fromManager = state.manager
     ? (await state.enqueueStorage(() => state.manager!.vaultStoreId)).trim()
     : ''
   if (fromManager) {
-    return fromManager
+    return { kind: ProviderSaveStoreIdKind.Available, storeId: fromManager }
   }
-  return (
-    state.activeVaultStoreId?.trim() ||
-    state.selectedLoginVaultStoreId?.trim() ||
-    omittedValue()
-  )
+  const storedId =
+    state.activeVaultStoreId?.trim() || state.selectedLoginVaultStoreId?.trim()
+  return storedId
+    ? { kind: ProviderSaveStoreIdKind.Available, storeId: storedId }
+    : { kind: ProviderSaveStoreIdKind.Unavailable }
 }
 
 function resetICloudSignInState(state: ProviderActionsContext) {
@@ -568,61 +603,72 @@ export async function ensureProviderSaved(
     kind: OAuthProviderUpdateKind.NotRequired,
   }
   const vaultStoreId = await vaultStoreIdForProviderSave(state)
+  const providerStoreFields: { storeId?: string } =
+    vaultStoreId.kind === ProviderSaveStoreIdKind.Available
+      ? { storeId: vaultStoreId.storeId }
+      : {}
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? 'google-drive'
-  const oauthSnapshot: OAuthFileConfig | void =
-    type === 'oauth-file'
-      ? {
-          preset: oauthPreset,
-          accessToken: state.oauthFile?.accessToken ?? '',
-          refreshToken: state.oauthFile?.refreshToken,
-          expiresAt: state.oauthFile?.expiresAt,
-          fileId: state.oauthFile?.fileId,
-          folderId: state.oauthFile?.folderId,
-          driveMode: state.oauthFile?.driveMode ?? 'private',
-          iCloudMode: state.oauthFile?.iCloudMode ?? 'private',
-          iCloudShareTarget: state.oauthFile?.iCloudShareTarget,
-          accountEmail: state.oauthFile?.accountEmail,
-          fileName: driveFile,
-        }
-      : omittedValue()
-  const localFolderSnapshot: LocalFolderConfig | void =
-    type === 'local-folder'
-      ? {
-          directoryName: state.localFolder?.directoryName,
-          handleId: state.localFolder?.handleId,
-        }
-      : omittedValue()
 
   const isExplicitAdd =
     state.addProviderOpen ||
     (state.isAuthenticated && state.loginSetup.kind === LoginSetupKind.Active)
 
   if (isNewSetup && type !== 'local') {
-    if (type === 'local-folder' && !localFolderSnapshot?.handleId) {
-      state.errorMsg = state.t('auth_storage.local_folder_choose_err')
-      return false
-    }
-    const provider: StorageProvider = {
-      id: generateId(),
-      type,
-      label: providerDefaultLabel(
+    let provider: StorageProvider
+    if (type === 'github') {
+      provider = {
+        id: generateId(),
         type,
-        type === 'github'
-          ? repo
-          : type === 'oauth-file'
-            ? driveFile
-            : type === 'local-folder'
-              ? localFolderSnapshot?.directoryName
-              : omittedValue(),
-        oauthPreset,
-      ),
-      githubPat: type === 'github' ? pat : omittedValue(),
-      githubRepo: type === 'github' ? repo : omittedValue(),
-      oauthFile: oauthSnapshot,
-      localFolder: localFolderSnapshot,
-      storeId: vaultStoreId,
-      createdAt: isoTimestamp(),
+        label: providerDefaultLabel(type, repo, oauthPreset),
+        githubPat: pat,
+        githubRepo: repo,
+        ...providerStoreFields,
+        createdAt: isoTimestamp(),
+      }
+    } else if (type === 'oauth-file') {
+      const oauthFile: OAuthFileConfig = {
+        preset: oauthPreset,
+        accessToken: state.oauthFile?.accessToken ?? '',
+        refreshToken: state.oauthFile?.refreshToken,
+        expiresAt: state.oauthFile?.expiresAt,
+        fileId: state.oauthFile?.fileId,
+        folderId: state.oauthFile?.folderId,
+        driveMode: state.oauthFile?.driveMode ?? 'private',
+        iCloudMode: state.oauthFile?.iCloudMode ?? 'private',
+        iCloudShareTarget: state.oauthFile?.iCloudShareTarget,
+        accountEmail: state.oauthFile?.accountEmail,
+        fileName: driveFile,
+      }
+      provider = {
+        id: generateId(),
+        type,
+        label: providerDefaultLabel(type, driveFile, oauthPreset),
+        oauthFile,
+        ...providerStoreFields,
+        createdAt: isoTimestamp(),
+      }
+    } else {
+      const localFolder: LocalFolderConfig = {
+        directoryName: state.localFolder?.directoryName,
+        handleId: state.localFolder?.handleId,
+      }
+      if (!localFolder.handleId) {
+        state.errorMsg = state.t('auth_storage.local_folder_choose_err')
+        return false
+      }
+      provider = {
+        id: generateId(),
+        type,
+        label: providerDefaultLabel(
+          type,
+          localFolder.directoryName,
+          oauthPreset,
+        ),
+        localFolder,
+        ...providerStoreFields,
+        createdAt: isoTimestamp(),
+      }
     }
     const duplicateProvider = findDuplicateSyncProvider(
       state.activeVaultProviders,
@@ -642,21 +688,26 @@ export async function ensureProviderSaved(
         }
       }
     }
-  } else if (isNewSetup && type === 'local' && !state.localProvider) {
+  } else if (
+    isNewSetup &&
+    type === 'local' &&
+    state.localProvider.kind === LocalProviderLookupKind.Missing
+  ) {
     const provider: StorageProvider = {
       id: generateId(),
       type: 'local',
       label: providerDefaultLabel('local'),
-      storeId: vaultStoreId,
+      ...providerStoreFields,
       createdAt: isoTimestamp(),
     }
     state.providers = [...state.providers, provider]
-  } else if (state.localProvider) {
+  } else if (state.localProvider.kind === LocalProviderLookupKind.Found) {
+    const localProviderId = state.localProvider.provider.id
     state.providers = state.providers.map((provider) =>
-      provider.id === state.localProvider?.id
+      provider.id === localProviderId
         ? {
             ...provider,
-            storeId: vaultStoreId ?? provider.storeId,
+            ...providerStoreFields,
           }
         : provider,
     )
@@ -666,13 +717,14 @@ export async function ensureProviderSaved(
         providers: state.providers,
         activeVaultStoreId: state.activeVaultStoreId,
       } as AuthProvidersSnapshot,
-      vaultStoreId,
+      providerStoreFields.storeId,
     )
     state.providers = snapshot.providers
   }
 
   if (state.storageMode === 'oauth-file' && state.oauthFile?.fileId) {
-    const activePreset = state.oauthFile.preset
+    const activeOauthFile = state.oauthFile
+    const activePreset = activeOauthFile.preset
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.NotRequired) {
       const duplicate = findDuplicateSyncProvider(state.syncProviders, {
         id: 'oauth-provider-update-target',
@@ -688,45 +740,44 @@ export async function ensureProviderSaved(
         }
       }
     }
-    const oauthProviderToUpdateId =
-      oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required
-        ? oauthProviderToUpdate.providerId
-        : omittedValue()
-    state.providers = state.providers.map((provider) => {
-      if (
-        provider.type !== 'oauth-file' ||
-        !provider.oauthFile ||
-        provider.id !== oauthProviderToUpdateId
-      ) {
-        return provider
-      }
-      const merged: OAuthFileConfig = {
-        preset: activePreset,
-        accessToken:
-          state.oauthFile!.accessToken || provider.oauthFile.accessToken,
-        refreshToken: provider.oauthFile.refreshToken,
-        expiresAt: provider.oauthFile.expiresAt ?? state.oauthFile!.expiresAt,
-        fileId: state.oauthFile!.fileId,
-        folderId: state.oauthFile!.folderId ?? provider.oauthFile.folderId,
-        driveMode: state.oauthFile!.driveMode ?? provider.oauthFile.driveMode,
-        iCloudMode:
-          state.oauthFile!.iCloudMode ?? provider.oauthFile.iCloudMode,
-        iCloudShareTarget:
-          state.oauthFile!.iCloudShareTarget ??
-          provider.oauthFile.iCloudShareTarget,
-        fileName:
-          provider.oauthFile.fileName?.trim() ||
-          state.oauthFile!.fileName?.trim() ||
-          driveFile,
-        accountEmail:
-          provider.oauthFile.accountEmail ?? state.oauthFile!.accountEmail,
-      }
-      return { ...provider, oauthFile: merged }
-    })
-    state.oauthFile =
-      state.providers.find(
-        (provider) => provider.id === oauthProviderToUpdateId,
-      )?.oauthFile ?? state.oauthFile
+    if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required) {
+      const oauthProviderToUpdateId = oauthProviderToUpdate.providerId
+      state.providers = state.providers.map((provider) => {
+        if (
+          provider.type !== 'oauth-file' ||
+          !provider.oauthFile ||
+          provider.id !== oauthProviderToUpdateId
+        ) {
+          return provider
+        }
+        const merged: OAuthFileConfig = {
+          preset: activePreset,
+          accessToken:
+            activeOauthFile.accessToken || provider.oauthFile.accessToken,
+          refreshToken: provider.oauthFile.refreshToken,
+          expiresAt: provider.oauthFile.expiresAt ?? activeOauthFile.expiresAt,
+          fileId: activeOauthFile.fileId,
+          folderId: activeOauthFile.folderId ?? provider.oauthFile.folderId,
+          driveMode: activeOauthFile.driveMode ?? provider.oauthFile.driveMode,
+          iCloudMode:
+            activeOauthFile.iCloudMode ?? provider.oauthFile.iCloudMode,
+          iCloudShareTarget:
+            activeOauthFile.iCloudShareTarget ??
+            provider.oauthFile.iCloudShareTarget,
+          fileName:
+            provider.oauthFile.fileName?.trim() ||
+            activeOauthFile.fileName?.trim() ||
+            driveFile,
+          accountEmail:
+            provider.oauthFile.accountEmail ?? activeOauthFile.accountEmail,
+        }
+        return { ...provider, oauthFile: merged }
+      })
+      state.oauthFile =
+        state.providers.find(
+          (provider) => provider.id === oauthProviderToUpdateId,
+        )?.oauthFile ?? activeOauthFile
+    }
   }
 
   state.clearLoginSetup()
@@ -777,8 +828,11 @@ export async function discoverStagedVaultStoreId(
           return state.manager!.vaultStoreId.trim()
         })
       }
+      const stagedStorage = state.stagedRemoteStorageArgs()
       const [storageMode, accessToken, remoteRef] =
-        state.stagedRemoteStorageArgs() ?? state.wasmStorageArgs()
+        stagedStorage.kind === StagedRemoteStorageKind.Available
+          ? stagedStorage.args
+          : state.wasmStorageArgs()
       return (
         await state.enqueueStorage(() =>
           state.manager!.discoverRemoteVaultStoreId(
@@ -824,9 +878,10 @@ export async function connectAndSyncStagedProvider(
   state.isVerifying = true
   const stagedRemoteArgs = state.stagedRemoteStorageArgs()
   try {
-    if (stagedRemoteArgs) {
-      const accessStatus =
-        await state.assessVaultConnectStatus(stagedRemoteArgs)
+    if (stagedRemoteArgs.kind === StagedRemoteStorageKind.Available) {
+      const accessStatus = await state.assessVaultConnectStatus(
+        stagedRemoteArgs.args,
+      )
       if (await state.handleRemoteVaultAssessStatus(accessStatus)) return
     }
 

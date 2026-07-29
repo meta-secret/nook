@@ -44,6 +44,27 @@ export enum LoginSetupKind {
 export type LoginSetup =
   | { kind: LoginSetupKind.Inactive }
   | { kind: LoginSetupKind.Active; providerType: StorageProviderType }
+
+export enum StagedRemoteStorageKind {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+export type StagedRemoteStorage =
+  | { kind: StagedRemoteStorageKind.Unavailable }
+  | {
+      kind: StagedRemoteStorageKind.Available
+      args: [string, string, string]
+    }
+
+export enum LocalProviderLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type LocalProviderLookup =
+  | { kind: LocalProviderLookupKind.Missing }
+  | { kind: LocalProviderLookupKind.Found; provider: StorageProvider }
 enum RecoveryDiscoveryKind {
   NotFound = 'not-found',
   Found = 'found',

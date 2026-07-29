@@ -13,6 +13,7 @@
   import {
     ColorMode,
     EnrollmentSubmitQueueKind,
+    ExistingVaultProviderSnapshotKind,
     ExistingVaultImportQueueKind,
     ExtensionConnectIntentKind,
     ExtensionSetupOfferKind,
@@ -24,7 +25,9 @@
     manualColorMode,
     systemColorMode,
     type EnrollmentSubmitQueue,
+    type ExistingVaultProviderSnapshot,
     type ExistingVaultImportQueue,
+    type ExtensionConnectIntent,
     type ExtensionSetupOffer,
     type VaultCreationQueue,
   } from '$lib/app-lifecycle-state'
@@ -53,6 +56,7 @@
     isExtensionConnectPath,
     openInstalledExtension,
     requestPairedExtensionUnlock,
+    type ExtensionConnectRequestState,
   } from '$lib/extension-connect'
   import {
     loadExtensionInstallTarget,
@@ -94,19 +98,21 @@
   let appLogsPage = $state<boolean>(
     'window' in globalThis && isAppLogsPath(window.location.pathname),
   )
-  const initialExtensionConnectRequestState =
+  const initialExtensionConnectRequestState: ExtensionConnectIntent =
     initialExtensionConnectIntent(SUPPORTS_EXTENSION)
   let extensionConnectRoute = $state<boolean>(
     'window' in globalThis
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   )
-  let extensionConnectRequestState = $state(initialExtensionConnectRequestState)
+  let extensionConnectRequestState = $state<ExtensionConnectIntent>(
+    initialExtensionConnectRequestState,
+  )
   // Keep the public extension handoff request in memory after leaving the
   // consent route. On reload, the site asks the installed extension for a new
   // vault-bound handoff only when that extension already holds an approved
   // grant for the active local vault.
-  let extensionIdentityRequestState = $state(
+  let extensionIdentityRequestState = $state<ExtensionConnectIntent>(
     initialExtensionConnectRequestState,
   )
   let extensionBackedVaultSession = $state(false)
@@ -140,7 +146,7 @@
     appLogsPage = isAppLogsPath(window.location.pathname)
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
-    const routeConnectRequest = SUPPORTS_EXTENSION
+    const routeConnectRequest: ExtensionConnectRequestState = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : { kind: ExtensionConnectRequestStateKind.Absent }
     extensionConnectRequestState = extensionConnectIntent(routeConnectRequest)
@@ -480,20 +486,44 @@
   function rememberExistingVaultImport(storeId: string): void {
     if (vault.loginSetup.kind !== LoginSetupKind.Active) return
     const setupType = vault.loginSetup.providerType
+    if (setupType === 'oauth-file' && !vault.oauthFile) {
+      vault.errorMsg = vault.t('errors.cloud_sync_provider_required')
+      return
+    }
+    if (setupType === 'local-folder' && !vault.localFolder) {
+      vault.errorMsg = vault.t('auth_storage.local_folder_choose_err')
+      return
+    }
+    const provider: ExistingVaultProviderSnapshot =
+      setupType === 'github'
+        ? {
+            kind: ExistingVaultProviderSnapshotKind.Github,
+            setupType,
+            githubPat: vault.githubPat,
+            githubRepo: vault.githubRepo,
+          }
+        : setupType === 'oauth-file' && vault.oauthFile
+          ? {
+              kind: ExistingVaultProviderSnapshotKind.OAuthFile,
+              setupType,
+              oauthFile: $state.snapshot(vault.oauthFile),
+            }
+          : setupType === 'local-folder' && vault.localFolder
+            ? {
+                kind: ExistingVaultProviderSnapshotKind.LocalFolder,
+                setupType,
+                localFolder: $state.snapshot(vault.localFolder),
+              }
+            : {
+                kind: ExistingVaultProviderSnapshotKind.Local,
+                setupType,
+              }
     pendingExistingVaultImportState = {
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
         storeId,
         previousActiveStoreId: vault.activeVaultStoreId,
-        setupType,
-        githubPat: vault.githubPat,
-        githubRepo: vault.githubRepo,
-        oauthFile: vault.oauthFile
-          ? $state.snapshot(vault.oauthFile)
-          : vault.oauthFile,
-        localFolder: vault.localFolder
-          ? $state.snapshot(vault.localFolder)
-          : vault.localFolder,
+        provider,
       },
     }
   }
@@ -522,12 +552,28 @@
       await vault.prepareExistingVaultImportSlot()
     }
     vault.loginRequiresExistingVault = true
-    vault.activateLoginSetup(pending.setupType)
-    vault.storageMode = pending.setupType
-    vault.githubPat = pending.githubPat
-    vault.githubRepo = pending.githubRepo
-    vault.oauthFile = pending.oauthFile
-    vault.localFolder = pending.localFolder
+    vault.activateLoginSetup(pending.provider.setupType)
+    vault.storageMode = pending.provider.setupType
+    vault.githubPat =
+      pending.provider.kind === ExistingVaultProviderSnapshotKind.Github
+        ? pending.provider.githubPat
+        : ''
+    vault.githubRepo =
+      pending.provider.kind === ExistingVaultProviderSnapshotKind.Github
+        ? pending.provider.githubRepo
+        : ''
+    if (pending.provider.kind === ExistingVaultProviderSnapshotKind.OAuthFile) {
+      vault.oauthFile = pending.provider.oauthFile
+    } else {
+      vault.clearOauthFile()
+    }
+    if (
+      pending.provider.kind === ExistingVaultProviderSnapshotKind.LocalFolder
+    ) {
+      vault.localFolder = pending.provider.localFolder
+    } else {
+      vault.clearLocalFolder()
+    }
     const recoverySummary = vault.existingVaultRecoverySummary
     await vault.connectStagedProvider()
     if (vault.isAuthenticated) {

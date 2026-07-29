@@ -2,7 +2,11 @@ import type { SvelteDate } from 'svelte/reactivity'
 import type { NookPendingSyncConflict, NookRuntimeConfig } from '$app-wasm'
 import type { NookVaultSyncResult, VaultAccessStatus } from '$lib/nook'
 import type { StorageProvider } from '$lib/auth-providers'
-import type { VaultProviderState } from '$lib/vault/state/provider.svelte'
+import type {
+  LocalProviderLookup,
+  StagedRemoteStorage,
+  VaultProviderState,
+} from '$lib/vault/state/provider.svelte'
 import type { VaultRuntimeState } from '$lib/vault/state/runtime.svelte'
 import type { VaultSecretsState } from '$lib/vault/state/secrets.svelte'
 import type { VaultSentinelState } from '$lib/vault/state/sentinel.svelte'
@@ -66,7 +70,7 @@ interface SharedStorageActionsContext {
 
 interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly activeVaultProviders: StorageProvider[]
-  readonly localProvider: StorageProvider | void
+  readonly localProvider: LocalProviderLookup
   readonly syncProviders: StorageProvider[]
   applyActiveProviderCredentials(): void
   assessVaultConnectStatus(
@@ -86,7 +90,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   refreshPasswordEntriesList(): Promise<boolean>
   showSuccess(message: string): void
   stageStagedProviderSyncIssue(args: [string, string, string]): Promise<boolean>
-  stagedRemoteStorageArgs(): [string, string, string] | void
+  stagedRemoteStorageArgs(): StagedRemoteStorage
   syncProviderById(
     providerId: string,
     options?: { quiet?: boolean; propagateError?: boolean },
@@ -196,7 +200,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ensureProviderSaved(): Promise<boolean>
   showSuccess(message: string): void
   stagedProviderLabel(): string
-  stagedRemoteStorageArgs(): [string, string, string] | void
+  stagedRemoteStorageArgs(): StagedRemoteStorage
   stageSyncConflict(conflict: NookPendingSyncConflict): void
   stopVaultSync(): void
   syncActiveVaultStoreIdToAuth(): Promise<void>
