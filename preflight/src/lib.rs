@@ -1,7 +1,9 @@
 pub mod coverage;
+mod rust_typed_json;
 pub mod source_size;
 mod typescript_state;
 
+pub use rust_typed_json::rust_test_untyped_json_assertions;
 pub use typescript_state::{
     typescript_generic_optional_state, typescript_implicit_application_state,
     typescript_mutable_void_state, typescript_null_absence_sentinels,
