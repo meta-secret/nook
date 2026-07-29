@@ -14,7 +14,7 @@
   import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
   import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
   import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
-  import type { VaultItemType } from "$lib/nook";
+  import { SecretType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
   import {
     SecretEditorModeKind,
@@ -54,10 +54,10 @@
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
-      secretsAddFormType.itemType === "secure-note",
+      secretsAddFormType.itemType === SecretType.SecureNote,
   );
 
-  function setAddMode(open: boolean, type: VaultItemType | void) {
+  function setAddMode(open: boolean, type: SecretType | void) {
     secretsAddOpen = open;
     secretsAddFormType =
       open && type

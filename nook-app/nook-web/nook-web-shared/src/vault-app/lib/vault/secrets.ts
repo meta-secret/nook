@@ -3,7 +3,7 @@ import type {
   AuthenticatorCodeView,
   NookImportResult,
   NookSecretRecord,
-  VaultItemType,
+  SecretType,
 } from "$lib/nook";
 import {
   generatePassword as coreGeneratePassword,
@@ -17,7 +17,6 @@ import {
   type NookSecretPage,
 } from "$app-wasm";
 import { syncLocalFolderProvider } from "$lib/vault/sync.svelte";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 import {
   isSentinelCeremonyRequiredError,
   refreshSentinelUnlockStatus,
@@ -297,7 +296,7 @@ async function prepareSecretMutation(state: VaultState): Promise<boolean> {
 export async function handleAddSecret(
   state: VaultState,
   id: string,
-  type: VaultItemType,
+  type: SecretType,
   data: string,
 ) {
   if (!(await prepareSecretMutation(state))) return;
@@ -465,7 +464,7 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
 export async function handleReplaceSecret(
   state: VaultState,
   oldId: string,
-  type: VaultItemType,
+  type: SecretType,
   data: string,
 ) {
   if (!(await prepareSecretMutation(state))) return;
@@ -558,7 +557,7 @@ export async function loadSecretPage(
   const page = await state.enqueueStorage(() =>
     state.manager!.queryPreparedSecretPage(
       query,
-      intoWasmStringValue(state.secretTypeFilter),
+      state.secretTypeFilter,
       requestedOffset,
       state.secretPageSize,
     ),
@@ -581,7 +580,7 @@ export async function loadSecretPage(
     const lastPage = await state.enqueueStorage(() =>
       state.manager!.querySecretPage(
         query,
-        intoWasmStringValue(state.secretTypeFilter),
+        state.secretTypeFilter,
         lastOffset,
         state.secretPageSize,
       ),

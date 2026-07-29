@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ReplicationType } from '$app-wasm'
   import { omittedValue } from '../../../explicit-state'
 
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
@@ -59,7 +60,7 @@
       draftProvider(type, oauthPreset),
     )
     try {
-      return vault.draftReplicationType === 'shared'
+      return vault.draftReplicationType === ReplicationType.Shared
         ? !result.supportsShared
         : !result.supportsPersonal
     } finally {

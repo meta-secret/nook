@@ -777,9 +777,8 @@ pub fn provider_replication_capability(
 #[allow(clippy::needless_pass_by_value)]
 pub fn validate_provider_replication(
     provider: nook_core::StorageProviderData,
-    replication_type: &str,
+    replication_type: nook_core::ReplicationType,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
-    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
     Ok(NookProviderReplicationCapability::from_core(
         nook_core::validate_provider_row_replication(&provider, replication_type)?,
     ))
@@ -789,9 +788,8 @@ pub fn validate_provider_replication(
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_supports_replication(
     provider: nook_core::StorageProviderData,
-    replication_type: &str,
+    replication_type: nook_core::ReplicationType,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
     Ok(nook_core::provider_supports_replication(
         &provider,
         replication_type,
@@ -802,10 +800,9 @@ pub fn provider_supports_replication(
 #[allow(clippy::needless_pass_by_value)]
 pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
-    replication_type: &str,
+    replication_type: nook_core::ReplicationType,
     preferred_id: Option<String>,
 ) -> Result<Option<String>, wasm_bindgen::JsError> {
-    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
     Ok(nook_core::first_compatible_provider_id(
         &snapshot.providers,
         replication_type,

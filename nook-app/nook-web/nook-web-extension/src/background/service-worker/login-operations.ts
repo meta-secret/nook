@@ -338,7 +338,7 @@ export async function websiteLoginSaveCommit(
     return {
       ok: false,
       reason: 'login-save-evidence-insufficient',
-      verdict: verdict.name,
+      verdict: verdict.verdict,
     }
   }
   const grants = await passwordPairingGrants()

@@ -1,4 +1,4 @@
-import type { VaultItemType } from "$lib/nook";
+import type { SecretType } from "$lib/nook";
 
 export enum SecretEditorModeKind {
   Closed = "closed",
@@ -7,4 +7,4 @@ export enum SecretEditorModeKind {
 
 export type SecretEditorMode =
   | { kind: SecretEditorModeKind.Closed }
-  | { kind: SecretEditorModeKind.Adding; itemType: VaultItemType };
+  | { kind: SecretEditorModeKind.Adding; itemType: SecretType };

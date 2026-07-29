@@ -3,6 +3,7 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
 import type {
@@ -139,9 +140,10 @@ export async function evaluatePendingSaveEvidence(): Promise<void> {
     return
   }
   if (
-    verdict.name === 'conflicting' ||
-    verdict.name === 'timeout' ||
-    (verdict.name === 'insufficient' && observation.errorMarkerPresent)
+    verdict.verdict === AuthenticationOutcomeVerdict.Conflicting ||
+    verdict.verdict === AuthenticationOutcomeVerdict.Timeout ||
+    (verdict.verdict === AuthenticationOutcomeVerdict.Insufficient &&
+      observation.errorMarkerPresent)
   ) {
     stopPendingSaveWatch()
     void sendRuntimeMessage({

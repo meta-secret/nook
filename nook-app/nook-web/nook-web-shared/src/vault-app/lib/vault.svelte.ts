@@ -4,7 +4,7 @@ import {
   type NookSecretRecord,
   type NookVaultSyncResult,
   type AuthenticatorCodeView,
-  type VaultItemType,
+  type SecretType,
 } from "$lib/nook";
 import {
   isVaultSessionLocked,
@@ -860,7 +860,7 @@ export class VaultState extends VaultLifecycleState {
     );
   }
 
-  async handleAddSecret(id: string, type: VaultItemType, data: string) {
+  async handleAddSecret(id: string, type: SecretType, data: string) {
     return secretsActions.handleAddSecret(this, id, type, data);
   }
 
@@ -909,7 +909,7 @@ export class VaultState extends VaultLifecycleState {
     return secretsActions.handleDeleteSecret(this, id);
   }
 
-  async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
+  async handleReplaceSecret(oldId: string, type: SecretType, data: string) {
     return secretsActions.handleReplaceSecret(this, oldId, type, data);
   }
 }

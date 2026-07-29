@@ -30,7 +30,6 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
-import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
 enum BackgroundWasmStartupKind {
@@ -194,12 +193,8 @@ export async function classifyAuthenticationOutcome(
         : Math.max(1, Math.floor(timeoutMs)),
     )
     try {
-      const name = verdict.name
-      if (!isAuthenticationOutcomeVerdictName(name)) {
-        return { name: 'insufficient', allowsCredentialCommit: false }
-      }
       return {
-        name,
+        verdict: verdict.verdict,
         allowsCredentialCommit: verdict.allowsCredentialCommit === true,
       }
     } finally {

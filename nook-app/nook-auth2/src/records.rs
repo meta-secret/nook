@@ -9,7 +9,9 @@ use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretType {

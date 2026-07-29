@@ -10,7 +10,7 @@
     CreditCard,
     Paperclip,
   } from "@lucide/svelte";
-  import type { VaultItemType } from "$lib/nook";
+  import { SecretType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
 
   let {
@@ -18,7 +18,7 @@
     onSelect,
   }: {
     vault: VaultState;
-    onSelect: (type: VaultItemType) => void;
+    onSelect: (type: SecretType) => void;
   } = $props();
 </script>
 
@@ -39,7 +39,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-login"
-        onclick={() => onSelect('login')}
+        onclick={() => onSelect(SecretType.Login)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -62,7 +62,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-authenticator"
-        onclick={() => onSelect('authenticator')}
+        onclick={() => onSelect(SecretType.Authenticator)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -85,7 +85,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-api-key"
-        onclick={() => onSelect('api-key')}
+        onclick={() => onSelect(SecretType.ApiKey)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -108,7 +108,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-seed-phrase"
-        onclick={() => onSelect('seed-phrase')}
+        onclick={() => onSelect(SecretType.SeedPhrase)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -131,7 +131,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-secure-note"
-        onclick={() => onSelect('secure-note')}
+        onclick={() => onSelect(SecretType.SecureNote)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -154,7 +154,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-credit-card"
-        onclick={() => onSelect('credit-card')}
+        onclick={() => onSelect(SecretType.CreditCard)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -177,7 +177,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-file-attachment"
-        onclick={() => onSelect('file-attachment')}
+        onclick={() => onSelect(SecretType.FileAttachment)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"
@@ -200,7 +200,7 @@
         type="button"
         class="group flex min-h-20 items-center gap-3 rounded-xl border border-border/55 bg-muted/10 px-3.5 py-3 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:px-4"
         data-testid="item-type-passkey"
-        onclick={() => onSelect('passkey')}
+        onclick={() => onSelect(SecretType.Passkey)}
       >
         <div
           class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-background/70 text-primary shadow-xs"

@@ -12,19 +12,20 @@ type DebugVault = {
       constructor: {
         simple(
           deviceMode: number,
-          replicationType: string,
+          replicationType: number,
         ): {
           free(): void
         }
         sentinel(
           deviceMode: number,
-          replicationType: string,
+          replicationType: number,
           threshold: number,
           requiredParticipants: number,
           readyParticipants: number,
         ): { free(): void }
       }
       device_mode: number
+      replication_type: number
       free(): void
     }
     setVaultArchitecture(value: { free(): void }): void
@@ -95,8 +96,14 @@ test('exposes only the project capability and rejects the opposite vault type', 
     const current = manager.vaultArchitecture
     const Architecture = current.constructor
     const oppositeArchitecture = simpleApp
-      ? Architecture.sentinel(current.device_mode, 'personal', 2, 3, 0)
-      : Architecture.simple(current.device_mode, 'personal')
+      ? Architecture.sentinel(
+          current.device_mode,
+          current.replication_type,
+          2,
+          3,
+          0,
+        )
+      : Architecture.simple(current.device_mode, current.replication_type)
     try {
       manager.setVaultArchitecture(oppositeArchitecture)
       return ''

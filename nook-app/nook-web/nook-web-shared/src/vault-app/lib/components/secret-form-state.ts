@@ -1,4 +1,4 @@
-import type { VaultItemType } from "$lib/nook";
+import type { SecretType } from "$lib/nook";
 
 export enum SecretTypeSelectionKind {
   ChoosingType = "choosing-type",
@@ -7,4 +7,4 @@ export enum SecretTypeSelectionKind {
 
 export type SecretTypeSelection =
   | { kind: SecretTypeSelectionKind.ChoosingType }
-  | { kind: SecretTypeSelectionKind.EditingFields; itemType: VaultItemType };
+  | { kind: SecretTypeSelectionKind.EditingFields; itemType: SecretType };

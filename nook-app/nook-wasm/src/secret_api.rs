@@ -1,6 +1,46 @@
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum NookSecretTypeFilter {
+    All,
+    Login,
+    ApiKey,
+    SeedPhrase,
+    SecureNote,
+    Passkey,
+    Authenticator,
+    CreditCard,
+    FileAttachment,
+}
+
+impl NookSecretTypeFilter {
+    pub(crate) const fn to_core(self) -> nook_core::SecretTypeFilter {
+        match self {
+            Self::All => nook_core::SecretTypeFilter::All,
+            Self::Login => nook_core::SecretTypeFilter::Only(nook_core::SecretType::Login),
+            Self::ApiKey => nook_core::SecretTypeFilter::Only(nook_core::SecretType::ApiKey),
+            Self::SeedPhrase => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::SeedPhrase)
+            }
+            Self::SecureNote => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::SecureNote)
+            }
+            Self::Passkey => nook_core::SecretTypeFilter::Only(nook_core::SecretType::Passkey),
+            Self::Authenticator => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::Authenticator)
+            }
+            Self::CreditCard => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::CreditCard)
+            }
+            Self::FileAttachment => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::FileAttachment)
+            }
+        }
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookSecretListItem {
     item: nook_core::SecretListItem,
@@ -20,8 +60,8 @@ impl NookSecretListItem {
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn secret_type(&self) -> String {
-        self.item.secret_type().as_str().to_owned()
+    pub fn secret_type(&self) -> nook_core::SecretType {
+        self.item.secret_type()
     }
 
     #[wasm_bindgen(getter, js_name = displayTitle)]
@@ -241,8 +281,8 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn secret_type(&self) -> String {
-        self.record.secret_type.as_str().to_owned()
+    pub fn secret_type(&self) -> nook_core::SecretType {
+        self.record.secret_type
     }
 
     #[wasm_bindgen(getter, js_name = displayTitle)]

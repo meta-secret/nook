@@ -1,9 +1,5 @@
-import { authenticatorSetupKeyChanged } from "$lib/nook";
-import type {
-  NookSecretRecord,
-  SecretFormInput,
-  VaultItemType,
-} from "$lib/nook";
+import { authenticatorSetupKeyChanged, SecretType } from "$lib/nook";
+import type { NookSecretRecord, SecretFormInput } from "$lib/nook";
 import { defaultPasswordGenerationOptions } from "$web-shared/password/generator";
 
 export class SecretFormState {
@@ -52,28 +48,28 @@ export class SecretFormState {
   generationSymbols = $state(defaultPasswordGenerationOptions.symbols);
 
   load(item: NookSecretRecord): void {
-    if (item.type === "login") {
+    if (item.type === SecretType.Login) {
       this.websiteUrl = item.websiteUrl;
       this.username = item.username;
       this.password = item.password;
       this.notes = item.notes ?? "";
-    } else if (item.type === "api-key") {
+    } else if (item.type === SecretType.ApiKey) {
       this.websiteUrl = item.websiteUrl;
       this.apiKey = item.primaryCredential || item.key;
       this.expiresAt = item.expiresAt ?? "";
-    } else if (item.type === "seed-phrase") {
+    } else if (item.type === SecretType.SeedPhrase) {
       this.accountName = item.name;
       this.seedPhrase = item.seed;
-    } else if (item.type === "secure-note") {
+    } else if (item.type === SecretType.SecureNote) {
       this.noteTitle = item.title;
       this.noteBody = item.note;
-    } else if (item.type === "file-attachment") {
+    } else if (item.type === SecretType.FileAttachment) {
       this.fileTitle = item.title;
       this.fileName = item.fileName;
       this.fileMimeType = item.mimeType;
       this.fileSizeBytes = item.sizeBytes;
       this.fileContentBase64 = item.contentBase64;
-    } else if (item.type === "authenticator") {
+    } else if (item.type === SecretType.Authenticator) {
       this.websiteUrl = item.websiteUrl ?? "";
       this.authenticatorIssuer = item.issuer;
       this.authenticatorAccount = item.account;
@@ -82,7 +78,7 @@ export class SecretFormState {
       this.authenticatorDigits = String(item.digits);
       this.authenticatorPeriod = String(item.period);
       this.authenticatorBackupCodes = item.backupCodes.join("\n");
-    } else if (item.type === "credit-card") {
+    } else if (item.type === SecretType.CreditCard) {
       this.cardTitle = item.title;
       this.cardholderName = item.cardholderName;
       this.cardNumber = item.cardNumber;
@@ -94,42 +90,42 @@ export class SecretFormState {
   }
 
   toInput(
-    selectedType: VaultItemType,
+    selectedType: SecretType,
     initialItem: NookSecretRecord | void,
   ): SecretFormInput {
-    if (selectedType === "login") {
+    if (selectedType === SecretType.Login) {
       return {
-        type: "login",
+        type: SecretType.Login,
         websiteUrl: this.websiteUrl.trim(),
         username: this.username.trim(),
         password: this.password,
         notes: this.notes.trim(),
       };
     }
-    if (selectedType === "api-key") {
+    if (selectedType === SecretType.ApiKey) {
       return {
-        type: "api-key",
+        type: SecretType.ApiKey,
         websiteUrl: this.websiteUrl.trim(),
         key: this.apiKey,
         expiresAt: this.expiresAt,
       };
     }
-    if (selectedType === "seed-phrase") {
+    if (selectedType === SecretType.SeedPhrase) {
       return {
-        type: "seed-phrase",
+        type: SecretType.SeedPhrase,
         name: this.accountName.trim(),
         seed: this.seedPhrase.trim(),
       };
     }
-    if (selectedType === "authenticator") {
+    if (selectedType === SecretType.Authenticator) {
       const setupKeyChanged =
-        initialItem?.type === "authenticator" &&
+        initialItem?.type === SecretType.Authenticator &&
         authenticatorSetupKeyChanged(
           initialItem.totpSecret,
           this.authenticatorSecret,
         );
       return {
-        type: "authenticator",
+        type: SecretType.Authenticator,
         websiteUrl: this.websiteUrl.trim(),
         issuer: this.authenticatorIssuer.trim(),
         account: this.authenticatorAccount.trim(),
@@ -140,9 +136,9 @@ export class SecretFormState {
         backupCodes: setupKeyChanged ? "" : this.authenticatorBackupCodes,
       };
     }
-    if (selectedType === "credit-card") {
+    if (selectedType === SecretType.CreditCard) {
       return {
-        type: "credit-card",
+        type: SecretType.CreditCard,
         title: this.cardTitle.trim(),
         cardholderName: this.cardholderName.trim(),
         number: this.cardNumber.trim(),
@@ -152,9 +148,9 @@ export class SecretFormState {
         notes: this.cardNotes.trim(),
       };
     }
-    if (selectedType === "file-attachment") {
+    if (selectedType === SecretType.FileAttachment) {
       return {
-        type: "file-attachment",
+        type: SecretType.FileAttachment,
         title: this.fileTitle.trim() || this.fileName.trim(),
         fileName: this.fileName.trim(),
         mimeType: this.fileMimeType.trim() || "application/octet-stream",
@@ -163,39 +159,40 @@ export class SecretFormState {
       };
     }
     return {
-      type: "secure-note",
+      type: SecretType.SecureNote,
       title: this.noteTitle.trim(),
       note: this.noteBody,
     };
   }
 
-  canSubmit(selectedType: VaultItemType | void, isSaving: boolean) {
+  canSubmit(selectedType: SecretType | void, isSaving: boolean) {
     if (isSaving || !selectedType) return false;
-    if (selectedType === "seed-phrase") return this.seedPhraseValid;
-    if (selectedType === "secure-note") {
+    if (selectedType === SecretType.SeedPhrase) return this.seedPhraseValid;
+    if (selectedType === SecretType.SecureNote) {
       return this.noteBody.trim().length > 0;
     }
-    if (selectedType === "file-attachment") {
+    if (selectedType === SecretType.FileAttachment) {
       return (
         this.fileContentBase64.length > 0 && this.fileName.trim().length > 0
       );
     }
-    if (selectedType === "api-key") return this.apiKey.trim().length > 0;
-    if (selectedType === "authenticator") {
+    if (selectedType === SecretType.ApiKey)
+      return this.apiKey.trim().length > 0;
+    if (selectedType === SecretType.Authenticator) {
       return (
         this.authenticatorSecret.trim().length > 0 &&
         (this.authenticatorIssuer.trim().length > 0 ||
           this.authenticatorSecret.trim().startsWith("otpauth://"))
       );
     }
-    if (selectedType === "login") {
+    if (selectedType === SecretType.Login) {
       return (
         this.websiteUrl.trim().length > 0 &&
         this.username.trim().length > 0 &&
         this.password.length > 0
       );
     }
-    if (selectedType === "credit-card") {
+    if (selectedType === SecretType.CreditCard) {
       return (
         this.cardTitle.trim().length > 0 && this.cardNumber.trim().length > 0
       );

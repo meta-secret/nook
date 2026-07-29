@@ -16,8 +16,8 @@ import {
 import {
   defaultVaultArchitecture,
   DeviceMode,
+  ReplicationType,
   VaultType,
-  type ReplicationType,
   type VaultArchitecture,
 } from "$lib/vault-architecture";
 enum ActiveVaultKind {
@@ -194,7 +194,7 @@ export class VaultProviderState {
   vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture());
   draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard);
   draftVaultType = $state(VaultType.Simple);
-  draftReplicationType = $state<ReplicationType>("personal");
+  draftReplicationType = $state<ReplicationType>(ReplicationType.Personal);
   private oauthSetupPresetState = $state<OAuthSetupPreset>({
     kind: "not-selected",
   });

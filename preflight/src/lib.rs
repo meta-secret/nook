@@ -51,6 +51,8 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
 
 const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "AppKind",
+    "AuthenticationOutcomeVerdict",
+    "AuthenticationOutcomeVerdictName",
     "DeviceMode",
     "DeviceProtectionStatus",
     "ExtensionDeviceMode",
@@ -60,6 +62,8 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "WasmApplication",
     "VaultType",
     "ReplicationType",
+    "SecretFormInputType",
+    "SecretType",
     "StorageProviderType",
     "OAuthFilePreset",
     "GoogleDriveMode",
@@ -68,15 +72,20 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
 
 const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "AppKind",
+    "AuthenticationOutcomeVerdict",
+    "AuthenticationOutcomeVerdictName",
     "WasmApplication",
     "ExtensionDeviceMode",
     "ExtensionDeviceProtectionStatus",
     "PopupProtectionStatus",
     "VaultApplication",
+    "VaultItemType",
     "DeviceMode",
     "DeviceProtectionStatus",
     "VaultType",
     "ReplicationType",
+    "SecretFormInputType",
+    "SecretType",
 ];
 
 const TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES: &[(&str, &str)] = &[

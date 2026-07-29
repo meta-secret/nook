@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
-import type { NookSecretRecord, VaultItemType } from '$lib/nook'
+import { SecretType, type NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 
@@ -15,7 +15,7 @@ const vault = {
 
 const legacyAuthenticator = {
   id: 'legacy-authenticator',
-  type: 'authenticator',
+  type: SecretType.Authenticator,
   issuer: 'Legacy service',
   account: 'alice@example.com',
   websiteUrl: '',
@@ -28,7 +28,7 @@ const legacyAuthenticator = {
 
 function renderLegacyAuthenticatorEditor() {
   const onReplaceSecret = vi
-    .fn<(oldId: string, type: VaultItemType, data: string) => Promise<void>>()
+    .fn<(oldId: string, type: SecretType, data: string) => Promise<void>>()
     .mockResolvedValue()
   const view = render(AddSecretForm, {
     vault,
@@ -38,7 +38,7 @@ function renderLegacyAuthenticatorEditor() {
     onGeneratePassword: vi.fn(() => ''),
     onCancel: vi.fn(),
     initialItem: legacyAuthenticator,
-    selectedType: 'authenticator',
+    selectedType: SecretType.Authenticator,
   })
   return { onReplaceSecret, view }
 }
@@ -72,7 +72,7 @@ describe('AddSecretForm authenticator editing', () => {
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
     const [, type, yaml] = onReplaceSecret.mock.calls[0]
-    expect(type).toBe('authenticator')
+    expect(type).toBe(SecretType.Authenticator)
     expect(yaml).toContain('algorithm: SHA256')
     expect(yaml).toContain('digits: 8')
     expect(yaml).toContain('period: 45')
@@ -91,7 +91,7 @@ describe('AddSecretForm authenticator editing', () => {
 
     await waitFor(() => expect(onReplaceSecret).toHaveBeenCalledTimes(1))
     const [, type, yaml] = onReplaceSecret.mock.calls[0]
-    expect(type).toBe('authenticator')
+    expect(type).toBe(SecretType.Authenticator)
     expect(yaml).toContain('algorithm: SHA1')
     expect(yaml).toContain('digits: 6')
     expect(yaml).toContain('period: 30')

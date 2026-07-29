@@ -1,3 +1,5 @@
+import type { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+
 export type AuthenticationOutcomeObservationView = {
   navigatedAwayFromAuthPath: boolean
   authFieldsPresent: boolean
@@ -8,14 +10,8 @@ export type AuthenticationOutcomeObservationView = {
   elapsedMs: number
 }
 
-export type AuthenticationOutcomeVerdictName =
-  | 'sufficient'
-  | 'insufficient'
-  | 'conflicting'
-  | 'timeout'
-
 export type AuthenticationOutcomeVerdictView = {
-  name: AuthenticationOutcomeVerdictName
+  verdict: AuthenticationOutcomeVerdict
   allowsCredentialCommit: boolean
 }
 
@@ -65,16 +61,5 @@ export function isAuthenticationOutcomeClassifyMessage(
       (typeof payload.timeoutMs === 'number' &&
         Number.isFinite(payload.timeoutMs) &&
         payload.timeoutMs > 0))
-  )
-}
-
-export function isAuthenticationOutcomeVerdictName(
-  value: unknown,
-): value is AuthenticationOutcomeVerdictName {
-  return (
-    value === 'sufficient' ||
-    value === 'insufficient' ||
-    value === 'conflicting' ||
-    value === 'timeout'
   )
 }

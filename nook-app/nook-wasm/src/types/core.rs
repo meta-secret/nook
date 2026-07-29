@@ -84,14 +84,14 @@ pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
 impl NookVaultArchitecture {
     #[wasm_bindgen(js_name = draft)]
     pub fn draft(
-        device_mode: &str,
+        device_mode: nook_core::DeviceMode,
         vault_type: nook_core::VaultType,
-        replication_type: &str,
+        replication_type: nook_core::ReplicationType,
     ) -> Result<Self, wasm_bindgen::JsError> {
         Ok(Self(nook_core::VaultArchitecture::draft(
-            nook_core::DeviceMode::parse(device_mode)?,
+            device_mode,
             vault_type,
-            nook_core::ReplicationType::parse(replication_type)?,
+            replication_type,
         )?))
     }
 
@@ -702,8 +702,8 @@ impl NookAuthenticationOutcomeVerdict {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn name(&self) -> String {
-        self.0.as_str().to_owned()
+    pub fn verdict(&self) -> nook_core::AuthenticationOutcomeVerdict {
+        self.0
     }
 
     #[wasm_bindgen(getter, js_name = allowsCredentialCommit)]

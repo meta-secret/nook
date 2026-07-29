@@ -458,7 +458,7 @@ impl NookVaultEpochHistoryDiagnostic {
 #[derive(Clone)]
 pub struct NookVaultSecretAccessDiagnostic {
     secret_id: String,
-    secret_type: String,
+    secret_type: nook_core::SecretType,
     status: String,
     epoch_status: String,
     epoch: nook_core::DiagnosticEpoch,
@@ -473,8 +473,8 @@ impl NookVaultSecretAccessDiagnostic {
     }
 
     #[wasm_bindgen(getter, js_name = secretType)]
-    pub fn secret_type(&self) -> String {
-        self.secret_type.clone()
+    pub fn secret_type(&self) -> nook_core::SecretType {
+        self.secret_type
     }
 
     #[wasm_bindgen(getter)]
@@ -626,7 +626,7 @@ impl NookVaultAccessReport {
                 .into_iter()
                 .map(|entry| NookVaultSecretAccessDiagnostic {
                     secret_id: entry.secret_id.as_str().to_owned(),
-                    secret_type: entry.secret_type.as_str().to_owned(),
+                    secret_type: entry.secret_type,
                     status: entry.status.as_str().to_owned(),
                     epoch_status: entry.epoch_status.as_str().to_owned(),
                     epoch: entry.epoch,

@@ -1,4 +1,5 @@
 import { omittedValue } from '../../nook-web-shared/src/explicit-state'
+import { ReplicationType } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { expect, test, type Page } from './fixtures'
 import { generateKeyPairSync, sign } from 'node:crypto'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
@@ -152,11 +153,11 @@ async function continueToPathChooser(page: Page) {
 
 async function setLegacyReplicationForProviderTest(
   page: Page,
-  mode: 'personal' | 'shared',
+  mode: ReplicationType,
 ) {
   await page.evaluate((replicationMode) => {
     const testWindow = window as Window & {
-      __nookVault?: { draftReplicationType: 'personal' | 'shared' }
+      __nookVault?: { draftReplicationType: ReplicationType }
     }
     if (testWindow.__nookVault) {
       testWindow.__nookVault.draftReplicationType = replicationMode
@@ -584,7 +585,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await openLoginProviderSetup(page)
 
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -613,7 +614,7 @@ test.describe('vault architecture modes', () => {
       fileName: SHARED_PROVIDER.fileName,
     })
 
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
     const sharedSecretKey = uniqueSecretKey('architecture-shared')
     await addSecret(page, sharedSecretKey, SHARED_SECRET_VALUE)
@@ -773,7 +774,7 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
 
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
@@ -844,7 +845,7 @@ test.describe('vault architecture modes', () => {
 
       // Sentinel genesis is provider-free and has its own creation ceremony.
       // Return to the chooser before exercising the legacy provider gates.
-      await setLegacyReplicationForProviderTest(page, 'shared')
+      await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()
       await expect(page.getByTestId('provider-option-github')).toBeDisabled()

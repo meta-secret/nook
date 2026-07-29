@@ -1,5 +1,6 @@
 <script lang="ts">
   import { omittedValue } from '../../../explicit-state'
+  import { NookSecretTypeFilter } from '$app-wasm'
 
   import {
     ArrowLeft,
@@ -28,8 +29,8 @@
     AuthenticatorCodeView,
     NookSecretListItem,
     NookSecretRecord,
-    VaultItemType,
   } from '$lib/nook'
+  import { SecretType } from '$lib/nook'
   import {
     freeDecryptedSecrets,
     toggleSecretExposure,
@@ -67,12 +68,12 @@
     secrets?: NookSecretListItem[]
     onAddSecret: (
       id: string,
-      type: VaultItemType,
+      type: SecretType,
       data: string,
     ) => Promise<void>
     onReplaceSecret: (
       oldId: string,
-      type: VaultItemType,
+      type: SecretType,
       data: string,
     ) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
@@ -83,7 +84,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean, type?: VaultItemType | void) => void
+    onAddModeChange?: (open: boolean, type?: SecretType | void) => void
   } = $props()
 
   let searchPattern = $derived(vault.secretQuery)
@@ -99,25 +100,61 @@
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   const typeFilters: Array<{
-    value: VaultItemType
+    value: SecretType
+    filter: NookSecretTypeFilter
     labelKey: string
   }> = [
-    { value: 'login', labelKey: 'vault.types.login' },
-    { value: 'authenticator', labelKey: 'vault.types.authenticator' },
-    { value: 'api-key', labelKey: 'vault.types.api_key' },
-    { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
-    { value: 'secure-note', labelKey: 'vault.types.secure_note' },
-    { value: 'credit-card', labelKey: 'vault.types.credit_card' },
-    { value: 'file-attachment', labelKey: 'vault.types.file_attachment' },
-    { value: 'passkey', labelKey: 'vault.types.passkey' },
+    {
+      value: SecretType.Login,
+      filter: NookSecretTypeFilter.Login,
+      labelKey: 'vault.types.login',
+    },
+    {
+      value: SecretType.Authenticator,
+      filter: NookSecretTypeFilter.Authenticator,
+      labelKey: 'vault.types.authenticator',
+    },
+    {
+      value: SecretType.ApiKey,
+      filter: NookSecretTypeFilter.ApiKey,
+      labelKey: 'vault.types.api_key',
+    },
+    {
+      value: SecretType.SeedPhrase,
+      filter: NookSecretTypeFilter.SeedPhrase,
+      labelKey: 'vault.types.seed_phrase',
+    },
+    {
+      value: SecretType.SecureNote,
+      filter: NookSecretTypeFilter.SecureNote,
+      labelKey: 'vault.types.secure_note',
+    },
+    {
+      value: SecretType.CreditCard,
+      filter: NookSecretTypeFilter.CreditCard,
+      labelKey: 'vault.types.credit_card',
+    },
+    {
+      value: SecretType.FileAttachment,
+      filter: NookSecretTypeFilter.FileAttachment,
+      labelKey: 'vault.types.file_attachment',
+    },
+    {
+      value: SecretType.Passkey,
+      filter: NookSecretTypeFilter.Passkey,
+      labelKey: 'vault.types.passkey',
+    },
   ]
 
   const filteredItems = $derived(secrets)
 
   const visibleItemCount = $derived(secrets.length)
   const activeTypeFilterLabel = $derived.by(() => {
+    if (vault.secretTypeFilter === NookSecretTypeFilter.All) {
+      return vault.t('vault.filter_all_types')
+    }
     const active = typeFilters.find(
-      ({ value }) => value === vault.secretTypeFilter,
+      ({ filter }) => filter === vault.secretTypeFilter,
     )
     return active
       ? vault.t(active.labelKey)
@@ -131,13 +168,16 @@
   )
 
   function getGroupIcon(items: NookSecretListItem[]) {
-    if (items.some((item) => item.type === 'login')) return Globe
-    if (items.some((item) => item.type === 'api-key')) return Braces
-    if (items.some((item) => item.type === 'seed-phrase')) return Sprout
-    if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
-    if (items.some((item) => item.type === 'credit-card')) return CreditCard
-    if (items.some((item) => item.type === 'file-attachment')) return Paperclip
-    if (items.some((item) => item.type === 'passkey')) return KeyRound
+    if (items.some((item) => item.type === SecretType.Login)) return Globe
+    if (items.some((item) => item.type === SecretType.ApiKey)) return Braces
+    if (items.some((item) => item.type === SecretType.SeedPhrase)) return Sprout
+    if (items.some((item) => item.type === SecretType.Authenticator))
+      return ShieldCheck
+    if (items.some((item) => item.type === SecretType.CreditCard))
+      return CreditCard
+    if (items.some((item) => item.type === SecretType.FileAttachment))
+      return Paperclip
+    if (items.some((item) => item.type === SecretType.Passkey)) return KeyRound
     return StickyNote
   }
 
@@ -153,7 +193,7 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort((a, b) => a.type.localeCompare(b.type)),
+        items: items.sort((a, b) => a.type - b.type),
       }))
       .sort((a, b) => a.site.localeCompare(b.site))
   })
@@ -168,9 +208,27 @@
   }
 
   function selectTypeFilter(value: string | void) {
-    const nextFilter = typeFilters.find((filter) => filter.value === value)
-    vault.secretTypeFilter = nextFilter?.value
+    if (value === 'all') {
+      vault.secretTypeFilter = NookSecretTypeFilter.All
+      void vault.loadSecretPage(searchPattern.trim(), 0)
+      return
+    }
+    const nextFilter = typeFilters.find(
+      (filter) => filter.filter === Number(value),
+    )
+    if (!nextFilter) return
+    vault.secretTypeFilter = nextFilter.filter
     void vault.loadSecretPage(searchPattern.trim(), 0)
+  }
+
+  function resetTransientSecretViews(
+    _query: string,
+    _offset: number,
+    _filter: NookSecretTypeFilter,
+  ) {
+    freeDecryptedSecrets(untrack(() => decryptedSecrets))
+    decryptedSecrets = {}
+    authenticatorCodes = {}
   }
 
   function openAddSecret() {
@@ -206,7 +264,7 @@
     editingItem = { kind: SecretEditorKind.Editing, record }
     formSelectedType = {
       kind: SecretTypeSelectionKind.EditingFields,
-      itemType: item.type as VaultItemType,
+      itemType: item.type,
     }
     addSecretOpen = true
     notifyAddMode()
@@ -231,7 +289,7 @@
   const isSecureNoteEditor = $derived(
     addSecretOpen &&
       formSelectedType.kind === SecretTypeSelectionKind.EditingFields &&
-      formSelectedType.itemType === 'secure-note',
+      formSelectedType.itemType === SecretType.SecureNote,
   )
 
   async function copyToClipboard(text: string, id: string, field: string) {
@@ -256,7 +314,8 @@
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true }
       if (
-        filteredItems.find((item) => item.id === id)?.type === 'authenticator'
+        filteredItems.find((item) => item.id === id)?.type ===
+        SecretType.Authenticator
       ) {
         await refreshAuthenticatorCode(id)
       }
@@ -312,12 +371,11 @@
   })
 
   $effect(() => {
-    void vault.secretQuery
-    void vault.secretPageOffset
-    void vault.secretTypeFilter
-    freeDecryptedSecrets(untrack(() => decryptedSecrets))
-    decryptedSecrets = {}
-    authenticatorCodes = {}
+    resetTransientSecretViews(
+      vault.secretQuery,
+      vault.secretPageOffset,
+      vault.secretTypeFilter,
+    )
   })
 
   onDestroy(() => {
@@ -426,11 +484,14 @@
         <div class="absolute right-1 top-1/2 -translate-y-1/2">
           <Select.Root
             type="single"
-            value={vault.secretTypeFilter ?? 'all'}
+            value={vault.secretTypeFilter === NookSecretTypeFilter.All
+              ? 'all'
+              : String(vault.secretTypeFilter)}
             onValueChange={selectTypeFilter}
           >
             <Select.Trigger
-              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter
+              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault
+                .secretTypeFilter !== NookSecretTypeFilter.All
                 ? 'border-primary/40 bg-primary/10 text-foreground'
                 : 'text-muted-foreground'}"
               data-testid="secret-type-filter"
@@ -444,10 +505,10 @@
               <Select.Item value="all" data-testid="secret-type-filter-all">
                 {vault.t('vault.filter_all_types')}
               </Select.Item>
-              {#each typeFilters as filter (filter.value)}
+              {#each typeFilters as filter (filter.filter)}
                 <Select.Item
-                  value={filter.value}
-                  data-testid={`secret-type-filter-${filter.value}`}
+                  value={String(filter.filter)}
+                  data-testid={`secret-type-filter-${filter.filter}`}
                 >
                   {vault.t(filter.labelKey)}
                 </Select.Item>
@@ -478,10 +539,10 @@
             {@const Icon = getGroupIcon(group.items)}
             {@const titleAsCardHeader =
               group.items.length === 1 &&
-              (group.items[0].type === 'secure-note' ||
-                group.items[0].type === 'file-attachment' ||
-                group.items[0].type === 'login' ||
-                group.items[0].type === 'credit-card')}
+              (group.items[0].type === SecretType.SecureNote ||
+                group.items[0].type === SecretType.FileAttachment ||
+                group.items[0].type === SecretType.Login ||
+                group.items[0].type === SecretType.CreditCard)}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"

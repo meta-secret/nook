@@ -6,11 +6,14 @@
   import {
     buildSecretYaml,
     generateSecretId,
+    SecretType,
     type NookSecretRecord,
-    type VaultItemType,
   } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
-  import type { SecretTypeSelection } from "$lib/components/secret-form-state";
+  import {
+    SecretTypeSelectionKind,
+    type SecretTypeSelection,
+  } from "$lib/components/secret-form-state";
   import PasskeyCreationGuidance from "./add-secret/PasskeyCreationGuidance.svelte";
   import SecretFields from "./add-secret/SecretFields.svelte";
   import { SecretFormState } from "./add-secret/secret-form-state.svelte";
@@ -25,19 +28,19 @@
     onCancel,
     initialItem,
     selectedTypeState = $bindable<SecretTypeSelection>({
-      kind: "choosing-type",
+      kind: SecretTypeSelectionKind.ChoosingType,
     }),
   }: {
     vault: VaultState;
     isSaving: boolean;
     onAddSecret: (
       id: string,
-      type: VaultItemType,
+      type: SecretType,
       data: string,
     ) => Promise<void>;
     onReplaceSecret?: (
       oldId: string,
-      type: VaultItemType,
+      type: SecretType,
       data: string,
     ) => Promise<void>;
     onGeneratePassword: (
@@ -62,34 +65,34 @@
 
   const typeTitle = $derived(
     isEditMode
-      ? selectedType === "login"
+      ? selectedType === SecretType.Login
         ? vault.t("add_secret.title_edit_login")
-        : selectedType === "api-key"
+        : selectedType === SecretType.ApiKey
           ? vault.t("add_secret.title_edit_api_key")
-          : selectedType === "seed-phrase"
+          : selectedType === SecretType.SeedPhrase
             ? vault.t("add_secret.title_edit_seed_phrase")
-            : selectedType === "secure-note"
+            : selectedType === SecretType.SecureNote
               ? vault.t("add_secret.title_edit_secure_note")
-              : selectedType === "authenticator"
+              : selectedType === SecretType.Authenticator
                 ? vault.t("add_secret.title_edit_authenticator")
-                : selectedType === "credit-card"
+                : selectedType === SecretType.CreditCard
                   ? vault.t("add_secret.title_edit_credit_card")
-                  : selectedType === "file-attachment"
+                  : selectedType === SecretType.FileAttachment
                     ? vault.t("add_secret.title_edit_file_attachment")
                     : vault.t("add_secret.title_edit_item")
-      : selectedType === "login"
+      : selectedType === SecretType.Login
         ? vault.t("add_secret.title_new_login")
-        : selectedType === "api-key"
+        : selectedType === SecretType.ApiKey
           ? vault.t("add_secret.title_new_api_key")
-          : selectedType === "seed-phrase"
+          : selectedType === SecretType.SeedPhrase
             ? vault.t("add_secret.title_new_seed_phrase")
-            : selectedType === "secure-note"
+            : selectedType === SecretType.SecureNote
               ? vault.t("add_secret.title_new_secure_note")
-              : selectedType === "authenticator"
+              : selectedType === SecretType.Authenticator
                 ? vault.t("add_secret.title_new_authenticator")
-                : selectedType === "credit-card"
+                : selectedType === SecretType.CreditCard
                   ? vault.t("add_secret.title_new_credit_card")
-                  : selectedType === "file-attachment"
+                  : selectedType === SecretType.FileAttachment
                     ? vault.t("add_secret.title_new_file_attachment")
                     : vault.t("add_secret.title_add_item"),
   );
@@ -99,7 +102,7 @@
     if (!item) return;
     selectedTypeState = {
       kind: "editing-fields",
-      itemType: item.type as VaultItemType,
+      itemType: item.type,
     };
     state.load(item);
   });
@@ -119,9 +122,14 @@
     if (!selectedType) return;
     state.submitError = "";
 
-    if (selectedType === "secure-note" && !state.noteBody.trim()) return;
-    if (selectedType === "file-attachment" && !state.fileContentBase64) return;
-    if (selectedType === "seed-phrase" && !state.seedPhraseValid) return;
+    if (selectedType === SecretType.SecureNote && !state.noteBody.trim()) return;
+    if (
+      selectedType === SecretType.FileAttachment &&
+      !state.fileContentBase64
+    )
+      return;
+    if (selectedType === SecretType.SeedPhrase && !state.seedPhraseValid)
+      return;
 
     let dataYaml: string;
     try {
@@ -142,7 +150,7 @@
     onCancel();
   }
 
-  const isSecureNoteForm = $derived(selectedType === "secure-note");
+  const isSecureNoteForm = $derived(selectedType === SecretType.SecureNote);
   const canSubmit = $derived(state.canSubmit(selectedType, isSaving));
   const saveLabel = $derived(
     isSaving
@@ -159,7 +167,7 @@
     onSelect={(type) =>
       (selectedTypeState = { kind: "editing-fields", itemType: type })}
   />
-{:else if selectedType === "passkey" && !isEditMode}
+{:else if selectedType === SecretType.Passkey && !isEditMode}
   <PasskeyCreationGuidance
     {vault}
     onBack={() => (selectedTypeState = { kind: "choosing-type" })}

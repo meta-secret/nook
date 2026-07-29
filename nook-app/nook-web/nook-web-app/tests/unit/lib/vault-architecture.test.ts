@@ -4,6 +4,7 @@ import initNookWasm, {
   DeviceMode,
   NookVaultArchitecture,
   OnboardingType,
+  ReplicationType,
   VaultType,
   enrollmentProviderForArchitecture,
 } from '$app-wasm'
@@ -97,7 +98,7 @@ describe('vault architecture adapter', () => {
     }).toEqual({
       device_mode: DeviceMode.Standard,
       vault_type: VaultType.Simple,
-      replication_type: 'personal',
+      replication_type: ReplicationType.Personal,
     })
     expect(onboardingType(architecture)).toBe('personal-credential-transfer')
   })
@@ -106,18 +107,18 @@ describe('vault architecture adapter', () => {
     const simple = NookVaultArchitecture.draft(
       DeviceMode.AntiHacker,
       VaultType.Simple,
-      'shared',
+      ReplicationType.Shared,
     )
     const sentinel = NookVaultArchitecture.draft(
       DeviceMode.Standard,
       VaultType.Sentinel,
-      'personal',
+      ReplicationType.Personal,
     )
     try {
       expect(() => simple.sentinel_threshold).toThrow(
         'errors.validation.invalid_sentinel_policy',
       )
-      expect(simple.replication_type).toBe('shared')
+      expect(simple.replication_type).toBe(ReplicationType.Shared)
       expect(sentinel.sentinel_threshold).toBe(2)
       expect(sentinel.sentinel_required_participants).toBe(2)
       expect(sentinel.sentinel_ready_participants).toBe(0)
@@ -147,7 +148,7 @@ describe('vault architecture adapter', () => {
     const draft: VaultArchitectureDraft = {
       device_mode: DeviceMode.AntiHacker,
       vault_type: VaultType.Sentinel,
-      replication_type: 'shared',
+      replication_type: ReplicationType.Shared,
       sentinel: {
         threshold: 2,
         required_participants: 3,
@@ -168,7 +169,7 @@ describe('vault architecture adapter', () => {
     const normalized = validateVaultArchitecture({
       device_mode: DeviceMode.Standard,
       vault_type: VaultType.Sentinel,
-      replication_type: 'personal',
+      replication_type: ReplicationType.Personal,
       sentinel: {
         threshold: 2,
         required_participants: 3,
@@ -186,7 +187,7 @@ describe('vault architecture adapter', () => {
     }).toEqual({
       device_mode: DeviceMode.Standard,
       vault_type: VaultType.Sentinel,
-      replication_type: 'personal',
+      replication_type: ReplicationType.Personal,
       sentinel_threshold: 2,
       sentinel_required_participants: 3,
       sentinel_ready_participants: 0,
@@ -206,7 +207,7 @@ describe('vault architecture adapter', () => {
     )
     const validatedCapability = validateProviderReplication(
       googleDriveProvider(),
-      'shared',
+      ReplicationType.Shared,
     )
     expect(validatedCapability.providerType).toBe(driveCapability.providerType)
     expect(takeWasmStringValue(validatedCapability.oauthPreset)).toBe(
@@ -219,7 +220,7 @@ describe('vault architecture adapter', () => {
     )
 
     expect(() =>
-      validateProviderReplication(githubProvider(), 'shared'),
+      validateProviderReplication(githubProvider(), ReplicationType.Shared),
     ).toThrow(
       /errors\.validation\.unsupported_provider_replication:github::shared/,
     )
@@ -236,14 +237,20 @@ describe('vault architecture adapter', () => {
     expect(providerCapabilityLabelKey(drive)).toBe(
       'provider_picker.capability_personal_shared',
     )
-    expect(providerSupportsReplication(github, 'shared')).toBe(false)
-    expect(providerSupportsReplication(drive, 'shared')).toBe(true)
-    expect(firstCompatibleProvider(providers, 'shared', github.id)).toBe(drive)
-    expect(firstCompatibleProvider(providers, 'personal', github.id)).toBe(
-      github,
+    expect(providerSupportsReplication(github, ReplicationType.Shared)).toBe(
+      false,
+    )
+    expect(providerSupportsReplication(drive, ReplicationType.Shared)).toBe(
+      true,
     )
     expect(
-      firstCompatibleProvider([github], 'shared', github.id),
+      firstCompatibleProvider(providers, ReplicationType.Shared, github.id),
+    ).toBe(drive)
+    expect(
+      firstCompatibleProvider(providers, ReplicationType.Personal, github.id),
+    ).toBe(github)
+    expect(
+      firstCompatibleProvider([github], ReplicationType.Shared, github.id),
     ).toBeUndefined()
   })
 
@@ -251,13 +258,19 @@ describe('vault architecture adapter', () => {
     const privateICloud = privateICloudProvider()
     const sharedICloud = sharedICloudProvider()
 
-    expect(providerSupportsReplication(privateICloud, 'personal')).toBe(true)
-    expect(providerSupportsReplication(privateICloud, 'shared')).toBe(false)
-    expect(providerSupportsReplication(sharedICloud, 'shared')).toBe(true)
+    expect(
+      providerSupportsReplication(privateICloud, ReplicationType.Personal),
+    ).toBe(true)
+    expect(
+      providerSupportsReplication(privateICloud, ReplicationType.Shared),
+    ).toBe(false)
+    expect(
+      providerSupportsReplication(sharedICloud, ReplicationType.Shared),
+    ).toBe(true)
     expect(
       firstCompatibleProvider(
         [privateICloud, sharedICloud],
-        'shared',
+        ReplicationType.Shared,
         privateICloud.id,
       )?.id,
     ).toBe(sharedICloud.id)
@@ -267,7 +280,7 @@ describe('vault architecture adapter', () => {
     const architecture = validateVaultArchitecture({
       device_mode: DeviceMode.Standard,
       vault_type: VaultType.Simple,
-      replication_type: 'shared',
+      replication_type: ReplicationType.Shared,
     })
     const provider = googleDriveProvider()
 

@@ -4,8 +4,8 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
-use crate::types::{NookStringValue, NookStringValueRef};
-use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
+use crate::types::NookStringValue;
+use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsCast;
@@ -390,7 +390,7 @@ impl NookVaultManager {
     pub async fn query_prepared_secret_page_js(
         &mut self,
         query: &str,
-        secret_type_filter: NookStringValue,
+        secret_type_filter: NookSecretTypeFilter,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
@@ -409,19 +409,13 @@ impl NookVaultManager {
     pub fn query_secret_page_js(
         &self,
         query: &str,
-        secret_type_filter: NookStringValue,
+        secret_type_filter: NookSecretTypeFilter,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let secret_type_filter = match secret_type_filter.as_ref() {
-            NookStringValueRef::Value(value) => {
-                nook_core::SecretTypeFilter::Only(nook_core::SecretType::parse(value)?)
-            }
-            NookStringValueRef::Unavailable => nook_core::SecretTypeFilter::All,
-        };
         Ok(NookSecretPage::from_core(self.query_secret_page(
             query,
-            secret_type_filter,
+            secret_type_filter.to_core(),
             offset,
             limit,
         )?)?)
@@ -505,7 +499,7 @@ impl NookVaultManager {
     pub async fn add_secret(
         &mut self,
         id: String,
-        secret_type: String,
+        secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
@@ -522,7 +516,6 @@ impl NookVaultManager {
         }
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
-        let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
@@ -708,7 +701,7 @@ impl NookVaultManager {
         &mut self,
         old_id: String,
         new_id: String,
-        secret_type: String,
+        secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
@@ -723,7 +716,6 @@ impl NookVaultManager {
             )
             .into());
         }
-        let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =

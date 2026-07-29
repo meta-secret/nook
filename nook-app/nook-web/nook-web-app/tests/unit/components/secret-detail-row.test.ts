@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
-import type { NookSecretListItem, NookSecretRecord } from '$lib/nook'
+import {
+  SecretType,
+  type NookSecretListItem,
+  type NookSecretRecord,
+} from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
 
@@ -12,7 +16,7 @@ const vault = {
 
 const authenticatorItem = {
   id: 'legacy-authenticator',
-  type: 'authenticator',
+  type: SecretType.Authenticator,
   issuer: 'Legacy service',
   account: 'alice@example.com',
   backupCodeCount: 2,
@@ -50,7 +54,7 @@ function loginItem(
 ): NookSecretListItem {
   return {
     id: 'secret_login',
-    type: 'login',
+    type: SecretType.Login,
     displayTitle: websiteUrl,
     groupKey: websiteHost || 'No Website',
     summary: username || websiteUrl,

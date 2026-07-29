@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
-import type { NookSecretListItem } from '$lib/nook'
+import { SecretType, type NookSecretListItem } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
@@ -36,7 +36,7 @@ describe('passkey item discovery', () => {
   test('renders safe passkey metadata without reveal, copy, or edit actions', () => {
     const item = {
       id: 'secret_passkey',
-      type: 'passkey',
+      type: SecretType.Passkey,
       rpId: 'login.example.com',
       passkeyUserName: 'alice@example.com',
       passkeyUserDisplayName: 'Alice',

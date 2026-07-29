@@ -24,6 +24,7 @@
     NookSecretListItem,
     NookSecretRecord,
   } from "$lib/nook";
+  import { SecretType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
   import MarkdownContent from "./MarkdownContent.svelte";
   import SeedPhraseGrid from "./SeedPhraseGrid.svelte";
@@ -70,17 +71,17 @@
   } = $props();
 
   const summary = $derived.by(() => {
-    if (item.type === "login") {
+    if (item.type === SecretType.Login) {
       return (
         item.username.trim() ||
         item.websiteUrl.trim() ||
         vault.t("vault.types.login")
       );
     }
-    if (item.type === "api-key") {
+    if (item.type === SecretType.ApiKey) {
       return item.websiteUrl.trim() || vault.t("vault.types.api_key");
     }
-    if (item.type === "seed-phrase") {
+    if (item.type === SecretType.SeedPhrase) {
       const name = item.name.trim();
       const words = item.seedWordCount;
       const label = name || vault.t("vault.fields.unnamed_seed_phrase");
@@ -89,10 +90,10 @@
       }
       return label;
     }
-    if (item.type === "authenticator") {
+    if (item.type === SecretType.Authenticator) {
       return item.account.trim() || item.issuer.trim();
     }
-    if (item.type === "passkey") {
+    if (item.type === SecretType.Passkey) {
       return (
         item.passkeyUserDisplayName.trim() ||
         item.passkeyUserName.trim() ||
@@ -100,38 +101,38 @@
         vault.t("vault.types.passkey")
       );
     }
-    if (item.type === "credit-card") {
+    if (item.type === SecretType.CreditCard) {
       const last4 = item.last4.trim();
       if (last4) return `•••• ${last4}`;
       return item.title.trim() || vault.t("vault.fields.unnamed_card");
     }
-    if (item.type === "file-attachment") {
+    if (item.type === SecretType.FileAttachment) {
       return item.fileName.trim() || item.title.trim() || vault.t("vault.fields.no_title");
     }
     return item.title.trim() || vault.t("vault.fields.no_title");
   });
 
   const headerTitle = $derived.by(() => {
-    if (item.type === "login") {
+    if (item.type === SecretType.Login) {
       return item.websiteHost || vault.t("vault.fields.no_website");
     }
-    if (item.type === "credit-card") {
+    if (item.type === SecretType.CreditCard) {
       return (
         item.title.trim() ||
         summary ||
         vault.t("vault.fields.unnamed_card")
       );
     }
-    if (item.type === "file-attachment") {
+    if (item.type === SecretType.FileAttachment) {
       return item.title.trim() || item.fileName.trim() || vault.t("vault.fields.no_title");
     }
     return summary;
   });
 
   const accountSubtitle = $derived(
-    item.type === "login"
+    item.type === SecretType.Login
       ? item.username.trim()
-      : item.type === "credit-card" && item.title.trim() && item.last4.trim()
+      : item.type === SecretType.CreditCard && item.title.trim() && item.last4.trim()
         ? `•••• ${item.last4.trim()}`
         : "",
   );
@@ -153,7 +154,7 @@
   }
 
   function downloadFileAttachment() {
-    if (!decrypted || item.type !== "file-attachment") return;
+    if (!decrypted || item.type !== SecretType.FileAttachment) return;
     const binary = atob(decrypted.contentBase64);
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) {
@@ -205,15 +206,15 @@
           <div
             class="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
           >
-            {#if item.type === "login"}
+            {#if item.type === SecretType.Login}
               <Globe class="size-3.5" />
-            {:else if item.type === "authenticator"}
+            {:else if item.type === SecretType.Authenticator}
               <ShieldCheck class="size-3.5" />
-            {:else if item.type === "passkey"}
+            {:else if item.type === SecretType.Passkey}
               <KeyRound class="size-3.5" />
-            {:else if item.type === "credit-card"}
+            {:else if item.type === SecretType.CreditCard}
               <CreditCard class="size-3.5" />
-            {:else if item.type === "file-attachment"}
+            {:else if item.type === SecretType.FileAttachment}
               <Paperclip class="size-3.5" />
             {:else}
               <StickyNote class="size-3.5" />
@@ -237,25 +238,25 @@
           <span
             class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
           >
-            {#if item.type === "login"}
+            {#if item.type === SecretType.Login}
               <Globe class="size-3 text-primary/70" />
               {vault.t("vault.types.login")}
-            {:else if item.type === "api-key"}
+            {:else if item.type === SecretType.ApiKey}
               <Braces class="size-3 text-primary/70" />
               {vault.t("vault.types.api_key")}
-            {:else if item.type === "seed-phrase"}
+            {:else if item.type === SecretType.SeedPhrase}
               <Sprout class="size-3 text-primary/70" />
               {vault.t("vault.types.seed_phrase")}
-            {:else if item.type === "authenticator"}
+            {:else if item.type === SecretType.Authenticator}
               <ShieldCheck class="size-3 text-primary/70" />
               {vault.t("vault.types.authenticator")}
-            {:else if item.type === "passkey"}
+            {:else if item.type === SecretType.Passkey}
               <KeyRound class="size-3 text-primary/70" />
               {vault.t("vault.types.passkey")}
-            {:else if item.type === "credit-card"}
+            {:else if item.type === SecretType.CreditCard}
               <CreditCard class="size-3 text-primary/70" />
               {vault.t("vault.types.credit_card")}
-            {:else if item.type === "file-attachment"}
+            {:else if item.type === SecretType.FileAttachment}
               <Paperclip class="size-3 text-primary/70" />
               {vault.t("vault.types.file_attachment")}
             {:else}
@@ -272,7 +273,7 @@
       <div
         class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}"
       >
-        {#if item.type !== "passkey"}
+        {#if item.type !== SecretType.Passkey}
           <button
             type="button"
             onclick={() => void onToggleReveal(item.id)}
@@ -314,7 +315,7 @@
     <!-- Item Structured Details -->
     {#if expanded}
       <div class="space-y-1.5 {titleAsHeader ? 'px-3 py-3' : ''}">
-        {#if item.type === "login"}
+        {#if item.type === SecretType.Login}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.website_label")}</span
@@ -405,7 +406,7 @@
               </div>
             </div>
           {/if}
-        {:else if item.type === "api-key"}
+        {:else if item.type === SecretType.ApiKey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.website_label")}</span
@@ -483,7 +484,7 @@
               </div>
             </div>
           {/if}
-        {:else if item.type === "seed-phrase"}
+        {:else if item.type === SecretType.SeedPhrase}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.account")}</span
@@ -533,7 +534,7 @@
               revealed={Boolean(decrypted)}
             />
           </div>
-        {:else if item.type === "authenticator"}
+        {:else if item.type === SecretType.Authenticator}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.current_code")}</span
@@ -689,7 +690,7 @@
             </div>
           </div>
           {/if}
-        {:else if item.type === "passkey"}
+        {:else if item.type === SecretType.Passkey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.relying_party")}</span
@@ -731,7 +732,7 @@
           <p class="text-[11px] leading-relaxed text-muted-foreground">
             {vault.t("vault.fields.passkey_managed_hint")}
           </p>
-        {:else if item.type === "credit-card"}
+        {:else if item.type === SecretType.CreditCard}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.title")}</span
@@ -885,7 +886,7 @@
               </div>
             </div>
           {/if}
-        {:else if item.type === "file-attachment"}
+        {:else if item.type === SecretType.FileAttachment}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
               >{vault.t("vault.fields.file_name")}</span

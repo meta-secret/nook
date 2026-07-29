@@ -197,9 +197,9 @@ impl VaultType {
 
 deserialize_with_parse!(VaultType);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Tsify)]
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum ReplicationType {
     /// Same owner / highly trusted devices may reuse sync-provider credentials.
     #[default]

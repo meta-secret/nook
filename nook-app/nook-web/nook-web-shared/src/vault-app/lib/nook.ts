@@ -13,6 +13,7 @@ import {
   generateId,
   NookVaultManager as NookVaultManagerClass,
   NookSecretFormFields,
+  SecretType,
   buildSecretYaml as wasmBuildSecretYaml,
   generatePassword as wasmGeneratePassword,
   generateSecretId,
@@ -41,19 +42,9 @@ export {
   authenticatorSetupKeyChanged,
   generateId,
   generateSecretId,
+  SecretType,
   VaultAccessStatus,
 };
-
-/** UI-only tag for the add-secret type picker — canonical schema lives in `nook-core`. */
-export type VaultItemType =
-  | "login"
-  | "api-key"
-  | "seed-phrase"
-  | "secure-note"
-  | "passkey"
-  | "authenticator"
-  | "credit-card"
-  | "file-attachment";
 
 export type AuthenticatorCodeView = {
   code: string;
@@ -129,34 +120,24 @@ function drainWasmStatusIntoLog(manager: NookVaultManager) {
   }, 500);
 }
 
-export enum SecretFormInputType {
-  Login = "login",
-  ApiKey = "api-key",
-  SeedPhrase = "seed-phrase",
-  SecureNote = "secure-note",
-  Authenticator = "authenticator",
-  CreditCard = "credit-card",
-  FileAttachment = "file-attachment",
-}
-
 export type SecretFormInput =
   | {
-      type: SecretFormInputType.Login;
+      type: SecretType.Login;
       websiteUrl: string;
       username: string;
       password: string;
       notes: string;
     }
   | {
-      type: SecretFormInputType.ApiKey;
+      type: SecretType.ApiKey;
       websiteUrl: string;
       key: string;
       expiresAt: string;
     }
-  | { type: SecretFormInputType.SeedPhrase; name: string; seed: string }
-  | { type: SecretFormInputType.SecureNote; title: string; note: string }
+  | { type: SecretType.SeedPhrase; name: string; seed: string }
+  | { type: SecretType.SecureNote; title: string; note: string }
   | {
-      type: SecretFormInputType.Authenticator;
+      type: SecretType.Authenticator;
       issuer: string;
       account: string;
       websiteUrl: string;
@@ -167,7 +148,7 @@ export type SecretFormInput =
       backupCodes: string;
     }
   | {
-      type: SecretFormInputType.CreditCard;
+      type: SecretType.CreditCard;
       title: string;
       cardholderName: string;
       number: string;
@@ -177,7 +158,7 @@ export type SecretFormInput =
       notes: string;
     }
   | {
-      type: SecretFormInputType.FileAttachment;
+      type: SecretType.FileAttachment;
       title: string;
       fileName: string;
       mimeType: string;
@@ -189,7 +170,7 @@ export type SecretFormInput =
 export function buildSecretYaml(input: SecretFormInput): string {
   let fields: NookSecretFormFields;
   switch (input.type) {
-    case SecretFormInputType.Login:
+    case SecretType.Login:
       fields = NookSecretFormFields.login(
         input.websiteUrl,
         input.username,
@@ -197,20 +178,20 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.notes,
       );
       break;
-    case SecretFormInputType.ApiKey:
+    case SecretType.ApiKey:
       fields = NookSecretFormFields.apiKey(
         input.websiteUrl,
         input.key,
         input.expiresAt,
       );
       break;
-    case SecretFormInputType.SeedPhrase:
+    case SecretType.SeedPhrase:
       fields = NookSecretFormFields.seedPhrase(input.name, input.seed);
       break;
-    case SecretFormInputType.SecureNote:
+    case SecretType.SecureNote:
       fields = NookSecretFormFields.secureNote(input.title, input.note);
       break;
-    case SecretFormInputType.Authenticator:
+    case SecretType.Authenticator:
       fields = NookSecretFormFields.authenticator(
         input.issuer,
         input.account,
@@ -222,7 +203,7 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.backupCodes,
       );
       break;
-    case SecretFormInputType.CreditCard:
+    case SecretType.CreditCard:
       fields = NookSecretFormFields.creditCard(
         input.title,
         input.cardholderName,
@@ -233,7 +214,7 @@ export function buildSecretYaml(input: SecretFormInput): string {
         input.notes,
       );
       break;
-    case SecretFormInputType.FileAttachment:
+    case SecretType.FileAttachment:
       fields = NookSecretFormFields.fileAttachment(
         input.title,
         input.fileName,

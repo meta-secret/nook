@@ -1,4 +1,5 @@
 import { fillOneTimeCode } from '../../../nook-web-shared/src/extension/password-forms'
+import { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
@@ -196,15 +197,16 @@ async function evaluatePendingEnrollmentEvidence(): Promise<void> {
   }
 
   if (
-    verdict.name === 'conflicting' ||
-    (verdict.name === 'insufficient' && observation.errorMarkerPresent)
+    verdict.verdict === AuthenticationOutcomeVerdict.Conflicting ||
+    (verdict.verdict === AuthenticationOutcomeVerdict.Insufficient &&
+      observation.errorMarkerPresent)
   ) {
     stopPendingEnrollmentWatch()
     watch.callbacks.reject()
     return
   }
 
-  if (verdict.name === 'timeout') {
+  if (verdict.verdict === AuthenticationOutcomeVerdict.Timeout) {
     watch.callbacks.timeout()
   }
 }
