@@ -244,12 +244,12 @@ export function listGithubStubDir(
     ...[...dirs].sort().map((name) => ({
       name,
       path: `${relativePath}/${name}`,
-      type: 'dir' as const,
+      type: ListGithubStubDirResultType.Dir as const,
     })),
     ...[...files].sort().map((name) => ({
       name,
       path: `${relativePath}/${name}`,
-      type: 'file' as const,
+      type: ListGithubStubDirResultType.File as const,
     })),
   ]
 }

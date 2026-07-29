@@ -579,7 +579,7 @@
                 >
                   <ChevronDown
                     class="size-3.5 transition-transform {detailsAuthId.kind ===
-                      'expanded' && detailsAuthId.authId === member.authId
+                      MemberDetailsKind.Expanded && detailsAuthId.authId === member.authId
                       ? 'rotate-180'
                       : ''}"
                   />

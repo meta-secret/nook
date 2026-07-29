@@ -22,7 +22,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     ObservedActivity,
     ObservedAgent,
     ObservedAlert,
+    ObservedTask,
     ObserverCopy,
+    ObserverSnapshot,
   } from './types';
   import { emergencyCopy } from './emergency-copy';
   import {
