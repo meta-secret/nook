@@ -1,5 +1,4 @@
 use std::fmt::Write as _;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -16,13 +15,17 @@ use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::verify_main_repair_delivery;
 use crate::model::{
-    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimOutcome, ClaimedTask,
-    CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
+    ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, CompletionArtifact, EnqueueTask,
+    TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
 
+mod lifecycle;
 mod task_prompt;
 mod workspace;
+use lifecycle::{
+    claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested, ClaimStep,
+};
 use task_prompt::*;
 use workspace::*;
 
@@ -72,6 +75,15 @@ impl<S: TaskStore> Worker<S> {
         tokio::fs::write(self.config.workspace.join(".hive-worker-ready"), b"ready")
             .await
             .hive_context("failed to publish worker readiness")?;
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .hive_context("failed to install the worker termination handler")?;
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        tokio::spawn(async move {
+            if terminate.recv().await.is_some() {
+                let _ = shutdown_tx.send(true);
+            }
+        });
 
         let task = loop {
             if let Err(error) = external_auth.validate().await {
@@ -85,13 +97,18 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 ));
             }
-            match self
-                .store
-                .claim(&self.config.agent_id, self.config.lease_seconds)
-                .await?
+            match claim_once(
+                &self.store,
+                &self.config.agent_id,
+                self.config.lease_seconds,
+                shutdown_rx.clone(),
+                &lifecycle_marker,
+            )
+            .await?
             {
-                ClaimOutcome::Claimed(task) => break task,
-                ClaimOutcome::NoTask => {
+                ClaimStep::Stopped => return Ok(()),
+                ClaimStep::Claimed(task) => break *task,
+                ClaimStep::NoTask => {
                     self.store
                         .register_agent(&self.config.agent_id, &self.config.pod_name)
                         .await?;
@@ -99,9 +116,17 @@ impl<S: TaskStore> Worker<S> {
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
-            tokio::time::sleep(Duration::from_secs(wait)).await;
+            tokio::select! {
+                biased;
+                shutdown = shutdown_requested(shutdown_rx.clone()) => {
+                    shutdown?;
+                    mark_interrupted(&lifecycle_marker).await?;
+                    return Ok(());
+                }
+                () = tokio::time::sleep(Duration::from_secs(wait)) => {}
+            }
         };
-        let result = self.execute(&task, external_auth).await;
+        let result = self.execute(&task, external_auth, shutdown_rx).await;
         if let Err(error) = result {
             if matches!(error, crate::HiveError::WorkerBlocked) {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -153,6 +178,7 @@ impl<S: TaskStore> Worker<S> {
         &self,
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
+        shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
@@ -346,9 +372,6 @@ impl<S: TaskStore> Worker<S> {
                 terminal_result
             },
         );
-        let mut terminate =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .hive_context("failed to install the worker termination handler")?;
         tokio::pin!(execution);
         tokio::select! {
             biased;
@@ -378,10 +401,8 @@ impl<S: TaskStore> Worker<S> {
                 heartbeat_result?;
                 return Err(crate::hive_error!("lease heartbeat stopped before task execution"));
             }
-            signal = terminate.recv() => {
-                if signal.is_none() {
-                    return Err(crate::hive_error!("worker termination signal stream closed"));
-                }
+            shutdown = shutdown_requested(shutdown) => {
+                shutdown?;
                 let _ = stop_tx.send(true);
                 heartbeat
                     .await
@@ -514,9 +535,9 @@ mod tests {
     use std::fmt::Write as _;
 
     use super::{
-        MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        establish_worker_lifecycle, obsolete_owner_delivery_targets, persistable_patch,
-        prepare_workspace, task_prompt, validate_dependency_artifacts,
+        blocked_disposition, bounded, obsolete_owner_delivery_targets, persistable_patch,
+        prepare_workspace, task_prompt, validate_dependency_artifacts, TaskDisposition,
+        MAX_PERSISTED_RESULT_BYTES,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -590,24 +611,6 @@ mod tests {
         ]);
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
-        Ok(())
-    }
-
-    #[test]
-    fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
-        let workspace = tempfile::tempdir()?;
-
-        establish_worker_lifecycle(workspace.path(), "pod-a")?;
-        let error = establish_worker_lifecycle(workspace.path(), "pod-a")
-            .err()
-            .ok_or_else(|| crate::hive_error!("the second worker process must be rejected"))?;
-
-        assert!(
-            error
-                .to_string()
-                .contains("refusing to restart a Hive worker")
-        );
-        assert!(workspace.path().join(".hive-task-finished").is_file());
         Ok(())
     }
 
@@ -760,8 +763,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
-    -> crate::HiveResult<()> {
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch(
+    ) -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")

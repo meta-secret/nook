@@ -1,29 +1,5 @@
 use super::*;
 
-pub(super) fn establish_worker_lifecycle(
-    workspace: &Path,
-    pod_name: &str,
-) -> crate::HiveResult<()> {
-    std::fs::create_dir_all(workspace)?;
-    let startup_marker = workspace.join(".hive-worker-started");
-    let startup_file = std::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&startup_marker);
-    let mut startup_file = match startup_file {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            std::fs::write(workspace.join(".hive-task-finished"), pod_name)?;
-            return Err(error)
-                .hive_context("refusing to restart a Hive worker inside an existing Pod");
-        }
-        Err(error) => return Err(error).hive_context("failed to establish Hive worker lifecycle"),
-    };
-    startup_file.write_all(pod_name.as_bytes())?;
-    startup_file.sync_all()?;
-    Ok(())
-}
-
 pub(super) async fn heartbeat_loop<S: TaskStore>(
     store: S,
     agent_id: AgentId,
