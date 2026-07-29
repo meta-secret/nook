@@ -419,12 +419,20 @@ impl Neo4jTaskStore {
                             coalesce(latest.attempt.started_at, 0) AS latest_attempt_started_at,
                             coalesce(latest.attempt.completed_at, 0) AS latest_attempt_completed_at,
                             coalesce(task.latest_activity_at, 0) AS latest_activity_at,
-                            substring(replace(coalesce(
-                              latest.attempt.error,
-                              task.failure_reason,
-                              task.blocked_reason,
-                              ''
-                            ), '\n', ' '), 0, 600)
+                            substring(replace(CASE
+                              WHEN task.status = 'BLOCKED' THEN coalesce(
+                                task.blocked_reason,
+                                latest.attempt.error,
+                                task.failure_reason,
+                                ''
+                              )
+                              ELSE coalesce(
+                                latest.attempt.error,
+                                task.failure_reason,
+                                task.blocked_reason,
+                                ''
+                              )
+                            END, '\n', ' '), 0, 600)
                               AS latest_error,
                             substring(replace(coalesce(latest.attempt.summary, ''), '\n', ' '), 0, 1200)
                               AS latest_summary,

@@ -228,7 +228,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
                         );
                     }
                     println!(
-                        "requeued failed chain for {task_id} with 3 additional attempts on {release_id}"
+                        "requeued failed chain for {task_id} with at least 3 remaining attempts per runnable member on {release_id}"
                     );
                     Ok(())
                 }

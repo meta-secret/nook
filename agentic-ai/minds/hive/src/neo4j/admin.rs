@@ -85,12 +85,33 @@ impl Neo4jTaskStore {
             .hive_context("release id must be a sha256 digest")?;
         let release_id = format!("sha256:{digest}");
         let mut transaction = self.graph.start_txn().await?;
+        let mut lock_rows = transaction
+            .execute(
+                query(
+                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
+                     WITH DISTINCT member
+                     ORDER BY member.id
+                     SET member.version = coalesce(member.version, 0) + 1
+                     RETURN count(member) AS locked",
+                )
+                .param("id", task_id.as_str()),
+            )
+            .await?;
+        let locked = match lock_rows.next(transaction.handle()).await? {
+            Some(row) => row.get::<i64>("locked")? > 0,
+            None => false,
+        };
+        drop(lock_rows);
+        if !locked {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
         let mut eligible_rows = transaction
             .execute(
                 query(
                     "MATCH (root:Task {id: $id})
                      WHERE root.kind = 'main-repair'
-                       AND root.status = 'FAILED'
+                       AND root.status IN ['FAILED', 'BLOCKED']
                        AND coalesce(root.last_retry_release, '') <> $release_id
                        AND NOT EXISTS {
                          MATCH (root)-[:DEPENDS_ON*0..]->(running:Task)
@@ -108,26 +129,6 @@ impl Neo4jTaskStore {
             transaction.rollback().await?;
             return Ok(false);
         }
-
-        let mut lock_rows = transaction
-            .execute(
-                query(
-                    "MATCH (root:Task {id: $id})-[:DEPENDS_ON*0..]->(member:Task)
-                     WITH DISTINCT member
-                     ORDER BY member.id
-                     SET member.version = coalesce(member.version, 0) + 1
-                     RETURN count(member) AS locked",
-                )
-                .param("id", task_id.as_str()),
-            )
-            .await?;
-        if lock_rows.next(transaction.handle()).await?.is_none() {
-            transaction.rollback().await?;
-            crate::hive_bail!(
-                "retryable Main repair graph disappeared while acquiring revival locks"
-            );
-        }
-        drop(lock_rows);
 
         let mut obsolete_rows = transaction
             .execute(
@@ -156,13 +157,13 @@ impl Neo4jTaskStore {
                 query(
                     "MATCH (root:Task {id: $id})
                      WHERE root.kind = 'main-repair'
-                       AND root.status = 'FAILED'
+                       AND root.status IN ['FAILED', 'BLOCKED']
                        AND coalesce(root.last_retry_release, '') <> $release_id
                      MATCH (root)-[:DEPENDS_ON*0..]->(member:Task)
                      WITH root, collect(DISTINCT member) AS members
                      UNWIND members AS member
                      WITH root, member
-                     WHERE member.status = 'FAILED'
+                     WHERE member.status IN ['READY', 'FAILED', 'BLOCKED']
                      OPTIONAL MATCH (member)-[:DEPENDS_ON]->(dependency:Task)
                      WITH root,
                           member,
@@ -170,12 +171,23 @@ impl Neo4jTaskStore {
                           count(CASE WHEN dependency.status = 'COMPLETED' THEN 1 END)
                             AS completed_count
                      SET member.status = CASE
-                           WHEN dependency_count = completed_count THEN 'READY'
-                           ELSE 'BLOCKED'
+                         WHEN dependency_count = completed_count THEN 'READY'
+                         ELSE 'BLOCKED'
+                       END,
+                         member.max_attempts = CASE
+                           WHEN coalesce(member.max_attempts, 0)
+                             < coalesce(member.attempt_count, 0) + 3
+                             THEN coalesce(member.attempt_count, 0) + 3
+                           ELSE member.max_attempts
                          END,
-                         member.max_attempts = member.attempt_count + 3,
                          member.failure_reason = null,
-                         member.blocked_reason = null,
+                         member.blocked_reason = CASE
+                           WHEN dependency_count = completed_count THEN null
+                           ELSE coalesce(
+                             member.blocked_reason,
+                             'waiting for retried dependencies'
+                           )
+                         END,
                          member.updated_at = timestamp(),
                          member.version = member.version + 1,
                          root.last_retry_release = $release_id

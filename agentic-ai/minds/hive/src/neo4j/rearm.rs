@@ -66,8 +66,12 @@ impl Neo4jTaskStore {
                                ELSE 'BLOCKED'
                              END,
                              retired.obsolete = false,
-                             retired.max_attempts =
-                               coalesce(retired.attempt_count, 0) + 3,
+                             retired.max_attempts = CASE
+                               WHEN coalesce(retired.max_attempts, 0)
+                                 < coalesce(retired.attempt_count, 0) + 3
+                                 THEN coalesce(retired.attempt_count, 0) + 3
+                               ELSE retired.max_attempts
+                             END,
                              retired.result_summary = null,
                              retired.blocked_reason = CASE
                                WHEN failed_count = 0
