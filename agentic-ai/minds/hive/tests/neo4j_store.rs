@@ -169,7 +169,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
         assert!(
             store
                 .record_activity(
-                    &ActivityLease::from(&stale_claim),
+                    &ActivityLease::from(stale_claim.as_ref()),
                     stale_agent,
                     &TaskActivity {
                         kind: ActivityKind::Action,
@@ -240,7 +240,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     assert!(
         !store
             .record_activity(
-                &ActivityLease::from(&stale_claim),
+                &ActivityLease::from(stale_claim.as_ref()),
                 stale_agent,
                 &TaskActivity {
                     kind: ActivityKind::Error,

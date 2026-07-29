@@ -325,7 +325,7 @@ mod tests {
             task.lease_token = Some(lease_token.clone());
             task.lease_until =
                 Some(Instant::now() + Duration::from_secs(u64::try_from(lease_seconds)?));
-            Ok(ClaimOutcome::Claimed(ClaimedTask {
+            Ok(ClaimOutcome::Claimed(Box::new(ClaimedTask {
                 id: task.definition.id.clone(),
                 kind: task.definition.kind.clone(),
                 prompt: task.definition.prompt.clone(),
@@ -336,7 +336,7 @@ mod tests {
                 owning_repairs,
                 dependency_context: Vec::new(),
                 dependency_artifacts: Vec::new(),
-            }))
+            })))
         }
 
         async fn heartbeat(

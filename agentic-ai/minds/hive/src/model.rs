@@ -163,7 +163,7 @@ impl From<&ClaimedTask> for ActivityLease {
 #[serde(tag = "state", content = "task", rename_all = "snake_case")]
 pub enum ClaimOutcome {
     NoTask,
-    Claimed(ClaimedTask),
+    Claimed(Box<ClaimedTask>),
 }
 
 impl ClaimOutcome {
@@ -174,7 +174,7 @@ impl ClaimOutcome {
 
     pub fn into_claimed(self) -> Result<ClaimedTask, ModelError> {
         match self {
-            Self::Claimed(task) => Ok(task),
+            Self::Claimed(task) => Ok(*task),
             Self::NoTask => Err(ModelError::NoClaimableTask),
         }
     }

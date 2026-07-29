@@ -772,7 +772,7 @@ impl TaskStore for Neo4jTaskStore {
                 };
                 let claimed = Self::claimed_task(row, attempt_id, lease_token)?;
                 transaction.commit().await?;
-                Ok(ClaimOutcome::Claimed(claimed))
+                Ok(ClaimOutcome::Claimed(Box::new(claimed)))
             }
             .await;
 
