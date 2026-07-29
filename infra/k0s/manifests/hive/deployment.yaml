@@ -30,7 +30,7 @@ spec:
       # Kubernetes terminates Pod containers concurrently. Keep the coordinator
       # socket alive while the worker handles SIGTERM and persists its lease
       # release, otherwise a rollout strands the task until lease expiry.
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: 75
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -157,7 +157,17 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sleep", "15"]
+                command:
+                  - /bin/bash
+                  - -ceu
+                  - |
+                    for attempt in $(seq 1 60); do
+                      if [ -e /workspace/.hive-task-finished ] \
+                        || [ ! -e /workspace/.hive-worker-ready ]; then
+                        exit 0
+                      fi
+                      sleep 1
+                    done
           env:
             - name: HIVE_COORDINATOR_SOCKET
               value: /run/hive-coordinator/coordinator.sock
@@ -180,6 +190,9 @@ spec:
           volumeMounts:
             - name: coordinator-channel
               mountPath: /run/hive-coordinator
+            - name: workspace
+              mountPath: /workspace
+              readOnly: true
             - name: trust-bundle
               mountPath: /trust
               readOnly: true

@@ -1,5 +1,4 @@
 use std::fmt::Write as _;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -20,6 +19,12 @@ use crate::model::{
     CompletionArtifact, EnqueueTask, TaskActivity, TaskTrigger, TerminalResult,
 };
 use crate::store::TaskStore;
+
+mod lifecycle;
+
+use lifecycle::{
+    ClaimWindow, establish_worker_lifecycle, finish_claim_during_shutdown, shutdown_requested,
+};
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
 const MAX_PERSISTED_PATCH_BYTES: usize = 1024 * 1024;
@@ -67,8 +72,22 @@ impl<S: TaskStore> Worker<S> {
         tokio::fs::write(self.config.workspace.join(".hive-worker-ready"), b"ready")
             .await
             .context("failed to publish worker readiness")?;
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .context("failed to install the worker termination handler")?;
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        tokio::spawn(async move {
+            if terminate.recv().await.is_some() {
+                let _ = shutdown_tx.send(true);
+            }
+        });
 
         let task = loop {
+            let interrupted = || async {
+                tokio::fs::write(&lifecycle_marker, b"rollout-before-execution")
+                    .await
+                    .context("mark interrupted Pod for replacement")
+            };
             if let Err(error) = external_auth.validate().await {
                 let _ =
                     tokio::fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
@@ -80,23 +99,57 @@ impl<S: TaskStore> Worker<S> {
                      consuming an attempt: {error}"
                 ));
             }
-            match self
+            let claim = self
                 .store
-                .claim(&self.config.agent_id, self.config.lease_seconds)
-                .await?
-            {
-                ClaimOutcome::Claimed(task) => break task,
-                ClaimOutcome::NoTask => {
+                .claim(&self.config.agent_id, self.config.lease_seconds);
+            match finish_claim_during_shutdown(claim, shutdown_rx.clone()).await {
+                ClaimWindow::Stopped => {
+                    interrupted().await?;
+                    return Ok(());
+                }
+                ClaimWindow::CompletedDuringShutdown(outcome) => {
+                    match outcome {
+                        Ok(ClaimOutcome::Claimed(task)) => {
+                            let released =
+                                self.store
+                                    .release(&task, &self.config.agent_id)
+                                    .await
+                                    .context("release task claimed during rollout shutdown")?;
+                            anyhow::ensure!(
+                                released,
+                                "task claimed during shutdown could not be released"
+                            );
+                        }
+                        Ok(ClaimOutcome::NoTask) => {}
+                        Err(error) => {
+                            interrupted().await?;
+                            return Err(error);
+                        }
+                    }
+                    interrupted().await?;
+                    return Ok(());
+                }
+                ClaimWindow::Completed(Ok(ClaimOutcome::Claimed(task))) => break task,
+                ClaimWindow::Completed(Ok(ClaimOutcome::NoTask)) => {
                     self.store
                         .register_agent(&self.config.agent_id, &self.config.pod_name)
                         .await?;
                 }
+                ClaimWindow::Completed(Err(error)) => return Err(error),
             }
             let wait = rand::rng()
                 .random_range(self.config.poll_min_seconds..=self.config.poll_max_seconds);
-            tokio::time::sleep(Duration::from_secs(wait)).await;
+            tokio::select! {
+                biased;
+                shutdown = shutdown_requested(shutdown_rx.clone()) => {
+                    shutdown?;
+                    interrupted().await?;
+                    return Ok(());
+                }
+                () = tokio::time::sleep(Duration::from_secs(wait)) => {}
+            }
         };
-        let result = self.execute(&task, external_auth).await;
+        let result = self.execute(&task, external_auth, shutdown_rx).await;
         if let Err(error) = result {
             if error.downcast_ref::<WorkerBlocked>().is_some() {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -151,6 +204,7 @@ impl<S: TaskStore> Worker<S> {
         &self,
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
+        shutdown: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
@@ -339,9 +393,6 @@ impl<S: TaskStore> Worker<S> {
                 terminal_result
             },
         );
-        let mut terminate =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .context("failed to install the worker termination handler")?;
         tokio::pin!(execution);
         tokio::select! {
             biased;
@@ -369,10 +420,8 @@ impl<S: TaskStore> Worker<S> {
                 heartbeat_result?;
                 return Err(anyhow!("lease heartbeat stopped before task execution"));
             }
-            signal = terminate.recv() => {
-                if signal.is_none() {
-                    return Err(anyhow!("worker termination signal stream closed"));
-                }
+            shutdown = shutdown_requested(shutdown) => {
+                shutdown?;
                 let _ = stop_tx.send(true);
                 heartbeat
                     .await
@@ -459,26 +508,6 @@ fn blocked_disposition(
 #[derive(Debug, thiserror::Error)]
 #[error("worker cancellation requested")]
 struct WorkerCancellationRequested;
-
-fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
-    std::fs::create_dir_all(workspace)?;
-    let startup_marker = workspace.join(".hive-worker-started");
-    let startup_file = std::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&startup_marker);
-    let mut startup_file = match startup_file {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            std::fs::write(workspace.join(".hive-task-finished"), pod_name)?;
-            return Err(error).context("refusing to restart a Hive worker inside an existing Pod");
-        }
-        Err(error) => return Err(error).context("failed to establish Hive worker lifecycle"),
-    };
-    startup_file.write_all(pod_name.as_bytes())?;
-    startup_file.sync_all()?;
-    Ok(())
-}
 
 async fn heartbeat_loop<S: TaskStore>(
     store: S,
@@ -1019,8 +1048,8 @@ mod tests {
 
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        establish_worker_lifecycle, obsolete_owner_delivery_targets, persistable_patch,
-        prepare_workspace, task_prompt, validate_dependency_artifacts,
+        obsolete_owner_delivery_targets, persistable_patch, prepare_workspace, task_prompt,
+        validate_dependency_artifacts,
     };
     use crate::model::{
         Artifact, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
@@ -1094,23 +1123,6 @@ mod tests {
         ]);
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
-        Ok(())
-    }
-
-    #[test]
-    fn a_restarted_process_cannot_reuse_the_same_pod_workspace() -> anyhow::Result<()> {
-        let workspace = tempfile::tempdir()?;
-
-        establish_worker_lifecycle(workspace.path(), "pod-a")?;
-        let error = establish_worker_lifecycle(workspace.path(), "pod-a")
-            .expect_err("the second worker process must be rejected");
-
-        assert!(
-            error
-                .to_string()
-                .contains("refusing to restart a Hive worker")
-        );
-        assert!(workspace.path().join(".hive-task-finished").is_file());
         Ok(())
     }
 

@@ -185,8 +185,11 @@ fn hive_graph_clients_never_mix_schema_revisions() {
     }
     let worker_manifest = read("infra/k0s/manifests/hive/deployment.yaml");
     for required in [
-        "terminationGracePeriodSeconds: 60",
-        "lifecycle:\n            preStop:\n              exec:\n                command: [\"/bin/sleep\", \"15\"]",
+        "terminationGracePeriodSeconds: 75",
+        "for attempt in $(seq 1 60)",
+        "/workspace/.hive-task-finished",
+        "[ ! -e /workspace/.hive-worker-ready ]",
+        "mountPath: /workspace\n              readOnly: true",
     ] {
         assert!(
             worker_manifest.contains(required),
