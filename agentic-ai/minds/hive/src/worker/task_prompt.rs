@@ -105,7 +105,10 @@ pub(super) fn repair_branch_name(task_id: &str) -> String {
     format!("codex/hive-{}", slug.trim_matches('-'))
 }
 
-pub(super) fn completion_is_obsolete(task: &ClaimedTask, result: &crate::model::TerminalResult) -> bool {
+pub(super) fn completion_is_obsolete(
+    task: &ClaimedTask,
+    result: &crate::model::TerminalResult,
+) -> bool {
     task.kind == "blocker" && result.is_obsolete()
 }
 

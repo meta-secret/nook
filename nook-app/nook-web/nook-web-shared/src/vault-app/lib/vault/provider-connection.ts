@@ -1,9 +1,6 @@
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { createLogger } from "$lib/log";
-import {
-  localFolderHandle,
-  LocalFolderHandleKind,
-} from "$lib/auth-providers";
+import { localFolderHandle, LocalFolderHandleKind } from "$lib/auth-providers";
 import { LocalFolderHealthKind } from "$lib/vault/state/sync.svelte";
 import {
   LocalFolderDraftKind,

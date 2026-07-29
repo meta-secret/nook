@@ -302,6 +302,7 @@ pub fn sync_providers_for_active_vault(
 }
 
 #[wasm_bindgen(js_name = localProviderForActiveVault)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn local_provider_for_active_vault(
     snapshot: nook_core::AuthProvidersSnapshotData,
     scope: &NookManagerStoreScope,

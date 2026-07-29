@@ -131,8 +131,7 @@ export function providerBelongsToVault(
   storeId: string,
 ): boolean {
   return (
-    provider.storeId.state === "unscoped" ||
-    provider.storeId.value === storeId
+    provider.storeId.state === "unscoped" || provider.storeId.value === storeId
   );
 }
 
