@@ -85,9 +85,7 @@ import {
   existingSharedStorageTarget,
   providerOnboardingType,
   providerOauthPresetForProvider,
-  resolveSharedStorageGrantTarget,
   sharedStorageGrantAccessToken,
-  SharedStorageGrantTargetKind,
   suggestedSharedStorageTarget,
   unavailableSharedStorageGrantCredential,
 } from "$lib/vault-architecture";
@@ -830,9 +828,9 @@ export async function issueEnrollmentCode(
         if (grant.kind === "unsupported") {
           throw new Error(state.t(grant.reasonKey));
         }
-        const grantTarget = resolveSharedStorageGrantTarget(grant.target);
+        const grantTarget = grant.target;
         if (grant.kind === "granted") {
-          if (grantTarget.kind === SharedStorageGrantTargetKind.Unavailable) {
+          if (grantTarget.state === "unavailable") {
             throw new Error(
               state.t("provider_setup.google_shared_create_failed"),
             );
@@ -844,12 +842,12 @@ export async function issueEnrollmentCode(
           state.sharedGrantInstructions = state.t(grant.note, {
             email: sharedJoinerIdentity,
             folder:
-              grantTarget.kind === SharedStorageGrantTargetKind.Named
+              grantTarget.state === "named"
                 ? grantTarget.storageTargetName
                 : grantTarget.storageTargetId,
           });
         } else if (grant.kind === "manual-grant-required") {
-          if (grantTarget.kind !== SharedStorageGrantTargetKind.Unavailable) {
+          if (grantTarget.state !== "unavailable") {
             sharedStorageTarget = {
               kind: SharedStorageTargetKind.Bound,
               storageTargetId: grantTarget.storageTargetId,
@@ -858,9 +856,9 @@ export async function issueEnrollmentCode(
           state.sharedGrantInstructions = state.t(grant.instructionsKey, {
             email: grant.joinerIdentity,
             folder:
-              grantTarget.kind === SharedStorageGrantTargetKind.Named
+              grantTarget.state === "named"
                 ? grantTarget.storageTargetName
-                : grantTarget.kind === SharedStorageGrantTargetKind.Identified
+                : grantTarget.state === "identified"
                   ? grantTarget.storageTargetId
                   : "shared folder",
           });

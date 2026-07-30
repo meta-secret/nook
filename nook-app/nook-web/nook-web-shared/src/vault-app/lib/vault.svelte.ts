@@ -16,6 +16,7 @@ import {
   resolveErrorMessage as wasmResolveErrorMessage,
   translateWithReplacements,
   type NookPendingSyncConflict,
+  type NookProviderSyncRevision,
   type NookSecretPage,
   type NookVaultManager,
   type NookAppLocale,
@@ -63,10 +64,7 @@ import {
   type LocalProviderLookup,
   type StagedRemoteStorage,
 } from "$lib/vault/state/provider.svelte";
-import type {
-  EventOutboxTarget,
-  ProviderSyncRevision,
-} from "$lib/vault/sync-operation-state";
+import type { EventOutboxTarget } from "$lib/vault/sync-operation-state";
 
 export type VaultEditRestriction =
   | { decision: VaultEditDecision.Allowed }
@@ -634,7 +632,7 @@ export class VaultState extends VaultLifecycleState {
   async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: ProviderSyncRevision,
+    revision: NookProviderSyncRevision,
   ): Promise<void> {
     return syncActions.updateProviderSyncMetadata(
       this,

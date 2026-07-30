@@ -128,7 +128,7 @@
           onAddDevice={() => vault.openSettings(SettingsSection.Onboard)}
         />
       {/if}
-      {#if vault.settingsOpen && vault.settingsSection === 'admin'}
+      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
           bind:activeSection={vault.adminAccordionSection}
@@ -173,7 +173,7 @@
           onImportProtonPass={(exportBytes) =>
             vault.handleProtonPassImport(exportBytes)}
         />
-      {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
+      {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Onboard}
         <OnboardDevice
           {vault}
           syncProviders={vault.syncProviders}

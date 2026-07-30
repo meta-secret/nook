@@ -58,9 +58,7 @@ import {
   prepareSharedStorageGrant,
   createSharedStorageTarget,
   providerOauthPresetForConfig,
-  resolveSharedStorageGrantTarget,
   sharedStorageGrantAccessToken,
-  SharedStorageGrantTargetKind,
   suggestedSharedStorageTarget,
 } from "$lib/vault-architecture";
 import {
@@ -300,8 +298,8 @@ export async function createGoogleSharedFolder(
   if (grant.kind === "unsupported") {
     throw new Error(state.t(grant.reasonKey));
   }
-  const target = resolveSharedStorageGrantTarget(grant.target);
-  if (target.kind === SharedStorageGrantTargetKind.Unavailable) {
+  const target = grant.target;
+  if (target.state === "unavailable") {
     throw new Error(state.t("provider_setup.google_shared_create_failed"));
   }
   state.configureOauthFile(
@@ -315,20 +313,18 @@ export async function createGoogleSharedFolder(
       ? state.t("provider_setup.google_shared_folder_created", {
           email: collaboratorEmail.trim(),
           folder:
-            target.kind === SharedStorageGrantTargetKind.Named
+            target.state === "named"
               ? target.storageTargetName
               : target.storageTargetId,
         })
       : state.t(grant.instructionsKey, {
           email: grant.joinerIdentity,
           folder:
-            target.kind === SharedStorageGrantTargetKind.Named
+            target.state === "named"
               ? target.storageTargetName
               : target.storageTargetId,
         });
-  return target.kind === SharedStorageGrantTargetKind.Named
-    ? target.storageTargetName
-    : folderName;
+  return target.state === "named" ? target.storageTargetName : folderName;
 }
 
 export async function useGoogleSharedFolder(

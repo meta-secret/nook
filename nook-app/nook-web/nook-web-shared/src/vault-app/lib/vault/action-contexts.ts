@@ -1,4 +1,8 @@
-import type { NookPendingSyncConflict, NookRuntimeConfig } from "$app-wasm";
+import type {
+  NookPendingSyncConflict,
+  NookProviderSyncRevision,
+  NookRuntimeConfig,
+} from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type { StorageProvider } from "$lib/auth-providers";
 import type {
@@ -13,7 +17,6 @@ import type { VaultSessionState } from "$lib/vault/state/session.svelte";
 import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
 import type { VaultArchitecture } from "$lib/vault-architecture";
-import type { ProviderSyncRevision } from "$lib/vault/sync-operation-state";
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,
@@ -229,7 +232,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: ProviderSyncRevision,
+    revision: NookProviderSyncRevision,
   ): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }

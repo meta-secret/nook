@@ -19,7 +19,6 @@ import {
   vaultArchitectureCanCreateSecret as canCreateSecret,
   vaultArchitectureOnboardingType as onboardingType,
   type SharedStorageGrantCredential,
-  type SharedStorageGrantTarget,
   type SharedStorageTargetHint,
   type SharedStorageTargetSelection,
 } from "$app-wasm";
@@ -73,44 +72,6 @@ export function sharedStorageGrantAccessToken(
 
 export function unavailableSharedStorageGrantCredential(): SharedStorageGrantCredential {
   return { state: "unavailable" };
-}
-
-export enum SharedStorageGrantTargetKind {
-  Unavailable = "unavailable",
-  Identified = "identified",
-  Named = "named",
-}
-
-export type ResolvedSharedStorageGrantTarget =
-  | { kind: SharedStorageGrantTargetKind.Unavailable }
-  | {
-      kind: SharedStorageGrantTargetKind.Identified;
-      storageTargetId: string;
-    }
-  | {
-      kind: SharedStorageGrantTargetKind.Named;
-      storageTargetId: string;
-      storageTargetName: string;
-    };
-
-export function resolveSharedStorageGrantTarget(
-  target: SharedStorageGrantTarget,
-): ResolvedSharedStorageGrantTarget {
-  switch (target.state) {
-    case "identified":
-      return {
-        kind: SharedStorageGrantTargetKind.Identified,
-        storageTargetId: target.storageTargetId,
-      };
-    case "named":
-      return {
-        kind: SharedStorageGrantTargetKind.Named,
-        storageTargetId: target.storageTargetId,
-        storageTargetName: target.storageTargetName,
-      };
-    case "unavailable":
-      return { kind: SharedStorageGrantTargetKind.Unavailable };
-  }
 }
 
 export type VaultArchitectureDraft = {

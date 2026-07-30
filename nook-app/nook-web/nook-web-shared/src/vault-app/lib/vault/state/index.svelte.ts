@@ -162,6 +162,7 @@ const syncKeys = [
   "isSyncing",
   "manualProviderSync",
   "manualProviderSyncRunning",
+  "beginManualProviderSync",
   "clearSyncingProvider",
   "isFanOutSyncing",
   "replacementConflicts",

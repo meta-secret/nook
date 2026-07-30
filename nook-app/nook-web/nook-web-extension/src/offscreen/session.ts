@@ -818,10 +818,10 @@ async function handleMessage(message: unknown): Promise<unknown> {
         throw new Error('Login save offer is missing or expired.')
       }
       const { offer } = lookup
-      pendingLoginSaveOfferStore.removeForCommit(offer)
       if (offer.vaultStoreId !== grant.vaultStoreId) {
         throw new Error('Login save offer does not match the vault grant.')
       }
+      pendingLoginSaveOfferStore.removeForCommit(offer)
       const committedOffer = { ...offer }
       offer.username = ''
       offer.password = ''

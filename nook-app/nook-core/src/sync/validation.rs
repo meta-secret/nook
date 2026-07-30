@@ -115,6 +115,31 @@ impl StorageProviderType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExistingVaultProviderReadiness {
+    Ready,
+    MissingOauthFile,
+    MissingLocalFolder,
+}
+
+/// Decide whether the selected provider has the browser configuration needed
+/// to resume an existing-vault import after device authentication.
+#[must_use]
+pub const fn existing_vault_provider_readiness(
+    provider_type: StorageProviderType,
+    oauth_file_configured: bool,
+    local_folder_configured: bool,
+) -> ExistingVaultProviderReadiness {
+    if matches!(provider_type, StorageProviderType::OauthFile) && !oauth_file_configured {
+        ExistingVaultProviderReadiness::MissingOauthFile
+    } else if matches!(provider_type, StorageProviderType::LocalFolder) && !local_folder_configured
+    {
+        ExistingVaultProviderReadiness::MissingLocalFolder
+    } else {
+        ExistingVaultProviderReadiness::Ready
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -386,6 +411,30 @@ pub fn validate_connect(
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn existing_vault_provider_readiness_requires_provider_configuration() {
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::OauthFile, false, false),
+            ExistingVaultProviderReadiness::MissingOauthFile
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::LocalFolder, false, false),
+            ExistingVaultProviderReadiness::MissingLocalFolder
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::Github, false, false),
+            ExistingVaultProviderReadiness::Ready
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::OauthFile, true, false),
+            ExistingVaultProviderReadiness::Ready
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::LocalFolder, false, true),
+            ExistingVaultProviderReadiness::Ready
+        );
+    }
 
     #[test]
     fn validate_connect_github_requires_pat() -> anyhow::Result<()> {

@@ -4,6 +4,7 @@
   import {
     DeviceProtectionStatus,
     JoinEnrollmentState,
+    NookExistingVaultProviderReadiness,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import {
@@ -72,10 +73,7 @@
   } from '$lib/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import {
-    ExistingVaultProviderPreparationKind,
-    prepareExistingVaultProvider,
-  } from '$lib/vault/existing-vault-provider.svelte'
+  import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
   import {
     mountBrowserLifecycle,
     THEME_STORAGE_KEY,
@@ -424,21 +422,24 @@
   )
 
   function rememberExistingVaultImport(storeId: string): void {
-    const preparation = prepareExistingVaultProvider(vault)
+    if (vault.loginSetup.kind !== LoginSetupKind.Active) return
+    const preparation = prepareExistingVaultProvider(
+      vault,
+      vault.loginSetup.providerType,
+    )
     if (
-      preparation.kind === ExistingVaultProviderPreparationKind.MissingOAuthFile
+      preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
     ) {
       vault.errorMsg = vault.t('errors.cloud_sync_provider_required')
       return
     }
     if (
-      preparation.kind ===
-      ExistingVaultProviderPreparationKind.MissingLocalFolder
+      preparation.kind === NookExistingVaultProviderReadiness.MissingLocalFolder
     ) {
       vault.errorMsg = vault.t('auth_storage.local_folder_choose_err')
       return
     }
-    if (preparation.kind !== ExistingVaultProviderPreparationKind.Ready) return
+    if (preparation.kind !== NookExistingVaultProviderReadiness.Ready) return
     pendingExistingVaultImportState = {
       kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {

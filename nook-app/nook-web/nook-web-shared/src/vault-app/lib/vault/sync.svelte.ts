@@ -34,11 +34,9 @@ import {
 import {
   EventOutboxTargetKind,
   LocalFolderInspectionKind,
-  ProviderSyncRevisionKind,
   type EventOutboxTarget,
   type LocalFolderInspection,
   type LocalFolderMultipleVaultsIssue,
-  type ProviderSyncRevision,
 } from "$lib/vault/sync-operation-state";
 import {
   AdminAccordionSection,
@@ -303,35 +301,43 @@ export async function flushRemoteEventOutboxNow(
   }
 }
 
+/** Persist sync metadata and consume the JS-owned WASM revision wrapper. */
 export async function updateProviderSyncMetadata(
   state: SyncActionsContext,
   providerId: string,
   yaml: string,
-  revision: ProviderSyncRevision,
+  revision: NookProviderSyncRevision,
 ): Promise<void> {
-  const managerStoreId = state.hasManager
-    ? await state.enqueueStorage(() => state.requireManager().vaultStoreId)
-    : "";
-  state.providers = updateProviderSyncMetadataWasm(
-    $state.snapshot({
-      providers: state.providers,
-      activeVaultStoreId:
-        state.activeVault.kind === ActiveVaultKind.Open
-          ? activeVaultScope(state.activeVault.storeId)
-          : unselectedVaultScope(),
-    }),
-    providerId,
-    yaml,
-    revision.kind === ProviderSyncRevisionKind.Tracked
-      ? NookProviderSyncRevision.tracked(revision.revision)
-      : NookProviderSyncRevision.untracked(),
-    managerStoreId
+  try {
+    const managerStoreId = state.hasManager
+      ? await state.enqueueStorage(() => state.requireManager().vaultStoreId)
+      : "";
+    const managerStoreScope = managerStoreId
       ? NookManagerStoreScope.scoped(managerStoreId)
-      : NookManagerStoreScope.unscoped(),
-    isoTimestamp(),
-  ).providers;
-  await state.persistProviders();
-  state.markSynced(new SvelteDate());
+      : NookManagerStoreScope.unscoped();
+    try {
+      state.providers = updateProviderSyncMetadataWasm(
+        $state.snapshot({
+          providers: state.providers,
+          activeVaultStoreId:
+            state.activeVault.kind === ActiveVaultKind.Open
+              ? activeVaultScope(state.activeVault.storeId)
+              : unselectedVaultScope(),
+        }),
+        providerId,
+        yaml,
+        revision,
+        managerStoreScope,
+        isoTimestamp(),
+      ).providers;
+    } finally {
+      managerStoreScope.free();
+    }
+    await state.persistProviders();
+    state.markSynced(new SvelteDate());
+  } finally {
+    revision.free();
+  }
 }
 
 export function dismissLocalFolderMultipleVaultsIssue(
@@ -426,20 +432,25 @@ async function stageProviderStoreMismatchConflict(
     provider.type === "local-folder"
       ? (["local-folder", "", ""] as const)
       : state.providerWasmArgs(provider);
-  state.stageSyncConflict(
-    NookPendingSyncConflict.storeId(
-      provider.id,
-      provider.label,
-      localYaml,
-      "",
-      args[0],
-      args[1],
-      args[2],
-      NookProviderSyncRevision.untracked(),
-      localStoreId,
-      remoteStoreId,
-    ),
-  );
+  const revision = NookProviderSyncRevision.untracked();
+  try {
+    state.stageSyncConflict(
+      NookPendingSyncConflict.storeId(
+        provider.id,
+        provider.label,
+        localYaml,
+        "",
+        args[0],
+        args[1],
+        args[2],
+        revision,
+        localStoreId,
+        remoteStoreId,
+      ),
+    );
+  } finally {
+    revision.free();
+  }
   log.warn("provider store mismatch staged", {
     provider: provider.label,
     localStoreId,
@@ -471,19 +482,24 @@ export async function stageStagedProviderSyncIssue(
     await state.enqueueStorage(() =>
       manager.restoreLocalAfterProviderAssessment(),
     );
-    state.stageSyncConflict(
-      NookPendingSyncConflict.pendingStoreId(
-        state.stagedProviderLabel(),
-        localYaml,
-        "",
-        args[0],
-        args[1],
-        args[2],
-        NookProviderSyncRevision.untracked(),
-        localStoreId,
-        remoteStoreId,
-      ),
-    );
+    const revision = NookProviderSyncRevision.untracked();
+    try {
+      state.stageSyncConflict(
+        NookPendingSyncConflict.pendingStoreId(
+          state.stagedProviderLabel(),
+          localYaml,
+          "",
+          args[0],
+          args[1],
+          args[2],
+          revision,
+          localStoreId,
+          remoteStoreId,
+        ),
+      );
+    } finally {
+      revision.free();
+    }
     log.warn("staged provider store mismatch staged", {
       provider: state.stagedProviderLabel(),
       localStoreId,
@@ -515,9 +531,11 @@ export async function syncLocalFolderProvider(
     manager.syncLocalFolderProvider(handle.handleId),
   )) as string;
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(provider.id, localYaml, {
-      kind: ProviderSyncRevisionKind.Untracked,
-    });
+    await state.updateProviderSyncMetadata(
+      provider.id,
+      localYaml,
+      NookProviderSyncRevision.untracked(),
+    );
   }
 }
 
@@ -795,7 +813,7 @@ export async function syncProviderById(
     await state.updateProviderSyncMetadata(
       providerId,
       await readLocalVaultYaml(),
-      { kind: ProviderSyncRevisionKind.Untracked },
+      NookProviderSyncRevision.untracked(),
     );
     log.debug("provider sync finished", { providerId, type: provider.type });
     return;

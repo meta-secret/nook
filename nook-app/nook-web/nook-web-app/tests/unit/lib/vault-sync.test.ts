@@ -12,32 +12,42 @@ import {
   type SyncConflictReview,
 } from '$lib/vault/state/sync.svelte'
 
-function buildConflict(kind?: string): PendingSyncConflict {
-  return kind === 'store_id'
-    ? NookPendingSyncConflict.storeId(
-        'provider-1',
-        'GitHub',
-        'local',
-        'remote',
-        'github',
-        'token',
-        'owner/repo',
-        NookProviderSyncRevision.untracked(),
-        'store-local',
-        'store-remote',
-      )
-    : NookPendingSyncConflict.content(
-        'provider-1',
-        'GitHub',
-        'local',
-        'remote',
-        1,
-        1,
-        'github',
-        'token',
-        'owner/repo',
-        NookProviderSyncRevision.untracked(),
-      )
+enum TestSyncConflictKind {
+  Content = 'content',
+  StoreId = 'store-id',
+}
+
+function buildConflict(kind: TestSyncConflictKind): PendingSyncConflict {
+  const revision = NookProviderSyncRevision.untracked()
+  try {
+    return kind === TestSyncConflictKind.StoreId
+      ? NookPendingSyncConflict.storeId(
+          'provider-1',
+          'GitHub',
+          'local',
+          'remote',
+          'github',
+          'token',
+          'owner/repo',
+          revision,
+          'store-local',
+          'store-remote',
+        )
+      : NookPendingSyncConflict.content(
+          'provider-1',
+          'GitHub',
+          'local',
+          'remote',
+          1,
+          1,
+          'github',
+          'token',
+          'owner/repo',
+          revision,
+        )
+  } finally {
+    revision.free()
+  }
 }
 
 function labelFor(review: SyncConflictReview): string {
@@ -82,7 +92,7 @@ describe('syncConflictLabel', () => {
     expect(
       labelFor({
         kind: SyncConflictReviewKind.RequiresDecision,
-        conflict: buildConflict(),
+        conflict: buildConflict(TestSyncConflictKind.Content),
       }),
     ).toBe('auth_storage.sync_conflict_banner:GitHub')
   })
@@ -91,7 +101,7 @@ describe('syncConflictLabel', () => {
     expect(
       labelFor({
         kind: SyncConflictReviewKind.RequiresDecision,
-        conflict: buildConflict('store_id'),
+        conflict: buildConflict(TestSyncConflictKind.StoreId),
       }),
     ).toBe('auth_storage.sync_conflict_store_id_banner:GitHub')
   })

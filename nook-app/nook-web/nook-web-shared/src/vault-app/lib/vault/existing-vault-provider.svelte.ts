@@ -2,51 +2,45 @@ import {
   ExistingVaultProviderSnapshotKind,
   type ExistingVaultProviderSnapshot,
 } from "$lib/app-lifecycle-state";
+import {
+  existingVaultProviderReadiness,
+  NookExistingVaultProviderReadiness,
+} from "$app-wasm";
+import {
+  GITHUB_PROVIDER_TYPE,
+  LOCAL_FOLDER_PROVIDER_TYPE,
+  OAUTH_FILE_PROVIDER_TYPE,
+  type StorageProviderType,
+} from "$lib/auth-providers";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
   LocalFolderDraftKind,
-  LoginSetupKind,
   OAuthFileDraftKind,
 } from "$lib/vault/state/provider.svelte";
 
-export enum ExistingVaultProviderPreparationKind {
-  Inactive = "inactive",
-  MissingOAuthFile = "missing-oauth-file",
-  MissingLocalFolder = "missing-local-folder",
-  Ready = "ready",
-}
-
 export type ExistingVaultProviderPreparation =
-  | { kind: ExistingVaultProviderPreparationKind.Inactive }
-  | { kind: ExistingVaultProviderPreparationKind.MissingOAuthFile }
-  | { kind: ExistingVaultProviderPreparationKind.MissingLocalFolder }
+  | { kind: NookExistingVaultProviderReadiness.MissingOauthFile }
+  | { kind: NookExistingVaultProviderReadiness.MissingLocalFolder }
   | {
-      kind: ExistingVaultProviderPreparationKind.Ready;
+      kind: NookExistingVaultProviderReadiness.Ready;
       provider: ExistingVaultProviderSnapshot;
     };
 
 export function prepareExistingVaultProvider(
   state: ProviderActionsContext,
+  setupType: StorageProviderType,
 ): ExistingVaultProviderPreparation {
-  if (state.loginSetup.kind !== LoginSetupKind.Active) {
-    return { kind: ExistingVaultProviderPreparationKind.Inactive };
+  const readiness = existingVaultProviderReadiness(
+    setupType,
+    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured,
+    state.localFolderDraft.kind === LocalFolderDraftKind.Configured,
+  );
+  if (readiness !== NookExistingVaultProviderReadiness.Ready) {
+    return { kind: readiness };
   }
-  const setupType = state.loginSetup.providerType;
-  if (
-    setupType === "oauth-file" &&
-    state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured
-  ) {
-    return { kind: ExistingVaultProviderPreparationKind.MissingOAuthFile };
-  }
-  if (
-    setupType === "local-folder" &&
-    state.localFolderDraft.kind !== LocalFolderDraftKind.Configured
-  ) {
-    return { kind: ExistingVaultProviderPreparationKind.MissingLocalFolder };
-  }
-  if (setupType === "github") {
+  if (setupType === GITHUB_PROVIDER_TYPE) {
     return {
-      kind: ExistingVaultProviderPreparationKind.Ready,
+      kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
         kind: ExistingVaultProviderSnapshotKind.Github,
         setupType,
@@ -55,34 +49,28 @@ export function prepareExistingVaultProvider(
       },
     };
   }
-  if (
-    setupType === "oauth-file" &&
-    state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-  ) {
+  if (setupType === OAUTH_FILE_PROVIDER_TYPE) {
     return {
-      kind: ExistingVaultProviderPreparationKind.Ready,
+      kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
         kind: ExistingVaultProviderSnapshotKind.OAuthFile,
         setupType,
-        oauthFile: $state.snapshot(state.oauthFileDraft.config),
+        oauthFile: $state.snapshot(state.requireOauthFileConfig()),
       },
     };
   }
-  if (
-    setupType === "local-folder" &&
-    state.localFolderDraft.kind === LocalFolderDraftKind.Configured
-  ) {
+  if (setupType === LOCAL_FOLDER_PROVIDER_TYPE) {
     return {
-      kind: ExistingVaultProviderPreparationKind.Ready,
+      kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
         kind: ExistingVaultProviderSnapshotKind.LocalFolder,
         setupType,
-        localFolder: $state.snapshot(state.localFolderDraft.config),
+        localFolder: $state.snapshot(state.requireLocalFolderConfig()),
       },
     };
   }
   return {
-    kind: ExistingVaultProviderPreparationKind.Ready,
+    kind: NookExistingVaultProviderReadiness.Ready,
     provider: {
       kind: ExistingVaultProviderSnapshotKind.Local,
       setupType,

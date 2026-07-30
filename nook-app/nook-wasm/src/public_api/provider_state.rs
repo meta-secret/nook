@@ -2,6 +2,41 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookExistingVaultProviderReadiness {
+    Ready,
+    MissingOauthFile,
+    MissingLocalFolder,
+}
+
+impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProviderReadiness {
+    fn from(value: nook_core::ExistingVaultProviderReadiness) -> Self {
+        match value {
+            nook_core::ExistingVaultProviderReadiness::Ready => Self::Ready,
+            nook_core::ExistingVaultProviderReadiness::MissingOauthFile => Self::MissingOauthFile,
+            nook_core::ExistingVaultProviderReadiness::MissingLocalFolder => {
+                Self::MissingLocalFolder
+            }
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = existingVaultProviderReadiness)]
+#[must_use]
+pub fn existing_vault_provider_readiness(
+    provider_type: nook_core::StorageProviderType,
+    oauth_file_configured: bool,
+    local_folder_configured: bool,
+) -> NookExistingVaultProviderReadiness {
+    nook_core::existing_vault_provider_readiness(
+        provider_type,
+        oauth_file_configured,
+        local_folder_configured,
+    )
+    .into()
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookOAuthAccessTokenKind {
     Missing,
     Available,

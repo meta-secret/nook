@@ -1,7 +1,6 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   importNamedLocalVaultBlob,
-  NookProviderSyncRevisionState,
   RemoteVaultRecoveryState,
   type NookReplacementConflict,
   type NookSecurityConflict,
@@ -14,7 +13,6 @@ import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { SyncConflictReviewKind } from "$lib/vault/state/sync.svelte";
 import {
   ConflictProviderSaveKind,
-  ProviderSyncRevisionKind,
   type ConflictProviderSave,
 } from "$lib/vault/sync-operation-state";
 import { StagedRemoteStorageKind } from "$lib/vault/state/provider.svelte";
@@ -301,22 +299,10 @@ export async function resolveSyncConflictImportRemote(
     providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
     if (conflict.remoteYaml.trim()) {
       const remoteRevision = conflict.remoteRevision;
-      const revision = (() => {
-        try {
-          return remoteRevision.state === NookProviderSyncRevisionState.Tracked
-            ? {
-                kind: ProviderSyncRevisionKind.Tracked,
-                revision: remoteRevision.value,
-              }
-            : { kind: ProviderSyncRevisionKind.Untracked };
-        } finally {
-          remoteRevision.free();
-        }
-      })();
       await state.updateProviderSyncMetadata(
         providerId,
         conflict.remoteYaml,
-        revision,
+        remoteRevision,
       );
     } else {
       state.providers = state.providers.map((provider) =>

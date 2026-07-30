@@ -17,15 +17,6 @@ export type EventOutboxTarget =
       args: [string, string, string];
     };
 
-export enum ProviderSyncRevisionKind {
-  Untracked = "untracked",
-  Tracked = "tracked",
-}
-
-export type ProviderSyncRevision =
-  | { kind: ProviderSyncRevisionKind.Untracked }
-  | { kind: ProviderSyncRevisionKind.Tracked; revision: string };
-
 export enum ConflictProviderSaveKind {
   NotSaved = "not-saved",
   Saved = "saved",
