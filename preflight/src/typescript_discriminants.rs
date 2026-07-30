@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-const DISCRIMINANT_NAMES: [&str; 8] = [
+const DISCRIMINANT_NAMES: [&str; 9] = [
     "action",
     "kind",
     "mode",
@@ -9,6 +9,7 @@ const DISCRIMINANT_NAMES: [&str; 8] = [
     "stage",
     "status",
     "type",
+    "variant",
 ];
 
 pub(crate) fn enclosing_enum_name<'a>(
@@ -41,14 +42,15 @@ pub(crate) fn enum_value_matches_discriminant(
     })
 }
 
-pub(crate) fn discriminant_member_name<'a>(
+pub(crate) fn discriminant_name<'a>(
     node: tree_sitter::Node<'_>,
     source: &'a str,
 ) -> Option<&'a str> {
-    if node.kind() != "member_expression" {
-        return None;
-    }
-    let property = node.child_by_field_name("property")?;
-    let name = property.utf8_text(source.as_bytes()).ok()?;
+    let name_node = match node.kind() {
+        "identifier" => node,
+        "member_expression" => node.child_by_field_name("property")?,
+        _ => return None,
+    };
+    let name = name_node.utf8_text(source.as_bytes()).ok()?;
     DISCRIMINANT_NAMES.contains(&name).then_some(name)
 }

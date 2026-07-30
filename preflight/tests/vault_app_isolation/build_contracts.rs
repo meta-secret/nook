@@ -110,7 +110,13 @@ fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<(
 
     assert!(ui_demo.contains("VITE_E2E_EXPOSE_VAULT: \"true\""));
     assert!(
-        ui_demo.contains("- task: _web:e2e:build-if-needed"),
+        ui_demo.contains("VITE_VAULT_IDLE_TIMEOUT_MS: \"300000\""),
+        "human-paced UI demos must not lock the vault during intentional pauses"
+    );
+    assert!(
+        ui_demo.contains(
+            "- task: _web:e2e:build-if-needed\n        vars:\n          E2E_VAULT_IDLE_TIMEOUT_MS: \"300000\"",
+        ),
         "UI demos must rebuild the production-seeded dist with test-only browser hooks"
     );
     Ok(())

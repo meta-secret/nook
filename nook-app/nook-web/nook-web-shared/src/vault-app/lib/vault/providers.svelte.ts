@@ -877,13 +877,13 @@ export async function ensureProviderSaved(
           }
         : provider,
     );
-  } else {
+  } else if (vaultStoreId.kind === ProviderSaveStoreIdKind.Available) {
     const snapshot = ensureLocalProviderRowWasm(
       {
         providers: state.providers,
-        activeVaultStoreId: activeVaultScope(state.requireActiveVaultStoreId()),
+        activeVaultStoreId: activeVaultScope(vaultStoreId.storeId),
       } as AuthProvidersSnapshot,
-      state.requireActiveVaultStoreId(),
+      vaultStoreId.storeId,
     );
     state.providers = snapshot.providers;
   }

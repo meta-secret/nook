@@ -356,11 +356,13 @@ tasks:
   _web:e2e:build-if-needed:
     internal: true
     desc: Vite build for e2e preview when dist is missing or sources/env changed.
+    vars:
+      E2E_VAULT_IDLE_TIMEOUT_MS: '{{default "2500" .E2E_VAULT_IDLE_TIMEOUT_MS}}'
     env:
       VITE_BASE: "{{.VITE_BASE}}"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "{{.E2E_VAULT_IDLE_TIMEOUT_MS}}"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/e2e-build-if-needed.sh"
@@ -386,11 +388,13 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
-      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "300000"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright UI demo (headless, workers=1, specs=${UI_DEMO_SPECS:-all})"
       - task: _web:e2e:build-if-needed
+        vars:
+          E2E_VAULT_IDLE_TIMEOUT_MS: "300000"
       - cd "{{.WEB_ROOT}}" && bun run test:ui-demo -- ${UI_DEMO_SPECS:-}
 
   _web:test:e2e:pr:parallel:

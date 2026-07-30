@@ -123,7 +123,7 @@
           </div>
         {/if}
 
-        {#if variant === "needs_request"}
+        {#if variant === JoinEnrollmentDialogVariant.NeedsRequest}
           <ul
             class="list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-muted-foreground text-pretty"
             data-testid="join-enrollment-explainer"
