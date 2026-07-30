@@ -3,7 +3,6 @@ import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";
 import {
-  activeVaultScope,
   isoTimestamp,
   VaultAccessStatus,
   type JoinRequest,
@@ -22,6 +21,7 @@ import {
   updateProviderSyncMetadata as updateProviderSyncMetadataWasm,
 } from "$app-wasm";
 import {
+  activeVaultScope,
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   localFolderHandle,

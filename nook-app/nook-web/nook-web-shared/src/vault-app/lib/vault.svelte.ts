@@ -1,5 +1,4 @@
 import {
-  activeVaultScope,
   VaultAccessStatus,
   type NookImportResult,
   type NookSecretRecord,
@@ -25,6 +24,7 @@ import {
   type StoreId,
 } from "$app-wasm";
 import {
+  activeVaultScope,
   type GoogleDriveMode,
   type ICloudMode,
   type OAuthFilePreset,

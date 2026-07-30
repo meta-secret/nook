@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import {
-    activeVaultScope,
-    providerBelongsToVault,
     ExtensionPairingApprovedMessageType,
     ExtensionPairingVaultType,
     type ExtensionEventLogRecord,
     type ExtensionPairingApprovedMessage,
   } from '$web-shared/extension/runtime-messages'
   import {
+    activeVaultScope,
+    providerBelongsToVault,
     sealAuthProvidersForDevicePublicKey,
     type StorageProvider,
   } from '$lib/auth-providers'
