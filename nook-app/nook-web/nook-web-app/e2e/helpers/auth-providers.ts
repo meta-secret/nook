@@ -443,7 +443,7 @@ export async function saveAuthProvidersInBrowser(
 }
 
 export function expectSealedCredential(stored: unknown, plaintext: string) {
-  expect(stored).toBeTypeOf('string')
+  expect(typeof stored).toBe('string')
   if (typeof stored !== 'string') {
     throw new Error('expected a persisted sealed credential')
   }

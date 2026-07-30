@@ -1,5 +1,6 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelVaultUnlockState,
@@ -276,14 +277,14 @@
       showProviderSetupLink = false
     }
     if (showLocalUnlock) {
-      void vault.prepareLocalLogin()
+      untrack(() => void vault.prepareLocalLogin())
     }
     if (
       !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
     ) {
-      void vault.refreshSentinelUnlockStatus()
+      untrack(() => void vault.refreshSentinelUnlockStatus())
     }
   })
 </script>

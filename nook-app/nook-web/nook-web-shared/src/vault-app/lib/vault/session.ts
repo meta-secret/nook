@@ -8,6 +8,7 @@ import {
 import { VaultType } from "$lib/vault-architecture";
 import { createLogger } from "$lib/log";
 import { inactiveSentinelUnlockSession } from "$lib/vault/sentinel-unlock";
+import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-session");
 
@@ -60,6 +61,7 @@ export function clearUnlockedSession(
   state: SessionActionsContext,
   resetManager = true,
 ): void {
+  state.localLoginPreparation = LocalLoginPreparationState.Idle;
   state.secretPageGeneration += 1;
   state.stopIdleSessionTracking();
   state.stopVaultSync();

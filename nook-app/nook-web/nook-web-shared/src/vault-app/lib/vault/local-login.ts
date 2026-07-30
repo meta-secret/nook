@@ -14,7 +14,10 @@ import {
   type NookVaultManager,
 } from "$app-wasm";
 import { activeVaultScope, saveAuthProviders } from "$lib/auth-providers";
-import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import {
+  ActiveVaultKind,
+  LocalLoginPreparationState,
+} from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-local");
 
@@ -33,7 +36,7 @@ export async function reloadProvidersForActiveVault(
 
 export function beginLoginVaultPicker(state: VaultState): void {
   state.clearSelectedLoginVaultStore();
-  state.localLoginPrepared = false;
+  state.localLoginPreparation = LocalLoginPreparationState.Idle;
   state.resetVaultSessionState();
 }
 
@@ -109,14 +112,24 @@ export async function refreshLocalVaultCatalog(
 }
 
 export async function prepareLocalLogin(state: VaultState): Promise<void> {
-  if (!state.localVaultPresent || state.localLoginPrepared) return;
+  if (
+    !state.localVaultPresent ||
+    state.localLoginPreparation !== LocalLoginPreparationState.Idle
+  )
+    return;
+  state.localLoginPreparation = LocalLoginPreparationState.Preparing;
   log.debug("preparing local login gate");
-  state.storageMode = "local";
-  state.githubPat = "";
-  state.clearOauthFile();
-  state.clearLocalFolder();
-  await state.refreshPasswordEntriesList();
-  state.localLoginPrepared = true;
+  try {
+    state.storageMode = "local";
+    state.githubPat = "";
+    state.clearOauthFile();
+    state.clearLocalFolder();
+    await state.refreshPasswordEntriesList();
+    state.localLoginPreparation = LocalLoginPreparationState.Ready;
+  } catch (error) {
+    state.localLoginPreparation = LocalLoginPreparationState.Idle;
+    throw error;
+  }
 }
 
 export async function selectVaultForUnlock(
@@ -135,11 +148,11 @@ export async function selectVaultForUnlock(
       );
     }
     state.localVaultPresent = await hasActiveLocalVault();
-    state.localLoginPrepared = false;
+    state.localLoginPreparation = LocalLoginPreparationState.Idle;
     await state.syncActiveVaultStoreIdToAuth();
     await state.reloadProvidersForActiveVault();
     await state.refreshPasswordEntriesList();
-    state.localLoginPrepared = true;
+    state.localLoginPreparation = LocalLoginPreparationState.Ready;
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t("errors.vault_selection_failed");
@@ -159,7 +172,7 @@ export async function prepareExistingVaultImportSlot(
   }
   state.clearActiveVaultStore();
   state.localVaultPresent = await hasActiveLocalVault();
-  state.localLoginPrepared = false;
+  state.localLoginPreparation = LocalLoginPreparationState.Idle;
 }
 
 export async function createLocalVaultWithDeviceKeys(
@@ -212,7 +225,7 @@ export async function createLocalVaultWithDeviceKeys(
     );
     await setLocalVaultLabel(storeId, trimmedLabel);
     await refreshLocalVaultCatalog(state);
-    state.localLoginPrepared = true;
+    state.localLoginPreparation = LocalLoginPreparationState.Ready;
     await state.ensureProviderSaved();
     await state.syncActiveVaultStoreIdToAuth();
     await state.hydrateMultiDeviceState();

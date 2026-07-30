@@ -59,7 +59,7 @@ const providerKeys = [
   "hasSelectedLoginVaultStore",
   "clearSelectedLoginVaultStore",
   "localVaultPresent",
-  "localLoginPrepared",
+  "localLoginPreparation",
   "loginSetup",
   "activateLoginSetup",
   "clearLoginSetup",

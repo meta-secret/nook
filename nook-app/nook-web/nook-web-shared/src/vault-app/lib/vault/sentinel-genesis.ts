@@ -7,6 +7,7 @@ import {
 import type { VaultState } from "$lib/vault.svelte";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
+import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
 function replaceOwnedWasmValues<T extends { free: () => void }>(
@@ -260,7 +261,7 @@ export async function completeDelivery(state: VaultState): Promise<void> {
     await setActiveVault(storeId);
     await state.refreshLocalVaultCatalog();
     state.selectLoginVault(storeId);
-    state.localLoginPrepared = false;
+    state.localLoginPreparation = LocalLoginPreparationState.Idle;
     state.sentinelCeremonyPrompt = true;
     state.sentinelGenesisPhase = state
       .requireManager()

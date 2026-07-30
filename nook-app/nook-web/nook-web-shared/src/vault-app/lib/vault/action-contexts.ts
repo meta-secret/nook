@@ -262,7 +262,7 @@ export type ArchitectureActionsContext = Pick<
 
 export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<VaultUiState, "settingsOpen"> &
-  Pick<VaultProviderState, "vaultArchitecture"> &
+  Pick<VaultProviderState, "localLoginPreparation" | "vaultArchitecture"> &
   Pick<
     VaultSessionState,
     | "awaitingJoinApproval"

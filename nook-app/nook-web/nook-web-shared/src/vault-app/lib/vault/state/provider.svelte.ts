@@ -45,6 +45,12 @@ export type LoginSetup =
   | { kind: LoginSetupKind.Inactive }
   | { kind: LoginSetupKind.Active; providerType: StorageProviderType };
 
+export enum LocalLoginPreparationState {
+  Idle = "idle",
+  Preparing = "preparing",
+  Ready = "ready",
+}
+
 export enum StagedRemoteStorageKind {
   Unavailable = "unavailable",
   Available = "available",
@@ -163,7 +169,9 @@ export class VaultProviderState {
   }
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false);
-  localLoginPrepared = $state(false);
+  localLoginPreparation = $state<LocalLoginPreparationState>(
+    LocalLoginPreparationState.Idle,
+  );
   private loginSetupState = $state<LoginSetup>({
     kind: LoginSetupKind.Inactive,
   });
@@ -222,6 +230,7 @@ export class VaultProviderState {
     };
   }
   clearOauthFile(): void {
+    if (this.oauthFileState.kind === OAuthFileDraftKind.NotConfigured) return;
     this.oauthFileState = { kind: OAuthFileDraftKind.NotConfigured };
   }
   private localFolderState = $state.raw<LocalFolderDraft>({
@@ -243,6 +252,8 @@ export class VaultProviderState {
     };
   }
   clearLocalFolder(): void {
+    if (this.localFolderState.kind === LocalFolderDraftKind.NotConfigured)
+      return;
     this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
   }
   localFolderBackupSupported = $state(
