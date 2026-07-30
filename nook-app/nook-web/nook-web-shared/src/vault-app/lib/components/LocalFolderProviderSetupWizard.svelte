@@ -1,5 +1,10 @@
 <script lang="ts">
   import { FolderOpen, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    localFolderDirectoryValue,
+    localFolderHandle,
+    LocalFolderHandleKind,
+  } from '$lib/auth-providers'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -26,13 +31,17 @@
   let connectionOpen = $state(true)
   let syncOpen = $state(false)
 
+  const folderHandle = $derived(
+    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? localFolderHandle(vault.localFolderDraft.config)
+      : { kind: LocalFolderHandleKind.Unselected },
+  )
   const hasFolder = $derived(
-    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
-      Boolean(vault.localFolderDraft.config.handleId),
+    folderHandle.kind === LocalFolderHandleKind.Selected,
   )
   const selectedDirectoryName = $derived(
     vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
-      ? vault.localFolderDraft.config.directoryName
+      ? localFolderDirectoryValue(vault.localFolderDraft.config.directoryName)
       : '',
   )
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
