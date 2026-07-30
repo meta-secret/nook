@@ -240,7 +240,8 @@ async function flushPasskeyEventToProviders(
   const snapshot = await activeManager.loadAuthProviders()
   const providers = snapshot.providers.filter(
     (provider) =>
-      provider.storeId === vaultStoreId &&
+      provider.storeId.state === 'storeId' &&
+      provider.storeId.value === vaultStoreId &&
       provider.type !== 'local' &&
       provider.type !== 'local-folder',
   )

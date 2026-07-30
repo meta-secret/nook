@@ -1,6 +1,10 @@
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { createLogger } from "$lib/log";
-import { localFolderHandle, LocalFolderHandleKind } from "$lib/auth-providers";
+import {
+  localFolderHandle,
+  LocalFolderHandleKind,
+  type LocalFolderHandle,
+} from "$lib/auth-providers";
 import { LocalFolderHealthKind } from "$lib/vault/state/sync.svelte";
 import {
   LocalFolderDraftKind,
@@ -45,7 +49,7 @@ export async function discoverStagedVaultStoreId(
   try {
     const discovery = (async () => {
       if (setupType === "local-folder") {
-        const handle =
+        const handle: LocalFolderHandle =
           state.localFolderDraft.kind === LocalFolderDraftKind.Configured
             ? localFolderHandle(state.localFolderDraft.config)
             : { kind: LocalFolderHandleKind.Unselected };

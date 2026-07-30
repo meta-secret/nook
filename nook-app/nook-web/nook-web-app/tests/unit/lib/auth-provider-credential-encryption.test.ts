@@ -1,8 +1,38 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
+import {
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
+  githubPatValue,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
+  oauthProviderConfiguration,
+  OAuthProviderConfigurationKind,
+  providerPersistenceDefaults,
+  storedGithubPat,
+  storedGithubRepository,
+  storedOAuthAccountEmail,
+  storedOAuthCredential,
+  storedOAuthRefreshCredential,
+  unselectedVaultScope,
+  type StorageProvider,
+} from '$lib/auth-providers'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
+
+function githubProvider(id: string, pat: string): StorageProvider {
+  return {
+    ...providerPersistenceDefaults(),
+    id,
+    type: 'github',
+    label: 'GitHub',
+    githubPat: storedGithubPat(pat),
+    githubRepo: storedGithubRepository('nook'),
+    syncCheckpoint: { state: 'neverSynced' },
+    createdAt: '2026-06-24T00:00:00.000Z',
+  }
+}
 
 async function readRawAuthProvidersFromIdb(): Promise<{
   providers: Array<{
@@ -59,16 +89,8 @@ describe.sequential(
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'
       await manager.saveAuthProviders({
-        providers: [
-          {
-            id: 'gh-unit',
-            type: 'github',
-            label: 'GitHub',
-            githubPat: pat,
-            githubRepo: 'nook',
-            createdAt: '2026-06-24T00:00:00.000Z',
-          },
-        ],
+        providers: [githubProvider('gh-unit', pat)],
+        activeVaultStoreId: unselectedVaultScope(),
       })
 
       const raw = await readRawAuthProvidersFromIdb()
@@ -84,20 +106,14 @@ describe.sequential(
     test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
       const pat = 'github_pat_22LOADdecryptTOKEN'
       await manager.saveAuthProviders({
-        providers: [
-          {
-            id: 'gh-load',
-            type: 'github',
-            label: 'GitHub',
-            githubPat: pat,
-            githubRepo: 'nook',
-            createdAt: '2026-06-24T00:00:00.000Z',
-          },
-        ],
+        providers: [githubProvider('gh-load', pat)],
+        activeVaultStoreId: unselectedVaultScope(),
       })
 
       const loaded = await manager.loadAuthProviders()
-      expect(loaded.providers[0]?.githubPat).toBe(pat)
+      const provider = loaded.providers[0]
+      if (!provider) throw new Error('expected a loaded GitHub provider')
+      expect(githubPatValue(provider.githubPat)).toBe(pat)
     })
 
     test('loadAuthProviders rejects plaintext rows without a legacy fallback', async () => {
@@ -151,24 +167,25 @@ describe.sequential(
     test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
       const access = 'ya29.unit-oauth-access-token'
       const refresh = '1//unit-refresh-token-secret'
+      const oauthFile = {
+        ...defaultOAuthFileConfig('google-drive'),
+        accessToken: storedOAuthCredential(access),
+        refreshToken: storedOAuthRefreshCredential(refresh),
+        accountEmail: storedOAuthAccountEmail('me@example.com'),
+      }
       await manager.saveAuthProviders({
         providers: [
           {
+            ...providerPersistenceDefaults(),
             id: 'gd-unit',
             type: 'oauth-file',
             label: 'Google Drive',
-            oauthFile: {
-              preset: 'google-drive',
-              accessToken: access,
-              refreshToken: refresh,
-              fileName: 'nook-events',
-              accountEmail: 'me@example.com',
-              driveMode: 'private',
-              iCloudMode: 'private',
-            },
+            oauthFile: configuredOAuthFile(oauthFile),
+            syncCheckpoint: { state: 'neverSynced' },
             createdAt: '2026-06-24T00:00:00.000Z',
           },
         ],
+        activeVaultStoreId: unselectedVaultScope(),
       })
 
       const raw = await readRawAuthProvidersFromIdb()
@@ -179,9 +196,21 @@ describe.sequential(
       expect(oauth?.refreshToken).not.toContain(refresh)
 
       const loaded = await manager.loadAuthProviders()
-      const loadedOauth = loaded.providers[0]?.oauthFile
-      expect(loadedOauth?.accessToken).toBe(access)
-      expect(loadedOauth?.refreshToken).toBe(refresh)
+      const provider = loaded.providers[0]
+      if (!provider) throw new Error('expected a loaded OAuth provider')
+      const loadedOauth = oauthProviderConfiguration(provider)
+      if (loadedOauth.kind !== OAuthProviderConfigurationKind.Configured) {
+        throw new Error('expected configured OAuth credentials')
+      }
+      const loadedAccess = oauthAccessToken(loadedOauth.config)
+      if (loadedAccess.kind !== OAuthAccessTokenKind.Available) {
+        throw new Error('expected a loaded OAuth access token')
+      }
+      expect(loadedAccess.token).toBe(access)
+      if (loadedOauth.config.refreshToken.state !== 'token') {
+        throw new Error('expected a loaded OAuth refresh token')
+      }
+      expect(loadedOauth.config.refreshToken.value).toBe(refresh)
     })
   },
 )

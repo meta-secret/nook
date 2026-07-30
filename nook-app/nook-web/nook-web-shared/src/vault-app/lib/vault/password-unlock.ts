@@ -31,6 +31,7 @@ type CatalogVaultLabel =
 import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
+  type NookEnrollmentProvider,
   NookVaultNameState,
   OnboardingType,
   decryptEnrollmentPayload,
@@ -458,11 +459,6 @@ export async function connectWithEnrollmentCode(
         sharedProviderNeedsSave = true;
       }
       if (preset === "icloud") {
-        if (storageTarget.kind === SharedStorageTargetKind.NotBound) {
-          throw new Error(
-            state.t("provider_setup.icloud_shared_target_required"),
-          );
-        }
         const existingProvider = sharedProvider;
         const existingConfiguration =
           existingProvider.kind === SharedGrantProviderKind.Existing
@@ -777,10 +773,7 @@ export async function issueEnrollmentCode(
     let enrollmentProviderRow = selectedProvider;
     if (usesSharedProviderGrant) {
       if (usesSharedICloud) {
-        if (
-          selectedOauth.kind === OAuthProviderConfigurationKind.Missing ||
-          selectedOauth.config.iCloudShareTarget.state === "personal"
-        ) {
+        if (selectedOauth.config.iCloudShareTarget.state === "personal") {
           throw new Error(
             state.t("provider_setup.icloud_shared_target_required"),
           );

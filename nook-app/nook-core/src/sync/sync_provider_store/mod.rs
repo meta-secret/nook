@@ -51,7 +51,7 @@ pub use sync_metadata::update_provider_sync_metadata;
 ///
 /// Field names are `camelCase` on the wire to match the structured-clone object
 /// the web layer and e2e seeders read/write directly in `IndexedDB`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct OAuthFileConfig {
@@ -73,8 +73,48 @@ pub struct OAuthFileConfig {
     pub icloud_mode: ICloudMode,
     /// Opaque, validated `ICloudSharedTarget` storage id. It contains `CloudKit`
     /// share/zone routing only and never contains an account credential.
-    #[serde(default, rename = "iCloudShareTarget", alias = "icloudShareTarget")]
+    #[serde(rename = "iCloudShareTarget")]
     pub icloud_share_target: StoredICloudShareTarget,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OAuthFileConfigWire {
+    preset: OauthFilePreset,
+    access_token: StoredOAuthAccessCredential,
+    refresh_token: StoredOAuthRefreshCredential,
+    expires_at: StoredOAuthTokenExpiry,
+    file_id: StoredOAuthRemoteFileId,
+    file_name: StoredOAuthRemoteFileName,
+    account_email: StoredOAuthAccountIdentity,
+    drive_mode: GoogleDriveMode,
+    folder_id: StoredGoogleDriveFolder,
+    #[serde(rename = "iCloudMode")]
+    icloud_mode: ICloudMode,
+    #[serde(default, rename = "iCloudShareTarget", alias = "icloudShareTarget")]
+    icloud_share_target: StoredICloudShareTarget,
+}
+
+impl<'de> Deserialize<'de> for OAuthFileConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = OAuthFileConfigWire::deserialize(deserializer)?;
+        Ok(Self {
+            preset: wire.preset,
+            access_token: wire.access_token,
+            refresh_token: wire.refresh_token,
+            expires_at: wire.expires_at,
+            file_id: wire.file_id,
+            file_name: wire.file_name,
+            account_email: wire.account_email,
+            drive_mode: wire.drive_mode,
+            folder_id: wire.folder_id,
+            icloud_mode: wire.icloud_mode,
+            icloud_share_target: wire.icloud_share_target,
+        })
+    }
 }
 
 pub type OAuthFileConfigData = OAuthFileConfig;
@@ -594,6 +634,32 @@ mod tests {
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
+    }
+
+    #[test]
+    fn legacy_oauth_config_defaults_icloud_target_but_serializes_explicit_state()
+    -> serde_json::Result<()> {
+        #[derive(Deserialize)]
+        struct SerializedTarget {
+            #[serde(rename = "iCloudShareTarget")]
+            target: crate::StoredICloudShareTarget,
+        }
+
+        let mut legacy = serde_json::to_value(OAuthFileConfigData::default())?;
+        let object = legacy
+            .as_object_mut()
+            .ok_or_else(|| serde_json::Error::io(std::io::Error::other("expected object")))?;
+        object.remove("iCloudShareTarget");
+
+        let migrated: OAuthFileConfigData = serde_json::from_value(legacy)?;
+        assert_eq!(
+            migrated.icloud_share_target,
+            crate::StoredICloudShareTarget::Personal
+        );
+
+        let current: SerializedTarget = serde_json::from_value(serde_json::to_value(migrated)?)?;
+        assert_eq!(current.target, crate::StoredICloudShareTarget::Personal);
+        Ok(())
     }
 
     #[test]

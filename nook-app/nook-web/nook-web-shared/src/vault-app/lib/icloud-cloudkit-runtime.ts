@@ -24,7 +24,7 @@ enum CloudKitElementLookupKind {
 
 type CloudKitElementLookup =
   | { kind: CloudKitElementLookupKind.Missing }
-  | { kind: CloudKitElementLookupKind.Found; element: Element };
+  | { kind: CloudKitElementLookupKind.Found; element: HTMLElement };
 
 export type CloudKitUserIdentity = {
   userRecordName?: string;

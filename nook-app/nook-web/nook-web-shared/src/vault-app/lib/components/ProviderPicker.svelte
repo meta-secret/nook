@@ -2,10 +2,15 @@
   import { ReplicationType } from '$app-wasm'
 
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
-  import type {
-    OAuthFilePreset,
-    StorageProvider,
-    StorageProviderType,
+  import {
+    configuredOAuthFile,
+    defaultOAuthFileConfig,
+    providerPersistenceDefaults,
+    storedGithubPat,
+    storedGithubRepository,
+    type OAuthFilePreset,
+    type StorageProvider,
+    type StorageProviderType,
   } from '$lib/auth-providers'
   import { providerReplicationCapability } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
@@ -29,6 +34,7 @@
     oauthPreset?: OAuthFilePreset,
   ): StorageProvider {
     const base: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
       type,
       label: type,
@@ -38,20 +44,16 @@
     if (type === 'github') {
       return {
         ...base,
-        githubPat: 'github_pat_draft',
-        githubRepo: 'nook',
+        githubPat: storedGithubPat('github_pat_draft'),
+        githubRepo: storedGithubRepository('nook'),
       }
     }
     if (type === 'oauth-file') {
       return {
         ...base,
-        oauthFile: {
-          preset: oauthPreset ?? 'google-drive',
-          accessToken: 'draft-token',
-          fileName: 'nook-events',
-          driveMode: 'private',
-          iCloudMode: 'private',
-        },
+        oauthFile: configuredOAuthFile(
+          defaultOAuthFileConfig(oauthPreset ?? 'google-drive'),
+        ),
       }
     }
     return base

@@ -6,7 +6,8 @@ import {
   NookEnrollmentProvider,
   default as initNookWasm,
   decryptEnrollmentPayload,
-  encryptEnrollmentPayload,
+  encryptLabeledEnrollmentPayload,
+  encryptUnlabeledEnrollmentPayload,
   normalizeEnrollmentCode,
   peekEnrollmentEntryId,
   peekEnrollmentEntryLabel,
@@ -75,25 +76,29 @@ describe('enrollment-code links', () => {
   })
 
   test('buildEnrollmentLink wraps the raw code in a hash URL', async () => {
-    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
+    const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
     expect(buildEnrollmentLink(code, 'https://nook.example')).toBe(
       `https://nook.example/#enroll=${encodeURIComponent(code)}`,
     )
   })
 
   test('normalizeEnrollmentCode accepts raw base64url codes', async () => {
-    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
+    const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
     expect(normalizeEnrollmentCode(code)).toBe(code)
   })
 
   test('normalizeEnrollmentCode extracts codes from hash links', async () => {
-    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
+    const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
     const link = buildEnrollmentLink(code, 'https://nook.example')
     expect(normalizeEnrollmentCode(link)).toBe(code)
   })
 
   test('wasm peek helpers accept full enrollment links', async () => {
-    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2', 'Desk')
+    const code = encryptLabeledEnrollmentPayload(
+      samplePayload(),
+      'hunter2',
+      'Desk',
+    )
     const link = buildEnrollmentLink(code, 'https://nook.example')
     expect(peekEnrollmentEntryId(link)).toBe('entry-local')
     expect(enrollmentEntryLabel(link)).toBe('Desk')
@@ -103,7 +108,7 @@ describe('enrollment-code links', () => {
 
 describe('enrollment payloads', () => {
   test('encrypts provider creds and exposes entry_id without the password', async () => {
-    const code = encryptEnrollmentPayload(
+    const code = encryptLabeledEnrollmentPayload(
       githubPayload(),
       'vault-pass-99',
       'Work laptop',
@@ -130,7 +135,7 @@ describe('enrollment payloads', () => {
   })
 
   test('rejects wrong vault passwords', async () => {
-    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
+    const code = encryptUnlabeledEnrollmentPayload(samplePayload(), 'hunter2')
     expect(() => decryptEnrollmentPayload(code, 'wrong-pass')).toThrow(
       'Vault password does not decrypt this enrollment code.',
     )

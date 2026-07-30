@@ -22,7 +22,10 @@ import {
   type SharedStorageTargetHint,
   type SharedStorageTargetSelection,
 } from "$app-wasm";
-import type { StorageProvider } from "$lib/auth-providers";
+import {
+  unselectedVaultScope,
+  type StorageProvider,
+} from "$lib/auth-providers";
 
 export type {
   NookProviderReplicationCapability as ProviderReplicationCapability,
@@ -160,14 +163,18 @@ export function firstCompatibleProvider(
   replicationType: ReplicationType,
   preference: CompatibleProviderPreference,
 ): CompatibleProviderSelection {
+  const snapshot = {
+    providers,
+    activeVaultStoreId: unselectedVaultScope(),
+  };
   const selection =
     preference.kind === CompatibleProviderPreferenceKind.Selected
       ? wasmFirstCompatibleProviderIdPreferred(
-          { providers },
+          snapshot,
           replicationType,
           preference.providerId,
         )
-      : wasmFirstCompatibleProviderId({ providers }, replicationType);
+      : wasmFirstCompatibleProviderId(snapshot, replicationType);
   if (selection.state === NookProviderSelectionState.Selected) {
     const provider = providers.find(
       (candidate) => candidate.id === selection.providerId,

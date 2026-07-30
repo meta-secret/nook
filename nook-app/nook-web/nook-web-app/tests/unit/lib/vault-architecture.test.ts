@@ -9,7 +9,21 @@ import initNookWasm, {
   enrollmentProviderForArchitecture,
   enrollmentSharedProviderForArchitecture,
 } from '$app-wasm'
-import type { StorageProvider } from '$lib/auth-providers'
+import {
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
+  oauthProviderConfiguration,
+  OAuthProviderConfigurationKind,
+  providerPersistenceDefaults,
+  storedGithubPat,
+  storedGithubRepository,
+  storedGoogleDriveFolder,
+  storedICloudShareTarget,
+  storedOAuthAccountEmail,
+  storedOAuthCredential,
+  storedOAuthRemoteFileName,
+  type StorageProvider,
+} from '$lib/auth-providers'
 import {
   canCreateSecret,
   CompatibleProviderPreferenceKind,
@@ -33,46 +47,51 @@ beforeAll(async () => {
 
 function googleDriveProvider(): StorageProvider {
   return {
+    ...providerPersistenceDefaults(),
     id: 'drive-1',
     type: 'oauth-file',
     label: 'Google Drive',
-    oauthFile: {
-      preset: 'google-drive',
-      accessToken: 'ya29.test',
-      fileName: 'nook.yaml',
-      accountEmail: 'alex@example.com',
-      driveMode: 'private',
-      iCloudMode: 'private',
-    },
+    oauthFile: configuredOAuthFile({
+      ...defaultOAuthFileConfig('google-drive'),
+      accessToken: storedOAuthCredential('ya29.test'),
+      fileName: storedOAuthRemoteFileName('nook.yaml'),
+      accountEmail: storedOAuthAccountEmail('alex@example.com'),
+    }),
+    syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-08T00:00:00.000Z',
   }
 }
 
 function githubProvider(): StorageProvider {
   return {
+    ...providerPersistenceDefaults(),
     id: 'github-1',
     type: 'github',
     label: 'GitHub',
-    githubRepo: 'nook-vault',
-    githubPat: 'github_pat_test',
+    githubRepo: storedGithubRepository('nook-vault'),
+    githubPat: storedGithubPat('github_pat_test'),
+    syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-08T00:00:00.000Z',
   }
 }
 
+const ICLOUD_SHARED_TARGET =
+  'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}'
+
 function sharedICloudProvider(): StorageProvider {
   return {
+    ...providerPersistenceDefaults(),
     id: 'icloud-shared-1',
     type: 'oauth-file',
     label: 'iCloud',
-    oauthFile: {
-      preset: 'icloud',
-      accessToken: 'cloudkit-web-token',
-      fileName: 'nook-events',
+    oauthFile: configuredOAuthFile({
+      ...defaultOAuthFileConfig('icloud'),
+      accessToken: storedOAuthCredential('cloudkit-web-token'),
       driveMode: 'private',
       iCloudMode: 'shared',
-      iCloudShareTarget:
-        'icloud-share-v1:{"role":"owner","zoneName":"zone","ownerRecordName":"owner","rootRecordName":"root","shortGuid":"guid"}',
-    },
+      iCloudShareTarget: storedICloudShareTarget(ICLOUD_SHARED_TARGET),
+    }),
+    syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-14T00:00:00.000Z',
   }
 }
@@ -81,13 +100,10 @@ function privateICloudProvider(): StorageProvider {
   return {
     ...sharedICloudProvider(),
     id: 'icloud-private-1',
-    oauthFile: {
-      preset: 'icloud',
-      accessToken: 'cloudkit-web-token',
-      fileName: 'nook-events',
-      driveMode: 'private',
-      iCloudMode: 'private',
-    },
+    oauthFile: configuredOAuthFile({
+      ...defaultOAuthFileConfig('icloud'),
+      accessToken: storedOAuthCredential('cloudkit-web-token'),
+    }),
   }
 }
 
@@ -324,13 +340,18 @@ describe('vault architecture adapter', () => {
 
   test('shared Drive provider mode overrides personal credential transfer', () => {
     const architecture = defaultVaultArchitecture()
+    const baseProvider = googleDriveProvider()
+    const baseConfiguration = oauthProviderConfiguration(baseProvider)
+    if (baseConfiguration.kind !== OAuthProviderConfigurationKind.Configured) {
+      throw new Error('expected configured Google Drive provider')
+    }
     const provider: StorageProvider = {
-      ...googleDriveProvider(),
-      oauthFile: {
-        ...googleDriveProvider().oauthFile!,
+      ...baseProvider,
+      oauthFile: configuredOAuthFile({
+        ...baseConfiguration.config,
         driveMode: 'shared',
-        folderId: 'persisted-shared-folder',
-      },
+        folderId: storedGoogleDriveFolder('persisted-shared-folder'),
+      }),
     }
 
     expect(providerOnboardingType(provider, architecture)).toBe(
@@ -367,7 +388,7 @@ describe('vault architecture adapter', () => {
     const enrollmentProvider = enrollmentICloudSharedProviderForArchitecture(
       provider,
       architecture,
-      provider.oauthFile?.iCloudShareTarget ?? '',
+      ICLOUD_SHARED_TARGET,
     )
     expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
     expect(enrollmentProvider.onboardingType).toBe(
@@ -375,9 +396,7 @@ describe('vault architecture adapter', () => {
     )
     expect(enrollmentProvider.oauthPreset).toBe('icloud')
     expect(() => enrollmentProvider.sharedJoinerIdentity).toThrow()
-    expect(enrollmentProvider.sharedStorageTargetId).toBe(
-      provider.oauthFile?.iCloudShareTarget,
-    )
+    expect(enrollmentProvider.sharedStorageTargetId).toBe(ICLOUD_SHARED_TARGET)
     expect(() => enrollmentProvider.oauthAccessToken).toThrow()
   })
 })

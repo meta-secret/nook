@@ -2,13 +2,21 @@ import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DriveFileIdentityKind,
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
   findDuplicateSyncProvider,
   findDuplicateSyncProviderExcluding,
   formatDriveStorageRef,
   GithubPatDisplayKind,
   maskGithubPat,
   providerDefaultLabel,
+  providerPersistenceDefaults,
   providerStorageDetail,
+  storedGithubPat,
+  storedGithubRepository,
+  storedOAuthAccountEmail,
+  storedOAuthCredential,
+  storedOAuthRemoteFileName,
   type StorageProvider,
 } from '$lib/auth-providers'
 import { NookDuplicateSyncProviderState } from '$app-wasm'
@@ -17,11 +25,13 @@ function githubProvider(
   overrides: Partial<StorageProvider> = {},
 ): StorageProvider {
   return {
+    ...providerPersistenceDefaults(),
     id: 'gh-1',
     type: 'github',
     label: 'GitHub',
-    githubRepo: 'nook',
-    githubPat: 'github_pat_11AAAAAAAAAA',
+    githubRepo: storedGithubRepository('nook'),
+    githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
+    syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-06-24T00:00:00.000Z',
     ...overrides,
   }
@@ -58,14 +68,14 @@ describe('providerStorageDetail', () => {
     const alpha = githubProvider({
       id: 'gh-alpha',
       label: 'GitHub · alpha',
-      githubRepo: 'alpha',
-      githubPat: 'github_pat_11AAAAbbbb',
+      githubRepo: storedGithubRepository('alpha'),
+      githubPat: storedGithubPat('github_pat_11AAAAbbbb'),
     })
     const beta = githubProvider({
       id: 'gh-beta',
       label: 'GitHub · beta',
-      githubRepo: 'beta',
-      githubPat: 'github_pat_22CCCCdddd',
+      githubRepo: storedGithubRepository('beta'),
+      githubPat: storedGithubPat('github_pat_22CCCCdddd'),
     })
 
     expect(providerStorageDetail(alpha)).toBe('alpha · github_pat_11A…')
@@ -75,16 +85,20 @@ describe('providerStorageDetail', () => {
 
   test('never exposes the full token', () => {
     const pat = 'github_pat_11BBBBCCCCDDDDEEEEFFFF'
-    const detail = providerStorageDetail(githubProvider({ githubPat: pat }))
+    const detail = providerStorageDetail(
+      githubProvider({ githubPat: storedGithubPat(pat) }),
+    )
     expect(detail).not.toContain(pat)
     expect(detail).toContain('…')
   })
 
   test('describes local browser storage', () => {
     const local: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: 'local-1',
       type: 'local',
       label: 'This device',
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
     expect(providerStorageDetail(local)).toBe(
@@ -94,31 +108,31 @@ describe('providerStorageDetail', () => {
 
   test('distinguishes two Google Drive vault files', () => {
     const personal: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: 'gd-1',
       type: 'oauth-file',
       label: 'Google Drive · personal.yaml',
-      oauthFile: {
-        preset: 'google-drive',
-        accessToken: 'ya29.test',
-        fileName: 'personal.yaml',
-        accountEmail: 'me@example.com',
-        driveMode: 'private',
-        iCloudMode: 'private',
-      },
+      oauthFile: configuredOAuthFile({
+        ...defaultOAuthFileConfig('google-drive'),
+        accessToken: storedOAuthCredential('ya29.test'),
+        fileName: storedOAuthRemoteFileName('personal.yaml'),
+        accountEmail: storedOAuthAccountEmail('me@example.com'),
+      }),
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
     const work: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: 'gd-2',
       type: 'oauth-file',
       label: 'Google Drive · work.yaml',
-      oauthFile: {
-        preset: 'google-drive',
-        accessToken: 'ya29.test',
-        fileName: 'work.yaml',
-        accountEmail: 'me@example.com',
-        driveMode: 'private',
-        iCloudMode: 'private',
-      },
+      oauthFile: configuredOAuthFile({
+        ...defaultOAuthFileConfig('google-drive'),
+        accessToken: storedOAuthCredential('ya29.test'),
+        fileName: storedOAuthRemoteFileName('work.yaml'),
+        accountEmail: storedOAuthAccountEmail('me@example.com'),
+      }),
+      syncCheckpoint: { state: 'neverSynced' },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
 
@@ -195,13 +209,13 @@ describe('findDuplicateSyncProvider', () => {
   test('finds an existing GitHub duplicate', () => {
     const existing = githubProvider({
       id: 'gh-existing',
-      githubRepo: 'nook-crdt-test-1',
-      githubPat: 'github_pat_11AAAAAAAAAA',
+      githubRepo: storedGithubRepository('nook-crdt-test-1'),
+      githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
     })
     const candidate = githubProvider({
       id: 'gh-new',
-      githubRepo: 'nook-crdt-test-1',
-      githubPat: 'github_pat_11AAAAAAAAAA',
+      githubRepo: storedGithubRepository('nook-crdt-test-1'),
+      githubPat: storedGithubPat('github_pat_11AAAAAAAAAA'),
     })
     expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
       state: NookDuplicateSyncProviderState.Duplicate,
@@ -218,12 +232,12 @@ describe('findDuplicateSyncProvider', () => {
 
   test('returns the unique state when no duplicate exists', () => {
     const existing = githubProvider({
-      githubRepo: 'alpha',
-      githubPat: 'github_pat_11AAAA',
+      githubRepo: storedGithubRepository('alpha'),
+      githubPat: storedGithubPat('github_pat_11AAAA'),
     })
     const candidate = githubProvider({
-      githubRepo: 'beta',
-      githubPat: 'github_pat_11AAAA',
+      githubRepo: storedGithubRepository('beta'),
+      githubPat: storedGithubPat('github_pat_11AAAA'),
     })
     expect(findDuplicateSyncProvider([existing], candidate)).toEqual({
       state: NookDuplicateSyncProviderState.Unique,

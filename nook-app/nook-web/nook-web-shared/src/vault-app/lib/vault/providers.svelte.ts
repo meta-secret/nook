@@ -8,7 +8,6 @@ import {
   configuredLocalFolder,
   configuredOAuthFile,
   defaultOAuthFileConfig,
-  defaultGithubRepository,
   findDuplicateSyncProvider,
   GITHUB_PROVIDER_TYPE,
   githubPatValue,
@@ -20,9 +19,7 @@ import {
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
-  localFolderConfigurationNotApplicable,
   missingOAuthAccessToken,
-  missingGithubPat,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
   OAuthAccessTokenKind,
@@ -39,7 +36,8 @@ import {
   signedOutOAuthCredential,
   storedGithubPat,
   storedGithubRepository,
-  storedOAuthCredential,
+  storedLocalFolderDirectory,
+  storedLocalFolderHandle,
   storedOAuthRemoteFileName,
   scopedProviderVault,
   unscopedProviderVault,
@@ -52,6 +50,7 @@ import {
   type LocalFolderHandle,
   type OAuthFileConfig,
   type OAuthFileName,
+  type OAuthProviderConfiguration,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
@@ -325,7 +324,14 @@ export async function chooseLocalFolder(
     throw new Error(state.t("provider_setup.local_folder_unsupported_browser"));
   }
   const folder = await chooseLocalFolderBackupDirectory();
-  state.configureLocalFolder(folder);
+  try {
+    state.configureLocalFolder({
+      directoryName: storedLocalFolderDirectory(folder.directoryName),
+      handleId: storedLocalFolderHandle(folder.handleId),
+    });
+  } finally {
+    folder.free();
+  }
 }
 
 export function refreshLocalFolderBackupSupport(
@@ -743,7 +749,7 @@ export async function ensureProviderSaved(
     oauthFileDraft.config.preset === "google-drive" &&
     (oauthFileDraft.config.driveMode === "shared" ||
       oauthFileDraft.config.folderId.state === "folderId");
-  const configuredRemoteFileName =
+  const configuredRemoteFileName: OAuthFileName =
     oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? oauthFileName(oauthFileDraft.config)
       : { kind: OAuthFileNameKind.Unresolved };
@@ -959,7 +965,7 @@ export async function ensureProviderSaved(
       const updatedProvider = state.providers.find(
         (provider) => provider.id === oauthProviderToUpdateId,
       );
-      const updatedConfiguration = updatedProvider
+      const updatedConfiguration: OAuthProviderConfiguration = updatedProvider
         ? oauthProviderConfiguration(updatedProvider)
         : { kind: OAuthProviderConfigurationKind.Missing };
       state.configureOauthFile(

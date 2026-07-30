@@ -1,5 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import type { StorageProvider } from '$lib/auth-providers'
+import {
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
+  missingOAuthAccessToken,
+  oauthAccessToken,
+  providerPersistenceDefaults,
+  rootGoogleDriveFolder,
+  storedGoogleDriveFolder,
+  storedOAuthCredential,
+  type StorageProvider,
+} from '$lib/auth-providers'
 import {
   findSharedGrantProvider,
   SharedGrantProviderKind,
@@ -8,18 +18,21 @@ import {
 } from '$lib/vault/password-unlock'
 
 function driveProvider(id: string, folderId: string): StorageProvider {
+  const config = {
+    ...defaultOAuthFileConfig('google-drive'),
+    accessToken: storedOAuthCredential(`token-${id}`),
+    folderId: folderId
+      ? storedGoogleDriveFolder(folderId)
+      : rootGoogleDriveFolder(),
+    driveMode: folderId ? ('shared' as const) : ('private' as const),
+  }
   return {
+    ...providerPersistenceDefaults(),
     id,
     type: 'oauth-file',
     label: 'Google Drive',
-    oauthFile: {
-      preset: 'google-drive',
-      accessToken: `token-${id}`,
-      folderId,
-      driveMode: folderId ? 'shared' : 'private',
-      iCloudMode: 'private',
-      fileName: 'nook-events',
-    },
+    oauthFile: configuredOAuthFile(config),
+    syncCheckpoint: { state: 'neverSynced' },
     createdAt: '2026-07-15T00:00:00.000Z',
   }
 }
@@ -60,39 +73,58 @@ describe('shared enrollment provider selection', () => {
   })
 
   test('flushes every created Drive target when the owner token is usable', () => {
-    expect(
-      shouldFlushSharedDriveGrant(
-        {
-          kind: 'granted',
-          note: 'architecture_modes.shared_grant_created',
-          storageTargetId: 'folder-required',
-        },
-        'token-owner',
-      ),
-    ).toBe(true)
-    expect(
-      shouldFlushSharedDriveGrant(
-        {
-          kind: 'manual-grant-required',
-          instructionsKey:
-            'architecture_modes.shared_grant_manual_instructions',
-          joinerIdentity: 'joiner@example.com',
-          storageTargetId: 'folder-required',
-        },
-        'token-owner',
-      ),
-    ).toBe(true)
-    expect(
-      shouldFlushSharedDriveGrant(
-        {
-          kind: 'manual-grant-required',
-          instructionsKey:
-            'architecture_modes.shared_grant_manual_instructions',
-          joinerIdentity: 'joiner@example.com',
-          storageTargetId: 'folder-required',
-        },
-        '',
-      ),
-    ).toBe(false)
+    const available = oauthAccessToken({
+      ...defaultOAuthFileConfig('google-drive'),
+      accessToken: storedOAuthCredential('token-owner'),
+    })
+    const missing = missingOAuthAccessToken()
+    try {
+      expect(
+        shouldFlushSharedDriveGrant(
+          {
+            kind: 'granted',
+            note: 'architecture_modes.shared_grant_created',
+            target: {
+              state: 'identified',
+              storageTargetId: 'folder-required',
+            },
+          },
+          available,
+        ),
+      ).toBe(true)
+      expect(
+        shouldFlushSharedDriveGrant(
+          {
+            kind: 'manual-grant-required',
+            instructionsKey:
+              'architecture_modes.shared_grant_manual_instructions',
+            joinerIdentity: 'joiner@example.com',
+            target: {
+              state: 'identified',
+              storageTargetId: 'folder-required',
+            },
+          },
+          available,
+        ),
+      ).toBe(true)
+      expect(
+        shouldFlushSharedDriveGrant(
+          {
+            kind: 'manual-grant-required',
+            instructionsKey:
+              'architecture_modes.shared_grant_manual_instructions',
+            joinerIdentity: 'joiner@example.com',
+            target: {
+              state: 'identified',
+              storageTargetId: 'folder-required',
+            },
+          },
+          missing,
+        ),
+      ).toBe(false)
+    } finally {
+      available.free()
+      missing.free()
+    }
   })
 })

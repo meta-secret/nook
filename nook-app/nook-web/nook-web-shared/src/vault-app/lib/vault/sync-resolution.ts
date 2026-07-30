@@ -6,7 +6,6 @@ import {
   type NookSecurityConflict,
   VaultSyncConflictKind,
 } from "$app-wasm";
-import { SvelteDate } from "svelte/reactivity";
 import { createLogger } from "$lib/log";
 import type { NookSecretRecord } from "$lib/nook";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
@@ -21,6 +20,7 @@ import {
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
+  scopedProviderVault,
 } from "$lib/auth-providers";
 
 const log = createLogger("vault-sync-resolution");
@@ -309,8 +309,7 @@ export async function resolveSyncConflictImportRemote(
         provider.id === providerId
           ? {
               ...provider,
-              storeId: importedStoreId,
-              lastSyncedAt: new SvelteDate().toISOString(),
+              storeId: scopedProviderVault(importedStoreId),
             }
           : provider,
       );
