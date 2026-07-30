@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require "json"
 require "tmpdir"
 
 root = File.expand_path("../..", __dir__)
@@ -325,6 +326,56 @@ unless neo4j.dig("ssl", "bolt", "privateKey", "secretName") == "hive-neo4j-tls" 
 end
 unless neo4j.dig("config", "server.bolt.tls_level") == "REQUIRED"
   raise "Neo4j Bolt listener must require TLS"
+end
+
+zot_resources = load_yaml_stream.call("infra/k0s/manifests/registry/zot.yaml").compact
+zot_resource = lambda do |kind, name|
+  zot_resources.find do |resource|
+    resource["kind"] == kind && resource.dig("metadata", "name") == name
+  end || raise("Missing Zot #{kind} #{name}")
+end
+zot_config = JSON.parse(
+  zot_resource.call("ConfigMap", "nook-zot").dig("data", "config.json")
+)
+unless zot_config.dig("storage", "rootDirectory") == "/var/lib/registry" &&
+       zot_config.dig("storage", "dedupe") == true &&
+       zot_config.dig("storage", "gc") == true
+  raise "Zot must use persistent deduplicated storage with garbage collection"
+end
+zot_pv = zot_resource.call("PersistentVolume", "nook-zot-data")
+unless zot_pv.dig("spec", "persistentVolumeReclaimPolicy") == "Retain" &&
+       zot_pv.dig("spec", "local", "path") == "/var/lib/hive/zot"
+  raise "Zot data must use the retained host-local volume"
+end
+zot_pvc = zot_resource.call("PersistentVolumeClaim", "nook-zot-data")
+unless zot_pvc.dig("spec", "volumeName") == "nook-zot-data" &&
+       zot_pvc.dig("spec", "storageClassName") == "nook-zot-local-retain"
+  raise "Zot PVC must bind only the retained Zot volume"
+end
+zot_deployment = zot_resource.call("Deployment", "nook-zot")
+zot_pod = zot_deployment.dig("spec", "template", "spec")
+zot_container = zot_pod.fetch("containers").find { |container| container["name"] == "zot" }
+unless zot_deployment.dig("spec", "strategy", "type") == "Recreate" &&
+       zot_pod["automountServiceAccountToken"] == false &&
+       zot_pod.dig("securityContext", "runAsNonRoot") == true &&
+       zot_container.dig("securityContext", "readOnlyRootFilesystem") == true &&
+       zot_container.dig("securityContext", "allowPrivilegeEscalation") == false &&
+       zot_container.dig("securityContext", "capabilities", "drop")&.include?("ALL")
+  raise "Zot workload hardening is incomplete"
+end
+unless zot_container["image"]&.match?(
+  %r{\Aghcr\.io/project-zot/zot-linux-amd64@sha256:[0-9a-f]{64}\z}
+)
+  raise "Zot image must use the upstream platform image pinned by digest"
+end
+if zot_resources.any? { |resource| %w[Service Ingress HTTPRoute].include?(resource["kind"]) }
+  raise "Zot must not have a public or cluster service endpoint"
+end
+zot_network = zot_resource.call("NetworkPolicy", "nook-zot-default-deny")
+unless zot_network.dig("spec", "policyTypes")&.sort == %w[Egress Ingress] &&
+       zot_network.dig("spec", "ingress").nil? &&
+       zot_network.dig("spec", "egress").nil?
+  raise "Zot must default-deny cluster ingress and egress"
 end
 
 infra_root_path = File.join(root, "infra/Taskfile.yml")

@@ -681,7 +681,7 @@ tasks:
         REMOTE
 
   k0s:uninstall:
-    desc: Uninstall k0s only when K0S_UNINSTALL_FORCE=1; preserve Neo4j data.
+    desc: Uninstall k0s only when forced; preserve Neo4j and Zot data.
     silent: true
     cmds:
       - |
@@ -765,6 +765,11 @@ tasks:
             "$backup_mac" \
             "$recovery_dir/neo4j-secrets.yaml.hmac"
         fi
+        sudo -n systemctl disable --now nook-zot-registry-loopback.service \
+          >/dev/null 2>&1 || true
+        sudo -n rm -f \
+          /etc/systemd/system/nook-zot-registry-loopback.service
+        sudo -n systemctl daemon-reload
         sudo -n k0s stop
         sudo -n k0s reset
         sudo -n systemctl disable --now nook-k0s-api-address.service \
@@ -817,6 +822,7 @@ tasks:
         rm -f "$firewall_config"
         trap - EXIT
         test -d /var/lib/hive/neo4j
-        echo "k0s removed; retained /var/lib/hive/neo4j"
+        test -d /var/lib/hive/zot
+        echo "k0s removed; retained /var/lib/hive/neo4j and /var/lib/hive/zot"
         REMOTE
         BASH
