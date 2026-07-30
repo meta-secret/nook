@@ -142,10 +142,10 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
 }
 
 /** Emit sitemap.xml and robots.txt for production deploys (nokey.sh). */
-enum SeoStaticFileKind {
-  Served = 'served',
-  PassThrough = 'pass-through',
-}
+const SeoStaticFileKind = {
+  Served: 'served',
+  PassThrough: 'pass-through',
+} as const
 
 function seoStaticFiles(outputDirectory: string): Plugin {
   const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
