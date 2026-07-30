@@ -9,6 +9,7 @@ use nook_core::{
     AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
     provider_credentials_are_presealed, seal_provider_credentials,
 };
+use serde::Serialize;
 
 use crate::NookError;
 
@@ -76,7 +77,8 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
         serde_wasm_bindgen::to_value(STATE_KEY).map_err(|e| idb_err("nook_auth key error", e))?;
     let storage_value = nook_core::auth_snapshot_legacy_storage_value(snapshot)
         .map_err(|e| idb_err("nook_auth compatibility projection error", e))?;
-    let value = serde_wasm_bindgen::to_value(&storage_value)
+    let value = storage_value
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| idb_err("nook_auth serialize error", e))?;
     store
         .put(&value, Some(&key))

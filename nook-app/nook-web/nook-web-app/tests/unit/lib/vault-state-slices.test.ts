@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, test } from 'vitest'
 import { SvelteDate } from 'svelte/reactivity'
 import { VaultStateSlices } from '$lib/vault/state/index.svelte'

@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures'
-import { activeVaultScope } from '$lib/auth-providers'
 import {
+  activeAuthProviderSeedScope,
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableLoginAutoUnlock,
@@ -59,41 +59,44 @@ async function seedScopedSyncProviders(
   storeA: string,
   storeB: string,
 ) {
-  await saveAuthProvidersInBrowser(page, {
-    activeVaultStoreId: activeVaultScope(storeA),
-    providers: [
-      {
-        id: 'provider-a',
-        type: 'oauth-file',
-        label: 'File · nook-multi-vault-a',
-        oauthFile: {
-          preset: 'google-drive',
-          accessToken: 'ya29.e2e_file_sync_token',
-          fileName: 'nook-multi-vault-a.yaml',
-          driveMode: 'private',
-          iCloudMode: 'private',
-          accountEmail: 'file-sync-e2e@example.com',
+  await saveAuthProvidersInBrowser(
+    page,
+    {
+      providers: [
+        {
+          id: 'provider-a',
+          type: 'oauth-file',
+          label: 'File · nook-multi-vault-a',
+          oauthFile: {
+            preset: 'google-drive',
+            accessToken: 'ya29.e2e_file_sync_token',
+            fileName: 'nook-multi-vault-a.yaml',
+            driveMode: 'private',
+            iCloudMode: 'private',
+            accountEmail: 'file-sync-e2e@example.com',
+          },
+          storeId: storeA,
+          createdAt: new Date().toISOString(),
         },
-        storeId: storeA,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'provider-b',
-        type: 'oauth-file',
-        label: 'File · nook-multi-vault-b',
-        oauthFile: {
-          preset: 'google-drive',
-          accessToken: 'ya29.e2e_file_sync_token',
-          fileName: 'nook-multi-vault-b.yaml',
-          driveMode: 'private',
-          iCloudMode: 'private',
-          accountEmail: 'file-sync-e2e@example.com',
+        {
+          id: 'provider-b',
+          type: 'oauth-file',
+          label: 'File · nook-multi-vault-b',
+          oauthFile: {
+            preset: 'google-drive',
+            accessToken: 'ya29.e2e_file_sync_token',
+            fileName: 'nook-multi-vault-b.yaml',
+            driveMode: 'private',
+            iCloudMode: 'private',
+            accountEmail: 'file-sync-e2e@example.com',
+          },
+          storeId: storeB,
+          createdAt: new Date().toISOString(),
         },
-        storeId: storeB,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-  })
+      ],
+    },
+    activeAuthProviderSeedScope(storeA),
+  )
   await disableLoginAutoUnlock(page)
   await page.reload()
   await expect(page.getByTestId('login-gate')).toBeVisible({

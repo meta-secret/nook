@@ -354,7 +354,7 @@ describe('vault architecture adapter', () => {
     }
 
     expect(providerOnboardingType(provider, architecture)).toBe(
-      'shared-provider-grant',
+      OnboardingType.SharedProviderGrant,
     )
     const enrollmentProvider = enrollmentSharedProviderForArchitecture(
       provider,
@@ -382,7 +382,7 @@ describe('vault architecture adapter', () => {
     expect(capability.supportsPersonal).toBe(true)
     expect(capability.supportsShared).toBe(true)
     expect(providerOnboardingType(provider, architecture)).toBe(
-      'shared-provider-grant',
+      OnboardingType.SharedProviderGrant,
     )
     const enrollmentProvider = enrollmentICloudSharedProviderForArchitecture(
       provider,

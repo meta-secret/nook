@@ -4,7 +4,9 @@ import {
   type LegalRoute,
 } from "$lib/app-lifecycle-state";
 import {
+  activeVaultScope,
   saveAuthProviders,
+  unselectedVaultScope,
   type AuthProvidersSnapshot,
 } from "$lib/auth-providers";
 import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
@@ -23,10 +25,14 @@ type BrowserLifecycleOptions = {
 };
 
 type AuthProviderDebugHooks = {
+  activeVaultScope(
+    storeId: string,
+  ): AuthProvidersSnapshot["activeVaultStoreId"];
   loadAuthProviders(): Promise<AuthProvidersSnapshot>;
   saveAuthProviders(
     snapshot: Parameters<typeof saveAuthProviders>[1],
   ): ReturnType<typeof saveAuthProviders>;
+  unselectedVaultScope(): AuthProvidersSnapshot["activeVaultStoreId"];
 };
 
 type BrowserDebugHooks = {
@@ -66,6 +72,7 @@ export function mountBrowserLifecycle({
       __nookVault: vault,
       __nookConfiguredVaultApplication: configuredVaultApplicationName(),
       __nookAuthProviders: {
+        activeVaultScope,
         loadAuthProviders: () =>
           vault.enqueueStorage(() =>
             vault.requireManager().loadAuthProviders(),
@@ -76,6 +83,7 @@ export function mountBrowserLifecycle({
           vault.enqueueStorage(() =>
             saveAuthProviders(vault.requireManager(), snapshot),
           ),
+        unselectedVaultScope,
       },
     };
     Object.assign(window, debugHooks);

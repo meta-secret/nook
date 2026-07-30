@@ -33,12 +33,7 @@ function githubProvider(id: string, pat: string): StorageProvider {
   }
 }
 
-async function readRawAuthProvidersFromIdb(): Promise<{
-  providers: Array<{
-    githubPat?: string
-    oauthFile?: { accessToken?: string; refreshToken?: string }
-  }>
-}> {
+async function readRawAuthProvidersFromIdb(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('nook_auth', 1)
     request.onerror = () =>
@@ -51,19 +46,56 @@ async function readRawAuthProvidersFromIdb(): Promise<{
       getReq.onerror = () =>
         reject(getReq.error ?? new Error('Failed to read providers.'))
       getReq.onsuccess = () => {
-        resolve(
-          (getReq.result as {
-            providers: Array<{
-              githubPat?: string
-              oauthFile?: { accessToken?: string; refreshToken?: string }
-            }>
-          }) ?? { providers: [] },
-        )
+        resolve(getReq.result)
       }
       tx.oncomplete = () => db.close()
       tx.onerror = () => reject(tx.error ?? new Error('IndexedDB tx failed.'))
     }
   })
+}
+
+function persistedProvider(rawSnapshot: unknown): Record<string, unknown> {
+  if (!(rawSnapshot instanceof Object) || !('providers' in rawSnapshot)) {
+    throw new Error('expected a persisted auth-provider snapshot')
+  }
+  const providers = (rawSnapshot as Record<string, unknown>).providers
+  if (!Array.isArray(providers) || providers.length === 0) {
+    throw new Error('expected a persisted auth provider')
+  }
+  const provider = providers[0]
+  if (!(provider instanceof Object)) {
+    throw new Error('expected the persisted provider to be an object')
+  }
+  return provider as Record<string, unknown>
+}
+
+function persistedGithubPat(rawSnapshot: unknown): string {
+  const githubPat = persistedProvider(rawSnapshot).githubPat
+  if (typeof githubPat !== 'string') {
+    throw new Error('expected a persisted sealed GitHub token')
+  }
+  return githubPat
+}
+
+function persistedOAuthCredentials(rawSnapshot: unknown): {
+  accessToken: string
+  refreshToken: string
+} {
+  const oauthFile = persistedProvider(rawSnapshot).oauthFile
+  if (!(oauthFile instanceof Object)) {
+    throw new Error('expected persisted OAuth credentials')
+  }
+  const credentialRecord = oauthFile as Record<string, unknown>
+  if (
+    typeof credentialRecord.accessToken !== 'string' ||
+    typeof credentialRecord.refreshToken !== 'string'
+  ) {
+    throw new Error('expected persisted OAuth access and refresh tokens')
+  }
+  return {
+    accessToken: credentialRecord.accessToken,
+    refreshToken: credentialRecord.refreshToken,
+  }
 }
 
 describe.sequential(
@@ -93,11 +125,7 @@ describe.sequential(
       })
 
       const raw = await readRawAuthProvidersFromIdb()
-      const storedPat = raw.providers[0]?.githubPat
-      expect(storedPat).toBeTypeOf('string')
-      if (typeof storedPat !== 'string') {
-        throw new Error('expected a persisted sealed GitHub token')
-      }
+      const storedPat = persistedGithubPat(raw)
       expect(storedPat).toContain(AGE_ARMOR_MARKER)
       expect(storedPat).not.toContain('UNITtestSECRET')
     })
@@ -160,7 +188,7 @@ describe.sequential(
       )
 
       const raw = await readRawAuthProvidersFromIdb()
-      expect(raw.providers[0]?.githubPat).toBe(pat)
+      expect(persistedGithubPat(raw)).toBe(pat)
     })
 
     test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
@@ -188,11 +216,11 @@ describe.sequential(
       })
 
       const raw = await readRawAuthProvidersFromIdb()
-      const oauth = raw.providers[0]?.oauthFile
-      expect(oauth?.accessToken).toContain(AGE_ARMOR_MARKER)
-      expect(oauth?.refreshToken).toContain(AGE_ARMOR_MARKER)
-      expect(oauth?.accessToken).not.toContain(access)
-      expect(oauth?.refreshToken).not.toContain(refresh)
+      const oauth = persistedOAuthCredentials(raw)
+      expect(oauth.accessToken).toContain(AGE_ARMOR_MARKER)
+      expect(oauth.refreshToken).toContain(AGE_ARMOR_MARKER)
+      expect(oauth.accessToken).not.toContain(access)
+      expect(oauth.refreshToken).not.toContain(refresh)
 
       const loaded = await manager.loadAuthProviders()
       const provider = loaded.providers[0]

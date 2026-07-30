@@ -9,8 +9,10 @@ import {
   requestPreparedICloudWebAuthToken,
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
+  type ICloudOAuthTokens,
 } from '$lib/icloud-oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
+import { CloudKitAuthErrorTranslationKey } from '$lib/icloud-auth-errors'
 import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
@@ -18,6 +20,28 @@ import {
 
 function resolvedCloudKitEffect() {
   return vi.fn(async (): Promise<void> => {})
+}
+
+function iCloudTokensWithoutAccountName(
+  accessToken: string,
+): ICloudOAuthTokens {
+  return {
+    accessToken,
+    accountName: { kind: ICloudAccountNameKind.Unavailable },
+  }
+}
+
+function iCloudTokensWithAccountName(
+  accessToken: string,
+  accountName: string,
+): ICloudOAuthTokens {
+  return {
+    accessToken,
+    accountName: {
+      kind: ICloudAccountNameKind.Available,
+      value: accountName,
+    },
+  }
 }
 
 function mockPendingCloudKitSignIn(setUpAuth = resolvedCloudKitEffect()) {
@@ -269,9 +293,9 @@ describe('icloud-oauth', () => {
         whenUserSignsIn,
       })
 
-      await expect(requestICloudWebAuthToken()).resolves.toEqual({
-        accessToken: 'existing-token',
-      })
+      await expect(requestICloudWebAuthToken()).resolves.toEqual(
+        iCloudTokensWithoutAccountName('existing-token'),
+      )
       expect(setUpAuth).toHaveBeenCalledWith({
         grabAuthToken: true,
         persist: true,
@@ -305,10 +329,9 @@ describe('icloud-oauth', () => {
         nameComponents: { givenName: 'Fresh', familyName: 'User' },
       })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'fresh-token',
-        accountName: 'Fresh User',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithAccountName('fresh-token', 'Fresh User'),
+      )
     })
 
     it('resolves from the CloudKit token store when the sign-in callback hangs', async () => {
@@ -330,9 +353,9 @@ describe('icloud-oauth', () => {
         ckWebAuthToken: 'store-token',
       })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'store-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('store-token'),
+      )
     })
 
     it('clicks the prepared CloudKit sign-in control without re-running setup', async () => {
@@ -357,9 +380,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'fresh-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('fresh-token'),
+      )
     })
 
     it('clicks the CloudKit-generated Apple auth div', async () => {
@@ -383,9 +406,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'cloudkit-div-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('cloudkit-div-token'),
+      )
     })
 
     it('can wait for the visible CloudKit control without clicking it', async () => {
@@ -419,9 +442,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'visible-control-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('visible-control-token'),
+      )
     })
 
     it('waits before the native CloudKit click stores a token', async () => {
@@ -455,9 +478,9 @@ describe('icloud-oauth', () => {
       })
       signInButton?.click()
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'native-click-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('native-click-token'),
+      )
       expect(setUpAuth).toHaveBeenCalledTimes(1)
     })
 
@@ -484,9 +507,9 @@ describe('icloud-oauth', () => {
         ckWebAuthToken: 'opaque-callback-token',
       })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'opaque-callback-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('opaque-callback-token'),
+      )
     })
 
     it('falls back to CloudKit web auth redirect when CloudKit JS hides the auth challenge', async () => {
@@ -537,9 +560,9 @@ describe('icloud-oauth', () => {
         }),
       )
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'direct-web-auth-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('direct-web-auth-token'),
+      )
       expect(close).toHaveBeenCalledOnce()
     })
 
@@ -599,9 +622,9 @@ describe('icloud-oauth', () => {
         }),
       )
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'brave-direct-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('brave-direct-token'),
+      )
       expect(close).toHaveBeenCalledOnce()
     })
 
@@ -636,7 +659,7 @@ describe('icloud-oauth', () => {
           clickSignInControl: false,
           signInTimeoutMs: 5000,
         }),
-      ).rejects.toThrow('Apple rejected the iCloud API token')
+      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
@@ -649,7 +672,7 @@ describe('icloud-oauth', () => {
 
       await expect(
         requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
-      ).rejects.toThrow('Apple sign-in did not complete.')
+      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
       expect(whenUserSignsIn).toHaveBeenCalled()
     })
 
@@ -666,7 +689,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(prepareICloudSignInControl()).rejects.toThrow(
-        'Apple sign-in is required.',
+        CloudKitAuthErrorTranslationKey.SignInRequired,
       )
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
@@ -690,9 +713,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'auth-required-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('auth-required-token'),
+      )
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
     })
 
@@ -713,9 +736,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'opaque-setup-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('opaque-setup-token'),
+      )
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
     })
 
@@ -731,7 +754,7 @@ describe('icloud-oauth', () => {
       })
 
       await expect(prepareICloudSignInControl()).rejects.toThrow(
-        'Apple CloudKit returned UNKNOWN_ERROR during sign-in.',
+        CloudKitAuthErrorTranslationKey.UnknownError,
       )
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
@@ -756,9 +779,9 @@ describe('icloud-oauth', () => {
         JSON.stringify('cookie-fallback-token'),
       )
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'cookie-fallback-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('cookie-fallback-token'),
+      )
     })
 
     it('normalizes tokens with webAuthToken key', async () => {
@@ -780,9 +803,9 @@ describe('icloud-oauth', () => {
         webAuthToken: 'alt-format-token',
       })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'alt-format-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('alt-format-token'),
+      )
     })
 
     it('allows retry after a sign-in timeout by resetting auth state', async () => {
@@ -796,7 +819,7 @@ describe('icloud-oauth', () => {
       // First attempt times out.
       await expect(
         requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
-      ).rejects.toThrow('Apple sign-in did not complete.')
+      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
 
       // Second attempt should re-run setUpAuth (not reuse stale promise).
       let resolveSignIn: (value: unknown) => void = () => {}
@@ -816,9 +839,9 @@ describe('icloud-oauth', () => {
       })
       resolveSignIn({ lookupInfo: {} })
 
-      await expect(pending).resolves.toEqual({
-        accessToken: 'retry-token',
-      })
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('retry-token'),
+      )
     })
   })
 })
