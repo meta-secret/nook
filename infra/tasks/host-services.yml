@@ -120,16 +120,16 @@ tasks:
            mv '$remote_traefik_next' '$remote_traefik'; \
            mv '$remote_next' '$remote_compose'; \
            docker compose -f '$remote_compose' pull; \
-           docker compose -f '$remote_compose' up -d --remove-orphans --wait"
+           docker compose -f '$remote_compose' up -d --wait redis traefik"
 
         ssh -n -o BatchMode=yes "$ssh_target" \
           "set -eu; \
            test \"\$(docker compose -f '$remote_compose' exec -T redis sh -ec 'export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; exec redis-cli ping')\" = PONG; \
            docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx traefik; \
-           curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null; \
            docker compose -f '$remote_compose' ps"
         BASH
       - task: k0s:install
+      - task: registry:deploy
       - task: kata:install
       - task: kata:verify
       - task: neo4j:deploy

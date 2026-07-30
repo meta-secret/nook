@@ -5,16 +5,28 @@ tasks:
   status:
     desc: Show the remote infrastructure service state.
     cmds:
-      - >-
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
         docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" ps
+        sudo -n k0s kubectl get deployment,pod,pvc \
+          --namespace hive-data \
+          -l app.kubernetes.io/name=nook-zot \
+          -o wide || true
+        sudo -n systemctl is-active nook-zot-registry-loopback.service || true
+        REMOTE
 
   logs:
     desc: Show recent remote infrastructure logs.
     cmds:
-      - >-
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
         docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" logs --tail=100
+        sudo -n k0s kubectl logs deployment/nook-zot \
+          --namespace hive-data \
+          --tail=100 || true
+        REMOTE
 
   redis:ping:
     desc: Verify the remote Redis compiler-cache service.
@@ -53,10 +65,3 @@ tasks:
         'set -eu;
         compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
         docker compose -f "$compose" exec -T redis sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; redis-cli DBSIZE; redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):"; redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'\'''
-
-  registry:check:
-    desc: Verify the loopback-only Hive image registry API.
-    cmds:
-      - >-
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
-        curl --fail --silent --show-error http://127.0.0.1:5000/v2/
