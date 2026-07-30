@@ -196,35 +196,19 @@ async function appendSealedAuthProviders(
     storedProvider(provider, seedScope),
   )
   await page.evaluate(
-    async ({ providers: additions, seedScope, activeVaultKind }) => {
+    async ({ providers: additions }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
         }
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
-      const fallbackActiveVaultScope =
-        seedScope.kind === activeVaultKind
-          ? hook.activeVaultScope(seedScope.storeId)
-          : hook.unselectedVaultScope()
       const snapshot = await hook.loadAuthProviders()
-      const resolvedActiveVaultScope =
-        snapshot.activeVaultStoreId.state === 'storeId'
-          ? snapshot.activeVaultStoreId
-          : fallbackActiveVaultScope
-      if (
-        additions.some((provider) => provider.type === 'oauth-file') &&
-        resolvedActiveVaultScope.state !== 'storeId'
-      ) {
-        throw new Error('E2E OAuth provider seeding requires an active vault')
-      }
       snapshot.providers.push(...additions)
       await hook.saveAuthProviders(snapshot)
     },
     {
       providers: storedAdditions,
-      seedScope,
-      activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
     },
   )
 }
@@ -287,27 +271,20 @@ export async function seedExtraGithubProviders(
   )
 }
 
-/**
- * Add extra oauth-file providers to the saved auth snapshot for onboarding UI tests.
- */
-export async function seedExtraOauthFileProviders(
-  page: Page,
-  extras: Array<{
-    id: string
-    label: string
-    fileName: string
-    accessToken: string
-    accountEmail?: string
-    folderId?: string
-  }>,
-) {
-  const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
-  const storeIdMatch = vaultYaml.match(/^store_id:\s*(\S+)/m)
-  if (!storeIdMatch) {
-    throw new Error('E2E OAuth provider seeding requires an active vault')
-  }
-  const storeIdFromVault = storeIdMatch[1]
+type SeededOauthFileProviderInput = {
+  id: string
+  label: string
+  fileName: string
+  accessToken: string
+  accountEmail?: string
+  folderId?: string
+}
 
+async function seedOauthFileProviders(
+  page: Page,
+  extras: SeededOauthFileProviderInput[],
+  seedScope: AuthProviderSeedScope,
+) {
   await appendSealedAuthProviders(
     page,
     extras.map((provider) => ({
@@ -324,12 +301,41 @@ export async function seedExtraOauthFileProviders(
         folderId: provider.folderId,
       },
     })),
-    activeAuthProviderSeedScope(storeIdFromVault),
+    seedScope,
   )
   await waitForAuthProviderIds(
     page,
     extras.map((provider) => provider.id),
   )
+}
+
+/**
+ * Add extra oauth-file providers to the saved auth snapshot for onboarding UI tests.
+ */
+export async function seedExtraOauthFileProviders(
+  page: Page,
+  extras: SeededOauthFileProviderInput[],
+) {
+  const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
+  const storeIdMatch = vaultYaml.match(/^store_id:\s*(\S+)/m)
+  if (!storeIdMatch) {
+    throw new Error('E2E OAuth provider seeding requires an active vault')
+  }
+  await seedOauthFileProviders(
+    page,
+    extras,
+    activeAuthProviderSeedScope(storeIdMatch[1]),
+  )
+}
+
+/**
+ * Add oauth-file providers before an enrollment link selects the target vault.
+ */
+export async function seedUnscopedOauthFileProvidersForEnrollment(
+  page: Page,
+  extras: SeededOauthFileProviderInput[],
+) {
+  await seedOauthFileProviders(page, extras, unselectedAuthProviderSeedScope())
 }
 
 export const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'

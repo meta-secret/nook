@@ -99,6 +99,24 @@ fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<
 }
 
 #[test]
+fn ui_demo_rebuilds_the_preview_with_test_only_debug_hooks() -> anyhow::Result<()> {
+    let root = repository_root();
+    let tasks = read(&root, "nook-app/nook-web/.task/web.yml");
+    let ui_demo = section(
+        &tasks,
+        "  _web:test:ui-demo:\n",
+        "  _web:test:e2e:pr:parallel:\n",
+    );
+
+    assert!(ui_demo.contains("VITE_E2E_EXPOSE_VAULT: \"true\""));
+    assert!(
+        ui_demo.contains("- task: _web:e2e:build-if-needed"),
+        "UI demos must rebuild the production-seeded dist with test-only browser hooks"
+    );
+    Ok(())
+}
+
+#[test]
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");

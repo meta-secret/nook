@@ -390,6 +390,7 @@ tasks:
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright UI demo (headless, workers=1, specs=${UI_DEMO_SPECS:-all})"
+      - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:ui-demo -- ${UI_DEMO_SPECS:-}
 
   _web:test:e2e:pr:parallel:

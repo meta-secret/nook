@@ -18,7 +18,7 @@ import {
   readPersistedAppLogs,
   revealSecretValue,
   seedGithubSyncProvidersWhileUnlocked,
-  seedExtraOauthFileProviders,
+  seedUnscopedOauthFileProvidersForEnrollment,
   seedOauthFileSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
@@ -731,7 +731,7 @@ test.describe('vault architecture modes', () => {
       ).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       })
-      await seedExtraOauthFileProviders(joiner, [
+      await seedUnscopedOauthFileProvidersForEnrollment(joiner, [
         {
           id: 'architecture-shared-joiner-provider',
           label: 'Joiner shared architecture drive',
