@@ -31,7 +31,16 @@ tasks:
         cutover_complete=false
         cleanup() {
           if test -n "$forward_pid"; then
-            sudo -n kill "$forward_pid" >/dev/null 2>&1 || true
+            sudo -n pkill -TERM -P "$forward_pid" >/dev/null 2>&1 || true
+            sudo -n kill -TERM "$forward_pid" >/dev/null 2>&1 || true
+            for _ in $(seq 1 5); do
+              if ! sudo -n kill -0 "$forward_pid" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 1
+            done
+            sudo -n pkill -KILL -P "$forward_pid" >/dev/null 2>&1 || true
+            sudo -n kill -KILL "$forward_pid" >/dev/null 2>&1 || true
             wait "$forward_pid" >/dev/null 2>&1 || true
           fi
           rm -rf "$work"
@@ -85,7 +94,7 @@ tasks:
           curl --fail --silent --show-error \
             --dump-header "$work/catalog.headers" \
             --output "$work/catalog.json" \
-            'http://127.0.0.1:5000/v2/_catalog?n=10000'
+            'http://127.0.0.1:5000/v2/_catalog?n=1000'
           if grep -Eiq '^link:' "$work/catalog.headers"; then
             echo "Legacy registry catalog exceeds the bounded migration page" >&2
             return 1
@@ -106,7 +115,7 @@ tasks:
             curl --fail --silent --show-error \
               --dump-header "$work/tags.headers" \
               --output "$work/tags.json" \
-              "http://127.0.0.1:5000/v2/$encoded_repository/tags/list?n=10000"
+              "http://127.0.0.1:5000/v2/$encoded_repository/tags/list?n=1000"
             if grep -Eiq '^link:' "$work/tags.headers"; then
               echo "Legacy tag list exceeds the bounded migration page: $repository" >&2
               return 1
