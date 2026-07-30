@@ -1,4 +1,8 @@
+#![allow(clippy::unnecessary_wraps)]
+
 use std::{fs, path::PathBuf};
+
+use anyhow::Context;
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -13,7 +17,7 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() {
+fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::Result<()> {
     let dockerfile = read("agentic-ai/minds/hive/Dockerfile");
     for required in [
         "FROM fetched-dependencies AS test-dependencies",
@@ -32,10 +36,11 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() {
         !dockerfile.contains("AS verification-dependencies"),
         "Hive test and Clippy dependency graphs must not share a serial stage"
     );
+    Ok(())
 }
 
 #[test]
-fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
+fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> anyhow::Result<()> {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
         "rediss://redis-ovh-borg-1.bynull.link:6380",
@@ -98,13 +103,15 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() {
             .join("nook-app/docker/resolve-docker-host-ip.sh")
             .exists()
     );
+    Ok(())
 }
 
 #[test]
-fn github_actions_keep_remote_credentials_out_of_delivery_builds() {
+fn github_actions_keep_remote_credentials_out_of_delivery_builds() -> anyhow::Result<()> {
     assert_hosted_docker_builds_use_buildkit_only();
     assert_workflows_scope_cache_credentials();
     assert_rust_build_cache_boundary();
+    Ok(())
 }
 
 fn assert_hosted_docker_builds_use_buildkit_only() {
@@ -220,7 +227,7 @@ fn assert_rust_build_cache_boundary() {
     }
 }
 
-fn assert_delivery_cache_scope_contract() {
+fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let setup = read(".github/actions/nook-docker-setup/action.yml");
     assert!(setup.contains("cache-telemetry.cjs start"));
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
@@ -260,7 +267,7 @@ fn assert_delivery_cache_scope_contract() {
     assert!(!setup.contains("cache_total_count()"));
     assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
 
-    assert_release_cache_fingerprint_contract();
+    assert_release_cache_fingerprint_contract()?;
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
@@ -271,10 +278,10 @@ fn assert_delivery_cache_scope_contract() {
     assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"));
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
-        .expect("WASM source cache inputs must exist")
+        .context("bake file must define the WASM source cache inputs")?
         .1
         .split_once("rust_wasm_source_cache_to =")
-        .expect("WASM source cache output must follow its inputs")
+        .context("bake file must delimit the WASM source cache inputs")?
         .0;
     assert!(
         wasm_source_cache
@@ -328,10 +335,10 @@ fn assert_delivery_cache_scope_contract() {
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dependencies = core_bake
         .split_once("target \"builder-wasm-deps\"")
-        .expect("WASM dependency target must exist")
+        .context("core bake file must define the WASM dependency target")?
         .1
         .split_once("target \"builder-debug\"")
-        .expect("native source target must follow WASM dependencies")
+        .context("core bake file must delimit the WASM dependency target")?
         .0;
     assert!(
         wasm_dependencies.contains("cache-from = rust_wasm_deps_cache_from"),
@@ -342,29 +349,31 @@ fn assert_delivery_cache_scope_contract() {
             && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
         "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
     );
+    Ok(())
 }
 
-fn assert_release_cache_fingerprint_contract() {
+fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
     let release = read(".github/workflows/release.yml");
     let release_source = release
         .find("- name: Checkout release source")
-        .expect("release source checkout must exist");
+        .context("release workflow must check out release source")?;
     let release_tooling = release
         .find("- name: Checkout release workflow tooling")
-        .expect("release tooling checkout must exist");
+        .context("release workflow must check out workflow tooling")?;
     let release_docker_setup = release
         .find("- name: Docker setup")
-        .expect("release Docker setup must exist");
+        .context("release workflow must configure Docker")?;
     assert!(
         release_source < release_tooling && release_tooling < release_docker_setup,
         "release Docker setup must fingerprint the requested source after checkout"
     );
     assert!(release.contains("path: .nook/release-workflow"));
     assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
+    Ok(())
 }
 
 #[test]
-fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
+fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Result<()> {
     let reporter = read("nook-app/docker/sccache-report.sh");
     for required in [
         "--show-stats --stats-format=json",
@@ -417,7 +426,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
             >= 3
     );
 
-    assert_delivery_cache_scope_contract();
+    assert_delivery_cache_scope_contract()?;
 
     let telemetry_action = read(".github/actions/nook-cache-telemetry/action.yml");
     for required in [
@@ -452,10 +461,11 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() {
             "Main statistics must retain cache telemetry: {required}"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn rust_build_targets_inherit_the_sccache_configuration() {
+fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> {
     for (path, targets) in [
         (
             "nook-app/nook-core/docker-bake.hcl",
@@ -488,4 +498,5 @@ fn rust_build_targets_inherit_the_sccache_configuration() {
             );
         }
     }
+    Ok(())
 }

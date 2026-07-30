@@ -4,8 +4,11 @@ import { expect, test } from './fixtures'
 // artifact at /site. The default local Vite server serves the same public
 // surface at /, so Playwright config supplies the matching path.
 const PUBLIC_SITE_PATH = process.env.NOOK_E2E_PUBLIC_SITE_PATH ?? ''
-const deploymentUrl = (configured: string | undefined, fallback: string) =>
-  (configured?.trim() || fallback).replace(/\/+$/, '')
+const deploymentUrl = (configured: unknown, fallback: string) =>
+  (typeof configured === 'string' && configured.trim()
+    ? configured.trim()
+    : fallback
+  ).replace(/\/+$/, '')
 const SITE_URL = deploymentUrl(process.env.VITE_SITE_URL, 'https://nokey.sh')
 const SIMPLE_APP_URL = deploymentUrl(
   process.env.VITE_SIMPLE_APP_URL,

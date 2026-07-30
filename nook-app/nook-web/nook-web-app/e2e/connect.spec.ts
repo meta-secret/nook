@@ -51,7 +51,7 @@ test.describe('vault connect flow', () => {
     await flushNookLogPersistQueue(page)
     const logs = await readPersistedAppLogs(page)
     expect(
-      logs?.some(
+      logs.some(
         (entry) =>
           entry.scope === 'vault-sync' &&
           entry.data?.includes('Vault crypto not initialized'),

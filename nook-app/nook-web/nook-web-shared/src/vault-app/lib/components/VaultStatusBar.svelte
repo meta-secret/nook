@@ -8,13 +8,15 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { StorageProviderType } from '$lib/auth-providers'
-  import type { VaultState } from '$lib/vault.svelte'
+  import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
+  import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
+  import { VaultStatusBarVariant } from './vault-status-bar-state'
 
   let {
     vault,
     storageMode = 'local' as StorageProviderType,
     githubRepo = '',
-    lastSyncedAt = undefined as Date | undefined,
+    lastSync,
     isSyncing = false,
     successMsg = '',
     errorMsg = '',
@@ -22,7 +24,7 @@
     label,
     showSyncStatus = true,
     showStorageIcon = true,
-    variant = 'panel',
+    variant = VaultStatusBarVariant.Panel,
     syncConflictLabel = '',
     onOpenSyncConflict,
     onRefresh,
@@ -32,7 +34,7 @@
     vault?: VaultState
     storageMode?: StorageProviderType
     githubRepo?: string
-    lastSyncedAt?: Date | undefined
+    lastSync: LastSync
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
@@ -40,7 +42,7 @@
     label?: string
     showSyncStatus?: boolean
     showStorageIcon?: boolean
-    variant?: 'panel' | 'quiet'
+    variant?: VaultStatusBarVariant
     syncConflictLabel?: string
     onOpenSyncConflict?: () => void
     onRefresh?: () => void | Promise<void>
@@ -57,9 +59,11 @@
     return () => clearInterval(timer)
   })
 
-  function formatLastSync(at: Date | undefined): string {
-    if (!at) return vault ? vault.t('status_bar.not_yet') : 'not yet'
-    const secs = Math.max(0, Math.floor((now - at.getTime()) / 1000))
+  function formatLastSync(sync: LastSync): string {
+    if (sync.kind === LastSyncKind.NeverSynced) {
+      return vault ? vault.t('status_bar.not_yet') : 'not yet'
+    }
+    const secs = Math.max(0, Math.floor((now - sync.at.getTime()) / 1000))
     if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'
     if (secs < 60)
       return vault
@@ -78,7 +82,7 @@
   }
 
   const isAuthenticatedVault = $derived(Boolean(vault?.isAuthenticated))
-  const isQuiet = $derived(variant === 'quiet')
+  const isQuiet = $derived(variant === VaultStatusBarVariant.Quiet)
 
   const statusLabel = $derived(
     label ??
@@ -101,9 +105,9 @@
 
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
-    if (vault.syncingProviderLabel) {
+    if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
       return vault.t('status_bar.syncing_to', {
-        provider: vault.syncingProviderLabel,
+        provider: vault.syncingProviderLabel.label,
       })
     }
     if (vault.isFanOutSyncing) {
@@ -191,7 +195,7 @@
             data-testid="vault-last-sync"
           >
             {vault!.t('status_bar.saved')}
-            {formatLastSync(lastSyncedAt)}
+            {formatLastSync(lastSync)}
           </span>
           {#if syncDetail}
             <span
@@ -222,7 +226,7 @@
               : vault
                 ? vault.t('status_bar.saved')
                 : 'Saved'}
-            {formatLastSync(lastSyncedAt)}
+            {formatLastSync(lastSync)}
           </span>
         {/if}
       </div>
@@ -311,7 +315,9 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary"
-            aria-label={vault ? vault.t('common.dismiss_success') : 'Dismiss success message'}
+            aria-label={vault
+              ? vault.t('common.dismiss_success')
+              : 'Dismiss success message'}
             data-testid="dismiss-success-btn"
             onclick={onDismissSuccess}
           >
@@ -333,7 +339,9 @@
           <button
             type="button"
             class="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive"
-            aria-label={vault ? vault.t('common.dismiss_error') : 'Dismiss error message'}
+            aria-label={vault
+              ? vault.t('common.dismiss_error')
+              : 'Dismiss error message'}
             data-testid="dismiss-error-btn"
             onclick={onDismissError}
           >

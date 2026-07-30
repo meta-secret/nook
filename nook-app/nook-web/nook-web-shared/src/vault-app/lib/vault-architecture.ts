@@ -1,8 +1,15 @@
 import {
+  DeviceMode,
   NookVaultArchitecture,
+  OnboardingType,
+  ReplicationType,
   VaultType,
   defaultVaultArchitecture,
   firstCompatibleProviderId as wasmFirstCompatibleProviderId,
+  firstCompatibleProviderIdPreferred as wasmFirstCompatibleProviderIdPreferred,
+  NookProviderSelectionState,
+  providerOauthPresetForConfig,
+  providerOauthPresetForProvider,
   providerReplicationCapability,
   providerSupportsReplication,
   prepareSharedStorageGrant,
@@ -11,30 +18,64 @@ import {
   validateVaultArchitecture as wasmValidateVaultArchitecture,
   vaultArchitectureCanCreateSecret as canCreateSecret,
   vaultArchitectureOnboardingType as onboardingType,
+  type SharedStorageGrantCredential,
+  type SharedStorageTargetHint,
+  type SharedStorageTargetSelection,
 } from "$app-wasm";
-import type { DeviceMode, ReplicationType } from "$app-wasm";
-import type { StorageProvider } from "$lib/auth-providers";
+import {
+  unselectedVaultScope,
+  type StorageProvider,
+} from "$lib/auth-providers";
 
 export type {
-  DeviceMode,
   NookProviderReplicationCapability as ProviderReplicationCapability,
-  ReplicationType,
   SharedStorageGrantOutcome,
   SharedStorageGrantRequest,
   NookVaultArchitecture as VaultArchitecture,
 } from "$app-wasm";
 
 export {
+  DeviceMode,
+  OnboardingType,
+  ReplicationType,
   VaultType,
   canCreateSecret,
   defaultVaultArchitecture,
   onboardingType,
   providerOnboardingType,
+  providerOauthPresetForConfig,
+  providerOauthPresetForProvider,
   providerReplicationCapability,
   providerSupportsReplication,
   prepareSharedStorageGrant,
   validateProviderReplication,
 };
+
+export function suggestedSharedStorageTarget(
+  name: string,
+): SharedStorageTargetHint {
+  return { state: "suggested", hint: name };
+}
+
+export function createSharedStorageTarget(): SharedStorageTargetSelection {
+  return { state: "create" };
+}
+
+export function existingSharedStorageTarget(
+  storageTargetId: string,
+): SharedStorageTargetSelection {
+  return { state: "existing", storageTargetId };
+}
+
+export function sharedStorageGrantAccessToken(
+  accessToken: string,
+): SharedStorageGrantCredential {
+  return { state: "accessToken", accessToken };
+}
+
+export function unavailableSharedStorageGrantCredential(): SharedStorageGrantCredential {
+  return { state: "unavailable" };
+}
 
 export type VaultArchitectureDraft = {
   device_mode: DeviceMode;
@@ -70,9 +111,10 @@ export function validateVaultArchitecture(
   }
 }
 
-export type ProviderCapabilityLabelKey =
-  | "provider_picker.capability_personal_only"
-  | "provider_picker.capability_personal_shared";
+export enum ProviderCapabilityLabelKey {
+  PersonalOnly = "provider_picker.capability_personal_only",
+  PersonalShared = "provider_picker.capability_personal_shared",
+}
 
 /** Presentation label derived from the Rust-owned provider capability. */
 export function providerCapabilityLabelKey(
@@ -81,8 +123,8 @@ export function providerCapabilityLabelKey(
   const capability = providerReplicationCapability(provider);
   try {
     return capability.supportsShared
-      ? "provider_picker.capability_personal_shared"
-      : "provider_picker.capability_personal_only";
+      ? ProviderCapabilityLabelKey.PersonalShared
+      : ProviderCapabilityLabelKey.PersonalOnly;
   } finally {
     capability.free();
   }
@@ -92,15 +134,56 @@ export function providerCapabilityLabelKey(
  * Keep the user's compatible selection, otherwise choose the first provider
  * accepted by Rust. Incompatible rows remain visible for explanation/removal.
  */
+export enum CompatibleProviderSelectionKind {
+  Selected = "selected",
+  Unavailable = "unavailable",
+}
+
+export type CompatibleProviderSelection =
+  | {
+      kind: CompatibleProviderSelectionKind.Selected;
+      provider: StorageProvider;
+    }
+  | { kind: CompatibleProviderSelectionKind.Unavailable };
+
+export enum CompatibleProviderPreferenceKind {
+  Automatic = "automatic",
+  Selected = "selected",
+}
+
+export type CompatibleProviderPreference =
+  | { kind: CompatibleProviderPreferenceKind.Automatic }
+  | {
+      kind: CompatibleProviderPreferenceKind.Selected;
+      providerId: string;
+    };
+
 export function firstCompatibleProvider(
   providers: StorageProvider[],
   replicationType: ReplicationType,
-  preferredId?: string,
-): StorageProvider | undefined {
-  const selectedId = wasmFirstCompatibleProviderId(
-    { providers },
-    replicationType,
-    preferredId ?? undefined,
-  );
-  return providers.find((provider) => provider.id === selectedId);
+  preference: CompatibleProviderPreference,
+): CompatibleProviderSelection {
+  const snapshot = {
+    providers,
+    activeVaultStoreId: unselectedVaultScope(),
+  };
+  const selection =
+    preference.kind === CompatibleProviderPreferenceKind.Selected
+      ? wasmFirstCompatibleProviderIdPreferred(
+          snapshot,
+          replicationType,
+          preference.providerId,
+        )
+      : wasmFirstCompatibleProviderId(snapshot, replicationType);
+  if (selection.state === NookProviderSelectionState.Selected) {
+    const provider = providers.find(
+      (candidate) => candidate.id === selection.providerId,
+    );
+    selection.free();
+    return provider
+      ? { kind: CompatibleProviderSelectionKind.Selected, provider }
+      : { kind: CompatibleProviderSelectionKind.Unavailable };
+  }
+  selection.free();
+  return { kind: CompatibleProviderSelectionKind.Unavailable };
 }

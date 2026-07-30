@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
+  NookAppLocaleParse,
   NookBrowserLocale,
   get_translation_catalog as getTranslationCatalog,
   lookupTranslation,
@@ -7,13 +8,10 @@ import initNookWasm, {
   parseAppLocale,
   resolveAppLocaleFromTag,
   resolveAppLocaleFromTags,
+  supportedAppLocaleCode,
   translateFromCatalog,
 } from '$app-wasm'
 import { HELP_SECTIONS } from '$lib/help-content'
-import {
-  intoWasmStringValue,
-  takeWasmStringValue,
-} from '$lib/wasm-string-value'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -46,27 +44,18 @@ describe('locale', () => {
   })
 
   test('parseAppLocale accepts only supported values', () => {
-    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('en')))).toBe(
-      'en',
-    )
-    expect(takeWasmStringValue(parseAppLocale(intoWasmStringValue('ru')))).toBe(
-      'ru',
-    )
-    expect(
-      takeWasmStringValue(parseAppLocale(intoWasmStringValue('de'))),
-    ).toBeUndefined()
-    expect(
-      takeWasmStringValue(parseAppLocale(intoWasmStringValue(undefined))),
-    ).toBeUndefined()
+    expect(supportedAppLocaleCode(parseAppLocale('en'))).toBe('en')
+    expect(supportedAppLocaleCode(parseAppLocale('ru'))).toBe('ru')
+    expect(parseAppLocale('de')).toBe(NookAppLocaleParse.Unsupported)
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
-    expect(takeWasmStringValue(resolveAppLocaleFromTag('en-GB'))).toBe('en')
-    expect(
-      takeWasmStringValue(resolveAppLocaleFromTag('de-DE')),
-    ).toBeUndefined()
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru-RU'))).toBe('ru')
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('ru_BY'))).toBe('ru')
+    expect(supportedAppLocaleCode(resolveAppLocaleFromTag('en-GB'))).toBe('en')
+    expect(resolveAppLocaleFromTag('de-DE')).toBe(
+      NookAppLocaleParse.Unsupported,
+    )
   })
 
   test('resolveAppLocaleFromTags respects preference order', () => {

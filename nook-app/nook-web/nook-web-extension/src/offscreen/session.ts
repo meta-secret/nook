@@ -1,15 +1,31 @@
 import initNookWasm, {
   configureVaultApplication,
   currentCodeFromOtpauthUri,
-  deviceProtectionStatusName,
+  DeviceMode,
   DeviceProtectionStatus,
   NookExternalEventLogRecords,
+  NookWebsiteLoginSaveDecision,
   NookVaultManager,
   previewOtpauthUri,
   providerWasmArgs,
+  VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import { ExtensionSessionMessageDispatcher } from './session-message-dispatch'
+import type {
+  AuthProvidersSnapshot,
+  StorageProvider,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+import {
+  ExtensionSessionMessageType,
+  ExtensionSessionMessageDispatcher,
+  parseExtensionSessionMessageType,
+  SessionMessageTypeParseKind,
+} from './session-message-dispatch'
+import {
+  LOGIN_SAVE_OFFER_TTL_MS,
+  PendingLoginSaveLookupState,
+  pendingLoginSaveOfferStore,
+  type PendingLoginSaveOffer,
+} from './login-save-offers'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -37,69 +53,67 @@ type ExtensionVaultGrant = {
   deviceSigningPublicKey: string
 }
 
-let initPromise: Promise<unknown> | undefined
-let manager: NookVaultManager | undefined
-let sessionTimer: ReturnType<typeof setTimeout> | undefined
+enum WasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
+
+type WasmStartup =
+  | { kind: WasmStartupKind.NotStarted }
+  | { kind: WasmStartupKind.Initializing; operation: Promise<unknown> }
+enum VaultManagerAvailabilityKind {
+  Locked = 'locked',
+  Active = 'active',
+}
+
+type VaultManagerAvailability =
+  | { kind: VaultManagerAvailabilityKind.Locked }
+  | { kind: VaultManagerAvailabilityKind.Active; manager: NookVaultManager }
+enum SessionExpiryScheduleKind {
+  Stopped = 'stopped',
+  Scheduled = 'scheduled',
+}
+
+type SessionExpirySchedule =
+  | { kind: SessionExpiryScheduleKind.Stopped }
+  | {
+      kind: SessionExpiryScheduleKind.Scheduled
+      timer: ReturnType<typeof setTimeout>
+    }
+
+let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
+let managerAvailability: VaultManagerAvailability = {
+  kind: VaultManagerAvailabilityKind.Locked,
+}
+let sessionExpirySchedule: SessionExpirySchedule = {
+  kind: SessionExpiryScheduleKind.Stopped,
+}
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
-const LOGIN_SAVE_OFFER_TTL_MS = 2 * 60 * 1000
-
-type PendingLoginSaveOffer = {
-  offerId: string
-  origin: string
-  username: string
-  password: string
-  vaultStoreId: string
-  decision: 'create' | 'update'
-  replaceSecretId?: string
-  expiresAt: number
-  expiryTimer: ReturnType<typeof setTimeout>
-}
-
-const pendingLoginSaveOffers = new Map<string, PendingLoginSaveOffer>()
 const canceledWebsitePasskeyRequests = new Set<string>()
-let sessionMessageDispatcher: ExtensionSessionMessageDispatcher | undefined
-
-function clearLoginSaveOffer(offer: PendingLoginSaveOffer | undefined): void {
-  if (!offer) return
-  offer.username = ''
-  offer.password = ''
-  clearTimeout(offer.expiryTimer)
-  pendingLoginSaveOffers.delete(offer.offerId)
-}
-
-function purgeExpiredLoginSaveOffers(now = Date.now()): void {
-  for (const offer of [...pendingLoginSaveOffers.values()]) {
-    if (offer.expiresAt <= now) {
-      clearLoginSaveOffer(offer)
-    }
-  }
-}
-
-function findPendingLoginSaveOffer(
-  origin: string,
-): PendingLoginSaveOffer | undefined {
-  purgeExpiredLoginSaveOffers()
-  for (const offer of pendingLoginSaveOffers.values()) {
-    if (offer.origin === origin) return offer
-  }
-  return undefined
-}
 
 function ensureWasm(): Promise<unknown> {
-  initPromise ??= initNookWasm({
+  if (wasmStartup.kind === WasmStartupKind.Initializing) {
+    return wasmStartup.operation
+  }
+  const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('offscreen/nook_wasm_bg.wasm'),
   }).then((value) => {
-    configureVaultApplication('extension')
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
-  return initPromise
+  wasmStartup = { kind: WasmStartupKind.Initializing, operation }
+  return operation
 }
 
 async function getManager(): Promise<NookVaultManager> {
   await ensureWasm()
-  manager ??= new NookVaultManager()
+  if (managerAvailability.kind === VaultManagerAvailabilityKind.Active) {
+    return managerAvailability.manager
+  }
+  const manager = new NookVaultManager()
+  managerAvailability = { kind: VaultManagerAvailabilityKind.Active, manager }
   return manager
 }
 
@@ -125,32 +139,39 @@ async function deviceResult(
 }
 
 function scheduleSessionExpiry(generation: number): void {
-  if (sessionTimer) clearTimeout(sessionTimer)
+  if (sessionExpirySchedule.kind === SessionExpiryScheduleKind.Scheduled) {
+    clearTimeout(sessionExpirySchedule.timer)
+  }
   sessionDeadlineAt = Date.now() + SESSION_DURATION_MS
-  sessionTimer = setTimeout(() => {
-    if (generation !== sessionGeneration) return
-    sessionTimer = undefined
-    sessionDeadlineAt = 0
-    sessionGeneration += 1
-    const expiredManager = manager
-    manager = undefined
-    if (expiredManager) {
-      try {
-        expiredManager.lockDeviceIdentity()
-        expiredManager.free()
-      } catch {
-        // The service worker closes this document immediately if a WASM call
-        // still owns the manager when the session expires.
+  sessionExpirySchedule = {
+    kind: SessionExpiryScheduleKind.Scheduled,
+    timer: setTimeout(() => {
+      if (generation !== sessionGeneration) return
+      sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
+      sessionDeadlineAt = 0
+      sessionGeneration += 1
+      const expiredManager = managerAvailability
+      managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
+      if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
+        try {
+          expiredManager.manager.lockDeviceIdentity()
+          expiredManager.manager.free()
+        } catch {
+          // The service worker closes this document immediately if a WASM call
+          // still owns the manager when the session expires.
+        }
       }
-    }
-    sessionMessageDispatcher?.replaceOperations(new Error(SESSION_LOCKED_ERROR))
-    chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
-  }, SESSION_DURATION_MS)
+      sessionMessageDispatcher.replaceOperations(
+        new Error(SESSION_LOCKED_ERROR),
+      )
+      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+    }, SESSION_DURATION_MS),
+  }
 }
 
 async function activateSession(): Promise<DeviceResult> {
   // Expiry closes the queue permanently; unlock must install a fresh queue.
-  sessionMessageDispatcher?.resetOperations()
+  sessionMessageDispatcher.resetOperations()
   const activeManager = await getManager()
   sessionGeneration += 1
   scheduleSessionExpiry(sessionGeneration)
@@ -166,13 +187,6 @@ function renewSessionExpiry(generation: number): void {
     throw new Error(SESSION_LOCKED_ERROR)
   }
   scheduleSessionExpiry(generation)
-}
-
-function messageType(message: unknown): string | undefined {
-  if (!message || typeof message !== 'object' || !('type' in message)) {
-    return undefined
-  }
-  return typeof message.type === 'string' ? message.type : undefined
 }
 
 function messagePayload(message: unknown): Record<string, unknown> {
@@ -226,7 +240,8 @@ async function flushPasskeyEventToProviders(
   const snapshot = await activeManager.loadAuthProviders()
   const providers = snapshot.providers.filter(
     (provider) =>
-      provider.storeId === vaultStoreId &&
+      provider.storeId.state === 'storeId' &&
+      provider.storeId.value === vaultStoreId &&
       provider.type !== 'local' &&
       provider.type !== 'local-folder',
   )
@@ -247,21 +262,22 @@ async function flushPasskeyEventToProviders(
 }
 
 async function handleMessage(message: unknown): Promise<unknown> {
-  switch (messageType(message)) {
-    case 'nook:extension-session-reset': {
-      for (const offer of Array.from(pendingLoginSaveOffers.values())) {
-        clearLoginSaveOffer(offer)
-      }
-      pendingLoginSaveOffers.clear()
+  const parsedType = parseExtensionSessionMessageType(message)
+  if (parsedType.kind === SessionMessageTypeParseKind.Invalid) {
+    return { ok: false, error: 'Invalid extension session message.' }
+  }
+  switch (parsedType.messageType) {
+    case ExtensionSessionMessageType.Reset: {
+      pendingLoginSaveOfferStore.clearAll()
       canceledWebsitePasskeyRequests.clear()
-      sessionMessageDispatcher?.replaceOperations(
+      sessionMessageDispatcher.replaceOperations(
         new Error('Extension session reset.'),
       )
       const activeManager = await getManager()
       activeManager.resetVaultSession()
       return { ok: true }
     }
-    case 'nook:extension-session-migrate-auth-providers': {
+    case ExtensionSessionMessageType.MigrateAuthProviders: {
       const activeManager = await getManager()
       if (
         (await activeManager.deviceProtectionStatus()) !==
@@ -272,18 +288,18 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await activeManager.loadAuthProviders()
       return { ok: true, migrated: true }
     }
-    case 'nook:extension-session-status': {
+    case ExtensionSessionMessageType.Status: {
       const activeManager = await getManager()
       const status = await activeManager.deviceProtectionStatus()
       return {
         ok: true,
-        status: deviceProtectionStatusName(status),
+        status,
         ...(status === DeviceProtectionStatus.Unlocked
           ? { device: await deviceResult(activeManager) }
           : {}),
       }
     }
-    case 'nook:extension-session-begin-passkey-setup': {
+    case ExtensionSessionMessageType.BeginPasskeySetup: {
       const activeManager = await getManager()
       const setup = await activeManager.beginDeviceProtection()
       const userHandle = setup.userHandle
@@ -297,15 +313,18 @@ async function handleMessage(message: unknown): Promise<unknown> {
         } satisfies PasskeySetup,
       }
     }
-    case 'nook:extension-session-finish-passkey-setup': {
+    case ExtensionSessionMessageType.FinishPasskeySetup: {
       const payload = messagePayload(message)
       const activeManager = await getManager()
       const credentialId = toBytes(payload.credentialId)
       const userHandle = toBytes(payload.userHandle)
       const prfInput = toBytes(payload.prfInput)
       const prfOutput = toBytes(payload.prfOutput)
-      const deviceMode = payload.deviceMode
-      if (deviceMode !== 'standard' && deviceMode !== 'anti-hacker') {
+      const deviceMode = payload.deviceMode as DeviceMode
+      if (
+        deviceMode !== DeviceMode.Standard &&
+        deviceMode !== DeviceMode.AntiHacker
+      ) {
         throw new Error('Unsupported extension device protection mode.')
       }
       try {
@@ -324,7 +343,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-recover-passkey': {
+    case ExtensionSessionMessageType.RecoverPasskey: {
       const payload = messagePayload(message)
       const activeManager = await getManager()
       const credentialId = toBytes(payload.credentialId)
@@ -343,7 +362,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-unlock-options': {
+    case ExtensionSessionMessageType.UnlockOptions: {
       const options = await (await getManager()).passkeyUnlockOptions()
       try {
         return {
@@ -357,7 +376,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         options.free()
       }
     }
-    case 'nook:extension-session-unlock-passkey': {
+    case ExtensionSessionMessageType.UnlockPasskey: {
       const prfOutput = toBytes(messagePayload(message).prfOutput)
       try {
         await (await getManager()).unlockDeviceIdentity(prfOutput)
@@ -366,21 +385,21 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-create-pin': {
+    case ExtensionSessionMessageType.CreatePin: {
       const pin = messagePayload(message).pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).finishPinDeviceProtection(pin)
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-unlock-pin': {
+    case ExtensionSessionMessageType.UnlockPin: {
       const pin = messagePayload(message).pin
       if (typeof pin !== 'string')
         throw new Error('Extension session received an invalid PIN.')
       await (await getManager()).unlockPinDeviceIdentity(pin)
       return { ok: true, device: await activateSession() }
     }
-    case 'nook:extension-session-seal-identity-handoff': {
+    case ExtensionSessionMessageType.SealIdentityHandoff: {
       const generation = sessionGeneration
       const payload = messagePayload(message)
       const recipientPublicKey = payload.recipientPublicKey
@@ -412,7 +431,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       renewSessionExpiry(generation)
       return { ok: true, envelope }
     }
-    case 'nook:extension-session-import-vault': {
+    case ExtensionSessionMessageType.ImportVault: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       const records = payload.eventLogRecords
@@ -442,26 +461,31 @@ async function handleMessage(message: unknown): Promise<unknown> {
       if (protection === DeviceProtectionStatus.Unlocked) {
         await activeManager.replaceAuthProvidersForVault({
           providers: grantedProviders,
-          activeVaultStoreId: grant.vaultStoreId,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
         })
       } else {
         // Pairing may race a closed/locked offscreen session. Website grants are
         // already sealed for this device public key, so replace this vault's
         // complete provider set without unlock, including an empty set.
         const lockedManager = activeManager as NookVaultManager & {
-          savePresealedAuthProviders: (snapshot: {
-            providers: StorageProvider[]
-            activeVaultStoreId: string
-          }) => Promise<void>
+          savePresealedAuthProviders: (
+            snapshot: AuthProvidersSnapshot,
+          ) => Promise<void>
         }
         await lockedManager.savePresealedAuthProviders({
           providers: grantedProviders,
-          activeVaultStoreId: grant.vaultStoreId,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
         })
       }
       return { ok: true, status }
     }
-    case 'nook:extension-session-update-vault': {
+    case ExtensionSessionMessageType.UpdateVault: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (!Array.isArray(payload.eventLogRecords)) {
@@ -484,7 +508,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       statusValue.free()
       return { ok: true, status }
     }
-    case 'nook:extension-session-list-passkeys': {
+    case ExtensionSessionMessageType.ListPasskeys: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -512,7 +536,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         accounts.forEach((account) => account.free())
       }
     }
-    case 'nook:extension-session-list-logins': {
+    case ExtensionSessionMessageType.ListLogins: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (typeof payload.origin !== 'string') {
@@ -537,7 +561,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         accounts.forEach((account) => account.free())
       }
     }
-    case 'nook:extension-session-reveal-login': {
+    case ExtensionSessionMessageType.RevealLogin: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -562,7 +586,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         credential.free()
       }
     }
-    case 'nook:extension-session-list-authenticators': {
+    case ExtensionSessionMessageType.ListAuthenticators: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (typeof payload.query !== 'string') {
@@ -588,7 +612,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         accounts.forEach((account) => account.free())
       }
     }
-    case 'nook:extension-session-authenticator-code': {
+    case ExtensionSessionMessageType.AuthenticatorCode: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (typeof payload.secretId !== 'string') {
@@ -608,7 +632,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         code.free()
       }
     }
-    case 'nook:extension-session-authenticator-enroll-preview': {
+    case ExtensionSessionMessageType.AuthenticatorEnrollPreview: {
       const payload = messagePayload(message)
       if (typeof payload.otpauthUri !== 'string') {
         throw new Error('Extension session received an invalid otpauth URI.')
@@ -631,7 +655,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         preview.free()
       }
     }
-    case 'nook:extension-session-authenticator-enroll-code': {
+    case ExtensionSessionMessageType.AuthenticatorEnrollCode: {
       const payload = messagePayload(message)
       if (typeof payload.otpauthUri !== 'string') {
         throw new Error('Extension session received an invalid otpauth URI.')
@@ -644,7 +668,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         code.free()
       }
     }
-    case 'nook:extension-session-authenticator-enroll-confirm': {
+    case ExtensionSessionMessageType.AuthenticatorEnrollConfirm: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -662,7 +686,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
       return { ok: true, secretId }
     }
-    case 'nook:extension-session-authenticator-backup-attach': {
+    case ExtensionSessionMessageType.AuthenticatorBackupAttach: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -685,7 +709,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
       return { ok: true, secretId }
     }
-    case 'nook:extension-session-plan-login-save': {
+    case ExtensionSessionMessageType.PlanLoginSave: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -706,60 +730,72 @@ async function handleMessage(message: unknown): Promise<unknown> {
       )
       try {
         const decision = plan.decision
-        if (decision !== 'create' && decision !== 'update') {
+        if (
+          decision !== NookWebsiteLoginSaveDecision.Create &&
+          decision !== NookWebsiteLoginSaveDecision.Update
+        ) {
           payload.password = ''
-          return { ok: true, decision, secretId: plan.secretId }
+          return decision === NookWebsiteLoginSaveDecision.AlreadySaved
+            ? { ok: true, decision, secretId: plan.secretId }
+            : { ok: true, decision }
         }
-        purgeExpiredLoginSaveOffers()
-        for (const existing of [...pendingLoginSaveOffers.values()]) {
-          if (existing.origin === payload.origin) {
-            clearLoginSaveOffer(existing)
-          }
-        }
+        pendingLoginSaveOfferStore.clearForOrigin(payload.origin)
         const offerId = crypto.randomUUID()
-        const replaceSecretId =
-          decision === 'update' && typeof plan.secretId === 'string'
-            ? plan.secretId
-            : undefined
-        const offer: PendingLoginSaveOffer = {
+        const commonOffer = {
           offerId,
           origin: payload.origin,
           username: payload.username,
           password: payload.password,
           vaultStoreId: grant.vaultStoreId,
-          decision,
-          replaceSecretId,
           expiresAt: Date.now() + LOGIN_SAVE_OFFER_TTL_MS,
           expiryTimer: setTimeout(() => {
-            clearLoginSaveOffer(pendingLoginSaveOffers.get(offerId))
+            pendingLoginSaveOfferStore.clearById(offerId)
           }, LOGIN_SAVE_OFFER_TTL_MS),
         }
-        pendingLoginSaveOffers.set(offerId, offer)
+        let offer: PendingLoginSaveOffer
+        if (decision === NookWebsiteLoginSaveDecision.Update) {
+          const replaceSecretId = plan.secretId
+          offer = {
+            ...commonOffer,
+            decision: NookWebsiteLoginSaveDecision.Update,
+            replaceSecretId,
+          }
+        } else {
+          offer = {
+            ...commonOffer,
+            decision: NookWebsiteLoginSaveDecision.Create,
+          }
+        }
+        pendingLoginSaveOfferStore.store(offer)
         payload.password = ''
         return {
           ok: true,
           decision,
           offerId,
-          secretId: replaceSecretId,
+          ...(offer.decision === NookWebsiteLoginSaveDecision.Update
+            ? { secretId: offer.replaceSecretId }
+            : {}),
           vaultStoreId: grant.vaultStoreId,
         }
       } finally {
         plan.free()
       }
     }
-    case 'nook:extension-session-pending-login-save': {
+    case ExtensionSessionMessageType.PendingLoginSave: {
       const payload = messagePayload(message)
       if (typeof payload.origin !== 'string') {
         throw new Error(
           'Extension session received an invalid pending login save lookup.',
         )
       }
-      const offer = findPendingLoginSaveOffer(payload.origin)
-      if (!offer) {
-        return { ok: true, offer: undefined }
+      const lookup = pendingLoginSaveOfferStore.findByOrigin(payload.origin)
+      if (lookup.state === PendingLoginSaveLookupState.Unavailable) {
+        return { ok: true, state: PendingLoginSaveLookupState.Unavailable }
       }
+      const { offer } = lookup
       return {
         ok: true,
+        state: PendingLoginSaveLookupState.Available,
         offer: {
           offerId: offer.offerId,
           decision: offer.decision,
@@ -767,7 +803,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         },
       }
     }
-    case 'nook:extension-session-commit-login-save': {
+    case ExtensionSessionMessageType.CommitLoginSave: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (typeof payload.offerId !== 'string') {
@@ -775,16 +811,18 @@ async function handleMessage(message: unknown): Promise<unknown> {
           'Extension session received an invalid login save commit.',
         )
       }
-      purgeExpiredLoginSaveOffers()
-      const offer = pendingLoginSaveOffers.get(payload.offerId)
-      if (!offer || offer.origin !== (payload.origin as string)) {
+      const lookup = pendingLoginSaveOfferStore.findById(payload.offerId)
+      if (
+        lookup.state === PendingLoginSaveLookupState.Unavailable ||
+        lookup.offer.origin !== (payload.origin as string)
+      ) {
         throw new Error('Login save offer is missing or expired.')
       }
+      const { offer } = lookup
       if (offer.vaultStoreId !== grant.vaultStoreId) {
         throw new Error('Login save offer does not match the vault grant.')
       }
-      clearTimeout(offer.expiryTimer)
-      pendingLoginSaveOffers.delete(offer.offerId)
+      pendingLoginSaveOfferStore.removeForCommit(offer)
       const committedOffer = { ...offer }
       offer.username = ''
       offer.password = ''
@@ -795,25 +833,27 @@ async function handleMessage(message: unknown): Promise<unknown> {
           committedOffer.origin,
           committedOffer.username,
           committedOffer.password,
-          committedOffer.replaceSecretId ?? '',
+          committedOffer.decision === NookWebsiteLoginSaveDecision.Update
+            ? committedOffer.replaceSecretId
+            : '',
         )
         await flushPasskeyEventToProviders(activeManager, grant.vaultStoreId)
         return { ok: true, decision: committedOffer.decision }
       } finally {
-        clearLoginSaveOffer(committedOffer)
+        pendingLoginSaveOfferStore.clearOffer(committedOffer)
       }
     }
-    case 'nook:extension-session-dismiss-login-save': {
+    case ExtensionSessionMessageType.DismissLoginSave: {
       const payload = messagePayload(message)
       if (typeof payload.offerId !== 'string') {
         throw new Error(
           'Extension session received an invalid login save dismissal.',
         )
       }
-      clearLoginSaveOffer(pendingLoginSaveOffers.get(payload.offerId))
+      pendingLoginSaveOfferStore.clearById(payload.offerId)
       return { ok: true }
     }
-    case 'nook:extension-session-cancel-passkey': {
+    case ExtensionSessionMessageType.CancelPasskey: {
       const payload = messagePayload(message)
       if (typeof payload.requestId !== 'string') {
         throw new Error(
@@ -823,7 +863,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
       canceledWebsitePasskeyRequests.add(payload.requestId)
       return { ok: true }
     }
-    case 'nook:extension-session-register-passkey': {
+    case ExtensionSessionMessageType.RegisterPasskey: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -858,7 +898,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
-    case 'nook:extension-session-assert-passkey': {
+    case ExtensionSessionMessageType.AssertPasskey: {
       const payload = messagePayload(message)
       const grant = extensionVaultGrant(payload)
       if (
@@ -895,13 +935,12 @@ async function handleMessage(message: unknown): Promise<unknown> {
       }
     }
     default:
-      return undefined
+      return
   }
 }
 
-sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
+const sessionMessageDispatcher = new ExtensionSessionMessageDispatcher({
   handleMessage,
   messagePayload,
-  messageType,
 })
 sessionMessageDispatcher.registerRuntimeListener()

@@ -1,7 +1,8 @@
 import { expect, type Page } from '@playwright/test'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import { createLocalE2eFileSyncVaultStub } from '../file-sync-stub'
-import { fetchGithubVaultYaml } from '../github-api'
+import { fetchGithubVaultYaml, GithubVaultYamlFetchKind } from '../github-api'
 import {
   assertJoinPendingYaml,
   parseVaultEventLogSnapshot,
@@ -187,7 +188,7 @@ export async function installOauthFileRemoteForLocalE2e(
   const stub =
     existingStub ??
     createLocalE2eFileSyncVaultStub(opts.vaultYaml ?? '', opts.fileName)
-  if (opts.vaultYaml !== undefined) {
+  if ('vaultYaml' in opts) {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, {
@@ -205,16 +206,25 @@ export async function stubGithubVaultForLocalE2e(
 ) {
   const stub =
     existingStub ?? createLocalE2eGithubVaultStub(opts.vaultYaml ?? '')
-  if (opts.vaultYaml !== undefined && !existingStub) {
+  if ('vaultYaml' in opts && !existingStub) {
     stub.setVaultYaml(opts.vaultYaml)
   }
   await stub.install(page, opts)
 }
 
+export enum ListGithubStubDirResultType {
+  File = 'file',
+  Dir = 'dir',
+}
+
 export function listGithubStubDir(
   eventFiles: Map<string, string>,
   relativePath: string,
-): Array<{ name: string; path: string; type: 'file' | 'dir' }> {
+): Array<{
+  name: string
+  path: string
+  type: ListGithubStubDirResultType.File | ListGithubStubDirResultType.Dir
+}> {
   const dirPrefix = relativePath.endsWith('/')
     ? relativePath
     : `${relativePath}/`
@@ -234,12 +244,12 @@ export function listGithubStubDir(
     ...[...dirs].sort().map((name) => ({
       name,
       path: `${relativePath}/${name}`,
-      type: 'dir' as const,
+      type: ListGithubStubDirResultType.Dir as const,
     })),
     ...[...files].sort().map((name) => ({
       name,
       path: `${relativePath}/${name}`,
-      type: 'file' as const,
+      type: ListGithubStubDirResultType.File as const,
     })),
   ]
 }
@@ -274,7 +284,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
-      if (opts.vaultYaml !== undefined) {
+      if ('vaultYaml' in opts) {
         if (opts.vaultYaml !== vaultYaml) {
           bumpSha()
         }
@@ -333,14 +343,14 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             files.push({
               name: 'nook-events',
               path: 'nook-events',
-              type: 'file',
+              type: ListGithubStubDirResultType.File,
             })
           }
           if (eventFiles.size > 0) {
             files.push({
               name: 'nook-log',
               path: 'nook-log',
-              type: 'dir',
+              type: ListGithubStubDirResultType.Dir,
             })
           }
           await route.fulfill({
@@ -425,7 +435,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
             return
           }
           const stored = eventFiles.get(relativePath)
-          if (stored !== undefined) {
+          if (eventFiles.has(relativePath)) {
             const encoded = Buffer.from(stored, 'utf8').toString('base64')
             await route.fulfill({
               status: 200,
@@ -505,7 +515,7 @@ export async function reloadUnlockLocalVaultWithSync(
     timeout: UI_TIMEOUT_MS,
   })
   await ensureLoginLocalUnlockReady(page)
-  await selectLoginUnlockMethod(page, 'keys')
+  await selectLoginUnlockMethod(page, UnlockMethod.Keys)
   await page.getByTestId('unlock-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -719,12 +729,14 @@ export async function reloadUnlockWithSyncProvider(
     timeout: UI_TIMEOUT_MS,
   })
   await ensureLoginLocalUnlockReady(page)
-  await unlockVaultOnLogin(
-    page,
-    opts?.password
-      ? { password: opts.password, entryLabel: opts.entryLabel }
-      : undefined,
-  )
+  if (opts?.password) {
+    await unlockVaultOnLogin(page, {
+      password: opts.password,
+      entryLabel: opts.entryLabel,
+    })
+  } else {
+    await unlockVaultOnLogin(page)
+  }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -778,7 +790,7 @@ export async function waitForLoadedSyncProviders(
           }
         })
         if (state.authenticated && state.count < minCount) {
-          await invokeVaultLoadProviders(page).catch(() => undefined)
+          await invokeVaultLoadProviders(page).catch(() => {})
         }
         return state.authenticated ? state.count : -1
       },
@@ -806,6 +818,10 @@ export async function syncSecretCount(
       ? parseVaultEventLogSnapshot(events).secretIds.length
       : 0
   }
-  const yaml = await fetchGithubVaultYaml(target.pat, target.repoName)
-  return parseVaultYamlSnapshot(yaml ?? 'secrets: []').secretIds.length
+  const result = await fetchGithubVaultYaml(target.pat, target.repoName)
+  return parseVaultYamlSnapshot(
+    result.kind === GithubVaultYamlFetchKind.Available
+      ? result.yaml
+      : 'secrets: []',
+  ).secretIds.length
 }

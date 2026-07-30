@@ -1,9 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { findMockAuthAccount, MOCK_AUTH_ACCOUNTS } from '../../accounts'
+  import {
+    findMockAuthAccount,
+    MOCK_AUTH_ACCOUNTS,
+    MockAuthAccountLookupKind,
+  } from '../../accounts'
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
   import {
     credentialsFromLoginSubmit,
+    LoginSubmissionKind,
     resetLoginSubmission,
   } from '../lib/login-form'
   import { navigate, recordLoginSubmission } from '../lib/navigation'
@@ -19,19 +24,22 @@
 
   function onsubmit(event: SubmitEvent) {
     const credentials = credentialsFromLoginSubmit(event)
-    if (!credentials) return
+    if (credentials.kind === LoginSubmissionKind.InvalidTarget) return
     recordLoginSubmission(credentials.username, credentials.password)
     const account = findMockAuthAccount(
       credentials.username,
       credentials.password,
     )
-    if (!account?.totpSecret) {
+    if (
+      account.kind === MockAuthAccountLookupKind.Missing ||
+      !account.account.totpSecret
+    ) {
       error = 'Invalid username or password.'
       return
     }
     setPendingTotpSession({
-      username: account.username,
-      totpSecret: account.totpSecret,
+      username: account.account.username,
+      totpSecret: account.account.totpSecret,
     })
     navigate('/totp/verify')
   }

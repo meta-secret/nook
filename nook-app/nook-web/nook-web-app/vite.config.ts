@@ -10,9 +10,9 @@ import {
   buildSitemapXml,
   siteUrlFromEnv,
 } from '../nook-web-shared/src/vault-app/lib/sitemap'
+import { VaultApplication } from '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-const viteBase =
-  typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
+const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || 'https://simple.nokey.sh'
 const sentinelAppUrl =
@@ -142,30 +142,38 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
 }
 
 /** Emit sitemap.xml and robots.txt for production deploys (nokey.sh). */
+const SeoStaticFileKind = {
+  Served: 'served',
+  PassThrough: 'pass-through',
+} as const
+
 function seoStaticFiles(outputDirectory: string): Plugin {
   const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split(/[?#]/, 1)[0]
       const siteUrl = siteUrlFromEnv(process.env)
-      const body =
+      const staticFile =
         pathname === '/robots.txt'
-          ? buildRobotsTxt(siteUrl)
+          ? {
+              kind: SeoStaticFileKind.Served,
+              body: buildRobotsTxt(siteUrl),
+              contentType: 'text/plain; charset=utf-8',
+            }
           : pathname === '/sitemap.xml'
-            ? buildSitemapXml(siteUrl)
-            : undefined
-      if (body === undefined) {
+            ? {
+                kind: SeoStaticFileKind.Served,
+                body: buildSitemapXml(siteUrl),
+                contentType: 'application/xml; charset=utf-8',
+              }
+            : { kind: SeoStaticFileKind.PassThrough }
+      if (staticFile.kind === SeoStaticFileKind.PassThrough) {
         next()
         return
       }
 
       response.statusCode = 200
-      response.setHeader(
-        'Content-Type',
-        pathname === '/robots.txt'
-          ? 'text/plain; charset=utf-8'
-          : 'application/xml; charset=utf-8',
-      )
-      response.end(body)
+      response.setHeader('Content-Type', staticFile.contentType)
+      response.end(staticFile.body)
     })
   }
 
@@ -187,16 +195,6 @@ function seoStaticFiles(outputDirectory: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const localHttps = env.NOOK_LOCAL_HTTPS === '1'
-  const https = localHttps
-    ? {
-        cert: readFileSync(
-          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_CERT_PATH'),
-        ),
-        key: readFileSync(
-          requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
-        ),
-      }
-    : undefined
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
   const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
@@ -216,8 +214,7 @@ export default defineConfig(({ mode }) => {
     // self-contained instead of coupling the site bundle to either mount path.
     base: appKind === 'site' ? './' : (viteBase ?? '/'),
     define: {
-      __NOOK_APP_KIND__: JSON.stringify(appKind),
-      __NOOK_WASM_APPLICATION__: JSON.stringify('unified-development'),
+      __NOOK_APP_KIND__: JSON.stringify(VaultApplication.UnifiedDevelopment),
     },
     plugins: [
       tailwindcss(),
@@ -251,7 +248,18 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      https,
+      ...(localHttps
+        ? {
+            https: {
+              cert: readFileSync(
+                requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_CERT_PATH'),
+              ),
+              key: readFileSync(
+                requiredEnvironmentPath(env, 'NOOK_LOCAL_HTTPS_KEY_PATH'),
+              ),
+            },
+          }
+        : {}),
       fs: {
         allow: ['../../..'],
       },

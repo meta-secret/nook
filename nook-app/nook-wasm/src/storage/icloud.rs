@@ -609,43 +609,40 @@ mod tests {
     use super::*;
     use nook_core::ICloudSharedTarget;
 
-    fn shared_target(role: ICloudShareRole) -> ICloudEventTarget {
-        ICloudEventTarget::Shared(
-            ICloudSharedTarget::new(
-                role,
-                "shared-zone",
-                "owner-record",
-                "shared-root",
-                "share-guid",
-            )
-            .expect("shared target should be valid"),
-        )
+    fn shared_target(role: ICloudShareRole) -> anyhow::Result<ICloudEventTarget> {
+        Ok(ICloudEventTarget::Shared(ICloudSharedTarget::new(
+            role,
+            "shared-zone",
+            "owner-record",
+            "shared-root",
+            "share-guid",
+        )?))
     }
 
     #[test]
-    fn shared_database_scope_depends_on_account_role() {
+    fn shared_database_scope_depends_on_account_role() -> anyhow::Result<()> {
         assert!(
             icloud_database_url(&ICloudEventTarget::Private, "records/query")
                 .contains("/private/records/query")
         );
         assert!(
-            icloud_database_url(&shared_target(ICloudShareRole::Owner), "records/query")
+            icloud_database_url(&shared_target(ICloudShareRole::Owner)?, "records/query")
                 .contains("/private/records/query")
         );
         assert!(
             icloud_database_url(
-                &shared_target(ICloudShareRole::Participant),
+                &shared_target(ICloudShareRole::Participant)?,
                 "records/query"
             )
             .contains("/shared/records/query")
         );
+        Ok(())
     }
 
     #[test]
-    fn shared_event_create_is_scoped_to_the_shared_root_hierarchy() {
-        let target = shared_target(ICloudShareRole::Participant);
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))
-            .expect("event id should be valid");
+    fn shared_event_create_is_scoped_to_the_shared_root_hierarchy() -> anyhow::Result<()> {
+        let target = shared_target(ICloudShareRole::Participant)?;
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let body =
             icloud_event_create_body(&target, &event_id, "nook-event-test", "encrypted-event");
 
@@ -659,12 +656,12 @@ mod tests {
             body["operations"][0]["record"]["fields"][ICLOUD_CONTENT_FIELD]["value"],
             "encrypted-event"
         );
+        Ok(())
     }
 
     #[test]
-    fn private_event_create_keeps_the_existing_default_zone_shape() {
-        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))
-            .expect("event id should be valid");
+    fn private_event_create_keeps_the_existing_default_zone_shape() -> anyhow::Result<()> {
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let body = icloud_event_create_body(
             &ICloudEventTarget::Private,
             &event_id,
@@ -674,5 +671,6 @@ mod tests {
 
         assert!(body.get("zoneID").is_none());
         assert!(body["operations"][0]["record"].get("parent").is_none());
+        Ok(())
     }
 }

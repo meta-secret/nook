@@ -13,5 +13,5 @@ export type WithoutChildren<T> = T extends { children?: any }
   : T;
 export type WithoutChildrenOrChild<T> = WithoutChildren<WithoutChild<T>>;
 export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & {
-  ref?: U | null;
+  ref?: U;
 };

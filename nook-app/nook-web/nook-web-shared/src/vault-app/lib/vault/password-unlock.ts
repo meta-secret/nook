@@ -1,44 +1,99 @@
 import { VaultState } from "$lib/vault.svelte";
+import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
 import { isoTimestamp } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
+  enrollmentOauthState,
+  findSharedGrantProvider,
+  SharedGrantProviderKind,
+  SharedStorageTargetKind,
+  shouldFlushSharedDriveGrant,
+  type SharedStorageTarget,
+} from "$lib/vault/password-enrollment";
+export {
+  findSharedGrantProvider,
+  SharedGrantProviderKind,
+  SharedStorageTargetKind,
+  shouldFlushSharedDriveGrant,
+  type SharedGrantProvider,
+  type SharedStorageTarget,
+} from "$lib/vault/password-enrollment";
+
+enum CatalogVaultLabelKind {
+  Missing = "missing",
+  Present = "present",
+}
+
+type CatalogVaultLabel =
+  | { kind: CatalogVaultLabelKind.Missing }
+  | { kind: CatalogVaultLabelKind.Present; label: string };
+import {
   JoinEnrollmentState,
   NookEnrollmentIssueInput,
+  type NookEnrollmentProvider,
+  NookVaultNameState,
   OnboardingType,
   decryptEnrollmentPayload,
+  enrollmentICloudSharedProviderForArchitecture,
   enrollmentProviderForArchitecture,
-  encryptEnrollmentPayload,
+  enrollmentSharedProviderForArchitecture,
+  encryptLabeledEnrollmentPayload,
+  encryptUnlabeledEnrollmentPayload,
   hasActiveLocalVault,
   setLocalVaultLabel,
-  type NookEnrollmentProvider,
 } from "$app-wasm";
 import {
   bindGoogleDriveSharedFolder,
+  configuredOAuthFile,
+  defaultOAuthFileConfig,
   GITHUB_PROVIDER_TYPE,
+  githubPatValue,
+  githubRepositoryValue,
+  localFolderProviderConfiguration,
+  LocalFolderProviderConfigurationKind,
+  isConfiguredOAuthFile,
+  oauthAccessToken,
+  OAuthAccessTokenKind,
+  oauthFileName,
+  OAuthFileNameKind,
+  oauthConfigurationNotApplicable,
   OAUTH_FILE_PROVIDER_TYPE,
+  providerPersistenceDefaults,
+  storedGoogleDriveFolder,
+  storedICloudShareTarget,
+  storedOAuthCredential,
+  storedOAuthRemoteFileName,
   type OAuthFilePreset,
+  type OAuthFileConfig,
   type StorageProvider,
 } from "$lib/auth-providers";
 import {
+  GoogleOAuthPrompt,
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
   requestGoogleDriveSharedAccess,
 } from "$lib/google-oauth";
 import {
   acceptICloudSharedVault,
+  ICloudAccountNameKind,
   oauthTokensToICloudConfig,
   requestICloudWebAuthToken,
 } from "$lib/icloud-oauth";
 import {
   prepareSharedStorageGrant,
+  createSharedStorageTarget,
+  existingSharedStorageTarget,
   providerOnboardingType,
-  type SharedStorageGrantOutcome,
+  providerOauthPresetForProvider,
+  sharedStorageGrantAccessToken,
+  suggestedSharedStorageTarget,
+  unavailableSharedStorageGrantCredential,
 } from "$lib/vault-architecture";
 import {
   isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,
 } from "$lib/vault/sentinel-unlock";
-import { takeWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-password");
 
@@ -55,7 +110,7 @@ export async function addVaultPassword(
   label: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
   }
@@ -67,7 +122,7 @@ export async function addVaultPassword(
   state.passwordError = "";
   state.isPasswordBusy = true;
   try {
-    const manager = state.manager!;
+    const manager = state.requireManager();
     await state.enqueueStorage(() => {
       const trimmedLabel = label.trim();
       const e2eManager = manager as typeof manager & E2ePasswordManager;
@@ -102,14 +157,14 @@ export async function updateVaultPasswordEntry(
   entryId: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.passwordError = "Vault engine is not available.";
     return;
   }
   state.passwordError = "";
   state.isPasswordBusy = true;
   try {
-    const manager = state.manager!;
+    const manager = state.requireManager();
     await state.enqueueStorage(() => {
       const e2eManager = manager as typeof manager & E2ePasswordManager;
       if (
@@ -136,17 +191,20 @@ export async function removeVaultPasswordEntry(
   state: VaultState,
   entryId: string,
 ): Promise<void> {
-  if (!state.manager) return;
+  if (!state.hasManager) return;
   state.passwordError = "";
   state.isPasswordBusy = true;
   try {
     await state.enqueueStorage(() =>
-      state.manager!.removeVaultPasswordEntry(entryId),
+      state.requireManager().removeVaultPasswordEntry(entryId),
     );
     await state.refreshPasswordEntriesList();
-    if (state.activeEnrollmentEntryId === entryId) {
+    if (
+      state.activeEnrollmentEntry.kind === EnrollmentEntryKind.Active &&
+      state.activeEnrollmentEntry.entryId === entryId
+    ) {
       state.enrollmentCode = "";
-      state.activeEnrollmentEntryId = undefined;
+      state.clearActiveEnrollmentEntry();
     }
     state.showSuccess(state.t("toasts.password_removed"));
     await state.runFanOutSyncAfterLocalSave();
@@ -164,7 +222,7 @@ export async function unlockWithPassword(
   entryId: string,
   password: string,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
@@ -191,12 +249,14 @@ export async function unlockWithPassword(
   state.isVerifying = true;
   try {
     const page = await state.enqueueStorage(() =>
-      state.manager!.connectWithPassword(
-        ...state.wasmStorageArgs(),
-        entryId,
-        password,
-        state.secretPageSize,
-      ),
+      state
+        .requireManager()
+        .connectWithPassword(
+          ...state.wasmStorageArgs(),
+          entryId,
+          password,
+          state.secretPageSize,
+        ),
     );
     state.applyConnectedSecretPage(page, "");
     if (state.deviceProtectionReady) {
@@ -240,77 +300,77 @@ export async function unlockWithPassword(
 
 export function clearEnrollmentCode(state: VaultState) {
   state.enrollmentCode = "";
-  state.activeEnrollmentEntryId = undefined;
+  state.clearActiveEnrollmentEntry();
 }
+
+enum SavedEnrollmentProviderKind {
+  Local = "local",
+  Remote = "remote",
+}
+
+type SavedEnrollmentProvider =
+  | { kind: SavedEnrollmentProviderKind.Local }
+  | { kind: SavedEnrollmentProviderKind.Remote; provider: StorageProvider };
 
 function applySavedEnrollmentProvider(
   state: VaultState,
-  provider: StorageProvider | undefined,
+  selection: SavedEnrollmentProvider,
 ) {
-  if (!provider || provider.type === "local") {
+  if (
+    selection.kind === SavedEnrollmentProviderKind.Local ||
+    selection.provider.type === "local"
+  ) {
     state.storageMode = "local";
-    state.loginSetupType = "local";
+    state.activateLoginSetup("local");
     return;
   }
 
+  const { provider } = selection;
   state.storageMode = provider.type;
-  state.loginSetupType = undefined;
+  state.clearLoginSetup();
   if (provider.type === "github") {
-    state.githubPat = provider.githubPat ?? "";
-    state.githubRepo = provider.githubRepo ?? "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.githubPat = githubPatValue(provider.githubPat);
+    state.githubRepo = githubRepositoryValue(provider.githubRepo);
+    state.clearOauthFile();
+    state.clearLocalFolder();
     return;
   }
   if (provider.type === "oauth-file") {
-    state.oauthFile = provider.oauthFile ?? undefined;
+    const configuration = provider.oauthFile;
+    if (!isConfiguredOAuthFile(configuration)) {
+      throw new Error(
+        "OAuth enrollment provider is missing its configuration.",
+      );
+    }
+    state.configureOauthFile(configuration.config);
     state.githubPat = "";
-    state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo;
-    state.localFolder = undefined;
+    const fileName = oauthFileName(configuration.config);
+    if (fileName.kind === OAuthFileNameKind.Resolved) {
+      state.githubRepo = fileName.fileName;
+    }
+    state.clearLocalFolder();
     return;
   }
 
-  state.localFolder = provider.localFolder ?? undefined;
-  state.githubPat = "";
-  state.oauthFile = undefined;
-}
-
-export function findSharedGrantProvider(
-  providers: StorageProvider[],
-  preset: string,
-  storageTargetId?: string,
-): StorageProvider | undefined {
-  const withToken = providers.filter(
-    (provider) =>
-      provider.type === "oauth-file" &&
-      provider.oauthFile?.preset === preset &&
-      Boolean(provider.oauthFile.accessToken?.trim()),
-  );
-  if (storageTargetId) {
-    return withToken.find(
-      (provider) =>
-        provider.oauthFile?.folderId === storageTargetId ||
-        provider.oauthFile?.iCloudShareTarget === storageTargetId,
+  const configuration = localFolderProviderConfiguration(provider);
+  if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
+    throw new Error(
+      "Local-folder enrollment provider is missing its configuration.",
     );
   }
-  return withToken[0];
-}
-
-export function shouldFlushSharedDriveGrant(
-  grant: SharedStorageGrantOutcome,
-  accessToken?: string,
-): boolean {
-  return grant.kind !== "unsupported" && Boolean(accessToken?.trim());
+  state.configureLocalFolder(configuration.config);
+  state.githubPat = "";
+  state.clearOauthFile();
 }
 
 async function localVaultHasPasswordEntries(
   state: VaultState,
 ): Promise<boolean> {
-  if (!state.manager) return false;
+  if (!state.hasManager) return false;
   if (!state.localVaultPresent && !(await hasActiveLocalVault())) return false;
   try {
     const entries = await state.enqueueStorage(() =>
-      state.manager!.fetchVaultPasswordEntries("local", "", ""),
+      state.requireManager().fetchVaultPasswordEntries("local", "", ""),
     );
     return entries.length > 0;
   } catch {
@@ -323,7 +383,7 @@ export async function connectWithEnrollmentCode(
   code: string,
   password = "",
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
@@ -333,6 +393,7 @@ export async function connectWithEnrollmentCode(
   state.isPasswordBusy = true;
   try {
     const payload = decryptEnrollmentPayload(code, password);
+    const enrollmentProvider = payload.provider;
     const entryId = payload.entryId.trim();
     const unlockPassword = password.trim();
     if (!entryId) {
@@ -343,163 +404,224 @@ export async function connectWithEnrollmentCode(
     }
 
     let enrollmentStorageArgs: [string, string, string];
-    if (payload.provider.type === GITHUB_PROVIDER_TYPE) {
-      const githubPat = takeWasmStringValue(payload.provider.githubPat) ?? "";
-      const githubRepo = takeWasmStringValue(payload.provider.githubRepo) ?? "";
+    if (enrollmentProvider.type === GITHUB_PROVIDER_TYPE) {
+      const githubPat = enrollmentProvider.githubPat;
+      const githubRepo = enrollmentProvider.githubRepo;
       state.storageMode = "github";
       state.githubPat = githubPat;
       state.githubRepo = githubRepo;
-      state.loginSetupType = "github";
+      state.activateLoginSetup("github");
       enrollmentStorageArgs = ["github", githubPat, githubRepo];
     } else if (payload.onboardingType === OnboardingType.SharedProviderGrant) {
-      const preset = (takeWasmStringValue(payload.provider.oauthPreset) ??
-        "google-drive") as OAuthFilePreset;
-      const storageTargetId = takeWasmStringValue(
-        payload.provider.sharedStorageTargetId,
-      )?.trim();
+      const preset = enrollmentProvider.oauthPreset as OAuthFilePreset;
+      const storageTarget: SharedStorageTarget = {
+        kind: SharedStorageTargetKind.Bound,
+        storageTargetId: enrollmentProvider.sharedStorageTargetId,
+      };
       await state.loadProviders();
-      let provider = findSharedGrantProvider(
+      const providerSelection = findSharedGrantProvider(
         state.providers,
         preset,
-        storageTargetId,
+        storageTarget,
       );
+      let sharedProvider = providerSelection;
       let sharedProviderNeedsSave = false;
-      if (!provider && preset === "google-drive") {
+      if (
+        sharedProvider.kind === SharedGrantProviderKind.AuthorizationRequired &&
+        preset === "google-drive"
+      ) {
         if (!isGoogleOAuthConfigured()) {
           throw new Error(state.t("provider_setup.google_oauth_unconfigured"));
         }
         const tokens = await requestGoogleDriveSharedAccess({
-          prompt: "consent",
+          prompt: GoogleOAuthPrompt.Consent,
         });
-        const oauthFile = oauthTokensToConfig(tokens, {
-          preset: "google-drive",
-          accessToken: tokens.accessToken,
-          folderId: storageTargetId || undefined,
-          fileName: "nook-events",
+        const initialConfig: OAuthFileConfig = {
+          ...defaultOAuthFileConfig("google-drive", "nook-events"),
+          folderId: storedGoogleDriveFolder(storageTarget.storageTargetId),
           driveMode: "shared",
-          iCloudMode: "private",
-        });
-        provider = {
-          id: "enrollment-shared-oauth",
-          type: "oauth-file",
-          label: "Shared Google Drive",
-          oauthFile,
-          createdAt: isoTimestamp(),
+        };
+        const oauthFile = oauthTokensToConfig(
+          tokens,
+          configuredOAuthFile(initialConfig),
+        );
+        sharedProvider = {
+          kind: SharedGrantProviderKind.Existing,
+          provider: {
+            ...providerPersistenceDefaults(),
+            id: "enrollment-shared-oauth",
+            type: OAUTH_FILE_PROVIDER_TYPE,
+            label: "Shared Google Drive",
+            oauthFile: configuredOAuthFile(oauthFile),
+            createdAt: isoTimestamp(),
+          },
         };
         sharedProviderNeedsSave = true;
       }
       if (preset === "icloud") {
-        if (!storageTargetId) {
-          throw new Error(
-            state.t("provider_setup.icloud_shared_target_required"),
-          );
-        }
-        const existingToken = provider?.oauthFile?.accessToken?.trim();
-        const tokens = existingToken
-          ? {
-              accessToken: existingToken,
-              accountName: provider?.oauthFile?.accountEmail,
-            }
-          : await requestICloudWebAuthToken();
-        const accepted = await acceptICloudSharedVault(storageTargetId);
-        provider = {
-          id: provider?.id ?? "enrollment-shared-icloud",
-          type: "oauth-file",
-          label: provider?.label ?? state.t("provider_picker.icloud"),
-          oauthFile: oauthTokensToICloudConfig(tokens, {
-            ...(provider?.oauthFile ?? {
-              preset: "icloud",
-              accessToken: tokens.accessToken,
-              driveMode: "private",
-              iCloudMode: "shared",
-            }),
-            iCloudMode: "shared",
-            iCloudShareTarget: accepted.storageTargetId,
-            fileName: provider?.oauthFile?.fileName ?? "nook-events",
-          }),
-          createdAt: provider?.createdAt ?? isoTimestamp(),
+        const existingProvider = sharedProvider;
+        const existingConfiguration =
+          existingProvider.kind === SharedGrantProviderKind.Existing
+            ? existingProvider.provider.oauthFile
+            : oauthConfigurationNotApplicable();
+        const existingConfig = isConfiguredOAuthFile(existingConfiguration)
+          ? existingConfiguration.config
+          : defaultOAuthFileConfig("icloud", "nook-events");
+        const existingCredential = oauthAccessToken(existingConfig);
+        const tokens =
+          existingCredential.kind === OAuthAccessTokenKind.Available
+            ? {
+                accessToken: existingCredential.token,
+                accountName:
+                  existingConfig.accountEmail.state === "email"
+                    ? {
+                        kind: ICloudAccountNameKind.Available as const,
+                        value: existingConfig.accountEmail.value,
+                      }
+                    : { kind: ICloudAccountNameKind.Unavailable as const },
+              }
+            : await requestICloudWebAuthToken();
+        const accepted = await acceptICloudSharedVault(
+          storageTarget.storageTargetId,
+        );
+        const sharedConfig: OAuthFileConfig = {
+          ...existingConfig,
+          iCloudMode: "shared",
+          iCloudShareTarget: storedICloudShareTarget(accepted.storageTargetId),
+          fileName:
+            existingConfig.fileName.state === "fileName"
+              ? existingConfig.fileName
+              : storedOAuthRemoteFileName("nook-events"),
+        };
+        const provider: StorageProvider = {
+          ...providerPersistenceDefaults(),
+          id:
+            existingProvider.kind === SharedGrantProviderKind.Existing
+              ? existingProvider.provider.id
+              : "enrollment-shared-icloud",
+          type: OAUTH_FILE_PROVIDER_TYPE,
+          label:
+            existingProvider.kind === SharedGrantProviderKind.Existing
+              ? existingProvider.provider.label
+              : state.t("provider_picker.icloud"),
+          oauthFile: configuredOAuthFile(
+            oauthTokensToICloudConfig(
+              tokens,
+              configuredOAuthFile(sharedConfig),
+            ),
+          ),
+          createdAt:
+            existingProvider.kind === SharedGrantProviderKind.Existing
+              ? existingProvider.provider.createdAt
+              : isoTimestamp(),
+        };
+        sharedProvider = {
+          kind: SharedGrantProviderKind.Existing,
+          provider,
         };
         sharedProviderNeedsSave = provider.id === "enrollment-shared-icloud";
       }
-      if (!provider) {
-        throw new Error(
-          "Shared-provider enrollment requires this browser to have matching provider access before connecting.",
-        );
-      }
       if (
-        storageTargetId &&
+        sharedProvider.kind === SharedGrantProviderKind.AuthorizationRequired
+      ) {
+        throw new Error(state.t("errors.shared_provider_access_required"));
+      }
+      let provider = sharedProvider.provider;
+      const providerConfiguration = provider.oauthFile;
+      if (
+        storageTarget.kind === SharedStorageTargetKind.Bound &&
         preset === "google-drive" &&
-        provider.oauthFile &&
-        !provider.oauthFile.folderId
+        isConfiguredOAuthFile(providerConfiguration) &&
+        providerConfiguration.config.folderId.state === "root"
       ) {
         provider = {
           ...provider,
-          oauthFile: { ...provider.oauthFile, folderId: storageTargetId },
+          oauthFile: configuredOAuthFile({
+            ...providerConfiguration.config,
+            folderId: storedGoogleDriveFolder(storageTarget.storageTargetId),
+          }),
         };
       }
-      applySavedEnrollmentProvider(state, provider);
+      applySavedEnrollmentProvider(state, {
+        kind: SavedEnrollmentProviderKind.Remote,
+        provider,
+      });
       if (sharedProviderNeedsSave) {
-        state.loginSetupType = "oauth-file";
+        state.activateLoginSetup("oauth-file");
       }
       enrollmentStorageArgs = state.providerWasmArgs(provider);
-    } else if (payload.provider.type === OAUTH_FILE_PROVIDER_TYPE) {
+    } else if (enrollmentProvider.type === OAUTH_FILE_PROVIDER_TYPE) {
+      const enrollmentState = enrollmentOauthState(enrollmentProvider);
+      const oauthFile: OAuthFileConfig = {
+        ...defaultOAuthFileConfig(
+          enrollmentProvider.oauthPreset as OAuthFilePreset,
+        ),
+        accessToken: storedOAuthCredential(enrollmentProvider.oauthAccessToken),
+        ...enrollmentState,
+      };
       const oauthProvider: StorageProvider = {
+        ...providerPersistenceDefaults(),
         id: "enrollment-oauth",
-        type: "oauth-file",
+        type: OAUTH_FILE_PROVIDER_TYPE,
         label: "Enrollment OAuth provider",
-        oauthFile: {
-          preset: (takeWasmStringValue(payload.provider.oauthPreset) ??
-            "google-drive") as OAuthFilePreset,
-          accessToken:
-            takeWasmStringValue(payload.provider.oauthAccessToken) ?? "",
-          refreshToken: takeWasmStringValue(payload.provider.oauthRefreshToken),
-          expiresAt: takeWasmStringValue(payload.provider.oauthExpiresAt),
-          fileId: takeWasmStringValue(payload.provider.oauthFileId),
-          fileName: takeWasmStringValue(payload.provider.oauthFileName),
-          accountEmail: takeWasmStringValue(payload.provider.oauthAccountEmail),
-          driveMode: "private",
-          iCloudMode: "private",
-        },
+        oauthFile: configuredOAuthFile(oauthFile),
         createdAt: isoTimestamp(),
       };
       state.storageMode = "oauth-file";
-      state.loginSetupType = "oauth-file";
-      state.oauthFile = oauthProvider.oauthFile;
+      state.activateLoginSetup("oauth-file");
+      state.configureOauthFile(oauthFile);
       state.githubPat = "";
-      state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo;
-      state.localFolder = undefined;
+      const fileName = oauthFileName(oauthFile);
+      if (fileName.kind === OAuthFileNameKind.Resolved) {
+        state.githubRepo = fileName.fileName;
+      }
+      state.clearLocalFolder();
       enrollmentStorageArgs = state.providerWasmArgs(oauthProvider);
     } else {
       await state.loadProviders();
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state);
-      const provider = hasLocalPasswordEntries
-        ? undefined
-        : (state.syncProviders[0] ??
-          state.providers.find((candidate) => candidate.type !== "local"));
-      applySavedEnrollmentProvider(state, provider);
+      let selection: SavedEnrollmentProvider = {
+        kind: SavedEnrollmentProviderKind.Local,
+      };
+      if (!hasLocalPasswordEntries) {
+        const candidate =
+          state.syncProviders[0] ??
+          state.providers.find((provider) => provider.type !== "local");
+        if (candidate && candidate.type !== "local") {
+          selection = {
+            kind: SavedEnrollmentProviderKind.Remote,
+            provider: candidate,
+          };
+        }
+      }
+      applySavedEnrollmentProvider(state, selection);
       enrollmentStorageArgs =
-        provider && provider.type !== "local"
-          ? state.providerWasmArgs(provider)
+        selection.kind === SavedEnrollmentProviderKind.Remote
+          ? state.providerWasmArgs(selection.provider)
           : ["local", "", ""];
     }
 
     await state.initDeviceIdentity();
 
     const page = await state.enqueueStorage(() =>
-      state.manager!.connectWithPassword(
-        ...enrollmentStorageArgs,
-        entryId,
-        unlockPassword,
-        state.secretPageSize,
-      ),
+      state
+        .requireManager()
+        .connectWithPassword(
+          ...enrollmentStorageArgs,
+          entryId,
+          unlockPassword,
+          state.secretPageSize,
+        ),
     );
     state.applyConnectedSecretPage(page, "");
-    const vaultName = payload.vaultName?.trim();
+    const vaultName = payload.vaultName.trim();
     const vaultStoreId = (
-      await state.enqueueStorage(() => state.manager!.vaultStoreId)
+      await state.enqueueStorage(() => state.requireManager().vaultStoreId)
     ).trim();
     if (vaultName && vaultStoreId) {
-      await state.enqueueStorage(() => state.manager!.setVaultName(vaultName));
+      await state.enqueueStorage(() =>
+        state.requireManager().setVaultName(vaultName),
+      );
       await setLocalVaultLabel(vaultStoreId, vaultName);
     }
     // Password enrollment downloads an existing vault into this browser. Make
@@ -537,7 +659,7 @@ export async function issueEnrollmentCode(
   password: string,
   providerId = state.syncProviders[0]?.id ?? "",
 ): Promise<string> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     throw new Error("Vault engine is not available.");
   }
   // Password verification borrows the wasm manager synchronously (`&self`).
@@ -586,7 +708,7 @@ export async function issueEnrollmentCode(
     try {
       verified = await state.enqueueStorage(async () => {
         await Promise.resolve();
-        return state.manager!.verifyVaultPassword(entryId, password);
+        return state.requireManager().verifyVaultPassword(entryId, password);
       });
     } catch {
       verified = false;
@@ -609,15 +731,17 @@ export async function issueEnrollmentCode(
         "Local backup folders cannot be embedded in enrollment codes. Choose a cloud provider or have the other browser choose the same folder.",
       );
     }
-    const githubPat = selectedProvider.githubPat?.trim() ?? "";
-    const githubRepo = selectedProvider.githubRepo?.trim() ?? "";
+    const githubPat = githubPatValue(selectedProvider.githubPat);
+    const githubRepo = githubRepositoryValue(selectedProvider.githubRepo);
+    const selectedOauth = selectedProvider.oauthFile;
     const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
     const usesSharedProviderGrant =
       providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
-      "shared-provider-grant";
+      OnboardingType.SharedProviderGrant;
     const usesSharedICloud =
       usesSharedProviderGrant &&
-      selectedProvider.oauthFile?.preset === "icloud";
+      isConfiguredOAuthFile(selectedOauth) &&
+      selectedOauth.config.preset === "icloud";
     log.info("enrollment provider selected", {
       providerId,
       providerType: selectedProvider.type,
@@ -633,36 +757,53 @@ export async function issueEnrollmentCode(
       !usesSharedProviderGrant &&
       (!githubPat || !githubRepo)
     ) {
-      throw new Error(
-        "GitHub sync provider is missing credentials. Reconnect in Settings and try again.",
-      );
+      throw new Error(state.t("errors.github_enrollment_credentials_required"));
     }
     state.sharedGrantInstructions = "";
-    let sharedStorageTargetId: string | undefined;
+    let sharedStorageTarget: SharedStorageTarget = {
+      kind: SharedStorageTargetKind.NotBound,
+    };
     let enrollmentProviderRow = selectedProvider;
     if (usesSharedProviderGrant) {
       if (usesSharedICloud) {
-        sharedStorageTargetId =
-          selectedProvider.oauthFile?.iCloudShareTarget?.trim();
-        if (!sharedStorageTargetId) {
+        if (selectedOauth.config.iCloudShareTarget.state === "personal") {
           throw new Error(
             state.t("provider_setup.icloud_shared_target_required"),
           );
         }
+        const targetId = selectedOauth.config.iCloudShareTarget.value;
+        sharedStorageTarget = {
+          kind: SharedStorageTargetKind.Bound,
+          storageTargetId: targetId,
+        };
       } else {
-        const accessToken = selectedProvider.oauthFile?.accessToken?.trim();
+        if (!isConfiguredOAuthFile(selectedOauth)) {
+          throw new Error(state.t("errors.shared_provider_oauth_required"));
+        }
+        const accessCredential = oauthAccessToken(selectedOauth.config);
         log.info("shared enrollment grant started", { providerId });
+        const fileName = oauthFileName(selectedOauth.config);
+        const storageTargetHint =
+          fileName.kind === OAuthFileNameKind.Resolved
+            ? fileName.fileName
+            : githubRepo;
+        const folderId = selectedOauth.config.folderId;
         const grant = await prepareSharedStorageGrant({
           providerType: selectedProvider.type,
-          oauthPreset: selectedProvider.oauthFile?.preset,
+          oauthPreset: providerOauthPresetForProvider(selectedProvider),
           joinerIdentityKind: "email",
           joinerIdentity: sharedJoinerIdentity,
-          storageTargetHint:
-            selectedProvider.oauthFile?.fileName ??
-            selectedProvider.githubRepo ??
-            undefined,
-          storageTargetId: selectedProvider.oauthFile?.folderId,
-          accessToken,
+          storageTargetHint: suggestedSharedStorageTarget(
+            storageTargetHint || "shared folder",
+          ),
+          storageTarget:
+            folderId.state === "folderId"
+              ? existingSharedStorageTarget(folderId.value)
+              : createSharedStorageTarget(),
+          credential:
+            accessCredential.kind === OAuthAccessTokenKind.Available
+              ? sharedStorageGrantAccessToken(accessCredential.token)
+              : unavailableSharedStorageGrantCredential(),
         });
         log.info("shared enrollment grant prepared", {
           providerId,
@@ -671,44 +812,66 @@ export async function issueEnrollmentCode(
         if (grant.kind === "unsupported") {
           throw new Error(state.t(grant.reasonKey));
         }
+        const grantTarget = grant.target;
         if (grant.kind === "granted") {
-          sharedStorageTargetId = grant.storageTargetId;
+          if (grantTarget.state === "unavailable") {
+            throw new Error(
+              state.t("provider_setup.google_shared_create_failed"),
+            );
+          }
+          sharedStorageTarget = {
+            kind: SharedStorageTargetKind.Bound,
+            storageTargetId: grantTarget.storageTargetId,
+          };
           state.sharedGrantInstructions = state.t(grant.note, {
             email: sharedJoinerIdentity,
-            folder: grant.storageTargetName ?? grant.storageTargetId,
+            folder:
+              grantTarget.state === "named"
+                ? grantTarget.storageTargetName
+                : grantTarget.storageTargetId,
           });
         } else if (grant.kind === "manual-grant-required") {
-          sharedStorageTargetId = grant.storageTargetId;
+          if (grantTarget.state !== "unavailable") {
+            sharedStorageTarget = {
+              kind: SharedStorageTargetKind.Bound,
+              storageTargetId: grantTarget.storageTargetId,
+            };
+          }
           state.sharedGrantInstructions = state.t(grant.instructionsKey, {
             email: grant.joinerIdentity,
             folder:
-              grant.storageTargetName ??
-              grant.storageTargetId ??
-              "shared folder",
+              grantTarget.state === "named"
+                ? grantTarget.storageTargetName
+                : grantTarget.state === "identified"
+                  ? grantTarget.storageTargetId
+                  : "shared folder",
           });
         }
-        if (sharedStorageTargetId && selectedProvider.oauthFile) {
+        if (
+          sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
+          isConfiguredOAuthFile(selectedOauth)
+        ) {
           const updatedOauth = bindGoogleDriveSharedFolder(
-            selectedProvider.oauthFile,
-            sharedStorageTargetId,
+            selectedOauth.config,
+            sharedStorageTarget.storageTargetId,
           );
           enrollmentProviderRow = {
             ...selectedProvider,
-            oauthFile: updatedOauth,
+            oauthFile: configuredOAuthFile(updatedOauth),
           };
-          state.oauthFile = updatedOauth;
+          state.configureOauthFile(updatedOauth);
           state.providers = state.providers.map((row) =>
             row.id === selectedProvider.id ? enrollmentProviderRow : row,
           );
           await state.persistProviders();
 
-          if (shouldFlushSharedDriveGrant(grant, accessToken)) {
+          if (shouldFlushSharedDriveGrant(grant, accessCredential)) {
             // The target is not usable until it contains the current vault
             // event log, even when collaborator access needs manual completion.
             // Await Rust/WASM fan-out before issuing the enrollment code.
             const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
             await state.enqueueStorage(() =>
-              state.manager!.flushEventOutboxForProvider(...targetArgs),
+              state.requireManager().flushEventOutboxForProvider(...targetArgs),
             );
           }
         }
@@ -716,49 +879,82 @@ export async function issueEnrollmentCode(
       if (usesSharedICloud) {
         const targetArgs = state.providerWasmArgs(enrollmentProviderRow);
         await state.enqueueStorage(() =>
-          state.manager!.flushEventOutboxForProvider(...targetArgs),
+          state.requireManager().flushEventOutboxForProvider(...targetArgs),
         );
       }
     }
-    const provider: NookEnrollmentProvider = enrollmentProviderForArchitecture(
-      enrollmentProviderRow,
-      state.vaultArchitecture,
-      usesSharedProviderGrant && !usesSharedICloud
-        ? sharedJoinerIdentity
-        : undefined,
-      sharedStorageTargetId,
-    );
+    const provider: NookEnrollmentProvider =
+      usesSharedProviderGrant &&
+      sharedStorageTarget.kind === SharedStorageTargetKind.Bound
+        ? usesSharedICloud
+          ? enrollmentICloudSharedProviderForArchitecture(
+              enrollmentProviderRow,
+              state.vaultArchitecture,
+              sharedStorageTarget.storageTargetId,
+            )
+          : enrollmentSharedProviderForArchitecture(
+              enrollmentProviderRow,
+              state.vaultArchitecture,
+              sharedJoinerIdentity,
+              sharedStorageTarget.storageTargetId,
+            )
+        : enrollmentProviderForArchitecture(
+            enrollmentProviderRow,
+            state.vaultArchitecture,
+          );
     log.info("enrollment provider payload prepared", { providerId });
-    const managerVaultName = takeWasmStringValue(
-      await state.enqueueStorage(() => state.manager!.vaultName),
-    );
-    const catalogVaultName = state.localVaults
-      .find((entry) => entry.storeId === state.activeVaultStoreId)
-      ?.label?.trim();
+    let catalogVaultName: CatalogVaultLabel = {
+      kind: CatalogVaultLabelKind.Missing,
+    };
+    if (state.activeVault.kind === ActiveVaultKind.Open) {
+      for (const entry of state.localVaults) {
+        const label = entry.label.trim();
+        if (entry.storeId === state.activeVault.storeId && label) {
+          catalogVaultName = {
+            kind: CatalogVaultLabelKind.Present,
+            label,
+          };
+          break;
+        }
+      }
+    }
     // The local catalog is the durable browser-level label index. Keep it as
     // the enrollment fallback while older/synced projections without
     // `vault_name` are still supported.
-    const vaultName = managerVaultName ?? catalogVaultName;
+    const manager = state.requireManager();
+    const vaultName: CatalogVaultLabel =
+      manager.vaultNameState === NookVaultNameState.Named
+        ? {
+            kind: CatalogVaultLabelKind.Present,
+            label: manager.vaultName,
+          }
+        : catalogVaultName;
     log.info("enrollment vault name loaded", {
       providerId,
-      hasVaultName: Boolean(vaultName),
+      hasVaultName: vaultName.kind === CatalogVaultLabelKind.Present,
     });
-    const payload = new NookEnrollmentIssueInput(
-      provider,
-      vaultName ?? "",
-      entryId,
-      isoTimestamp(),
-    );
+    const payload =
+      vaultName.kind === CatalogVaultLabelKind.Present
+        ? NookEnrollmentIssueInput.named(
+            provider,
+            vaultName.label,
+            entryId,
+            isoTimestamp(),
+          )
+        : NookEnrollmentIssueInput.unnamed(provider, entryId, isoTimestamp());
     const selectedPassword = state.passwordEntries.find(
       (e) => e.id === entryId,
     );
-    const code = encryptEnrollmentPayload(
-      payload,
-      password,
-      selectedPassword?.label ?? "",
-    );
+    const code =
+      selectedPassword && selectedPassword.label.trim()
+        ? encryptLabeledEnrollmentPayload(
+            payload,
+            password,
+            selectedPassword.label,
+          )
+        : encryptUnlabeledEnrollmentPayload(payload, password);
     state.enrollmentCode = code;
-    state.activeEnrollmentEntryId = entryId;
+    state.beginEnrollmentEntry(entryId);
     log.info("enrollment code issued", { providerId });
     return code;
   } finally {

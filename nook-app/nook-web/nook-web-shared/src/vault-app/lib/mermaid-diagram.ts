@@ -1,14 +1,30 @@
 /** Lazy-loaded Mermaid rendering for in-app help diagrams. */
 
-export type MermaidTheme = "light" | "dark";
+export enum MermaidTheme {
+  Light = "light",
+  Dark = "dark",
+}
 
-let mermaidModule: typeof import("mermaid") | undefined = undefined;
+enum MermaidModuleCacheKind {
+  NotLoaded = "not-loaded",
+  Loaded = "loaded",
+}
+
+type MermaidModuleCache =
+  | { kind: MermaidModuleCacheKind.NotLoaded }
+  | { kind: MermaidModuleCacheKind.Loaded; module: typeof import("mermaid") };
+
+let mermaidModuleCache: MermaidModuleCache = {
+  kind: MermaidModuleCacheKind.NotLoaded,
+};
 
 async function loadMermaid() {
-  if (!mermaidModule) {
-    mermaidModule = await import("mermaid");
+  if (mermaidModuleCache.kind === MermaidModuleCacheKind.Loaded) {
+    return mermaidModuleCache.module.default;
   }
-  return mermaidModule.default;
+  const loaded = await import("mermaid");
+  mermaidModuleCache = { kind: MermaidModuleCacheKind.Loaded, module: loaded };
+  return loaded.default;
 }
 
 export async function renderMermaidDiagram(
@@ -18,7 +34,7 @@ export async function renderMermaidDiagram(
   const mermaid = await loadMermaid();
   mermaid.initialize({
     startOnLoad: false,
-    theme: theme === "dark" ? "dark" : "default",
+    theme: theme === MermaidTheme.Dark ? "dark" : "default",
     securityLevel: "strict",
     fontFamily: "inherit",
   });

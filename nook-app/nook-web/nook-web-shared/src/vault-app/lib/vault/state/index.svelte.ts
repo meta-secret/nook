@@ -14,7 +14,10 @@ function delegateState(
   for (const key of keys) {
     Object.defineProperty(target, key, {
       enumerable: true,
-      get: () => Reflect.get(state, key),
+      get: () => {
+        const value = Reflect.get(state, key);
+        return typeof value === "function" ? value.bind(state) : value;
+      },
       set: (value: unknown) => Reflect.set(state, key, value),
     });
   }
@@ -45,25 +48,46 @@ const providerKeys = [
   "providers",
   "providersLoaded",
   "localVaults",
-  "activeVaultStoreId",
-  "selectedLoginVaultStoreId",
+  "localVaultCatalog",
+  "activeVault",
+  "openActiveVault",
+  "hasActiveVaultStore",
+  "requireActiveVaultStoreId",
+  "clearActiveVaultStore",
+  "selectedLoginVault",
+  "selectLoginVault",
+  "hasSelectedLoginVaultStore",
+  "clearSelectedLoginVaultStore",
   "localVaultPresent",
-  "localLoginPrepared",
-  "loginSetupType",
+  "localLoginPreparation",
+  "loginSetup",
+  "activateLoginSetup",
+  "clearLoginSetup",
   "loginRequiresExistingVault",
-  "existingVaultRecoverySummary",
+  "recoveryDiscovery",
+  "recordExistingVaultRecovery",
+  "requireExistingVaultRecovery",
+  "clearExistingVaultRecoverySummary",
   "addProviderOpen",
   "storageMode",
   "githubPat",
   "githubRepo",
-  "oauthFile",
-  "localFolder",
+  "oauthFileDraft",
+  "configureOauthFile",
+  "requireOauthFileConfig",
+  "clearOauthFile",
+  "localFolderDraft",
+  "configureLocalFolder",
+  "requireLocalFolderConfig",
+  "clearLocalFolder",
   "localFolderBackupSupported",
   "vaultArchitecture",
   "draftDeviceMode",
   "draftVaultType",
   "draftReplicationType",
-  "oauthSetupPreset",
+  "oauthSetupSelection",
+  "selectOauthSetupPreset",
+  "clearOauthSetupPreset",
   "googleOAuthBusy",
   "icloudOAuthPreparing",
   "icloudOAuthReady",
@@ -71,7 +95,10 @@ const providerKeys = [
 ] as const satisfies readonly (keyof VaultProviderState)[];
 
 const sessionKeys = [
-  "manager",
+  "managerSession",
+  "hasManager",
+  "requireManager",
+  "openManager",
   "deviceProtectionStatus",
   "deviceProtectionLockedStatus",
   "isAuthenticated",
@@ -95,8 +122,13 @@ const sessionKeys = [
   "enrollmentFromUrlPending",
   "loginEnrollmentCode",
   "passwordEntries",
-  "selectedPasswordEntryId",
-  "activeEnrollmentEntryId",
+  "selectedPasswordEntry",
+  "selectPasswordEntry",
+  "clearSelectedPasswordEntry",
+  "activeEnrollmentEntry",
+  "beginEnrollmentEntry",
+  "clearActiveEnrollmentEntry",
+  "clearManager",
 ] as const satisfies readonly (keyof VaultSessionState)[];
 
 const secretsKeys = [
@@ -106,6 +138,7 @@ const secretsKeys = [
   "secretPageSize",
   "secretQuery",
   "secretTypeFilter",
+  "clearSecretTypeFilter",
 ] as const satisfies readonly (keyof VaultSecretsState)[];
 
 const sentinelKeys = [
@@ -114,7 +147,9 @@ const sentinelKeys = [
   "sentinelGenesisParticipantCount",
   "sentinelGenesisParticipants",
   "sentinelGenesisDeliveries",
-  "sentinelGenesisStoreId",
+  "sentinelGenesisTarget",
+  "selectSentinelGenesisStore",
+  "clearSentinelGenesisStore",
   "sentinelCeremonyPrompt",
   "sentinelUnlockStatus",
   "sentinelUnlockRequest",
@@ -123,14 +158,23 @@ const sentinelKeys = [
 ] as const satisfies readonly (keyof VaultSentinelState)[];
 
 const syncKeys = [
-  "lastSyncedAt",
+  "lastSync",
+  "markSynced",
   "isSyncing",
-  "syncingProviderId",
+  "manualProviderSync",
+  "manualProviderSyncRunning",
+  "beginManualProviderSync",
+  "clearSyncingProvider",
   "isFanOutSyncing",
   "replacementConflicts",
   "securityConflicts",
-  "pendingSyncConflict",
-  "localFolderMultipleVaultsIssue",
+  "syncConflictReview",
+  "syncConflictRequiresDecision",
+  "stageSyncConflict",
+  "clearPendingSyncConflict",
+  "localFolderHealth",
+  "reportLocalFolderMultipleVaults",
+  "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 
 type VaultStateSliceFields = VaultRuntimeState &
@@ -142,8 +186,8 @@ type VaultStateSliceFields = VaultRuntimeState &
   VaultSyncState;
 
 class VaultStateSlicesBase {
-  constructor() {
-    delegateState(this, new VaultRuntimeState(), runtimeKeys);
+  constructor(runtimeState = new VaultRuntimeState()) {
+    delegateState(this, runtimeState, runtimeKeys);
     delegateState(this, new VaultUiState(), uiKeys);
     delegateState(this, new VaultProviderState(), providerKeys);
     delegateState(this, new VaultSessionState(), sessionKeys);
@@ -153,8 +197,12 @@ class VaultStateSlicesBase {
   }
 }
 
-type VaultStateSlicesConstructor = new () => VaultStateSlicesBase &
-  VaultStateSliceFields;
+type VaultStateSlicesConstructor = {
+  new (): VaultStateSlicesBase & VaultStateSliceFields;
+  new (
+    runtimeState: VaultRuntimeState,
+  ): VaultStateSlicesBase & VaultStateSliceFields;
+};
 
 export const VaultStateSlices =
   VaultStateSlicesBase as VaultStateSlicesConstructor;

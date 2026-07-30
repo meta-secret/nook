@@ -10,7 +10,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 
 | Skill card | Purpose | Executable skill |
 |---|---|---|
-| [source-file-size.md](source-file-size.md) | **P1 / most critical structure rule:** hard source limits require cohesive domain or architectural decomposition; test-only and arbitrary splits are forbidden | [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md) |
+| [source-file-size.md](source-file-size.md) | **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition | [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md) |
 | [code-review-comments.md](code-review-comments.md) | Handle every active comment without waiting for reviewers: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.agents/skills/code-review-comments/SKILL.md`](../../.agents/skills/code-review-comments/SKILL.md) |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional project skills | [`.agents/skills/dynamic-skill/SKILL.md`](../../.agents/skills/dynamic-skill/SKILL.md) |
 | [efficient-pr-delivery.md](efficient-pr-delivery.md) | Ship PRs with focused hosted execution, explicit complete validation, and exact-head readiness | [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md) |
@@ -23,6 +23,7 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
 | [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes and generated DTOs in Rust/WASM, reserve TypeScript for UI/browser glue, and model sum types as enums | |
 | [svelte-state-modeling.md](svelte-state-modeling.md) | Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM | |
 | [typescript-serial-operation-queues.md](typescript-serial-operation-queues.md) | Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains | |
+| [typescript-explicit-state.md](typescript-explicit-state.md) | Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns | |
 | [ui-design-skills.md](ui-design-skills.md) | Always load both `impeccable` and `design-taste-frontend` for user-visible UI work, applying them through Nook's Svelte, product, accessibility, and typed-boundary constraints | |
 | [web-unused-code.md](web-unused-code.md) | Enable class-member analysis in every web Knip graph and remove every valid unused-code finding | |
 

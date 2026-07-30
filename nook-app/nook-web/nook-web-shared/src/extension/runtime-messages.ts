@@ -1,16 +1,41 @@
+import {
+  isExtensionConnectScope,
+  type ExtensionConnectScope,
+} from './extension-connect-scope'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from './paired-vault-identity-status'
+
+export { ExtensionPairedVaultIdentityStatusMessageStatus }
+
+export enum ExtensionPairingVaultType {
+  Simple = 'simple',
+  Sentinel = 'sentinel',
+}
+
+export enum OpenSimpleVaultMessageType {
+  NookOpenSimpleVault = 'nook:open-simple-vault',
+}
+
 export type OpenSimpleVaultMessage = {
-  type: 'nook:open-simple-vault'
+  type: OpenSimpleVaultMessageType.NookOpenSimpleVault
+}
+
+export enum OpenCompanionLauncherMessageType {
+  NookOpenCompanionLauncher = 'nook:open-companion-launcher',
 }
 
 export type OpenCompanionLauncherMessage = {
-  type: 'nook:open-companion-launcher'
+  type: OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
   payload?: {
     intent: 'pair'
   }
 }
 
+export enum BeginExtensionPairingMessageType {
+  NookBeginExtensionPairing = 'nook:begin-extension-pairing',
+}
+
 export type BeginExtensionPairingMessage = {
-  type: 'nook:begin-extension-pairing'
+  type: BeginExtensionPairingMessageType.NookBeginExtensionPairing
   payload: {
     deviceId: string
     devicePublicKey: string
@@ -20,7 +45,7 @@ export type BeginExtensionPairingMessage = {
 }
 
 export type ExtensionPairingApprovedGrant = {
-  vaultType: 'simple'
+  vaultType: ExtensionPairingVaultType.Simple
   deviceId: string
   devicePublicKey: string
   deviceSigningPublicKey: string
@@ -28,7 +53,7 @@ export type ExtensionPairingApprovedGrant = {
   vaultStoreId: string
   vaultName: string
   approvedAt: string
-  scopes: string[]
+  scopes: ExtensionConnectScope[]
   providers: unknown[]
 }
 
@@ -38,22 +63,34 @@ export type ExtensionEventLogRecord = {
   event: Record<string, unknown>
 }
 
+export enum ExtensionPairingApprovedMessageType {
+  NookExtensionPairingApproved = 'nook:extension-pairing-approved',
+}
+
 export type ExtensionPairingApprovedMessage = {
-  type: 'nook:extension-pairing-approved'
+  type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved
   payload: ExtensionPairingApprovedGrant
   eventLogRecords: ExtensionEventLogRecord[]
 }
 
+export enum ExtensionLocalEventLogUpdatedMessageType {
+  NookExtensionLocalEventLogUpdated = 'nook:extension-local-event-log-updated',
+}
+
 export type ExtensionLocalEventLogUpdatedMessage = {
-  type: 'nook:extension-local-event-log-updated'
+  type: ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated
   payload: {
     vaultStoreId: string
     eventLogRecords: ExtensionEventLogRecord[]
   }
 }
 
+export enum ExtensionIdentityHandoffRequestMessageType {
+  NookExtensionIdentityHandoffRequest = 'nook:extension-identity-handoff-request',
+}
+
 export type ExtensionIdentityHandoffRequestMessage = {
-  type: 'nook:extension-identity-handoff-request'
+  type: ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest
   payload: {
     recipientPublicKey: string
     nonce: string
@@ -63,8 +100,12 @@ export type ExtensionIdentityHandoffRequestMessage = {
   }
 }
 
+export enum ExtensionPairedVaultIdentityDiscoveryMessageType {
+  NookExtensionPairedVaultIdentityDiscovery = 'nook:extension-paired-vault-identity-discovery',
+}
+
 export type ExtensionPairedVaultIdentityDiscoveryMessage = {
-  type: 'nook:extension-paired-vault-identity-discovery'
+  type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery
   payload: {
     requestId: string
     vaultStoreId: string
@@ -72,8 +113,12 @@ export type ExtensionPairedVaultIdentityDiscoveryMessage = {
   }
 }
 
+export enum ExtensionPairedVaultUnlockRequestMessageType {
+  NookExtensionPairedVaultUnlockRequest = 'nook:extension-paired-vault-unlock-request',
+}
+
 export type ExtensionPairedVaultUnlockRequestMessage = {
-  type: 'nook:extension-paired-vault-unlock-request'
+  type: ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest
   payload: {
     requestId: string
     vaultStoreId: string
@@ -85,37 +130,47 @@ type ExtensionPairedVaultIdentityStatusBase = {
   vaultStoreId: string
 }
 
+export enum ExtensionPairedVaultIdentityStatusMessageType {
+  NookExtensionPairedVaultIdentityStatus = 'nook:extension-paired-vault-identity-status',
+}
+
 export type ExtensionPairedVaultIdentityStatusMessage =
   | {
-      type: 'nook:extension-paired-vault-identity-status'
+      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus
       payload: ExtensionPairedVaultIdentityStatusBase & {
-        status: 'unavailable' | 'locked'
+        status:
+          | ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+          | ExtensionPairedVaultIdentityStatusMessageStatus.Locked
       }
     }
   | {
-      type: 'nook:extension-paired-vault-identity-status'
+      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus
       payload: ExtensionPairedVaultIdentityStatusBase & {
-        status: 'different-vault'
+        status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
         connectedVaultStoreId: string
         connectedVaultName: string
       }
     }
   | {
-      type: 'nook:extension-paired-vault-identity-status'
+      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus
       payload: ExtensionPairedVaultIdentityStatusBase & {
-        status: 'unlocked'
+        status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
         extensionRuntimeId: string
         deviceId: string
         devicePublicKey: string
         deviceSigningPublicKey: string
         deviceLabel: string
         nonce: string
-        scopes: string[]
+        scopes: ExtensionConnectScope[]
       }
     }
 
+export enum ExtensionPairedVaultIdentityHandoffRequestMessageType {
+  NookExtensionPairedVaultIdentityHandoffRequest = 'nook:extension-paired-vault-identity-handoff-request',
+}
+
 export type ExtensionPairedVaultIdentityHandoffRequestMessage = {
-  type: 'nook:extension-paired-vault-identity-handoff-request'
+  type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest
   payload: ExtensionIdentityHandoffRequestMessage['payload'] & {
     vaultStoreId: string
   }
@@ -170,7 +225,10 @@ export function isRuntimeMessage(message: unknown): message is RuntimeMessage {
 export function isOpenSimpleVaultMessage(
   message: unknown,
 ): message is OpenSimpleVaultMessage {
-  return isRuntimeMessage(message) && message.type === 'nook:open-simple-vault'
+  return (
+    isRuntimeMessage(message) &&
+    message.type === OpenSimpleVaultMessageType.NookOpenSimpleVault
+  )
 }
 
 export function isOpenCompanionLauncherMessage(
@@ -178,7 +236,7 @@ export function isOpenCompanionLauncherMessage(
 ): message is OpenCompanionLauncherMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:open-companion-launcher'
+    message.type !== OpenCompanionLauncherMessageType.NookOpenCompanionLauncher
   ) {
     return false
   }
@@ -197,7 +255,8 @@ export function isBeginExtensionPairingMessage(
 ): message is BeginExtensionPairingMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:begin-extension-pairing' ||
+    message.type !==
+      BeginExtensionPairingMessageType.NookBeginExtensionPairing ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {
@@ -221,7 +280,8 @@ export function isExtensionPairingApprovedMessage(
 ): message is ExtensionPairingApprovedMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-pairing-approved' ||
+    message.type !==
+      ExtensionPairingApprovedMessageType.NookExtensionPairingApproved ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {
@@ -242,7 +302,8 @@ export function isExtensionIdentityHandoffRequestMessage(
 ): message is ExtensionIdentityHandoffRequestMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-identity-handoff-request' ||
+    message.type !==
+      ExtensionIdentityHandoffRequestMessageType.NookExtensionIdentityHandoffRequest ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {
@@ -292,7 +353,7 @@ export function isExtensionPairedVaultIdentityDiscoveryMessage(
   return (
     isPairedVaultRequestMessage(
       message,
-      'nook:extension-paired-vault-identity-discovery',
+      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
     ) &&
     typeof (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
       .expiresAt === 'number' &&
@@ -310,7 +371,7 @@ export function isExtensionPairedVaultUnlockRequestMessage(
 ): message is ExtensionPairedVaultUnlockRequestMessage {
   return isPairedVaultRequestMessage(
     message,
-    'nook:extension-paired-vault-unlock-request',
+    ExtensionPairedVaultUnlockRequestMessageType.NookExtensionPairedVaultUnlockRequest,
   )
 }
 
@@ -319,7 +380,8 @@ export function isExtensionPairedVaultIdentityStatusMessage(
 ): message is ExtensionPairedVaultIdentityStatusMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-paired-vault-identity-status' ||
+    message.type !==
+      ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {
@@ -334,10 +396,17 @@ export function isExtensionPairedVaultIdentityStatusMessage(
   ) {
     return false
   }
-  if (payload.status === 'unavailable' || payload.status === 'locked') {
+  if (
+    payload.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
+    payload.status === ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+  ) {
     return true
   }
-  if (payload.status === 'different-vault') {
+  if (
+    payload.status ===
+    ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+  ) {
     return (
       typeof payload.connectedVaultStoreId === 'string' &&
       payload.connectedVaultStoreId.length > 0 &&
@@ -346,7 +415,8 @@ export function isExtensionPairedVaultIdentityStatusMessage(
     )
   }
   return (
-    payload.status === 'unlocked' &&
+    payload.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked &&
     typeof payload.extensionRuntimeId === 'string' &&
     payload.extensionRuntimeId.length > 0 &&
     typeof payload.deviceId === 'string' &&
@@ -369,7 +439,8 @@ export function isExtensionPairedVaultIdentityHandoffRequestMessage(
 ): message is ExtensionPairedVaultIdentityHandoffRequestMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-paired-vault-identity-handoff-request' ||
+    message.type !==
+      ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {
@@ -398,7 +469,7 @@ export function isExtensionPairingApprovedGrant(
   if (!value || typeof value !== 'object') return false
   const payload = value as Record<string, unknown>
   return (
-    payload.vaultType === 'simple' &&
+    payload.vaultType === ExtensionPairingVaultType.Simple &&
     typeof payload.deviceId === 'string' &&
     typeof payload.devicePublicKey === 'string' &&
     typeof payload.deviceSigningPublicKey === 'string' &&
@@ -407,7 +478,7 @@ export function isExtensionPairingApprovedGrant(
     typeof payload.vaultName === 'string' &&
     typeof payload.approvedAt === 'string' &&
     Array.isArray(payload.scopes) &&
-    payload.scopes.every((scope) => typeof scope === 'string') &&
+    payload.scopes.every(isExtensionConnectScope) &&
     Array.isArray(payload.providers)
   )
 }
@@ -417,7 +488,8 @@ export function isExtensionLocalEventLogUpdatedMessage(
 ): message is ExtensionLocalEventLogUpdatedMessage {
   if (
     !isRuntimeMessage(message) ||
-    message.type !== 'nook:extension-local-event-log-updated' ||
+    message.type !==
+      ExtensionLocalEventLogUpdatedMessageType.NookExtensionLocalEventLogUpdated ||
     typeof (message as { payload?: unknown }).payload !== 'object' ||
     !(message as { payload?: unknown }).payload
   ) {

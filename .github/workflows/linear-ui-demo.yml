@@ -167,10 +167,13 @@ jobs:
               return
             }
 
-            const { transitionUiDemoIssue } = require(
+            const {
+              transitionUiDemoIssue,
+              UiDemoIssueTransitionKind,
+            } = require(
               `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
             )
-            const issue = await transitionUiDemoIssue({
+            const result = await transitionUiDemoIssue({
               apiKey: process.env.LINEAR_API_KEY,
               config: {
                 repository: `${context.repo.owner}/${context.repo.repo}`,
@@ -179,4 +182,6 @@ jobs:
               merged: context.payload.pull_request.merged,
               prNumber: context.payload.pull_request.number,
             })
-            if (!issue) core.info('This pull request has no Linear UI demo issue')
+            if (result.kind === UiDemoIssueTransitionKind.IssueAbsent) {
+              core.info('This pull request has no Linear UI demo issue')
+            }

@@ -1,9 +1,9 @@
 import {
   dumpLogs,
   getLogLevel,
+  LogLevel,
   logCount,
   type LogEntry,
-  type LogLevel,
 } from "$lib/log";
 import { stripBasePath } from "$lib/routes";
 
@@ -33,14 +33,19 @@ export type AppLogsResponse = {
 };
 
 const LOG_LEVELS: readonly LogLevel[] = [
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
+  LogLevel.Error,
+  LogLevel.Warn,
+  LogLevel.Info,
+  LogLevel.Debug,
+  LogLevel.Trace,
 ];
 
-function parseLevel(raw: string | undefined, fallback: LogLevel): LogLevel {
+function parseLevel(
+  params: URLSearchParams,
+  name: string,
+  fallback: LogLevel,
+): LogLevel {
+  const raw = params.get(name);
   const value = raw?.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
     ? (value as LogLevel)
@@ -48,10 +53,12 @@ function parseLevel(raw: string | undefined, fallback: LogLevel): LogLevel {
 }
 
 function parsePositiveInt(
-  raw: string | undefined,
+  params: URLSearchParams,
+  name: string,
   fallback: number,
   max: number,
 ) {
+  const raw = params.get(name);
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.min(parsed, max);
@@ -69,13 +76,9 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith("?") ? search.slice(1) : search,
   );
   return {
-    minLevel: parseLevel(params.get("minLevel") ?? undefined, "trace"),
-    limit: parsePositiveInt(params.get("limit") ?? undefined, 500, 5000),
-    offset: parsePositiveInt(
-      params.get("offset") ?? undefined,
-      0,
-      Number.MAX_SAFE_INTEGER,
-    ),
+    minLevel: parseLevel(params, "minLevel", LogLevel.Trace),
+    limit: parsePositiveInt(params, "limit", 500, 5000),
+    offset: parsePositiveInt(params, "offset", 0, Number.MAX_SAFE_INTEGER),
   };
 }
 
@@ -85,8 +88,8 @@ export function buildAppLogsUrl(
 ): string {
   const params = new URLSearchParams();
   if (query.minLevel) params.set("minLevel", query.minLevel);
-  if (query.limit !== undefined) params.set("limit", String(query.limit));
-  if (query.offset !== undefined) params.set("offset", String(query.offset));
+  if ("limit" in query) params.set("limit", String(query.limit));
+  if ("offset" in query) params.set("offset", String(query.offset));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
 }

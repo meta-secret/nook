@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  isAuthenticationOutcomeClassifyMessage,
-  isAuthenticationOutcomeVerdictName,
-} from '../src/lib/outcome-evidence-messages'
+import { isAuthenticationOutcomeClassifyMessage } from '../src/lib/outcome-evidence-messages'
 
 const validObservation = {
   navigatedAwayFromAuthPath: true,
@@ -36,10 +33,11 @@ describe('outcome evidence messages', () => {
     expect(
       isAuthenticationOutcomeClassifyMessage({
         type: 'nook:authentication-outcome-classify',
-        payload: { observation: { ...validObservation, password: 'x' } },
+        payload: {
+          observation: { ...validObservation, password: 'x' },
+          timeoutMs: 8_000,
+        },
       }),
     ).toBe(true)
-    expect(isAuthenticationOutcomeVerdictName('sufficient')).toBe(true)
-    expect(isAuthenticationOutcomeVerdictName('maybe')).toBe(false)
   })
 })

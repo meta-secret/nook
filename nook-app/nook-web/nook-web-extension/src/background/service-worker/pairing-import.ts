@@ -1,5 +1,6 @@
 import type { ExtensionPairingApprovedMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
+  ProviderCredentialStagingKind,
   scrubProviderCredentials,
   stageProviderCredentials,
 } from '../../lib/provider-credential-staging'
@@ -10,6 +11,7 @@ import {
   isStoredExtensionPairingGrant,
   pairingGrantStorageKey,
   setupAfterPairingGrantRemoval,
+  PairingSetupAfterRemovalKind,
   setupStorageKey,
 } from '../pairing-grants'
 import {
@@ -58,9 +60,11 @@ export async function importApprovedPairing(
       return { ok: false, reason: 'event-log-access-not-granted' }
     }
     await ensureExtensionSessionDocument()
+    const staging = stageProviderCredentials(message.payload.providers)
     const providers =
-      stageProviderCredentials(message.payload.providers) ??
-      message.payload.providers
+      staging.kind === ProviderCredentialStagingKind.Staged
+        ? staging.providers
+        : message.payload.providers
     const pairingItems = extensionPairingGrantStorageItems(
       message.payload,
       imported,
@@ -130,10 +134,17 @@ export async function importLocalEventLogUpdate(
     const imported = await importExtensionEventLog(grant, eventLogRecords)
     if (!imported.accessGranted) {
       const setup = setupAfterPairingGrantRemoval(stored, vaultStoreId)
-      await reconcilePairingStorage(setup ? { [setupStorageKey]: setup } : {}, [
-        key,
-        ...(setup ? [] : [setupStorageKey]),
-      ])
+      await reconcilePairingStorage(
+        setup.kind === PairingSetupAfterRemovalKind.Ready
+          ? { [setupStorageKey]: setup.setup }
+          : {},
+        [
+          key,
+          ...(setup.kind === PairingSetupAfterRemovalKind.Ready
+            ? []
+            : [setupStorageKey]),
+        ],
+      )
       return { ok: false, reason: 'event-log-access-revoked' }
     }
     const setup = stored[setupStorageKey]

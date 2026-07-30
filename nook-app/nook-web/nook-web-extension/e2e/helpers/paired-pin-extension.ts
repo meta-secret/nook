@@ -31,7 +31,7 @@ const rootDir = path.resolve(
 const extensionDir =
   process.env.NOOK_EXTENSION_E2E_DIR || path.join(rootDir, 'dist')
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 const setupStorageKey = 'nook:extension-setup'
 const EXTENSION_TIMEOUT_MS = 45_000
 
@@ -129,7 +129,9 @@ export async function launchPairedPinExtension(
 
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    executablePath: chromiumExecutablePath,
+    ...(chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath }
+      : {}),
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,

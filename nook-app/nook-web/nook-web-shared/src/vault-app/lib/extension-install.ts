@@ -1,30 +1,49 @@
 import { DEFAULT_SITE_URL } from "$lib/sitemap";
 import {
   discoverPairedExtensionIdentity,
+  InstalledExtensionRuntimeKind,
   readInstalledExtensionRuntimeId,
 } from "$lib/extension-connect";
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+import {
+  ActiveVaultKind,
+  type ActiveVault,
+} from "$lib/vault/state/provider.svelte";
 
-export type ExtensionInstallMethod = "chrome_web_store" | "manual_zip";
+export enum ExtensionInstallMethod {
+  ChromeWebStore = "chrome_web_store",
+  ManualZip = "manual_zip",
+}
+
+export enum ExtensionInstallSource {
+  Metadata = "metadata",
+  Fallback = "fallback",
+}
 
 export type ExtensionInstallTarget = {
   installMethod: ExtensionInstallMethod;
   installUrl: string;
   channel?: string;
   version?: string;
-  source: "metadata" | "fallback";
+  source: ExtensionInstallSource;
 };
 
-export type ExtensionSetupStatus =
-  | "not_installed"
-  | "installed_unpaired"
-  | "paired_elsewhere"
-  | "paired";
+export enum ExtensionSetupStatus {
+  NotInstalled = "not_installed",
+  InstalledUnpaired = "installed_unpaired",
+  PairedElsewhere = "paired_elsewhere",
+  Paired = "paired",
+}
 
-export type ExtensionSetupState = {
-  status: ExtensionSetupStatus;
-  connectedVaultName?: string;
-  connectedVaultStoreId?: string;
-};
+export type ExtensionSetupState =
+  | { status: ExtensionSetupStatus.NotInstalled }
+  | { status: ExtensionSetupStatus.InstalledUnpaired }
+  | { status: ExtensionSetupStatus.Paired }
+  | {
+      status: ExtensionSetupStatus.PairedElsewhere;
+      connectedVaultName: string;
+      connectedVaultStoreId: string;
+    };
 
 type BrowserExtensionEnvironment = {
   maxTouchPoints: number;
@@ -40,6 +59,30 @@ type ExtensionDeploymentMetadata = {
   install_method: ExtensionInstallMethod;
   install_url: string;
 };
+
+enum ExtensionMetadataParseKind {
+  Invalid = "invalid",
+  Valid = "valid",
+}
+
+type ExtensionMetadataParse =
+  | { kind: ExtensionMetadataParseKind.Invalid }
+  | {
+      kind: ExtensionMetadataParseKind.Valid;
+      metadata: ExtensionDeploymentMetadata;
+    };
+
+enum ExtensionMetadataFetchKind {
+  Unavailable = "unavailable",
+  Loaded = "loaded",
+}
+
+type ExtensionMetadataFetch =
+  | { kind: ExtensionMetadataFetchKind.Unavailable }
+  | {
+      kind: ExtensionMetadataFetchKind.Loaded;
+      metadata: ExtensionDeploymentMetadata;
+    };
 
 function marketingSiteBaseUrl(): string {
   const fromEnv = import.meta.env.VITE_SITE_URL?.trim();
@@ -83,7 +126,7 @@ export function shouldOfferExtensionSetup(
   environment: BrowserExtensionEnvironment = navigator,
 ): boolean {
   return (
-    status !== "not_installed" ||
+    status !== ExtensionSetupStatus.NotInstalled ||
     browserSupportsExtensionInstallation(environment)
   );
 }
@@ -91,13 +134,16 @@ export function shouldOfferExtensionSetup(
 function isExtensionInstallMethod(
   value: unknown,
 ): value is ExtensionInstallMethod {
-  return value === "chrome_web_store" || value === "manual_zip";
+  return (
+    value === ExtensionInstallMethod.ChromeWebStore ||
+    value === ExtensionInstallMethod.ManualZip
+  );
 }
 
-function parseExtensionMetadata(
-  value: unknown,
-): ExtensionDeploymentMetadata | undefined {
-  if (!value || typeof value !== "object") return undefined;
+function parseExtensionMetadata(value: unknown): ExtensionMetadataParse {
+  if (!value || typeof value !== "object") {
+    return { kind: ExtensionMetadataParseKind.Invalid };
+  }
   const record = value as Record<string, unknown>;
   const channel = typeof record.channel === "string" ? record.channel : "";
   const version = typeof record.version === "string" ? record.version : "";
@@ -112,22 +158,25 @@ function parseExtensionMetadata(
     !installUrl ||
     !isExtensionInstallMethod(record.install_method)
   ) {
-    return undefined;
+    return { kind: ExtensionMetadataParseKind.Invalid };
   }
   try {
     const parsed = new URL(installUrl);
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return undefined;
+      return { kind: ExtensionMetadataParseKind.Invalid };
     }
   } catch {
-    return undefined;
+    return { kind: ExtensionMetadataParseKind.Invalid };
   }
   return {
-    channel,
-    version,
-    extension_id: extensionId,
-    install_method: record.install_method,
-    install_url: installUrl,
+    kind: ExtensionMetadataParseKind.Valid,
+    metadata: {
+      channel,
+      version,
+      extension_id: extensionId,
+      install_method: record.install_method,
+      install_url: installUrl,
+    },
   };
 }
 
@@ -141,56 +190,77 @@ function metadataCandidateUrls(): string[] {
 
 async function fetchExtensionMetadata(
   url: string,
-): Promise<ExtensionDeploymentMetadata | undefined> {
+): Promise<ExtensionMetadataFetch> {
   try {
     const response = await fetch(url, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
-    if (!response.ok) return undefined;
-    return parseExtensionMetadata(await response.json());
+    if (!response.ok) return { kind: ExtensionMetadataFetchKind.Unavailable };
+    const parsed = parseExtensionMetadata(await response.json());
+    return parsed.kind === ExtensionMetadataParseKind.Valid
+      ? {
+          kind: ExtensionMetadataFetchKind.Loaded,
+          metadata: parsed.metadata,
+        }
+      : { kind: ExtensionMetadataFetchKind.Unavailable };
   } catch {
-    return undefined;
+    return { kind: ExtensionMetadataFetchKind.Unavailable };
   }
 }
 
 export async function loadExtensionInstallTarget(): Promise<ExtensionInstallTarget> {
   for (const url of metadataCandidateUrls()) {
     const metadata = await fetchExtensionMetadata(url);
-    if (!metadata) continue;
+    if (metadata.kind !== ExtensionMetadataFetchKind.Loaded) continue;
     return {
-      installMethod: metadata.install_method,
-      installUrl: metadata.install_url,
-      channel: metadata.channel,
-      version: metadata.version,
-      source: "metadata",
+      installMethod: metadata.metadata.install_method,
+      installUrl: metadata.metadata.install_url,
+      channel: metadata.metadata.channel,
+      version: metadata.metadata.version,
+      source: ExtensionInstallSource.Metadata,
     };
   }
   return {
-    installMethod: "manual_zip",
+    installMethod: ExtensionInstallMethod.ManualZip,
     installUrl: extensionInstallLandingUrl(),
-    source: "fallback",
+    source: ExtensionInstallSource.Fallback,
   };
 }
 
 export async function resolveExtensionSetupState(
-  vaultStoreId: string | undefined,
+  activeVault: ActiveVault,
 ): Promise<ExtensionSetupState> {
-  if (!readInstalledExtensionRuntimeId()) return { status: "not_installed" };
-  if (!vaultStoreId) return { status: "installed_unpaired" };
-
-  const discovery = await discoverPairedExtensionIdentity(vaultStoreId);
-  if (discovery.status === "locked" || discovery.status === "unlocked") {
-    return { status: "paired" };
+  if (
+    readInstalledExtensionRuntimeId().kind ===
+    InstalledExtensionRuntimeKind.NotInstalled
+  ) {
+    return { status: ExtensionSetupStatus.NotInstalled };
   }
-  if (discovery.status === "different-vault") {
+  if (activeVault.kind === ActiveVaultKind.Closed) {
+    return { status: ExtensionSetupStatus.InstalledUnpaired };
+  }
+
+  const discovery = await discoverPairedExtensionIdentity(activeVault.storeId);
+  if (
+    discovery.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
+    discovery.status ===
+      ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  ) {
+    return { status: ExtensionSetupStatus.Paired };
+  }
+  if (
+    discovery.status ===
+    ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+  ) {
     return {
-      status: "paired_elsewhere",
+      status: ExtensionSetupStatus.PairedElsewhere,
       connectedVaultName: discovery.connectedVaultName,
       connectedVaultStoreId: discovery.connectedVaultStoreId,
     };
   }
-  return { status: "installed_unpaired" };
+  return { status: ExtensionSetupStatus.InstalledUnpaired };
 }
 
 export function openExtensionInstallTarget(

@@ -1,6 +1,6 @@
 //! Key-epoch rotation errors.
 
-use nook_auth2::{MultiDeviceError, SecretPayloadError, VaultCryptoError};
+use nook_auth2::{MultiDeviceError, SecretPayloadError, ValidationError, VaultCryptoError};
 use thiserror::Error;
 
 pub type VaultEpochResult<T> = Result<T, VaultEpochError>;
@@ -21,4 +21,7 @@ pub enum VaultEpochError {
 
     #[error(transparent)]
     SecretPayload(#[from] SecretPayloadError),
+
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }

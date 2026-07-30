@@ -231,15 +231,15 @@ test.describe('local vault', () => {
       )
       return {
         recordCounts,
-        local: localStorage.getItem('nook_cleanup_probe'),
-        session: sessionStorage.getItem('nook_cleanup_probe'),
+        localPresent: Boolean(localStorage.getItem('nook_cleanup_probe')),
+        sessionPresent: Boolean(sessionStorage.getItem('nook_cleanup_probe')),
         caches: await caches.keys(),
         cookie: document.cookie,
       }
     })
     expect(remaining.recordCounts).toEqual([0, 0, 0, 0])
-    expect(remaining.local).toBeNull()
-    expect(remaining.session).toBeNull()
+    expect(remaining.localPresent).toBe(false)
+    expect(remaining.sessionPresent).toBe(false)
     expect(remaining.caches).not.toContain('nook-cleanup-probe')
     expect(remaining.cookie).not.toContain('nook_cleanup_probe=')
     await expect
@@ -254,13 +254,14 @@ test.describe('local vault', () => {
             }
           ).__nookVault
           if (!vault || vault.isAuthenticated) return false
-          const cleanupProbe =
-            sessionStorage.getItem('nook_cleanup_probe') ?? undefined
-          if (cleanupProbe !== undefined) {
+          const cleanupProbe = sessionStorage
+            .getItem('nook_cleanup_probe')
+            ?.valueOf()
+          if (cleanupProbe) {
             return false
           }
           try {
-            await vault.enqueueStorage(() => undefined)
+            await vault.enqueueStorage(() => {})
             return false
           } catch {
             return true

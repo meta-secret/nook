@@ -60,10 +60,12 @@ impl LocalEventStore {
     pub fn load_graph(&self, store_id: &str) -> EventResult<EventGraph> {
         let mut graph = EventGraph::new();
         for event_id in self.replica.event_ids() {
-            let bytes = self
-                .replica
-                .get_bytes(&event_id)
-                .expect("event id came from replica store");
+            let bytes =
+                self.replica
+                    .get_bytes(&event_id)
+                    .ok_or_else(|| EventError::MissingEvent {
+                        event_id: event_id.as_str().to_owned(),
+                    })?;
             let event = parse_event_storage_bytes(bytes)?;
             let _ = graph.insert(event, store_id)?;
         }
@@ -126,7 +128,9 @@ pub fn union_remote_events(
         }
         let bytes = candidate
             .get_bytes(&event_id)
-            .expect("candidate event was inserted before graph validation")
+            .ok_or_else(|| EventError::MissingEvent {
+                event_id: event_id.as_str().to_owned(),
+            })?
             .to_vec();
         accepted.put_event(event_id, bytes);
     }
@@ -406,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn union_rejects_event_id_mismatch() -> EventResult<()> {
+    fn union_rejects_event_id_mismatch() -> anyhow::Result<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
@@ -415,7 +419,8 @@ mod tests {
 
         let mut local = LocalEventStore::new();
         let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE)
-            .expect_err("store test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(
             err,
             crate::EventError::RemoteEventIdMismatch { .. }
@@ -445,14 +450,15 @@ mod tests {
     }
 
     #[test]
-    fn remote_event_store_filter_rejects_id_mismatch() -> EventResult<()> {
+    fn remote_event_store_filter_rejects_id_mismatch() -> anyhow::Result<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE)
-            .expect_err("store test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(
             err,
             crate::EventError::RemoteEventIdMismatch { .. }
@@ -535,16 +541,17 @@ mod tests {
     }
 
     #[test]
-    fn classify_remote_event_log_fails_closed_on_unreadable_event() -> EventResult<()> {
+    fn classify_remote_event_log_fails_closed_on_unreadable_event() -> anyhow::Result<()> {
         let event_id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
         let err = classify_remote_event_log(&[(event_id, b"not event yaml".to_vec())], Some(STORE))
-            .expect_err("store test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, crate::EventError::ParseRemoteEvent(_)));
         Ok(())
     }
 
     #[test]
-    fn union_rejects_current_schema_event_with_bad_signature() -> EventResult<()> {
+    fn union_rejects_current_schema_event_with_bad_signature() -> anyhow::Result<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let mut genesis = genesis(&signing_key)?;
         let event_id = genesis.id()?;
@@ -553,7 +560,8 @@ mod tests {
 
         let mut local = LocalEventStore::new();
         let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE)
-            .expect_err("store test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(
             err,
             crate::EventError::SignatureVerificationFailed
@@ -648,10 +656,9 @@ mod tests {
         let before_event_ids = local.event_ids();
         let before_outbox = local.pending_outbox("drive");
 
-        let err = union_remote_events(&mut local, &[(remote_id.clone(), remote_bytes)], STORE)
-            .expect_err("invalid existing graph should reject the staged union");
+        let result = union_remote_events(&mut local, &[(remote_id.clone(), remote_bytes)], STORE);
 
-        assert!(matches!(err, EventError::ParseStoredEvent(_)));
+        assert!(matches!(result, Err(EventError::ParseStoredEvent(_))));
         assert_eq!(local.event_ids(), before_event_ids);
         assert_eq!(
             local.get_bytes(&existing_id),

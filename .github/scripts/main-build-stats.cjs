@@ -41,7 +41,8 @@ function requireString(value, label) {
 
 function timestampMilliseconds(value, label) {
   const timestamp = Date.parse(requireString(value, label))
-  if (!Number.isFinite(timestamp)) throw new Error(`${label} must be an ISO timestamp`)
+  if (!Number.isFinite(timestamp))
+    throw new Error(`${label} must be an ISO timestamp`)
   return timestamp
 }
 
@@ -51,14 +52,23 @@ function durationSeconds(
   label,
   { negativeSkewToleranceMilliseconds = 0 } = {},
 ) {
-  if (!startedAt || !completedAt) return null
+  if (!startedAt || !completedAt) return { complete: false }
   const started = timestampMilliseconds(startedAt, `${label}.started_at`)
   const completed = timestampMilliseconds(completedAt, `${label}.completed_at`)
   if (completed < started) {
-    if (started - completed <= negativeSkewToleranceMilliseconds) return 0
+    if (started - completed <= negativeSkewToleranceMilliseconds) {
+      return { complete: true, seconds: 0 }
+    }
     throw new Error(`${label} completion precedes its start`)
   }
-  return Math.round((completed - started) / 1000)
+  return {
+    complete: true,
+    seconds: Math.round((completed - started) / 1000),
+  }
+}
+
+function durationField(measurement) {
+  return measurement.complete ? { duration_seconds: measurement.seconds } : {}
 }
 
 function maximumTimestamp(values, fallback) {
@@ -84,62 +94,97 @@ function minimumTimestamp(values, fallback) {
 }
 
 function normalizeStep(step) {
+  const duration = durationSeconds(
+    step.started_at,
+    step.completed_at,
+    `step ${step.name}`,
+  )
   return {
     number: requireInteger(step.number, 'step.number'),
     name: requireString(step.name, 'step.name'),
     status: requireString(step.status, 'step.status'),
-    conclusion: step.conclusion ?? null,
-    started_at: step.started_at ?? null,
-    completed_at: step.completed_at ?? null,
-    duration_seconds: durationSeconds(step.started_at, step.completed_at, `step ${step.name}`),
+    ...(step.conclusion ? { conclusion: step.conclusion } : {}),
+    ...(step.started_at ? { started_at: step.started_at } : {}),
+    ...(step.completed_at ? { completed_at: step.completed_at } : {}),
+    ...durationField(duration),
   }
 }
 
 function normalizeJob(job) {
-  const steps = (job.steps ?? []).map(normalizeStep).sort((left, right) => left.number - right.number)
+  const steps = (job.steps ?? [])
+    .map(normalizeStep)
+    .sort((left, right) => left.number - right.number)
+  const duration = durationSeconds(
+    job.started_at,
+    job.completed_at,
+    `job ${job.name}`,
+    {
+      // GitHub can report a never-started skipped job as completing one second
+      // before its nominal start when both timestamps are rounded to seconds.
+      negativeSkewToleranceMilliseconds:
+        job.conclusion === 'skipped' ? 1000 : 0,
+    },
+  )
   return {
     id: requireInteger(job.id, 'job.id'),
     name: requireString(job.name, 'job.name'),
     status: requireString(job.status, 'job.status'),
-    conclusion: job.conclusion ?? null,
-    runner_name: job.runner_name || null,
-    runner_group_name: job.runner_group_name || null,
+    ...(job.conclusion ? { conclusion: job.conclusion } : {}),
+    ...(job.runner_name ? { runner_name: job.runner_name } : {}),
+    ...(job.runner_group_name
+      ? { runner_group_name: job.runner_group_name }
+      : {}),
     labels: Array.isArray(job.labels) ? job.labels.map(String) : [],
-    started_at: job.started_at ?? null,
-    completed_at: job.completed_at ?? null,
-    duration_seconds: durationSeconds(job.started_at, job.completed_at, `job ${job.name}`, {
-      // GitHub can report a never-started skipped job as completing one second
-      // before its nominal start when both timestamps are rounded to seconds.
-      negativeSkewToleranceMilliseconds: job.conclusion === 'skipped' ? 1000 : 0,
-    }),
+    ...(job.started_at ? { started_at: job.started_at } : {}),
+    ...(job.completed_at ? { completed_at: job.completed_at } : {}),
+    ...durationField(duration),
     steps,
   }
 }
 
 function sumNamedStepSeconds(jobs, predicate) {
   const durations = jobs.flatMap((job) =>
-    job.steps.filter((step) => predicate(step.name)).map((step) => step.duration_seconds),
+    job.steps
+      .filter((step) => predicate(step.name))
+      .map((step) => step.duration_seconds),
   )
-  if (durations.length === 0 || durations.some((duration) => duration === null)) return null
-  return durations.reduce((total, duration) => total + duration, 0)
+  if (
+    durations.length === 0 ||
+    durations.some((duration) => !Number.isInteger(duration))
+  ) {
+    return { complete: false }
+  }
+  return {
+    complete: true,
+    seconds: durations.reduce((total, duration) => total + duration, 0),
+  }
 }
 
 function median(values) {
   const sorted = [...values].sort((left, right) => left - right)
-  if (sorted.length === 0) return null
+  if (sorted.length === 0) {
+    throw new Error('median requires at least one measured value')
+  }
   const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2
 }
 
 function metricComparison(current, baselines) {
-  if (current === null || baselines.some((value) => value === null)) {
-    return { baseline: null, changePercent: null, regression: false }
+  if (
+    !Number.isFinite(current) ||
+    baselines.length === 0 ||
+    baselines.some((value) => !Number.isFinite(value))
+  ) {
+    return { regression: false }
   }
   const baseline = median(baselines)
-  if (baseline === null || baseline === 0) {
-    return { baseline, changePercent: null, regression: false }
+  if (baseline === 0) {
+    return { baseline, regression: false }
   }
-  const changePercent = Math.round(((current - baseline) / baseline) * 1000) / 10
+  const changePercent =
+    Math.round(((current - baseline) / baseline) * 1000) / 10
   return {
     baseline,
     changePercent,
@@ -187,17 +232,22 @@ function cacheTelemetrySummary(cacheTelemetry, run) {
       sccache_compile_requests: total('sccache', 'compile_requests'),
       sccache_cache_hits: sccacheHits,
       sccache_cache_misses: sccacheMisses,
-      sccache_hit_rate_percent:
-        sccacheHits + sccacheMisses === 0
-          ? null
-          : Math.round((sccacheHits / (sccacheHits + sccacheMisses)) * 10_000) /
-            100,
+      ...(sccacheHits + sccacheMisses === 0
+        ? {}
+        : {
+            sccache_hit_rate_percent:
+              Math.round(
+                (sccacheHits / (sccacheHits + sccacheMisses)) * 10_000,
+              ) / 100,
+          }),
       buildkit_completed_steps: buildkitCompleted,
       buildkit_cached_steps: buildkitCached,
-      buildkit_cache_hit_rate_percent:
-        buildkitCompleted === 0
-          ? null
-          : Math.round((buildkitCached / buildkitCompleted) * 10_000) / 100,
+      ...(buildkitCompleted === 0
+        ? {}
+        : {
+            buildkit_cache_hit_rate_percent:
+              Math.round((buildkitCached / buildkitCompleted) * 10_000) / 100,
+          }),
     },
     jobs,
     collection: {
@@ -214,10 +264,8 @@ function addComparison(record, baselineRecords) {
       comparison: {
         baseline_runs: [],
         baseline_quality: 'not_applicable',
-        baseline_note: 'Failed and cancelled attempts retain partial timings but are not compared with successful builds',
-        wall_seconds_change_percent: null,
-        execution_seconds_change_percent: null,
-        build_seconds_change_percent: null,
+        baseline_note:
+          'Failed and cancelled attempts retain partial timings but are not compared with successful builds',
         regression: false,
         regression_reasons: [],
       },
@@ -237,13 +285,21 @@ function addComparison(record, baselineRecords) {
           candidate.source_run?.run_id === record.source_run.run_id &&
           candidate.source_run?.run_attempt === record.source_run.run_attempt
         ) &&
-        timestampMilliseconds(candidate.source_run.completed_at, 'baseline.completed_at') <
-          currentCompletedAt,
+        timestampMilliseconds(
+          candidate.source_run.completed_at,
+          'baseline.completed_at',
+        ) < currentCompletedAt,
     )
     .sort(
       (left, right) =>
-        timestampMilliseconds(right.source_run.completed_at, 'baseline.completed_at') -
-        timestampMilliseconds(left.source_run.completed_at, 'baseline.completed_at'),
+        timestampMilliseconds(
+          right.source_run.completed_at,
+          'baseline.completed_at',
+        ) -
+        timestampMilliseconds(
+          left.source_run.completed_at,
+          'baseline.completed_at',
+        ),
     )
     .slice(0, 2)
   const wall = metricComparison(
@@ -259,11 +315,13 @@ function addComparison(record, baselineRecords) {
     baselines.map((candidate) => candidate.summary.build_seconds),
   )
   const regressionReasons = []
-  if (wall.regression) regressionReasons.push('wall_seconds_exceeded_baseline_threshold')
+  if (wall.regression)
+    regressionReasons.push('wall_seconds_exceeded_baseline_threshold')
   if (execution.regression) {
     regressionReasons.push('execution_seconds_exceeded_baseline_threshold')
   }
-  if (build.regression) regressionReasons.push('build_seconds_exceeded_baseline_threshold')
+  if (build.regression)
+    regressionReasons.push('build_seconds_exceeded_baseline_threshold')
 
   return {
     ...record,
@@ -279,9 +337,15 @@ function addComparison(record, baselineRecords) {
           : baselines.length === 1
             ? 'Only one earlier successful Main record is available'
             : 'Two most recent successful Main attempts from the same workflow',
-      wall_seconds_change_percent: wall.changePercent,
-      execution_seconds_change_percent: execution.changePercent,
-      build_seconds_change_percent: build.changePercent,
+      ...('changePercent' in wall
+        ? { wall_seconds_change_percent: wall.changePercent }
+        : {}),
+      ...('changePercent' in execution
+        ? { execution_seconds_change_percent: execution.changePercent }
+        : {}),
+      ...('changePercent' in build
+        ? { build_seconds_change_percent: build.changePercent }
+        : {}),
       regression: regressionReasons.length > 0,
       regression_reasons: regressionReasons,
     },
@@ -296,112 +360,160 @@ function buildMainBuildStats({
   cacheTelemetry = [],
   recordedAt,
 }) {
-  if (run.name !== 'Main') throw new Error(`expected Main workflow, got ${run.name}`)
-  if (run.event !== 'push') throw new Error(`expected push event, got ${run.event}`)
-  if (run.head_branch !== 'main') throw new Error(`expected main branch, got ${run.head_branch}`)
+  if (run.name !== 'Main')
+    throw new Error(`expected Main workflow, got ${run.name}`)
+  if (run.event !== 'push')
+    throw new Error(`expected push event, got ${run.event}`)
+  if (run.head_branch !== 'main')
+    throw new Error(`expected main branch, got ${run.head_branch}`)
 
   const attemptStartedAt = run.run_started_at || run.created_at
   const attemptStartedMilliseconds = timestampMilliseconds(
     attemptStartedAt,
     'source_run.attempt_started_at',
   )
-  const attemptJobs = run.run_attempt > 1
-    ? jobs.filter((job) => {
-        if (!job.started_at) return false
-        const jobStartedMilliseconds = timestampMilliseconds(
-          job.started_at,
-          `job ${job.name}.started_at`,
-        )
-        // GitHub's rerun-attempt endpoint also returns successful jobs reused
-        // from earlier attempts. Keep only jobs that actually ran in this
-        // attempt, allowing one second for API timestamp rounding.
-        return jobStartedMilliseconds >= attemptStartedMilliseconds - 1000
-      })
-    : jobs
+  const attemptJobs =
+    run.run_attempt > 1
+      ? jobs.filter((job) => {
+          if (!job.started_at) return false
+          const jobStartedMilliseconds = timestampMilliseconds(
+            job.started_at,
+            `job ${job.name}.started_at`,
+          )
+          // GitHub's rerun-attempt endpoint also returns successful jobs reused
+          // from earlier attempts. Keep only jobs that actually ran in this
+          // attempt, allowing one second for API timestamp rounding.
+          return jobStartedMilliseconds >= attemptStartedMilliseconds - 1000
+        })
+      : jobs
   if (attemptJobs.length === 0) {
     throw new Error(`Main attempt ${run.run_attempt} has no executed jobs`)
   }
 
-  const normalizedJobs = attemptJobs
-    .map(normalizeJob)
-    .sort((left, right) => {
-      if (!left.started_at) return 1
-      if (!right.started_at) return -1
-      return timestampMilliseconds(left.started_at, 'job.started_at') -
-        timestampMilliseconds(right.started_at, 'job.started_at')
-    })
+  const normalizedJobs = attemptJobs.map(normalizeJob).sort((left, right) => {
+    if (!left.started_at) return 1
+    if (!right.started_at) return -1
+    return (
+      timestampMilliseconds(left.started_at, 'job.started_at') -
+      timestampMilliseconds(right.started_at, 'job.started_at')
+    )
+  })
   const earliestJobStartedAt = minimumTimestamp(
     normalizedJobs.map((job) => job.started_at),
     run.run_started_at || run.created_at,
   )
-  const startedAt = run.run_attempt > 1
-    ? earliestJobStartedAt
-    : run.run_started_at || earliestJobStartedAt
-  const wallStartedAt = run.run_attempt > 1
-    ? attemptStartedAt
-    : run.created_at
+  const startedAt =
+    run.run_attempt > 1
+      ? earliestJobStartedAt
+      : run.run_started_at || earliestJobStartedAt
+  const wallStartedAt = run.run_attempt > 1 ? attemptStartedAt : run.created_at
   const completedAt = maximumTimestamp(
     normalizedJobs.map((job) => job.completed_at),
     run.updated_at,
   )
-  const queueSeconds = durationSeconds(wallStartedAt, startedAt, 'source_run.queue')
-  const executionSeconds = durationSeconds(startedAt, completedAt, 'source_run.execution')
-  const wallSeconds = durationSeconds(wallStartedAt, completedAt, 'source_run.wall')
+  const queueSeconds = durationSeconds(
+    wallStartedAt,
+    startedAt,
+    'source_run.queue',
+  )
+  const executionSeconds = durationSeconds(
+    startedAt,
+    completedAt,
+    'source_run.execution',
+  )
+  const wallSeconds = durationSeconds(
+    wallStartedAt,
+    completedAt,
+    'source_run.wall',
+  )
+  if (
+    !queueSeconds.complete ||
+    !executionSeconds.complete ||
+    !wallSeconds.complete
+  ) {
+    throw new Error('source run timestamps must produce complete durations')
+  }
+  const buildSeconds = sumNamedStepSeconds(normalizedJobs, (name) =>
+    BUILD_STEPS.has(name),
+  )
+  const deploymentSeconds = sumNamedStepSeconds(normalizedJobs, (name) =>
+    DEPLOYMENT_STEPS.has(name),
+  )
+  const coverageSeconds = sumNamedStepSeconds(normalizedJobs, (name) =>
+    COVERAGE_STEPS.has(name),
+  )
 
-  const record = addComparison({
-    schema_version: 2,
-    recorded_at: requireString(recordedAt, 'recorded_at'),
-    source_run: {
-      workflow_name: 'Main',
-      workflow_id: requireInteger(run.workflow_id, 'source_run.workflow_id'),
-      run_id: requireInteger(run.id, 'source_run.run_id'),
-      run_attempt: requireInteger(run.run_attempt, 'source_run.run_attempt'),
-      url: requireString(run.html_url, 'source_run.url'),
-      event: 'push',
-      head_branch: 'main',
-      head_sha: requireString(run.head_sha, 'source_run.head_sha'),
-      conclusion: requireString(run.conclusion, 'source_run.conclusion'),
-      created_at: requireString(run.created_at, 'source_run.created_at'),
-      started_at: startedAt,
-      completed_at: completedAt,
+  const record = addComparison(
+    {
+      schema_version: 3,
+      recorded_at: requireString(recordedAt, 'recorded_at'),
+      source_run: {
+        workflow_name: 'Main',
+        workflow_id: requireInteger(run.workflow_id, 'source_run.workflow_id'),
+        run_id: requireInteger(run.id, 'source_run.run_id'),
+        run_attempt: requireInteger(run.run_attempt, 'source_run.run_attempt'),
+        url: requireString(run.html_url, 'source_run.url'),
+        event: 'push',
+        head_branch: 'main',
+        head_sha: requireString(run.head_sha, 'source_run.head_sha'),
+        conclusion: requireString(run.conclusion, 'source_run.conclusion'),
+        created_at: requireString(run.created_at, 'source_run.created_at'),
+        started_at: startedAt,
+        completed_at: completedAt,
+      },
+      source_pull_requests: sourcePullRequests.map((pullRequest) => ({
+        number: requireInteger(
+          pullRequest.number,
+          'source_pull_request.number',
+        ),
+        url: requireString(pullRequest.html_url, 'source_pull_request.url'),
+        title: requireString(pullRequest.title, 'source_pull_request.title'),
+      })),
+      summary: {
+        queue_seconds: queueSeconds.seconds,
+        execution_seconds: executionSeconds.seconds,
+        wall_seconds: wallSeconds.seconds,
+        job_count: normalizedJobs.length,
+        step_count: normalizedJobs.reduce(
+          (total, job) => total + job.steps.length,
+          0,
+        ),
+        ...(buildSeconds.complete
+          ? { build_seconds: buildSeconds.seconds }
+          : {}),
+        ...(deploymentSeconds.complete
+          ? { deployment_seconds: deploymentSeconds.seconds }
+          : {}),
+        ...(coverageSeconds.complete
+          ? { coverage_seconds: coverageSeconds.seconds }
+          : {}),
+      },
+      cache_telemetry: cacheTelemetrySummary(cacheTelemetry, run),
+      jobs: normalizedJobs,
     },
-    source_pull_requests: sourcePullRequests.map((pullRequest) => ({
-      number: requireInteger(pullRequest.number, 'source_pull_request.number'),
-      url: requireString(pullRequest.html_url, 'source_pull_request.url'),
-      title: requireString(pullRequest.title, 'source_pull_request.title'),
-    })),
-    summary: {
-      queue_seconds: queueSeconds,
-      execution_seconds: executionSeconds,
-      wall_seconds: wallSeconds,
-      job_count: normalizedJobs.length,
-      step_count: normalizedJobs.reduce((total, job) => total + job.steps.length, 0),
-      build_seconds: sumNamedStepSeconds(normalizedJobs, (name) => BUILD_STEPS.has(name)),
-      deployment_seconds: sumNamedStepSeconds(normalizedJobs, (name) =>
-        DEPLOYMENT_STEPS.has(name),
-      ),
-      coverage_seconds: sumNamedStepSeconds(normalizedJobs, (name) => COVERAGE_STEPS.has(name)),
-    },
-    cache_telemetry: cacheTelemetrySummary(cacheTelemetry, run),
-    jobs: normalizedJobs,
-  }, baselineRecords)
+    baselineRecords,
+  )
 
   validateMainBuildStats(record)
   return record
 }
 
 function validateMainBuildStats(record, expected = {}) {
-  if (!record || typeof record !== 'object') throw new Error('record must be an object')
-  if (![1, 2].includes(record.schema_version)) {
-    throw new Error('schema_version must be 1 or 2')
+  if (!record || typeof record !== 'object')
+    throw new Error('record must be an object')
+  if (![1, 2, 3].includes(record.schema_version)) {
+    throw new Error('schema_version must be 1, 2, or 3')
   }
   timestampMilliseconds(record.recorded_at, 'recorded_at')
 
   const source = record.source_run
-  if (!source || typeof source !== 'object') throw new Error('source_run is required')
-  if (source.workflow_name !== 'Main') throw new Error('source_run.workflow_name must be Main')
+  if (!source || typeof source !== 'object')
+    throw new Error('source_run is required')
+  if (source.workflow_name !== 'Main')
+    throw new Error('source_run.workflow_name must be Main')
   if (source.event !== 'push') throw new Error('source_run.event must be push')
-  if (source.head_branch !== 'main') throw new Error('source_run.head_branch must be main')
+  if (source.head_branch !== 'main')
+    throw new Error('source_run.head_branch must be main')
   requireInteger(source.workflow_id, 'source_run.workflow_id')
   requireInteger(source.run_id, 'source_run.run_id')
   requireInteger(source.run_attempt, 'source_run.run_attempt')
@@ -412,17 +524,20 @@ function validateMainBuildStats(record, expected = {}) {
   timestampMilliseconds(source.started_at, 'source_run.started_at')
   timestampMilliseconds(source.completed_at, 'source_run.completed_at')
 
-  if (expected.runId !== undefined && source.run_id !== expected.runId) {
-    throw new Error(`source run ${source.run_id} does not match expected run ${expected.runId}`)
+  if ('runId' in expected && source.run_id !== expected.runId) {
+    throw new Error(
+      `source run ${source.run_id} does not match expected run ${expected.runId}`,
+    )
   }
-  if (expected.runAttempt !== undefined && source.run_attempt !== expected.runAttempt) {
+  if ('runAttempt' in expected && source.run_attempt !== expected.runAttempt) {
     throw new Error(
       `source attempt ${source.run_attempt} does not match expected attempt ${expected.runAttempt}`,
     )
   }
 
   const pullRequests = record.source_pull_requests
-  if (!Array.isArray(pullRequests)) throw new Error('source_pull_requests must be an array')
+  if (!Array.isArray(pullRequests))
+    throw new Error('source_pull_requests must be an array')
   for (const pullRequest of pullRequests) {
     requireInteger(pullRequest.number, 'source_pull_request.number')
     requireString(pullRequest.url, 'source_pull_request.url')
@@ -431,7 +546,8 @@ function validateMainBuildStats(record, expected = {}) {
 
   if (!Array.isArray(record.jobs)) throw new Error('jobs must be an array')
   const summary = record.summary
-  if (!summary || typeof summary !== 'object') throw new Error('summary is required')
+  if (!summary || typeof summary !== 'object')
+    throw new Error('summary is required')
   for (const field of [
     'queue_seconds',
     'execution_seconds',
@@ -441,15 +557,24 @@ function validateMainBuildStats(record, expected = {}) {
   ]) {
     requireInteger(summary[field], `summary.${field}`)
   }
-  for (const field of ['build_seconds', 'deployment_seconds', 'coverage_seconds']) {
-    if (summary[field] !== null) requireInteger(summary[field], `summary.${field}`)
+  for (const field of [
+    'build_seconds',
+    'deployment_seconds',
+    'coverage_seconds',
+  ]) {
+    if (field in summary) requireInteger(summary[field], `summary.${field}`)
   }
   if (summary.wall_seconds < summary.execution_seconds) {
     throw new Error('summary.wall_seconds must include execution_seconds')
   }
-  if (summary.job_count !== record.jobs.length) throw new Error('summary.job_count mismatch')
-  const stepCount = record.jobs.reduce((total, job) => total + job.steps.length, 0)
-  if (summary.step_count !== stepCount) throw new Error('summary.step_count mismatch')
+  if (summary.job_count !== record.jobs.length)
+    throw new Error('summary.job_count mismatch')
+  const stepCount = record.jobs.reduce(
+    (total, job) => total + job.steps.length,
+    0,
+  )
+  if (summary.step_count !== stepCount)
+    throw new Error('summary.step_count mismatch')
 
   if (record.schema_version >= 2) {
     const telemetry = record.cache_telemetry
@@ -459,7 +584,10 @@ function validateMainBuildStats(record, expected = {}) {
     if (!Array.isArray(telemetry.jobs)) {
       throw new Error('cache_telemetry.jobs must be an array')
     }
-    if (!telemetry.collection || typeof telemetry.collection.complete !== 'boolean') {
+    if (
+      !telemetry.collection ||
+      typeof telemetry.collection.complete !== 'boolean'
+    ) {
       throw new Error('cache_telemetry.collection is required')
     }
     if (!Array.isArray(telemetry.collection.warnings)) {
@@ -523,7 +651,8 @@ function validateMainBuildStats(record, expected = {}) {
   }
 
   const comparison = record.comparison
-  if (!comparison || typeof comparison !== 'object') throw new Error('comparison is required')
+  if (!comparison || typeof comparison !== 'object')
+    throw new Error('comparison is required')
   if (!Array.isArray(comparison.baseline_runs)) {
     throw new Error('comparison.baseline_runs must be an array')
   }
@@ -534,8 +663,8 @@ function validateMainBuildStats(record, expected = {}) {
     'execution_seconds_change_percent',
     'build_seconds_change_percent',
   ]) {
-    if (comparison[field] !== null && !Number.isFinite(comparison[field])) {
-      throw new Error(`comparison.${field} must be a number or null`)
+    if (field in comparison && !Number.isFinite(comparison[field])) {
+      throw new Error(`comparison.${field} must be numeric when present`)
     }
   }
   if (typeof comparison.regression !== 'boolean') {
@@ -549,14 +678,17 @@ function validateMainBuildStats(record, expected = {}) {
     requireInteger(job.id, 'job.id')
     requireString(job.name, 'job.name')
     requireString(job.status, 'job.status')
-    if (!Array.isArray(job.labels)) throw new Error('job.labels must be an array')
+    if (!Array.isArray(job.labels))
+      throw new Error('job.labels must be an array')
     if (!Array.isArray(job.steps)) throw new Error('job.steps must be an array')
-    if (job.duration_seconds !== null) requireInteger(job.duration_seconds, 'job.duration_seconds')
+    if ('duration_seconds' in job) {
+      requireInteger(job.duration_seconds, 'job.duration_seconds')
+    }
     for (const step of job.steps) {
       requireInteger(step.number, 'step.number')
       requireString(step.name, 'step.name')
       requireString(step.status, 'step.status')
-      if (step.duration_seconds !== null) {
+      if ('duration_seconds' in step) {
         requireInteger(step.duration_seconds, 'step.duration_seconds')
       }
     }
@@ -567,18 +699,67 @@ function validateMainBuildStats(record, expected = {}) {
 
 function serializeMainBuildStats(record) {
   validateMainBuildStats(record)
-  return `${JSON.stringify(record, null, 2)}\n`
+  return `${JSON.stringify(record, (_key, nestedValue) => nestedValue, 2)}\n`
 }
 
 function normalizeLegacyMainBuildStats(record) {
   const normalized = structuredClone(record)
-  if (normalized.schema_version < 2 || !normalized.cache_telemetry) return normalized
+
+  if (normalized.schema_version < 3) {
+    for (const field of [
+      'build_seconds',
+      'deployment_seconds',
+      'coverage_seconds',
+    ]) {
+      if (!Number.isFinite(normalized.summary?.[field])) {
+        delete normalized.summary?.[field]
+      }
+    }
+    for (const field of [
+      'wall_seconds_change_percent',
+      'execution_seconds_change_percent',
+      'build_seconds_change_percent',
+    ]) {
+      if (!Number.isFinite(normalized.comparison?.[field])) {
+        delete normalized.comparison?.[field]
+      }
+    }
+    for (const job of normalized.jobs ?? []) {
+      if (!Number.isFinite(job.duration_seconds)) delete job.duration_seconds
+      for (const step of job.steps ?? []) {
+        if (!Number.isFinite(step.duration_seconds))
+          delete step.duration_seconds
+      }
+    }
+    if (normalized.cache_telemetry) {
+      const telemetryTotals = normalized.cache_telemetry.totals
+      for (const field of [
+        'sccache_hit_rate_percent',
+        'buildkit_cache_hit_rate_percent',
+      ]) {
+        if (!Number.isFinite(telemetryTotals?.[field])) {
+          delete telemetryTotals?.[field]
+        }
+      }
+      for (const job of normalized.cache_telemetry.jobs ?? []) {
+        if (!Number.isFinite(job.sccache?.hit_rate_percent)) {
+          delete job.sccache?.hit_rate_percent
+        }
+        if (!Number.isFinite(job.buildkit?.cache_hit_rate_percent)) {
+          delete job.buildkit?.cache_hit_rate_percent
+        }
+      }
+    }
+  }
+
+  if (normalized.schema_version < 2 || !normalized.cache_telemetry)
+    return normalized
 
   const totals = normalized.cache_telemetry.totals
   if (
     totals &&
-    totals.direct_compile_job_count === undefined &&
-    totals.local_fallback_job_count !== undefined
+    !('direct_compile_job_count' in totals) &&
+    'local_fallback_job_count' in totals
   ) {
     totals.direct_compile_job_count = totals.local_fallback_job_count
     delete totals.local_fallback_job_count
@@ -592,7 +773,9 @@ function normalizeLegacyMainBuildStats(record) {
 }
 
 function validateFile(path, expected = {}) {
-  const record = normalizeLegacyMainBuildStats(JSON.parse(fs.readFileSync(path, 'utf8')))
+  const record = normalizeLegacyMainBuildStats(
+    JSON.parse(fs.readFileSync(path, 'utf8')),
+  )
   validateMainBuildStats(record, expected)
   return record
 }
@@ -600,14 +783,18 @@ function validateFile(path, expected = {}) {
 if (require.main === module) {
   const [command, path] = process.argv.slice(2)
   if (command !== '--validate' || !path) {
-    console.error('usage: node .github/scripts/main-build-stats.cjs --validate <record.yaml>')
+    console.error(
+      'usage: node .github/scripts/main-build-stats.cjs --validate <record.yaml>',
+    )
     process.exit(2)
   }
   validateFile(path, {
-    runId: process.env.SOURCE_RUN_ID ? Number(process.env.SOURCE_RUN_ID) : undefined,
-    runAttempt: process.env.SOURCE_RUN_ATTEMPT
-      ? Number(process.env.SOURCE_RUN_ATTEMPT)
-      : undefined,
+    ...(process.env.SOURCE_RUN_ID
+      ? { runId: Number(process.env.SOURCE_RUN_ID) }
+      : {}),
+    ...(process.env.SOURCE_RUN_ATTEMPT
+      ? { runAttempt: Number(process.env.SOURCE_RUN_ATTEMPT) }
+      : {}),
   })
   console.log(`validated ${path}`)
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_wraps)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -25,7 +27,7 @@ fn directory_has_files(path: &Path) -> bool {
 }
 
 #[test]
-fn agent_implementation_claims_only_explicit_workbench_records() {
+fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Result<()> {
     let workflow = read(".github/workflows/agent-implement.yml");
     let record_validator = read(".github/scripts/workbench-records.cjs");
 
@@ -81,10 +83,11 @@ fn agent_implementation_claims_only_explicit_workbench_records() {
             < workflow.find("Run ci-agent implement"),
         "the workflow must publish the interpreted task plan before implementation"
     );
+    Ok(())
 }
 
 #[test]
-fn statistics_leave_the_product_repository() {
+fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
     let collector = read(".github/workflows/main-build-stats.yml");
     let publisher = read(".github/scripts/workbench-publish.cjs");
 
@@ -122,10 +125,11 @@ fn statistics_leave_the_product_repository() {
             "{path} must not retain obsolete statistics path exceptions"
         );
     }
+    Ok(())
 }
 
 #[test]
-fn agent_prompt_requires_a_publishable_worklog() {
+fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let prompt = read(".github/prompts/agent-implement.md");
     let plan_prompt = read(".github/prompts/agent-plan.md");
     let ignore = read(".gitignore");
@@ -170,4 +174,5 @@ fn agent_prompt_requires_a_publishable_worklog() {
             .any(|line| line == "/.nook-workbench-plan.md"),
         "the workflow-owned task plan must not be committed to the Nook PR"
     );
+    Ok(())
 }

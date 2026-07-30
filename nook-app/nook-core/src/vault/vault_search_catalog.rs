@@ -37,15 +37,15 @@ impl SecretSearchCatalogEntry {
         payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
         item: SecretListItem,
         integrity_key: &SymmetricKey,
-    ) -> Self {
+    ) -> VaultResult<Self> {
         let normalized_search_text = item.normalized_search_text();
-        let integrity_tag = catalog_entry_integrity_tag(payload_digest, &item, integrity_key);
-        Self {
+        let integrity_tag = catalog_entry_integrity_tag(payload_digest, &item, integrity_key)?;
+        Ok(Self {
             payload_digest,
             item,
             integrity_tag,
             normalized_search_text,
-        }
+        })
     }
 
     fn has_valid_integrity(&self, integrity_key: &SymmetricKey) -> bool {
@@ -55,8 +55,9 @@ impl SecretSearchCatalogEntry {
         let Ok(item_json) = serde_json::to_vec(&self.item) else {
             return false;
         };
-        let mut mac = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes())
-            .expect("HMAC accepts keys of any length");
+        let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes()) else {
+            return false;
+        };
         mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
         mac.update(&self.payload_digest);
         mac.update(&item_json);
@@ -213,7 +214,7 @@ impl SecretSearchCatalog {
             record.zeroize_plaintext();
             next.insert(
                 id.clone(),
-                SecretSearchCatalogEntry::new(digest, item, integrity_key),
+                SecretSearchCatalogEntry::new(digest, item, integrity_key)?,
             );
         }
         self.entries = next;
@@ -274,14 +275,15 @@ fn catalog_entry_integrity_tag(
     payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
     item: &SecretListItem,
     integrity_key: &SymmetricKey,
-) -> String {
-    let item_json = serde_json::to_vec(item).expect("secret list items always serialize");
+) -> VaultResult<String> {
+    let item_json = serde_json::to_vec(item)
+        .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()))?;
     let mut mac = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes())
-        .expect("HMAC accepts keys of any length");
+        .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
     mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
     mac.update(&payload_digest);
     mac.update(&item_json);
-    hex::encode(mac.finalize().into_bytes())
+    Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
 #[cfg(test)]
@@ -303,14 +305,14 @@ mod tests {
         .list_item()
     }
 
-    fn integrity_key() -> SymmetricKey {
-        SymmetricKey::parse(&"a".repeat(64)).expect("fixture key is valid")
+    fn integrity_key() -> anyhow::Result<SymmetricKey> {
+        Ok(SymmetricKey::parse(&"a".repeat(64))?)
     }
 
     #[test]
-    fn ten_thousand_item_catalog_returns_a_specific_match() {
+    fn ten_thousand_item_catalog_returns_a_specific_match() -> anyhow::Result<()> {
         let mut catalog = SecretSearchCatalog::default();
-        let integrity_key = integrity_key();
+        let integrity_key = integrity_key()?;
         for index in 0..10_000 {
             let username = if index == 9_876 {
                 "needle-account"
@@ -320,7 +322,7 @@ mod tests {
             let item = login_item(index, username);
             catalog.entries.insert(
                 item.id.clone(),
-                SecretSearchCatalogEntry::new([0_u8; PAYLOAD_DIGEST_BYTES], item, &integrity_key),
+                SecretSearchCatalogEntry::new([0_u8; PAYLOAD_DIGEST_BYTES], item, &integrity_key)?,
             );
         }
 
@@ -330,6 +332,7 @@ mod tests {
             page.records[0].id,
             SecretId::from_vault_record("secret_catalog09876")
         );
+        Ok(())
     }
 
     #[test]
@@ -341,7 +344,7 @@ mod tests {
         let bucket = search_catalog_bucket(&item.id);
         catalog.entries.insert(
             item.id.clone(),
-            SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key),
+            SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key)?,
         );
 
         let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {

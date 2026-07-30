@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use crate::HiveContext;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -81,7 +81,7 @@ pub struct CoordinatorTaskStore {
 }
 
 impl CoordinatorTaskStore {
-    pub async fn connect(path: &Path) -> anyhow::Result<Self> {
+    pub async fn connect(path: &Path) -> crate::HiveResult<Self> {
         let stream = loop {
             match UnixStream::connect(path).await {
                 Ok(stream) => break stream,
@@ -89,7 +89,7 @@ impl CoordinatorTaskStore {
                     tokio::time::sleep(Duration::from_millis(250)).await;
                 }
                 Err(error) => {
-                    return Err(error).with_context(|| {
+                    return Err(error).with_hive_context(|| {
                         format!("connect to Hive coordinator socket {}", path.display())
                     });
                 }
@@ -100,61 +100,61 @@ impl CoordinatorTaskStore {
         })
     }
 
-    async fn request(&self, request: Request) -> anyhow::Result<Response> {
+    async fn request(&self, request: Request) -> crate::HiveResult<Response> {
         let mut channel = self.channel.lock().await;
-        let payload = serde_json::to_vec(&request).context("serialize coordinator request")?;
+        let payload = serde_json::to_vec(&request).hive_context("serialize coordinator request")?;
         channel
             .get_mut()
             .write_all(&payload)
             .await
-            .context("write coordinator request")?;
+            .hive_context("write coordinator request")?;
         channel
             .get_mut()
             .write_all(b"\n")
             .await
-            .context("terminate coordinator request")?;
+            .hive_context("terminate coordinator request")?;
         channel
             .get_mut()
             .flush()
             .await
-            .context("flush coordinator request")?;
+            .hive_context("flush coordinator request")?;
 
         let mut response = String::new();
         let bytes = channel
             .read_line(&mut response)
             .await
-            .context("read coordinator response")?;
+            .hive_context("read coordinator response")?;
         if bytes == 0 {
-            anyhow::bail!("Hive coordinator closed its private channel");
+            crate::hive_bail!("Hive coordinator closed its private channel");
         }
-        match serde_json::from_str(&response).context("decode coordinator response")? {
-            Response::Error(error) => Err(anyhow::anyhow!(error)),
+        match serde_json::from_str(&response).hive_context("decode coordinator response")? {
+            Response::Error(error) => Err(crate::HiveError::message(error)),
             response => Ok(response),
         }
     }
 
-    async fn unit(&self, request: Request) -> anyhow::Result<()> {
+    async fn unit(&self, request: Request) -> crate::HiveResult<()> {
         match self.request(request).await? {
             Response::Unit => Ok(()),
-            response => anyhow::bail!("unexpected coordinator response: {response:?}"),
+            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
         }
     }
 
-    async fn accepted(&self, request: Request) -> anyhow::Result<bool> {
+    async fn accepted(&self, request: Request) -> crate::HiveResult<bool> {
         match self.request(request).await? {
             Response::Accepted(accepted) => Ok(accepted),
-            response => anyhow::bail!("unexpected coordinator response: {response:?}"),
+            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
         }
     }
 }
 
 #[async_trait]
 impl TaskStore for CoordinatorTaskStore {
-    async fn migrate(&self) -> anyhow::Result<()> {
+    async fn migrate(&self) -> crate::HiveResult<()> {
         self.unit(Request::Migrate).await
     }
 
-    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> anyhow::Result<()> {
+    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()> {
         self.unit(Request::RegisterAgent {
             agent_id: agent_id.clone(),
             pod_name: pod_name.to_owned(),
@@ -162,38 +162,38 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
-    async fn enqueue(&self, _task: &EnqueueTask) -> anyhow::Result<()> {
-        anyhow::bail!("workers are not authorized to enqueue tasks")
+    async fn enqueue(&self, _task: &EnqueueTask) -> crate::HiveResult<()> {
+        crate::hive_bail!("workers are not authorized to enqueue tasks")
     }
 
     async fn active_delivery(
         &self,
         _source_commit: &str,
         _kind: &str,
-    ) -> anyhow::Result<Option<TaskId>> {
-        anyhow::bail!("workers are not authorized to inspect delivery tasks")
+    ) -> crate::HiveResult<Option<TaskId>> {
+        crate::hive_bail!("workers are not authorized to inspect delivery tasks")
     }
 
-    async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
-        anyhow::bail!("workers are not authorized to cancel tasks")
+    async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
+        crate::hive_bail!("workers are not authorized to cancel tasks")
     }
 
     async fn cancellation_targets(
         &self,
         _task_id: &TaskId,
-    ) -> anyhow::Result<Vec<CancellationTarget>> {
-        anyhow::bail!("workers are not authorized to inspect cancellation targets")
+    ) -> crate::HiveResult<Vec<CancellationTarget>> {
+        crate::hive_bail!("workers are not authorized to inspect cancellation targets")
     }
 
-    async fn finalize_cancellation(&self, _task_id: &TaskId) -> anyhow::Result<bool> {
-        anyhow::bail!("workers are not authorized to finalize cancellation")
+    async fn finalize_cancellation(&self, _task_id: &TaskId) -> crate::HiveResult<bool> {
+        crate::hive_bail!("workers are not authorized to finalize cancellation")
     }
 
     async fn acknowledge_cancellation(
         &self,
         task: &ClaimedTask,
         agent_id: &AgentId,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::AcknowledgeCancellation {
             task: task.clone(),
             agent_id: agent_id.clone(),
@@ -201,7 +201,11 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
-    async fn claim(&self, agent_id: &AgentId, lease_seconds: i64) -> anyhow::Result<ClaimOutcome> {
+    async fn claim(
+        &self,
+        agent_id: &AgentId,
+        lease_seconds: i64,
+    ) -> crate::HiveResult<ClaimOutcome> {
         match self
             .request(Request::Claim {
                 agent_id: agent_id.clone(),
@@ -210,7 +214,7 @@ impl TaskStore for CoordinatorTaskStore {
             .await?
         {
             Response::Claim(task) => Ok(task),
-            response => anyhow::bail!("unexpected coordinator response: {response:?}"),
+            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
         }
     }
 
@@ -220,7 +224,7 @@ impl TaskStore for CoordinatorTaskStore {
         agent_id: &AgentId,
         lease_token: &LeaseToken,
         lease_seconds: i64,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::Heartbeat {
             task_id: task_id.clone(),
             agent_id: agent_id.clone(),
@@ -235,7 +239,7 @@ impl TaskStore for CoordinatorTaskStore {
         lease: &ActivityLease,
         agent_id: &AgentId,
         activity: &TaskActivity,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::RecordActivity {
             lease: lease.clone(),
             agent_id: agent_id.clone(),
@@ -244,7 +248,7 @@ impl TaskStore for CoordinatorTaskStore {
         .await
     }
 
-    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> anyhow::Result<bool> {
+    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> crate::HiveResult<bool> {
         self.accepted(Request::Release {
             task: task.clone(),
             agent_id: agent_id.clone(),
@@ -259,7 +263,7 @@ impl TaskStore for CoordinatorTaskStore {
         obsolete: bool,
         summary: &str,
         artifact: &CompletionArtifact,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::Complete {
             task: task.clone(),
             agent_id: agent_id.clone(),
@@ -275,7 +279,7 @@ impl TaskStore for CoordinatorTaskStore {
         task: &ClaimedTask,
         agent_id: &AgentId,
         error: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::Fail {
             task: task.clone(),
             agent_id: agent_id.clone(),
@@ -290,7 +294,7 @@ impl TaskStore for CoordinatorTaskStore {
         agent_id: &AgentId,
         blocker: &EnqueueTask,
         reason: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> crate::HiveResult<bool> {
         self.accepted(Request::Block {
             task: task.clone(),
             agent_id: agent_id.clone(),
@@ -301,19 +305,21 @@ impl TaskStore for CoordinatorTaskStore {
     }
 }
 
-pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> anyhow::Result<()> {
+pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> crate::HiveResult<()> {
     if let Some(parent) = socket.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .with_context(|| format!("create coordinator socket directory {}", parent.display()))?;
+            .with_hive_context(|| {
+                format!("create coordinator socket directory {}", parent.display())
+            })?;
     }
     remove_socket_if_present(&socket).await?;
     let listener = UnixListener::bind(&socket)
-        .with_context(|| format!("bind Hive coordinator socket {}", socket.display()))?;
+        .with_hive_context(|| format!("bind Hive coordinator socket {}", socket.display()))?;
     let (stream, _) = listener
         .accept()
         .await
-        .context("accept worker coordinator channel")?;
+        .hive_context("accept worker coordinator channel")?;
     drop(listener);
     remove_socket_if_present(&socket).await?;
 
@@ -322,7 +328,7 @@ pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> anyhow:
     while let Some(line) = lines
         .next_line()
         .await
-        .context("read worker coordinator request")?
+        .hive_context("read worker coordinator request")?
     {
         let response = match serde_json::from_str::<Request>(&line) {
             Ok(request) => handle_request(&store, request)
@@ -331,16 +337,18 @@ pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> anyhow:
             Err(error) => Response::Error(format!("decode coordinator request: {error}")),
         };
         writer
-            .write_all(&serde_json::to_vec(&response).context("serialize coordinator response")?)
+            .write_all(
+                &serde_json::to_vec(&response).hive_context("serialize coordinator response")?,
+            )
             .await
-            .context("write coordinator response")?;
+            .hive_context("write coordinator response")?;
         writer.write_all(b"\n").await?;
         writer.flush().await?;
     }
     Ok(())
 }
 
-async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Result<Response> {
+async fn handle_request<S: TaskStore>(store: &S, request: Request) -> crate::HiveResult<Response> {
     match request {
         Request::Migrate => {
             store.migrate().await?;
@@ -408,11 +416,13 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> anyhow::Re
     }
 }
 
-async fn remove_socket_if_present(path: &Path) -> anyhow::Result<()> {
+async fn remove_socket_if_present(path: &Path) -> crate::HiveResult<()> {
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("remove stale socket {}", path.display())),
+        Err(error) => {
+            Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
+        }
     }
 }
 
@@ -424,31 +434,32 @@ mod tests {
     };
 
     #[test]
-    fn worker_protocol_has_no_enqueue_or_raw_query_operation() {
-        let serialized = serde_json::to_string(&Request::Migrate).expect("serialize");
+    fn worker_protocol_has_no_enqueue_or_raw_query_operation() -> crate::HiveResult<()> {
+        let serialized = serde_json::to_string(&Request::Migrate)?;
         assert!(!serialized.contains("enqueue"));
         assert!(!serialized.contains("query"));
         assert!(!serialized.contains("password"));
+        Ok(())
     }
 
     #[test]
-    fn activity_request_carries_only_lease_identity() {
+    fn activity_request_carries_only_lease_identity() -> crate::HiveResult<()> {
         let serialized = serde_json::to_string(&Request::RecordActivity {
             lease: ActivityLease {
-                task_id: TaskId::new("task-1").expect("task id"),
-                attempt_id: AttemptId::new("attempt-1").expect("attempt id"),
-                lease_token: LeaseToken::new("lease-1").expect("lease token"),
+                task_id: TaskId::new("task-1")?,
+                attempt_id: AttemptId::new("attempt-1")?,
+                lease_token: LeaseToken::new("lease-1")?,
             },
-            agent_id: AgentId::new("agent-1").expect("agent id"),
+            agent_id: AgentId::new("agent-1")?,
             activity: TaskActivity {
                 kind: ActivityKind::Action,
                 message: "activity.command_running".to_owned(),
                 detail: "task format".to_owned(),
             },
-        })
-        .expect("serialize activity");
+        })?;
         assert!(!serialized.contains("prompt"));
         assert!(!serialized.contains("dependency"));
         assert!(!serialized.contains("source_commit"));
+        Ok(())
     }
 }

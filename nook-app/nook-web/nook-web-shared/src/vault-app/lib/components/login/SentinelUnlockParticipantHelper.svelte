@@ -6,6 +6,10 @@
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    GenesisDeliverySelectionKind,
+    type GenesisDeliverySelection,
+  } from './sentinel-unlock-participant-state'
+  import {
     createSentinelUnlockResponse,
     listSentinelStoredDeliveries,
   } from '$lib/vault/sentinel-unlock'
@@ -25,7 +29,9 @@
   let actionBusy = $state(false)
   let loaded = $state(false)
   let open = $state(false)
-  let selectedDelivery = $state<string>()
+  let selectedDelivery = $state<GenesisDeliverySelection>({
+    kind: GenesisDeliverySelectionKind.NotSelected,
+  })
   let request = $state('')
   let response = $state('')
   let copied = $state(false)
@@ -35,7 +41,9 @@
   )
   const selectedSummary = $derived(
     vault.sentinelStoredDeliveries.find(
-      (delivery) => delivery.storeId === selectedDelivery,
+      (delivery) =>
+        selectedDelivery.kind === GenesisDeliverySelectionKind.Selected &&
+        delivery.storeId === selectedDelivery.storeId,
     ),
   )
 
@@ -50,11 +58,27 @@
   async function refreshDeliveries() {
     try {
       const deliveries = await listSentinelStoredDeliveries(vault)
+      if (selectedDelivery.kind !== GenesisDeliverySelectionKind.Selected) {
+        const firstDelivery = deliveries[0]
+        selectedDelivery = firstDelivery
+          ? {
+              kind: GenesisDeliverySelectionKind.Selected,
+              storeId: firstDelivery.storeId,
+            }
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
+        return
+      }
+      const selectedStoreId = selectedDelivery.storeId
       if (
-        !selectedDelivery ||
-        !deliveries.some((delivery) => delivery.storeId === selectedDelivery)
+        !deliveries.some((delivery) => delivery.storeId === selectedStoreId)
       ) {
-        selectedDelivery = deliveries[0]?.storeId
+        const firstDelivery = deliveries[0]
+        selectedDelivery = firstDelivery
+          ? {
+              kind: GenesisDeliverySelectionKind.Selected,
+              storeId: firstDelivery.storeId,
+            }
+          : { kind: GenesisDeliverySelectionKind.NotSelected }
       }
     } catch {
       // A missing device identity or empty list simply hides the first-vault helper.
@@ -64,7 +88,10 @@
   }
 
   async function createResponse() {
-    const storeId = selectedDelivery?.trim()
+    const storeId =
+      selectedDelivery.kind === GenesisDeliverySelectionKind.Selected
+        ? selectedDelivery.storeId.trim()
+        : ''
     const payload = request.trim()
     if (!storeId || !payload || actionBusy) return
     actionBusy = true
@@ -148,8 +175,19 @@
             </label>
             <Select.Root
               type="single"
-              value={selectedDelivery}
-              onValueChange={(value) => (selectedDelivery = value)}
+              value={selectedDelivery.kind ===
+              GenesisDeliverySelectionKind.Selected
+                ? selectedDelivery.storeId
+                : GenesisDeliverySelectionKind.NotSelected}
+              onValueChange={(value) => {
+                selectedDelivery =
+                  value === GenesisDeliverySelectionKind.NotSelected
+                    ? { kind: GenesisDeliverySelectionKind.NotSelected }
+                    : {
+                        kind: GenesisDeliverySelectionKind.Selected,
+                        storeId: value,
+                      }
+              }}
             >
               <Select.Trigger
                 id="sentinel-delivery-select"
@@ -196,7 +234,8 @@
               data-testid="sentinel-unlock-create-response-btn"
               disabled={disabled ||
                 actionBusy ||
-                !selectedDelivery ||
+                selectedDelivery.kind !==
+                  GenesisDeliverySelectionKind.Selected ||
                 !request.trim()}
               onclick={() => void createResponse()}
             >

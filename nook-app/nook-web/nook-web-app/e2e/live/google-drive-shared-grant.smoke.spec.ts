@@ -3,6 +3,7 @@ import {
   createSharedVaultFolder,
   getFileMetadata,
   hasLiveDriveSharedGrantCredentials,
+  LiveDriveCredentialsStateKind,
   readLiveDriveSharedGrantCredentials,
   shareFolderWithEmail,
   trashDriveFile,
@@ -32,18 +33,34 @@ describeLive('live Google Drive shared-folder grant', () => {
 
   let ownerToken = ''
   let joinerEmail = ''
-  let joinerToken: string | undefined
+  enum JoinerCredentialsKind {
+    OwnerOnly = 'owner-only',
+    OwnerAndJoiner = 'owner-and-joiner',
+  }
+
+  type JoinerCredentials =
+    | { kind: JoinerCredentialsKind.OwnerOnly }
+    | { kind: JoinerCredentialsKind.OwnerAndJoiner; accessToken: string }
+  let joinerCredentials: JoinerCredentials = {
+    kind: JoinerCredentialsKind.OwnerOnly,
+  }
   let folderId = ''
   let markerFileId = ''
 
   test.beforeAll(() => {
     const credentials = readLiveDriveSharedGrantCredentials()
-    if (!credentials) {
+    if (credentials.kind === LiveDriveCredentialsStateKind.Missing) {
       throw new Error('live Drive shared-grant credentials missing')
     }
     ownerToken = credentials.ownerAccessToken
     joinerEmail = credentials.joinerEmail
-    joinerToken = credentials.joinerAccessToken
+    joinerCredentials =
+      credentials.kind === LiveDriveCredentialsStateKind.OwnerOnly
+        ? { kind: JoinerCredentialsKind.OwnerOnly }
+        : {
+            kind: JoinerCredentialsKind.OwnerAndJoiner,
+            accessToken: credentials.joinerAccessToken,
+          }
   })
 
   test.afterAll(async () => {
@@ -84,7 +101,8 @@ describeLive('live Google Drive shared-folder grant', () => {
     )
     expect(markerFileId.length).toBeGreaterThan(0)
 
-    if (joinerToken) {
+    if (joinerCredentials.kind === JoinerCredentialsKind.OwnerAndJoiner) {
+      const joinerToken = joinerCredentials.accessToken
       const joinerFolder = await verifySharedVaultFolder(joinerToken, folderId)
       expect(joinerFolder.canAddChildren).toBe(true)
       expect(joinerFolder.id).toBe(folderId)

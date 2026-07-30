@@ -6,6 +6,7 @@ import {
 import initNookWasm, {
   authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
+  classifyAuthenticationOutcomeWithDefaultTimeout as wasmClassifyAuthenticationOutcomeWithDefaultTimeout,
   configureVaultApplication,
   generatePassword as wasmGeneratePassword,
   readExtensionPairingState as wasmReadExtensionPairingState,
@@ -19,6 +20,7 @@ import initNookWasm, {
   NookExtensionPairingState,
   NookExternalEventLogRecords,
   NookVaultManager,
+  VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthenticationPageObservationView,
@@ -28,19 +30,39 @@ import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
 } from '../lib/outcome-evidence-messages'
-import { isAuthenticationOutcomeVerdictName } from '../lib/outcome-evidence-messages'
 import type { ImportedEventLogState } from './pairing-grants'
 
-let initPromise: Promise<unknown> | undefined
+enum BackgroundWasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
+
+type BackgroundWasmStartup =
+  | { kind: BackgroundWasmStartupKind.NotStarted }
+  | {
+      kind: BackgroundWasmStartupKind.Initializing
+      operation: Promise<unknown>
+    }
+
+let backgroundWasmStartup: BackgroundWasmStartup = {
+  kind: BackgroundWasmStartupKind.NotStarted,
+}
 
 function ensureExtensionWasm(): Promise<unknown> {
-  initPromise ??= initNookWasm({
+  if (backgroundWasmStartup.kind === BackgroundWasmStartupKind.Initializing) {
+    return backgroundWasmStartup.operation
+  }
+  const operation = initNookWasm({
     module_or_path: chrome.runtime.getURL('background/nook_wasm_bg.wasm'),
   }).then((value) => {
-    configureVaultApplication('extension')
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
-  return initPromise
+  backgroundWasmStartup = {
+    kind: BackgroundWasmStartupKind.Initializing,
+    operation,
+  }
+  return operation
 }
 
 export async function readExtensionPairingState(): Promise<
@@ -87,9 +109,21 @@ export async function reconcileExtensionPairingState(
   }
 }
 
+export enum AuthenticationWorkflowSnapshotKind {
+  Matched = 'matched',
+  NoMatch = 'no-match',
+}
+
+export type AuthenticationWorkflowSnapshot =
+  | { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
+  | {
+      kind: AuthenticationWorkflowSnapshotKind.Matched
+      snapshot: AuthenticationWorkflowSnapshotView
+    }
+
 export async function authenticationWorkflowSnapshot(
   observations: AuthenticationPageObservationView[],
-): Promise<AuthenticationWorkflowSnapshotView | undefined> {
+): Promise<AuthenticationWorkflowSnapshot> {
   await ensureExtensionWasm()
   const inputs = new NookAuthenticationPageObservations()
   try {
@@ -117,18 +151,21 @@ export async function authenticationWorkflowSnapshot(
       if (
         workflowMatch.state === NookAuthenticationWorkflowMatchState.NoMatch
       ) {
-        return undefined
+        return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
       }
       const snapshot = workflowMatch.snapshot()
       try {
         return {
-          kind: snapshot.kindName,
-          stage: snapshot.stageName,
-          action: snapshot.actionName,
-          currentStep: snapshot.currentStep,
-          totalSteps: snapshot.totalSteps,
-          requiresHumanApproval: snapshot.requiresHumanApproval,
-          observationIndex: snapshot.observationIndex,
+          kind: AuthenticationWorkflowSnapshotKind.Matched,
+          snapshot: {
+            kind: snapshot.kindName,
+            stage: snapshot.stageName,
+            action: snapshot.actionName,
+            currentStep: snapshot.currentStep,
+            totalSteps: snapshot.totalSteps,
+            requiresHumanApproval: snapshot.requiresHumanApproval,
+            observationIndex: snapshot.observationIndex,
+          },
         }
       } finally {
         snapshot.free()
@@ -151,7 +188,7 @@ export async function generateSuggestedPassword(): Promise<string> {
 
 export async function classifyAuthenticationOutcome(
   observation: AuthenticationOutcomeObservationView,
-  timeoutMs?: number,
+  timeoutMs: number,
 ): Promise<AuthenticationOutcomeVerdictView> {
   await ensureExtensionWasm()
   const input = new NookAuthenticationOutcomeObservation(
@@ -166,15 +203,39 @@ export async function classifyAuthenticationOutcome(
   try {
     const verdict = wasmClassifyAuthenticationOutcome(
       input,
-      timeoutMs === undefined ? undefined : Math.max(1, Math.floor(timeoutMs)),
+      Math.max(1, Math.floor(timeoutMs)),
     )
     try {
-      const name = verdict.name
-      if (!isAuthenticationOutcomeVerdictName(name)) {
-        return { name: 'insufficient', allowsCredentialCommit: false }
-      }
       return {
-        name,
+        verdict: verdict.verdict,
+        allowsCredentialCommit: verdict.allowsCredentialCommit === true,
+      }
+    } finally {
+      verdict.free()
+    }
+  } finally {
+    input.free()
+  }
+}
+
+export async function classifyAuthenticationOutcomeWithDefaultTimeout(
+  observation: AuthenticationOutcomeObservationView,
+): Promise<AuthenticationOutcomeVerdictView> {
+  await ensureExtensionWasm()
+  const input = new NookAuthenticationOutcomeObservation(
+    observation.navigatedAwayFromAuthPath,
+    observation.authFieldsPresent,
+    observation.successMarkerPresent,
+    observation.errorMarkerPresent,
+    observation.sameDocumentMutation,
+    observation.inIframe,
+    Math.max(0, Math.floor(observation.elapsedMs)),
+  )
+  try {
+    const verdict = wasmClassifyAuthenticationOutcomeWithDefaultTimeout(input)
+    try {
+      return {
+        verdict: verdict.verdict,
         allowsCredentialCommit: verdict.allowsCredentialCommit === true,
       }
     } finally {

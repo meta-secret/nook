@@ -72,10 +72,8 @@ export class CiInteractionLogger {
     const lines = formatToolCompleted(toolCall, {
       includeShellOutput: !this.shellStream.hasStreamed(),
     });
-    if (lines) {
-      for (const line of lines) {
-        log.info(line);
-      }
+    for (const line of lines) {
+      log.info(line);
     }
   }
 }

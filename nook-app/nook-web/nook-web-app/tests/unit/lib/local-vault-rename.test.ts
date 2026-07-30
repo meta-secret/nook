@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const wasmMocks = vi.hoisted(() => ({
-  getActiveVaultId: vi.fn(),
+  getActiveVaultSelection: vi.fn(),
   hasActiveLocalVault: vi.fn(),
   listLocalVaults: vi.fn(),
   prepareNewLocalVaultSlot: vi.fn(),
@@ -28,23 +28,27 @@ vi.mock('$lib/auth-providers', () => ({
 }))
 
 import { renameLocalVaultLabel } from '$lib/vault/local-login'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 
 describe('renameLocalVaultLabel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    wasmMocks.setLocalVaultLabel.mockResolvedValue(undefined)
+    wasmMocks.setLocalVaultLabel.mockImplementation(async () => {})
   })
 
   test('keeps a committed manager rename when catalog refresh fails', async () => {
-    const setVaultName = vi.fn().mockResolvedValue(undefined)
+    const setVaultName = vi.fn().mockImplementation(async () => {})
     wasmMocks.listLocalVaults.mockRejectedValue(
       new Error('catalog refresh failed'),
     )
     const state = {
-      activeVaultStoreId: 'store-1',
+      activeVault: {
+        kind: ActiveVaultKind.Open,
+        storeId: 'store-1',
+      },
       localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      manager: { setVaultName },
+      requireManager: () => ({ setVaultName }),
       enqueueStorage: <T>(operation: () => T | Promise<T>) =>
         Promise.resolve(operation()),
       dismissSuccess: vi.fn(),

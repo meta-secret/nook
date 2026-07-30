@@ -6,6 +6,15 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
+export enum OpenPrLookupKind {
+  Found = "found",
+  NotFound = "not-found",
+}
+
+export type OpenPrLookup =
+  | { kind: OpenPrLookupKind.Found; number: number }
+  | { kind: OpenPrLookupKind.NotFound };
+
 export function parseRepository(fullName: string): RepoRef {
   const [owner, repo] = fullName.split("/");
   if (!owner || !repo) {
@@ -34,7 +43,7 @@ export async function findOpenPr(
   octokit: Octokit,
   { owner, repo }: RepoRef,
   headBranch: string,
-): Promise<number | null> {
+): Promise<OpenPrLookup> {
   const { data } = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42,7 +51,10 @@ export async function findOpenPr(
     head: `${owner}:${headBranch}`,
     per_page: 1,
   });
-  return data[0]?.number ?? null;
+  const match = data[0];
+  return match
+    ? { kind: OpenPrLookupKind.Found, number: match.number }
+    : { kind: OpenPrLookupKind.NotFound };
 }
 
 export async function branchExistsOnOrigin(
@@ -93,8 +105,8 @@ export async function createFixPr(
     return data.number;
   } catch (err: unknown) {
     const existing = await findOpenPr(octokit, repoRef, headBranch);
-    if (existing) {
-      return existing;
+    if (existing.kind === OpenPrLookupKind.Found) {
+      return existing.number;
     }
     throw err;
   }
@@ -102,7 +114,8 @@ export async function createFixPr(
 
 const CODEX_REVIEWER_LOGIN = "chatgpt-codex-connector[bot]";
 const CODEX_REVIEW_HEADING = "### 💡 Codex Review";
-const CODEX_REVIEW_INTRO = "Here are some automated review suggestions for this pull request.";
+const CODEX_REVIEW_INTRO =
+  "Here are some automated review suggestions for this pull request.";
 const CODEX_ABOUT_DETAILS = [
   "<details> <summary>ℹ️ About Codex in GitHub</summary>",
   "<br/>",
@@ -115,7 +128,8 @@ const CODEX_ABOUT_DETAILS = [
   "</details>",
 ].join(" ");
 const CLEAN_CODEX_REVIEW_PREFIX = "Codex Review: Didn't find any major issues.";
-const REVIEWED_COMMIT_PATTERN = /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
+const REVIEWED_COMMIT_PATTERN =
+  /\*\*Reviewed commit:\*\*\s*`([0-9a-f]{10,40})`/;
 const CODEX_REVIEWED_COMMIT_ONLY_PATTERN =
   /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/;
 
@@ -148,16 +162,18 @@ export async function requestCodexReview(
     }),
   ]);
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const reviewRequests = comments.filter((comment) => comment.body?.includes(marker));
+  const reviewRequests = comments.filter((comment) =>
+    comment.body?.includes(marker),
+  );
   const reviewSettled =
     reviews.some(
       (review) =>
         review.commit_id === pr.head.sha &&
         isSubmittedReviewState(review.state) &&
-        isCodexReviewer(review.user?.login),
+        isCodexReviewer(review.user),
     ) ||
     comments.some((comment) =>
-      isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+      isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
     );
   const requestReactions = reviewSettled
     ? []
@@ -174,11 +190,12 @@ export async function requestCodexReview(
         )
       ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const settled = reviewSettled || approvalReaction;
   const lastRequestIndex = comments.reduce(
-    (lastIndex, comment, index) => (comment.body?.includes(marker) ? index : lastIndex),
+    (lastIndex, comment, index) =>
+      comment.body?.includes(marker) ? index : lastIndex,
     -1,
   );
   const retryAfterUsageLimit =
@@ -186,7 +203,7 @@ export async function requestCodexReview(
     comments
       .slice(lastRequestIndex + 1)
       .some((comment) =>
-        isCodexUsageLimitComment(comment.body ?? "", comment.user?.login),
+        isCodexUsageLimitComment(comment.body ?? "", comment.user),
       );
   if (settled || (reviewRequests.length > 0 && !retryAfterUsageLimit)) {
     return { headSha: pr.head.sha, requested: false, settled };
@@ -275,6 +292,9 @@ type ReviewThreadPage = {
   };
 };
 
+type ReviewThreads =
+  ReviewThreadPage["repository"]["pullRequest"]["reviewThreads"];
+
 const REVIEW_THREADS_QUERY = `
   query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -314,18 +334,35 @@ export async function inspectPrFeedback(
   });
 
   let unresolvedThreads = 0;
-  let cursor: string | undefined;
-  do {
-    const page = await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
-      owner,
-      repo,
-      number: prNumber,
-      cursor,
-    });
-    const threads = page.repository.pullRequest.reviewThreads;
-    unresolvedThreads += threads.nodes.filter((thread) => !thread.isResolved).length;
-    cursor = threads.pageInfo.hasNextPage ? threads.pageInfo.endCursor : undefined;
-  } while (cursor);
+  enum PaginationKind {
+    FirstPage = "first-page",
+    NextPage = "next-page",
+    Complete = "complete",
+  }
+
+  let pagination:
+    | { kind: PaginationKind.FirstPage }
+    | { kind: PaginationKind.NextPage; cursor: string }
+    | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
+  while (pagination.kind !== PaginationKind.Complete) {
+    const page: ReviewThreadPage =
+      await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
+        owner,
+        repo,
+        number: prNumber,
+        ...(pagination.kind === PaginationKind.NextPage
+          ? { cursor: pagination.cursor }
+          : {}),
+      });
+    const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
+    unresolvedThreads += threads.nodes.filter(
+      (thread) => !thread.isResolved,
+    ).length;
+    pagination =
+      threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
+        ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
+        : { kind: PaginationKind.Complete };
+  }
 
   const [issueComments, reviews] = await Promise.all([
     octokit.paginate(octokit.rest.issues.listComments, {
@@ -343,12 +380,14 @@ export async function inspectPrFeedback(
   ]);
 
   const marker = codexReviewRequestMarker(pr.head.sha);
-  const reviewRequests = issueComments.filter((comment) => comment.body?.includes(marker));
+  const reviewRequests = issueComments.filter((comment) =>
+    comment.body?.includes(marker),
+  );
   const currentHeadReview = reviews.some(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
-      isCodexReviewer(review.user?.login),
+      isCodexReviewer(review.user),
   );
   const requestReactions = (
     await Promise.all(
@@ -363,16 +402,16 @@ export async function inspectPrFeedback(
     )
   ).flat();
   const approvalReaction = requestReactions.some(
-    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user?.login),
+    (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const cleanComment = issueComments.some((comment) =>
-    isCleanCodexReviewComment(comment.body ?? "", comment.user?.login, pr.head.sha),
+    isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = issueComments.filter(
     (comment) =>
       !isRepositoryStatusComment(comment.body ?? "") &&
-      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user?.login),
+      !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
   const substantiveReviews = reviews.filter((review) => {
     if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
@@ -382,7 +421,7 @@ export async function inspectPrFeedback(
       return true;
     }
     const body = review.body?.trim() ?? "";
-    return body.length > 0 && !isCodexReviewStatusBody(body, review.user?.login);
+    return body.length > 0 && !isCodexReviewStatusBody(body, review.user);
   });
 
   return {
@@ -401,8 +440,7 @@ export async function inspectPrFeedback(
 
 function isNotFound(err: unknown): boolean {
   return (
-    typeof err === "object" &&
-    err !== null &&
+    err instanceof Error &&
     "status" in err &&
     (err as { status: number }).status === 404
   );
@@ -437,17 +475,42 @@ function isRepositoryStatusComment(body: string): boolean {
   );
 }
 
-function isCodexReviewer(login: string | undefined): boolean {
-  return login === CODEX_REVIEWER_LOGIN;
+function isCodexReviewer(actor: unknown): boolean {
+  if (typeof actor !== "object" || !actor) {
+    return false;
+  }
+  return (
+    "login" in actor &&
+    (actor as { login?: unknown }).login === CODEX_REVIEWER_LOGIN
+  );
 }
 
-function isCodexReviewStatusBody(body: string, login: string | undefined): boolean {
-  if (!isCodexReviewer(login)) {
+enum ReviewedCommitState {
+  Missing = "missing",
+  Found = "found",
+}
+
+type ReviewedCommit =
+  | { state: ReviewedCommitState.Missing }
+  | { state: ReviewedCommitState.Found; value: string };
+
+function reviewedCommitIn(body: string): ReviewedCommit {
+  const match = body.match(REVIEWED_COMMIT_PATTERN);
+  if (!match || typeof match[1] !== "string") {
+    return { state: ReviewedCommitState.Missing };
+  }
+  return { state: ReviewedCommitState.Found, value: match[1] };
+}
+
+function isCodexReviewStatusBody(body: string, actor: unknown): boolean {
+  if (!isCodexReviewer(actor)) {
     return false;
   }
   const trimmed = body.trim();
   const detailsIndex = trimmed.indexOf("<details>");
-  const summary = (detailsIndex === -1 ? trimmed : trimmed.slice(0, detailsIndex))
+  const summary = (
+    detailsIndex === -1 ? trimmed : trimmed.slice(0, detailsIndex)
+  )
     .replace(/[ \t]+$/gm, "")
     .trim();
   if (detailsIndex !== -1) {
@@ -459,34 +522,49 @@ function isCodexReviewStatusBody(body: string, login: string | undefined): boole
   const expectedPrefix = `${CODEX_REVIEW_HEADING}\n\n${CODEX_REVIEW_INTRO}\n\n`;
   return (
     summary.startsWith(expectedPrefix) &&
-    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(summary.slice(expectedPrefix.length))
+    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(
+      summary.slice(expectedPrefix.length),
+    )
   );
 }
 
-function isCodexUsageLimitComment(body: string, login: string | undefined): boolean {
-  return isCodexReviewer(login) && body.includes("Codex usage limits for code reviews");
+function isCodexUsageLimitComment(body: string, actor: unknown): boolean {
+  return (
+    isCodexReviewer(actor) &&
+    body.includes("Codex usage limits for code reviews")
+  );
 }
 
 function isCleanCodexReviewComment(
   body: string,
-  login: string | undefined,
+  actor: unknown,
   headSha: string,
 ): boolean {
-  if (!isCodexCleanReviewStatusComment(body, login)) {
+  if (!isCodexCleanReviewStatusComment(body, actor)) {
     return false;
   }
-  const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
-  return reviewedCommit !== undefined && headSha.startsWith(reviewedCommit);
+  const reviewedCommit = reviewedCommitIn(body);
+  return (
+    reviewedCommit.state === ReviewedCommitState.Found &&
+    headSha.startsWith(reviewedCommit.value)
+  );
 }
 
-function isCodexCleanReviewStatusComment(body: string, login: string | undefined): boolean {
+function isCodexCleanReviewStatusComment(
+  body: string,
+  actor: unknown,
+): boolean {
   return (
-    isCodexReviewer(login) &&
+    isCodexReviewer(actor) &&
     body.trimStart().startsWith(CLEAN_CODEX_REVIEW_PREFIX) &&
     REVIEWED_COMMIT_PATTERN.test(body)
   );
 }
 
 function isSubmittedReviewState(state: string): boolean {
-  return state === "APPROVED" || state === "CHANGES_REQUESTED" || state === "COMMENTED";
+  return (
+    state === "APPROVED" ||
+    state === "CHANGES_REQUESTED" ||
+    state === "COMMENTED"
+  );
 }

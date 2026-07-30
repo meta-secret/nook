@@ -3,6 +3,19 @@ import './vault-visual.css'
 import './product-sections.css'
 import './responsive.css'
 import { landingMessages } from './messages.js'
+import {
+  GitHubStarsCacheLookupKind,
+  GitHubStarsStateKind,
+  githubStarsNotLoaded,
+  loadedGitHubStars,
+  readCachedGitHubStarCount,
+} from './github-stars-state'
+import {
+  ExtensionMetadataStateKind,
+  loadedExtensionMetadata,
+  loadingExtensionMetadata,
+  unavailableExtensionMetadata,
+} from './extension-metadata-state'
 
 const cryptoTerms = Array.from(document.querySelectorAll('.crypto-term'))
 const readoutCode = document.querySelector('.readout-code')
@@ -20,9 +33,8 @@ const extensionManual = document.querySelector('.extension-manual')
 const githubStarsLink = document.querySelector('.github-stars')
 const githubStarsCount = document.querySelector('.github-stars-count')
 const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
-let extensionMetadata = null
-let extensionMetadataUnavailable = false
-let githubStarCount
+let extensionMetadataState = loadingExtensionMetadata()
+let githubStarsState = githubStarsNotLoaded()
 let followsSystemTheme = true
 
 function selectCryptoTerm(term) {
@@ -89,18 +101,19 @@ function validateExtensionMetadata(metadata) {
 
 function updateExtensionInstallState(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (extensionMetadataUnavailable) {
+  if (extensionMetadataState.kind === ExtensionMetadataStateKind.Unavailable) {
     extensionInstallStatus.textContent = messages['extension.unavailable']
     extensionInstallAction.hidden = true
     extensionStoreNote.hidden = true
     extensionManual.hidden = true
     return
   }
-  if (!extensionMetadata) {
+  if (extensionMetadataState.kind === ExtensionMetadataStateKind.Loading) {
     extensionInstallStatus.textContent = messages['extension.loading']
     return
   }
 
+  const extensionMetadata = extensionMetadataState.metadata
   const storeInstall = extensionMetadata.install_method === 'chrome_web_store'
   const actionKey = storeInstall
     ? 'extension.add_store'
@@ -123,16 +136,18 @@ async function loadExtensionMetadata() {
       headers: { Accept: 'application/json' },
     })
     if (!response.ok) throw new Error('Extension metadata unavailable.')
-    extensionMetadata = validateExtensionMetadata(await response.json())
+    extensionMetadataState = loadedExtensionMetadata(
+      validateExtensionMetadata(await response.json()),
+    )
   } catch {
-    extensionMetadataUnavailable = true
+    extensionMetadataState = unavailableExtensionMetadata()
   }
   updateExtensionInstallState()
 }
 
 function updateGitHubStars(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (githubStarCount === undefined) {
+  if (githubStarsState.kind === GitHubStarsStateKind.NotLoaded) {
     githubStarsCount.textContent = '—'
     githubStarsLink.setAttribute('aria-label', messages['github.link_label'])
     return
@@ -141,33 +156,17 @@ function updateGitHubStars(locale = document.documentElement.lang) {
   githubStarsCount.textContent = new Intl.NumberFormat(locale, {
     notation: 'compact',
     maximumFractionDigits: 1,
-  }).format(githubStarCount)
+  }).format(githubStarsState.count)
   githubStarsLink.setAttribute(
     'aria-label',
-    `${messages['github.link_label']} · ${messages['github.stars_label']}: ${new Intl.NumberFormat(locale).format(githubStarCount)}`,
+    `${messages['github.link_label']} · ${messages['github.stars_label']}: ${new Intl.NumberFormat(locale).format(githubStarsState.count)}`,
   )
 }
 
-function readCachedGitHubStarCount() {
-  try {
-    const cached = JSON.parse(localStorage.getItem('nook_github_stars') ?? '{}')
-    if (
-      Number.isSafeInteger(cached.count) &&
-      cached.count >= 0 &&
-      Number.isSafeInteger(cached.updatedAt)
-    ) {
-      return cached
-    }
-  } catch {
-    // A malformed or unavailable cache must not affect the header.
-  }
-  return undefined
-}
-
 async function loadGitHubStars() {
-  const cached = readCachedGitHubStarCount()
-  if (cached) {
-    githubStarCount = cached.count
+  const cached = readCachedGitHubStarCount(localStorage)
+  if (cached.kind === GitHubStarsCacheLookupKind.Found) {
+    githubStarsState = loadedGitHubStars(cached.count)
     updateGitHubStars()
   }
 
@@ -189,12 +188,12 @@ async function loadGitHubStars() {
     ) {
       throw new Error('Invalid GitHub repository metadata.')
     }
-    githubStarCount = repository.stargazers_count
+    githubStarsState = loadedGitHubStars(repository.stargazers_count)
     try {
       localStorage.setItem(
         'nook_github_stars',
         JSON.stringify({
-          count: githubStarCount,
+          count: githubStarsState.count,
           updatedAt: Date.now(),
         }),
       )
@@ -234,7 +233,7 @@ function applyLandingLocale(locale, persist = false) {
     )
   }
   for (const label of document.querySelectorAll('.system-label')) {
-    if (label.dataset.termIndex === undefined) continue
+    if (!('termIndex' in label.dataset)) continue
     const term = cryptoTerms[Number(label.dataset.termIndex)]
     label.dataset.detail = term.dataset.detail
     label.setAttribute(

@@ -7,7 +7,7 @@ import {
   dismissSyncConflictIfVisible,
   expandSettingsSection,
   expandLoginEnrollmentPanel,
-  expectVaultPasswordStatus,
+  expectNoVaultPasswords,
   openStorageSettings,
   revealSecretValue,
   rotateVaultPassword,
@@ -32,6 +32,7 @@ import {
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
+import { PasswordEnvelopeCiphertextStateKind } from './vault-yaml'
 
 test.describe('vault password envelope with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
@@ -71,7 +72,7 @@ test.describe('vault password envelope with sync provider', () => {
 
   test('attaching a password switches the vault to password unlock mode', async () => {
     await openStorageSettings(deviceA)
-    await expectVaultPasswordStatus(deviceA, 'none')
+    await expectNoVaultPasswords(deviceA)
 
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
     await deviceA.getByTestId('vault-secrets-tab').click()
@@ -109,8 +110,8 @@ test.describe('vault password envelope with sync provider', () => {
       ct?: string
     }
     expect(outer.entry_id).toBeTruthy()
-    expect(outer.provider).toBeUndefined()
-    expect(outer.password).toBeUndefined()
+    expect(Object.hasOwn(outer, 'provider')).toBe(false)
+    expect(Object.hasOwn(outer, 'password')).toBe(false)
     expect(outer.ct).toBeTruthy()
     expect(typeof outer.issued_at).toBe('string')
     expect(Date.parse(outer.issued_at)).not.toBeNaN()
@@ -200,7 +201,7 @@ test.describe('vault password envelope with sync provider', () => {
       (snapshot) => snapshot.hasPasswordEnvelope,
     )
     const oldEnvelope = before.passwordEnvelopeCiphertext
-    expect(oldEnvelope).not.toBeUndefined()
+    expect(oldEnvelope.kind).toBe(PasswordEnvelopeCiphertextStateKind.Present)
 
     await openStorageSettings(deviceA)
     await rotateVaultPassword(deviceA, 'rotated-pw-9')
@@ -209,12 +210,16 @@ test.describe('vault password envelope with sync provider', () => {
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope &&
-        snapshot.passwordEnvelopeCiphertext !== undefined &&
-        snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
+        snapshot.passwordEnvelopeCiphertext.kind ===
+          PasswordEnvelopeCiphertextStateKind.Present &&
+        (oldEnvelope.kind !== PasswordEnvelopeCiphertextStateKind.Present ||
+          snapshot.passwordEnvelopeCiphertext.ciphertext !==
+            oldEnvelope.ciphertext),
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
     )
-    expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
-    expect(after.passwordEnvelopeCiphertext).not.toBeUndefined()
+    expect(after.passwordEnvelopeCiphertext.kind).toBe(
+      PasswordEnvelopeCiphertextStateKind.Present,
+    )
   })
 
   test('removing the backup password leaves device-key unlock intact', async () => {
@@ -235,7 +240,7 @@ test.describe('vault password envelope with sync provider', () => {
       (snapshot) => !snapshot.hasPasswordEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await expectVaultPasswordStatus(deviceA, 'none', {
+    await expectNoVaultPasswords(deviceA, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 

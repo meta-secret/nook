@@ -1,13 +1,32 @@
 import { describe, expect, test } from 'vitest'
-import { getLegalPageFromPath, LEGAL_PAGES } from '$lib/legal-content'
+import { LegalRouteKind, legalRoute } from '$lib/app-lifecycle-state'
+import {
+  LEGAL_PAGES,
+  LegalPageLookupKind,
+  LegalPageId,
+  getLegalPageFromPath,
+} from '$lib/legal-content'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {
-    expect(getLegalPageFromPath('/privacy')).toBe('privacy')
-    expect(getLegalPageFromPath('/privacy/')).toBe('privacy')
-    expect(getLegalPageFromPath('/terms')).toBe('terms')
-    expect(getLegalPageFromPath('/')).toBeUndefined()
-    expect(getLegalPageFromPath('/vault')).toBeUndefined()
+    expect(getLegalPageFromPath('/privacy')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Privacy,
+    })
+    expect(getLegalPageFromPath('/privacy/')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Privacy,
+    })
+    expect(getLegalPageFromPath('/terms')).toEqual({
+      kind: LegalPageLookupKind.LegalPage,
+      page: LegalPageId.Terms,
+    })
+    expect(legalRoute(getLegalPageFromPath('/'))).toEqual({
+      kind: LegalRouteKind.Application,
+    })
+    expect(legalRoute(getLegalPageFromPath('/vault'))).toEqual({
+      kind: LegalRouteKind.Application,
+    })
   })
 
   test('loads markdown sources from docs/', () => {

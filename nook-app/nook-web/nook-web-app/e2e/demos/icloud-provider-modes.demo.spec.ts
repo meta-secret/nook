@@ -15,7 +15,7 @@ async function demoBeat(page: Page) {
 test('choose private or shared iCloud vault storage', async ({ page }) => {
   await page.addInitScript(() => {
     const container = {
-      setUpAuth: async () => undefined,
+      setUpAuth: async () => {},
       whenUserSignsIn: () => new Promise(() => {}),
     }
     ;(

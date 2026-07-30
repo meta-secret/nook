@@ -4,12 +4,13 @@ import {
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
-import { installDemoChromeStub } from './static-chrome-stub'
+import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
 
 test('generate a signup password through Nook Pilot', async ({ page }) => {
   const messages = await loadPilotMessages()
   const stubArgs = {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     generatePilotFlow: true,
   }
 

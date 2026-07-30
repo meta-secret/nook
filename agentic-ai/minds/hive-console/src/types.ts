@@ -48,6 +48,17 @@ export type ObserverCopy = {
   close_details: string;
 };
 
+export enum ObservedExecutionStatus {
+  Blocked = 'BLOCKED',
+  Cancelled = 'CANCELLED',
+  Cancelling = 'CANCELLING',
+  Completed = 'COMPLETED',
+  Failed = 'FAILED',
+  Idle = 'IDLE',
+  Ready = 'READY',
+  Running = 'RUNNING',
+}
+
 export type ObservedAgent = {
   id: string;
   pod_name: string;
@@ -70,15 +81,28 @@ export type ObservedActivity = {
   attempt_number: number;
 };
 
+export enum ObservedAlertKind {
+  TaskFailed = 'task-failed',
+  DependencyFailed = 'dependency-failed',
+  DependencyBlocked = 'dependency-blocked',
+  ActivityStale = 'activity-stale',
+  CancellationStuck = 'cancellation-stuck',
+}
+
+export enum ObservedAlertSeverity {
+  Critical = 'critical',
+  Warning = 'warning',
+}
+
 export type ObservedAlert = {
   id: string;
   kind:
-    | 'task-failed'
-    | 'dependency-failed'
-    | 'dependency-blocked'
-    | 'activity-stale'
-    | 'cancellation-stuck';
-  severity: 'critical' | 'warning';
+    | ObservedAlertKind.TaskFailed
+    | ObservedAlertKind.DependencyFailed
+    | ObservedAlertKind.DependencyBlocked
+    | ObservedAlertKind.ActivityStale
+    | ObservedAlertKind.CancellationStuck;
+  severity: ObservedAlertSeverity;
   task_id: string;
   first_observed_at: number;
   reason: string;

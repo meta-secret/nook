@@ -1,4 +1,4 @@
-import { chromium, expect, test } from '@playwright/test'
+import { chromium, expect, test, type Page } from '@playwright/test'
 import {
   assertWebsitePasskey,
   attachNookLogsForTest,
@@ -23,9 +23,19 @@ import {
   startLoginServer,
   waitForExtensionPairingReady,
 } from './helpers/extension-smoke-runtime'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
+
+enum WebsitePageStateKind {
+  Skipped = 'skipped',
+  Opened = 'opened',
+}
+
+type WebsitePageState =
+  | { kind: WebsitePageStateKind.Skipped }
+  | { kind: WebsitePageStateKind.Opened; page: Page }
 
 test('creates a passkey from browser-native WASM options after extension messaging', async ({
   browserName,
@@ -57,10 +67,18 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     testInfo.outputPath('chromium-profile')
   const context = await launchExtensionContext(userDataDir)
   const loginServer = await startLoginServer()
-  const website = isHostedSmoke ? undefined : await context.newPage()
-  await website?.goto(`${loginServer.origin}/login`)
-  const websiteAfterUnlock = isHostedSmoke ? undefined : await context.newPage()
-  await websiteAfterUnlock?.goto(`${loginServer.origin}/login`)
+  const website: WebsitePageState = isHostedSmoke
+    ? { kind: WebsitePageStateKind.Skipped }
+    : { kind: WebsitePageStateKind.Opened, page: await context.newPage() }
+  if (website.kind === WebsitePageStateKind.Opened) {
+    await website.page.goto(`${loginServer.origin}/login`)
+  }
+  const websiteAfterUnlock: WebsitePageState = isHostedSmoke
+    ? { kind: WebsitePageStateKind.Skipped }
+    : { kind: WebsitePageStateKind.Opened, page: await context.newPage() }
+  if (websiteAfterUnlock.kind === WebsitePageStateKind.Opened) {
+    await websiteAfterUnlock.page.goto(`${loginServer.origin}/login`)
+  }
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
@@ -161,8 +179,8 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     expect(pairedGrant).toEqual(
       expect.objectContaining({
         scopes: expect.arrayContaining([
-          'passkey-management',
-          'password-filling',
+          ExtensionConnectScope.PasskeyManagement,
+          ExtensionConnectScope.PasswordFilling,
         ]),
       }),
     )
@@ -197,12 +215,26 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await reconnectPage.close()
     await pairingLauncher.close()
 
-    let websiteCredentialId: string | undefined
-    if (website) {
-      websiteCredentialId = await registerWebsitePasskey(website)
+    enum WebsitePasskeyStateKind {
+      NotCreated = 'not-created',
+      Created = 'created',
+    }
+
+    type WebsitePasskeyState =
+      | { kind: WebsitePasskeyStateKind.NotCreated }
+      | { kind: WebsitePasskeyStateKind.Created; credentialId: string }
+    let websitePasskeyState: WebsitePasskeyState = {
+      kind: WebsitePasskeyStateKind.NotCreated,
+    }
+    if (website.kind === WebsitePageStateKind.Opened) {
+      const websiteCredentialId = await registerWebsitePasskey(website.page)
+      websitePasskeyState = {
+        kind: WebsitePasskeyStateKind.Created,
+        credentialId: websiteCredentialId,
+      }
       expect(websiteCredentialId).toBeTruthy()
-      await assertWebsitePasskey(website, websiteCredentialId)
-      await website.close()
+      await assertWebsitePasskey(website.page, websiteCredentialId)
+      await website.page.close()
     }
 
     await simplePage.getByRole('button', { name: 'Done' }).click()
@@ -443,9 +475,15 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         ).length
       })
       .toBe(3)
-    if (websiteAfterUnlock && websiteCredentialId) {
-      await assertWebsitePasskey(websiteAfterUnlock, websiteCredentialId)
-      await websiteAfterUnlock.close()
+    if (
+      websiteAfterUnlock.kind === WebsitePageStateKind.Opened &&
+      websitePasskeyState.kind === WebsitePasskeyStateKind.Created
+    ) {
+      await assertWebsitePasskey(
+        websiteAfterUnlock.page,
+        websitePasskeyState.credentialId,
+      )
+      await websiteAfterUnlock.page.close()
     }
     await attachNookLogsForTest(reopenedVaultPage, testInfo)
 
@@ -454,7 +492,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       userDataDir,
       {
         headless: false,
-        executablePath: chromiumExecutablePath,
+        ...(chromiumExecutablePath
+          ? { executablePath: chromiumExecutablePath }
+          : {}),
         args: [
           `--disable-extensions-except=${extensionDir}`,
           `--load-extension=${extensionDir}`,
@@ -578,10 +618,12 @@ test('reuses the offscreen session after the service worker restarts', async ({
       (target) =>
         target.type === 'service_worker' && target.url === worker.url(),
     )
-    expect(workerTarget).toBeDefined()
+    if (!workerTarget) {
+      throw new Error('Expected the active extension service worker target')
+    }
     await expect(
       cdp.send('Target.closeTarget', {
-        targetId: workerTarget!.targetId,
+        targetId: workerTarget.targetId,
       }),
     ).resolves.toEqual({ success: true })
 

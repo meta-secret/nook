@@ -28,8 +28,9 @@ code.
 
 ## Recorded metrics
 
-Each schema-version-2 record is JSON-compatible YAML and contains the fields
-below. Historical schema-version-1 timing-only records remain valid baselines.
+Each schema-version-3 record is JSON-compatible YAML and contains the fields
+below. Historical schema-version-1 timing-only and schema-version-2 nullable
+records remain valid baselines after boundary normalization.
 
 - Main run ID, attempt, head SHA, conclusion, URL, and timestamps;
 - associated pull requests when GitHub can resolve them;
@@ -44,10 +45,11 @@ below. Historical schema-version-1 timing-only records remain valid baselines.
 - comparison with the two latest successful attempts from the same workflow,
   including threshold-based wall, execution, and build regression flags.
 
-Incomplete steps use `null` duration. The collector never invents a duration
-for a cancelled step whose completion timestamp is absent. All strings are
-JSON-quoted, preventing colons, timestamps, or PR titles from producing invalid
-YAML.
+Incomplete steps omit `duration_seconds`. The collector never invents a
+duration for a cancelled step whose completion timestamp is absent. Optional
+timestamps and rates are likewise omitted when the source cannot provide a
+truthful measurement. All strings are JSON-quoted, preventing colons,
+timestamps, or PR titles from producing invalid YAML.
 
 ## Publication and isolation
 

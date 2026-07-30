@@ -4,9 +4,10 @@
   import FixtureCredentials from '../lib/FixtureCredentials.svelte'
   import {
     credentialsFromLoginSubmit,
+    LoginSubmissionKind,
     resetLoginSubmission,
   } from '../lib/login-form'
-  import { completePlainLogin } from '../lib/plain-login'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
 
   const fixtureAccount = MOCK_AUTH_ACCOUNTS.find(
     (account) => !account.totpSecret,
@@ -19,9 +20,9 @@
   function onsubmit(event: SubmitEvent) {
     const credentials = credentialsFromLoginSubmit(event)
     if (
-      credentials &&
+      credentials.kind === LoginSubmissionKind.Credentials &&
       completePlainLogin(credentials.username, credentials.password) ===
-        'invalid'
+        PlainLoginResult.Invalid
     ) {
       error = 'Invalid username or password.'
     }

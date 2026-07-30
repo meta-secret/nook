@@ -4,6 +4,7 @@
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
+  import { LoginVaultWorkflow } from '$lib/components/login/login-unlock-state'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
 
@@ -26,7 +27,7 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let workflow = $state<'open' | 'create' | 'import'>('open')
+  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
 </script>
 
 <div class="space-y-5" data-testid="login-vault-picker">
@@ -36,7 +37,7 @@
     onSelect={(selected) => (workflow = selected)}
   />
 
-  {#if workflow === 'open'}
+  {#if workflow === LoginVaultWorkflow.Open}
     <section class="space-y-3" data-testid="login-vault-picker-existing">
       <div class="space-y-1">
         <h3
@@ -65,7 +66,7 @@
         {/each}
       </ul>
     </section>
-  {:else if workflow === 'create'}
+  {:else if workflow === LoginVaultWorkflow.Create}
     <section class="space-y-3" data-testid="login-vault-picker-start-fresh">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">

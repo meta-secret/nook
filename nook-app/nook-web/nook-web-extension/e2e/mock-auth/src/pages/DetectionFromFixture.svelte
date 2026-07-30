@@ -1,8 +1,14 @@
 <script lang="ts">
-  import { completePlainLogin } from '../lib/plain-login'
+  import {
+    DetectionFixtureRenderKind,
+    type DetectionFixtureRenderState,
+  } from '../lib/detection-fixture-state'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
   import {
     getSiteFixture,
     getTemplateFixture,
+    SiteFixtureLookupKind,
+    SiteFixtureSubmitType,
     type SiteFixtureField,
   } from '../lib/site-fixtures'
 
@@ -17,17 +23,30 @@
   let stepIndex = $state(0)
   let error = $state('')
 
-  const fixture = $derived(
-    templateId
+  const renderState: DetectionFixtureRenderState = $derived.by(() => {
+    const selectedFixture = templateId
       ? getTemplateFixture(templateId)
       : siteId
         ? getSiteFixture(siteId)
-        : undefined,
-  )
+        : { kind: SiteFixtureLookupKind.Missing }
+    if (selectedFixture.kind === SiteFixtureLookupKind.Missing) {
+      return { kind: DetectionFixtureRenderKind.Missing }
+    }
+    const selectedStep = selectedFixture.fixture.steps.find(
+      (_candidate, index) => index === stepIndex,
+    )
+    return selectedStep
+      ? {
+          kind: DetectionFixtureRenderKind.Ready,
+          fixture: selectedFixture.fixture,
+          step: selectedStep,
+        }
+      : { kind: DetectionFixtureRenderKind.Missing }
+  })
   const label = $derived(templateId ?? siteId ?? 'unknown')
-  const step = $derived(fixture?.steps[stepIndex])
   const wrapAriaHidden = $derived(
-    Boolean(fixture?.quirks.includes('aria-hidden-ancestor')),
+    renderState.kind === DetectionFixtureRenderKind.Ready &&
+      renderState.fixture.quirks.includes('aria-hidden-ancestor'),
   )
 
   function fieldSelector(field: SiteFixtureField): string {
@@ -41,9 +60,10 @@
   }
 
   function readUsername(form: HTMLFormElement): string {
-    const current = step
-    if (!current) return ''
-    const identity = current.fields.find((field) => field.type !== 'password')
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const identity = renderState.step.fields.find(
+      (field) => field.type !== 'password',
+    )
     if (!identity) return ''
     return (
       form.querySelector<HTMLInputElement>(fieldSelector(identity))?.value ?? ''
@@ -51,9 +71,10 @@
   }
 
   function readPassword(form: HTMLFormElement): string {
-    const current = step
-    if (!current) return ''
-    const password = current.fields.find((field) => field.type === 'password')
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return ''
+    const password = renderState.step.fields.find(
+      (field) => field.type === 'password',
+    )
     if (!password) return ''
     return (
       form.querySelector<HTMLInputElement>(fieldSelector(password))?.value ?? ''
@@ -62,7 +83,8 @@
 
   function onsubmit(event: SubmitEvent) {
     event.preventDefault()
-    if (!fixture || !step) return
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
+    const { fixture, step } = renderState
     const form = event.currentTarget
     if (!(form instanceof HTMLFormElement)) return
     const hasPassword = step.fields.some((field) => field.type === 'password')
@@ -77,13 +99,14 @@
     }
     const username = readUsername(form)
     const password = readPassword(form)
-    if (completePlainLogin(username, password) === 'invalid') {
+    if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }
   }
 
   function onButtonAdvance() {
-    if (!fixture) return
+    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
+    const { fixture } = renderState
     if (stepIndex < fixture.steps.length - 1) {
       stepIndex += 1
       error = ''
@@ -91,13 +114,14 @@
   }
 </script>
 
-{#if !fixture || !step}
+{#if renderState.kind === DetectionFixtureRenderKind.Missing}
   <main>
     <h1>Unknown site fixture</h1>
     <p data-testid="mock-auth-scenario">missing-fixture</p>
     <p class="error" role="alert">No fixture for {label}</p>
   </main>
 {:else if wrapAriaHidden}
+  {@const step = renderState.step}
   <div aria-hidden="true">
     <main>
       <h1>{label}</h1>
@@ -118,7 +142,7 @@
             data-testid={field['data-testid']}
           />
         {/each}
-        {#if step.submit.type === 'button'}
+        {#if step.submit.type === SiteFixtureSubmitType.Button}
           <button
             type="button"
             name={step.submit.name}
@@ -142,6 +166,7 @@
     </main>
   </div>
 {:else}
+  {@const step = renderState.step}
   <main>
     <h1>{label}</h1>
     <p data-testid="mock-auth-scenario">{label}-login</p>
@@ -161,7 +186,7 @@
           data-testid={field['data-testid']}
         />
       {/each}
-      {#if step.submit.type === 'button'}
+      {#if step.submit.type === SiteFixtureSubmitType.Button}
         <button
           type="button"
           name={step.submit.name}

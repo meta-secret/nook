@@ -4,7 +4,8 @@ import { ensureAppWasm } from '$lib/wasm-bootstrap'
 
 // Keep the initial root identity: a replacement page can supply a new #app
 // while the asynchronous WASM bootstrap is pending.
-const target = document.getElementById('app') ?? undefined
+const target = document.getElementById('app')
+if (!target) throw new Error('Vault app mount target is missing')
 
 await ensureAppWasm()
 const { default: App } = await import('$vault-shared/App.svelte')
@@ -17,4 +18,4 @@ if (target?.isConnected) {
   mount(App, { target })
 }
 
-export default undefined
+export default {}

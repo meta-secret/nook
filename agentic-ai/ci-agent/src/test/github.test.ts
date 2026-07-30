@@ -81,7 +81,7 @@ test("createFixPr leaves the PR body free of automatic merge control markers", a
     assert.equal(createdBody, "## Summary\n\nOpen this PR for review.");
     assert.doesNotMatch(createdBody, /nook-agent-managed|nook-agent-monitor-wake/);
   } finally {
-    if (priorBody === undefined) {
+    if (!priorBody) {
       delete process.env.AGENT_PR_BODY;
     } else {
       process.env.AGENT_PR_BODY = priorBody;

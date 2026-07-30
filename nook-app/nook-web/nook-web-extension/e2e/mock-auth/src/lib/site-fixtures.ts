@@ -11,8 +11,13 @@ export type SiteFixtureField = {
   'data-testid'?: string
 }
 
+export enum SiteFixtureSubmitType {
+  Button = 'button',
+  Submit = 'submit',
+}
+
 export type SiteFixtureSubmit = {
-  type?: string
+  type: SiteFixtureSubmitType
   name?: string
   id?: string
   label: string
@@ -26,11 +31,16 @@ export type SiteFixtureStep = {
 
 export type SiteFixture = {
   id: string
-  source: 'capture' | 'research'
+  source: SiteFixtureSource
   loginUrl: string
   quirks: string[]
   steps: SiteFixtureStep[]
   template: string
+}
+
+enum SiteFixtureSource {
+  Capture = 'capture',
+  Research = 'research',
 }
 
 export type PopularLoginSite = {
@@ -48,9 +58,27 @@ type ShellTemplate = {
   steps: SiteFixtureStep[]
 }
 
+export enum SiteFixtureLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type SiteFixtureLookup =
+  | { kind: SiteFixtureLookupKind.Missing }
+  | { kind: SiteFixtureLookupKind.Found; fixture: SiteFixture }
+
+export enum ShellTemplateLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type ShellTemplateLookup =
+  | { kind: ShellTemplateLookupKind.Missing }
+  | { kind: ShellTemplateLookupKind.Found; template: ShellTemplate }
+
 type SiteShellRef = {
   template: string
-  source: 'capture' | 'research'
+  source: SiteFixtureSource
   loginUrl: string
   quirks?: string[]
   steps?: SiteFixtureStep[]
@@ -73,26 +101,33 @@ for (const [pathKey, template] of Object.entries(templateModules)) {
   templatesById.set(id, { ...template, id })
 }
 
-function resolveSiteFixture(id: string): SiteFixture | undefined {
+function resolveSiteFixture(id: string): SiteFixtureLookup {
   const ref = siteShells[id]
-  if (!ref) return undefined
+  if (!ref) return { kind: SiteFixtureLookupKind.Missing }
   const template = templatesById.get(ref.template)
   const steps = ref.steps ?? template?.steps
-  if (!steps || steps.length === 0) return undefined
+  if (!steps || steps.length === 0) {
+    return { kind: SiteFixtureLookupKind.Missing }
+  }
   return {
-    id,
-    source: ref.source,
-    loginUrl: ref.loginUrl,
-    quirks: ref.quirks ?? template?.quirks ?? [],
-    steps,
-    template: ref.template,
+    kind: SiteFixtureLookupKind.Found,
+    fixture: {
+      id,
+      source: ref.source,
+      loginUrl: ref.loginUrl,
+      quirks: ref.quirks ?? template?.quirks ?? [],
+      steps,
+      template: ref.template,
+    },
   }
 }
 
 const fixturesById = new Map<string, SiteFixture>()
 for (const id of Object.keys(siteShells)) {
   const fixture = resolveSiteFixture(id)
-  if (fixture) fixturesById.set(id, fixture)
+  if (fixture.kind === SiteFixtureLookupKind.Found) {
+    fixturesById.set(id, fixture.fixture)
+  }
 }
 
 export function listSiteFixtureIds(): string[] {
@@ -103,27 +138,36 @@ export function listShellTemplateIds(): string[] {
   return [...templatesById.keys()].sort()
 }
 
-export function getSiteFixture(id: string): SiteFixture | undefined {
-  return fixturesById.get(id)
+export function getSiteFixture(id: string): SiteFixtureLookup {
+  const fixture = fixturesById.get(id)
+  return fixture
+    ? { kind: SiteFixtureLookupKind.Found, fixture }
+    : { kind: SiteFixtureLookupKind.Missing }
 }
 
-export function getShellTemplate(id: string): ShellTemplate | undefined {
-  return templatesById.get(id)
+export function getShellTemplate(id: string): ShellTemplateLookup {
+  const template = templatesById.get(id)
+  return template
+    ? { kind: ShellTemplateLookupKind.Found, template }
+    : { kind: ShellTemplateLookupKind.Missing }
 }
 
 /** Render a shared template as a fixture (CI exercises unique shells, not every catalog id). */
-export function getTemplateFixture(
-  templateId: string,
-): SiteFixture | undefined {
+export function getTemplateFixture(templateId: string): SiteFixtureLookup {
   const template = templatesById.get(templateId)
-  if (!template || template.steps.length === 0) return undefined
+  if (!template || template.steps.length === 0) {
+    return { kind: SiteFixtureLookupKind.Missing }
+  }
   return {
-    id: templateId,
-    source: 'research',
-    loginUrl: `https://template.invalid/${templateId}`,
-    quirks: template.quirks ?? [],
-    steps: template.steps,
-    template: templateId,
+    kind: SiteFixtureLookupKind.Found,
+    fixture: {
+      id: templateId,
+      source: SiteFixtureSource.Research,
+      loginUrl: `https://template.invalid/${templateId}`,
+      quirks: template.quirks ?? [],
+      steps: template.steps,
+      template: templateId,
+    },
   }
 }
 
@@ -181,7 +225,10 @@ export function renderFixtureHtml(
       return `<input ${attrs} />`
     })
     .join('\n')
-  const submitType = step.submit.type === 'button' ? 'button' : 'submit'
+  const submitType =
+    step.submit.type === SiteFixtureSubmitType.Button
+      ? SiteFixtureSubmitType.Button
+      : SiteFixtureSubmitType.Submit
   const submitAttrs = [
     `type="${submitType}"`,
     step.submit.name ? `name="${escapeAttr(step.submit.name)}"` : '',

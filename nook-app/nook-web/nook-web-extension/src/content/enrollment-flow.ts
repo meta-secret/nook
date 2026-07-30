@@ -21,6 +21,10 @@ import {
   fillStagedEnrollmentCode,
   stopPendingEnrollmentWatch,
 } from './enrollment-outcome'
+import {
+  RuntimeMessageDeliveryKind,
+  type RuntimeMessageDelivery,
+} from './autofill/login-passkey-actions'
 
 export type EnrollmentPageHints = {
   qr: boolean
@@ -43,7 +47,9 @@ export type EnrollmentFlowHost = {
   openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
-  sendRuntimeMessage: <T>(message: unknown) => Promise<T | undefined>
+  sendRuntimeMessage: <T>(
+    message: unknown,
+  ) => Promise<RuntimeMessageDelivery<T>>
   translatedMessage: (key: string) => string
   translatedMessageWithSubstitution: (
     key: string,
@@ -53,15 +59,36 @@ export type EnrollmentFlowHost = {
 
 const ENROLLMENT_SECTION_CLASS = 'enrollment-actions'
 
+enum AuthenticatorOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 type AuthenticatorOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | AuthenticatorOptionsResponseStatus.Ready
+    | AuthenticatorOptionsResponseStatus.Locked
+    | AuthenticatorOptionsResponseStatus.Unavailable
   accounts?: WebsiteAuthenticatorOption[]
+}
+
+enum EnrollPreviewResponseStatus {
+  Ready = 'ready',
+  Unavailable = 'unavailable',
+}
+
+enum BackupAttachMode {
+  Replace = 'replace',
+  Merge = 'merge',
 }
 
 type EnrollPreviewResponse = {
   ok?: boolean
-  status?: 'ready' | 'unavailable'
+  status?:
+    | EnrollPreviewResponseStatus.Ready
+    | EnrollPreviewResponseStatus.Unavailable
   preview?: OtpauthEnrollmentPreview
   vaultStoreId?: string
   reason?: string
@@ -94,7 +121,7 @@ async function commitStagedEnrollment(
   vaultStoreId: string,
 ): Promise<void> {
   setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
-  const confirmResponse = await host.sendRuntimeMessage<EnrollConfirmResponse>({
+  const confirmDelivery = await host.sendRuntimeMessage<EnrollConfirmResponse>({
     type: 'nook:website-authenticator-enroll-confirm',
     payload: {
       origin: location.origin,
@@ -102,7 +129,10 @@ async function commitStagedEnrollment(
       stageId,
     },
   })
-  if (confirmResponse?.ok) {
+  if (
+    confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    confirmDelivery.response.ok
+  ) {
     setHostDescription(host, host.translatedMessage('widgetEnrollSaved'))
     if (detectEnrollmentHints().backupCodes) {
       renderEnrollmentActions(host, detectEnrollmentHints())
@@ -111,7 +141,10 @@ async function commitStagedEnrollment(
     // MutationObserver scan rebuilds the enrollment CTA and wipes the saved
     // confirmation before the user (or e2e) can observe it.
     holdEnrollmentWidgetAfterSave = true
-  } else if (confirmResponse?.reason === 'authenticator-locked') {
+  } else if (
+    confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+    confirmDelivery.response.reason === 'authenticator-locked'
+  ) {
     setHostDescription(host, lockedEnrollMessage(host))
   } else {
     setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
@@ -152,7 +185,7 @@ async function beginEnrollmentCeremony(
   section: HTMLElement,
   vaultStoreId: string,
   otpauthUri: { value: string },
-  candidate: DecodedOtpauthCandidate | undefined,
+  candidate: DecodedOtpauthCandidate,
 ): Promise<void> {
   holdEnrollmentWidgetAfterSave = false
   setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
@@ -162,7 +195,7 @@ async function beginEnrollmentCeremony(
     'pending',
     enrollmentEvidenceCallbacks(host, section, 'pending', vaultStoreId),
   )
-  const stageResponse = await host.sendRuntimeMessage<EnrollStageResponse>({
+  const stageDelivery = await host.sendRuntimeMessage<EnrollStageResponse>({
     type: 'nook:website-authenticator-enroll-stage',
     payload: {
       origin: location.origin,
@@ -172,7 +205,16 @@ async function beginEnrollmentCeremony(
   })
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
-  if (!stageResponse?.ok || typeof stageResponse.stageId !== 'string') {
+  if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+    stopPendingEnrollmentWatch()
+    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    host.setBusy(false)
+    renderEnrollmentActions(host, detectEnrollmentHints())
+    return
+  }
+  const { response: stageResponse } = stageDelivery
+  const stageId = stageResponse.stageId
+  if (stageResponse.ok !== true || typeof stageId !== 'string') {
     stopPendingEnrollmentWatch()
     setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
     host.setBusy(false)
@@ -182,16 +224,11 @@ async function beginEnrollmentCeremony(
   // Replace the temporary pending watch with the real stage id.
   beginEnrollmentEvidenceWatch(
     host,
-    stageResponse.stageId,
-    enrollmentEvidenceCallbacks(
-      host,
-      section,
-      stageResponse.stageId,
-      vaultStoreId,
-    ),
+    stageId,
+    enrollmentEvidenceCallbacks(host, section, stageId, vaultStoreId),
   )
 
-  const filled = await fillStagedEnrollmentCode(host, stageResponse.stageId)
+  const filled = await fillStagedEnrollmentCode(host, stageId)
   setHostDescription(
     host,
     host.translatedMessage(
@@ -249,8 +286,7 @@ function clearOtpauthUri(uri: { value: string }): void {
   uri.value = ''
 }
 
-function clearCandidate(candidate: DecodedOtpauthCandidate | undefined): void {
-  if (!candidate) return
+function clearCandidate(candidate: DecodedOtpauthCandidate): void {
   clearOtpauthCandidate(candidate)
 }
 
@@ -346,7 +382,7 @@ async function showQrPreview(
   host: EnrollmentFlowHost,
   section: HTMLElement,
   otpauthUri: { value: string },
-  candidate: DecodedOtpauthCandidate | undefined,
+  candidate: DecodedOtpauthCandidate,
 ): Promise<void> {
   section.replaceChildren()
   host.title.textContent = host.translatedMessage('widgetEnrollPreview')
@@ -354,7 +390,7 @@ async function showQrPreview(
   host.setBusy(true)
 
   try {
-    const response = await host.sendRuntimeMessage<EnrollPreviewResponse>({
+    const delivery = await host.sendRuntimeMessage<EnrollPreviewResponse>({
       type: 'nook:website-authenticator-enroll-preview',
       payload: {
         origin: location.origin,
@@ -362,15 +398,19 @@ async function showQrPreview(
       },
     })
 
-    if (!response?.ok) {
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response?.ok
+    ) {
       setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
     }
+    const { response } = delivery
 
-    if (response.status === 'unavailable') {
+    if (response.status === EnrollPreviewResponseStatus.Unavailable) {
       setHostDescription(host, unavailableMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearOtpauthUri(otpauthUri)
@@ -488,12 +528,12 @@ async function startQrEnrollment(
       return
     }
     const candidate = result.candidates[0]
-    const uri = { value: candidate?.otpauthUri ?? '' }
-    if (!uri.value) {
+    if (!candidate || !candidate.otpauthUri) {
       setHostDescription(host, host.translatedMessage('widgetEnrollNoQr'))
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }
+    const uri = { value: candidate.otpauthUri }
     await showQrPreview(host, section, uri, candidate)
   } finally {
     host.setBusy(false)
@@ -523,7 +563,7 @@ function showBackupModeChooser(
   section.replaceChildren()
   setHostDescription(host, host.translatedMessage('widgetBackupReview'))
 
-  const attach = (mode: 'replace' | 'merge') => {
+  const attach = (mode: BackupAttachMode) => {
     if (host.isBusy()) return
     host.setBusy(true)
     setHostDescription(host, host.translatedMessage('widgetBackupWorking'))
@@ -538,10 +578,16 @@ function showBackupModeChooser(
           mode,
         },
       })
-      .then((response) => {
-        if (response?.ok) {
+      .then((delivery) => {
+        if (
+          delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+          delivery.response?.ok
+        ) {
           setHostDescription(host, host.translatedMessage('widgetBackupSaved'))
-        } else if (response?.reason === 'authenticator-locked') {
+        } else if (
+          delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+          delivery.response?.reason === 'authenticator-locked'
+        ) {
           setHostDescription(host, lockedBackupMessage(host))
         } else {
           setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
@@ -559,7 +605,7 @@ function showBackupModeChooser(
     'widgetBackupModeReplace',
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach('replace')
+      attach(BackupAttachMode.Replace)
     },
   )
   const mergeButton = createSecondaryButton(
@@ -567,7 +613,7 @@ function showBackupModeChooser(
     'widgetBackupModeMerge',
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
-      attach('merge')
+      attach(BackupAttachMode.Merge)
     },
   )
   appendButtonRow(section, [replaceButton, mergeButton])
@@ -628,27 +674,31 @@ async function continueBackupWithAuthenticatorOptions(
   host.setBusy(true)
 
   try {
-    const response =
+    const delivery =
       await host.sendRuntimeMessage<AuthenticatorOptionsResponse>({
         type: 'nook:website-authenticator-options',
         payload: { origin: location.origin },
       })
 
-    if (!response?.ok) {
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response?.ok
+    ) {
       setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)
       return
     }
+    const { response } = delivery
 
-    if (response.status === 'locked') {
+    if (response.status === AuthenticatorOptionsResponseStatus.Locked) {
       setHostDescription(host, lockedBackupMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)
       return
     }
 
-    if (response.status === 'unavailable') {
+    if (response.status === AuthenticatorOptionsResponseStatus.Unavailable) {
       setHostDescription(host, unavailableMessage(host))
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)

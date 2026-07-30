@@ -5,6 +5,7 @@ pub mod enrollment;
 pub mod multi_device;
 pub mod password_envelope;
 pub mod sentinel_genesis;
+mod sentinel_genesis_types;
 mod sentinel_signing;
 pub mod sentinel_unlock;
 mod slip39;

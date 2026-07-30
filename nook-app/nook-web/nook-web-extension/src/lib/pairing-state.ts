@@ -3,9 +3,22 @@ import {
   type ExtensionReadySetupState,
 } from '../background/pairing-grants'
 
-export type ExtensionPairingStateQueryMessage = {
-  type: 'nook:extension-pairing-state-query'
+export enum ExtensionPairingStateQueryMessageType {
+  NookExtensionPairingStateQuery = 'nook:extension-pairing-state-query',
 }
+
+export type ExtensionPairingStateQueryMessage = {
+  type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
+}
+
+export enum ExtensionSetupLoadKind {
+  Ready = 'ready',
+  Unavailable = 'unavailable',
+}
+
+export type ExtensionSetupLoad =
+  | { kind: ExtensionSetupLoadKind.Ready; setup: ExtensionReadySetupState }
+  | { kind: ExtensionSetupLoadKind.Unavailable }
 
 export function isExtensionPairingStateQueryMessage(
   message: unknown,
@@ -14,26 +27,31 @@ export function isExtensionPairingStateQueryMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-pairing-state-query'
+    message.type ===
+      ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery
   )
 }
 
-export function loadExtensionSetupState(): Promise<
-  ExtensionReadySetupState | undefined
-> {
+export function loadExtensionSetupState(): Promise<ExtensionSetupLoad> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
-      { type: 'nook:extension-pairing-state-query' },
-      (response: { ok?: boolean; setup?: unknown } | undefined) => {
+      {
+        type: ExtensionPairingStateQueryMessageType.NookExtensionPairingStateQuery,
+      },
+      (response: unknown) => {
         if (
           chrome.runtime.lastError ||
-          response?.ok !== true ||
+          !response ||
+          typeof response !== 'object' ||
+          !('ok' in response) ||
+          response.ok !== true ||
+          !('setup' in response) ||
           !isExtensionReadySetupState(response.setup)
         ) {
-          resolve(undefined)
+          resolve({ kind: ExtensionSetupLoadKind.Unavailable })
           return
         }
-        resolve(response.setup)
+        resolve({ kind: ExtensionSetupLoadKind.Ready, setup: response.setup })
       },
     )
   })

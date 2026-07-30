@@ -13,6 +13,10 @@
     copySentinelRequest,
     runSentinelDashboardAction,
   } from '$lib/components/login/sentinel-dashboard-actions'
+  import {
+    SentinelTerminalLineTone,
+    SentinelTerminalPolicyStep,
+  } from '$lib/components/login/sentinel-dashboard-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelGenesisPhase,
@@ -22,9 +26,7 @@
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
 
-  type PolicyStep = 'total' | 'threshold' | 'confirm'
-  type Tone = 'muted' | 'success' | 'answer' | 'accent'
-  type Line = { text: string; tone: Tone }
+  type Line = { text: string; tone: SentinelTerminalLineTone }
 
   let {
     vault,
@@ -52,15 +54,15 @@
     deliveries: NookSentinelGenesisDelivery[]
     isBusy: boolean
     onBack: () => void
-    onStart: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddParticipant: (payload: string) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
   } = $props()
 
-  let policyStep = $state<PolicyStep>('total')
+  let policyStep = $state<SentinelTerminalPolicyStep>(
+    SentinelTerminalPolicyStep.Total,
+  )
   let response = $state('')
   let actionBusy = $state(false)
   let copied = $state(false)
@@ -88,27 +90,34 @@
         ? 4
         : status === SentinelGenesisPhase.CollectingParticipants
           ? 3
-          : policyStep === 'total' || policyStep === 'threshold'
+          : policyStep === SentinelTerminalPolicyStep.Total ||
+              policyStep === SentinelTerminalPolicyStep.Threshold
             ? 2
             : 3,
   )
   const policyLines = $derived<Line[]>([
-    { text: 'NOOK SENTINEL INIT v0.3.0', tone: 'accent' },
+    {
+      text: 'NOOK SENTINEL INIT v0.3.0',
+      tone: SentinelTerminalLineTone.Accent,
+    },
     {
       text: vault.t('login.sentinel_terminal_guided'),
-      tone: 'muted',
+      tone: SentinelTerminalLineTone.Muted,
     },
     {
       text: vault.t('login.sentinel_terminal_device_included'),
-      tone: 'success',
+      tone: SentinelTerminalLineTone.Success,
     },
-    { text: `◆ ${vault.t('login.vault_name_label')}  ${name}`, tone: 'answer' },
+    {
+      text: `◆ ${vault.t('login.vault_name_label')}  ${name}`,
+      tone: SentinelTerminalLineTone.Answer,
+    },
     {
       text:
         status === SentinelGenesisPhase.Inactive
           ? vault.t('login.sentinel_terminal_draft_notice')
           : `${vault.t('login.sentinel_terminal_status')}  ${vault.t(sentinelGenesisPhaseTranslationKey(status)).toUpperCase()}`,
-      tone: 'muted',
+      tone: SentinelTerminalLineTone.Muted,
     },
   ])
 
@@ -120,13 +129,13 @@
   function chooseTotal(value: number) {
     participantCount = value
     threshold = Math.min(threshold, value)
-    policyStep = 'threshold'
+    policyStep = SentinelTerminalPolicyStep.Threshold
     void scrollOutput()
   }
 
   function chooseThreshold(value: number) {
     threshold = value
-    policyStep = 'confirm'
+    policyStep = SentinelTerminalPolicyStep.Confirm
     void scrollOutput()
   }
 
@@ -154,7 +163,6 @@
       actionBusy = false
     }
   }
-
 </script>
 
 <div
@@ -175,10 +183,10 @@
   {/if}
 
   <section
+    {...status === SentinelGenesisPhase.Inactive
+      ? { 'data-testid': 'sentinel-genesis-policy-step' }
+      : {}}
     class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-[#41613b] bg-[#030503] shadow-[0_0_80px_rgb(93_255_103/0.08)]"
-    data-testid={status === SentinelGenesisPhase.Inactive
-      ? 'sentinel-genesis-policy-step'
-      : undefined}
   >
     <header
       class="flex items-center justify-between border-b border-[#2d4229] bg-[#101510] px-5 py-3 text-xs"
@@ -207,18 +215,22 @@
         >
           {#each policyLines as line, index (index)}
             <p
-              class:mt-3={line.tone === 'answer'}
-              class:text-[#d4ffc7]={line.tone === 'answer'}
-              class:text-[#83e273]={line.tone === 'success'}
-              class:text-[#d9c365]={line.tone === 'accent'}
-              class:text-[#6f9f65]={line.tone === 'muted'}
+              class:mt-3={line.tone === SentinelTerminalLineTone.Answer}
+              class:text-[#d4ffc7]={line.tone ===
+                SentinelTerminalLineTone.Answer}
+              class:text-[#83e273]={line.tone ===
+                SentinelTerminalLineTone.Success}
+              class:text-[#d9c365]={line.tone ===
+                SentinelTerminalLineTone.Accent}
+              class:text-[#6f9f65]={line.tone ===
+                SentinelTerminalLineTone.Muted}
               class="whitespace-pre-wrap"
             >
               {line.text}
             </p>
           {/each}
 
-          {#if status === SentinelGenesisPhase.Inactive && policyStep === 'confirm'}
+          {#if status === SentinelGenesisPhase.Inactive && policyStep === SentinelTerminalPolicyStep.Confirm}
             <div class="mt-7 border border-[#4f7a46] bg-[#081008] p-5">
               <p class="text-[#d9c365]">REVIEW GENESIS</p>
               <p class="mt-3">{name} · {threshold}-of-{participantCount}</p>
@@ -290,7 +302,7 @@
           {/if}
 
           <div class="mt-7">
-            {#if status === SentinelGenesisPhase.Inactive && policyStep === 'total'}
+            {#if status === SentinelGenesisPhase.Inactive && policyStep === SentinelTerminalPolicyStep.Total}
               <p>
                 <span class="text-[#83e273]">?</span>
                 {vault.t('login.sentinel_terminal_total_question')}
@@ -298,18 +310,20 @@
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each participantChoices as choice (choice)}
                   <button
+                    {...choice === participantCount
+                      ? {
+                          'data-testid': 'sentinel-genesis-participant-count',
+                        }
+                      : {}}
                     class={`border px-4 py-2 text-xs ${choice === participantCount ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
                     data-participant-count={choice}
-                    data-testid={choice === participantCount
-                      ? 'sentinel-genesis-participant-count'
-                      : undefined}
                     onclick={() => chooseTotal(choice)}
                     >❯ {choice}
                     {vault.t('login.sentinel_terminal_devices')}</button
                   >
                 {/each}
               </div>
-            {:else if status === SentinelGenesisPhase.Inactive && policyStep === 'threshold'}
+            {:else if status === SentinelGenesisPhase.Inactive && policyStep === SentinelTerminalPolicyStep.Threshold}
               <p>
                 <span class="text-[#83e273]">?</span>
                 {vault.t('login.sentinel_terminal_threshold_question')}
@@ -317,10 +331,10 @@
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as choice (choice)}
                   <button
+                    {...choice === threshold
+                      ? { 'data-testid': 'sentinel-genesis-threshold' }
+                      : {}}
                     class={`border px-4 py-2 text-xs ${choice === threshold ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
-                    data-testid={choice === threshold
-                      ? 'sentinel-genesis-threshold'
-                      : undefined}
                     onclick={() => chooseThreshold(choice)}
                     >❯ {choice} of {participantCount}</button
                   >

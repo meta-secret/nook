@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test'
 import {
   GITHUB_VAULT_PATH,
   fetchGithubVaultYaml,
+  GithubVaultYamlFetchKind,
   githubApiFetch,
   githubApiHeaders,
   githubFetch,
@@ -154,13 +155,13 @@ export async function waitForVaultYaml(
     if (options?.page) {
       await assertNoVaultErrors(options.page, { allowTransient: true })
     }
-    const yaml = await fetchGithubVaultYaml(pat, repoName)
-    if (yaml) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
+    const result = await fetchGithubVaultYaml(pat, repoName)
+    if (result.kind === GithubVaultYamlFetchKind.Available) {
+      const snapshot = parseVaultYamlSnapshot(result.yaml)
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(result.yaml)})`
     }
     await sleep(intervalMs)
   }

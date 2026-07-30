@@ -162,8 +162,8 @@ mod tests {
 
     const STORE_ID: &str = "store_recovery01x";
 
-    fn timestamp(value: &str) -> IsoTimestamp {
-        IsoTimestamp::parse(value).expect("timestamp")
+    fn timestamp(value: &str) -> anyhow::Result<IsoTimestamp> {
+        Ok(IsoTimestamp::parse(value)?)
     }
 
     fn append_event(
@@ -172,55 +172,51 @@ mod tests {
         parent: EventId,
         operations: Vec<VaultOperation>,
         created_at: &str,
-    ) -> EventId {
+    ) -> anyhow::Result<EventId> {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: StoreId::parse(STORE_ID).expect("store"),
-            actor_id: signing.actor_id().expect("actor"),
+            store_id: StoreId::parse(STORE_ID)?,
+            actor_id: signing.actor_id()?,
             actor_signing_public_key: signing.public_key(),
             parents: vec![parent],
-            created_at: timestamp(created_at),
-            key_epoch: EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())
-                .expect("epoch"),
+            created_at: timestamp(created_at)?,
+            key_epoch: EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
             operations,
         };
-        let event = VaultEvent::sign(body, signing.signing_key()).expect("signed event");
-        let id = event.id().expect("event id");
-        graph.insert(event, STORE_ID).expect("insert");
-        id
+        let event = VaultEvent::sign(body, signing.signing_key())?;
+        let id = event.id()?;
+        graph.insert(event, STORE_ID)?;
+        Ok(id)
     }
 
     #[test]
-    fn reports_only_active_devices_and_current_password_labels() {
-        let signing = SigningIdentity::generate().expect("signing").0;
-        let first = DeviceIdentity::generate().expect("first device");
-        let second = DeviceIdentity::generate().expect("second device");
+    fn reports_only_active_devices_and_current_password_labels() -> anyhow::Result<()> {
+        let signing = SigningIdentity::generate()?.0;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
         let password = create_password_entry_with_work_factor(
-            &crate::generate_vault_keys().expect("vault keys"),
+            &crate::generate_vault_keys()?,
             "pwdentry001",
             "Emergency kit",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
             10,
-        )
-        .expect("password entry");
+        )?;
         let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID).expect("store"),
-            &signing.actor_id().expect("actor"),
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())
-                .expect("epoch"),
+            &StoreId::parse(STORE_ID)?,
+            &signing.actor_id()?,
+            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &timestamp("2026-07-22T00:00:00Z"),
+            &timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
-        )
-        .expect("genesis");
-        let genesis_id = genesis.id().expect("genesis id");
+        )?;
+        let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
-        graph.insert(genesis, STORE_ID).expect("insert genesis");
+        graph.insert(genesis, STORE_ID)?;
 
         let first_id = append_event(
             &mut graph,
@@ -239,7 +235,7 @@ mod tests {
                 ),
             }],
             "2026-07-22T00:00:01Z",
-        );
+        )?;
         let second_id = append_event(
             &mut graph,
             &signing,
@@ -257,7 +253,7 @@ mod tests {
                 ),
             }],
             "2026-07-22T00:00:02Z",
-        );
+        )?;
         append_event(
             &mut graph,
             &signing,
@@ -272,9 +268,9 @@ mod tests {
                 },
             ],
             "2026-07-22T00:00:03Z",
-        );
+        )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID).expect("options");
+        let options = vault_recovery_options(&graph, STORE_ID)?;
         assert_eq!(
             options.devices,
             vec![VaultRecoveryDevice {
@@ -292,29 +288,28 @@ mod tests {
             }]
         );
         assert!(!options.requires_sentinel_quorum);
+        Ok(())
     }
 
     #[test]
-    fn sentinel_participants_require_quorum_and_never_offer_passwords() {
-        let signing = SigningIdentity::generate().expect("signing").0;
-        let device = DeviceIdentity::generate().expect("device");
+    fn sentinel_participants_require_quorum_and_never_offer_passwords() -> anyhow::Result<()> {
+        let signing = SigningIdentity::generate()?.0;
+        let device = DeviceIdentity::generate()?;
         let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID).expect("store"),
-            &signing.actor_id().expect("actor"),
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())
-                .expect("epoch"),
+            &StoreId::parse(STORE_ID)?,
+            &signing.actor_id()?,
+            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &timestamp("2026-07-22T00:00:00Z"),
+            &timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
-        )
-        .expect("genesis");
-        let genesis_id = genesis.id().expect("genesis id");
+        )?;
+        let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
-        graph.insert(genesis, STORE_ID).expect("insert genesis");
+        graph.insert(genesis, STORE_ID)?;
         append_event(
             &mut graph,
             &signing,
@@ -326,54 +321,53 @@ mod tests {
                 label: MemberLabel::from_trusted("Sentinel owner".to_owned()),
             }],
             "2026-07-22T00:00:01Z",
-        );
+        )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID).expect("options");
+        let options = vault_recovery_options(&graph, STORE_ID)?;
         assert!(options.requires_sentinel_quorum);
         assert_eq!(options.devices.len(), 1);
         assert!(options.password_entries.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn removed_password_is_not_reported() {
-        let signing = SigningIdentity::generate().expect("signing").0;
+    fn removed_password_is_not_reported() -> anyhow::Result<()> {
+        let signing = SigningIdentity::generate()?.0;
         let password = create_password_entry_with_work_factor(
-            &crate::generate_vault_keys().expect("vault keys"),
+            &crate::generate_vault_keys()?,
             "pwdentry001",
             "Old recovery",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
             10,
-        )
-        .expect("password entry");
+        )?;
         let genesis = build_genesis_import_event(
-            &StoreId::parse(STORE_ID).expect("store"),
-            &signing.actor_id().expect("actor"),
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())
-                .expect("epoch"),
+            &StoreId::parse(STORE_ID)?,
+            &signing.actor_id()?,
+            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &timestamp("2026-07-22T00:00:00Z"),
+            &timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
-        )
-        .expect("genesis");
-        let genesis_id = genesis.id().expect("genesis id");
+        )?;
+        let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
-        graph.insert(genesis, STORE_ID).expect("insert genesis");
+        graph.insert(genesis, STORE_ID)?;
         append_event(
             &mut graph,
             &signing,
             genesis_id,
             vec![VaultOperation::PasswordRemoved {
-                entry_id: PasswordEntryId::parse(&password.id).expect("password id"),
+                entry_id: PasswordEntryId::parse(&password.id)?,
             }],
             "2026-07-22T00:00:01Z",
-        );
+        )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID).expect("options");
+        let options = vault_recovery_options(&graph, STORE_ID)?;
         assert!(options.password_entries.is_empty());
+        Ok(())
     }
 }

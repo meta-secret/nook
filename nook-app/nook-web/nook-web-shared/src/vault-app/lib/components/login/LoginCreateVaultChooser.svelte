@@ -18,30 +18,26 @@
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
   import SentinelGenesisJoinFlow from '$lib/components/login/SentinelGenesisJoinFlow.svelte'
   import {
+    SentinelDashboard,
+    SentinelDashboardChoiceKind,
     sentinelDashboardPortal,
-    type SentinelDashboard,
+    type SentinelDashboardChoice,
   } from '$lib/components/login/sentinel-dashboard-portal'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    ChosenVaultPath,
+    VaultCreationWizardStep,
+  } from './login-create-vault-chooser-state'
   import { VaultType } from '$lib/vault-architecture'
-  import type { AppKind } from '$lib/app-kind'
   import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
   import {
     SentinelGenesisPhase,
+    VaultApplication,
     sentinelGenesisParticipantFingerprint,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
-
-  type WizardStep =
-    | 'choose'
-    | 'simple-create'
-    | 'sentinel-dashboard'
-    | 'sentinel-policy'
-    | 'sentinel-ceremony'
-    | 'join'
-
-  type ChosenPath = 'undecided' | 'simple' | 'sentinel' | 'join'
 
   let {
     vault,
@@ -69,15 +65,13 @@
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
-    appKind: AppKind
+    appKind: VaultApplication
     isVerifying: boolean
     isInitializing: boolean
     usesExtensionDeviceIdentity?: boolean
     onCreateDeviceVault: (label: string) => void | Promise<void>
     onConnectStorage: () => void
-    onStartSentinelGenesis?: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onAddSentinelGenesisParticipantResponse?: (
       payload: string,
       participantLabel?: string,
@@ -109,11 +103,21 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let wizardStep = $state<WizardStep>('choose')
-  let chosenPath = $state<ChosenPath>('undecided')
+  let wizardStep = $state<VaultCreationWizardStep>(
+    VaultCreationWizardStep.Choose,
+  )
+  let chosenPath = $state<ChosenVaultPath>(ChosenVaultPath.Undecided)
   let vaultName = $state('')
   let sentinelName = $state('')
-  let sentinelDashboard = $state<SentinelDashboard>()
+  let sentinelDashboardState = $state<SentinelDashboardChoice>({
+    kind: SentinelDashboardChoiceKind.NotChosen,
+  })
+  function dashboardIs(dashboard: SentinelDashboard): boolean {
+    return (
+      sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
+      sentinelDashboardState.dashboard === dashboard
+    )
+  }
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
   let sentinelActionBusy = $state(false)
@@ -123,17 +127,20 @@
   let importedParticipantResponse = $state('')
 
   $effect(() => {
-    if (sentinelOnboardingPackage.trim() && wizardStep === 'choose') {
-      chosenPath = 'join'
-      wizardStep = 'join'
+    if (
+      sentinelOnboardingPackage.trim() &&
+      wizardStep === VaultCreationWizardStep.Choose
+    ) {
+      chosenPath = ChosenVaultPath.Join
+      wizardStep = VaultCreationWizardStep.Join
     }
   })
 
   $effect(() => {
     const invitation = sentinelInvitationRequest.trim()
-    if (!invitation || wizardStep !== 'choose') return
-    chosenPath = 'join'
-    wizardStep = 'join'
+    if (!invitation || wizardStep !== VaultCreationWizardStep.Choose) return
+    chosenPath = ChosenVaultPath.Join
+    wizardStep = VaultCreationWizardStep.Join
   })
 
   $effect(() => {
@@ -142,7 +149,7 @@
       !response ||
       response === importedParticipantResponse ||
       sentinelGenesisPhase !== SentinelGenesisPhase.CollectingParticipants ||
-      sentinelDashboard !== 'terminal' ||
+      !dashboardIs(SentinelDashboard.Terminal) ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
@@ -151,16 +158,22 @@
     void onAddSentinelGenesisParticipantResponse(response)
   })
 
-
   $effect(() => {
     if (sentinelGenesisPhase === SentinelGenesisPhase.Complete) {
-      sentinelDashboard = undefined
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
       return
     }
     if (sentinelGenesisPhase !== SentinelGenesisPhase.Inactive) {
-      sentinelDashboard ??= 'card-stack'
-      wizardStep = 'sentinel-ceremony'
-      chosenPath = 'sentinel'
+      if (
+        sentinelDashboardState.kind === SentinelDashboardChoiceKind.NotChosen
+      ) {
+        sentinelDashboardState = {
+          kind: SentinelDashboardChoiceKind.Chosen,
+          dashboard: SentinelDashboard.CardStack,
+        }
+      }
+      wizardStep = VaultCreationWizardStep.SentinelCeremony
+      chosenPath = ChosenVaultPath.Sentinel
     }
   })
 
@@ -176,23 +189,24 @@
       sentinelThreshold <= sentinelParticipantCount,
   )
   const sentinelDashboardActive = $derived(
-    sentinelDashboard !== undefined &&
-      (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
+    sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
+      (wizardStep === VaultCreationWizardStep.SentinelPolicy ||
+        wizardStep === VaultCreationWizardStep.SentinelCeremony),
   )
   const sentinelGenesisInvitationLink = $derived(
     buildSentinelGenesisRequestLink(sentinelGenesisRequest),
   )
   const landingSupporting = $derived(
-    appKind === 'simple'
+    appKind === VaultApplication.Simple
       ? vault.t('login.landing_supporting_simple')
-      : appKind === 'sentinel'
+      : appKind === VaultApplication.Sentinel
         ? vault.t('login.landing_supporting_sentinel')
         : vault.t('login.landing_supporting'),
   )
   const existingVaultDescription = $derived(
-    appKind === 'simple'
+    appKind === VaultApplication.Simple
       ? vault.t('login.path_cloud_description_simple')
-      : appKind === 'sentinel'
+      : appKind === VaultApplication.Sentinel
         ? vault.t('login.path_cloud_description_sentinel')
         : vault.t('login.path_cloud_description'),
   )
@@ -212,58 +226,61 @@
     }
   })
   const canGoBack = $derived(
-    wizardStep === 'simple-create' ||
-      wizardStep === 'sentinel-dashboard' ||
-      wizardStep === 'sentinel-policy' ||
-      (wizardStep === 'join' && !sentinelInvitationRequest.trim()),
+    wizardStep === VaultCreationWizardStep.SimpleCreate ||
+      wizardStep === VaultCreationWizardStep.SentinelDashboard ||
+      wizardStep === VaultCreationWizardStep.SentinelPolicy ||
+      (wizardStep === VaultCreationWizardStep.Join &&
+        !sentinelInvitationRequest.trim()),
   )
 
   const stepIndex = $derived.by(() => {
     switch (wizardStep) {
-      case 'choose':
+      case VaultCreationWizardStep.Choose:
         return 0
-      case 'simple-create':
-      case 'sentinel-dashboard':
-      case 'sentinel-policy':
-      case 'join':
-      case 'sentinel-ceremony':
+      case VaultCreationWizardStep.SimpleCreate:
+      case VaultCreationWizardStep.SentinelDashboard:
+      case VaultCreationWizardStep.SentinelPolicy:
+      case VaultCreationWizardStep.Join:
+      case VaultCreationWizardStep.SentinelCeremony:
         return 1
     }
   })
 
   const progressSteps = $derived.by(() => {
     const choose = vault.t('login.landing_step_choose')
-    if (chosenPath === 'simple') {
+    if (chosenPath === ChosenVaultPath.Simple) {
       return [choose, vault.t('login.landing_step_simple')]
     }
-    if (chosenPath === 'sentinel') {
+    if (chosenPath === ChosenVaultPath.Sentinel) {
       return [choose, vault.t('login.landing_step_sentinel')]
     }
-    if (chosenPath === 'join') {
+    if (chosenPath === ChosenVaultPath.Join) {
       return [choose, vault.t('login.landing_step_join')]
     }
     return [choose]
   })
 
-
   function chooseSimplePath() {
     vault.draftVaultType = VaultType.Simple
-    chosenPath = 'simple'
-    wizardStep = 'simple-create'
+    chosenPath = ChosenVaultPath.Simple
+    wizardStep = VaultCreationWizardStep.SimpleCreate
   }
 
   function chooseSentinelCreatePath() {
     vault.draftVaultType = VaultType.Sentinel
-    chosenPath = 'sentinel'
+    chosenPath = ChosenVaultPath.Sentinel
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
-    sentinelDashboard = undefined
-    wizardStep = 'sentinel-dashboard'
+    sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
+    wizardStep = VaultCreationWizardStep.SentinelDashboard
   }
 
   function chooseSentinelDashboard(dashboard: SentinelDashboard) {
-    sentinelDashboard = dashboard
-    wizardStep = 'sentinel-policy'
+    sentinelDashboardState = {
+      kind: SentinelDashboardChoiceKind.Chosen,
+      dashboard,
+    }
+    wizardStep = VaultCreationWizardStep.SentinelPolicy
   }
 
   async function prepareInitiatorDeviceKeys() {
@@ -302,23 +319,28 @@
   }
 
   function goBack() {
-    if (wizardStep === 'sentinel-ceremony') return
-    if (wizardStep === 'simple-create' || wizardStep === 'join') {
-      chosenPath = 'undecided'
-      wizardStep = 'choose'
+    if (wizardStep === VaultCreationWizardStep.SentinelCeremony) return
+    if (
+      wizardStep === VaultCreationWizardStep.SimpleCreate ||
+      wizardStep === VaultCreationWizardStep.Join
+    ) {
+      chosenPath = ChosenVaultPath.Undecided
+      wizardStep = VaultCreationWizardStep.Choose
       return
     }
-    if (wizardStep === 'sentinel-dashboard') {
-      sentinelDashboard = undefined
-      chosenPath = 'undecided'
-      wizardStep = 'choose'
+    if (wizardStep === VaultCreationWizardStep.SentinelDashboard) {
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
+      chosenPath = ChosenVaultPath.Undecided
+      wizardStep = VaultCreationWizardStep.Choose
       return
     }
-    if (wizardStep === 'sentinel-policy') {
-      const dashboard = sentinelDashboard
-      sentinelDashboard = undefined
-      wizardStep = 'sentinel-dashboard'
-      if (dashboard) restoreDashboardChoiceFocus(dashboard)
+    if (wizardStep === VaultCreationWizardStep.SentinelPolicy) {
+      const dashboardChoice = sentinelDashboardState
+      sentinelDashboardState = { kind: SentinelDashboardChoiceKind.NotChosen }
+      wizardStep = VaultCreationWizardStep.SentinelDashboard
+      if (dashboardChoice.kind === SentinelDashboardChoiceKind.Chosen) {
+        restoreDashboardChoiceFocus(dashboardChoice.dashboard)
+      }
     }
   }
 
@@ -332,8 +354,7 @@
       !sentinelNameReady ||
       !sentinelPolicyValid ||
       isBusy ||
-      sentinelActionBusy ||
-      !onStartSentinelGenesis
+      sentinelActionBusy
     ) {
       return false
     }
@@ -345,7 +366,7 @@
         threshold: sentinelThreshold,
       })
       if (started !== false) {
-        wizardStep = 'sentinel-ceremony'
+        wizardStep = VaultCreationWizardStep.SentinelCeremony
         return true
       }
       return false
@@ -353,7 +374,6 @@
       sentinelActionBusy = false
     }
   }
-
 </script>
 
 <div
@@ -362,23 +382,24 @@
     sentinelDashboardActive
       ? 'fixed inset-0 z-40 w-full overflow-y-auto bg-[#10141a] text-white'
       : 'w-full',
-    sentinelDashboard === 'terminal' && sentinelDashboardActive
+    dashboardIs(SentinelDashboard.Terminal) && sentinelDashboardActive
       ? 'sentinel-terminal bg-[#090b09] font-mono text-[#b7ff95]'
       : '',
-    sentinelDashboard === 'card-stack' && sentinelDashboardActive
+    dashboardIs(SentinelDashboard.CardStack) && sentinelDashboardActive
       ? 'sentinel-card-stack'
       : '',
   ]}
+  {...sentinelDashboardActive &&
+  sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen
+    ? { 'data-sentinel-dashboard': sentinelDashboardState.dashboard }
+    : {}}
   data-testid="login-create-vault-chooser"
-  data-sentinel-dashboard={sentinelDashboardActive
-    ? sentinelDashboard
-    : undefined}
   use:sentinelDashboardPortal={{
     active: sentinelDashboardActive,
-    dashboard: sentinelDashboard,
+    choice: sentinelDashboardState,
   }}
 >
-  {#if sentinelDashboardActive && sentinelDashboard === 'card-stack'}
+  {#if sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)}
     <SentinelCardStackDashboard
       {vault}
       bind:name={sentinelName}
@@ -400,7 +421,7 @@
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
     />
-  {:else if sentinelDashboardActive && sentinelDashboard === 'terminal'}
+  {:else if sentinelDashboardActive && dashboardIs(SentinelDashboard.Terminal)}
     <SentinelTerminalDashboard
       {vault}
       bind:name={sentinelName}
@@ -463,7 +484,7 @@
         <div
           class={[
             'relative',
-            sentinelDashboardActive && sentinelDashboard === 'card-stack'
+            sentinelDashboardActive && dashboardIs(SentinelDashboard.CardStack)
               ? 'sentinel-card-stack-panel rounded-none border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-6 sm:p-10'
               : sentinelDashboardActive
                 ? 'rounded-none border border-[#294323] bg-black/40 p-5 shadow-[0_0_80px_rgb(94_255_112/0.05)] sm:p-8'
@@ -484,7 +505,7 @@
                 <h2
                   class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
                 >
-                  {sentinelDashboard === 'terminal'
+                  {dashboardIs(SentinelDashboard.Terminal)
                     ? vault.t('login.sentinel_dashboard_terminal_title')
                     : vault.t('login.sentinel_dashboard_card_stack_title')}
                 </h2>
@@ -494,7 +515,7 @@
                   })}
                 </p>
               </div>
-              {#if wizardStep === 'sentinel-policy'}
+              {#if wizardStep === VaultCreationWizardStep.SentinelPolicy}
                 <Button
                   type="button"
                   variant="outline"
@@ -539,7 +560,7 @@
                       {label}
                     </p>
 
-                    {#if index === stepIndex && wizardStep === 'choose'}
+                    {#if index === stepIndex && wizardStep === VaultCreationWizardStep.Choose}
                       <section
                         class="mt-3 space-y-3"
                         data-testid="landing-auth-step-choose"
@@ -552,7 +573,7 @@
                             class="grid gap-2"
                             data-testid="get-started-path-list"
                           >
-                            {#if appKind !== 'sentinel'}
+                            {#if appKind !== VaultApplication.Sentinel}
                               <button
                                 type="button"
                                 class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
@@ -584,7 +605,7 @@
                                 />
                               </button>
                             {/if}
-                            {#if appKind !== 'simple'}
+                            {#if appKind !== VaultApplication.Simple}
                               <button
                                 type="button"
                                 class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
@@ -655,7 +676,7 @@
                           </div>
                         </div>
                       </section>
-                    {:else if index === stepIndex && wizardStep === 'simple-create'}
+                    {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SimpleCreate}
                       <section
                         class="mt-3 space-y-3"
                         data-testid="landing-auth-step-simple"
@@ -714,7 +735,7 @@
                           </Button>
                         </div>
                       </section>
-                    {:else if index === stepIndex && wizardStep === 'sentinel-dashboard'}
+                    {:else if index === stepIndex && wizardStep === VaultCreationWizardStep.SentinelDashboard}
                       <section
                         class="mt-4 space-y-4"
                         data-testid="sentinel-dashboard-choice"
@@ -736,7 +757,9 @@
                             data-testid="sentinel-dashboard-card-stack"
                             disabled={isBusy}
                             onclick={() =>
-                              chooseSentinelDashboard('card-stack')}
+                              chooseSentinelDashboard(
+                                SentinelDashboard.CardStack,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg bg-foreground text-background"
@@ -763,7 +786,10 @@
                             class="group rounded-xl border border-border bg-[#090b09] p-4 text-left text-[#b7ff95] transition hover:border-[#b7ff95]/60 hover:shadow-md disabled:opacity-60"
                             data-testid="sentinel-dashboard-terminal"
                             disabled={isBusy}
-                            onclick={() => chooseSentinelDashboard('terminal')}
+                            onclick={() =>
+                              chooseSentinelDashboard(
+                                SentinelDashboard.Terminal,
+                              )}
                           >
                             <span
                               class="mb-4 grid size-10 place-items-center rounded-lg border border-[#b7ff95]/30 bg-[#b7ff95]/10"
@@ -792,7 +818,7 @@
             </ol>
           {/if}
 
-          {#if wizardStep === 'join'}
+          {#if wizardStep === VaultCreationWizardStep.Join}
             <SentinelGenesisJoinFlow
               {vault}
               {isBusy}

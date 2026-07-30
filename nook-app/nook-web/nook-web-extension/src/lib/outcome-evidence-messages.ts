@@ -1,3 +1,5 @@
+import type { AuthenticationOutcomeVerdict } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+
 export type AuthenticationOutcomeObservationView = {
   navigatedAwayFromAuthPath: boolean
   authFieldsPresent: boolean
@@ -8,22 +10,20 @@ export type AuthenticationOutcomeObservationView = {
   elapsedMs: number
 }
 
-export type AuthenticationOutcomeVerdictName =
-  | 'sufficient'
-  | 'insufficient'
-  | 'conflicting'
-  | 'timeout'
-
 export type AuthenticationOutcomeVerdictView = {
-  name: AuthenticationOutcomeVerdictName
+  verdict: AuthenticationOutcomeVerdict
   allowsCredentialCommit: boolean
 }
 
+export enum AuthenticationOutcomeClassifyMessageType {
+  NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',
+}
+
 export type AuthenticationOutcomeClassifyMessage = {
-  type: 'nook:authentication-outcome-classify'
+  type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
   payload: {
     observation: AuthenticationOutcomeObservationView
-    timeoutMs?: number
+    timeoutMs: number
   }
 }
 
@@ -34,7 +34,8 @@ export function isAuthenticationOutcomeClassifyMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authentication-outcome-classify' ||
+    message.type !==
+      AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object' ||
@@ -56,20 +57,9 @@ export function isAuthenticationOutcomeClassifyMessage(
     typeof view.elapsedMs === 'number' &&
     Number.isFinite(view.elapsedMs) &&
     view.elapsedMs >= 0 &&
-    (payload.timeoutMs === undefined ||
-      (typeof payload.timeoutMs === 'number' &&
-        Number.isFinite(payload.timeoutMs) &&
-        payload.timeoutMs > 0))
-  )
-}
-
-export function isAuthenticationOutcomeVerdictName(
-  value: unknown,
-): value is AuthenticationOutcomeVerdictName {
-  return (
-    value === 'sufficient' ||
-    value === 'insufficient' ||
-    value === 'conflicting' ||
-    value === 'timeout'
+    'timeoutMs' in payload &&
+    typeof payload.timeoutMs === 'number' &&
+    Number.isFinite(payload.timeoutMs) &&
+    payload.timeoutMs > 0
   )
 }

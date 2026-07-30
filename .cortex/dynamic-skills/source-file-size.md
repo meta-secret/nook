@@ -13,15 +13,16 @@ failure requires architectural refactoring, not cosmetic redistribution.
 
 ## Hard Limits
 
-- Non-Rust authored source: at most **1,000 lines**.
-- Rust authored source: at most **1,500 lines**.
+- Every authored source file, including Rust: at most **1,000 lines**.
 - Files above their limit are prohibited. There are no authored-code
   allowlists, baselines, grandfathered violations, or changed-file-only
   exceptions.
 
-The Rust allowance exists only because idiomatic Rust often colocates focused
-unit tests with their implementation. It is not permission for a production
-module to accumulate unrelated responsibilities.
+Rust receives no larger allowance. A Rust file above 1,000 lines is evidence
+that its domain model is overcomplicated or the module owns too many production
+responsibilities. Colocated focused unit tests do not justify retaining an
+oversized production abstraction; decompose the production model and keep each
+new module's tests with the behavior it owns.
 
 ## Problem Pattern
 
@@ -87,7 +88,7 @@ An exclusion must describe data provenance, not excuse authored source.
 ## Examples
 
 - Rejected: move 900 lines of `#[cfg(test)]` from a 1,700-line Rust service
-  into `service_tests.rs` while leaving the 800-line multi-responsibility
+  into `service_tests.rs` while leaving the multi-responsibility
   service unchanged.
 - Rejected: keep `service_tests.rs` under `src` after splitting production
   responsibilities; unit tests belong inline with each owning abstraction.
@@ -119,9 +120,9 @@ An exclusion must describe data provenance, not excuse authored source.
 ## Static Enforcement
 
 The repository-wide preflight scanner fails when any authored source file
-crosses its language limit or Rust unit tests live in an external module under
-`src`. Its failure message directs the agent to architectural decomposition and
-explicitly rejects test-file and arbitrary splits.
+crosses the uniform 1,000-line limit or Rust unit tests live in an external
+module under `src`. Its failure message directs the agent to architectural
+decomposition and explicitly rejects test-file and arbitrary splits.
 
 Static line counting cannot prove cohesion or dependency direction. Contract
 tests keep this critical guidance wired into `.cortex`, the executable skill,

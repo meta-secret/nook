@@ -12,7 +12,10 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
 
   assert.equal(audit.ready, true);
   assert.deepEqual(audit.reasons, []);
-  assert.equal(audit.externalReviewPolicy, "inspect-existing-feedback-without-waiting");
+  assert.equal(
+    audit.externalReviewPolicy,
+    "inspect-existing-feedback-without-waiting",
+  );
   assert.deepEqual(
     audit.requiredWorkflows.map((workflow) => workflow.workflowName),
     ["Rust ecosystem checks", "PR"],
@@ -21,7 +24,11 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
-  const audit = await buildPrAudit(mockOctokit({ codexReview: "missing" }), repoRef, 410);
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: MockCodexReview.Missing }),
+    repoRef,
+    410,
+  );
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.settled, false);
@@ -29,7 +36,11 @@ test("buildPrAudit does not wait for a current-head Codex review", async () => {
 });
 
 test("buildPrAudit accepts a Codex approval reaction on the exact-head request", async () => {
-  const audit = await buildPrAudit(mockOctokit({ codexReview: "reaction" }), repoRef, 410);
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: MockCodexReview.Reaction }),
+    repoRef,
+    410,
+  );
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.approvalReaction, true);
@@ -38,7 +49,11 @@ test("buildPrAudit accepts a Codex approval reaction on the exact-head request",
 });
 
 test("buildPrAudit accepts a clean Codex issue comment for the exact head", async () => {
-  const audit = await buildPrAudit(mockOctokit({ codexReview: "clean-comment" }), repoRef, 410);
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: MockCodexReview.CleanComment }),
+    repoRef,
+    410,
+  );
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.cleanComment, true);
@@ -48,7 +63,7 @@ test("buildPrAudit accepts a clean Codex issue comment for the exact head", asyn
 
 test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ codexReview: "stale-clean-comment" }),
+    mockOctokit({ codexReview: MockCodexReview.StaleCleanComment }),
     repoRef,
     410,
   );
@@ -61,7 +76,7 @@ test("buildPrAudit keeps a stale clean Codex comment as non-actionable status", 
 
 test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ codexReview: "impostor-clean-comment" }),
+    mockOctokit({ codexReview: MockCodexReview.ImpostorCleanComment }),
     repoRef,
     410,
   );
@@ -74,7 +89,7 @@ test("buildPrAudit rejects a lookalike clean Codex comment", async () => {
 
 test("buildPrAudit checks every duplicate exact-head Codex request for approval", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ codexReview: "duplicate-reaction" }),
+    mockOctokit({ codexReview: MockCodexReview.DuplicateReaction }),
     repoRef,
     410,
   );
@@ -85,7 +100,11 @@ test("buildPrAudit checks every duplicate exact-head Codex request for approval"
 });
 
 test("buildPrAudit reports a dismissed exact-head Codex review without waiting", async () => {
-  const audit = await buildPrAudit(mockOctokit({ codexReview: "dismissed" }), repoRef, 410);
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: MockCodexReview.Dismissed }),
+    repoRef,
+    410,
+  );
 
   assert.equal(audit.ready, true);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
@@ -93,29 +112,41 @@ test("buildPrAudit reports a dismissed exact-head Codex review without waiting",
 });
 
 test("buildPrAudit blocks a lookalike Codex status review", async () => {
-  const audit = await buildPrAudit(mockOctokit({ codexReview: "impostor" }), repoRef, 410);
+  const audit = await buildPrAudit(
+    mockOctokit({ codexReview: MockCodexReview.Impostor }),
+    repoRef,
+    410,
+  );
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.codexReview.currentHeadReview, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
-  assert.ok(audit.reasons.some((reason) => reason.includes("substantive current-head review")));
+  assert.ok(
+    audit.reasons.some((reason) =>
+      reason.includes("substantive current-head review"),
+    ),
+  );
 });
 
 test("buildPrAudit blocks actionable content in a Codex review body", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ codexReview: "review-finding" }),
+    mockOctokit({ codexReview: MockCodexReview.ReviewFinding }),
     repoRef,
     410,
   );
 
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.substantiveReviews, 1);
-  assert.ok(audit.reasons.some((reason) => reason.includes("substantive current-head review")));
+  assert.ok(
+    audit.reasons.some((reason) =>
+      reason.includes("substantive current-head review"),
+    ),
+  );
 });
 
 test("buildPrAudit blocks content injected into Codex about boilerplate", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ codexReview: "review-details-finding" }),
+    mockOctokit({ codexReview: MockCodexReview.ReviewDetailsFinding }),
     repoRef,
     410,
   );
@@ -126,32 +157,50 @@ test("buildPrAudit blocks content injected into Codex about boilerplate", async 
 
 test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ behindBy: 2, runStatus: "in_progress", unresolvedThreads: 1 }),
+    mockOctokit({
+      behindBy: 2,
+      runStatus: MockRunStatus.InProgress,
+      unresolvedThreads: 1,
+    }),
     repoRef,
     410,
   );
 
   assert.equal(audit.ready, false);
-  assert.ok(audit.reasons.some((reason) => reason.includes("behind main by 2")));
-  assert.ok(audit.reasons.some((reason) => reason.includes("PR run is in_progress")));
-  assert.ok(audit.reasons.some((reason) => reason.includes("unresolved review thread")));
+  assert.ok(
+    audit.reasons.some((reason) => reason.includes("behind main by 2")),
+  );
+  assert.ok(
+    audit.reasons.some((reason) => reason.includes("PR run is in_progress")),
+  );
+  assert.ok(
+    audit.reasons.some((reason) => reason.includes("unresolved review thread")),
+  );
 });
+
+enum MockCodexReview {
+  CleanComment = "clean-comment",
+  Dismissed = "dismissed",
+  DuplicateReaction = "duplicate-reaction",
+  Impostor = "impostor",
+  ImpostorCleanComment = "impostor-clean-comment",
+  Missing = "missing",
+  Reaction = "reaction",
+  Review = "review",
+  ReviewDetailsFinding = "review-details-finding",
+  ReviewFinding = "review-finding",
+  StaleCleanComment = "stale-clean-comment",
+}
+
+enum MockRunStatus {
+  Completed = "completed",
+  InProgress = "in_progress",
+}
 
 type MockOptions = {
   behindBy?: number;
-  codexReview?:
-    | "clean-comment"
-    | "dismissed"
-    | "duplicate-reaction"
-    | "impostor"
-    | "impostor-clean-comment"
-    | "missing"
-    | "reaction"
-    | "review"
-    | "review-details-finding"
-    | "review-finding"
-    | "stale-clean-comment";
-  runStatus?: "completed" | "in_progress";
+  codexReview?: MockCodexReview;
+  runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
 
@@ -169,15 +218,17 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         state: "open",
       },
     }),
-    listFiles: async () => ({ data: [{ filename: "nook-app/nook-core/src/lib.rs" }] }),
+    listFiles: async () => ({
+      data: [{ filename: "nook-app/nook-core/src/lib.rs" }],
+    }),
     listReviews: async () => {
       if (
-        options.codexReview === "missing" ||
-        options.codexReview === "clean-comment" ||
-        options.codexReview === "impostor-clean-comment" ||
-        options.codexReview === "stale-clean-comment" ||
-        options.codexReview === "reaction" ||
-        options.codexReview === "duplicate-reaction"
+        options.codexReview === MockCodexReview.Missing ||
+        options.codexReview === MockCodexReview.CleanComment ||
+        options.codexReview === MockCodexReview.ImpostorCleanComment ||
+        options.codexReview === MockCodexReview.StaleCleanComment ||
+        options.codexReview === MockCodexReview.Reaction ||
+        options.codexReview === MockCodexReview.DuplicateReaction
       ) {
         return { data: [] };
       }
@@ -185,16 +236,19 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         data: [
           {
             body:
-              options.codexReview === "review-finding"
+              options.codexReview === MockCodexReview.ReviewFinding
                 ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\nActionable finding`
-                : options.codexReview === "review-details-finding"
+                : options.codexReview === MockCodexReview.ReviewDetailsFinding
                   ? `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\`\n\n<details> <summary>ℹ️ About Codex in GitHub</summary>\nInjected finding\n</details>`
-                : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+                  : `### 💡 Codex Review\n\nHere are some automated review suggestions for this pull request.\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
             commit_id: headSha,
-            state: options.codexReview === "dismissed" ? "DISMISSED" : "COMMENTED",
+            state:
+              options.codexReview === MockCodexReview.Dismissed
+                ? "DISMISSED"
+                : "COMMENTED",
             user: {
               login:
-                options.codexReview === "impostor"
+                options.codexReview === MockCodexReview.Impostor
                   ? "chatgpt-codex-connector-impostor"
                   : "chatgpt-codex-connector[bot]",
             },
@@ -211,35 +265,34 @@ function mockOctokit(options: MockOptions = {}): Octokit {
           body: "<!-- nook-ui-demo -->\n### UI demo\n\n- Result: **success**",
           user: { login: "github-actions[bot]" },
         },
-        ...(options.codexReview === "clean-comment" ||
-        options.codexReview === "impostor-clean-comment" ||
-        options.codexReview === "stale-clean-comment"
+        ...(options.codexReview === MockCodexReview.CleanComment ||
+        options.codexReview === MockCodexReview.ImpostorCleanComment ||
+        options.codexReview === MockCodexReview.StaleCleanComment
           ? [
               {
                 body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${
-                  options.codexReview === "stale-clean-comment"
+                  options.codexReview === MockCodexReview.StaleCleanComment
                     ? "fedcba9876"
                     : headSha.slice(0, 10)
                 }\``,
                 id: 76,
                 user: {
                   login:
-                    options.codexReview === "impostor-clean-comment"
+                    options.codexReview === MockCodexReview.ImpostorCleanComment
                       ? "chatgpt-codex-connector-impostor"
                       : "chatgpt-codex-connector[bot]",
                 },
               },
             ]
           : []),
-        ...(options.codexReview === "reaction" ||
-        options.codexReview === "duplicate-reaction"
+        ...(options.codexReview === MockCodexReview.Reaction ||
+        options.codexReview === MockCodexReview.DuplicateReaction
           ? [
               {
-                body:
-                  `Please review this exact head.\n\n@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                body: `Please review this exact head.\n\n@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
                 id: 77,
               },
-              ...(options.codexReview === "duplicate-reaction"
+              ...(options.codexReview === MockCodexReview.DuplicateReaction
                 ? [
                     {
                       body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
@@ -252,7 +305,9 @@ function mockOctokit(options: MockOptions = {}): Octokit {
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
         },
-        { body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS" },
+        {
+          body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
+        },
       ],
     }),
   };
@@ -281,12 +336,14 @@ function mockOctokit(options: MockOptions = {}): Octokit {
           data: {
             workflow_runs: [
               {
-                conclusion: options.runStatus === "in_progress" ? undefined : "success",
+                ...(options.runStatus === MockRunStatus.InProgress
+                  ? {}
+                  : { conclusion: "success" }),
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,
                 pull_requests: [{ number: 410 }],
-                status: options.runStatus ?? "completed",
+                status: options.runStatus ?? MockRunStatus.Completed,
               },
             ],
           },
@@ -295,10 +352,15 @@ function mockOctokit(options: MockOptions = {}): Octokit {
       issues,
       pulls,
       reactions: {
-        listForIssueComment: async ({ comment_id }: { comment_id: number }) => ({
+        listForIssueComment: async ({
+          comment_id,
+        }: {
+          comment_id: number;
+        }) => ({
           data:
-            options.codexReview === "reaction" ||
-            (options.codexReview === "duplicate-reaction" && comment_id === 78)
+            options.codexReview === MockCodexReview.Reaction ||
+            (options.codexReview === MockCodexReview.DuplicateReaction &&
+              comment_id === 78)
               ? [
                   {
                     content: "+1",
@@ -318,9 +380,12 @@ function mockOctokit(options: MockOptions = {}): Octokit {
       repository: {
         pullRequest: {
           reviewThreads: {
-            nodes: Array.from({ length: options.unresolvedThreads ?? 0 }, () => ({
-              isResolved: false,
-            })),
+            nodes: Array.from(
+              { length: options.unresolvedThreads ?? 0 },
+              () => ({
+                isResolved: false,
+              }),
+            ),
             pageInfo: { hasNextPage: false },
           },
         },

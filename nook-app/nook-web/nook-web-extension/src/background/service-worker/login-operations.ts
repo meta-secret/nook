@@ -1,6 +1,11 @@
-import { type WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
-import { classifyAuthenticationOutcome } from '../vault-runtime'
 import {
+  NookWebsiteLoginSaveDecision,
+  WebsiteLoginSavePendingState,
+  type WebsiteLoginSaveOfferView,
+} from '../../lib/login-save-messages'
+import { classifyAuthenticationOutcomeWithDefaultTimeout } from '../vault-runtime'
+import {
+  LoginPickerLoadKind,
   authorizedWebsiteGrant,
   isLoginPickerSender,
   loadLoginPicker,
@@ -19,6 +24,7 @@ import { LOGIN_PICKER_TTL_MS } from './account-pickers'
 import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
+  isUnlockedSessionStatus,
   openCompanionLauncher,
 } from './session-lifecycle'
 
@@ -32,7 +38,11 @@ export async function openWebsiteLoginPicker(
     'login-forbidden-origin',
   )
   if ('response' in access) return access.response
-  if (sender.tab?.id === undefined) {
+  if (
+    !sender.tab ||
+    !('id' in sender.tab) ||
+    typeof sender.tab.id !== 'number'
+  ) {
     return { ok: false, reason: 'login-picker-tab-missing' }
   }
 
@@ -74,10 +84,11 @@ export async function queryLoginPicker(
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -102,10 +113,11 @@ export async function selectLoginPicker(
   if (!isLoginPickerSender(sender)) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: false, reason: 'login-picker-expired' }
   }
+  const { request } = loaded
   const grants = (await passwordPairingGrants()).filter((grant) =>
     request.allowedVaultStoreIds.includes(grant.vaultStoreId),
   )
@@ -149,10 +161,11 @@ export async function cancelLoginPicker(
   message: { payload: { requestId: string } },
   sender: chrome.runtime.MessageSender,
 ): Promise<unknown> {
-  const request = await loadLoginPicker(message.payload.requestId)
-  if (!request) {
+  const loaded = await loadLoginPicker(message.payload.requestId)
+  if (loaded.kind === LoginPickerLoadKind.Unavailable) {
     return { ok: true }
   }
+  const { request } = loaded
   if (
     !isLoginPickerSender(sender) &&
     !isAuthorizedWebsiteSender(sender, request.origin)
@@ -204,8 +217,7 @@ export async function websiteLoginSaveOffer(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     pendingPassword.value = ''
     openCompanionLauncher()
@@ -230,18 +242,19 @@ export async function websiteLoginSaveOffer(
     !('ok' in response) ||
     response.ok !== true ||
     !('decision' in response) ||
-    typeof response.decision !== 'string'
+    typeof response.decision !== 'number'
   ) {
     return { ok: false, reason: 'login-save-plan-failed' }
   }
   if (
-    response.decision === 'already-saved' ||
-    response.decision === 'invalid'
+    response.decision === NookWebsiteLoginSaveDecision.AlreadySaved ||
+    response.decision === NookWebsiteLoginSaveDecision.Invalid
   ) {
     return { ok: true, status: 'ready', decision: response.decision }
   }
   if (
-    (response.decision !== 'create' && response.decision !== 'update') ||
+    (response.decision !== NookWebsiteLoginSaveDecision.Create &&
+      response.decision !== NookWebsiteLoginSaveDecision.Update) ||
     !('offerId' in response) ||
     typeof response.offerId !== 'string'
   ) {
@@ -265,7 +278,7 @@ export async function websiteLoginSavePending(
   }
   const grants = await passwordPairingGrants()
   if (grants.length === 0) {
-    return { ok: true, offer: undefined }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   await ensureExtensionSessionDocument()
   const response = await sendSessionMessage({
@@ -281,15 +294,16 @@ export async function websiteLoginSavePending(
     return { ok: false, reason: 'login-save-pending-failed' }
   }
   if (
+    !('state' in response) ||
+    response.state !== WebsiteLoginSavePendingState.Available ||
     !('offer' in response) ||
-    !response.offer ||
     typeof response.offer !== 'object'
   ) {
-    return { ok: true, offer: undefined }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   const staged = response.offer as {
     offerId?: string
-    decision?: string
+    decision?: unknown
     vaultStoreId?: string
   }
   const grant = grants.find(
@@ -298,9 +312,10 @@ export async function websiteLoginSavePending(
   if (
     !grant ||
     typeof staged.offerId !== 'string' ||
-    (staged.decision !== 'create' && staged.decision !== 'update')
+    (staged.decision !== NookWebsiteLoginSaveDecision.Create &&
+      staged.decision !== NookWebsiteLoginSaveDecision.Update)
   ) {
-    return { ok: true, offer: undefined }
+    return { ok: true, state: WebsiteLoginSavePendingState.Unavailable }
   }
   const offer: WebsiteLoginSaveOfferView = {
     offerId: staged.offerId,
@@ -308,7 +323,7 @@ export async function websiteLoginSavePending(
     vaultStoreId: grant.vaultStoreId,
     vaultName: grant.vaultName,
   }
-  return { ok: true, offer }
+  return { ok: true, state: WebsiteLoginSavePendingState.Available, offer }
 }
 
 export async function websiteLoginSaveCommit(
@@ -332,12 +347,14 @@ export async function websiteLoginSaveCommit(
   if (!isAuthorizedWebsiteSender(sender, message.payload.origin)) {
     return { ok: false, reason: 'login-save-forbidden-origin' }
   }
-  const verdict = await classifyAuthenticationOutcome(message.payload.evidence)
+  const verdict = await classifyAuthenticationOutcomeWithDefaultTimeout(
+    message.payload.evidence,
+  )
   if (!verdict.allowsCredentialCommit) {
     return {
       ok: false,
       reason: 'login-save-evidence-insufficient',
-      verdict: verdict.name,
+      verdict: verdict.verdict,
     }
   }
   const grants = await passwordPairingGrants()
@@ -349,27 +366,31 @@ export async function websiteLoginSaveCommit(
     type: 'nook:extension-session-pending-login-save',
     payload: { origin: message.payload.origin },
   })
-  const stagedVaultStoreId =
+  let grant = grants[0]!
+  if (
     pending &&
     typeof pending === 'object' &&
+    'state' in pending &&
+    pending.state === WebsiteLoginSavePendingState.Available &&
     'offer' in pending &&
     pending.offer &&
     typeof pending.offer === 'object' &&
     'vaultStoreId' in pending.offer &&
     typeof pending.offer.vaultStoreId === 'string'
-      ? pending.offer.vaultStoreId
-      : undefined
-  const grant =
-    grants.find((candidate) => candidate.vaultStoreId === stagedVaultStoreId) ??
-    grants[0]
+  ) {
+    const pendingVaultStoreId = pending.offer.vaultStoreId
+    const matchingGrant = grants.find(
+      (candidate) => candidate.vaultStoreId === pendingVaultStoreId,
+    )
+    if (matchingGrant) grant = matchingGrant
+  }
   const status = await sendSessionMessage({
     type: 'nook:extension-session-status',
   })
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     openCompanionLauncher()
     return { ok: false, reason: 'login-save-locked' }

@@ -18,9 +18,26 @@ export type LoginCredentials = {
   password: string;
 };
 
+export enum LoginCredentialsLookupKind {
+  Absent = "absent",
+  Found = "found",
+}
+
+export type LoginCredentialsLookup =
+  | { kind: LoginCredentialsLookupKind.Absent }
+  | {
+      kind: LoginCredentialsLookupKind.Found;
+      credentials: LoginCredentials;
+    };
+
+export enum PasswordFormScopeKind {
+  Owned = "owned",
+  Unowned = "unowned",
+}
+
 export type PasswordFormScope =
-  | { kind: "owned"; owner: HTMLFormElement }
-  | { kind: "unowned" };
+  | { kind: PasswordFormScopeKind.Owned; owner: HTMLFormElement }
+  | { kind: PasswordFormScopeKind.Unowned };
 
 export type PasswordFormObservation = {
   root: ParentNode;
@@ -52,11 +69,11 @@ export const usernameFieldSelectors = [
 ] as const;
 
 const usernameCandidateSelector = [
-  'input:not([type])',
+  "input:not([type])",
   'input[type="text"]',
   'input[type="email"]',
   'input[type="tel"]',
-].join(',');
+].join(",");
 
 /** Account-identity fields: username, email, Microsoft loginfmt, Slack login_email. */
 const usernamePositivePattern =
@@ -83,12 +100,12 @@ export const oneTimeCodeFieldSelectors = [
 ] as const;
 
 const oneTimeCodeCandidateSelector = [
-  'input:not([type])',
+  "input:not([type])",
   'input[type="text"]',
   'input[type="tel"]',
   'input[type="number"]',
   'input[type="password"]',
-].join(',');
+].join(",");
 
 /** Matches accessible names like "Enter OTP Code" and camelCase attrs like VerificationCode. */
 const oneTimeCodePositivePattern =
@@ -119,8 +136,8 @@ function isRenderedInput(field: HTMLInputElement): boolean {
   if (field.getAttribute("aria-hidden") === "true") {
     return false;
   }
-  let element: HTMLElement | undefined = field;
-  while (element) {
+  let element = field as HTMLElement;
+  while (true) {
     if (element.hidden) {
       return false;
     }
@@ -128,7 +145,9 @@ function isRenderedInput(field: HTMLInputElement): boolean {
     if (style?.display === "none" || style?.visibility === "hidden") {
       return false;
     }
-    element = element.parentElement ?? undefined;
+    const parent = element.parentElement;
+    if (!parent) break;
+    element = parent;
   }
   return true;
 }
@@ -139,13 +158,15 @@ function findFields(
   formScope?: PasswordFormScope,
 ): HTMLInputElement[] {
   const queryRoot =
-    formScope?.kind === "owned" ? formScope.owner.ownerDocument : root;
+    formScope?.kind === PasswordFormScopeKind.Owned
+      ? formScope.owner.ownerDocument
+      : root;
   return Array.from(
     queryRoot.querySelectorAll<HTMLInputElement>(selector),
   ).filter((field) =>
-    formScope === undefined
+    !formScope
       ? true
-      : formScope.kind === "unowned"
+      : formScope.kind === PasswordFormScopeKind.Unowned
         ? !field.form
         : field.form === formScope.owner,
   );
@@ -230,26 +251,55 @@ function hasLoginContext(field: HTMLInputElement): boolean {
   const form = field.form;
   if (form) {
     const formIdentity = expandIdentityText(
-      [form.id, form.className, form.getAttribute("action") ?? "", form.name].join(
-        " ",
-      ),
+      [
+        form.id,
+        form.className,
+        form.getAttribute("action") ?? "",
+        form.name,
+      ].join(" "),
     );
-    if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(formIdentity)) {
+    if (
+      /\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(
+        formIdentity,
+      )
+    ) {
       return true;
     }
   }
-  let container: HTMLElement | undefined = field.parentElement ?? undefined;
+  enum AncestorTraversalKind {
+    Finished = "finished",
+    Visiting = "visiting",
+  }
+
+  type AncestorTraversal =
+    | { kind: AncestorTraversalKind.Finished }
+    | { kind: AncestorTraversalKind.Visiting; element: HTMLElement };
+  let containerState: AncestorTraversal = field.parentElement
+    ? { kind: AncestorTraversalKind.Visiting, element: field.parentElement }
+    : { kind: AncestorTraversalKind.Finished };
   let depth = 0;
-  while (container && depth < 6) {
+  while (containerState.kind === AncestorTraversalKind.Visiting && depth < 6) {
+    const container = containerState.element;
     const identity = expandIdentityText(
-      [container.id, container.className, container.getAttribute("role") ?? ""].join(
-        " ",
-      ),
+      [
+        container.id,
+        container.className,
+        container.getAttribute("role") ?? "",
+      ].join(" "),
     );
-    if (/\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(identity)) {
+    if (
+      /\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(
+        identity,
+      )
+    ) {
       return true;
     }
-    container = container.parentElement ?? undefined;
+    containerState = container.parentElement
+      ? {
+          kind: AncestorTraversalKind.Visiting,
+          element: container.parentElement,
+        }
+      : { kind: AncestorTraversalKind.Finished };
     depth += 1;
   }
   const doc = field.ownerDocument;
@@ -264,9 +314,7 @@ function hasLoginContext(field: HTMLInputElement): boolean {
         (advanceControl as HTMLInputElement).value ?? "",
       ].join(" "),
     );
-    if (
-      /\b(?:next|continue|sign[\s-]*in|log[\s-]*in|verify)\b/u.test(label)
-    ) {
+    if (/\b(?:next|continue|sign[\s-]*in|log[\s-]*in|verify)\b/u.test(label)) {
       return true;
     }
   }
@@ -352,15 +400,26 @@ function hasAutocompleteToken(
 const passkeyControlPositivePattern =
   /\b(?:pass\s*key|passkey|webauthn|security\s*key|hardware\s*key|fido|touch\s*id|face\s*id|windows\s*hello)\b/iu;
 
+export enum PasskeyControlLookupKind {
+  Absent = "absent",
+  Found = "found",
+}
+
+export type PasskeyControlLookup =
+  | { kind: PasskeyControlLookupKind.Absent }
+  | { kind: PasskeyControlLookupKind.Found; control: HTMLElement };
+
 export function findPasskeyControl(
   root: ParentNode = document,
-): HTMLElement | undefined {
+): PasskeyControlLookup {
   // Only marked controls and labeled activatable elements count. Do not treat
   // password/username inputs that happen to include `webauthn` in autocomplete
   // (common on combined login forms) as passkey controls — that falsely
   // proposes "Create passkey" instead of password autofill.
   const marked = root.querySelector?.("[data-nook-passkey-control]");
-  if (marked instanceof HTMLElement) return marked;
+  if (marked instanceof HTMLElement) {
+    return { kind: PasskeyControlLookupKind.Found, control: marked };
+  }
   const controls = Array.from(
     root.querySelectorAll?.<HTMLElement>(
       'button, a[href], [role="button"], input[type="button"], input[type="submit"]',
@@ -375,14 +434,14 @@ export function findPasskeyControl(
       ""
     ).trim();
     if (labeled && passkeyControlPositivePattern.test(labeled)) {
-      return control;
+      return { kind: PasskeyControlLookupKind.Found, control };
     }
   }
-  return undefined;
+  return { kind: PasskeyControlLookupKind.Absent };
 }
 
 export function pageHasPasskeyControl(root: ParentNode = document): boolean {
-  return Boolean(findPasskeyControl(root));
+  return findPasskeyControl(root).kind === PasskeyControlLookupKind.Found;
 }
 
 function pageHasManualCheckpoint(root: ParentNode): boolean {
@@ -405,9 +464,7 @@ function pageHasManualCheckpoint(root: ParentNode): boolean {
       checkbox.id ??
       ""
     ).toLowerCase();
-    if (
-      /terms|privacy|agree|accept|policy|consent|eula/.test(labeled)
-    ) {
+    if (/terms|privacy|agree|accept|policy|consent|eula/.test(labeled)) {
       return true;
     }
   }
@@ -507,8 +564,8 @@ export function summarizeAuthenticationWorkflowForms(
     return [
       {
         root,
-        formScope: { kind: "unowned" },
-        summary: summarizeRoot(root, { kind: "unowned" }),
+        formScope: { kind: PasswordFormScopeKind.Unowned },
+        summary: summarizeRoot(root, { kind: PasswordFormScopeKind.Unowned }),
       },
     ];
   }
@@ -516,7 +573,10 @@ export function summarizeAuthenticationWorkflowForms(
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),
   ).filter((form) => {
-    const formScope: PasswordFormScope = { kind: "owned", owner: form };
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    };
     const summary = summarizeRoot(root, formScope);
     return (
       summary.passwordFieldCount > 0 ||
@@ -526,8 +586,11 @@ export function summarizeAuthenticationWorkflowForms(
   });
   const observations: PasswordFormObservation[] = forms.map((form) => ({
     root,
-    formScope: { kind: "owned", owner: form },
-    summary: summarizeRoot(root, { kind: "owned", owner: form }),
+    formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+    summary: summarizeRoot(root, {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    }),
   }));
   const unownedFields = [
     ...allPasswordFields,
@@ -538,7 +601,9 @@ export function summarizeAuthenticationWorkflowForms(
     unownedFields.map((field) => nearestUnownedAuthContainer(field, root)),
   );
   for (const container of unownedContainers) {
-    const formScope: PasswordFormScope = { kind: "unowned" };
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Unowned,
+    };
     observations.push({
       root: container,
       formScope,
@@ -618,9 +683,11 @@ export function fillGeneratedPassword(
 export function readLoginCredentials(
   root: ParentNode = document,
   formScope?: PasswordFormScope,
-): LoginCredentials | undefined {
+): LoginCredentialsLookup {
   const passwordFields = findPasswordFields(root, formScope);
-  if (passwordFields.length === 0) return undefined;
+  if (passwordFields.length === 0) {
+    return { kind: LoginCredentialsLookupKind.Absent };
+  }
 
   const newPasswordFields = passwordFields.filter((field) =>
     hasAutocompleteToken(field, "new-password"),
@@ -632,10 +699,14 @@ export function readLoginCredentials(
     ) ??
     passwordFields[0];
   const password = passwordField.value.trim();
-  const username =
-    findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
-  if (!username || !password) return undefined;
-  return { username, password };
+  const username = findUsernameFields(root, formScope)[0]?.value.trim() ?? "";
+  if (!username || !password) {
+    return { kind: LoginCredentialsLookupKind.Absent };
+  }
+  return {
+    kind: LoginCredentialsLookupKind.Found,
+    credentials: { username, password },
+  };
 }
 
 export function submitLoginForm(
@@ -684,17 +755,14 @@ function clickAdvanceControl(
   formScope?: PasswordFormScope,
 ): boolean {
   const queryRoot =
-    formScope?.kind === "owned" ? formScope.owner : root;
+    formScope?.kind === PasswordFormScopeKind.Owned ? formScope.owner : root;
   const controls = Array.from(
     queryRoot.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
       'button[type="submit"], input[type="submit"], button:not([type]), button[type="button"]',
     ),
   );
   for (const control of controls) {
-    if (
-      control.disabled ||
-      control.getAttribute("aria-disabled") === "true"
-    ) {
+    if (control.disabled || control.getAttribute("aria-disabled") === "true") {
       continue;
     }
     const label = expandIdentityText(

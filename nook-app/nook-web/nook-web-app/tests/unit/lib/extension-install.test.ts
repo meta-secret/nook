@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  ExtensionInstallMethod,
+  ExtensionInstallSource,
+  ExtensionSetupStatus,
   browserSupportsExtensionInstallation,
   extensionInstallLandingUrl,
   loadExtensionInstallTarget,
@@ -7,6 +10,13 @@ import {
   resolveExtensionSetupState,
   shouldOfferExtensionSetup,
 } from '$lib/extension-install'
+import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+
+const activeVault = {
+  kind: ActiveVaultKind.Open,
+  storeId: 'store-1',
+} as const
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-nook-extension-runtime-id')
@@ -15,7 +25,7 @@ afterEach(() => {
 })
 
 function stubExtensionIdentityStatus(
-  status: 'unavailable' | 'locked' | 'different-vault',
+  status: ExtensionPairedVaultIdentityStatusMessageStatus,
 ): void {
   document.documentElement.setAttribute(
     'data-nook-extension-runtime-id',
@@ -34,7 +44,8 @@ function stubExtensionIdentityStatus(
             requestId: message.payload.requestId,
             vaultStoreId: message.payload.vaultStoreId,
             status,
-            ...(status === 'different-vault'
+            ...(status ===
+            ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
               ? {
                   connectedVaultStoreId: 'store-previous',
                   connectedVaultName: 'Previous vault',
@@ -102,10 +113,15 @@ describe('extension install target', () => {
     },
   ])('does not support installation in an $label', ({ environment }) => {
     expect(browserSupportsExtensionInstallation(environment)).toBe(false)
-    expect(shouldOfferExtensionSetup('not_installed', environment)).toBe(false)
-    expect(shouldOfferExtensionSetup('installed_unpaired', environment)).toBe(
-      true,
-    )
+    expect(
+      shouldOfferExtensionSetup(ExtensionSetupStatus.NotInstalled, environment),
+    ).toBe(false)
+    expect(
+      shouldOfferExtensionSetup(
+        ExtensionSetupStatus.InstalledUnpaired,
+        environment,
+      ),
+    ).toBe(true)
   })
 
   test('falls back to the marketing install landing page', async () => {
@@ -118,9 +134,9 @@ describe('extension install target', () => {
     )
 
     await expect(loadExtensionInstallTarget()).resolves.toEqual({
-      installMethod: 'manual_zip',
+      installMethod: ExtensionInstallMethod.ManualZip,
       installUrl: extensionInstallLandingUrl(),
-      source: 'fallback',
+      source: ExtensionInstallSource.Fallback,
     })
   })
 
@@ -134,18 +150,18 @@ describe('extension install target', () => {
           channel: 'production',
           version: '1.2.3',
           extension_id: extensionId,
-          install_method: 'chrome_web_store',
+          install_method: ExtensionInstallMethod.ChromeWebStore,
           install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
         }),
       })),
     )
 
     await expect(loadExtensionInstallTarget()).resolves.toEqual({
-      installMethod: 'chrome_web_store',
+      installMethod: ExtensionInstallMethod.ChromeWebStore,
       installUrl: `https://chromewebstore.google.com/detail/${extensionId}`,
       channel: 'production',
       version: '1.2.3',
-      source: 'metadata',
+      source: ExtensionInstallSource.Metadata,
     })
   })
 
@@ -156,9 +172,9 @@ describe('extension install target', () => {
     const installUrl =
       'https://chromewebstore.google.com/detail/abcdefghijklmnopqrstuvwxyzabcdef'
     openExtensionInstallTarget({
-      installMethod: 'chrome_web_store',
+      installMethod: ExtensionInstallMethod.ChromeWebStore,
       installUrl,
-      source: 'metadata',
+      source: ExtensionInstallSource.Metadata,
     })
 
     expect(open).toHaveBeenCalledWith(
@@ -171,32 +187,38 @@ describe('extension install target', () => {
 
 describe('extension setup status', () => {
   test('reports not_installed when the content-script attribute is missing', async () => {
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
-      status: 'not_installed',
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+      status: ExtensionSetupStatus.NotInstalled,
     })
   })
 
   test('reports installed_unpaired when the extension is present but not paired', async () => {
-    stubExtensionIdentityStatus('unavailable')
+    stubExtensionIdentityStatus(
+      ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+    )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
-      status: 'installed_unpaired',
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+      status: ExtensionSetupStatus.InstalledUnpaired,
     })
   })
 
   test('reports paired when the extension holds a locked grant', async () => {
-    stubExtensionIdentityStatus('locked')
+    stubExtensionIdentityStatus(
+      ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
+    )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
-      status: 'paired',
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+      status: ExtensionSetupStatus.Paired,
     })
   })
 
   test('reports the vault identity when the extension is paired elsewhere', async () => {
-    stubExtensionIdentityStatus('different-vault')
+    stubExtensionIdentityStatus(
+      ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
+    )
 
-    await expect(resolveExtensionSetupState('store-1')).resolves.toEqual({
-      status: 'paired_elsewhere',
+    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+      status: ExtensionSetupStatus.PairedElsewhere,
       connectedVaultStoreId: 'store-previous',
       connectedVaultName: 'Previous vault',
     })

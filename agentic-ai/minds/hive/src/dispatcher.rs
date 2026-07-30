@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
-use anyhow::Context;
+use crate::HiveContext;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
@@ -21,9 +21,9 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     repository_url: &str,
     checkout: &Path,
     poll_seconds: u64,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
-        anyhow::bail!("Workbench polling must exceed the worker heartbeat interval");
+        crate::hive_bail!("Workbench polling must exceed the worker heartbeat interval");
     }
     store.migrate().await?;
     let mut reconciled_revision = None;
@@ -47,7 +47,10 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     }
 }
 
-async fn sync_workbench_checkout(repository_url: &str, checkout: &Path) -> anyhow::Result<String> {
+async fn sync_workbench_checkout(
+    repository_url: &str,
+    checkout: &Path,
+) -> crate::HiveResult<String> {
     if checkout.join(".git").is_dir() {
         git(
             checkout,
@@ -66,14 +69,14 @@ async fn sync_workbench_checkout(repository_url: &str, checkout: &Path) -> anyho
         .await?;
     } else {
         if checkout.exists() {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Workbench checkout {} exists without Git metadata",
                 checkout.display()
             );
         }
         let parent = checkout
             .parent()
-            .context("Workbench checkout has no parent directory")?;
+            .hive_context("Workbench checkout has no parent directory")?;
         tokio::fs::create_dir_all(parent).await?;
         let output = Command::new("git")
             .args(["clone", "--depth=1", "--branch=main", "--"])
@@ -81,9 +84,9 @@ async fn sync_workbench_checkout(repository_url: &str, checkout: &Path) -> anyho
             .arg(checkout)
             .output()
             .await
-            .context("start Workbench clone")?;
+            .hive_context("start Workbench clone")?;
         if !output.status.success() {
-            anyhow::bail!(
+            crate::hive_bail!(
                 "Workbench clone failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
             );
@@ -102,25 +105,25 @@ async fn sync_workbench_checkout(repository_url: &str, checkout: &Path) -> anyho
     git(checkout, &["gc", "--prune=now"]).await?;
     let output = git(checkout, &["rev-parse", "HEAD"]).await?;
     let revision = String::from_utf8(output)
-        .context("Workbench revision is not UTF-8")?
+        .hive_context("Workbench revision is not UTF-8")?
         .trim()
         .to_owned();
     if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        anyhow::bail!("Workbench checkout returned an invalid revision");
+        crate::hive_bail!("Workbench checkout returned an invalid revision");
     }
     Ok(revision)
 }
 
-async fn git(checkout: &Path, args: &[&str]) -> anyhow::Result<Vec<u8>> {
+async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(checkout)
         .args(args)
         .output()
         .await
-        .context("start Workbench Git operation")?;
+        .hive_context("start Workbench Git operation")?;
     if !output.status.success() {
-        anyhow::bail!(
+        crate::hive_bail!(
             "Workbench Git operation failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
@@ -132,11 +135,11 @@ async fn dispatch_once<S: TaskStore>(
     store: &S,
     checkout: &Path,
     reconciled_incidents: &mut HashMap<String, String>,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let incidents = checkout.join("issues/hive-isolated-agent-platform");
     let mut entries = tokio::fs::read_dir(&incidents)
         .await
-        .with_context(|| format!("read Workbench incidents at {}", incidents.display()))?;
+        .with_hive_context(|| format!("read Workbench incidents at {}", incidents.display()))?;
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(source_commit) = main_failure_commit(&name) else {
@@ -146,7 +149,7 @@ async fn dispatch_once<S: TaskStore>(
             continue;
         }
         let body = String::from_utf8(tokio::fs::read(entry.path()).await?)
-            .context("Workbench issue is not UTF-8")?;
+            .hive_context("Workbench issue is not UTF-8")?;
         if !incident_needs_reconciliation(reconciled_incidents, &name, &body) {
             continue;
         }
@@ -156,7 +159,7 @@ async fn dispatch_once<S: TaskStore>(
                 let cancelled = store
                     .cancel(&task_id, "Main rerun succeeded")
                     .await
-                    .with_context(|| format!("cancel {}", task_id))?;
+                    .with_hive_context(|| format!("cancel {}", task_id))?;
                 eprintln!(
                     "Hive Workbench successful rerun task={} cancelled={cancelled}",
                     task_id
@@ -171,7 +174,7 @@ async fn dispatch_once<S: TaskStore>(
                 let cancelled = store
                     .cancel(&task_id, "Main rerun failed only deferred E2E jobs")
                     .await
-                    .with_context(|| format!("cancel {}", task_id))?;
+                    .with_hive_context(|| format!("cancel {}", task_id))?;
                 eprintln!(
                     "Hive Workbench retirement task={} cancelled={cancelled}",
                     task_id
@@ -186,14 +189,14 @@ async fn dispatch_once<S: TaskStore>(
             continue;
         }
         let (run_id, run_attempt) = main_failure_run(&body)
-            .context("ready Main failure issue has no workflow-run marker")?;
+            .hive_context("ready Main failure issue has no workflow-run marker")?;
         let run: serde_json::Value = serde_json::from_slice(
             &fetch(&format!(
                 "https://api.github.com/repos/meta-secret/nook/actions/runs/{run_id}"
             ))
             .await?,
         )
-        .context("decode current Main workflow-run state")?;
+        .hive_context("decode current Main workflow-run state")?;
         if !main_run_requires_repair(&run, &source_commit) {
             reconciled_incidents.insert(name, body);
             continue;
@@ -211,7 +214,7 @@ async fn reconcile_delivery<S: TaskStore>(
     body: &str,
     run_id: u64,
     run_attempt: u64,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let task_id = main_failure_task_id(task_base, run_id, run_attempt)?;
     if let Some(active_id) = store.active_delivery(source_commit, "main-repair").await? {
         if active_id == task_id {
@@ -224,9 +227,9 @@ async fn reconcile_delivery<S: TaskStore>(
         let cancelled = store
             .cancel(&active_id, "Superseded by a newer failed Main attempt")
             .await
-            .with_context(|| format!("cancel superseded delivery {}", active_id))?;
+            .with_hive_context(|| format!("cancel superseded delivery {}", active_id))?;
         terminate_cancelled_workers(store, &active_id).await?;
-        anyhow::bail!(
+        crate::hive_bail!(
             "superseded Hive delivery {active_id} cancellation_requested={cancelled}; retry after the worker acknowledges termination"
         );
     }
@@ -243,7 +246,7 @@ async fn reconcile_delivery<S: TaskStore>(
     if let Err(error) = store.enqueue(&task).await
         && !format!("{error:#}").contains("already exists")
     {
-        return Err(error).with_context(|| format!("enqueue {}", task.id));
+        return Err(error).with_hive_context(|| format!("enqueue {}", task.id));
     }
     Ok(())
 }
@@ -251,11 +254,11 @@ async fn reconcile_delivery<S: TaskStore>(
 async fn terminate_cancelled_workers<S: TaskStore>(
     store: &S,
     root_task_id: &TaskId,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     for target in store.cancellation_targets(root_task_id).await? {
         delete_worker_pod(&target.pod_name).await?;
         let finalized = store.finalize_cancellation(&target.task_id).await?;
-        anyhow::ensure!(
+        crate::hive_ensure!(
             finalized,
             "cancelled worker {} terminated but task {} could not be finalized",
             target.pod_name,
@@ -265,13 +268,13 @@ async fn terminate_cancelled_workers<S: TaskStore>(
     Ok(())
 }
 
-async fn delete_worker_pod(pod_name: &str) -> anyhow::Result<()> {
+async fn delete_worker_pod(pod_name: &str) -> crate::HiveResult<()> {
     if !pod_name.starts_with("hive-")
         || !pod_name.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'.')
         })
     {
-        anyhow::bail!("refusing invalid Hive worker Pod name");
+        crate::hive_bail!("refusing invalid Hive worker Pod name");
     }
     let token = tokio::fs::read_to_string("/run/reaper-auth/token").await?;
     let url = format!("http://hive-reaper.hive-system.svc.cluster.local:8080/reap/{pod_name}");
@@ -296,26 +299,26 @@ async fn delete_worker_pod(pod_name: &str) -> anyhow::Result<()> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .context("start Hive lifecycle-controller request")?;
+        .hive_context("start Hive lifecycle-controller request")?;
     child
         .stdin
         .take()
-        .context("open Kubernetes request configuration")?
+        .hive_context("open Kubernetes request configuration")?
         .write_all(format!("header = \"Authorization: Bearer {}\"\n", token.trim()).as_bytes())
         .await
-        .context("write Hive lifecycle-controller request configuration")?;
+        .hive_context("write Hive lifecycle-controller request configuration")?;
     let output = child
         .wait_with_output()
         .await
-        .context("call Hive lifecycle controller")?;
-    anyhow::ensure!(
+        .hive_context("call Hive lifecycle controller")?;
+    crate::hive_ensure!(
         output.status.success(),
         "Hive lifecycle-controller request failed"
     );
     let status: u16 = String::from_utf8(output.stdout)?
         .parse()
-        .context("decode Hive lifecycle-controller status")?;
-    anyhow::ensure!(
+        .hive_context("decode Hive lifecycle-controller status")?;
+    crate::hive_ensure!(
         status == 204,
         "Hive lifecycle controller returned status {status}"
     );
@@ -358,13 +361,18 @@ fn main_failure_run(body: &str) -> Option<(u64, u64)> {
     main_failure_runs(body).into_iter().last()
 }
 
-fn main_failure_task_id(task_base: &str, run_id: u64, run_attempt: u64) -> anyhow::Result<TaskId> {
-    TaskId::new(format!("{task_base}-run-{run_id}-attempt-{run_attempt}"))
-        .map_err(anyhow::Error::msg)
+fn main_failure_task_id(
+    task_base: &str,
+    run_id: u64,
+    run_attempt: u64,
+) -> crate::HiveResult<TaskId> {
+    Ok(TaskId::new(format!(
+        "{task_base}-run-{run_id}-attempt-{run_attempt}"
+    ))?)
 }
 
-fn main_failure_task_ids(task_base: &str, body: &str) -> anyhow::Result<Vec<TaskId>> {
-    let mut task_ids = vec![TaskId::new(task_base).map_err(anyhow::Error::msg)?];
+fn main_failure_task_ids(task_base: &str, body: &str) -> crate::HiveResult<Vec<TaskId>> {
+    let mut task_ids = vec![TaskId::new(task_base)?];
     for (run_id, run_attempt) in main_failure_runs(body) {
         task_ids.push(main_failure_task_id(task_base, run_id, run_attempt)?);
     }
@@ -387,7 +395,7 @@ fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> boo
         )
 }
 
-async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
+async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
     let output = Command::new("curl")
         .args([
             "--fail",
@@ -406,9 +414,9 @@ async fn fetch(url: &str) -> anyhow::Result<Vec<u8>> {
         ])
         .output()
         .await
-        .context("start Workbench fetch")?;
+        .hive_context("start Workbench fetch")?;
     if !output.status.success() {
-        anyhow::bail!("Workbench fetch failed with status {}", output.status);
+        crate::hive_bail!("Workbench fetch failed with status {}", output.status);
     }
     Ok(output.stdout)
 }
@@ -444,26 +452,30 @@ mod tests {
 
     #[async_trait]
     impl TaskStore for RecordingStore {
-        async fn migrate(&self) -> anyhow::Result<()> {
+        async fn migrate(&self) -> crate::HiveResult<()> {
             Ok(())
         }
-        async fn register_agent(&self, _: &AgentId, _: &str) -> anyhow::Result<()> {
+        async fn register_agent(&self, _: &AgentId, _: &str) -> crate::HiveResult<()> {
             unreachable!()
         }
-        async fn enqueue(&self, task: &EnqueueTask) -> anyhow::Result<()> {
+        async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
             self.enqueued
                 .lock()
-                .expect("enqueued")
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
                 .push(task.id.clone());
             Ok(())
         }
-        async fn active_delivery(&self, _: &str, _: &str) -> anyhow::Result<Option<TaskId>> {
-            Ok(self.active.lock().expect("active").clone())
+        async fn active_delivery(&self, _: &str, _: &str) -> crate::HiveResult<Option<TaskId>> {
+            Ok(self
+                .active
+                .lock()
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .clone())
         }
-        async fn cancel(&self, task_id: &TaskId, _: &str) -> anyhow::Result<bool> {
+        async fn cancel(&self, task_id: &TaskId, _: &str) -> crate::HiveResult<bool> {
             self.cancelled
                 .lock()
-                .expect("cancelled")
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
                 .push(task_id.clone());
             Ok(true)
         }
@@ -471,19 +483,19 @@ mod tests {
             &self,
             _: &ClaimedTask,
             _: &AgentId,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!()
         }
         async fn cancellation_targets(
             &self,
             _: &TaskId,
-        ) -> anyhow::Result<Vec<CancellationTarget>> {
+        ) -> crate::HiveResult<Vec<CancellationTarget>> {
             Ok(Vec::new())
         }
-        async fn finalize_cancellation(&self, _: &TaskId) -> anyhow::Result<bool> {
+        async fn finalize_cancellation(&self, _: &TaskId) -> crate::HiveResult<bool> {
             unreachable!()
         }
-        async fn claim(&self, _: &AgentId, _: i64) -> anyhow::Result<ClaimOutcome> {
+        async fn claim(&self, _: &AgentId, _: i64) -> crate::HiveResult<ClaimOutcome> {
             unreachable!()
         }
         async fn heartbeat(
@@ -492,10 +504,10 @@ mod tests {
             _: &AgentId,
             _: &LeaseToken,
             _: i64,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!()
         }
-        async fn release(&self, _: &ClaimedTask, _: &AgentId) -> anyhow::Result<bool> {
+        async fn release(&self, _: &ClaimedTask, _: &AgentId) -> crate::HiveResult<bool> {
             unreachable!()
         }
         async fn complete(
@@ -505,10 +517,10 @@ mod tests {
             _: bool,
             _: &str,
             _: &CompletionArtifact,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!()
         }
-        async fn fail(&self, _: &ClaimedTask, _: &AgentId, _: &str) -> anyhow::Result<bool> {
+        async fn fail(&self, _: &ClaimedTask, _: &AgentId, _: &str) -> crate::HiveResult<bool> {
             unreachable!()
         }
         async fn block(
@@ -517,13 +529,13 @@ mod tests {
             _: &AgentId,
             _: &EnqueueTask,
             _: &str,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!()
         }
     }
 
     #[test]
-    fn recognizes_only_ready_automated_main_incidents() {
+    fn recognizes_only_ready_automated_main_incidents() -> crate::HiveResult<()> {
         let source_commit = "0123456789abcdef0123456789abcdef01234567";
         let failed_main = json!({
             "name": "Main",
@@ -557,8 +569,7 @@ mod tests {
             Some((789012, 3))
         );
         assert_eq!(
-            main_failure_task_ids("main-failure-abcdef", "<!-- main-run:123456:attempt:2 -->")
-                .expect("task ids")
+            main_failure_task_ids("main-failure-abcdef", "<!-- main-run:123456:attempt:2 -->")?
                 .iter()
                 .map(TaskId::as_str)
                 .collect::<Vec<_>>(),
@@ -568,9 +579,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            main_failure_task_id("main-failure-abcdef", 123456, 2)
-                .expect("current task id")
-                .as_str(),
+            main_failure_task_id("main-failure-abcdef", 123456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
         assert!(main_run_requires_repair(&failed_main, source_commit));
@@ -601,6 +610,7 @@ mod tests {
         let mut unrelated = failed_main;
         unrelated["head_sha"] = json!("ffffffffffffffffffffffffffffffffffffffff");
         assert!(!main_run_requires_repair(&unrelated, source_commit));
+        Ok(())
     }
 
     #[test]
@@ -640,21 +650,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn current_generation_is_idempotent() -> anyhow::Result<()> {
+    async fn current_generation_is_idempotent() -> crate::HiveResult<()> {
         let store = RecordingStore::default();
         let current = main_failure_task_id("main-failure-abcdef", 123, 2)?;
-        *store.active.lock().expect("active") = Some(current);
+        *store
+            .active
+            .lock()
+            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? =
+            Some(current);
 
         reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
 
-        assert!(store.cancelled.lock().expect("cancelled").is_empty());
-        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+        assert!(
+            store
+                .cancelled
+                .lock()
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .is_empty()
+        );
+        assert!(
+            store
+                .enqueued
+                .lock()
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .is_empty()
+        );
         Ok(())
     }
 
     #[tokio::test]
-    async fn dispatcher_rejects_sub_heartbeat_polling() {
-        let checkout = tempfile::tempdir().expect("checkout");
+    async fn dispatcher_rejects_sub_heartbeat_polling() -> crate::HiveResult<()> {
+        let checkout = tempfile::tempdir()?;
         let error = run_workbench_dispatcher(
             RecordingStore::default(),
             "https://example.invalid/workbench.git",
@@ -662,19 +688,25 @@ mod tests {
             60,
         )
         .await
-        .expect_err("sub-heartbeat polling must fail");
+        .err()
+        .ok_or_else(|| crate::hive_error!("sub-heartbeat polling must fail"))?;
         assert!(
             error
                 .to_string()
                 .contains("must exceed the worker heartbeat")
         );
+        Ok(())
     }
 
     #[tokio::test]
-    async fn replacement_waits_for_superseded_worker_acknowledgement() -> anyhow::Result<()> {
+    async fn replacement_waits_for_superseded_worker_acknowledgement() -> crate::HiveResult<()> {
         let store = RecordingStore::default();
         let old = main_failure_task_id("main-failure-abcdef", 123, 1)?;
-        *store.active.lock().expect("active") = Some(old.clone());
+        *store
+            .active
+            .lock()
+            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? =
+            Some(old.clone());
 
         assert!(
             reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2)
@@ -682,18 +714,31 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            store.cancelled.lock().expect("cancelled").as_slice(),
+            store
+                .cancelled
+                .lock()
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .as_slice(),
             &[old]
         );
-        assert!(store.enqueued.lock().expect("enqueued").is_empty());
+        assert!(
+            store
+                .enqueued
+                .lock()
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .is_empty()
+        );
 
-        *store.active.lock().expect("active") = None;
+        *store
+            .active
+            .lock()
+            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? = None;
         reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
         assert_eq!(
             store
                 .enqueued
                 .lock()
-                .expect("enqueued")
+                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
                 .iter()
                 .map(TaskId::as_str)
                 .collect::<Vec<_>>(),
@@ -703,17 +748,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn workbench_checkout_reuses_the_same_public_git_snapshot() -> anyhow::Result<()> {
+    async fn workbench_checkout_reuses_the_same_public_git_snapshot() -> crate::HiveResult<()> {
         let origin = tempfile::tempdir()?;
         let checkout = tempfile::tempdir()?;
         let checkout_path = checkout.path().join("workbench");
-        let git = |args: &[&str]| -> anyhow::Result<()> {
+        let git = |args: &[&str]| -> crate::HiveResult<()> {
             let status = StdCommand::new("git")
                 .arg("-C")
                 .arg(origin.path())
                 .args(args)
                 .status()?;
-            anyhow::ensure!(status.success(), "test Git command failed: {args:?}");
+            crate::hive_ensure!(status.success(), "test Git command failed: {args:?}");
             Ok(())
         };
         git(&["init", "--initial-branch=main"])?;

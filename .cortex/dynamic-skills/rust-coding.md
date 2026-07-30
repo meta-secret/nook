@@ -41,10 +41,15 @@ When you see `Option<T>`, ask:
   state-specific values on the owning variant.
 - Do not create a one-variant wrapper enum just to avoid `Option<T>`. If callers
   genuinely ask a lookup question, `Option<T>` is the precise Rust result.
-- Do not call `.unwrap()` in authored Rust. Production code returns, propagates,
-  or explicitly classifies failure. Tests prefer `Result`/`?`; when the test is
-  asserting a fixture invariant, use `expect` with enough context to identify
-  the failed setup.
+- Do not call `.unwrap()`, `.expect(...)`, or `.expect_err(...)` in authored
+  Rust. Production code returns, propagates, or explicitly classifies failure.
+  Every fallible test
+  returns a concrete or `anyhow::Result` and propagates with `?`, including
+  locally constructed fixtures.
+- Keep `anyhow` test-only. Production libraries, binaries, examples, and build
+  scripts use concrete `thiserror` enums with operation-specific variants and
+  typed sources. Only `#[cfg(test)]` unit tests and integration tests under
+  `tests/` may use `anyhow`, and crates declare it under `[dev-dependencies]`.
 - Do not use `String` for typed domain values such as timestamps, YAML payloads,
   YAML payloads, storage/provider types, vault/store ids, event ids, or secret
   keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
@@ -52,6 +57,15 @@ When you see `Option<T>`, ask:
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
+- Tests of a known JSON contract serialize and deserialize through the concrete
+  Rust wire or domain type, then assert typed fields and enum variants. Do not
+  index `serde_json::Value` or use `Value::is_null()` for field-value
+  assertions: indexing conflates an omitted property with JSON `null`, discards
+  enum exhaustiveness, and turns schema drift into a runtime assertion.
+- Raw `serde_json::Value` is reserved for tests whose actual subject is unknown,
+  malformed, or deliberately partial JSON. A narrow `Value::Object`/`.get()`
+  assertion may verify that a serializer omitted or renamed a property, but
+  domain values still require a typed round trip.
 - Do not expose WASM DTO fields named `yaml` for event/vault records when the
   real payload is a typed domain value. Use typed fields such as
   `event: VaultEvent` internally and across merge/sync APIs; add explicit
@@ -82,9 +96,19 @@ When you see `Option<T>`, ask:
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
   `nook-app/nook-core/src`; place them in the owning group and re-export through
   `lib.rs` only when they are part of the stable public core API.
-- Authored TypeScript/Svelte uses `undefined`, never `null`, for absence. Rust
-  and WASM helpers should make it easy for TS to pass plain objects or omitted
-  values instead of forcing TS to construct nullable shim objects.
+- Rust-owned `Tsify`/WASM domain contracts never author `undefined`, `null`, or
+  `void` field states. Do not pair `Option<T>` with a
+  `#[tsify(type = "... | undefined")]` override: that merely exports the same
+  unnamed absence twice. When absence means not-applicable, unconfigured,
+  pending, manual, or another domain state, use a named Rust enum and derive
+  the generated boundary type from it.
+- Truthful structural omission in external or persisted wire formats may still
+  use `Option<T>` internally without a handwritten absence override. A
+  `Tsify`-derived field or `wasm_bindgen` parameter/return must not expose
+  `Option<T>` because generated TypeScript recreates unnamed absence. Normalize
+  it into a named domain state before the exported boundary.
+- `void` remains TypeScript's unit/effect return type, equivalent to Rust `()`;
+  it is not a serialized field-state escape hatch.
 
 ## Examples
 
@@ -198,8 +222,13 @@ impl NookRuntimeConfig {
     }
 
     #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
-    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: Option<String>) -> u32 {
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         // Use immutable instance state directly.
+        300_000
+    }
+
+    #[wasm_bindgen(js_name = defaultVaultIdleTimeoutMs)]
+    pub fn default_vault_idle_timeout_ms(&self) -> u32 {
         300_000
     }
 }
@@ -213,9 +242,10 @@ class VaultState {
   )
 }
 
-vault.runtimeConfig.resolveVaultIdleTimeoutMs(
-  import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
-)
+const rawIdleTimeout = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS
+const idleTimeout = rawIdleTimeout
+  ? vault.runtimeConfig.resolveVaultIdleTimeoutMs(rawIdleTimeout)
+  : vault.runtimeConfig.defaultVaultIdleTimeoutMs()
 ```
 
 ## Scope
@@ -238,16 +268,25 @@ whether a value exists.
 
 - Add or update tests for each new enum state.
 - Make fallible Rust tests return `Result<(), E>` and use `?` for setup and
-  verification. Do not silence `unwrap_used` by mechanically replacing
-  `.unwrap()` with `.expect(...)`; reserve `expect` for a deliberately asserted
-  infallible local invariant.
+  verification. Panic shortcuts are prohibited; do not replace one with
+  another or hide it behind a helper.
 - Do not use `Box<dyn std::error::Error>` as a catch-all test error. Return the
   concrete crate error for one error family, or `anyhow::Result` when the test
   intentionally combines unrelated error types.
 - Add deserialization tests proving required persisted values reject missing and
   empty input.
-- Run Clippy for all targets with `clippy::unwrap_used` denied and verify a
-  repository search has no authored `.unwrap()` calls.
+- Search Rust-owned `Tsify` DTOs for authored `type =` overrides. The
+  repository preflight must report zero `undefined`, `null`, or `void`
+  sentinels in those overrides.
+- Search known-contract tests for `serde_json::Value`, `json["..."]`, and
+  `.is_null()`. Replace field-value checks with typed round trips and enum/value
+  assertions. Keep raw values only where malformed/unknown JSON or exact
+  property presence is the behavior under test.
+- Run Clippy for all targets with `clippy::expect_used` and
+  `clippy::unwrap_used` denied, and verify a repository search has no authored
+  `.expect(...)`, `.expect_err(...)`, or `.unwrap()` calls. Run the
+  syntax-aware preflight that rejects production `anyhow` paths and non-dev
+  Cargo dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app && cargo clippy -p

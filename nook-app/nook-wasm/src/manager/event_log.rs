@@ -1,9 +1,14 @@
 //! Event-log persistence and provider fan-out.
 
-use super::{
-    CeremonyState, EventLogSessionState, EventLogSyncIssueState, NookVaultManager, SyncOutboxState,
-    VaultNameState, VaultSessionState,
+mod extension_import;
+mod provider_io;
+mod records;
+
+pub(in crate::manager) use records::{
+    EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
 };
+
+use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
@@ -30,37 +35,12 @@ use nook_core::{
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
     rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct ExternalEventLogRecord {
-    pub event_id: String,
-    pub event: VaultEvent,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct EventLogStorageRecord {
-    pub event_id: String,
-    pub path: String,
-    pub event: VaultEvent,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::manager) struct ExtensionEventLogImportStatus {
-    pub vault_store_id: String,
-    pub event_count: usize,
-    pub heads: Vec<String>,
-    pub access_granted: bool,
 }
 
 struct PreparedEpochRotation {
@@ -474,9 +454,9 @@ impl NookVaultManager {
         if !self.vault.store_id.is_empty() {
             let local = load_local_event_store(&self.vault.store_id).await?;
             for event_id in local.missing_event_ids(&remote_ids) {
-                let bytes = local
-                    .get_bytes(&event_id)
-                    .expect("missing event id came from local event store");
+                let bytes = local.get_bytes(&event_id).ok_or_else(|| {
+                    NookError::Database(format!("Local event {event_id} is missing"))
+                })?;
                 self.put_current_provider_event_if_absent(&event_id, bytes)
                     .await?;
                 remote_ids.insert(event_id);
@@ -693,162 +673,6 @@ impl NookVaultManager {
         self.export_event_log_records().await
     }
 
-    fn validate_extension_import_records(
-        expected_store_id: &nook_core::StoreId,
-        records: &[ExternalEventLogRecord],
-    ) -> Result<(), NookError> {
-        for record in records {
-            let event_id = EventId::parse(&record.event_id)?;
-            Self::validate_event_record_id(&event_id, &record.event)?;
-            let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
-            let record_store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
-            if record_store_id != *expected_store_id {
-                return Err(NookError::Database(format!(
-                    "Approved vault store_id {} does not match imported store_id {}.",
-                    expected_store_id.as_str(),
-                    record_store_id.as_str()
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    async fn restore_rejected_extension_import(
-        &mut self,
-        previous_active_store_id: Option<&str>,
-        previous_vault: VaultSessionState,
-        previous_event_log: EventLogSessionState,
-        previous_sync_outbox: SyncOutboxState,
-    ) -> Result<(), NookError> {
-        self.vault.reset();
-        self.vault = previous_vault;
-        self.event_log = previous_event_log;
-        self.sync_outbox = previous_sync_outbox;
-        if let Some(store_id) = previous_active_store_id {
-            crate::storage::indexed_db::switch_active_vault(store_id).await?;
-        } else {
-            crate::storage::indexed_db::clear_active_vault_id().await?;
-        }
-        Ok(())
-    }
-
-    /// Import the website's encrypted event-log projection for the extension.
-    ///
-    /// The caller transports bytes only. Rust owns every trust decision: the
-    /// application capability, protected local device identity, canonical event
-    /// ids/signatures, vault store id, and current (non-revoked) device grant.
-    pub(in crate::manager) async fn import_extension_event_log_records(
-        &mut self,
-        expected_store_id: &str,
-        expected_device_id: &str,
-        expected_device_public_key: &str,
-        expected_device_signing_public_key: &str,
-        records: Vec<ExternalEventLogRecord>,
-    ) -> Result<ExtensionEventLogImportStatus, NookError> {
-        if self.application != nook_core::VaultApplication::Extension {
-            return Err(NookError::Database(
-                "Extension event-log import requires the extension application capability."
-                    .to_owned(),
-            ));
-        }
-        if records.is_empty() {
-            return Err(NookError::Database(
-                "Extension event-log import requires at least one event.".to_owned(),
-            ));
-        }
-
-        let expected_store_id = nook_core::StoreId::parse(expected_store_id)?;
-        let expected_device_id = nook_core::DeviceId::parse(expected_device_id)?;
-        let expected_device_public_key =
-            nook_core::DevicePublicKey::parse(expected_device_public_key)?;
-        let expected_device_signing_public_key =
-            nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let (stored_device_id, _) = crate::storage::indexed_db::load_wrapped_device_identity()
-            .await?
-            .ok_or_else(|| {
-                NookError::IndexedDb(
-                    "Extension device protection must be configured before vault import."
-                        .to_owned(),
-                )
-            })?;
-        if stored_device_id != expected_device_id.as_str() {
-            return Err(NookError::Decryption(
-                "Approved extension device does not match the protected local identity.".to_owned(),
-            ));
-        }
-        Self::validate_extension_import_records(&expected_store_id, &records)?;
-
-        // Stage the complete replacement projection in fresh vault/event-log
-        // state while retaining the active session for rollback. IndexedDB
-        // writes target the replacement store id, so a transient failure
-        // cannot corrupt or evict the currently active vault.
-        let previous_active_store_id = crate::storage::indexed_db::get_active_vault_id().await?;
-        let mut previous_vault = std::mem::take(&mut self.vault);
-        let mut previous_event_log = std::mem::take(&mut self.event_log);
-        let mut previous_sync_outbox = std::mem::take(&mut self.sync_outbox);
-        let import = async {
-            let merged = self.sync_external_event_log_records(records).await?;
-            if self.vault.store_id != expected_store_id.as_str() {
-                return Err(NookError::Database(format!(
-                    "Approved vault store_id {} does not match imported store_id {}.",
-                    expected_store_id.as_str(),
-                    self.vault.store_id
-                )));
-            }
-
-            let store = load_local_event_store(&self.vault.store_id).await?;
-            let graph = store.load_graph(&self.vault.store_id)?;
-            let has_active_grant = nook_core::event_graph_has_active_device_access(
-                &graph,
-                &expected_device_id,
-                &expected_device_public_key,
-                &expected_device_signing_public_key,
-            )?;
-            let auth_id = nook_core::dec_auth_id_from_public_key(&expected_device_public_key)?;
-            let has_device_envelope = self.vault.meta.auth.contains_key(&auth_id);
-
-            Ok(ExtensionEventLogImportStatus {
-                vault_store_id: self.vault.store_id.clone(),
-                event_count: merged.len(),
-                heads: self.event_log.heads.clone(),
-                access_granted: has_active_grant && has_device_envelope,
-            })
-        }
-        .await;
-        match import {
-            Ok(status) if status.access_granted => {
-                previous_vault.reset();
-                previous_event_log.reset();
-                previous_sync_outbox.reset();
-                self.sentinel_genesis = CeremonyState::Inactive;
-                self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
-                self.pending_sentinel_genesis_request = CeremonyState::Inactive;
-                self.sentinel_unlock = CeremonyState::Inactive;
-                Ok(status)
-            }
-            Ok(status) => {
-                self.restore_rejected_extension_import(
-                    previous_active_store_id.as_deref(),
-                    previous_vault,
-                    previous_event_log,
-                    previous_sync_outbox,
-                )
-                .await?;
-                Ok(status)
-            }
-            Err(error) => {
-                self.restore_rejected_extension_import(
-                    previous_active_store_id.as_deref(),
-                    previous_vault,
-                    previous_event_log,
-                    previous_sync_outbox,
-                )
-                .await?;
-                Err(error)
-            }
-        }
-    }
-
     pub(in crate::manager) async fn sync_local_folder_provider(
         &mut self,
         handle_id: &str,
@@ -871,275 +695,6 @@ impl NookVaultManager {
             .collect::<Result<Vec<_>, NookError>>()?;
         write_local_folder_event_files(handle_id, &writes).await?;
         Ok(load_from_indexed_db().await?.unwrap_or_default())
-    }
-
-    async fn list_current_provider_event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
-        let raw_ids = match self.storage.mode {
-            nook_core::StorageMode::Github => {
-                list_github_event_ids(&self.storage.access_token, &self.storage.remote_ref).await?
-            }
-            nook_core::StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.storage.access_token, &self.storage.drive_event_parent)
-                    .await?
-            }
-            nook_core::StorageMode::ICloud => {
-                list_icloud_event_ids(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                )
-                .await?
-            }
-            nook_core::StorageMode::Local => Vec::new(),
-        };
-        raw_ids
-            .into_iter()
-            .map(|raw| EventId::parse(&raw).map_err(NookError::from))
-            .collect()
-    }
-
-    async fn fetch_current_provider_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
-        match self.storage.mode {
-            nook_core::StorageMode::Github => {
-                fetch_github_event(
-                    &self.storage.access_token,
-                    &self.storage.remote_ref,
-                    event_id,
-                )
-                .await
-            }
-            nook_core::StorageMode::GoogleDrive => {
-                fetch_drive_event(
-                    &self.storage.access_token,
-                    &self.storage.drive_event_parent,
-                    event_id,
-                )
-                .await
-            }
-            nook_core::StorageMode::ICloud => {
-                fetch_icloud_event(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                    event_id,
-                )
-                .await
-            }
-            nook_core::StorageMode::Local => Ok(Vec::new()),
-        }
-    }
-
-    async fn put_current_provider_event_if_absent(
-        &self,
-        event_id: &EventId,
-        bytes: &[u8],
-    ) -> Result<(), NookError> {
-        match self.storage.mode {
-            nook_core::StorageMode::Github => {
-                put_github_event_if_absent(
-                    &self.storage.access_token,
-                    &self.storage.remote_ref,
-                    event_id,
-                    bytes,
-                )
-                .await
-            }
-            nook_core::StorageMode::GoogleDrive => put_drive_event_if_absent(
-                &self.storage.access_token,
-                &self.storage.drive_event_parent,
-                event_id,
-                bytes,
-            )
-            .await
-            .map(|_| ()),
-            nook_core::StorageMode::ICloud => {
-                put_icloud_event_if_absent(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                    event_id,
-                    bytes,
-                )
-                .await
-            }
-            nook_core::StorageMode::Local => Ok(()),
-        }
-    }
-
-    pub(in crate::manager) async fn bootstrap_event_log_genesis(
-        &mut self,
-    ) -> Result<(), NookError> {
-        self.activate_event_log_mode().await?;
-        let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id()?;
-        let signing_public_key = signing.public_key();
-        let key_epoch = self.ensure_key_epoch().await?;
-        let identity = self.device_identity()?;
-        let mut operations = vec![VaultOperation::VaultImported {
-            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
-            secrets: vec![],
-            password_entries: self.vault.password_entries.clone(),
-        }];
-        if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
-            let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-            let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-            match self.vault.architecture.vault_type {
-                nook_core::VaultType::Simple => {
-                    let auth_record =
-                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-                    let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-                    operations.push(VaultOperation::JoinApproved {
-                        device_id: identity.device_id().clone(),
-                        encryption_public_key: identity.public_key(),
-                        signing_public_key: signing_public_key.clone(),
-                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
-                        secrets_key_ciphertext: envelopes.secrets_key,
-                        members_key_ciphertext: envelopes.members_key,
-                    });
-                }
-                nook_core::VaultType::Sentinel => {
-                    operations.push(VaultOperation::SentinelParticipantEnrolled {
-                        device_id: identity.device_id().clone(),
-                        encryption_public_key: identity.public_key(),
-                        signing_public_key: signing_public_key.clone(),
-                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
-                    });
-                }
-            }
-        }
-        let body = nook_core::VaultEventBody {
-            schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
-            store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
-            actor_id,
-            actor_signing_public_key: signing_public_key,
-            parents: Vec::new(),
-            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
-            key_epoch: EventId::parse(&key_epoch)?,
-            operations,
-        };
-        let import = nook_core::VaultEvent::sign(body, signing.signing_key())?;
-        let event_id = import.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&import)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
-        self.event_log.heads = vec![event_id.as_str().to_owned()];
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
-            .await?;
-        Ok(())
-    }
-
-    /// Write Sentinel genesis as one immutable root event. The complete roster and
-    /// complete encrypted share set are deliberately inseparable here: no
-    /// partially enrolled/openable Sentinel event history is ever published.
-    pub(in crate::manager) async fn bootstrap_sentinel_genesis_event(
-        &mut self,
-        participants: &[nook_core::SentinelGenesisParticipant],
-        deliveries: &[nook_core::SentinelGenesisShareDelivery],
-    ) -> Result<(), NookError> {
-        self.activate_event_log_mode().await?;
-        let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id()?;
-        let key_epoch = self.ensure_key_epoch().await?;
-        let mut operations = vec![VaultOperation::VaultImported {
-            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
-            secrets: vec![],
-            password_entries: vec![],
-        }];
-        operations.extend(participants.iter().map(|participant| {
-            VaultOperation::SentinelParticipantEnrolled {
-                device_id: participant.device_id.clone(),
-                encryption_public_key: participant.encryption_public_key.clone(),
-                signing_public_key: participant.signing_public_key.clone(),
-                label: nook_core::MemberLabel::from_trusted(participant.label.clone()),
-            }
-        }));
-        operations.push(VaultOperation::SentinelSharesIssued {
-            shares: deliveries
-                .iter()
-                .map(|delivery| nook_core::SentinelShareIssuedPayload {
-                    device_id: delivery.device_id.clone(),
-                    version: delivery.share.version,
-                    threshold: delivery.share.threshold,
-                    required_participants: delivery.share.required_participants,
-                    share_index: delivery.share.share_index,
-                    ciphertext: delivery.share.ciphertext.clone(),
-                })
-                .collect(),
-        });
-        let body = nook_core::VaultEventBody {
-            schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
-            store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
-            actor_id,
-            actor_signing_public_key: signing.public_key(),
-            parents: Vec::new(),
-            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
-            key_epoch: EventId::parse(&key_epoch)?,
-            operations,
-        };
-        let genesis = nook_core::VaultEvent::sign(body, signing.signing_key())?;
-        let event_id = genesis.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&genesis)
-            .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
-        self.event_log.heads = vec![event_id.as_str().to_owned()];
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
-            .await?;
-        Ok(())
-    }
-
-    /// Idempotently finish the event-log portion of Sentinel genesis. If a crash
-    /// happened after event bytes were indexed but before heads were written,
-    /// rebuild heads from the existing graph rather than creating a second root.
-    pub(in crate::manager) async fn ensure_sentinel_genesis_event(
-        &mut self,
-        participants: &[nook_core::SentinelGenesisParticipant],
-        deliveries: &[nook_core::SentinelGenesisShareDelivery],
-    ) -> Result<(), NookError> {
-        let store = load_local_event_store(&self.vault.store_id).await?;
-        if store.event_ids().is_empty() {
-            return self
-                .bootstrap_sentinel_genesis_event(participants, deliveries)
-                .await;
-        }
-        self.activate_event_log_mode().await?;
-        let graph = store.load_graph(&self.vault.store_id)?;
-        self.event_log.heads = graph
-            .heads()
-            .into_iter()
-            .map(|head| head.as_str().to_owned())
-            .collect();
-        save_heads(&self.vault.store_id, &self.event_log.heads).await
-    }
-
-    pub(in crate::manager) async fn persist_vault_change(
-        &mut self,
-        operations: Vec<VaultOperation>,
-    ) -> Result<(), NookError> {
-        self.ensure_event_log_ready().await?;
-        if operations.is_empty() {
-            self.persist_projection_cache().await?;
-            self.flush_sync_event_outbox().await?;
-        } else {
-            self.append_vault_operations(operations).await?;
-        }
-        Ok(())
-    }
-
-    pub(in crate::manager) async fn sync_event_log_from_storage(
-        &mut self,
-    ) -> Result<bool, NookError> {
-        if !self.ensure_event_log_mode().await? {
-            return Ok(false);
-        }
-        let before = self.event_log.heads.clone();
-        self.sync_events_from_current_provider().await?;
-        let changed = self.event_log.heads != before;
-        if changed
-            && (self.vault.crypto.is_unlocked()
-                || self.ensure_vault_crypto_from_cache().await.is_ok())
-        {
-            self.apply_event_projection_to_session().await?;
-        }
-        Ok(changed)
     }
 
     fn rewrap_device_meta_for_epoch(
@@ -1282,24 +837,23 @@ mod tests {
         non_local_effect_before_unhandled_error,
         reason = "the contract records a typed sync issue before rejecting the remote store"
     )]
-    fn rejected_event_log_classification_is_available_as_a_typed_issue() {
+    fn rejected_event_log_classification_is_available_as_a_typed_issue() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         let classification = RemoteEventLogClassification::DifferentStore {
             local_store_id: "store_local12345".to_owned(),
             remote_store_id: "store_remote1234".to_owned(),
         };
 
-        match manager.guard_remote_event_log_classification("Sync provider", &classification) {
-            Ok(()) => panic!("different remote store must be rejected"),
-            Err(_) => {}
-        }
-        let issue = manager
-            .take_event_log_sync_issue()
-            .issue()
-            .expect("typed sync issue");
+        assert!(
+            manager
+                .guard_remote_event_log_classification("Sync provider", &classification)
+                .is_err()
+        );
+        let issue = manager.take_event_log_sync_issue().issue()?;
         assert!(issue.is_store_mismatch());
-        assert_eq!(issue.local_store_id().as_deref(), Some("store_local12345"));
-        assert_eq!(issue.remote_store_id().as_deref(), Some("store_remote1234"));
+        assert_eq!(issue.local_store_id()?, "store_local12345");
+        assert_eq!(issue.remote_store_id()?, "store_remote1234");
+        Ok(())
     }
 }
 

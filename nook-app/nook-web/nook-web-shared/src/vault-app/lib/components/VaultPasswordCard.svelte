@@ -20,9 +20,13 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import { takeWasmStringValue } from '$lib/wasm-string-value'
-
-  type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
+  import {
+    ActivePasswordEntryKind,
+    ResolvedPasswordEntryKind,
+    VaultPasswordPanel,
+    type ActivePasswordEntry,
+    type ResolvedPasswordEntry,
+  } from './vault-password-card-state'
 
   let {
     vault,
@@ -37,7 +41,7 @@
     onClearCode,
     embedded = false,
     allowIssueCode = true,
-    initialPanel = 'idle' as Panel,
+    initialPanel = VaultPasswordPanel.Idle,
     showWarningBanner = true,
   }: {
     vault: VaultState
@@ -51,14 +55,11 @@
       password: string,
     ) => void | Promise<void>
     onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (
-      entryId: PasswordEntryId,
-      password: string,
-    ) => Promise<string | void>
+    onIssueCode: (entryId: PasswordEntryId, password: string) => Promise<string>
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
-    initialPanel?: Panel
+    initialPanel?: VaultPasswordPanel
     showWarningBanner?: boolean
   } = $props()
 
@@ -66,8 +67,10 @@
     return initialPanel
   }
 
-  let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<PasswordEntryId>()
+  let panel = $state<VaultPasswordPanel>(resolveInitialPanel())
+  let activeEntryId = $state<ActivePasswordEntry>({
+    kind: ActivePasswordEntryKind.None,
+  })
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -76,13 +79,22 @@
   let localError = $state('')
 
   const hasPasswords = $derived(passwordEntries.length > 0)
-  const activeEntry = $derived(
-    passwordEntries.find((entry) => entry.id === activeEntryId) ?? undefined,
-  )
+  const activeEntry: ResolvedPasswordEntry = $derived.by(() => {
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) {
+      return { kind: ResolvedPasswordEntryKind.Unavailable } as const
+    }
+    const selectedEntryId = activeEntryId.entryId
+    const entry = passwordEntries.find((candidate) => {
+      return candidate.id === selectedEntryId
+    })
+    return entry
+      ? { kind: ResolvedPasswordEntryKind.Available, entry }
+      : { kind: ResolvedPasswordEntryKind.Unavailable }
+  })
 
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return undefined
-    return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode))
+    if (!enrollmentCode) return ''
+    return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
@@ -99,12 +111,17 @@
         mins: String(minutes),
       })
     const hours = Math.round(minutes / 60)
-    return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
+    return vault.t('vault_passwords.issued_hours_ago', {
+      hours: String(hours),
+    })
   })
 
-  function openPanel(target: Panel, entryId: string | undefined = undefined) {
+  function openPanel(
+    target: VaultPasswordPanel,
+    selection: ActivePasswordEntry,
+  ) {
     panel = target
-    activeEntryId = entryId
+    activeEntryId = selection
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -113,8 +130,8 @@
   }
 
   function closePanel() {
-    panel = 'idle'
-    activeEntryId = undefined
+    panel = VaultPasswordPanel.Idle
+    activeEntryId = { kind: ActivePasswordEntryKind.None }
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -146,7 +163,7 @@
 
   async function submitRotatePassword() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
@@ -156,7 +173,7 @@
       return
     }
     try {
-      await onUpdatePassword(activeEntryId, passwordInput)
+      await onUpdatePassword(activeEntryId.entryId, passwordInput)
       closePanel()
     } catch {
       // surfaced via prop
@@ -165,9 +182,9 @@
 
   async function submitRemove() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     try {
-      await onRemovePassword(activeEntryId)
+      await onRemovePassword(activeEntryId.entryId)
       closePanel()
     } catch {
       // surfaced via prop
@@ -176,13 +193,13 @@
 
   async function submitIssueCode() {
     localError = ''
-    if (!activeEntryId) return
+    if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!passwordInput) {
       localError = vault.t('vault_passwords.enter_pw_error')
       return
     }
     try {
-      await onIssueCode(activeEntryId, passwordInput)
+      await onIssueCode(activeEntryId.entryId, passwordInput)
       passwordInput = ''
       confirmInput = ''
     } catch (e: unknown) {
@@ -197,7 +214,7 @@
 <svelte:element
   this={embedded ? 'div' : 'section'}
   class={embedded
-    ? undefined
+    ? ''
     : 'rounded-xl border border-dashed border-border/70 bg-muted/15 p-4 sm:p-5'}
   data-testid="vault-password-card"
 >
@@ -248,7 +265,7 @@
     </p>
   {/if}
 
-  {#if panel === 'idle'}
+  {#if panel === VaultPasswordPanel.Idle}
     {#if passwordEntries.length > 0}
       <ul class="mb-4 space-y-3" data-testid="vault-password-list">
         {#each passwordEntries as entry (entry.id)}
@@ -273,29 +290,37 @@
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <Button
+                {...entry.id === passwordEntries[0]?.id
+                  ? { 'data-testid': 'rotate-vault-password-btn' }
+                  : {}}
                 type="button"
                 variant="ghost"
                 size="sm"
                 class="h-9 px-2.5"
                 disabled={isBusy}
-                data-testid={entry.id === passwordEntries[0]?.id
-                  ? 'rotate-vault-password-btn'
-                  : undefined}
-                onclick={() => openPanel('rotate', entry.id)}
+                onclick={() =>
+                  openPanel(VaultPasswordPanel.Rotate, {
+                    kind: ActivePasswordEntryKind.Selected,
+                    entryId: entry.id,
+                  })}
               >
                 <RefreshCw class="size-4" />
               </Button>
               {#if allowIssueCode}
                 <Button
+                  {...entry.id === passwordEntries[0]?.id
+                    ? { 'data-testid': 'issue-enrollment-code-btn' }
+                    : {}}
                   type="button"
                   variant="ghost"
                   size="sm"
                   class="h-9 px-2.5"
                   disabled={isBusy}
-                  data-testid={entry.id === passwordEntries[0]?.id
-                    ? 'issue-enrollment-code-btn'
-                    : undefined}
-                  onclick={() => openPanel('issue', entry.id)}
+                  onclick={() =>
+                    openPanel(VaultPasswordPanel.Issue, {
+                      kind: ActivePasswordEntryKind.Selected,
+                      entryId: entry.id,
+                    })}
                 >
                   <QrCode class="size-4" />
                   <span class="hidden sm:inline"
@@ -304,15 +329,19 @@
                 </Button>
               {/if}
               <Button
+                {...entry.id === passwordEntries[0]?.id
+                  ? { 'data-testid': 'remove-vault-password-btn' }
+                  : {}}
                 type="button"
                 variant="ghost"
                 size="sm"
                 class="h-9 px-2.5 text-destructive hover:text-destructive"
                 disabled={isBusy}
-                data-testid={entry.id === passwordEntries[0]?.id
-                  ? 'remove-vault-password-btn'
-                  : undefined}
-                onclick={() => openPanel('remove', entry.id)}
+                onclick={() =>
+                  openPanel(VaultPasswordPanel.Remove, {
+                    kind: ActivePasswordEntryKind.Selected,
+                    entryId: entry.id,
+                  })}
               >
                 <Trash2 class="size-4" />
               </Button>
@@ -327,7 +356,10 @@
       size="sm"
       disabled={isBusy}
       data-testid="set-vault-password-btn"
-      onclick={() => openPanel('add')}
+      onclick={() =>
+        openPanel(VaultPasswordPanel.Add, {
+          kind: ActivePasswordEntryKind.None,
+        })}
     >
       <Plus class="size-4" />
       {hasPasswords
@@ -336,15 +368,17 @@
     </Button>
   {/if}
 
-  {#if panel === 'add' || panel === 'rotate'}
+  {#if panel === VaultPasswordPanel.Add || panel === VaultPasswordPanel.Rotate}
     <form
       class="space-y-4"
       onsubmit={(event) => {
         event.preventDefault()
-        void (panel === 'add' ? submitAddPassword() : submitRotatePassword())
+        void (panel === VaultPasswordPanel.Add
+          ? submitAddPassword()
+          : submitRotatePassword())
       }}
     >
-      {#if panel === 'add'}
+      {#if panel === VaultPasswordPanel.Add}
         <div class="space-y-1.5">
           <label
             for="vault-pw-label"
@@ -361,16 +395,16 @@
             data-testid="vault-password-label"
           />
         </div>
-      {:else if activeEntry}
+      {:else if activeEntry.kind === ResolvedPasswordEntryKind.Available}
         <p class="text-xs text-muted-foreground">
           {vault.t('vault_passwords.rotating_for_prefix')}<span
-            class="font-medium text-foreground">{activeEntry.label}</span
+            class="font-medium text-foreground">{activeEntry.entry.label}</span
           >.
         </p>
       {/if}
       <div class="space-y-1.5">
         <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
-          {panel === 'add'
+          {panel === VaultPasswordPanel.Add
             ? vault.t('vault.fields.password')
             : vault.t('vault_passwords.new_password')}
         </label>
@@ -434,7 +468,7 @@
             {vault.t('vault_passwords.working')}
           {:else}
             <ShieldCheck class="size-3.5" />
-            {panel === 'add'
+            {panel === VaultPasswordPanel.Add
               ? vault.t('vault_passwords.add_password')
               : vault.t('vault_passwords.rotate')}
           {/if}
@@ -443,11 +477,11 @@
     </form>
   {/if}
 
-  {#if panel === 'remove' && activeEntry}
+  {#if panel === VaultPasswordPanel.Remove && activeEntry.kind === ResolvedPasswordEntryKind.Available}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
         {vault.t('vault_passwords.remove_body_prefix')}<span
-          class="font-medium text-foreground">{activeEntry.label}</span
+          class="font-medium text-foreground">{activeEntry.entry.label}</span
         >{vault.t('vault_passwords.remove_body_suffix')}
       </p>
       <div class="flex items-center justify-end gap-2">
@@ -479,7 +513,7 @@
     </div>
   {/if}
 
-  {#if panel === 'issue' && activeEntry}
+  {#if panel === VaultPasswordPanel.Issue && activeEntry.kind === ResolvedPasswordEntryKind.Available}
     <div class="space-y-4">
       {#if !enrollmentCode}
         <form
@@ -491,7 +525,8 @@
         >
           <p class="text-xs text-muted-foreground text-pretty">
             {vault.t('vault_passwords.issue_desc_prefix')}<span
-              class="font-medium text-foreground">{activeEntry.label}</span
+              class="font-medium text-foreground"
+              >{activeEntry.entry.label}</span
             >{vault.t('vault_passwords.issue_desc_suffix')}
           </p>
           <div class="space-y-1.5">
@@ -500,7 +535,7 @@
               class="text-sm font-medium text-muted-foreground"
             >
               {vault.t('vault_passwords.password_for', {
-                label: activeEntry.label,
+                label: activeEntry.entry.label,
               })}
             </label>
             <input

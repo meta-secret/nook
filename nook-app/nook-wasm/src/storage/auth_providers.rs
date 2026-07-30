@@ -9,12 +9,15 @@ use nook_core::{
     AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
     provider_credentials_are_presealed, seal_provider_credentials,
 };
+use serde::Serialize;
 
 use crate::NookError;
 
 const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
 const STATE_KEY: &str = "providers";
+const SCHEMA_KEY: &str = "providers-schema";
+const STORAGE_SCHEMA_VERSION: u32 = 1;
 
 fn idb_err(context: &str, error: impl std::fmt::Debug) -> NookError {
     NookError::IndexedDb(format!("{context}: {error:?}"))
@@ -57,8 +60,11 @@ async fn read_raw_snapshot() -> Result<serde_json::Value, NookError> {
     }
 }
 
-/// Persist a snapshot object under the `providers` key (structured-clone object,
-/// matching the shape the web layer and e2e seeders read directly).
+/// Persist the rollback-safe schema-1 projection under `providers`.
+///
+/// The semantic Rust enums remain the in-memory contract. The stored projection
+/// deliberately retains the original string-or-absent shape so a previous app
+/// build can read provider rows after rollback.
 async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), NookError> {
     let rexie = open_auth_db().await?;
     let transaction = rexie
@@ -69,12 +75,23 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
         .map_err(|e| idb_err("nook_auth store error", e))?;
     let key =
         serde_wasm_bindgen::to_value(STATE_KEY).map_err(|e| idb_err("nook_auth key error", e))?;
-    let value = serde_wasm_bindgen::to_value(snapshot)
+    let storage_value = nook_core::auth_snapshot_legacy_storage_value(snapshot)
+        .map_err(|e| idb_err("nook_auth compatibility projection error", e))?;
+    let value = storage_value
+        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| idb_err("nook_auth serialize error", e))?;
     store
         .put(&value, Some(&key))
         .await
         .map_err(|e| idb_err("nook_auth put error", e))?;
+    let schema_key =
+        serde_wasm_bindgen::to_value(SCHEMA_KEY).map_err(|e| idb_err("schema key error", e))?;
+    let schema_value = serde_wasm_bindgen::to_value(&STORAGE_SCHEMA_VERSION)
+        .map_err(|e| idb_err("schema version error", e))?;
+    store
+        .put(&schema_value, Some(&schema_key))
+        .await
+        .map_err(|e| idb_err("schema version put error", e))?;
     transaction
         .done()
         .await
@@ -171,7 +188,7 @@ mod wasm_idb_tests {
                 "nook",
                 "2026-06-24T00:00:00.000Z",
             )],
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         }
     }
 
@@ -179,135 +196,134 @@ mod wasm_idb_tests {
         github_snapshot_with_id("gh-wasm", pat)
     }
 
-    async fn clear_auth_snapshot() {
+    async fn clear_auth_snapshot() -> anyhow::Result<()> {
         write_snapshot(&AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         })
-        .await
-        .expect("clear auth snapshot");
+        .await?;
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn save_seals_github_pat_in_indexed_db() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn save_seals_github_pat_in_indexed_db() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11WASMtestSECRET";
-        save_auth_providers(&identity, &github_snapshot(pat))
-            .await
-            .expect("save");
-        let raw = read_raw_snapshot().await.expect("read raw");
-        let stored_pat = raw["providers"][0]["githubPat"]
-            .as_str()
-            .expect("githubPat");
+        save_auth_providers(&identity, &github_snapshot(pat)).await?;
+        let raw = read_raw_snapshot().await?;
+        let stored_pat = raw["providers"][0]["githubPat"].as_str()?;
         assert!(nook_core::is_sealed_credential(stored_pat));
         assert!(!stored_pat.contains("WASMtestSECRET"));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn load_decrypts_sealed_github_pat() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn load_decrypts_sealed_github_pat() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_22LOADroundTRIP";
-        save_auth_providers(&identity, &github_snapshot(pat))
-            .await
-            .expect("save");
-        let loaded = load_auth_providers(&identity).await.expect("load");
+        save_auth_providers(&identity, &github_snapshot(pat)).await?;
+        let loaded = load_auth_providers(&identity).await?;
         assert_eq!(
             loaded.snapshot.providers[0].github_pat.as_deref(),
             Some(pat)
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn load_rejects_plaintext_credentials() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn load_rejects_plaintext_credentials() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_33PLAINTEXT";
-        write_snapshot(&github_snapshot(pat))
-            .await
-            .expect("write plaintext");
+        write_snapshot(&github_snapshot(pat)).await?;
         assert!(load_auth_providers(&identity).await.is_err());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn save_seals_oauth_tokens_in_indexed_db() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn save_seals_oauth_tokens_in_indexed_db() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let access = "ya29.wasm-oauth-access";
         let refresh = "1//wasm-refresh-secret";
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
                 id: "gd-wasm".to_owned(),
-                provider_type: "oauth-file".to_owned(),
+                provider_type: nook_core::StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: None,
-                github_repo: None,
-                oauth_file: Some(OAuthFileConfigData {
-                    preset: OauthFilePreset::GoogleDrive,
-                    access_token: access.to_owned(),
-                    refresh_token: Some(refresh.to_owned()),
-                    expires_at: None,
-                    file_id: None,
-                    file_name: Some("nook-events".to_owned()),
-                    account_email: None,
-                    drive_mode: nook_core::GoogleDriveMode::Private,
-                    folder_id: None,
-                    icloud_mode: ICloudMode::Private,
-                    icloud_share_target: None,
-                }),
-                local_folder: None,
-                store_id: None,
+                github_pat: nook_core::StoredGithubPat::Missing,
+                github_repo: nook_core::StoredGithubRepository::DefaultRepository,
+                oauth_file: nook_core::StoredOAuthFileConfiguration::configured(
+                    OAuthFileConfigData {
+                        preset: OauthFilePreset::GoogleDrive,
+                        access_token: nook_core::StoredOAuthAccessCredential::AccessToken(
+                            access.to_owned(),
+                        ),
+                        refresh_token: nook_core::StoredOAuthRefreshCredential::Token(
+                            refresh.to_owned(),
+                        ),
+                        expires_at: nook_core::StoredOAuthTokenExpiry::Unknown,
+                        file_id: nook_core::StoredOAuthRemoteFileId::Unresolved,
+                        file_name: nook_core::StoredOAuthRemoteFileName::FileName(
+                            "nook-events".to_owned(),
+                        ),
+                        account_email: nook_core::StoredOAuthAccountIdentity::Unknown,
+                        drive_mode: nook_core::GoogleDriveMode::Private,
+                        folder_id: nook_core::StoredGoogleDriveFolder::Root,
+                        icloud_mode: ICloudMode::Private,
+                        icloud_share_target: nook_core::StoredICloudShareTarget::Personal,
+                    },
+                ),
+                local_folder: nook_core::StoredLocalFolderConfiguration::NotApplicable,
+                store_id: nook_core::ProviderVaultScope::Unscoped,
                 sync_checkpoint: nook_core::ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: None,
+            active_vault_store_id: nook_core::ActiveVaultScope::Unselected,
         };
-        save_auth_providers(&identity, &snapshot)
-            .await
-            .expect("save");
-        let raw = read_raw_snapshot().await.expect("read raw");
+        save_auth_providers(&identity, &snapshot).await?;
+        let raw = read_raw_snapshot().await?;
         let oauth = &raw["providers"][0]["oauthFile"];
-        let stored_access = oauth["accessToken"].as_str().expect("accessToken");
-        let stored_refresh = oauth["refreshToken"].as_str().expect("refreshToken");
+        let stored_access = oauth["accessToken"].as_str()?;
+        let stored_refresh = oauth["refreshToken"].as_str()?;
         assert!(nook_core::is_sealed_credential(stored_access));
         assert!(nook_core::is_sealed_credential(stored_refresh));
         assert!(!stored_access.contains(access));
         assert!(!stored_refresh.contains(refresh));
 
-        let loaded = load_auth_providers(&identity).await.expect("load");
-        let loaded_oauth = loaded.snapshot.providers[0]
-            .oauth_file
-            .as_ref()
-            .expect("oauth");
+        let loaded = load_auth_providers(&identity).await?;
+        let loaded_oauth = loaded.snapshot.providers[0].oauth_file.as_ref()?;
         assert_eq!(loaded_oauth.access_token, access);
         assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() -> anyhow::Result<()>
+    {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_existing");
-        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        existing.providers[0].store_id =
+            nook_core::ProviderVaultScope::StoreId("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
             .providers
             .remove(0);
-        retained.store_id = Some("store-other".to_owned());
+        retained.store_id = nook_core::ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
-        existing.active_vault_store_id = Some("store-incoming".to_owned());
-        save_auth_providers(&identity, &existing)
-            .await
-            .expect("save existing");
+        existing.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
+        save_auth_providers(&identity, &existing).await?;
 
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
-        incoming.active_vault_store_id = Some("store-incoming".to_owned());
-        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
-        save_presealed_auth_providers(&incoming)
-            .await
-            .expect("merge presealed");
+        incoming.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
+        seal_provider_credentials(&identity, &mut incoming)?;
+        save_presealed_auth_providers(&incoming).await?;
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
         let mut provider_ids = stored
             .providers
@@ -321,21 +337,21 @@ mod wasm_idb_tests {
             Some("store-incoming")
         );
         assert!(provider_credentials_are_presealed(&stored));
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_save_rejects_existing_plaintext_provider_rows() {
-        clear_auth_snapshot().await;
+    async fn presealed_save_rejects_existing_plaintext_provider_rows() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
         write_snapshot(&github_snapshot_with_id(
             "gh-plaintext",
             "github_pat_plaintext",
         ))
-        .await
-        .expect("write plaintext");
+        .await?;
 
-        let identity = DeviceIdentity::generate().expect("identity");
+        let identity = DeviceIdentity::generate()?;
         let mut incoming = github_snapshot_with_id("gh-incoming", "github_pat_incoming");
-        seal_provider_credentials(&identity, &mut incoming).expect("seal incoming");
+        seal_provider_credentials(&identity, &mut incoming)?;
         let result = save_presealed_auth_providers(&incoming).await;
         assert!(matches!(
             result,
@@ -343,37 +359,39 @@ mod wasm_idb_tests {
                 if message == "auth-provider-credential-must-be-encrypted"
         ));
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         assert_eq!(
             raw["providers"][0]["githubPat"].as_str(),
             Some("github_pat_plaintext")
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    async fn presealed_empty_save_clears_only_the_incoming_vault() {
-        clear_auth_snapshot().await;
-        let identity = DeviceIdentity::generate().expect("identity");
+    async fn presealed_empty_save_clears_only_the_incoming_vault() -> anyhow::Result<()> {
+        clear_auth_snapshot().await?;
+        let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_removed");
-        existing.providers[0].store_id = Some("store-incoming".to_owned());
+        existing.providers[0].store_id =
+            nook_core::ProviderVaultScope::StoreId("store-incoming".to_owned());
         let mut retained = github_snapshot_with_id("gh-retained", "github_pat_retained")
             .providers
             .remove(0);
-        retained.store_id = Some("store-other".to_owned());
+        retained.store_id = nook_core::ProviderVaultScope::StoreId("store-other".to_owned());
         existing.providers.push(retained);
-        existing.active_vault_store_id = Some("store-incoming".to_owned());
-        save_auth_providers(&identity, &existing)
-            .await
-            .expect("save existing");
+        existing.active_vault_store_id =
+            nook_core::ActiveVaultScope::StoreId("store-incoming".to_owned());
+        save_auth_providers(&identity, &existing).await?;
 
         save_presealed_auth_providers(&AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: Some("store-incoming".to_owned()),
+            active_vault_store_id: nook_core::ActiveVaultScope::StoreId(
+                "store-incoming".to_owned(),
+            ),
         })
-        .await
-        .expect("replace with empty provider set");
+        .await?;
 
-        let raw = read_raw_snapshot().await.expect("read raw");
+        let raw = read_raw_snapshot().await?;
         let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
         assert_eq!(stored.providers.len(), 1);
         assert_eq!(stored.providers[0].id, "gh-retained");
@@ -381,5 +399,6 @@ mod wasm_idb_tests {
             stored.active_vault_store_id.as_deref(),
             Some("store-incoming")
         );
+        Ok(())
     }
 }

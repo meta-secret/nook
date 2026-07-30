@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow};
+use crate::HiveContext;
 use codex::Arg0DispatchPaths;
 use rand::RngExt;
 use sha2::{Digest, Sha256};
@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::auth::BrokerExternalAuth;
 use crate::codex::{CodexOptions, InProcessCodexRunner};
-use crate::delivery::{verify_main_repair_delivery, verify_main_repair_merge_and_main};
+use crate::delivery::verify_main_repair_delivery;
 use crate::model::{
     ActivityLease, AgentId, Artifact, BlockerRequest, ClaimedTask, CompletionArtifact, EnqueueTask,
     TaskActivity, TaskTrigger, TerminalResult,
@@ -21,10 +21,13 @@ use crate::model::{
 use crate::store::TaskStore;
 
 mod lifecycle;
-
+mod task_prompt;
+mod workspace;
 use lifecycle::{
     ClaimStep, claim_once, establish_worker_lifecycle, mark_interrupted, shutdown_requested,
 };
+use task_prompt::*;
+use workspace::*;
 
 const MAX_PERSISTED_RESULT_BYTES: usize = 64 * 1024;
 const MAX_PERSISTED_PATCH_BYTES: usize = 1024 * 1024;
@@ -56,12 +59,12 @@ impl<S: TaskStore> Worker<S> {
         Self { store, config }
     }
 
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self) -> crate::HiveResult<()> {
         establish_worker_lifecycle(&self.config.workspace, &self.config.pod_name)?;
         let external_auth = BrokerExternalAuth::connect(&self.config.auth_socket).await?;
         let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
         if lifecycle_marker.exists() {
-            return Err(anyhow!(
+            return Err(crate::hive_error!(
                 "refusing to reuse a Pod that already finished a Hive task"
             ));
         }
@@ -71,10 +74,10 @@ impl<S: TaskStore> Worker<S> {
             .await?;
         tokio::fs::write(self.config.workspace.join(".hive-worker-ready"), b"ready")
             .await
-            .context("failed to publish worker readiness")?;
+            .hive_context("failed to publish worker readiness")?;
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .context("failed to install the worker termination handler")?;
+                .hive_context("failed to install the worker termination handler")?;
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         tokio::spawn(async move {
             if terminate.recv().await.is_some() {
@@ -88,8 +91,8 @@ impl<S: TaskStore> Worker<S> {
                     tokio::fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
                 tokio::fs::write(&lifecycle_marker, b"auth-channel-unavailable")
                     .await
-                    .context("mark failed auth channel for Pod replacement")?;
-                return Err(anyhow!(
+                    .hive_context("mark failed auth channel for Pod replacement")?;
+                return Err(crate::hive_error!(
                     "Hive auth channel failed before a task claim; replacing the Pod without \
                      consuming an attempt: {error}"
                 ));
@@ -125,35 +128,32 @@ impl<S: TaskStore> Worker<S> {
         };
         let result = self.execute(&task, external_auth, shutdown_rx).await;
         if let Err(error) = result {
-            if error.downcast_ref::<WorkerBlocked>().is_some() {
+            if matches!(error, crate::HiveError::WorkerBlocked) {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
                     .await
-                    .context("failed to mark the blocked Pod for replacement")?;
+                    .hive_context("failed to mark the blocked Pod for replacement")?;
                 return Ok(());
             }
-            if error.downcast_ref::<WorkerInterrupted>().is_some() {
+            if matches!(error, crate::HiveError::WorkerInterrupted) {
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
                     .await
-                    .context("failed to mark the interrupted Pod for replacement")?;
+                    .hive_context("failed to mark the interrupted Pod for replacement")?;
                 return Ok(());
             }
-            if error
-                .downcast_ref::<WorkerCancellationRequested>()
-                .is_some()
-            {
+            if matches!(error, crate::HiveError::WorkerCancellationRequested) {
                 let acknowledged = self
                     .store
                     .acknowledge_cancellation(&task, &self.config.agent_id)
                     .await
-                    .context("failed to acknowledge task cancellation")?;
+                    .hive_context("failed to acknowledge task cancellation")?;
                 if !acknowledged {
-                    return Err(anyhow!(
+                    return Err(crate::hive_error!(
                         "task cancellation acknowledgement was rejected because the lease is stale"
                     ));
                 }
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
                     .await
-                    .context("failed to mark the cancelled Pod for replacement")?;
+                    .hive_context("failed to mark the cancelled Pod for replacement")?;
                 return Ok(());
             }
             let message = bounded(&format!("{error:#}"));
@@ -163,14 +163,14 @@ impl<S: TaskStore> Worker<S> {
                 .await;
             tokio::fs::write(&lifecycle_marker, task.id.as_str())
                 .await
-                .context("failed to mark the Pod for replacement")?;
-            return Err(anyhow!(
+                .hive_context("failed to mark the Pod for replacement")?;
+            return Err(crate::hive_error!(
                 "Hive task failed; bounded details were persisted in Neo4j"
             ));
         }
         tokio::fs::write(&lifecycle_marker, task.id.as_str())
             .await
-            .context("failed to mark the Pod for replacement")?;
+            .hive_context("failed to mark the Pod for replacement")?;
         Ok(())
     }
 
@@ -179,7 +179,7 @@ impl<S: TaskStore> Worker<S> {
         task: &ClaimedTask,
         external_auth: std::sync::Arc<BrokerExternalAuth>,
         shutdown: watch::Receiver<bool>,
-    ) -> anyhow::Result<()> {
+    ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
         let mut heartbeat = tokio::spawn(heartbeat_loop(
             self.store.clone(),
@@ -233,11 +233,15 @@ impl<S: TaskStore> Worker<S> {
                          actual task yet. Return the required completed terminal result.",
                         )
                         .await
-                        .context("embedded Codex dependency resolution failed")?;
+                        .hive_context("embedded Codex dependency resolution failed")?;
                         let result: TerminalResult = serde_json::from_str(&resolution)
-                            .context("Codex returned an invalid dependency resolution result")?;
+                            .hive_context(
+                                "Codex returned an invalid dependency resolution result",
+                            )?;
                         if !matches!(result, TerminalResult::Completed { .. }) {
-                            return Err(anyhow!("Codex could not integrate dependency artifacts"));
+                            return Err(crate::hive_error!(
+                                "Codex could not integrate dependency artifacts"
+                            ));
                         }
                         ensure_dependencies_resolved(&repository).await?;
                         commit_dependency_baseline(&repository).await?
@@ -257,9 +261,9 @@ impl<S: TaskStore> Worker<S> {
                         InProcessCodexRunner::with_external_auth(codex_options, external_auth)
                             .execute_task(task.id.as_str(), &prompt)
                             .await
-                            .context("embedded Codex execution failed")?;
+                            .hive_context("embedded Codex execution failed")?;
                     let result: TerminalResult = serde_json::from_str(&raw_result)
-                        .context("Codex returned an invalid terminal result")?;
+                        .hive_context("Codex returned an invalid terminal result")?;
                     if let TerminalResult::Blocked {
                         summary, blocker, ..
                     } = &result
@@ -268,14 +272,16 @@ impl<S: TaskStore> Worker<S> {
                     }
                     let obsolete = completion_is_obsolete(task, &result);
                     if obsolete {
-                        anyhow::ensure!(
-                            !task.owning_repairs.is_empty(),
-                            "obsolete blocker retirement requires active owning Main repairs"
-                        );
-                        anyhow::ensure!(
-                            result.changed_files().is_empty(),
-                            "obsolete blocker retirement cannot report changed files"
-                        );
+                        if task.owning_repairs.is_empty() {
+                            crate::hive_bail!(
+                                "obsolete blocker retirement requires active owning Main repairs"
+                            );
+                        }
+                        if !result.changed_files().is_empty() {
+                            crate::hive_bail!(
+                                "obsolete blocker retirement cannot report changed files"
+                            );
+                        }
                         verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
                     }
                     if task.kind == "main-repair" {
@@ -301,13 +307,12 @@ impl<S: TaskStore> Worker<S> {
                         preparation.resumed,
                     )
                     .await?;
-                    if obsolete {
-                        anyhow::ensure!(
-                            matches!(artifact, CompletionArtifact::NotProduced),
+                    if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
+                        crate::hive_bail!(
                             "obsolete blocker retirement cannot persist a patch artifact"
                         );
                     }
-                    Ok::<TaskDisposition, anyhow::Error>(TaskDisposition::Completed {
+                    Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
                         artifact,
                         obsolete,
@@ -317,8 +322,8 @@ impl<S: TaskStore> Worker<S> {
                 drop(activity_tx);
                 activity_persistence
                     .await
-                    .context("task activity persistence panicked")??;
-                let terminal_result: anyhow::Result<()> = match task_result? {
+                    .hive_context("task activity persistence panicked")??;
+                let terminal_result: crate::HiveResult<()> = match task_result? {
                     TaskDisposition::Completed {
                         summary,
                         artifact,
@@ -372,39 +377,41 @@ impl<S: TaskStore> Worker<S> {
                 let completion_committed = matches!(&execution, Ok(Ok(())));
                 let heartbeat_result = heartbeat
                     .await
-                    .context("heartbeat task panicked")?;
+                    .hive_context("heartbeat task panicked")?;
                 if !completion_committed {
-                    heartbeat_result.context("lease heartbeat failed")?;
+                    heartbeat_result.hive_context("lease heartbeat failed")?;
                 }
-                execution.map_err(|_| anyhow!("task timed out"))??
+                execution.map_err(|_| crate::hive_error!("task timed out"))??
             }
             heartbeat_result = &mut heartbeat => {
                 let heartbeat_result = heartbeat_result
-                    .context("heartbeat task panicked")?
-                    .context("lease heartbeat failed");
+                    .hive_context("heartbeat task panicked")?
+                    .hive_context("lease heartbeat failed");
                 if heartbeat_result
                     .as_ref()
-                    .is_err_and(|error| error.downcast_ref::<WorkerCancellationRequested>().is_some())
+                    .is_err_and(|error| {
+                        matches!(error, crate::HiveError::WorkerCancellationRequested)
+                    })
                 {
                     return Err(WorkerCancellationRequested.into());
                 }
                 heartbeat_result?;
-                return Err(anyhow!("lease heartbeat stopped before task execution"));
+                return Err(crate::hive_error!("lease heartbeat stopped before task execution"));
             }
             shutdown = shutdown_requested(shutdown) => {
                 shutdown?;
                 let _ = stop_tx.send(true);
                 heartbeat
                     .await
-                    .context("heartbeat task panicked")?
-                    .context("lease heartbeat failed during termination")?;
+                    .hive_context("heartbeat task panicked")?
+                    .hive_context("lease heartbeat failed during termination")?;
                 let released = self
                     .store
                     .release(task, &self.config.agent_id)
                     .await
-                    .context("failed to release the task during termination")?;
+                    .hive_context("failed to release the task during termination")?;
                 if !released {
-                    return Err(anyhow!("task release was rejected because the lease is stale"));
+                    return Err(crate::hive_error!("task release was rejected because the lease is stale"));
                 }
                 return Err(WorkerInterrupted.into());
             }
@@ -418,7 +425,7 @@ async fn persist_activity<S: TaskStore>(
     agent_id: AgentId,
     task: ClaimedTask,
     mut receiver: mpsc::UnboundedReceiver<TaskActivity>,
-) -> anyhow::Result<()> {
+) -> crate::HiveResult<()> {
     let lease = ActivityLease::from(&task);
     while let Some(activity) = receiver.recv().await {
         if !store.record_activity(&lease, &agent_id, &activity).await? {
@@ -480,524 +487,22 @@ fn blocked_disposition(
 #[error("worker cancellation requested")]
 struct WorkerCancellationRequested;
 
-async fn heartbeat_loop<S: TaskStore>(
-    store: S,
-    agent_id: AgentId,
-    task: ClaimedTask,
-    lease_seconds: i64,
-    heartbeat_seconds: u64,
-    mut stop: watch::Receiver<bool>,
-) -> anyhow::Result<()> {
-    let mut interval = tokio::time::interval(Duration::from_secs(heartbeat_seconds));
-    let mut renewal = 0_u64;
-    interval.tick().await;
-    loop {
-        tokio::select! {
-            changed = stop.changed() => {
-                if changed.is_err() || *stop.borrow() {
-                    return Ok(());
-                }
-            }
-            _ = interval.tick() => {
-                let accepted = store
-                    .heartbeat(
-                        &task.id,
-                        &agent_id,
-                        &task.lease_token,
-                        lease_seconds,
-                    )
-                    .await?;
-                if !accepted {
-                    return Err(WorkerCancellationRequested.into());
-                }
-                renewal += 1;
-                eprintln!(
-                    "Hive lease heartbeat accepted task={} renewal={renewal}",
-                    task.id
-                );
-            }
-        }
+impl From<WorkerInterrupted> for crate::HiveError {
+    fn from(_: WorkerInterrupted) -> Self {
+        Self::WorkerInterrupted
     }
 }
 
-async fn prepare_workspace(
-    workspace: &Path,
-    repository_url: &str,
-    source_commit: &str,
-    resume_branch: Option<&str>,
-    dependency_artifacts: &[Artifact],
-) -> anyhow::Result<WorkspacePreparation> {
-    tokio::fs::create_dir_all(workspace.join("task")).await?;
-    tokio::fs::create_dir_all(workspace.join("output")).await?;
-    tokio::fs::create_dir_all(workspace.join("temporary")).await?;
-    let repository = workspace.join("repository");
-    if repository.join(".git").is_dir() {
-        return Err(anyhow!(
-            "refusing to reuse a repository left by an earlier worker process"
-        ));
+impl From<WorkerBlocked> for crate::HiveError {
+    fn from(_: WorkerBlocked) -> Self {
+        Self::WorkerBlocked
     }
-    tokio::fs::create_dir_all(&repository).await?;
-    let status = Command::new("git")
-        .arg("init")
-        .arg("--quiet")
-        .arg(&repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .context("failed to initialize the task repository")?;
-    if !status.success() {
-        return Err(anyhow!("git init failed with status {status}"));
-    }
-    run_git_status(
-        &repository,
-        &["remote", "add", "origin", repository_url],
-        "configure the task repository remote",
-    )
-    .await?;
-    run_git_status(
-        &repository,
-        &["fetch", "--depth=1", "origin", source_commit],
-        "fetch the pinned task revision",
-    )
-    .await?;
-    let mut did_resume = false;
-    if let Some(branch) = resume_branch {
-        let resumed = Command::new("git")
-            .args([
-                "fetch",
-                "--depth=100",
-                "origin",
-                &format!("refs/heads/{branch}"),
-            ])
-            .current_dir(&repository)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await?;
-        if resumed.success() {
-            run_git_status(
-                &repository,
-                &["checkout", "--quiet", "-B", branch, "FETCH_HEAD"],
-                "resume the durable Hive repair branch",
-            )
-            .await?;
-            run_git_status(
-                &repository,
-                &["merge-base", "--is-ancestor", source_commit, "HEAD"],
-                "verify the repair branch descends from its pinned revision",
-            )
-            .await?;
-            did_resume = true;
-        }
-    }
-    if !did_resume {
-        run_git_status(
-            &repository,
-            &["checkout", "--quiet", "--detach", source_commit],
-            "check out the pinned task revision",
-        )
-        .await?;
-    }
-    validate_dependency_artifacts(dependency_artifacts)?;
-    let mut applied_dependency = false;
-    for (index, artifact) in dependency_artifacts.iter().enumerate() {
-        if did_resume && patch_is_already_applied(&repository, artifact).await? {
-            continue;
-        }
-        let mut child = Command::new("git")
-            .args(["apply", "--3way", "--index", "--binary", "-"])
-            .current_dir(&repository)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context("failed to apply a dependency artifact")?;
-        child
-            .stdin
-            .take()
-            .context("dependency patch stdin was unavailable")?
-            .write_all(artifact.content.as_bytes())
-            .await
-            .context("failed to stream a dependency patch")?;
-        let status = child
-            .wait()
-            .await
-            .context("dependency patch process failed")?;
-        if !status.success() {
-            let unmerged = git_output(&repository, &["diff", "--name-only", "--diff-filter=U"])
-                .await
-                .context("inspect dependency conflicts")?;
-            if unmerged.trim().is_empty() {
-                return Err(anyhow!(
-                    "dependency artifact {} failed to apply with status {status}",
-                    artifact.id
-                ));
-            }
-            let pending = repository.join(".hive-pending");
-            tokio::fs::create_dir(&pending).await?;
-            for (pending_index, pending_artifact) in
-                dependency_artifacts.iter().enumerate().skip(index + 1)
-            {
-                tokio::fs::write(
-                    pending.join(format!("{pending_index:04}.patch")),
-                    pending_artifact.content.as_bytes(),
-                )
-                .await?;
-            }
-            return Ok(WorkspacePreparation {
-                baseline: String::new(),
-                conflicted: true,
-                resumed: did_resume,
-            });
-        }
-        applied_dependency = true;
-    }
-    if applied_dependency {
-        let baseline = commit_dependency_baseline(&repository).await?;
-        return Ok(WorkspacePreparation {
-            baseline,
-            conflicted: false,
-            resumed: did_resume,
-        });
-    }
-    Ok(WorkspacePreparation {
-        baseline: git_output(&repository, &["rev-parse", "HEAD"]).await?,
-        conflicted: false,
-        resumed: did_resume,
-    })
 }
 
-fn validate_dependency_artifacts(dependency_artifacts: &[Artifact]) -> anyhow::Result<()> {
-    for artifact in dependency_artifacts {
-        if artifact.kind != "git-patch" {
-            return Err(anyhow!(
-                "dependency artifact {} has unsupported kind {}",
-                artifact.id,
-                artifact.kind
-            ));
-        }
-        let digest = Sha256::digest(artifact.content.as_bytes());
-        let digest = format!(
-            "sha256:{}",
-            digest.iter().fold(
-                String::with_capacity(digest.len() * 2),
-                |mut encoded, byte| {
-                    let _ = write!(encoded, "{byte:02x}");
-                    encoded
-                },
-            )
-        );
-        if digest != artifact.digest {
-            return Err(anyhow!(
-                "dependency artifact {} failed digest verification",
-                artifact.id
-            ));
-        }
+impl From<WorkerCancellationRequested> for crate::HiveError {
+    fn from(_: WorkerCancellationRequested) -> Self {
+        Self::WorkerCancellationRequested
     }
-    Ok(())
-}
-
-async fn patch_is_already_applied(repository: &Path, artifact: &Artifact) -> anyhow::Result<bool> {
-    let mut child = Command::new("git")
-        .args(["apply", "--reverse", "--check", "--binary", "-"])
-        .current_dir(repository)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .context("failed to inspect a resumed dependency artifact")?;
-    child
-        .stdin
-        .take()
-        .context("dependency reverse-check stdin was unavailable")?
-        .write_all(artifact.content.as_bytes())
-        .await
-        .context("failed to stream a dependency reverse check")?;
-    Ok(child
-        .wait()
-        .await
-        .context("dependency reverse-check process failed")?
-        .success())
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct WorkspacePreparation {
-    baseline: String,
-    conflicted: bool,
-    resumed: bool,
-}
-
-async fn ensure_dependencies_resolved(repository: &Path) -> anyhow::Result<()> {
-    let unmerged = git_output(repository, &["diff", "--name-only", "--diff-filter=U"]).await?;
-    if !unmerged.trim().is_empty() {
-        anyhow::bail!("dependency integration left unresolved Git conflicts");
-    }
-    if repository.join(".hive-pending").exists() {
-        anyhow::bail!("dependency integration did not apply every pending patch");
-    }
-    Ok(())
-}
-
-async fn commit_dependency_baseline(repository: &Path) -> anyhow::Result<String> {
-    run_git_status(
-        repository,
-        &["add", "--all", "--", "."],
-        "stage dependency artifacts",
-    )
-    .await?;
-    run_git_status(
-        repository,
-        &[
-            "-c",
-            "user.name=Hive",
-            "-c",
-            "user.email=hive@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "Apply completed Hive dependencies",
-        ],
-        "commit dependency artifact baseline",
-    )
-    .await?;
-    git_output(repository, &["rev-parse", "HEAD"]).await
-}
-
-async fn git_output(repository: &Path, arguments: &[&str]) -> anyhow::Result<String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .context("failed to execute git")?;
-    if !output.status.success() {
-        anyhow::bail!("git {:?} failed with status {}", arguments, output.status);
-    }
-    String::from_utf8(output.stdout)
-        .context("git output is not UTF-8")
-        .map(|value| value.trim().to_owned())
-}
-
-async fn run_git_status(
-    repository: &Path,
-    arguments: &[&str],
-    operation: &str,
-) -> anyhow::Result<()> {
-    let status = Command::new("git")
-        .args(arguments)
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-        .await
-        .with_context(|| format!("failed to {operation}"))?;
-    if !status.success() {
-        anyhow::bail!("{operation} failed with status {status}");
-    }
-    Ok(())
-}
-
-async fn persistable_patch(
-    repository: &Path,
-    baseline: &str,
-    task: &ClaimedTask,
-    result: &TerminalResult,
-    resumed: bool,
-) -> anyhow::Result<CompletionArtifact> {
-    let add_status = Command::new("git")
-        .args(["add", "--intent-to-add", "--", "."])
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .context("failed to stage untracked files for patch persistence")?;
-    if !add_status.success() {
-        return Err(anyhow!(
-            "git add --intent-to-add failed with status {add_status}"
-        ));
-    }
-
-    let output = Command::new("git")
-        .args(["diff", "--binary", "--no-ext-diff", baseline, "--", "."])
-        .current_dir(repository)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .context("failed to collect the durable task patch")?;
-    if !output.status.success() {
-        return Err(anyhow!("git diff failed with status {}", output.status));
-    }
-    if output.stdout.len() > MAX_PERSISTED_PATCH_BYTES {
-        return Err(anyhow!(
-            "task patch exceeds the {} byte prototype limit",
-            MAX_PERSISTED_PATCH_BYTES
-        ));
-    }
-    if output.stdout.is_empty() {
-        if !resumed && !result.changed_files().is_empty() {
-            return Err(anyhow!(
-                "Codex reported changed files but produced no persistable git patch"
-            ));
-        }
-        return Ok(CompletionArtifact::NotProduced);
-    }
-
-    let content = String::from_utf8(output.stdout).context("task patch is not UTF-8")?;
-    let digest = Sha256::digest(content.as_bytes());
-    let digest = digest.iter().fold(
-        String::with_capacity(digest.len() * 2),
-        |mut encoded, byte| {
-            let _ = write!(encoded, "{byte:02x}");
-            encoded
-        },
-    );
-    let id = format!("{}:git-patch", task.attempt_id);
-    Ok(CompletionArtifact::Produced(Artifact {
-        uri: format!("hive://artifact/{id}"),
-        id,
-        kind: "git-patch".to_owned(),
-        digest: format!("sha256:{digest}"),
-        content,
-    }))
-}
-
-fn task_prompt(task: &ClaimedTask) -> String {
-    let owning_repairs = if task.owning_repairs.is_empty() {
-        "No active owning Main repairs.".to_owned()
-    } else {
-        task.owning_repairs
-            .iter()
-            .map(|owner| {
-                format!(
-                    "- {} (delivery branch `{}`)",
-                    owner,
-                    repair_branch_name(owner.as_str())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    let dependencies = if task.dependency_context.is_empty() {
-        "No dependency results.".to_owned()
-    } else {
-        task.dependency_context
-            .iter()
-            .map(|dependency| format!("- {}: {}", dependency.id, dependency.summary))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    let delivery = if task.kind == "main-repair" {
-        let branch = repair_branch_name(task.id.as_str());
-        format!(
-            "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
-         You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
-         `git`, `gh`, and repository Taskfile commands; run `gh auth setup-git` before the first \
-         authenticated Git push. Reuse or create the deterministic branch \
-         `{branch}` (or the next `-gN` generation after a closed or red-Main delivery), publish \
-         the repair PR with a `[Hive]` title and both the `hive` and \
-         `ci:full-e2e` labels, traverse all \
-         checks and review feedback, fix and reply \
-         to every actionable item, run `task hive:guest:pr:ready PR=<number>` for the exact-head \
-         readiness audit, squash-merge, verify the \
-         resulting Main workflow is green, and publish the required Workbench completion records \
-         and statistics. Inspect GitHub first because a replacement Pod may be resuming a branch, \
-         PR, merge, or Main verification completed by an earlier attempt. A merged generation is \
-         not finished when it has unresolved actionable review: create the next `-gN` delivery \
-         branch from current `origin/main`, implement the follow-up there, open and own a new \
-         marked Hive PR, then reply to the original review threads with the follow-up link. Keep \
-         those original threads unresolved until the follow-up is successfully merged, then resolve \
-         them before reporting completion. Do not repeatedly audit an immutable merged branch. Do not report completed \
-         before the squash merge and green Main verification. If blocked by another change, report \
-         structured blocked status and identify the blocker precisely."
-        )
-    } else if task.kind == "blocker" {
-        "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
-         prerequisite yourself using the available repository and GitHub access. When the task \
-         names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
-         belongs to an open repair PR, check out that existing PR branch, fix it there, push a \
-         replacement exact-head run, and follow it to a terminal result. Before doing work or \
-         reporting another blocker, inspect every active owning Main repair listed below. Only when \
-         every listed repair has already been merged and has a successful Main run containing its \
-         merge is this prerequisite obsolete: report completed with `obsolete` set to true, no \
-         changes, and explain that it no longer blocks delivery, even when the requested capability \
-         remains unavailable. For every genuine prerequisite completion and every non-blocker task, \
-         set `obsolete` to false. When \
-         no owning repair is listed, or any listed repair is still live, do not use this \
-         obsolescence rule. Never extend an obsolete blocker chain. Never report this task's own id \
-         as its blocker and never create a duplicate repair PR. Report blocked only for a genuinely \
-         separate prerequisite, using a distinct stable blocker id and an actionable prompt that \
-         another worker can complete."
-            .to_owned()
-    } else {
-        String::new()
-    };
-    format!(
-        "You are Hive worker attempt {} for task {}.\n\
-         Work only inside the supplied repository workspace.\n\
-         Complete the task and return the required structured terminal result.\n\n\
-         Task kind: {}\n\
-         Task:\n{}\n\n\
-         Active owning Main repairs:\n{}\n\n\
-         Completed dependency context:\n{}{}",
-        task.attempt_number,
-        task.id,
-        task.kind,
-        task.prompt,
-        owning_repairs,
-        dependencies,
-        delivery
-    )
-}
-
-fn repair_branch_name(task_id: &str) -> String {
-    let slug = task_id
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || character == '-' {
-                character.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    format!("codex/hive-{}", slug.trim_matches('-'))
-}
-
-fn completion_is_obsolete(task: &ClaimedTask, result: &TerminalResult) -> bool {
-    task.kind == "blocker" && result.is_obsolete()
-}
-
-async fn verify_obsolete_owner_deliveries(
-    repository: &Path,
-    owning_repairs: &[crate::model::TaskId],
-) -> anyhow::Result<()> {
-    for (owner, branch) in obsolete_owner_delivery_targets(owning_repairs) {
-        verify_main_repair_merge_and_main(repository, &branch)
-            .await
-            .with_context(|| {
-                format!(
-                    "obsolete blocker retirement requires a merged repair and green Main for owner \
-                     {owner}"
-                )
-            })?;
-    }
-    Ok(())
-}
-
-fn obsolete_owner_delivery_targets(
-    owning_repairs: &[crate::model::TaskId],
-) -> Vec<(crate::model::TaskId, String)> {
-    owning_repairs
-        .iter()
-        .map(|owner| (owner.clone(), repair_branch_name(owner.as_str())))
-        .collect()
 }
 
 fn bounded(value: &str) -> String {
@@ -1134,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn replacement_worker_inspects_direct_github_delivery_state() -> anyhow::Result<()> {
+    fn replacement_worker_inspects_direct_github_delivery_state() -> crate::HiveResult<()> {
         let task = ClaimedTask {
             id: TaskId::new("main-failure-recovery")?,
             kind: "main-repair".to_owned(),
@@ -1164,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn every_dependency_artifact_is_verified_before_application() {
+    fn every_dependency_artifact_is_verified_before_application() -> anyhow::Result<()> {
         let valid_content = "valid patch";
         let valid_digest = Sha256::digest(valid_content.as_bytes());
         let valid_digest = valid_digest.iter().fold(
@@ -1192,12 +697,18 @@ mod tests {
         ];
 
         let error = validate_dependency_artifacts(&artifacts)
-            .expect_err("a corrupt later patch must fail before the first patch is applied");
+            .err()
+            .ok_or_else(|| {
+                crate::hive_error!(
+                    "a corrupt later patch must fail before the first patch is applied"
+                )
+            })?;
         assert!(error.to_string().contains("later-corrupt"));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn implementation_patch_is_durable_before_completion() -> anyhow::Result<()> {
+    async fn implementation_patch_is_durable_before_completion() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -1267,7 +778,7 @@ mod tests {
         let artifact =
             persistable_patch(repository.path(), baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            panic!("patch artifact");
+            return Err(crate::hive_error!("patch artifact must be produced"));
         };
 
         assert_eq!(artifact.kind, "git-patch");
@@ -1279,8 +790,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resumed_repair_accepts_changes_already_published_on_its_branch() -> anyhow::Result<()>
-    {
+    async fn resumed_repair_accepts_changes_already_published_on_its_branch()
+    -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -1335,7 +846,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completed_dependency_patch_becomes_the_task_baseline() -> anyhow::Result<()> {
+    async fn completed_dependency_patch_becomes_the_task_baseline() -> crate::HiveResult<()> {
         let source = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<Vec<u8>> {
             let output = std::process::Command::new("git")
@@ -1459,7 +970,7 @@ mod tests {
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            panic!("task patch");
+            return Err(crate::hive_error!("task patch must be produced"));
         };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));

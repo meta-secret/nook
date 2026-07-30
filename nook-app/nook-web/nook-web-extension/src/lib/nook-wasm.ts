@@ -4,37 +4,72 @@ import {
   type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/password/generator'
 import {
-  intoWasmStringValue,
-  takeWasmStringValue,
-} from '../../../nook-web-shared/src/vault-app/lib/wasm-string-value'
-import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
   buildPasskeyPrfRequestOptions,
   buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
+  defaultTranslationCatalog as wasmDefaultTranslationCatalog,
+  DeviceMode,
+  DeviceProtectionStatus,
   generatePassword as wasmGeneratePassword,
   get_translation_catalog as wasmGetTranslationCatalog,
+  NookAppLocaleParse,
   parseAppLocale as wasmParseAppLocale,
   resolveAppLocaleFromTags as wasmResolveAppLocaleFromTags,
   resolveTranslationCatalog as wasmResolveTranslationCatalog,
+  supportedAppLocaleCode,
+  VaultApplication,
   type NookAppLocale,
-  type DeviceMode as ExtensionDeviceMode,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-let initPromise: Promise<unknown> | undefined
+enum ExtensionWasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-export type {
-  NookAppLocale,
-  DeviceMode as ExtensionDeviceMode,
-} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+type ExtensionWasmStartup =
+  | { kind: ExtensionWasmStartupKind.NotStarted }
+  | { kind: ExtensionWasmStartupKind.Initializing; operation: Promise<unknown> }
+
+let extensionWasmStartup: ExtensionWasmStartup = {
+  kind: ExtensionWasmStartupKind.NotStarted,
+}
+
+export type { NookAppLocale } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+export { DeviceMode, DeviceProtectionStatus }
+
+export enum StoredAppLocaleInputKind {
+  Missing = 'missing',
+  Stored = 'stored',
+}
+
+export type StoredAppLocaleInput =
+  | { kind: StoredAppLocaleInputKind.Missing }
+  | { kind: StoredAppLocaleInputKind.Stored; value: string }
+
+export enum StoredAppLocaleParseKind {
+  Unsupported = 'unsupported',
+  Supported = 'supported',
+}
+
+export type StoredAppLocaleParse =
+  | { kind: StoredAppLocaleParseKind.Unsupported }
+  | { kind: StoredAppLocaleParseKind.Supported; locale: NookAppLocale }
 
 export function ensureNookWasm() {
-  initPromise ??= initNookWasm().then((value) => {
-    configureVaultApplication('extension')
+  if (extensionWasmStartup.kind === ExtensionWasmStartupKind.Initializing) {
+    return extensionWasmStartup.operation
+  }
+  const operation = initNookWasm().then((value) => {
+    configureVaultApplication(VaultApplication.Extension)
     return value
   })
-  return initPromise
+  extensionWasmStartup = {
+    kind: ExtensionWasmStartupKind.Initializing,
+    operation,
+  }
+  return operation
 }
 
 export type ExtensionDeviceProtectionResult = {
@@ -42,13 +77,6 @@ export type ExtensionDeviceProtectionResult = {
   devicePublicKey: string
   deviceSigningPublicKey: string
 }
-
-export type ExtensionDeviceProtectionStatus =
-  | 'missing'
-  | 'plaintext'
-  | 'passkey'
-  | 'pin'
-  | 'unlocked'
 
 type SessionResponse<T> = { ok: true } & T
 
@@ -60,7 +88,7 @@ type PublicKeyCredentialWithPrf = PublicKeyCredential & {
 
 function runtimeMessage<T>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+    chrome.runtime.sendMessage(message, (response: unknown) => {
       if (chrome.runtime.lastError?.message) {
         reject(new Error(chrome.runtime.lastError.message))
         return
@@ -69,7 +97,7 @@ function runtimeMessage<T>(message: unknown): Promise<T> {
         reject(new Error('Extension session did not respond.'))
         return
       }
-      resolve(response)
+      resolve(response as T)
     })
   })
 }
@@ -126,7 +154,12 @@ function prfOutput(credential: PublicKeyCredential): number[] {
   return bytes(prf.results.first)
 }
 
-function passkeyError(error: unknown, action: 'create' | 'get'): Error {
+enum PasskeyOperation {
+  Create = 'create',
+  Get = 'get',
+}
+
+function passkeyError(error: unknown, action: PasskeyOperation): Error {
   if (error instanceof DOMException && error.name === 'NotAllowedError') {
     return new Error(
       `PASSKEY_CEREMONY_NOT_ALLOWED: Passkey ${action} request did not finish.`,
@@ -158,7 +191,7 @@ async function getPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    throw passkeyError(error, 'get')
+    throw passkeyError(error, PasskeyOperation.Get)
   }
 }
 
@@ -183,35 +216,55 @@ async function createPasskey(
     }
     return credential as PublicKeyCredentialWithPrf
   } catch (error) {
-    throw passkeyError(error, 'create')
+    throw passkeyError(error, PasskeyOperation.Create)
   }
 }
 
-export async function extensionDeviceProtectionStatus(): Promise<ExtensionDeviceProtectionStatus> {
+export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
   const { status } = await sessionMessage<
-    SessionResponse<{ status: ExtensionDeviceProtectionStatus }>
+    SessionResponse<{ status: DeviceProtectionStatus }>
   >({ type: 'nook:extension-session-status' })
-  if (['missing', 'plaintext', 'passkey', 'pin', 'unlocked'].includes(status)) {
-    return status
+  switch (status) {
+    case DeviceProtectionStatus.Missing:
+    case DeviceProtectionStatus.Plaintext:
+    case DeviceProtectionStatus.Passkey:
+    case DeviceProtectionStatus.Pin:
+    case DeviceProtectionStatus.Unlocked:
+      return status
+    default:
+      throw new Error(
+        `Unsupported extension device protection status: ${status}`,
+      )
   }
-  throw new Error(`Unsupported extension device protection status: ${status}`)
 }
 
-export async function extensionSessionDevice(): Promise<
-  ExtensionDeviceProtectionResult | undefined
-> {
+export enum ExtensionSessionDeviceStateKind {
+  Locked = 'locked',
+  Active = 'active',
+}
+
+export type ExtensionSessionDeviceState =
+  | { kind: ExtensionSessionDeviceStateKind.Locked }
+  | {
+      kind: ExtensionSessionDeviceStateKind.Active
+      device: ExtensionDeviceProtectionResult
+    }
+
+export async function extensionSessionDevice(): Promise<ExtensionSessionDeviceState> {
   const response = await sessionMessage<
     SessionResponse<{
-      status: ExtensionDeviceProtectionStatus
+      status: DeviceProtectionStatus
       device?: ExtensionDeviceProtectionResult
     }>
   >({ type: 'nook:extension-session-status' })
-  return response.status === 'unlocked' ? response.device : undefined
+  return response.status === DeviceProtectionStatus.Unlocked && response.device
+    ? { kind: ExtensionSessionDeviceStateKind.Active, device: response.device }
+    : { kind: ExtensionSessionDeviceStateKind.Locked }
 }
 
 export async function createExtensionPasskey(
   passkeyLabel: string,
-  deviceMode: ExtensionDeviceMode,
+  deviceMode: DeviceMode,
 ): Promise<ExtensionDeviceProtectionResult> {
   await ensureNookWasm()
   const { setup } = await sessionMessage<
@@ -331,12 +384,19 @@ export async function generateSuggestedPassword(
 }
 
 export async function parseStoredAppLocale(
-  value: string | undefined,
-): Promise<NookAppLocale | undefined> {
+  input: StoredAppLocaleInput,
+): Promise<StoredAppLocaleParse> {
   await ensureNookWasm()
-  return takeWasmStringValue(wasmParseAppLocale(intoWasmStringValue(value))) as
-    | NookAppLocale
-    | undefined
+  if (input.kind === StoredAppLocaleInputKind.Missing) {
+    return { kind: StoredAppLocaleParseKind.Unsupported }
+  }
+  const parsed = wasmParseAppLocale(input.value)
+  return parsed === NookAppLocaleParse.Unsupported
+    ? { kind: StoredAppLocaleParseKind.Unsupported }
+    : {
+        kind: StoredAppLocaleParseKind.Supported,
+        locale: supportedAppLocaleCode(parsed) as NookAppLocale,
+      }
 }
 
 export async function resolveAppLocaleFromTags(
@@ -350,11 +410,28 @@ export async function getResolvedTranslationCatalog(
   locale: NookAppLocale,
 ): Promise<string> {
   await ensureNookWasm()
-  let wasmCatalog: string | undefined
+  const catalog = readWasmCatalog(locale)
+  return catalog.kind === WasmCatalogReadKind.Available
+    ? wasmResolveTranslationCatalog(locale, catalog.catalog)
+    : wasmDefaultTranslationCatalog(locale)
+}
+
+enum WasmCatalogReadKind {
+  Available = 'available',
+  Unavailable = 'unavailable',
+}
+
+type WasmCatalogRead =
+  | { kind: WasmCatalogReadKind.Available; catalog: string }
+  | { kind: WasmCatalogReadKind.Unavailable }
+
+function readWasmCatalog(locale: NookAppLocale): WasmCatalogRead {
   try {
-    wasmCatalog = wasmGetTranslationCatalog(locale)
+    return {
+      kind: WasmCatalogReadKind.Available,
+      catalog: wasmGetTranslationCatalog(locale),
+    }
   } catch {
-    wasmCatalog = undefined
+    return { kind: WasmCatalogReadKind.Unavailable }
   }
-  return wasmResolveTranslationCatalog(locale, wasmCatalog)
 }

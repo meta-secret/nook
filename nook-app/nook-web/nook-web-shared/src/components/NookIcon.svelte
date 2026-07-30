@@ -2,14 +2,14 @@
   let {
     src,
     alt = 'Nook logo',
-    filter = undefined,
+    filter = '',
     class: className = '',
   }: {
     src: string
     alt?: string
-    filter?: string | undefined
+    filter?: string
     class?: string
   } = $props()
 </script>
 
-<img {src} {alt} class={className} style:filter={filter} />
+<img {src} {alt} class={className} style:filter />

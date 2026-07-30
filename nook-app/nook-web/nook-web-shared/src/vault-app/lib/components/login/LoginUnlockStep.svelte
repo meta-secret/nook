@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     SentinelVaultUnlockState,
-    type NookLocalVaultEntry,
     type NookPasswordEntrySummary,
   } from '$app-wasm'
   import { ShieldCheck } from '@lucide/svelte'
@@ -13,6 +12,14 @@
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { isSentinelVault } from '$lib/vault/sentinel-unlock'
+  import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
+  import {
+    LoginVaultEntryKind,
+    LoginVaultWorkflow,
+    PasswordUnlockCapabilityKind,
+    type LoginVaultEntry,
+    type PasswordUnlockCapability,
+  } from './login-unlock-state'
 
   type PasswordEntrySummary = Pick<
     NookPasswordEntrySummary,
@@ -21,39 +28,41 @@
 
   let {
     vault,
-    vaultEntry = undefined as NookLocalVaultEntry | undefined,
+    vaultEntry,
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(undefined as string | undefined),
+    selectedPasswordEntry,
     isVerifying,
     isInitializing,
     isUnlocking = false,
     onUnlock,
     onUnlockWithPassword,
+    onSelectPasswordEntry,
     onSwitchVault,
     onCreateAnotherVault,
     onImportFromSync,
   }: {
     vault: VaultState
-    vaultEntry?: NookLocalVaultEntry | undefined
+    vaultEntry: LoginVaultEntry
     hasMultipleVaults?: boolean
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntryId?: string | undefined
+    selectedPasswordEntry: PasswordEntrySelection
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean
     onUnlock: () => void | Promise<void>
-    onUnlockWithPassword?: (
+    onUnlockWithPassword: (
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onSwitchVault?: () => void | Promise<void>
-    onCreateAnotherVault?: (label: string) => void | Promise<void>
-    onImportFromSync?: () => void
+    onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
+    onSwitchVault: () => void | Promise<void>
+    onCreateAnotherVault: (label: string) => void | Promise<void>
+    onImportFromSync: () => void
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let workflow = $state<'open' | 'create' | 'import'>('open')
+  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
   const showSentinelCeremony = $derived(
     vault.sentinelCeremonyPrompt ||
       vault.sentinelUnlockStatus ===
@@ -64,6 +73,14 @@
   const hidePasswordUnlock = $derived(
     showSentinelCeremony || isSentinelVault(vault),
   )
+  const passwordUnlock = $derived<PasswordUnlockCapability>(
+    hidePasswordUnlock
+      ? { kind: PasswordUnlockCapabilityKind.Unavailable }
+      : {
+          kind: PasswordUnlockCapabilityKind.Available,
+          unlock: onUnlockWithPassword,
+        },
+  )
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
@@ -73,16 +90,16 @@
     onSelect={(selected) => (workflow = selected)}
   />
 
-  {#if workflow === 'open'}
-    {#if vaultEntry}
+  {#if workflow === LoginVaultWorkflow.Open}
+    {#if vaultEntry.kind === LoginVaultEntryKind.Available}
       <section class="space-y-2" data-testid="login-vault-context">
         <h3
           class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
         >
           {vault.t('login.vault_on_device')}
         </h3>
-        <LoginVaultCard {vault} entry={vaultEntry} active />
-        {#if hasMultipleVaults && onSwitchVault}
+        <LoginVaultCard {vault} entry={vaultEntry.entry} active />
+        {#if hasMultipleVaults}
           <button
             type="button"
             class="text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -115,7 +132,7 @@
         <LoginAuthorizationStep
           {vault}
           {passwordEntries}
-          bind:selectedPasswordEntryId
+          {selectedPasswordEntry}
           {isVerifying}
           {isInitializing}
           {isUnlocking}
@@ -124,13 +141,12 @@
             vault.loginPasswordPrompt = false
           }}
           {onUnlock}
-          onUnlockWithPassword={hidePasswordUnlock
-            ? undefined
-            : onUnlockWithPassword}
+          {passwordUnlock}
+          {onSelectPasswordEntry}
         />
       </section>
     {/if}
-  {:else if workflow === 'create' && onCreateAnotherVault}
+  {:else if workflow === LoginVaultWorkflow.Create}
     <section class="space-y-3" data-testid="login-vault-create-workflow">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">
@@ -149,7 +165,7 @@
         onCreate={onCreateAnotherVault}
       />
     </section>
-  {:else if workflow === 'import' && onImportFromSync}
+  {:else if workflow === LoginVaultWorkflow.Import}
     <section class="space-y-3" data-testid="login-vault-import-workflow">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">

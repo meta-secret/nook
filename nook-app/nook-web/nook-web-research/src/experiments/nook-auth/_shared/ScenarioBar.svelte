@@ -1,5 +1,5 @@
 <script lang="ts">
-  export type Presence = 'empty' | 'existing'
+  import { DemoVaultPresence as Presence } from './nook-auth-state'
 
   interface Props {
     presence: Presence
@@ -16,14 +16,14 @@
   aria-label="Demo presence"
 >
   <button
-    class={`rounded-full px-3 py-1.5 transition ${presence === 'empty' ? (light ? 'bg-black text-white' : 'bg-white text-black') : 'opacity-60 hover:opacity-100'}`}
-    onclick={() => onPresence('empty')}
+    class={`rounded-full px-3 py-1.5 transition ${presence === Presence.Empty ? (light ? 'bg-black text-white' : 'bg-white text-black') : 'opacity-60 hover:opacity-100'}`}
+    onclick={() => onPresence(Presence.Empty)}
   >
     Empty
   </button>
   <button
-    class={`rounded-full px-3 py-1.5 transition ${presence === 'existing' ? (light ? 'bg-black text-white' : 'bg-white text-black') : 'opacity-60 hover:opacity-100'}`}
-    onclick={() => onPresence('existing')}
+    class={`rounded-full px-3 py-1.5 transition ${presence === Presence.Existing ? (light ? 'bg-black text-white' : 'bg-white text-black') : 'opacity-60 hover:opacity-100'}`}
+    onclick={() => onPresence(Presence.Existing)}
   >
     Vault exists
   </button>

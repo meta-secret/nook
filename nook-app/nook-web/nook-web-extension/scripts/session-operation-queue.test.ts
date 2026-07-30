@@ -1,12 +1,45 @@
 import { describe, expect, test } from 'bun:test'
-import { SessionOperationQueue } from '../src/lib/session-operation-queue'
+import {
+  SessionOperationPriority,
+  SessionOperationQueue,
+} from '../src/lib/session-operation-queue'
+
+enum ReleaseGateKind {
+  Waiting = 'waiting',
+  Releasable = 'releasable',
+}
+
+type ReleaseGate =
+  | { kind: ReleaseGateKind.Waiting }
+  | { kind: ReleaseGateKind.Releasable; release: () => void }
+enum PasswordResidencyKind {
+  Resident = 'resident',
+  Cleared = 'cleared',
+}
+
+type PasswordResidency =
+  | { kind: PasswordResidencyKind.Resident; password: string }
+  | { kind: PasswordResidencyKind.Cleared }
+enum SecretResidencyKind {
+  Resident = 'resident',
+  Cleared = 'cleared',
+}
+
+type SecretResidency =
+  | { kind: SecretResidencyKind.Resident; secret: string }
+  | { kind: SecretResidencyKind.Cleared }
 
 function deferred() {
-  let release: (() => void) | undefined
+  let gate: ReleaseGate = { kind: ReleaseGateKind.Waiting }
   const promise = new Promise<void>((resolve) => {
-    release = resolve
+    gate = { kind: ReleaseGateKind.Releasable, release: resolve }
   })
-  return { promise, release: () => release?.() }
+  return {
+    promise,
+    release: () => {
+      if (gate.kind === ReleaseGateKind.Releasable) gate.release()
+    },
+  }
 }
 
 describe('SessionOperationQueue', () => {
@@ -25,7 +58,7 @@ describe('SessionOperationQueue', () => {
       async () => {
         order.push('interactive')
       },
-      { priority: 'interactive' },
+      { priority: SessionOperationPriority.Interactive },
     )
 
     blocker.release()
@@ -38,22 +71,31 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let password: string | undefined = 'temporary-password'
+    let passwordResidency: PasswordResidency = {
+      kind: PasswordResidencyKind.Resident,
+      password: 'temporary-password',
+    }
     const queued = queue.enqueue(
       async () => {
-        throw new Error(`Unexpected password use: ${password}`)
+        throw new Error(
+          `Unexpected password use: ${
+            passwordResidency.kind === PasswordResidencyKind.Resident
+              ? passwordResidency.password
+              : 'cleared'
+          }`,
+        )
       },
       {
-        priority: 'interactive',
+        priority: SessionOperationPriority.Interactive,
         expiresAt: Date.now() + 10,
         onExpire: () => {
-          password = undefined
+          passwordResidency = { kind: PasswordResidencyKind.Cleared }
         },
       },
     )
 
     await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
-    expect(password).toBeUndefined()
+    expect(passwordResidency.kind).toBe(PasswordResidencyKind.Cleared)
     blocker.release()
     await first
   })
@@ -71,18 +113,21 @@ describe('SessionOperationQueue', () => {
     const queue = new SessionOperationQueue()
     const blocker = deferred()
     const first = queue.enqueue(() => blocker.promise)
-    let pendingSecret: string | undefined = 'temporary-secret'
-    const queued = queue.enqueue(async () => undefined, {
+    let secretResidency: SecretResidency = {
+      kind: SecretResidencyKind.Resident,
+      secret: 'temporary-secret',
+    }
+    const queued = queue.enqueue(async () => {}, {
       onExpire: () => {
-        pendingSecret = undefined
+        secretResidency = { kind: SecretResidencyKind.Cleared }
       },
     })
 
     queue.close(new Error('session expired'))
 
     await expect(queued).rejects.toThrow('session expired')
-    expect(pendingSecret).toBeUndefined()
-    await expect(queue.enqueue(async () => undefined)).rejects.toThrow(
+    expect(secretResidency.kind).toBe(SecretResidencyKind.Cleared)
+    await expect(queue.enqueue(async () => {})).rejects.toThrow(
       'session expired',
     )
     blocker.release()

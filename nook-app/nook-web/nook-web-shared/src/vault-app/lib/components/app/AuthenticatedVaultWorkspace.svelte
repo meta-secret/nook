@@ -1,18 +1,35 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import type { ExtensionSetupState } from "$lib/extension-install";
-  import { SUPPORTS_EXTENSION } from "$lib/app-kind";
-  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
-  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
-  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
-  import SecretVault from "$lib/components/SecretVault.svelte";
-  import VaultAdmin from "$lib/components/VaultAdmin.svelte";
-  import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
-  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
-  import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
-  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
-  import type { VaultItemType } from "$lib/nook";
-  import type { VaultState } from "$lib/vault.svelte";
+  import { onDestroy } from 'svelte'
+  import {
+    ExtensionSetupOfferKind,
+    type ExtensionSetupOffer,
+  } from '$lib/app-lifecycle-state'
+  import { SUPPORTS_EXTENSION } from '$lib/app-kind'
+  import { ExtensionSetupStatus } from '$lib/extension-install'
+  import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
+  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
+  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
+  import SecretVault from '$lib/components/SecretVault.svelte'
+  import VaultAdmin from '$lib/components/VaultAdmin.svelte'
+  import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
+  import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
+  import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
+  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
+  import { SecretType } from '$lib/nook'
+  import {
+    SecretTypeSelectionKind,
+    type SecretTypeSelection,
+  } from '$lib/components/secret-form-state'
+  import type { VaultState } from '$lib/vault.svelte'
+  import {
+    AdminAccordionSection,
+    SettingsAccordionSection,
+    SettingsSection,
+  } from '$lib/vault/state/ui.svelte'
+  import {
+    SecretEditorModeKind,
+    type SecretEditorMode,
+  } from './authenticated-vault-workspace-state'
 
   let {
     vault,
@@ -27,43 +44,53 @@
     onSettingsReconnect,
     onEditorOpenChange,
   }: {
-    vault: VaultState;
-    extensionSetupState: ExtensionSetupState | undefined;
-    extensionInstallBusy: boolean;
-    extensionConnectError: boolean;
-    hasSecurityRecommendations: boolean;
-    needsSyncProvider: boolean;
-    needsAnotherDevice: boolean;
-    onExtensionInstall: () => void;
-    onExtensionConnect: () => void;
-    onSettingsReconnect: () => void;
-    onEditorOpenChange: (open: boolean) => void;
-  } = $props();
+    vault: VaultState
+    extensionSetupState: ExtensionSetupOffer
+    extensionInstallBusy: boolean
+    extensionConnectError: boolean
+    hasSecurityRecommendations: boolean
+    needsSyncProvider: boolean
+    needsAnotherDevice: boolean
+    onExtensionInstall: () => void
+    onExtensionConnect: () => void
+    onSettingsReconnect: () => void
+    onEditorOpenChange: (open: boolean) => void
+  } = $props()
 
-  const appVersion = "0.1.0";
-  let secretsAddOpen = $state(false);
-  let secretsAddFormType = $state<VaultItemType>();
-  let secretsEditorResetKey = $state(0);
+  const appVersion = '0.1.0'
+  let secretsAddOpen = $state(false)
+  let secretsAddFormType = $state<SecretEditorMode>({
+    kind: SecretEditorModeKind.Closed,
+  })
+  let secretsEditorResetKey = $state(0)
   const secretsNoteEditorOpen = $derived(
-    secretsAddOpen && secretsAddFormType === "secure-note",
-  );
+    secretsAddOpen &&
+      secretsAddFormType.kind === SecretEditorModeKind.Adding &&
+      secretsAddFormType.itemType === SecretType.SecureNote,
+  )
 
-  function setAddMode(open: boolean, type: VaultItemType | undefined) {
-    secretsAddOpen = open;
-    secretsAddFormType = type;
-    onEditorOpenChange(open);
+  function setAddMode(open: boolean, selection: SecretTypeSelection) {
+    secretsAddOpen = open
+    secretsAddFormType =
+      open && selection.kind === SecretTypeSelectionKind.EditingFields
+        ? {
+            kind: SecretEditorModeKind.Adding,
+            itemType: selection.itemType,
+          }
+        : { kind: SecretEditorModeKind.Closed }
+    onEditorOpenChange(open)
   }
 
   function leaveSecretsEditor() {
-    secretsAddOpen = false;
-    secretsAddFormType = undefined;
-    secretsEditorResetKey += 1;
-    onEditorOpenChange(false);
+    secretsAddOpen = false
+    secretsAddFormType = { kind: SecretEditorModeKind.Closed }
+    secretsEditorResetKey += 1
+    onEditorOpenChange(false)
   }
 
   onDestroy(() => {
-    onEditorOpenChange(false);
-  });
+    onEditorOpenChange(false)
+  })
 </script>
 
 <div
@@ -81,10 +108,10 @@
         ? 'space-y-4'
         : 'flex min-h-0 flex-1 flex-col gap-4'}"
     >
-      {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState && extensionSetupState.status !== "paired"}
+      {#if !vault.settingsOpen && !secretsAddOpen && SUPPORTS_EXTENSION && extensionSetupState.kind === ExtensionSetupOfferKind.Visible && extensionSetupState.setup.status !== ExtensionSetupStatus.Paired}
         <ExtensionInstallSetupCard
           {vault}
-          state={extensionSetupState}
+          state={extensionSetupState.setup}
           installBusy={extensionInstallBusy}
           onInstall={onExtensionInstall}
           onConnect={onExtensionConnect}
@@ -96,22 +123,23 @@
           {vault}
           {needsSyncProvider}
           {needsAnotherDevice}
-          onAddSyncProvider={() => vault.openAdmin("storage")}
-          onAddDevice={() => vault.openSettings("onboard")}
+          onAddSyncProvider={() =>
+            vault.openAdmin(AdminAccordionSection.Storage)}
+          onAddDevice={() => vault.openSettings(SettingsSection.Onboard)}
         />
       {/if}
-      {#if vault.settingsOpen && vault.settingsSection === "admin"}
+      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
           bind:activeSection={vault.adminAccordionSection}
           syncProviders={vault.syncProviders}
-          syncingProviderId={vault.syncingProviderId}
+          manualProviderSync={vault.manualProviderSync}
           isAuthenticated={vault.isAuthenticated}
           isSaving={vault.isSaving}
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           addProviderOpen={vault.addProviderOpen}
-          bind:setupType={vault.loginSetupType}
+          loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
           passwordEntries={vault.passwordEntries}
@@ -122,12 +150,12 @@
           onSyncProvider={(id) => vault.syncProviderById(id)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) => vault.beginProviderSetup(type, preset)}
+          onBeginSetup={(type, preset) =>
+            vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-          onUpdatePassword={(id, pw) =>
-            vault.updateVaultPasswordEntry(id, pw)}
+          onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
           onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
           onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
           onClearCode={() => vault.clearEnrollmentCode()}
@@ -145,7 +173,7 @@
           onImportProtonPass={(exportBytes) =>
             vault.handleProtonPassImport(exportBytes)}
         />
-      {:else if vault.settingsOpen && vault.settingsSection === "onboard"}
+      {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Onboard}
         <OnboardDevice
           {vault}
           syncProviders={vault.syncProviders}
@@ -156,7 +184,7 @@
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           addProviderOpen={vault.addProviderOpen}
-          bind:setupType={vault.loginSetupType}
+          loginSetup={vault.loginSetup}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
           onIssueCode={(entryId, pw, providerId) =>
@@ -165,7 +193,8 @@
           onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) => vault.beginProviderSetup(type, preset)}
+          onBeginSetup={(type, preset) =>
+            vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onConnectProvider={onSettingsReconnect}
         />
@@ -194,7 +223,10 @@
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefresh={() => vault.manualSync()}
             onOpenDevicesSettings={() =>
-              vault.openSettings("storage", "devices")}
+              vault.openSettings(
+                SettingsSection.Storage,
+                SettingsAccordionSection.Devices,
+              )}
           />
         {/if}
         <div class="flex min-h-0 flex-1 flex-col">
@@ -202,8 +234,7 @@
             <SecretVault
               {vault}
               isSaving={vault.isSaving}
-              editsBlocked={vault.editsBlocked}
-              editBlockMessage={vault.editBlockMessage}
+              editRestriction={vault.editRestriction}
               secrets={vault.secrets}
               onAddModeChange={setAddMode}
               onAddSecret={(id, type, data) =>
@@ -236,7 +267,7 @@
       {vault}
       storageMode={vault.storageMode}
       githubRepo={vault.githubRepo}
-      lastSyncedAt={vault.lastSyncedAt}
+      lastSync={vault.lastSync}
       isSyncing={vault.isSyncActivityVisible}
       successMsg={vault.successMsg}
       errorMsg={vault.errorMsg}
@@ -251,20 +282,20 @@
       settingsOpen={vault.settingsOpen}
       settingsSection={vault.settingsSection}
       onSelectSecrets={() => {
-        leaveSecretsEditor();
-        vault.closeSettings();
+        leaveSecretsEditor()
+        vault.closeSettings()
       }}
       onSelectOnboard={() => {
-        leaveSecretsEditor();
-        vault.openSettings("onboard");
+        leaveSecretsEditor()
+        vault.openSettings(SettingsSection.Onboard)
       }}
       onSelectAdmin={() => {
-        leaveSecretsEditor();
-        vault.openAdmin();
+        leaveSecretsEditor()
+        vault.openAdmin()
       }}
       onSelectSettings={() => {
-        leaveSecretsEditor();
-        vault.openSettings();
+        leaveSecretsEditor()
+        vault.openSettings()
       }}
     />
   </div>

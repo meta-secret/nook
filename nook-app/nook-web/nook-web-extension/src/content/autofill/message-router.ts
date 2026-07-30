@@ -3,7 +3,10 @@ import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
 } from '../../lib/authenticator-picker-messages'
-import { isQueryLoginDetectionMessage } from '../../lib/login-detection-messages'
+import {
+  isQueryLoginDetectionMessage,
+  LoginDetectionStatus,
+} from '../../lib/login-detection-messages'
 import {
   isWebsiteLoginCanceledMessage,
   isWebsiteLoginSelectedMessage,
@@ -17,7 +20,12 @@ import {
   fillAndSubmitAccount,
   setStatus,
 } from './login-passkey-actions'
-import { pickerState, widgetState } from './state'
+import {
+  AuthenticatorPickerKind,
+  LoginPickerKind,
+  pickerState,
+  widgetState,
+} from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
 
 export function removeScannedWidget(): void {
@@ -34,7 +42,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const detected = summarizeAuthenticationWorkflowForms().length > 0
     sendResponse({
       ok: true,
-      status: detected ? 'detected' : 'not-detected',
+      status: detected
+        ? LoginDetectionStatus.Detected
+        : LoginDetectionStatus.NotDetected,
     })
     return false
   }
@@ -42,10 +52,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sender.id === chrome.runtime.id &&
     isWebsiteLoginCanceledMessage(message) &&
     message.payload.origin === location.origin &&
-    message.payload.requestId === pickerState.pendingLogin?.requestId
+    pickerState.login.kind === LoginPickerKind.Open &&
+    message.payload.requestId === pickerState.login.request.requestId
   ) {
-    const pending = pickerState.pendingLogin
-    pickerState.pendingLogin = undefined
+    const pending = pickerState.login.request
+    pickerState.clearPendingLogin()
     window.clearTimeout(pending.timeoutId)
     setStatus(
       pending.description,
@@ -63,10 +74,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sender.id === chrome.runtime.id &&
     isWebsiteLoginSelectedMessage(message) &&
     message.payload.origin === location.origin &&
-    message.payload.requestId === pickerState.pendingLogin?.requestId
+    pickerState.login.kind === LoginPickerKind.Open &&
+    message.payload.requestId === pickerState.login.request.requestId
   ) {
-    const pending = pickerState.pendingLogin
-    pickerState.pendingLogin = undefined
+    const pending = pickerState.login.request
+    pickerState.clearPendingLogin()
     window.clearTimeout(pending.timeoutId)
     sendResponse({ ok: true })
     widgetState.busy = true
@@ -93,10 +105,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sender.id === chrome.runtime.id &&
     isWebsiteAuthenticatorCanceledMessage(message) &&
     message.payload.origin === location.origin &&
-    message.payload.requestId === pickerState.pendingAuthenticator?.requestId
+    pickerState.authenticator.kind === AuthenticatorPickerKind.Open &&
+    message.payload.requestId === pickerState.authenticator.request.requestId
   ) {
-    const pending = pickerState.pendingAuthenticator
-    pickerState.pendingAuthenticator = undefined
+    const pending = pickerState.authenticator.request
+    pickerState.clearPendingAuthenticator()
     window.clearTimeout(pending.timeoutId)
     setStatus(
       pending.description,
@@ -114,12 +127,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sender.id !== chrome.runtime.id ||
     !isWebsiteAuthenticatorSelectedMessage(message) ||
     message.payload.origin !== location.origin ||
-    message.payload.requestId !== pickerState.pendingAuthenticator?.requestId
+    pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
+    message.payload.requestId !== pickerState.authenticator.request.requestId
   ) {
     return false
   }
-  const pending = pickerState.pendingAuthenticator
-  pickerState.pendingAuthenticator = undefined
+  const pending = pickerState.authenticator.request
+  pickerState.clearPendingAuthenticator()
   window.clearTimeout(pending.timeoutId)
   sendResponse({ ok: true })
   widgetState.busy = true

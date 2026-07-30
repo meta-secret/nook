@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::types::NookWebsiteLoginSavePlan;
+use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -66,21 +66,21 @@ impl NookVaultManager {
         let plan = self.plan_matching_login_save(origin, &username, &password)?;
         let decision = plan.decision();
         let planned_replace = plan.secret_id();
-        match decision.as_str() {
-            "already-saved" => {
+        match decision {
+            NookWebsiteLoginSaveDecision::AlreadySaved => {
                 username.zeroize();
                 password.zeroize();
                 return Ok(());
             }
-            "invalid" => {
+            NookWebsiteLoginSaveDecision::Invalid => {
                 username.zeroize();
                 password.zeroize();
                 return Err(NookError::Database(
                     "Captured login is not valid to save.".to_owned(),
                 ));
             }
-            "update" => {
-                let expected = planned_replace.ok_or_else(|| {
+            NookWebsiteLoginSaveDecision::Update => {
+                let expected = planned_replace.map_err(|_| {
                     NookError::Database("Login update is missing the existing secret.".to_owned())
                 })?;
                 let provided = replace_secret_id.unwrap_or_default();
@@ -92,7 +92,7 @@ impl NookVaultManager {
                     ));
                 }
             }
-            "create" => {
+            NookWebsiteLoginSaveDecision::Create => {
                 if replace_secret_id.is_some_and(|value| !value.is_empty()) {
                     username.zeroize();
                     password.zeroize();
@@ -100,13 +100,6 @@ impl NookVaultManager {
                         "Login create must not target an existing secret.".to_owned(),
                     ));
                 }
-            }
-            _ => {
-                username.zeroize();
-                password.zeroize();
-                return Err(NookError::Database(
-                    "Unsupported website login save decision.".to_owned(),
-                ));
             }
         }
 
@@ -122,9 +115,9 @@ impl NookVaultManager {
         username.zeroize();
         password.zeroize();
         let data = yaml.as_str().to_owned();
-        let secret_type = nook_core::SecretType::Login.as_str().to_owned();
+        let secret_type = nook_core::SecretType::Login;
 
-        if decision.as_str() == "update" {
+        if decision == NookWebsiteLoginSaveDecision::Update {
             let old_id = replace_secret_id.unwrap_or_default().to_owned();
             let new_id = nook_core::generate_secret_id()?.to_string();
             let records = self

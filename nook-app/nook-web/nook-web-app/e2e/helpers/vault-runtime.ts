@@ -11,28 +11,31 @@ import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => '__nookVault' in window), {
+      timeout: UI_TIMEOUT_MS,
+    })
+    .toBe(true)
+
   const clearedThroughManager = await page.evaluate(async () => {
     const vault = (
       window as Window & {
-        __nookVault?: {
-          initPromise?: Promise<void>
-          stopVaultSync?: () => void
-          waitForStorageChain?: () => Promise<void>
-          enqueueStorage?: <T>(operation: () => Promise<T>) => Promise<T>
-          manager?: { deleteLocalBrowserData?: () => Promise<void> }
+        __nookVault: {
+          init(): Promise<void>
+          stopVaultSync(): void
+          waitForStorageChain(): Promise<void>
+          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
+          hasManager: boolean
+          requireManager(): { deleteLocalBrowserData(): Promise<void> }
         }
       }
     ).__nookVault
-    await vault?.initPromise
-    vault?.stopVaultSync?.()
-    await vault?.waitForStorageChain?.()
-    const manager = vault?.manager
-    if (!manager?.deleteLocalBrowserData) return false
-    if (vault.enqueueStorage) {
-      await vault.enqueueStorage(() => manager.deleteLocalBrowserData!())
-    } else {
-      await manager.deleteLocalBrowserData()
-    }
+    await vault.init()
+    vault.stopVaultSync()
+    await vault.waitForStorageChain()
+    if (!vault.hasManager) return false
+    const manager = vault.requireManager()
+    await vault.enqueueStorage(() => manager.deleteLocalBrowserData())
     return true
   })
   await page.evaluate(
@@ -48,17 +51,16 @@ export async function clearBrowserVault(page: Page) {
           pending -= 1
           if (pending === 0) resolve()
         }
-        const onError = (err: DOMException | undefined) =>
-          reject(err ?? new Error('IndexedDB delete failed'))
-
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
-        vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
+        vaultDb.onerror = () =>
+          reject(vaultDb.error ?? new Error('Vault database failed to open'))
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
-        authDb.onerror = () => onError(authDb.error ?? undefined)
+        authDb.onerror = () =>
+          reject(authDb.error ?? new Error('Auth database failed to open'))
         authDb.onblocked = done
       }),
     clearedThroughManager,
@@ -113,7 +115,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
           stopVaultSync?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | undefined
+          clearSyncingProvider: () => void
           isPasswordBusy?: boolean
         }
       }
@@ -122,7 +124,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
     vault.stopVaultSync?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = undefined
+    vault.clearSyncingProvider()
     vault.isPasswordBusy = false
   })
 }
@@ -137,7 +139,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
           stopIdleSessionTracking?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | undefined
+          clearSyncingProvider: () => void
           isPasswordBusy?: boolean
         }
       }
@@ -147,7 +149,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
     vault.stopIdleSessionTracking?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = undefined
+    vault.clearSyncingProvider()
     vault.isPasswordBusy = false
   })
 }
@@ -280,14 +282,30 @@ export async function setupGithubProvider(
   await page.getByTestId('github-pat-input').fill(pat)
 }
 
+export enum GoogleOAuthErrorStateKind {
+  Hidden = 'hidden',
+  Visible = 'visible',
+}
+
+export type GoogleOAuthErrorState =
+  | { kind: GoogleOAuthErrorStateKind.Hidden }
+  | { kind: GoogleOAuthErrorStateKind.Visible; message: string }
+
 export async function readGoogleOAuthError(
   page: Page,
-): Promise<string | undefined> {
+): Promise<GoogleOAuthErrorState> {
   const error = page.getByTestId('google-oauth-error')
   if (!(await error.isVisible())) {
-    return undefined
+    return { kind: GoogleOAuthErrorStateKind.Hidden }
   }
-  return ((await error.textContent()) ?? undefined)?.trim() || undefined
+  const content = await error.textContent()
+  if (typeof content !== 'string') {
+    return { kind: GoogleOAuthErrorStateKind.Hidden }
+  }
+  const message = content.trim()
+  return message
+    ? { kind: GoogleOAuthErrorStateKind.Visible, message }
+    : { kind: GoogleOAuthErrorStateKind.Hidden }
 }
 
 export async function waitForGoogleOAuthSignedIn(page: Page) {
@@ -295,8 +313,8 @@ export async function waitForGoogleOAuthSignedIn(page: Page) {
     .poll(
       async () => {
         const errorText = await readGoogleOAuthError(page)
-        if (errorText) {
-          throw new Error(`Google OAuth failed: ${errorText}`)
+        if (errorText.kind === GoogleOAuthErrorStateKind.Visible) {
+          throw new Error(`Google OAuth failed: ${errorText.message}`)
         }
         return (
           (await page.getByTestId('google-account-status').isVisible()) ||

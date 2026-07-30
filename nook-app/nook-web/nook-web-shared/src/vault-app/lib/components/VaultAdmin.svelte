@@ -9,44 +9,59 @@
     RefreshCw,
     ShieldCheck,
     X,
-  } from "@lucide/svelte";
-  import SettingsAccordionSection from "$lib/components/settings/SettingsAccordionSection.svelte";
-  import AuthStorage from "$lib/components/AuthStorage.svelte";
-  import VaultPasswordCard from "$lib/components/VaultPasswordCard.svelte";
-  import BitwardenImportPanel from "$lib/components/BitwardenImportPanel.svelte";
-  import LastPassImportPanel from "$lib/components/LastPassImportPanel.svelte";
-  import OnePasswordImportPanel from "$lib/components/OnePasswordImportPanel.svelte";
-  import ApplePasswordsImportPanel from "$lib/components/ApplePasswordsImportPanel.svelte";
-  import ChromePasswordsImportPanel from "$lib/components/ChromePasswordsImportPanel.svelte";
-  import GoogleAuthenticatorImportPanel from "$lib/components/GoogleAuthenticatorImportPanel.svelte";
-  import ProtonPassImportPanel from "$lib/components/ProtonPassImportPanel.svelte";
-  import { Button } from "$lib/components/ui/button";
+  } from '@lucide/svelte'
+  import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
+  import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
+  import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
+  import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
+  import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
+  import ChromePasswordsImportPanel from '$lib/components/ChromePasswordsImportPanel.svelte'
+  import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
+  import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
+  import { Button } from '$lib/components/ui/button'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
     PasswordEntryId,
-    StoreId,
-  } from "$app-wasm";
-  import type { VaultState } from "$lib/vault.svelte";
-  import type { NookImportResult } from "$lib/nook";
+  } from '$app-wasm'
+  import type { VaultState } from '$lib/vault.svelte'
+  import type { NookImportResult } from '$lib/nook'
   import type {
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from "$lib/auth-providers";
+  } from '$lib/auth-providers'
+  import {
+    ActiveVaultKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
+  import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
+  import type { ManualProviderSync } from '$lib/vault/state/sync.svelte'
+  import {
+    ImportProviderSectionKind,
+    VaultLabelEditorKind,
+    VaultRenameOperationKind,
+    VaultSwitchOperationKind,
+    type ImportProviderSection,
+    type VaultLabelEditor,
+    type VaultRenameOperation,
+    type VaultSwitchOperation,
+  } from './vault-admin-state'
 
   let {
     vault,
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId = undefined,
+    manualProviderSync,
     isAuthenticated,
     isSaving,
     addProviderOpen = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
-    githubPat = $bindable(""),
-    githubRepo = $bindable(""),
+    loginSetup,
+    githubPat = $bindable(''),
+    githubRepo = $bindable(''),
     passwordEntries,
     isPasswordBusy,
     passwordError,
@@ -70,189 +85,215 @@
     onImportChromePasswords,
     onImportGoogleAuthenticator,
     onImportProtonPass,
-    activeSection = $bindable(
-      undefined as
-        | "vaults"
-        | "storage"
-        | "passwords"
-        | "import-export"
-        | undefined,
-    ),
+    activeSection = $bindable(AdminAccordionSection.Vaults),
   }: {
-    vault: VaultState;
-    isVerifying: boolean;
-    isInitializing: boolean;
-    syncProviders: StorageProvider[];
-    syncingProviderId?: string | undefined;
-    isAuthenticated: boolean;
-    isSaving: boolean;
-    addProviderOpen?: boolean;
-    setupType?: StorageProviderType | undefined;
-    githubPat: string;
-    githubRepo: string;
-    passwordEntries: NookPasswordEntrySummary[];
-    isPasswordBusy: boolean;
-    passwordError: string;
-    enrollmentCode: string;
-    onReconnect: () => void | Promise<void>;
-    onSyncProvider?: (id: string) => void | Promise<void>;
-    onBeginAddProvider?: () => void;
-    onCancelAddProvider?: () => void;
+    vault: VaultState
+    isVerifying: boolean
+    isInitializing: boolean
+    syncProviders: StorageProvider[]
+    manualProviderSync: ManualProviderSync
+    isAuthenticated: boolean
+    isSaving: boolean
+    addProviderOpen?: boolean
+    loginSetup: LoginSetup
+    githubPat: string
+    githubRepo: string
+    passwordEntries: NookPasswordEntrySummary[]
+    isPasswordBusy: boolean
+    passwordError: string
+    enrollmentCode: string
+    onReconnect: () => void | Promise<void>
+    onSyncProvider?: (id: string) => void | Promise<void>
+    onBeginAddProvider?: () => void
+    onCancelAddProvider?: () => void
     onBeginSetup: (
       type: StorageProviderType,
       oauthPreset?: OAuthFilePreset,
-    ) => void;
-    onCancelSetup: () => void;
-    onRemoveProvider?: (id: string) => void | Promise<void>;
-    onAddPassword: (label: string, password: string) => void | Promise<void>;
+    ) => void
+    onCancelSetup: () => void
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    onAddPassword: (label: string, password: string) => void | Promise<void>
     onUpdatePassword: (
       entryId: PasswordEntryId,
       password: string,
-    ) => void | Promise<void>;
-    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>;
-    onIssueCode: (
-      entryId: PasswordEntryId,
-      password: string,
-    ) => Promise<string | void>;
-    onClearCode: () => void;
+    ) => void | Promise<void>
+    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
+    onIssueCode: (entryId: PasswordEntryId, password: string) => Promise<string>
+    onClearCode: () => void
     onImportBitwarden: (
       json: string,
       password: string,
-    ) => Promise<NookImportResult>;
-    onImportLastPass: (csv: string) => Promise<NookImportResult>;
-    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>;
-    onImportApplePasswords: (csv: string) => Promise<NookImportResult>;
-    onImportChromePasswords: (csv: string) => Promise<NookImportResult>;
+    ) => Promise<NookImportResult>
+    onImportLastPass: (csv: string) => Promise<NookImportResult>
+    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
+    onImportApplePasswords: (csv: string) => Promise<NookImportResult>
+    onImportChromePasswords: (csv: string) => Promise<NookImportResult>
     onImportGoogleAuthenticator: (
       migrationUris: string[],
-    ) => Promise<NookImportResult>;
-    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>;
-    activeSection?:
-      | "vaults"
-      | "storage"
-      | "passwords"
-      | "import-export"
-      | undefined;
-  } = $props();
+    ) => Promise<NookImportResult>
+    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>
+    activeSection?: AdminAccordionSection
+  } = $props()
 
-  let newVaultName = $state("");
-  let drafts = $state<Record<string, string>>({});
-  let draftSeed = $state("");
-  let creating = $state(false);
-  let editingStoreId = $state<StoreId>();
-  let renamingStoreId = $state<StoreId>();
-  let switchingTo = $state<StoreId>();
-  let activeImportProvider = $state<string>();
+  let newVaultName = $state('')
+  let drafts = $state<Record<string, string>>({})
+  let draftSeed = $state('')
+  let creating = $state(false)
+  let editingStoreId = $state<VaultLabelEditor>({
+    kind: VaultLabelEditorKind.Closed,
+  })
+  let renamingStoreId = $state<VaultRenameOperation>({
+    kind: VaultRenameOperationKind.Idle,
+  })
+  let switchingTo = $state<VaultSwitchOperation>({
+    kind: VaultSwitchOperationKind.Idle,
+  })
+  let activeImportProvider = $state<ImportProviderSection>({
+    kind: ImportProviderSectionKind.Closed,
+  })
+  function toggleAdminSection(section: AdminAccordionSection): void {
+    activeSection =
+      activeSection === section ? AdminAccordionSection.Closed : section
+  }
 
-  const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? "");
-  const vaults = $derived(vault.localVaults);
-  const hasPasswords = $derived(passwordEntries.length > 0);
+  function importProviderOpen(providerId: string): boolean {
+    return (
+      activeImportProvider.kind === ImportProviderSectionKind.Open &&
+      activeImportProvider.providerId === providerId
+    )
+  }
+
+  function toggleImportProvider(providerId: string): void {
+    activeImportProvider = importProviderOpen(providerId)
+      ? { kind: ImportProviderSectionKind.Closed }
+      : { kind: ImportProviderSectionKind.Open, providerId }
+  }
+
+  const activeStoreId = $derived(
+    vault.activeVault.kind === ActiveVaultKind.Open
+      ? vault.activeVault.storeId.trim()
+      : '',
+  )
+  const vaults = $derived(vault.localVaults)
+  const hasPasswords = $derived(passwordEntries.length > 0)
   const isBusy = $derived(
     isVerifying ||
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId !== undefined ||
-      switchingTo !== undefined,
-  );
+      renamingStoreId.kind === VaultRenameOperationKind.Renaming ||
+      switchingTo.kind === VaultSwitchOperationKind.Switching,
+  )
 
   function buildDrafts() {
-    const next: Record<string, string> = {};
+    const next: Record<string, string> = {}
     for (const entry of vaults) {
       next[entry.storeId] = entry.displayLabel(
-        vault.t("login.vault_picker_unnamed"),
-      );
+        vault.t('login.vault_picker_unnamed'),
+      )
     }
-    drafts = next;
+    drafts = next
   }
 
   $effect(() => {
     const seed = vaults
-      .map((entry) => `${entry.storeId}:${entry.label ?? ""}`)
-      .join("|");
+      .map((entry) => `${entry.storeId}:${entry.label ?? ''}`)
+      .join('|')
     if (seed !== draftSeed) {
-      draftSeed = seed;
-      buildDrafts();
+      draftSeed = seed
+      buildDrafts()
     }
-  });
+  })
 
   function draftFor(entry: NookLocalVaultEntry) {
     return (
       drafts[entry.storeId] ??
-      entry.displayLabel(vault.t("login.vault_picker_unnamed"))
-    );
+      entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+    )
   }
 
   function setDraft(entry: NookLocalVaultEntry, value: string) {
-    drafts = { ...drafts, [entry.storeId]: value };
+    drafts = { ...drafts, [entry.storeId]: value }
   }
 
   function canSave(entry: NookLocalVaultEntry) {
-    const draft = draftFor(entry).trim();
+    const draft = draftFor(entry).trim()
     return (
       !isBusy &&
       draft.length > 0 &&
-      draft !== entry.displayLabel(vault.t("login.vault_picker_unnamed"))
-    );
+      draft !== entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+    )
   }
 
   function beginRename(entry: NookLocalVaultEntry) {
-    if (isBusy) return;
-    setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    editingStoreId = entry.storeId;
+    if (isBusy) return
+    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
+    editingStoreId = {
+      kind: VaultLabelEditorKind.Editing,
+      storeId: entry.storeId,
+    }
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    setDraft(entry, entry.displayLabel(vault.t("login.vault_picker_unnamed")));
-    if (editingStoreId === entry.storeId) {
-      editingStoreId = undefined;
+    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
+    if (
+      editingStoreId.kind === VaultLabelEditorKind.Editing &&
+      editingStoreId.storeId === entry.storeId
+    ) {
+      editingStoreId = { kind: VaultLabelEditorKind.Closed }
     }
   }
 
   async function createVault() {
-    const label = newVaultName.trim();
-    if (!label || isBusy) return;
-    creating = true;
+    const label = newVaultName.trim()
+    if (!label || isBusy) return
+    creating = true
     try {
-      await vault.createLocalVaultWithDeviceKeys(label);
+      await vault.createLocalVaultWithDeviceKeys(label)
       if (!vault.errorMsg) {
-        newVaultName = "";
+        newVaultName = ''
       }
     } finally {
-      creating = false;
+      creating = false
     }
   }
 
   async function renameVault(entry: NookLocalVaultEntry) {
-    if (!canSave(entry)) return;
-    renamingStoreId = entry.storeId;
+    if (!canSave(entry)) return
+    renamingStoreId = {
+      kind: VaultRenameOperationKind.Renaming,
+      storeId: entry.storeId,
+    }
     try {
-      await vault.renameLocalVault(entry.storeId, draftFor(entry));
+      await vault.renameLocalVault(entry.storeId, draftFor(entry))
       if (!vault.errorMsg) {
-        editingStoreId = undefined;
+        editingStoreId = { kind: VaultLabelEditorKind.Closed }
       }
     } finally {
-      renamingStoreId = undefined;
+      renamingStoreId = { kind: VaultRenameOperationKind.Idle }
     }
   }
 
   async function switchTo(entry: NookLocalVaultEntry) {
-    if (entry.storeId === activeStoreId || isBusy) return;
-    switchingTo = entry.storeId;
+    if (entry.storeId === activeStoreId || isBusy) return
+    switchingTo = {
+      kind: VaultSwitchOperationKind.Switching,
+      storeId: entry.storeId,
+    }
     try {
-      await vault.switchToVault(entry.storeId);
+      await vault.switchToVault(entry.storeId)
     } finally {
-      switchingTo = undefined;
+      switchingTo = { kind: VaultSwitchOperationKind.Idle }
     }
   }
 </script>
 
 <div class="space-y-2" data-testid="vault-admin-panel">
   <SettingsAccordionSection
-    title={vault.t("vault.admin_vaults_title")}
-    subtitle={vault.t("vault.admin_vaults_desc")}
-    section="vaults"
-    bind:activeSection
+    title={vault.t('vault.admin_vaults_title')}
+    subtitle={vault.t('vault.admin_vaults_desc')}
+    open={activeSection === AdminAccordionSection.Vaults}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Vaults)}
     testId="vault-admin-vaults-section"
   >
     {#snippet badge()}
@@ -261,7 +302,7 @@
         data-testid="vault-admin-vault-count"
       >
         <CheckCircle2 class="size-3" />
-        {vault.t("vault.admin_vault_count", { count: String(vaults.length) })}
+        {vault.t('vault.admin_vault_count', { count: String(vaults.length) })}
       </span>
     {/snippet}
 
@@ -274,22 +315,22 @@
             for="vault-admin-create-input"
             class="text-xs font-medium text-muted-foreground"
           >
-            {vault.t("vault.admin_new_vault_label")}
+            {vault.t('vault.admin_new_vault_label')}
           </label>
           <input
             id="vault-admin-create-input"
             class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-            placeholder={vault.t("login.vault_name_placeholder")}
+            placeholder={vault.t('login.vault_name_placeholder')}
             data-testid="vault-admin-create-input"
             value={newVaultName}
             disabled={isBusy}
             oninput={(event) => {
-              newVaultName = (event.currentTarget as HTMLInputElement).value;
+              newVaultName = (event.currentTarget as HTMLInputElement).value
             }}
             onkeydown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void createVault();
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void createVault()
               }
             }}
           />
@@ -306,7 +347,7 @@
           {:else}
             <Plus class="size-4" />
           {/if}
-          {vault.t("vault.switcher_create_new")}
+          {vault.t('vault.switcher_create_new')}
         </Button>
       </div>
 
@@ -315,7 +356,9 @@
       >
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
-          {@const isEditing = editingStoreId === entry.storeId}
+          {@const isEditing =
+            editingStoreId.kind === VaultLabelEditorKind.Editing &&
+            editingStoreId.storeId === entry.storeId}
           <li
             class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
             data-testid="vault-admin-entry"
@@ -336,7 +379,7 @@
               {#if isEditing}
                 <input
                   class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                  aria-label={vault.t("vault.manager_name_label")}
+                  aria-label={vault.t('vault.manager_name_label')}
                   data-testid="vault-admin-name-input"
                   data-store-id={entry.storeId}
                   value={draftFor(entry)}
@@ -347,12 +390,12 @@
                       (event.currentTarget as HTMLInputElement).value,
                     )}
                   onkeydown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void renameVault(entry);
-                    } else if (event.key === "Escape") {
-                      event.preventDefault();
-                      cancelRename(entry);
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void renameVault(entry)
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault()
+                      cancelRename(entry)
                     }
                   }}
                 />
@@ -363,7 +406,7 @@
                   data-store-id={entry.storeId}
                 >
                   <span class="truncate text-sm font-medium text-foreground">
-                    {entry.displayLabel(vault.t("login.vault_picker_unnamed"))}
+                    {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
                   </span>
                 </div>
               {/if}
@@ -385,11 +428,13 @@
                   class="h-10 w-full"
                   data-testid="vault-admin-cancel-rename-btn"
                   data-store-id={entry.storeId}
-                  disabled={renamingStoreId === entry.storeId}
+                  disabled={renamingStoreId.kind ===
+                    VaultRenameOperationKind.Renaming &&
+                    renamingStoreId.storeId === entry.storeId}
                   onclick={() => cancelRename(entry)}
                 >
                   <X class="size-4" />
-                  {vault.t("common.cancel")}
+                  {vault.t('common.cancel')}
                 </Button>
               {:else if !isActive}
                 <Button
@@ -402,10 +447,10 @@
                   disabled={isBusy}
                   onclick={() => void switchTo(entry)}
                 >
-                  {#if switchingTo === entry.storeId}
+                  {#if switchingTo.kind === VaultSwitchOperationKind.Switching && switchingTo.storeId === entry.storeId}
                     <RefreshCw class="size-4 animate-spin" />
                   {/if}
-                  {vault.t("common.switch")}
+                  {vault.t('common.switch')}
                 </Button>
               {:else}
                 <span
@@ -413,7 +458,7 @@
                   data-testid="vault-admin-active-badge"
                 >
                   <Check class="size-4" />
-                  {vault.t("vault.switcher_open_badge")}
+                  {vault.t('vault.switcher_open_badge')}
                 </span>
               {/if}
               <Button
@@ -427,12 +472,12 @@
                 onclick={() =>
                   isEditing ? void renameVault(entry) : beginRename(entry)}
               >
-                {#if isEditing && renamingStoreId === entry.storeId}
+                {#if isEditing && renamingStoreId.kind === VaultRenameOperationKind.Renaming && renamingStoreId.storeId === entry.storeId}
                   <RefreshCw class="size-4 animate-spin" />
                 {:else if !isEditing}
                   <PencilLine class="size-4" />
                 {/if}
-                {vault.t("common.rename")}
+                {vault.t('common.rename')}
               </Button>
             </div>
           </li>
@@ -442,10 +487,10 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t("settings.storage")}
-    subtitle={vault.t("settings.storage_desc")}
-    section="storage"
-    bind:activeSection
+    title={vault.t('settings.storage')}
+    subtitle={vault.t('settings.storage_desc')}
+    open={activeSection === AdminAccordionSection.Storage}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Storage)}
     testId="storage-providers-section"
   >
     {#snippet badge()}
@@ -455,7 +500,7 @@
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
-          {vault.t("settings.vault_unlocked")}
+          {vault.t('settings.vault_unlocked')}
         </span>
       {/if}
     {/snippet}
@@ -463,11 +508,11 @@
       {vault}
       embedded
       {syncProviders}
-      {syncingProviderId}
+      {manualProviderSync}
       {isVerifying}
       {isInitializing}
       {addProviderOpen}
-      bind:setupType
+      {loginSetup}
       bind:githubPat
       bind:githubRepo
       {onReconnect}
@@ -481,10 +526,10 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t("settings.passwords")}
-    subtitle={vault.t("settings.passwords_desc")}
-    section="passwords"
-    bind:activeSection
+    title={vault.t('settings.passwords')}
+    subtitle={vault.t('settings.passwords_desc')}
+    open={activeSection === AdminAccordionSection.Passwords}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.Passwords)}
     testId="vault-unlock-section"
   >
     {#snippet badge()}
@@ -497,13 +542,13 @@
         {#if hasPasswords}
           <ShieldCheck class="size-3" />
           {passwordEntries.length === 1
-            ? vault.t("settings.password_count_singular")
-            : vault.t("settings.password_count_plural", {
+            ? vault.t('settings.password_count_singular')
+            : vault.t('settings.password_count_plural', {
                 count: String(passwordEntries.length),
               })}
         {:else}
           <Lock class="size-3" />
-          {vault.t("settings.no_passwords")}
+          {vault.t('settings.no_passwords')}
         {/if}
       </span>
     {/snippet}
@@ -524,18 +569,18 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t("settings.import_export")}
-    subtitle={vault.t("settings.import_export_desc")}
-    section="import-export"
-    bind:activeSection
+    title={vault.t('settings.import_export')}
+    subtitle={vault.t('settings.import_export_desc')}
+    open={activeSection === AdminAccordionSection.ImportExport}
+    onToggle={() => toggleAdminSection(AdminAccordionSection.ImportExport)}
     testId="vault-import-export-section"
   >
     <div class="space-y-2">
       <SettingsAccordionSection
-        title={vault.t("apple_passwords_import.source")}
-        subtitle={vault.t("apple_passwords_import.description")}
-        section="apple-passwords"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('apple_passwords_import.source')}
+        subtitle={vault.t('apple_passwords_import.description')}
+        open={importProviderOpen('apple-passwords')}
+        onToggle={() => toggleImportProvider('apple-passwords')}
         testId="apple-passwords-import-section"
       >
         <ApplePasswordsImportPanel
@@ -547,10 +592,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("chrome_passwords_import.source")}
-        subtitle={vault.t("chrome_passwords_import.description")}
-        section="chrome-passwords"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('chrome_passwords_import.source')}
+        subtitle={vault.t('chrome_passwords_import.description')}
+        open={importProviderOpen('chrome-passwords')}
+        onToggle={() => toggleImportProvider('chrome-passwords')}
         testId="chrome-passwords-import-section"
       >
         <ChromePasswordsImportPanel
@@ -562,10 +607,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("google_authenticator_import.source")}
-        subtitle={vault.t("google_authenticator_import.description")}
-        section="google-authenticator"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('google_authenticator_import.source')}
+        subtitle={vault.t('google_authenticator_import.description')}
+        open={importProviderOpen('google-authenticator')}
+        onToggle={() => toggleImportProvider('google-authenticator')}
         testId="google-authenticator-import-section"
       >
         <GoogleAuthenticatorImportPanel
@@ -577,10 +622,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("bitwarden_import.source")}
-        subtitle={vault.t("bitwarden_import.description")}
-        section="bitwarden"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('bitwarden_import.source')}
+        subtitle={vault.t('bitwarden_import.description')}
+        open={importProviderOpen('bitwarden')}
+        onToggle={() => toggleImportProvider('bitwarden')}
         testId="bitwarden-import-section"
       >
         <BitwardenImportPanel
@@ -592,10 +637,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("lastpass_import.source")}
-        subtitle={vault.t("lastpass_import.description")}
-        section="lastpass"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('lastpass_import.source')}
+        subtitle={vault.t('lastpass_import.description')}
+        open={importProviderOpen('lastpass')}
+        onToggle={() => toggleImportProvider('lastpass')}
         testId="lastpass-import-section"
       >
         <LastPassImportPanel
@@ -607,10 +652,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("onepassword_import.source")}
-        subtitle={vault.t("onepassword_import.description")}
-        section="onepassword"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('onepassword_import.source')}
+        subtitle={vault.t('onepassword_import.description')}
+        open={importProviderOpen('onepassword')}
+        onToggle={() => toggleImportProvider('onepassword')}
         testId="onepassword-import-section"
       >
         <OnePasswordImportPanel
@@ -622,10 +667,10 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t("proton_pass_import.source")}
-        subtitle={vault.t("proton_pass_import.description")}
-        section="proton-pass"
-        bind:activeSection={activeImportProvider}
+        title={vault.t('proton_pass_import.source')}
+        subtitle={vault.t('proton_pass_import.description')}
+        open={importProviderOpen('proton-pass')}
+        onToggle={() => toggleImportProvider('proton-pass')}
         testId="proton-pass-import-section"
       >
         <ProtonPassImportPanel

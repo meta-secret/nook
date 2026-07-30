@@ -1,8 +1,14 @@
 <script lang="ts">
   import { FolderOpen, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import {
+    localFolderDirectoryValue,
+    localFolderHandle,
+    LocalFolderHandleKind,
+  } from '$lib/auth-providers'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import { LocalFolderDraftKind } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
@@ -25,7 +31,19 @@
   let connectionOpen = $state(true)
   let syncOpen = $state(false)
 
-  const hasFolder = $derived(Boolean(vault.localFolder?.handleId))
+  const folderHandle = $derived(
+    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? localFolderHandle(vault.localFolderDraft.config)
+      : { kind: LocalFolderHandleKind.Unselected },
+  )
+  const hasFolder = $derived(
+    folderHandle.kind === LocalFolderHandleKind.Selected,
+  )
+  const selectedDirectoryName = $derived(
+    vault.localFolderDraft.kind === LocalFolderDraftKind.Configured
+      ? localFolderDirectoryValue(vault.localFolderDraft.config.directoryName)
+      : '',
+  )
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
 
   $effect(() => {
@@ -114,12 +132,12 @@
           {vault.t('provider_setup.local_folder_unsupported_browser')}
         </p>
       {/if}
-      {#if vault.localFolder?.directoryName}
+      {#if selectedDirectoryName}
         <p
           class="truncate rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground"
           data-testid="{idPrefix}-local-folder-selected"
         >
-          {vault.localFolder.directoryName}
+          {selectedDirectoryName}
         </p>
       {/if}
       {#if folderError}

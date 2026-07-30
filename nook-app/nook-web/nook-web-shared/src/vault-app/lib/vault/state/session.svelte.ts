@@ -7,8 +7,52 @@ import {
   type NookVaultManager,
   type PasswordEntryId,
 } from "$app-wasm";
+export enum ManagerSessionKind {
+  Locked = "locked",
+  Unlocked = "unlocked",
+}
+
+export type ManagerSession =
+  | { kind: ManagerSessionKind.Locked }
+  | { kind: ManagerSessionKind.Unlocked; manager: NookVaultManager };
+export enum PasswordEntrySelectionKind {
+  NotSelected = "not-selected",
+  Selected = "selected",
+}
+
+export type PasswordEntrySelection =
+  | { kind: PasswordEntrySelectionKind.NotSelected }
+  | { kind: PasswordEntrySelectionKind.Selected; entryId: PasswordEntryId };
+export enum EnrollmentEntryKind {
+  Inactive = "inactive",
+  Active = "active",
+}
+
+export type EnrollmentEntry =
+  | { kind: EnrollmentEntryKind.Inactive }
+  | { kind: EnrollmentEntryKind.Active; entryId: PasswordEntryId };
 export class VaultSessionState {
-  manager = $state<NookVaultManager>();
+  private managerState = $state<ManagerSession>({
+    kind: ManagerSessionKind.Locked,
+  });
+  get managerSession(): ManagerSession {
+    return this.managerState;
+  }
+  get hasManager(): boolean {
+    return this.managerState.kind === ManagerSessionKind.Unlocked;
+  }
+  requireManager(): NookVaultManager {
+    if (this.managerState.kind === ManagerSessionKind.Unlocked) {
+      return this.managerState.manager;
+    }
+    throw new Error("Vault manager is required");
+  }
+  openManager(value: NookVaultManager): void {
+    this.managerState = { kind: ManagerSessionKind.Unlocked, manager: value };
+  }
+  clearManager(): void {
+    this.managerState = { kind: ManagerSessionKind.Locked };
+  }
   deviceProtectionStatus = $state<DeviceProtectionStatus>(
     DeviceProtectionStatus.Loading,
   );
@@ -46,6 +90,40 @@ export class VaultSessionState {
   enrollmentFromUrlPending = $state(false);
   loginEnrollmentCode = $state("");
   passwordEntries = $state<NookPasswordEntrySummary[]>([]);
-  selectedPasswordEntryId = $state<PasswordEntryId>();
-  activeEnrollmentEntryId = $state<PasswordEntryId>();
+  private selectedPasswordEntryState = $state<PasswordEntrySelection>({
+    kind: PasswordEntrySelectionKind.NotSelected,
+  });
+  get selectedPasswordEntry(): PasswordEntrySelection {
+    return this.selectedPasswordEntryState;
+  }
+  set selectedPasswordEntry(value: PasswordEntrySelection) {
+    this.selectedPasswordEntryState = value;
+  }
+  selectPasswordEntry(value: PasswordEntryId): void {
+    this.selectedPasswordEntryState = {
+      kind: PasswordEntrySelectionKind.Selected,
+      entryId: value,
+    };
+  }
+  clearSelectedPasswordEntry(): void {
+    this.selectedPasswordEntryState = {
+      kind: PasswordEntrySelectionKind.NotSelected,
+    };
+  }
+
+  private activeEnrollmentEntryState = $state<EnrollmentEntry>({
+    kind: EnrollmentEntryKind.Inactive,
+  });
+  get activeEnrollmentEntry(): EnrollmentEntry {
+    return this.activeEnrollmentEntryState;
+  }
+  beginEnrollmentEntry(value: PasswordEntryId): void {
+    this.activeEnrollmentEntryState = {
+      kind: EnrollmentEntryKind.Active,
+      entryId: value,
+    };
+  }
+  clearActiveEnrollmentEntry(): void {
+    this.activeEnrollmentEntryState = { kind: EnrollmentEntryKind.Inactive };
+  }
 }

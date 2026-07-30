@@ -1,8 +1,31 @@
-export type SentinelDashboard = "card-stack" | "terminal";
+export enum SentinelDashboard {
+  CardStack = "card-stack",
+  Terminal = "terminal",
+}
+
+export enum SentinelDashboardChoiceKind {
+  NotChosen = "not-chosen",
+  Chosen = "chosen",
+}
+
+export type SentinelDashboardChoice =
+  | { kind: SentinelDashboardChoiceKind.NotChosen }
+  | {
+      kind: SentinelDashboardChoiceKind.Chosen;
+      dashboard: SentinelDashboard;
+    };
+enum FocusReturnKind {
+  Body = "body",
+  Element = "element",
+}
+
+type FocusReturn =
+  | { kind: FocusReturnKind.Body }
+  | { kind: FocusReturnKind.Element; element: HTMLElement };
 
 type SentinelDashboardPortalParameters = {
   active: boolean;
-  dashboard: SentinelDashboard | undefined;
+  choice: SentinelDashboardChoice;
 };
 
 export function sentinelDashboardPortal(
@@ -20,7 +43,7 @@ export function sentinelDashboardPortal(
   ].join(",");
   const siblingInertState: Array<[HTMLElement, boolean]> = [];
   let active = false;
-  let previousFocus: HTMLElement | undefined;
+  let previousFocus: FocusReturn = { kind: FocusReturnKind.Body };
   let returnFocusTestId = "sentinel-dashboard-card-stack";
   node.before(anchor);
 
@@ -65,15 +88,16 @@ export function sentinelDashboardPortal(
     }
   }
 
-  function activate(dashboard: SentinelDashboard | undefined) {
+  function activate(choice: SentinelDashboardChoice) {
     returnFocusTestId =
-      dashboard === "terminal"
+      choice.kind === SentinelDashboardChoiceKind.Chosen &&
+      choice.dashboard === SentinelDashboard.Terminal
         ? "sentinel-dashboard-terminal"
         : "sentinel-dashboard-card-stack";
     previousFocus =
       document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : undefined;
+        ? { kind: FocusReturnKind.Element, element: document.activeElement }
+        : { kind: FocusReturnKind.Body };
     document.body.appendChild(node);
     setBackgroundInert(true);
     node.addEventListener("keydown", trapFocus);
@@ -91,14 +115,17 @@ export function sentinelDashboardPortal(
     anchor.parentNode?.insertBefore(node, anchor.nextSibling);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (previousFocus?.isConnected) {
-          previousFocus.focus();
+        if (
+          previousFocus.kind === FocusReturnKind.Element &&
+          previousFocus.element.isConnected
+        ) {
+          previousFocus.element.focus();
         } else {
           node
             .querySelector<HTMLElement>(`[data-testid="${returnFocusTestId}"]`)
             ?.focus();
         }
-        previousFocus = undefined;
+        previousFocus = { kind: FocusReturnKind.Body };
       });
     });
     active = false;
@@ -107,7 +134,7 @@ export function sentinelDashboardPortal(
   function update(next: SentinelDashboardPortalParameters) {
     if (next.active === active) return;
     if (next.active) {
-      activate(next.dashboard);
+      activate(next.choice);
     } else {
       deactivate();
     }
@@ -120,7 +147,8 @@ export function sentinelDashboardPortal(
       if (active) {
         node.removeEventListener("keydown", trapFocus);
         setBackgroundInert(false);
-        previousFocus?.focus();
+        if (previousFocus.kind === FocusReturnKind.Element)
+          previousFocus.element.focus();
       }
       node.remove();
       anchor.remove();

@@ -1,17 +1,25 @@
 <script lang="ts">
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
-  import type {
-    ExtensionEventLogRecord,
-    ExtensionPairingApprovedMessage,
+  import {
+    ExtensionPairingApprovedMessageType,
+    ExtensionPairingVaultType,
+    type ExtensionEventLogRecord,
+    type ExtensionPairingApprovedMessage,
   } from '$web-shared/extension/runtime-messages'
   import {
+    activeVaultScope,
+    providerBelongsToVault,
     sealAuthProvidersForDevicePublicKey,
     type StorageProvider,
   } from '$lib/auth-providers'
   import { Button } from '$lib/components/ui/button'
-  import type { ExtensionConnectRequest } from '$lib/extension-connect'
+  import {
+    ExtensionConnectScope,
+    type ExtensionConnectRequest,
+  } from '$lib/extension-connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { approveExtensionDevice } from '$app-wasm'
+  import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
@@ -42,13 +50,14 @@
   }
 
   function activeVaultName(): string {
-    const active = vault.localVaults.find(
-      (entry) => entry.storeId === vault.activeVaultStoreId,
-    )
-    return (
-      active?.displayLabel(vault.t('login.vault_picker_unnamed')) ??
-      vault.t('login.vault_picker_unnamed')
-    )
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      for (const entry of vault.localVaults) {
+        if (entry.storeId === vault.activeVault.storeId) {
+          return entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+        }
+      }
+    }
+    return vault.t('login.vault_picker_unnamed')
   }
 
   function sendGrantToExtension(
@@ -79,9 +88,9 @@
     }
 
     const message: ExtensionPairingApprovedMessage = {
-      type: 'nook:extension-pairing-approved',
+      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: request.deviceId,
         devicePublicKey: request.devicePublicKey,
         deviceSigningPublicKey: request.deviceSigningPublicKey,
@@ -115,26 +124,21 @@
               resolve()
               return
             }
-            const failure =
-              !!response && typeof response === 'object'
-                ? (response as { reason?: unknown; error?: unknown })
-                : undefined
-            const reason =
-              typeof failure?.reason === 'string' && failure.reason.length > 0
-                ? failure.reason
-                : typeof failure?.error === 'string' && failure.error.length > 0
-                  ? failure.error
-                  : undefined
-            const detail =
-              reason === 'auth-provider-plaintext-migration-required'
-                ? vault.t(
-                    'extension.consent.plaintext_provider_migration_required',
-                  )
-                : undefined
+            const migrationRequired =
+              !!response &&
+              typeof response === 'object' &&
+              (('reason' in response &&
+                response.reason ===
+                  'auth-provider-plaintext-migration-required') ||
+                ('error' in response &&
+                  response.error ===
+                    'auth-provider-plaintext-migration-required'))
             reject(
               new Error(
-                detail
-                  ? `${vault.t('extension.consent.grant_rejected')} (${detail})`
+                migrationRequired
+                  ? `${vault.t('extension.consent.grant_rejected')} (${vault.t(
+                      'extension.consent.plaintext_provider_migration_required',
+                    )})`
                   : vault.t('extension.consent.grant_rejected'),
               ),
             )
@@ -143,7 +147,7 @@
       })
 
     return (async () => {
-      let lastError: Error | undefined
+      let lastError = new Error(vault.t('extension.consent.grant_rejected'))
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           await sendOnce()
@@ -160,12 +164,12 @@
           }
         }
       }
-      throw lastError ?? new Error(vault.t('extension.consent.grant_rejected'))
+      throw lastError
     })()
   }
 
   async function approveExtension() {
-    if (!vault.manager || !canApprove) return
+    if (!vault.hasManager || !canApprove) return
 
     isApproving = true
     vault.isSaving = true
@@ -175,7 +179,7 @@
     try {
       await vault.enqueueStorage(() =>
         approveExtensionDevice(
-          vault.manager!,
+          vault.requireManager(),
           request.deviceId,
           request.devicePublicKey,
           request.deviceSigningPublicKey,
@@ -183,26 +187,31 @@
         ),
       )
       const vaultStoreId =
-        vault.activeVaultStoreId ??
-        (await vault.enqueueStorage(() => vault.manager!.vaultStoreId))
+        vault.activeVault.kind === ActiveVaultKind.Open
+          ? vault.activeVault.storeId
+          : await vault.enqueueStorage(
+              () => vault.requireManager().vaultStoreId,
+            )
       let grantedProviders: StorageProvider[] = []
-      if (request.scopes.includes('sync-provider-credentials')) {
+      if (
+        request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
+      ) {
         const authProviders = await vault.enqueueStorage(() =>
-          vault.manager!.loadAuthProviders(),
+          vault.requireManager().loadAuthProviders(),
         )
         const matchingProviders = authProviders.providers.filter(
-          (provider) => !provider.storeId || provider.storeId === vaultStoreId,
+          (provider) => providerBelongsToVault(provider, vaultStoreId),
         )
         grantedProviders = sealAuthProvidersForDevicePublicKey(
           request.devicePublicKey,
           {
             providers: matchingProviders,
-            activeVaultStoreId: vaultStoreId,
+            activeVaultStoreId: activeVaultScope(vaultStoreId),
           },
         ).providers
       }
       const eventLogRecordValues = await vault.enqueueStorage(() =>
-        vault.manager!.exportEventLogRecords(),
+        vault.requireManager().exportEventLogRecords(),
       )
       try {
         await sendGrantToExtension(
@@ -356,14 +365,8 @@
   {/if}
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
-    <Button
-      type="button"
-      variant="outline"
-      onclick={() => onClose(approved)}
-    >
-      {approved
-        ? vault.t('common.done')
-        : vault.t('common.cancel')}
+    <Button type="button" variant="outline" onclick={() => onClose(approved)}>
+      {approved ? vault.t('common.done') : vault.t('common.cancel')}
     </Button>
     <Button
       type="button"

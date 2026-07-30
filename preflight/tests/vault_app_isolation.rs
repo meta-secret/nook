@@ -29,6 +29,7 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 }
 
 #[path = "vault_app_isolation/build_contracts.rs"]
+#[allow(clippy::unnecessary_wraps)]
 mod build_contracts;
 #[path = "vault_app_isolation/hosted_delivery_contracts.rs"]
 mod hosted_delivery_contracts;

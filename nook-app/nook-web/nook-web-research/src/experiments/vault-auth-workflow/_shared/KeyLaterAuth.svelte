@@ -4,10 +4,10 @@
   import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
     createVaultAuthWorkflowState,
-    type Presence,
+    Presence,
+    SentinelUi,
+    VaultPath,
   } from './vault-auth-workflow-state.svelte'
-
-  export type SentinelUi = 'card-stack' | 'terminal'
 
   interface Props {
     onSentinel: (ui: SentinelUi, vaultName: string) => void
@@ -25,8 +25,8 @@
     vaultName = ''
   }
   const continueAfterName = () => workflow.continueAfterName(vaultName)
-  const chooseSimple = () => workflow.choose('simple')
-  const chooseSentinel = () => workflow.choose('sentinel')
+  const chooseSimple = () => workflow.choose(VaultPath.Simple)
+  const chooseSentinel = () => workflow.choose(VaultPath.Sentinel)
   const goBack = () => workflow.goBack()
 </script>
 
@@ -68,7 +68,7 @@
                 {vaultAuthStepMessage(label)}
               </p>
 
-              {#if presence === 'empty' && index === step && step === 0}
+              {#if presence === Presence.Empty && index === step && step === 0}
                 <input
                   class="mt-3 w-full border-b border-black/20 bg-transparent py-2 text-base outline-none"
                   placeholder="Vault name"
@@ -81,7 +81,7 @@
                 >
                   Continue
                 </button>
-              {:else if presence === 'empty' && index === step && step === 1}
+              {:else if presence === Presence.Empty && index === step && step === 1}
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button
                     class="rounded-full border border-black/15 px-4 py-2 text-sm"
@@ -96,7 +96,7 @@
                     Build Sentinel vault
                   </button>
                 </div>
-              {:else if presence === 'empty' && path === 'simple' && index === step && step === 2}
+              {:else if presence === Presence.Empty && path === VaultPath.Simple && index === step && step === 2}
                 <p class="mt-2 text-sm text-[#666]">
                   Create “{vaultName.trim()}” locally — no passkey prologue.
                 </p>
@@ -105,17 +105,19 @@
                 >
                   Create simple vault
                 </button>
-              {:else if presence === 'empty' && path === 'sentinel' && index === step && step === 2}
+              {:else if presence === Presence.Empty && path === VaultPath.Sentinel && index === step && step === 2}
                 <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <button
                     class="rounded-full bg-black px-4 py-2 text-sm text-white"
-                    onclick={() => onSentinel('card-stack', vaultName.trim())}
+                    onclick={() =>
+                      onSentinel(SentinelUi.CardStack, vaultName.trim())}
                   >
                     Sentinel card stack · default
                   </button>
                   <button
                     class="rounded-full border border-black/15 px-4 py-2 text-sm"
-                    onclick={() => onSentinel('terminal', vaultName.trim())}
+                    onclick={() =>
+                      onSentinel(SentinelUi.Terminal, vaultName.trim())}
                   >
                     Vault terminal
                   </button>
@@ -124,14 +126,14 @@
                   Opens the full setup UI for “{vaultName.trim()}”. Passkey
                   comes later at device init.
                 </p>
-              {:else if presence === 'existing' && index === step && step === 0}
+              {:else if presence === Presence.Existing && index === step && step === 0}
                 <button
                   class="mt-3 rounded-full bg-black px-4 py-2 text-sm text-white"
                   onclick={() => (workflow.step = 1)}
                 >
                   Continue to unlock
                 </button>
-              {:else if index === step && index === steps.length - 1 && !(presence === 'empty' && path === 'simple' && step === 2)}
+              {:else if index === step && index === steps.length - 1 && !(presence === Presence.Empty && path === VaultPath.Simple && step === 2)}
                 <button
                   class="mt-3 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm text-white"
                 >

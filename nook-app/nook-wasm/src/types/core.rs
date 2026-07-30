@@ -1,77 +1,119 @@
 use super::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NookValueState {
-    Unavailable,
-    Value,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookProviderSyncRevisionState {
+    Untracked,
+    Tracked,
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone)]
-pub struct NookStringValue {
-    state: NookValueState,
-    value: String,
-}
+#[derive(Clone)]
+pub struct NookProviderSyncRevision(nook_core::ProviderSyncRevision);
 
 #[wasm_bindgen]
-impl NookStringValue {
-    #[wasm_bindgen(js_name = unavailable)]
+impl NookProviderSyncRevision {
+    #[wasm_bindgen(js_name = untracked)]
     #[must_use]
-    pub fn unavailable() -> Self {
-        Self {
-            state: NookValueState::Unavailable,
-            value: String::new(),
-        }
+    pub fn untracked() -> Self {
+        Self(nook_core::ProviderSyncRevision::Unknown)
     }
 
-    #[wasm_bindgen(js_name = value)]
-    pub fn available(value: String) -> Result<Self, wasm_bindgen::JsError> {
-        if value.is_empty() {
-            return Err(wasm_bindgen::JsError::new(
-                "available string value must not be empty",
-            ));
-        }
-        Ok(Self {
-            state: NookValueState::Value,
-            value,
-        })
+    #[wasm_bindgen(js_name = tracked)]
+    #[must_use]
+    pub fn tracked(revision: String) -> Self {
+        Self(nook_core::ProviderSyncRevision::Revision(revision))
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn state(&self) -> NookValueState {
-        self.state
+    pub fn state(&self) -> NookProviderSyncRevisionState {
+        match &self.0 {
+            nook_core::ProviderSyncRevision::Unknown => NookProviderSyncRevisionState::Untracked,
+            nook_core::ProviderSyncRevision::Revision(_) => NookProviderSyncRevisionState::Tracked,
+        }
     }
 
     #[wasm_bindgen(getter)]
-    pub fn string(&self) -> Result<String, wasm_bindgen::JsError> {
-        match self.state {
-            NookValueState::Unavailable => {
-                Err(wasm_bindgen::JsError::new("string value is unavailable"))
+    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            nook_core::ProviderSyncRevision::Unknown => {
+                Err(wasm_bindgen::JsError::new("provider revision is untracked"))
             }
-            NookValueState::Value => Ok(self.value.clone()),
+            nook_core::ProviderSyncRevision::Revision(revision) => Ok(revision.clone()),
         }
     }
 }
 
-pub(crate) enum NookStringValueRef<'a> {
-    Unavailable,
-    Value(&'a str),
+impl NookProviderSyncRevision {
+    pub(crate) fn as_core(&self) -> nook_core::ProviderSyncRevisionRef<'_> {
+        match &self.0 {
+            nook_core::ProviderSyncRevision::Unknown => {
+                nook_core::ProviderSyncRevisionRef::Unreported
+            }
+            nook_core::ProviderSyncRevision::Revision(revision) => {
+                nook_core::ProviderSyncRevisionRef::Revision(revision)
+            }
+        }
+    }
 }
 
-impl NookStringValue {
-    pub(crate) fn from_value(value: impl Into<String>) -> Self {
-        Self {
-            state: NookValueState::Value,
-            value: value.into(),
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookManagerStoreScopeState {
+    Unscoped,
+    Scoped,
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookManagerStoreScope(ManagerStoreScope);
+
+#[derive(Clone)]
+enum ManagerStoreScope {
+    Unscoped,
+    Scoped(String),
+}
+
+#[wasm_bindgen]
+impl NookManagerStoreScope {
+    #[wasm_bindgen(js_name = unscoped)]
+    #[must_use]
+    pub fn unscoped() -> Self {
+        Self(ManagerStoreScope::Unscoped)
+    }
+
+    #[wasm_bindgen(js_name = scoped)]
+    #[must_use]
+    pub fn scoped(store_id: String) -> Self {
+        Self(ManagerStoreScope::Scoped(store_id))
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookManagerStoreScopeState {
+        match &self.0 {
+            ManagerStoreScope::Unscoped => NookManagerStoreScopeState::Unscoped,
+            ManagerStoreScope::Scoped(_) => NookManagerStoreScopeState::Scoped,
         }
     }
 
-    pub(crate) fn as_ref(&self) -> NookStringValueRef<'_> {
-        match self.state {
-            NookValueState::Unavailable => NookStringValueRef::Unavailable,
-            NookValueState::Value => NookStringValueRef::Value(&self.value),
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            ManagerStoreScope::Unscoped => Err(wasm_bindgen::JsError::new(
+                "manager store scope is unscoped",
+            )),
+            ManagerStoreScope::Scoped(store_id) => Ok(store_id.clone()),
+        }
+    }
+}
+
+impl NookManagerStoreScope {
+    pub(crate) fn as_core(&self) -> nook_core::ManagerStoreScopeRef<'_> {
+        match &self.0 {
+            ManagerStoreScope::Unscoped => nook_core::ManagerStoreScopeRef::Unscoped,
+            ManagerStoreScope::Scoped(store_id) => nook_core::ManagerStoreScopeRef::Store(store_id),
         }
     }
 }
@@ -84,14 +126,14 @@ pub struct NookVaultArchitecture(nook_core::VaultArchitecture);
 impl NookVaultArchitecture {
     #[wasm_bindgen(js_name = draft)]
     pub fn draft(
-        device_mode: &str,
+        device_mode: nook_core::DeviceMode,
         vault_type: nook_core::VaultType,
-        replication_type: &str,
+        replication_type: nook_core::ReplicationType,
     ) -> Result<Self, wasm_bindgen::JsError> {
         Ok(Self(nook_core::VaultArchitecture::draft(
-            nook_core::DeviceMode::parse(device_mode)?,
+            device_mode,
             vault_type,
-            nook_core::ReplicationType::parse(replication_type)?,
+            replication_type,
         )?))
     }
 
@@ -179,6 +221,20 @@ impl NookVaultArchitecture {
 pub struct NookProviderReplicationCapability(nook_core::ProviderReplicationCapability);
 
 #[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookProviderOAuthPresetState {
+    NotApplicable,
+    Preset,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookProviderJoinerIdentityState {
+    NotRequired,
+    Required,
+}
+
+#[wasm_bindgen]
 impl NookProviderReplicationCapability {
     pub(crate) fn from_core(value: nook_core::ProviderReplicationCapability) -> Self {
         Self(value)
@@ -189,13 +245,23 @@ impl NookProviderReplicationCapability {
         self.0.provider_type.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = oauthPreset)]
-    pub fn oauth_preset(&self) -> NookStringValue {
+    #[wasm_bindgen(getter, js_name = oauthPresetState)]
+    pub fn oauth_preset_state(&self) -> NookProviderOAuthPresetState {
         match self.0.oauth_preset {
-            nook_core::ProviderOauthPreset::NotApplicable => NookStringValue::unavailable(),
-            nook_core::ProviderOauthPreset::Preset(preset) => {
-                NookStringValue::from_value(preset.as_str())
+            nook_core::ProviderOauthPreset::NotApplicable => {
+                NookProviderOAuthPresetState::NotApplicable
             }
+            nook_core::ProviderOauthPreset::Preset(_) => NookProviderOAuthPresetState::Preset,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthPreset)]
+    pub fn oauth_preset(&self) -> Result<String, wasm_bindgen::JsError> {
+        match self.0.oauth_preset {
+            nook_core::ProviderOauthPreset::NotApplicable => {
+                Err(wasm_bindgen::JsError::new("OAuth preset is not applicable"))
+            }
+            nook_core::ProviderOauthPreset::Preset(preset) => Ok(preset.as_str().to_owned()),
         }
     }
 
@@ -209,13 +275,25 @@ impl NookProviderReplicationCapability {
         self.0.supports_shared
     }
 
-    #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
-    pub fn shared_joiner_identity(&self) -> NookStringValue {
+    #[wasm_bindgen(getter, js_name = sharedJoinerIdentityState)]
+    pub fn shared_joiner_identity_state(&self) -> NookProviderJoinerIdentityState {
         match self.0.shared_joiner_identity {
-            nook_core::ProviderJoinerIdentity::NotRequired => NookStringValue::unavailable(),
-            nook_core::ProviderJoinerIdentity::Required(kind) => {
-                NookStringValue::from_value(kind.as_str())
+            nook_core::ProviderJoinerIdentity::NotRequired => {
+                NookProviderJoinerIdentityState::NotRequired
             }
+            nook_core::ProviderJoinerIdentity::Required(_) => {
+                NookProviderJoinerIdentityState::Required
+            }
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
+    pub fn shared_joiner_identity(&self) -> Result<String, wasm_bindgen::JsError> {
+        match self.0.shared_joiner_identity {
+            nook_core::ProviderJoinerIdentity::NotRequired => Err(wasm_bindgen::JsError::new(
+                "shared joiner identity is not required",
+            )),
+            nook_core::ProviderJoinerIdentity::Required(kind) => Ok(kind.as_str().to_owned()),
         }
     }
 }
@@ -467,22 +545,26 @@ impl NookEventLogSyncIssue {
     }
 
     #[wasm_bindgen(getter, js_name = localStoreId)]
-    pub fn local_store_id(&self) -> Option<String> {
+    pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.classification {
             nook_core::RemoteEventLogClassification::DifferentStore { local_store_id, .. } => {
-                Some(local_store_id.clone())
+                Ok(local_store_id.clone())
             }
-            _ => None,
+            _ => Err(wasm_bindgen::JsError::new(
+                "event-log issue is not a store mismatch",
+            )),
         }
     }
 
     #[wasm_bindgen(getter, js_name = remoteStoreId)]
-    pub fn remote_store_id(&self) -> Option<String> {
+    pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.classification {
             nook_core::RemoteEventLogClassification::DifferentStore {
                 remote_store_id, ..
-            } => Some(remote_store_id.clone()),
-            _ => None,
+            } => Ok(remote_store_id.clone()),
+            _ => Err(wasm_bindgen::JsError::new(
+                "event-log issue is not a store mismatch",
+            )),
         }
     }
 
@@ -541,329 +623,6 @@ impl NookSentinelGenesisFinalizeResult {
     #[wasm_bindgen(getter, js_name = participantDeliveries)]
     pub fn participant_deliveries(&mut self) -> Vec<NookSentinelGenesisDelivery> {
         std::mem::take(&mut self.deliveries)
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone)]
-pub struct NookLoginAccount {
-    secret_id: String,
-    username: String,
-    website_url: String,
-    website_host: String,
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObservation);
-
-#[wasm_bindgen]
-impl NookAuthenticationPageObservation {
-    #[wasm_bindgen(constructor)]
-    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
-    pub fn new(
-        username_field_count: u32,
-        current_password_field_count: u32,
-        new_password_field_count: u32,
-        generic_password_field_count: u32,
-        one_time_code_field_count: u32,
-        manual_checkpoint_present: bool,
-        authenticator_setup_hint: bool,
-        backup_codes_hint: bool,
-        passkey_control_present: bool,
-        matching_passkey_account_count: u32,
-    ) -> Self {
-        Self(nook_core::AuthenticationPageObservation {
-            username_field_count,
-            current_password_field_count,
-            new_password_field_count,
-            generic_password_field_count,
-            one_time_code_field_count,
-            manual_checkpoint_present,
-            authenticator_setup_hint,
-            backup_codes_hint,
-            passkey_control_present,
-            matching_passkey_account_count,
-        })
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationPageObservations(Vec<nook_core::AuthenticationPageObservation>);
-
-#[wasm_bindgen]
-impl NookAuthenticationPageObservations {
-    #[wasm_bindgen(constructor)]
-    #[must_use]
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    pub fn add(&mut self, observation: &NookAuthenticationPageObservation) {
-        self.0.push(observation.to_core());
-    }
-}
-
-impl NookAuthenticationPageObservations {
-    pub(crate) fn as_core(&self) -> &[nook_core::AuthenticationPageObservation] {
-        &self.0
-    }
-}
-
-impl NookAuthenticationPageObservation {
-    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationPageObservation {
-        self.0
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationWorkflowSnapshot(nook_core::AuthenticationWorkflowSnapshot);
-
-#[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NookAuthenticationWorkflowMatchState {
-    NoMatch,
-    Matched,
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationWorkflowMatch(nook_core::AuthenticationWorkflowMatch);
-
-impl NookAuthenticationWorkflowMatch {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowMatch) -> Self {
-        Self(value)
-    }
-}
-
-#[wasm_bindgen]
-impl NookAuthenticationWorkflowMatch {
-    #[wasm_bindgen(getter)]
-    pub fn state(&self) -> NookAuthenticationWorkflowMatchState {
-        match self.0 {
-            nook_core::AuthenticationWorkflowMatch::NoMatch => {
-                NookAuthenticationWorkflowMatchState::NoMatch
-            }
-            nook_core::AuthenticationWorkflowMatch::Matched(_) => {
-                NookAuthenticationWorkflowMatchState::Matched
-            }
-        }
-    }
-
-    pub fn snapshot(&self) -> Result<NookAuthenticationWorkflowSnapshot, wasm_bindgen::JsError> {
-        match self.0 {
-            nook_core::AuthenticationWorkflowMatch::NoMatch => Err(wasm_bindgen::JsError::new(
-                "authentication workflow was not detected",
-            )),
-            nook_core::AuthenticationWorkflowMatch::Matched(snapshot) => {
-                Ok(NookAuthenticationWorkflowSnapshot::from_core(snapshot))
-            }
-        }
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationOutcomeObservation(nook_core::AuthenticationOutcomeObservation);
-
-#[wasm_bindgen]
-impl NookAuthenticationOutcomeObservation {
-    #[wasm_bindgen(constructor)]
-    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
-    pub fn new(
-        navigated_away_from_auth_path: bool,
-        auth_fields_present: bool,
-        success_marker_present: bool,
-        error_marker_present: bool,
-        same_document_mutation: bool,
-        in_iframe: bool,
-        elapsed_ms: u32,
-    ) -> Self {
-        Self(nook_core::AuthenticationOutcomeObservation {
-            navigated_away_from_auth_path,
-            auth_fields_present,
-            success_marker_present,
-            error_marker_present,
-            same_document_mutation,
-            in_iframe,
-            elapsed_ms,
-        })
-    }
-
-    pub(crate) const fn to_core(&self) -> nook_core::AuthenticationOutcomeObservation {
-        self.0
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookAuthenticationOutcomeVerdict(nook_core::AuthenticationOutcomeVerdict);
-
-#[wasm_bindgen]
-impl NookAuthenticationOutcomeVerdict {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationOutcomeVerdict) -> Self {
-        Self(value)
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn name(&self) -> String {
-        self.0.as_str().to_owned()
-    }
-
-    #[wasm_bindgen(getter, js_name = allowsCredentialCommit)]
-    pub fn allows_credential_commit(&self) -> bool {
-        self.0.allows_credential_commit()
-    }
-}
-
-#[wasm_bindgen]
-impl NookAuthenticationWorkflowSnapshot {
-    pub(crate) const fn from_core(value: nook_core::AuthenticationWorkflowSnapshot) -> Self {
-        Self(value)
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn kind(&self) -> nook_core::AuthenticationWorkflowKind {
-        self.0.kind
-    }
-
-    #[wasm_bindgen(getter, js_name = kindName)]
-    pub fn kind_name(&self) -> String {
-        self.0.kind.as_str().to_owned()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn stage(&self) -> nook_core::AuthenticationWorkflowStage {
-        self.0.stage
-    }
-
-    #[wasm_bindgen(getter, js_name = stageName)]
-    pub fn stage_name(&self) -> String {
-        self.0.stage.as_str().to_owned()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn action(&self) -> nook_core::AuthenticationWorkflowAction {
-        self.0.action
-    }
-
-    #[wasm_bindgen(getter, js_name = actionName)]
-    pub fn action_name(&self) -> String {
-        self.0.action.as_str().to_owned()
-    }
-
-    #[wasm_bindgen(getter, js_name = currentStep)]
-    pub fn current_step(&self) -> u8 {
-        self.0.current_step
-    }
-
-    #[wasm_bindgen(getter, js_name = totalSteps)]
-    pub fn total_steps(&self) -> u8 {
-        self.0.total_steps
-    }
-
-    #[wasm_bindgen(getter, js_name = requiresHumanApproval)]
-    pub fn requires_human_approval(&self) -> bool {
-        self.0.requires_human_approval
-    }
-
-    #[wasm_bindgen(getter, js_name = observationIndex)]
-    pub fn observation_index(&self) -> u32 {
-        self.0.observation_index
-    }
-}
-
-#[wasm_bindgen]
-impl NookLoginAccount {
-    pub(crate) fn from_login(id: &nook_core::SecretId, login: &nook_core::LoginSecret) -> Self {
-        Self {
-            secret_id: id.to_string(),
-            username: login.username.clone(),
-            website_url: login.website_url.clone(),
-            website_host: nook_core::hostname_from_url(&login.website_url),
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = secretId)]
-    pub fn secret_id(&self) -> String {
-        self.secret_id.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn username(&self) -> String {
-        self.username.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = websiteUrl)]
-    pub fn website_url(&self) -> String {
-        self.website_url.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = websiteHost)]
-    pub fn website_host(&self) -> String {
-        self.website_host.clone()
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookLoginFillCredential {
-    username: String,
-    password: String,
-}
-
-#[wasm_bindgen]
-impl NookLoginFillCredential {
-    pub(crate) fn new(username: String, password: String) -> Self {
-        Self { username, password }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn username(&self) -> String {
-        self.username.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn password(&self) -> String {
-        self.password.clone()
-    }
-}
-
-impl Drop for NookLoginFillCredential {
-    fn drop(&mut self) {
-        use zeroize::Zeroize;
-        self.username.zeroize();
-        self.password.zeroize();
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookWebsiteLoginSavePlan {
-    decision: String,
-    secret_id: Option<String>,
-}
-
-#[wasm_bindgen]
-impl NookWebsiteLoginSavePlan {
-    pub(crate) fn from_decision(decision: nook_core::WebsiteLoginSaveDecision) -> Self {
-        let label = decision.as_str().to_owned();
-        match decision {
-            nook_core::WebsiteLoginSaveDecision::Create
-            | nook_core::WebsiteLoginSaveDecision::Invalid => Self {
-                decision: label,
-                secret_id: None,
-            },
-            nook_core::WebsiteLoginSaveDecision::Update { secret_id }
-            | nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
-                decision: label,
-                secret_id: Some(secret_id.to_string()),
-            },
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn decision(&self) -> String {
-        self.decision.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = secretId)]
-    pub fn secret_id(&self) -> Option<String> {
-        self.secret_id.clone()
     }
 }
 

@@ -1,6 +1,52 @@
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum NookSecretTypeFilter {
+    All,
+    Login,
+    ApiKey,
+    SeedPhrase,
+    SecureNote,
+    Passkey,
+    Authenticator,
+    CreditCard,
+    FileAttachment,
+}
+
+impl NookSecretTypeFilter {
+    pub(crate) const fn to_core(self) -> nook_core::SecretTypeFilter {
+        match self {
+            Self::All => nook_core::SecretTypeFilter::All,
+            Self::Login => nook_core::SecretTypeFilter::Only(nook_core::SecretType::Login),
+            Self::ApiKey => nook_core::SecretTypeFilter::Only(nook_core::SecretType::ApiKey),
+            Self::SeedPhrase => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::SeedPhrase)
+            }
+            Self::SecureNote => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::SecureNote)
+            }
+            Self::Passkey => nook_core::SecretTypeFilter::Only(nook_core::SecretType::Passkey),
+            Self::Authenticator => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::Authenticator)
+            }
+            Self::CreditCard => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::CreditCard)
+            }
+            Self::FileAttachment => {
+                nook_core::SecretTypeFilter::Only(nook_core::SecretType::FileAttachment)
+            }
+        }
+    }
+}
+
+#[wasm_bindgen(js_name = secretTypeName)]
+#[must_use]
+pub fn secret_type_name(secret_type: nook_core::SecretType) -> String {
+    secret_type.as_str().to_owned()
+}
+
+#[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookSecretListItem {
     item: nook_core::SecretListItem,
@@ -20,7 +66,12 @@ impl NookSecretListItem {
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn secret_type(&self) -> String {
+    pub fn secret_type(&self) -> nook_core::SecretType {
+        self.item.secret_type()
+    }
+
+    #[wasm_bindgen(getter, js_name = typeName)]
+    pub fn secret_type_name(&self) -> String {
         self.item.secret_type().as_str().to_owned()
     }
 
@@ -241,8 +292,8 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn secret_type(&self) -> String {
-        self.record.secret_type.as_str().to_owned()
+    pub fn secret_type(&self) -> nook_core::SecretType {
+        self.record.secret_type
     }
 
     #[wasm_bindgen(getter, js_name = displayTitle)]
@@ -596,14 +647,15 @@ mod wasm_tests {
     use crate::{
         NookAuthenticationOutcomeObservation, NookAuthenticationPageObservation,
         NookAuthenticationPageObservations, NookExtensionPairingState, NookSecretPage,
-        authentication_workflow_snapshot, classify_authentication_outcome, generate_totp_code,
-        verify_totp_code, wasm_storage_mode_for_provider,
+        authentication_workflow_snapshot, classify_authentication_outcome_with_default_timeout,
+        generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
-    fn extension_pairing_state_round_trips_as_a_plain_object() {
+    fn extension_pairing_state_round_trips_as_a_plain_object() -> Result<(), wasm_bindgen::JsError>
+    {
         let key = "nook:extension-pairing-grant:store-test";
         let input = serde_json::json!({
             (key): {
@@ -626,55 +678,59 @@ mod wasm_tests {
             &input,
             &serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true),
         )
-        .expect("serialize pairing input")
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
         .unchecked_into::<js_sys::Object>();
-        let state = NookExtensionPairingState::from_object(&input).expect("validate pairing input");
-        let output = state.to_object().expect("serialize pairing output");
+        let state = NookExtensionPairingState::from_object(&input)?;
+        let output = state.to_object()?;
 
-        assert!(js_sys::Reflect::has(&output, &key.into()).expect("inspect output key"));
+        assert!(
+            js_sys::Reflect::has(&output, &key.into())
+                .map_err(|_| wasm_bindgen::JsError::new("failed to inspect reflected field"))?
+        );
         assert!(!output.is_instance_of::<js_sys::Map>());
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn provider_storage_modes_round_trip_in_wasm() {
+    fn provider_storage_modes_round_trip_in_wasm() -> Result<(), wasm_bindgen::JsError> {
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
-                Some(nook_core::OauthFilePreset::GoogleDrive),
-            )
-            .expect("google-drive storage mode"),
+                nook_core::OauthFilePreset::GoogleDrive,
+            )?,
             "google-drive"
         );
         assert_eq!(
             wasm_storage_mode_for_provider(
                 nook_core::StorageProviderType::OauthFile,
-                Some(nook_core::OauthFilePreset::ICloud),
-            )
-            .expect("icloud storage mode"),
+                nook_core::OauthFilePreset::ICloud,
+            )?,
             "icloud"
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn totp_helpers_match_core_authenticator_for_fixture_seed() {
+    fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsError>
+    {
         let secret = "JBSWY3DPEHPK3PXP";
         let unix_seconds = 1_721_520_000_u64;
-        let code = generate_totp_code(secret, unix_seconds).expect("totp code");
+        let code = generate_totp_code(secret, unix_seconds)?;
         assert_eq!(code.len(), 6);
         assert!(code.bytes().all(|b| b.is_ascii_digit()));
-        assert!(verify_totp_code(secret, &code, unix_seconds).expect("verify"));
-        assert!(!verify_totp_code(secret, "000000", unix_seconds).expect("reject"));
+        assert!(verify_totp_code(secret, &code, unix_seconds)?);
+        assert!(!verify_totp_code(secret, "000000", unix_seconds)?);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn authentication_workflow_snapshot_preserves_core_policy() {
+    fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsError>
+    {
         let observation =
             NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
-        let snapshot = authentication_workflow_snapshot(&observations)
-            .snapshot()
-            .expect("login workflow");
+        let snapshot = authentication_workflow_snapshot(&observations).snapshot()?;
 
         assert_eq!(snapshot.kind_name(), "login");
         assert_eq!(snapshot.stage_name(), "credentials");
@@ -683,28 +739,36 @@ mod wasm_tests {
         assert_eq!(snapshot.total_steps(), 3);
         assert!(snapshot.requires_human_approval());
         assert_eq!(snapshot.observation_index(), 0);
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn classify_authentication_outcome_preserves_core_policy() {
+    fn classify_authentication_outcome_preserves_core_policy() -> anyhow::Result<()> {
         let navigation_only =
             NookAuthenticationOutcomeObservation::new(true, false, false, false, false, false, 500);
-        let navigation = classify_authentication_outcome(&navigation_only, None);
-        assert_eq!(navigation.name(), "insufficient");
+        let navigation = classify_authentication_outcome_with_default_timeout(&navigation_only);
+        assert_eq!(
+            navigation.verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Insufficient
+        );
         assert!(!navigation.allows_credential_commit());
 
         let success =
             NookAuthenticationOutcomeObservation::new(true, false, true, false, false, false, 300);
-        let sufficient = classify_authentication_outcome(&success, None);
-        assert_eq!(sufficient.name(), "sufficient");
+        let sufficient = classify_authentication_outcome_with_default_timeout(&success);
+        assert_eq!(
+            sufficient.verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Sufficient
+        );
         assert!(sufficient.allows_credential_commit());
 
         let conflict =
             NookAuthenticationOutcomeObservation::new(false, true, true, true, false, false, 100);
         assert_eq!(
-            classify_authentication_outcome(&conflict, None).name(),
-            "conflicting"
+            classify_authentication_outcome_with_default_timeout(&conflict).verdict(),
+            nook_core::AuthenticationOutcomeVerdict::Conflicting
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
@@ -721,7 +785,7 @@ mod wasm_tests {
         );
 
         assert_eq!(item.id(), "secret_login");
-        assert_eq!(item.secret_type(), "login");
+        assert_eq!(item.secret_type(), nook_core::SecretType::Login);
         assert_eq!(item.website_url(), "https://example.com");
         assert_eq!(item.website_host(), "example.com");
         assert_eq!(item.username(), "alice");
@@ -743,7 +807,7 @@ mod wasm_tests {
             "login.example.com".to_owned(),
         );
 
-        assert_eq!(item.secret_type(), "passkey");
+        assert_eq!(item.secret_type(), nook_core::SecretType::Passkey);
         assert_eq!(item.rp_id(), "login.example.com");
         assert_eq!(item.passkey_user_name(), "alice@example.com");
         assert_eq!(item.passkey_user_display_name(), "Alice");
@@ -766,7 +830,7 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
-    fn page_resolves_brand_authenticator_onto_site_host() {
+    fn page_resolves_brand_authenticator_onto_site_host() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: vec![
                 nook_core::SecretListItem {
@@ -789,17 +853,17 @@ mod wasm_tests {
             total: 2,
             offset: 0,
             limit: 50,
-        })
-        .expect("metadata page");
+        })?;
 
         let items = page.take_items();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].group_key(), "namecheap.com");
         assert_eq!(items[1].group_key(), "namecheap.com");
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn page_transfers_metadata_items_only_once() {
+    fn page_transfers_metadata_items_only_once() -> anyhow::Result<()> {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: vec![nook_core::SecretListItem {
                 id: nook_core::SecretId::from_vault_record("secret_note"),
@@ -810,34 +874,35 @@ mod wasm_tests {
             total: 1,
             offset: 0,
             limit: 50,
-        })
-        .expect("metadata page");
+        })?;
 
         let items = page.take_items();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title(), "Recovery");
         assert!(page.take_items().is_empty());
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::public_api::is_google_drive_shared_grant_request;
+    use nook_core::{OauthFilePreset, ProviderOauthPreset, StorageProviderType};
 
     #[test]
-    fn google_drive_grant_requires_explicit_preset() {
-        assert!(!is_google_drive_shared_grant_request("oauth-file", None));
+    fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
         assert!(!is_google_drive_shared_grant_request(
-            "oauth-file",
-            Some("")
+            StorageProviderType::OauthFile,
+            ProviderOauthPreset::NotApplicable,
         ));
         assert!(is_google_drive_shared_grant_request(
-            "oauth-file",
-            Some("google-drive")
+            StorageProviderType::OauthFile,
+            ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
         ));
         assert!(!is_google_drive_shared_grant_request(
-            "oauth-file",
-            Some("icloud")
+            StorageProviderType::OauthFile,
+            ProviderOauthPreset::Preset(OauthFilePreset::ICloud),
         ));
+        Ok(())
     }
 }

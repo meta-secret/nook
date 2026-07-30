@@ -2,7 +2,19 @@ import privacyPolicyMd from "../../../../../../docs/privacy-policy.md?raw";
 import termsOfServiceMd from "../../../../../../docs/terms-of-service.md?raw";
 import { stripBasePath } from "$lib/routes";
 
-export type LegalPageId = "privacy" | "terms";
+export enum LegalPageId {
+  Privacy = "privacy",
+  Terms = "terms",
+}
+
+export enum LegalPageLookupKind {
+  ApplicationPath = "application-path",
+  LegalPage = "legal-page",
+}
+
+export type LegalPageLookup =
+  | { kind: LegalPageLookupKind.ApplicationPath }
+  | { kind: LegalPageLookupKind.LegalPage; page: LegalPageId };
 
 export type LegalPage = {
   id: LegalPageId;
@@ -13,13 +25,13 @@ export type LegalPage = {
 
 export const LEGAL_PAGES: Record<LegalPageId, LegalPage> = {
   privacy: {
-    id: "privacy",
+    id: LegalPageId.Privacy,
     title: "Privacy Policy",
     path: "/privacy",
     source: privacyPolicyMd,
   },
   terms: {
-    id: "terms",
+    id: LegalPageId.Terms,
     title: "Terms of Service",
     path: "/terms",
     source: termsOfServiceMd,
@@ -43,11 +55,16 @@ export const LOGS_PATH = "/logs";
 export { stripBasePath } from "$lib/routes";
 
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
-export function getLegalPageFromPath(
-  pathname: string,
-): LegalPageId | undefined {
+export function getLegalPageFromPath(pathname: string): LegalPageLookup {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
-  return LEGAL_PATHS.get(normalized) ?? undefined;
+  const page = LEGAL_PATHS.get(normalized);
+  if (!page) {
+    return { kind: LegalPageLookupKind.ApplicationPath };
+  }
+  return {
+    kind: LegalPageLookupKind.LegalPage,
+    page,
+  };
 }
 
 export function legalPageForId(id: LegalPageId): LegalPage {

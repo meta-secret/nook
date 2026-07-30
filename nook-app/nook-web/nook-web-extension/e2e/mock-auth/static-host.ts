@@ -20,18 +20,34 @@ function contentType(filePath: string): string {
   return 'application/octet-stream'
 }
 
-async function resolveAsset(urlPath: string): Promise<string | undefined> {
+enum StaticAssetResolutionKind {
+  Rejected = 'rejected',
+  Resolved = 'resolved',
+}
+
+type StaticAssetResolution =
+  | { kind: StaticAssetResolutionKind.Rejected }
+  | { kind: StaticAssetResolutionKind.Resolved; path: string }
+
+async function resolveAsset(urlPath: string): Promise<StaticAssetResolution> {
   const relative = urlPath === '/' ? '/index.html' : urlPath
   const candidate = path.normalize(path.join(distRoot, relative))
-  if (!candidate.startsWith(distRoot)) return undefined
+  if (!candidate.startsWith(distRoot)) {
+    return { kind: StaticAssetResolutionKind.Rejected }
+  }
   try {
     const info = await stat(candidate)
-    if (info.isFile()) return candidate
+    if (info.isFile()) {
+      return { kind: StaticAssetResolutionKind.Resolved, path: candidate }
+    }
   } catch {
     // fall through to SPA index
   }
   // Client-side routes: serve the SPA shell.
-  return path.join(distRoot, 'index.html')
+  return {
+    kind: StaticAssetResolutionKind.Resolved,
+    path: path.join(distRoot, 'index.html'),
+  }
 }
 
 /**
@@ -51,13 +67,13 @@ export async function startMockAuthServer(): Promise<MockAuthServer> {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1')
       const asset = await resolveAsset(url.pathname)
-      if (!asset) {
+      if (asset.kind === StaticAssetResolutionKind.Rejected) {
         response.writeHead(404)
         response.end('Not found')
         return
       }
-      const body = await readFile(asset)
-      response.writeHead(200, { 'content-type': contentType(asset) })
+      const body = await readFile(asset.path)
+      response.writeHead(200, { 'content-type': contentType(asset.path) })
       response.end(body)
     })().catch(() => {
       if (!response.headersSent) response.writeHead(500)

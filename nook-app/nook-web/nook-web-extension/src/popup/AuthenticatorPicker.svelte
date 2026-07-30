@@ -23,33 +23,46 @@
   let querySequence = 0
   let completed = false
 
-  function sendRuntimeMessage<T>(message: unknown): Promise<T | undefined> {
+  function sendRuntimeMessage(message: unknown): Promise<unknown> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, (response: T | undefined) => {
-        if (chrome.runtime.lastError) {
-          resolve(undefined)
-          return
-        }
+      chrome.runtime.sendMessage(message, (response: unknown) => {
         resolve(response)
       })
     })
+  }
+
+  function isOkResponse(response: unknown): response is { ok: true } {
+    return Boolean(
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true,
+    )
+  }
+
+  function isAccountQueryResponse(response: unknown): response is {
+    ok: true
+    origin: string
+    accounts?: WebsiteAuthenticatorOption[]
+  } {
+    return (
+      isOkResponse(response) &&
+      'origin' in response &&
+      typeof response.origin === 'string'
+    )
   }
 
   async function loadAccounts(searchQuery: string): Promise<void> {
     const sequence = ++querySequence
     loading = true
     error = ''
-    const response = await sendRuntimeMessage<{
-      ok?: boolean
-      origin?: string
-      accounts?: WebsiteAuthenticatorOption[]
-    }>({
+    const response = await sendRuntimeMessage({
       type: 'nook:authenticator-picker-query',
       payload: { requestId, query: searchQuery },
     })
     if (sequence !== querySequence) return
     loading = false
-    if (!response?.ok || typeof response.origin !== 'string') {
+    if (!isAccountQueryResponse(response)) {
       accounts = []
       destinationOrigin = ''
       error = i18n.t('extension.authenticator_picker.failed')
@@ -63,7 +76,7 @@
     if (busy) return
     busy = true
     error = ''
-    const response = await sendRuntimeMessage<{ ok?: boolean }>({
+    const response = await sendRuntimeMessage({
       type: 'nook:authenticator-picker-select',
       payload: {
         requestId,
@@ -71,7 +84,7 @@
         secretId: account.secretId,
       },
     })
-    if (response?.ok) {
+    if (isOkResponse(response)) {
       completed = true
       window.close()
       return

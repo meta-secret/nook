@@ -1,4 +1,3 @@
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   type EnrollmentFlowHost,
   type EnrollmentPageHints,
@@ -8,7 +7,11 @@ import {
   cancelPendingLoginPickerRequest,
   sendRuntimeMessage,
 } from './login-passkey-actions'
-import { widgetState } from './state'
+import {
+  WidgetPlacementKind,
+  widgetState,
+  type WidgetWorkflowRoot,
+} from './state'
 import {
   applyWidgetPosition,
   attachPointerDrag,
@@ -433,7 +436,7 @@ export function createWidgetShell(
 export function mountWidgetShell(
   shell: WidgetShell,
   workflowKey: string,
-  workflowRoot: PasswordFormObservation | undefined,
+  workflowRoot: WidgetWorkflowRoot,
 ): void {
   const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
   const applyCollapsedState = (): void => {
@@ -444,14 +447,16 @@ export function mountWidgetShell(
     collapsedLaunch.hidden = !widgetState.collapsed
     host.setAttribute('aria-expanded', widgetState.collapsed ? 'false' : 'true')
     requestAnimationFrame(() => {
-      if (!widgetState.position) return
-      widgetState.position = clampWidgetPosition(
-        widgetState.position.left,
-        widgetState.position.top,
+      if (widgetState.placement.kind === WidgetPlacementKind.Unpositioned)
+        return
+      const position = clampWidgetPosition(
+        widgetState.placement.position.left,
+        widgetState.placement.position.top,
         host.offsetWidth,
         host.offsetHeight,
       )
-      applyWidgetPosition(host, widgetState.position)
+      widgetState.setPosition(position)
+      applyWidgetPosition(host, position)
     })
   }
 
@@ -465,9 +470,9 @@ export function mountWidgetShell(
   panel.append(toolbar, body, collapsedLaunch)
   host.attachShadow({ mode: 'open' }).append(style, panel)
   document.documentElement.append(host)
-  widgetState.host = host
-  widgetState.renderedWorkflowKey = workflowKey
-  widgetState.renderedWorkflowRoot = workflowRoot
+  widgetState.attachHost(host)
+  widgetState.assignWorkflowKey(workflowKey)
+  widgetState.setRenderedWorkflowRoot(workflowRoot)
 
   attachPointerDrag(host, toolbar)
   attachPointerDrag(host, collapsedLaunch, {
@@ -477,7 +482,7 @@ export function mountWidgetShell(
     },
   })
   applyCollapsedState()
-  if (widgetState.position) {
-    applyWidgetPosition(host, widgetState.position)
+  if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
+    applyWidgetPosition(host, widgetState.placement.position)
   }
 }

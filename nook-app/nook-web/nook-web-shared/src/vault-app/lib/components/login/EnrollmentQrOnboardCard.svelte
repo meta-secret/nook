@@ -11,30 +11,49 @@
   } from "$lib/components/ui/card";
 
   import type { VaultState } from "$lib/vault.svelte";
+  import {
+    PasswordFieldMountKind,
+    type PasswordFieldMount,
+  } from "./password-field-mount-state";
 
   let {
     vault,
     code,
-    passwordEntryId = undefined,
-    passwordEntryLabel = undefined,
+    passwordEntryId,
+    passwordEntryLabel,
     isVerifying,
     onSubmit,
   }: {
     vault: VaultState;
     code: string;
-    passwordEntryId?: string | undefined;
-    passwordEntryLabel?: string | undefined;
+    passwordEntryId: string;
+    passwordEntryLabel: string;
     isVerifying: boolean;
     onSubmit: (password: string) => void | Promise<void>;
   } = $props();
 
   let passwordInput = $state("");
-  let passwordField: HTMLInputElement | undefined = $state();
+  let passwordField = $state<PasswordFieldMount>({
+    kind: PasswordFieldMountKind.Unmounted,
+  });
+
+  function capturePasswordField(element: HTMLInputElement) {
+    passwordField = { kind: PasswordFieldMountKind.Mounted, element };
+    return {
+      destroy() {
+        passwordField = { kind: PasswordFieldMountKind.Unmounted };
+      },
+    };
+  }
 
   $effect(() => {
     void code;
     passwordInput = "";
-    queueMicrotask(() => passwordField?.focus());
+    queueMicrotask(() => {
+      if (passwordField.kind === PasswordFieldMountKind.Mounted) {
+        passwordField.element.focus();
+      }
+    });
   });
 </script>
 
@@ -88,7 +107,7 @@
         </label>
         <input
           id="enrollment-scan-password"
-          bind:this={passwordField}
+          use:capturePasswordField
           type="password"
           class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder={vault.t("login.password_entry_placeholder")}

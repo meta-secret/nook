@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { DeviceMode } from '$app-wasm'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
+  import { DeviceModeTranslationPart } from './device-mode-select-state'
 
   let {
     vault,
@@ -12,19 +14,23 @@
     disabled?: boolean
   } = $props()
 
-  const deviceModes = ['standard', 'anti-hacker'] as const
+  const deviceModes = [DeviceMode.Standard, DeviceMode.AntiHacker]
 
   function modeTranslationKey(
-    mode: (typeof deviceModes)[number],
-    suffix: 'title' | 'description',
+    mode: DeviceMode,
+    suffix: DeviceModeTranslationPart,
   ) {
-    return `device_protection.mode_${mode.replace('-', '_')}_${suffix}`
+    const modeKey = mode === DeviceMode.AntiHacker ? 'anti_hacker' : 'standard'
+    return `device_protection.mode_${modeKey}_${suffix}`
   }
 
-  function selectMode(value: string | undefined) {
-    if (value === 'standard' || value === 'anti-hacker') {
-      vault.draftDeviceMode = value
-    }
+  function selectMode(value: unknown) {
+    if (typeof value !== 'string') return
+    const selectedMode = Number(value)
+    if (selectedMode === DeviceMode.Standard)
+      vault.draftDeviceMode = DeviceMode.Standard
+    if (selectedMode === DeviceMode.AntiHacker)
+      vault.draftDeviceMode = DeviceMode.AntiHacker
   }
 </script>
 
@@ -34,7 +40,7 @@
   </label>
   <Select.Root
     type="single"
-    value={vault.draftDeviceMode}
+    value={String(vault.draftDeviceMode)}
     onValueChange={selectMode}
     {disabled}
   >
@@ -44,17 +50,27 @@
       data-testid="device-mode-select"
       aria-describedby={`${id}-description`}
     >
-      {vault.t(modeTranslationKey(vault.draftDeviceMode, 'title'))}
+      {vault.t(
+        modeTranslationKey(
+          vault.draftDeviceMode,
+          DeviceModeTranslationPart.Title,
+        ),
+      )}
     </Select.Trigger>
     <Select.Content portalProps={{ disabled: true }}>
       {#each deviceModes as mode (mode)}
-        <Select.Item value={mode}>
-          {vault.t(modeTranslationKey(mode, 'title'))}
+        <Select.Item value={String(mode)}>
+          {vault.t(modeTranslationKey(mode, DeviceModeTranslationPart.Title))}
         </Select.Item>
       {/each}
     </Select.Content>
   </Select.Root>
   <p id={`${id}-description`} class="text-xs text-pretty text-muted-foreground">
-    {vault.t(modeTranslationKey(vault.draftDeviceMode, 'description'))}
+    {vault.t(
+      modeTranslationKey(
+        vault.draftDeviceMode,
+        DeviceModeTranslationPart.Description,
+      ),
+    )}
   </p>
 </div>

@@ -8,10 +8,15 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from "$lib/passkey-device-protection";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
+import {
+  activeVaultScope,
+  LOCAL_PROVIDER_TYPE,
+  unselectedVaultScope,
+} from "$lib/auth-providers";
 import { createLogger } from "$lib/log";
 import type { DeviceMode } from "$lib/vault-architecture";
 import type { VaultState } from "$lib/vault.svelte";
+import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   DeviceProtectionStatus,
   providersVisibleWhileDeviceLocked,
@@ -27,21 +32,22 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
   state.providers = providersVisibleWhileDeviceLocked(
     $state.snapshot({
       providers: state.providers,
-      ...(state.activeVaultStoreId
-        ? { activeVaultStoreId: state.activeVaultStoreId }
-        : {}),
+      activeVaultStoreId:
+        state.activeVault.kind === ActiveVaultKind.Open
+          ? activeVaultScope(state.activeVault.storeId)
+          : unselectedVaultScope(),
     }),
   ).providers;
   state.providersLoaded = state.providers.length > 0;
   state.githubPat = "";
-  state.oauthFile = undefined;
-  state.localFolder = undefined;
+  state.clearOauthFile();
+  state.clearLocalFolder();
   if (state.localVaultPresent) {
     state.storageMode = LOCAL_PROVIDER_TYPE;
   }
-  if (!state.manager) return Promise.resolve();
+  if (!state.hasManager) return Promise.resolve();
   return state
-    .enqueueStorage(() => state.manager!.lockDeviceIdentity())
+    .enqueueStorage(() => state.requireManager().lockDeviceIdentity())
     .catch(() => {
       // Persisted identity remains wrapped even if the manager is tearing down.
     });
@@ -78,13 +84,13 @@ export async function setupDeviceProtection(
   passkeyLabel = "",
   deviceMode: DeviceMode = state.draftDeviceMode,
 ): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
   try {
     await state.enqueueStorage(() =>
-      createPasskeyProtection(state.manager!, passkeyLabel, deviceMode),
+      createPasskeyProtection(state.requireManager(), passkeyLabel, deviceMode),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
@@ -128,13 +134,13 @@ export async function setupDeviceProtection(
 export async function recoverDeviceProtectionWithPasskey(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
   try {
     await state.enqueueStorage(() =>
-      recoverExistingPasskeyProtection(state.manager!),
+      recoverExistingPasskeyProtection(state.requireManager()),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
@@ -184,7 +190,7 @@ export async function setupPinDeviceProtection(
   pin: string,
   confirmPin: string,
 ): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
@@ -193,7 +199,7 @@ export async function setupPinDeviceProtection(
       throw new Error(state.t("device_protection.pin_mismatch"));
     }
     await state.enqueueStorage(() =>
-      state.manager!.finishPinDeviceProtection(pin),
+      state.requireManager().finishPinDeviceProtection(pin),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Pin);
@@ -212,13 +218,13 @@ export async function setupPinDeviceProtection(
 }
 
 export async function unlockDeviceProtection(state: VaultState): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
   try {
     await state.enqueueStorage(() =>
-      authorizePasskeyProtection(state.manager!),
+      authorizePasskeyProtection(state.requireManager()),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
@@ -243,13 +249,13 @@ export async function unlockPinDeviceProtection(
   state: VaultState,
   pin: string,
 ): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
   try {
     await state.enqueueStorage(() =>
-      state.manager!.unlockPinDeviceIdentity(pin),
+      state.requireManager().unlockPinDeviceIdentity(pin),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Pin);
@@ -270,11 +276,11 @@ export async function unlockPinDeviceProtection(
 export async function resetDeviceProtectionForRecovery(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   try {
-    await state.manager.resetDeviceProtectionForRecovery();
+    await state.requireManager().resetDeviceProtectionForRecovery();
     state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
     state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
     state.deviceId = "";
@@ -282,8 +288,8 @@ export async function resetDeviceProtectionForRecovery(
     state.providers = [];
     state.providersLoaded = false;
     state.githubPat = "";
-    state.oauthFile = undefined;
-    state.localFolder = undefined;
+    state.clearOauthFile();
+    state.clearLocalFolder();
     state.storageMode = LOCAL_PROVIDER_TYPE;
     state.showSuccess(state.t("device_protection.recovery_complete"));
   } catch (error) {

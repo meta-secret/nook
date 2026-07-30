@@ -2,15 +2,19 @@
   import { ArrowUpRight, Fingerprint, Shield } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar from '../_shared/ScenarioBar.svelte'
+  import {
+    DemoVaultPresence as Presence,
+    NookAuthChoice,
+  } from '../_shared/nook-auth-state'
 
   let { navigate }: ExperimentProps = $props()
-  let presence = $state<Presence>('empty')
-  let picked = $state<'none' | 'simple' | 'sentinel' | 'unlock'>('none')
+  let presence = $state<Presence>(Presence.Empty)
+  let picked = $state<NookAuthChoice>(NookAuthChoice.None)
 
   function setPresence(next: Presence) {
     presence = next
-    picked = 'none'
+    picked = NookAuthChoice.None
   }
 </script>
 
@@ -30,20 +34,20 @@
       <h1
         class="mt-5 text-5xl leading-[0.95] font-semibold tracking-[-0.05em] sm:text-6xl"
       >
-        {presence === 'existing'
+        {presence === Presence.Existing
           ? 'Keys you already keep.'
           : 'Keys, not accounts.'}
       </h1>
       <p class="mt-6 max-w-md text-base leading-7 text-[#555]">
-        {presence === 'existing'
+        {presence === Presence.Existing
           ? 'Open Nook found a sealed vault on this device. Unlock continues the landing promise — no create theater.'
           : 'Same voice as the landing page. First choice is what to build, not how to authenticate.'}
       </p>
 
-      {#if presence === 'existing'}
+      {#if presence === Presence.Existing}
         <button
           class="mt-10 inline-flex items-center gap-2 rounded-md bg-black px-5 py-3 text-sm font-medium text-white"
-          onclick={() => (picked = 'unlock')}
+          onclick={() => (picked = NookAuthChoice.Unlock)}
         >
           Unlock vault <ArrowUpRight class="size-4" />
         </button>
@@ -51,27 +55,27 @@
         <div class="mt-10 flex flex-wrap gap-3">
           <button
             class="rounded-md bg-black px-5 py-3 text-sm font-medium text-white"
-            onclick={() => (picked = 'simple')}
+            onclick={() => (picked = NookAuthChoice.Simple)}
           >
             Create simple vault
           </button>
           <button
             class="rounded-md border border-black px-5 py-3 text-sm font-medium"
-            onclick={() => (picked = 'sentinel')}
+            onclick={() => (picked = NookAuthChoice.Sentinel)}
           >
             Build Sentinel vault
           </button>
         </div>
       {/if}
 
-      {#if picked !== 'none'}
+      {#if picked !== NookAuthChoice.None}
         <div class="mt-8 rounded-xl border border-black/10 bg-[#f7f7f5] p-5">
           <p
             class="font-mono text-[11px] tracking-[0.16em] uppercase text-[#777]"
           >
             Next step
           </p>
-          {#if picked === 'unlock'}
+          {#if picked === NookAuthChoice.Unlock}
             <p class="mt-2 text-lg font-medium">
               Passkey unlocks the existing vault.
             </p>
@@ -80,7 +84,7 @@
             >
               <Fingerprint class="size-4" /> Authenticate
             </button>
-          {:else if picked === 'simple'}
+          {:else if picked === NookAuthChoice.Simple}
             <p class="mt-2 text-lg font-medium">
               Name the vault and create locally.
             </p>
@@ -117,7 +121,7 @@
       <p
         class="absolute bottom-6 font-mono text-[11px] tracking-[0.18em] text-[#888] uppercase"
       >
-        {presence === 'existing'
+        {presence === Presence.Existing
           ? 'Presence · vault sealed'
           : 'Presence · empty mesh'}
       </p>

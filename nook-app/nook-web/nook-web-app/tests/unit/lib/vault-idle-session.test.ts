@@ -1,10 +1,9 @@
-import { beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, describe, expect, test, vi } from 'vitest'
 import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
 } from '$app-wasm'
 import { createVaultIdleSessionTracker } from '$lib/vault-idle-session'
-import { intoWasmStringValue } from '$lib/wasm-string-value'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -16,12 +15,8 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       false,
     )
-    expect(
-      config.resolveVaultIdleTimeoutMs(intoWasmStringValue(undefined)),
-    ).toBe(5 * 60_000)
-    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('1000'))).toBe(
-      5 * 60_000,
-    )
+    expect(config.resolveDefaultVaultIdleTimeoutMs()).toBe(5 * 60_000)
+    expect(config.resolveVaultIdleTimeoutMs('1000')).toBe(5 * 60_000)
   })
 
   test('e2e build honors VITE_VAULT_IDLE_TIMEOUT_MS', () => {
@@ -29,9 +24,7 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('production'),
       true,
     )
-    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('2500'))).toBe(
-      2500,
-    )
+    expect(config.resolveVaultIdleTimeoutMs('2500')).toBe(2500)
   })
 
   test('rejects values below minimum in dev/e2e', () => {
@@ -39,9 +32,7 @@ describe('resolveVaultIdleTimeoutMs', () => {
       NookClientRunModeUtil.parse('development'),
       false,
     )
-    expect(config.resolveVaultIdleTimeoutMs(intoWasmStringValue('100'))).toBe(
-      5 * 60_000,
-    )
+    expect(config.resolveVaultIdleTimeoutMs('100')).toBe(5 * 60_000)
   })
 })
 
@@ -51,9 +42,7 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       false,
     )
-    expect(
-      config.resolveVaultIdleWarningMs(intoWasmStringValue(undefined)),
-    ).toBe(30_000)
+    expect(config.resolveDefaultVaultIdleWarningMs()).toBe(30_000)
   })
 
   test('e2e can disable warning', () => {
@@ -61,7 +50,7 @@ describe('resolveVaultIdleWarningMs', () => {
       NookClientRunModeUtil.parse('prod'),
       true,
     )
-    expect(config.resolveVaultIdleWarningMs(intoWasmStringValue('0'))).toBe(0)
+    expect(config.resolveVaultIdleWarningMs('0')).toBe(0)
   })
 })
 
@@ -98,5 +87,33 @@ describe('createVaultIdleSessionTracker', () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(expired).toBe(false)
     tracker.stop()
+  })
+
+  test('expiration detaches every activity listener before locking', async () => {
+    const removeListener = vi.spyOn(document, 'removeEventListener')
+    const tracker = createVaultIdleSessionTracker({
+      timeoutMs: 30,
+      warningMs: 0,
+      onExpire: () => {
+        tracker.stop()
+      },
+    })
+
+    try {
+      tracker.start()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      for (const event of [
+        'pointerdown',
+        'keydown',
+        'touchstart',
+        'scroll',
+        'click',
+      ]) {
+        expect(removeListener).toHaveBeenCalledWith(event, expect.any(Function))
+      }
+    } finally {
+      tracker.stop()
+      removeListener.mockRestore()
+    }
   })
 })

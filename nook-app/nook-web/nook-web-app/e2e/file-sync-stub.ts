@@ -6,6 +6,7 @@ import {
   EVENT_DIGEST_PATTERN,
   fulfillEventMetadata,
   parseEventMultipart,
+  EventMultipartParseKind,
 } from './event-log-stub'
 
 const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
@@ -16,10 +17,23 @@ function toPosixPath(value: string) {
   return value.split(path.sep).join('/')
 }
 
-function sha256FileNameFromPath(filePath: string) {
-  const name = path.basename(filePath)
-  return EVENT_FILE_NAME_PATTERN.test(name) ? name : undefined
+enum EventFileIdParseKind {
+  NotEvent = 'not-event',
+  Event = 'event',
 }
+
+type EventFileIdParse =
+  | { kind: EventFileIdParseKind.NotEvent }
+  | { kind: EventFileIdParseKind.Event; digest: string }
+
+enum EventFileReadKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+type EventFileRead =
+  | { kind: EventFileReadKind.Missing }
+  | { kind: EventFileReadKind.Found; content: string }
 
 /** File-backed e2e sync remote. The browser still uses the OAuth-file code path;
  * Playwright serves those provider calls from a real temp directory.
@@ -51,10 +65,13 @@ export function createLocalE2eFileSyncVaultStub(
     return `e2e-file-event-${digest}`
   }
 
-  function eventDigestFromFileId(id: string) {
+  function parseEventFileId(id: string): EventFileIdParse {
     return id.startsWith('e2e-file-event-')
-      ? id.slice('e2e-file-event-'.length)
-      : undefined
+      ? {
+          kind: EventFileIdParseKind.Event,
+          digest: id.slice('e2e-file-event-'.length),
+        }
+      : { kind: EventFileIdParseKind.NotEvent }
   }
 
   function eventDigests() {
@@ -66,9 +83,14 @@ export function createLocalE2eFileSyncVaultStub(
       .sort()
   }
 
-  function readEvent(digest: string) {
+  function readEvent(digest: string): EventFileRead {
     const file = eventPath(digest)
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined
+    return fs.existsSync(file)
+      ? {
+          kind: EventFileReadKind.Found,
+          content: fs.readFileSync(file, 'utf8'),
+        }
+      : { kind: EventFileReadKind.Missing }
   }
 
   function writeEvent(digest: string, content: string) {
@@ -113,11 +135,13 @@ export function createLocalE2eFileSyncVaultStub(
     getEventFileContents: () =>
       eventDigests()
         .map((digest) => readEvent(digest))
-        .filter((content): content is string => content !== undefined),
+        .flatMap((event) =>
+          event.kind === EventFileReadKind.Found ? [event.content] : [],
+        ),
     clearEventFiles: () => {
       if (!fs.existsSync(eventsDir())) return
       for (const name of fs.readdirSync(eventsDir())) {
-        if (sha256FileNameFromPath(name)) {
+        if (EVENT_FILE_NAME_PATTERN.test(path.basename(name))) {
           fs.unlinkSync(path.join(eventsDir(), name))
         }
       }
@@ -136,7 +160,7 @@ export function createLocalE2eFileSyncVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
-      if (opts?.vaultYaml !== undefined) {
+      if (opts && 'vaultYaml' in opts) {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -217,17 +241,17 @@ export function createLocalE2eFileSyncVaultStub(
         const driveFileId = driveFileMatch?.[1]
 
         if (driveFileId && fullUrl.includes('alt=media')) {
-          const eventDigest = eventDigestFromFileId(driveFileId)
-          if (eventDigest) {
-            const content = readEvent(eventDigest)
-            if (content === undefined) {
+          const eventFile = parseEventFileId(driveFileId)
+          if (eventFile.kind === EventFileIdParseKind.Event) {
+            const event = readEvent(eventFile.digest)
+            if (event.kind === EventFileReadKind.Missing) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
             await route.fulfill({
               status: 200,
               contentType: 'application/x-yaml',
-              body: content,
+              body: event.content,
             })
             return
           }
@@ -245,16 +269,18 @@ export function createLocalE2eFileSyncVaultStub(
         }
 
         if (driveFileId && method === 'GET') {
-          const eventDigest = eventDigestFromFileId(driveFileId)
-          if (eventDigest) {
-            if (readEvent(eventDigest) === undefined) {
+          const eventFile = parseEventFileId(driveFileId)
+          if (eventFile.kind === EventFileIdParseKind.Event) {
+            if (
+              readEvent(eventFile.digest).kind === EventFileReadKind.Missing
+            ) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
             await fulfillEventMetadata(
               route,
               driveFileId,
-              eventDigest,
+              eventFile.digest,
               'e2e-file-event-md5-',
             )
             return
@@ -277,7 +303,7 @@ export function createLocalE2eFileSyncVaultStub(
           method === 'POST'
         ) {
           const event = parseEventMultipart(request.postData() ?? '')
-          if (event) {
+          if (event.kind === EventMultipartParseKind.Valid) {
             if (!writeEvent(event.digest, event.content)) {
               await route.fulfill({ status: 409, body: '{}' })
               return

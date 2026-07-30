@@ -1,11 +1,10 @@
 /** Deterministic WebAuthn PRF mock used by browser-flow tests. */
 export function installMockPasskeyRuntime() {
   const credentialId = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
-  const saved = window.name.startsWith('nook-e2e-passkey:')
-    ? window.name.slice('nook-e2e-passkey:'.length)
-    : undefined
-  let userHandle = saved
-    ? Uint8Array.from(JSON.parse(saved) as number[])
+  let userHandle = window.name.startsWith('nook-e2e-passkey:')
+    ? Uint8Array.from(
+        JSON.parse(window.name.slice('nook-e2e-passkey:'.length)) as number[],
+      )
     : Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
   const saveUserHandle = () => {
     window.name = `nook-e2e-passkey:${JSON.stringify(Array.from(userHandle))}`
@@ -70,10 +69,7 @@ export function installMockPasskeyRuntime() {
   }
   Object.defineProperty(window, 'PublicKeyCredential', {
     configurable: true,
-    get: () =>
-      localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable'
-        ? undefined
-        : publicKeyCredential,
+    value: publicKeyCredential,
   })
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
@@ -92,6 +88,11 @@ export function installMockPasskeyRuntime() {
         }
       }) => {
         const mode = localStorage.getItem('nook_e2e_passkey_mode')
+        if (mode === 'unavailable') {
+          throw new Error(
+            'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
+          )
+        }
         if (mode === 'cancel') {
           throw new DOMException(
             'The operation was cancelled.',
@@ -146,6 +147,11 @@ export function installMockPasskeyRuntime() {
         }
       }) => {
         const mode = localStorage.getItem('nook_e2e_passkey_mode')
+        if (mode === 'unavailable') {
+          throw new Error(
+            'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
+          )
+        }
         if (mode === 'cancel') {
           throw new DOMException(
             'The operation was cancelled.',

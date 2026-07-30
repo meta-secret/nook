@@ -34,16 +34,19 @@ export function applyDraftVaultArchitecture(
   state.architectureSecretCreationAllowed = canCreateSecret(
     state.vaultArchitecture,
   );
-  state.manager?.setVaultArchitecture(state.vaultArchitecture);
+  if (state.hasManager) {
+    state.requireManager().setVaultArchitecture(state.vaultArchitecture);
+  }
 }
 
 export function refreshVaultArchitectureFromManager(
   state: ArchitectureActionsContext,
 ): void {
-  if (!state.manager) return;
+  if (!state.hasManager) return;
   let architecture: VaultArchitecture;
   try {
-    architecture = state.manager.vaultArchitecture as VaultArchitecture;
+    architecture = state.requireManager()
+      .vaultArchitecture as VaultArchitecture;
   } catch (error) {
     log.warn("vault architecture metadata could not be loaded", {
       error: error instanceof Error ? error.message : String(error),
@@ -64,13 +67,13 @@ export async function refreshArchitectureSecretCreationAllowed(
   state: ArchitectureActionsContext,
 ): Promise<void> {
   const fallback = canCreateSecret(state.vaultArchitecture);
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.architectureSecretCreationAllowed = fallback;
     return;
   }
   try {
     state.architectureSecretCreationAllowed = await state.enqueueStorage(() =>
-      state.manager!.canCreateSecretForVaultArchitecture(),
+      state.requireManager().canCreateSecretForVaultArchitecture(),
     );
   } catch {
     state.architectureSecretCreationAllowed = fallback;

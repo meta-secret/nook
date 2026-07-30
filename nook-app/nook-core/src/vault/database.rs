@@ -277,8 +277,7 @@ mod tests {
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
         let passphrase = TEST_PASSPHRASE;
 
-        let yaml = std::fs::read_to_string(fixtures.join("nook-projection.example.yaml"))
-            .expect("missing fixtures/nook-projection.example.yaml");
+        let yaml = std::fs::read_to_string(fixtures.join("nook-projection.example.yaml"))?;
 
         assert!(yaml.as_str().contains("secrets:"));
         assert!(yaml.as_str().contains('|'));

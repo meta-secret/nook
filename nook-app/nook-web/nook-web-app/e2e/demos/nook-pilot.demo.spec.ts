@@ -4,11 +4,16 @@ import {
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
-import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
+import {
+  demoDomainEnumArgs,
+  installDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     loginPilotFlow: true,
   }
 }
@@ -16,6 +21,7 @@ function loginPilotStubArgs(messages: Record<string, ChromeMessage>) {
 function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
   return {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     authenticatorPickerFlow: true,
     responsesByType: {
       'nook:authentication-workflow-snapshot': {

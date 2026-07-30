@@ -22,7 +22,9 @@ export function formatToolStarted(toolCall: ToolCall): string {
     case "grep": {
       const pattern = stringArg(toolCall.args, "pattern");
       const path = stringArg(toolCall.args, "path");
-      return path ? `grep ${truncate(pattern, 80)} in ${shortenPath(path)}` : `grep ${truncate(pattern, 100)}`;
+      return path
+        ? `grep ${truncate(pattern, 80)} in ${shortenPath(path)}`
+        : `grep ${truncate(pattern, 100)}`;
     }
     case "glob":
       return `glob ${stringArg(toolCall.args, "glob_pattern")}`;
@@ -51,11 +53,11 @@ export function formatToolStarted(toolCall: ToolCall): string {
 export function formatToolCompleted(
   toolCall: ToolCall,
   options: { includeShellOutput?: boolean } = {},
-): string[] | null {
+): string[] {
   const includeShellOutput = options.includeShellOutput ?? true;
   const result = toolCall.result;
   if (!result) {
-    return null;
+    return [];
   }
 
   if (result.status === "error") {
@@ -81,21 +83,22 @@ export function formatToolCompleted(
     case "mcp":
       return ["mcp done"];
     default:
-      return null;
+      return [];
   }
 }
 
-export function extractShellOutputChunk(event: Record<string, unknown> | undefined): string {
-  if (!event) {
+export function extractShellOutputChunk(event: unknown): string {
+  if (!event || typeof event !== "object") {
     return "";
   }
+  const eventRecord = event as Record<string, unknown>;
 
-  const direct = readShellText(event);
+  const direct = readShellText(eventRecord);
   if (direct) {
     return direct;
   }
 
-  const nested = event.value;
+  const nested = eventRecord.value;
   if (nested && typeof nested === "object") {
     const fromNested = readShellText(nested as Record<string, unknown>);
     if (fromNested) {
@@ -103,10 +106,11 @@ export function extractShellOutputChunk(event: Record<string, unknown> | undefin
     }
   }
 
-  const protobufCase = typeof event.case === "string" ? event.case : "";
+  const protobufCase =
+    typeof eventRecord.case === "string" ? eventRecord.case : "";
   if (protobufCase.includes("stdout") || protobufCase.includes("stderr")) {
-    if (typeof event.value === "string") {
-      return event.value;
+    if (typeof eventRecord.value === "string") {
+      return eventRecord.value;
     }
     if (nested && typeof nested === "object") {
       return readShellText(nested as Record<string, unknown>);
@@ -127,7 +131,10 @@ function formatTaskOutputBlocks(value: unknown): string[] {
   if (typeof record.durationMs === "number") {
     lines.push(`task duration ${record.durationMs}ms`);
   }
-  if (typeof record.resultSuffix === "string" && record.resultSuffix.trim().length > 0) {
+  if (
+    typeof record.resultSuffix === "string" &&
+    record.resultSuffix.trim().length > 0
+  ) {
     lines.push(...formatOutputBlock("task result", record.resultSuffix));
   }
 
@@ -187,7 +194,7 @@ function readShellText(value: Record<string, unknown>): string {
   return "";
 }
 
-function stringArg(args: ToolCall["args"] | undefined, key: string): string {
+function stringArg(args: unknown, key: string): string {
   if (!args || typeof args !== "object") {
     return "";
   }

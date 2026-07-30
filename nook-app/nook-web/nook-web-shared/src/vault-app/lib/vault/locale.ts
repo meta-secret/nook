@@ -1,11 +1,30 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookAppLocale } from "$app-wasm";
 import {
+  defaultTranslationCatalog,
   get_translation_catalog as getTranslationCatalog,
   resolveTranslationCatalog,
 } from "$app-wasm";
 
-type TranslationCatalog = string;
+enum TranslationCatalogLookupKind {
+  Unavailable = "unavailable",
+  Loaded = "loaded",
+}
+
+function wasmTranslationCatalog(
+  locale: NookAppLocale,
+):
+  | { kind: TranslationCatalogLookupKind.Unavailable }
+  | { kind: TranslationCatalogLookupKind.Loaded; catalog: string } {
+  try {
+    return {
+      kind: TranslationCatalogLookupKind.Loaded,
+      catalog: getTranslationCatalog(locale),
+    };
+  } catch {
+    return { kind: TranslationCatalogLookupKind.Unavailable };
+  }
+}
 
 export async function updateLocale(
   state: VaultState,
@@ -14,18 +33,18 @@ export async function updateLocale(
 ): Promise<void> {
   state.locale = newLocale;
   localStorage.setItem("nook_locale", newLocale);
-  if (typeof document !== "undefined") {
+  if ("document" in globalThis) {
     document.documentElement.lang = newLocale;
   }
 
-  const preferWasm = options?.preferWasm ?? Boolean(state.manager);
-  let wasmCatalog: TranslationCatalog | undefined;
-  if (preferWasm) {
-    try {
-      wasmCatalog = getTranslationCatalog(newLocale);
-    } catch {
-      // Fall back to the bundled JSON catalogs only.
-    }
+  const preferWasm = options?.preferWasm ?? state.hasManager;
+  if (!preferWasm) {
+    state.translations = defaultTranslationCatalog(newLocale);
+    return;
   }
-  state.translations = resolveTranslationCatalog(newLocale, wasmCatalog);
+  const wasmCatalog = wasmTranslationCatalog(newLocale);
+  state.translations =
+    wasmCatalog.kind === TranslationCatalogLookupKind.Loaded
+      ? resolveTranslationCatalog(newLocale, wasmCatalog.catalog)
+      : defaultTranslationCatalog(newLocale);
 }

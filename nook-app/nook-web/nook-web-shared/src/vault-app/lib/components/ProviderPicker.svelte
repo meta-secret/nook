@@ -1,9 +1,16 @@
 <script lang="ts">
+  import { ReplicationType } from '$app-wasm'
+
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
-  import type {
-    OAuthFilePreset,
-    StorageProvider,
-    StorageProviderType,
+  import {
+    configuredOAuthFile,
+    defaultOAuthFileConfig,
+    providerPersistenceDefaults,
+    storedGithubPat,
+    storedGithubRepository,
+    type OAuthFilePreset,
+    type StorageProvider,
+    type StorageProviderType,
   } from '$lib/auth-providers'
   import { providerReplicationCapability } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
@@ -26,27 +33,30 @@
     type: StorageProviderType,
     oauthPreset?: OAuthFilePreset,
   ): StorageProvider {
-    return {
+    const base: StorageProvider = {
+      ...providerPersistenceDefaults(),
       id: `draft-${type}-${oauthPreset ?? 'default'}`,
       type,
       label: type,
-      githubPat: type === 'github' ? 'github_pat_draft' : undefined,
-      githubRepo: type === 'github' ? 'nook' : undefined,
-      oauthFile:
-        type === 'oauth-file'
-          ? {
-              preset: oauthPreset ?? 'google-drive',
-              accessToken: 'draft-token',
-              fileName: 'nook-events',
-              driveMode: 'private',
-              iCloudMode: 'private',
-            }
-          : undefined,
-      localFolder: undefined,
-      storeId: undefined,
       syncCheckpoint: { state: 'neverSynced' },
       createdAt: new Date(0).toISOString(),
     }
+    if (type === 'github') {
+      return {
+        ...base,
+        githubPat: storedGithubPat('github_pat_draft'),
+        githubRepo: storedGithubRepository('nook'),
+      }
+    }
+    if (type === 'oauth-file') {
+      return {
+        ...base,
+        oauthFile: configuredOAuthFile(
+          defaultOAuthFileConfig(oauthPreset ?? 'google-drive'),
+        ),
+      }
+    }
+    return base
   }
 
   function blocked(
@@ -57,7 +67,7 @@
       draftProvider(type, oauthPreset),
     )
     try {
-      return vault.draftReplicationType === 'shared'
+      return vault.draftReplicationType === ReplicationType.Shared
         ? !result.supportsShared
         : !result.supportsPersonal
     } finally {

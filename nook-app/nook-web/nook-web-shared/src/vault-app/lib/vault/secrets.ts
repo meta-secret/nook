@@ -3,7 +3,7 @@ import type {
   AuthenticatorCodeView,
   NookImportResult,
   NookSecretRecord,
-  VaultItemType,
+  SecretType,
 } from "$lib/nook";
 import {
   generatePassword as coreGeneratePassword,
@@ -15,14 +15,28 @@ import {
   JoinEnrollmentState,
   RemoteVaultRecoveryState,
   type NookSecretPage,
+  type NookVaultManager,
 } from "$app-wasm";
+import { VaultEditDecision } from "$app-wasm";
 import { syncLocalFolderProvider } from "$lib/vault/sync.svelte";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 import {
   isSentinelCeremonyRequiredError,
   refreshSentinelUnlockStatus,
   surfaceSentinelCeremonyIfNeeded,
 } from "$lib/vault/sentinel-unlock";
+import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
+import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
+enum StorageConnectionKind {
+  Configured = "configured",
+  RemoteRecovery = "remote-recovery",
+}
+
+type StorageConnection =
+  | { kind: StorageConnectionKind.Configured }
+  | {
+      kind: StorageConnectionKind.RemoteRecovery;
+      args: [string, string, string];
+    };
 
 const log = createLogger("connect");
 
@@ -36,7 +50,7 @@ export async function loadDb(state: VaultState) {
     return;
   }
 
-  if (!state.manager) {
+  if (!state.hasManager) {
     state.errorMsg = state.t("errors.engine_unavailable");
     return;
   }
@@ -53,7 +67,11 @@ export async function loadDb(state: VaultState) {
     await state.initDeviceIdentity();
     await state.ensureOAuthTokensFresh();
 
-    if (!state.isAuthenticated && state.loginSetupType === "local-folder") {
+    if (
+      !state.isAuthenticated &&
+      state.loginSetup.kind === LoginSetupKind.Active &&
+      state.loginSetup.providerType === "local-folder"
+    ) {
       const saved = await state.ensureProviderSaved();
       if (!saved) return;
       const provider =
@@ -69,7 +87,9 @@ export async function loadDb(state: VaultState) {
     }
 
     let accessStatus = await state.assessVaultConnectStatus();
-    let connectArgsOverride: [string, string, string] | undefined = undefined;
+    let storageConnection: StorageConnection = {
+      kind: StorageConnectionKind.Configured,
+    };
     log.debug("loadDb assess", {
       accessStatus,
       localVaultPresent: state.localVaultPresent,
@@ -100,7 +120,10 @@ export async function loadDb(state: VaultState) {
       log.debug("loadDb provider re-assess", { remoteStatus });
       if (remoteStatus === VaultAccessStatus.Ready) {
         accessStatus = VaultAccessStatus.Ready;
-        connectArgsOverride = providerArgs;
+        storageConnection = {
+          kind: StorageConnectionKind.RemoteRecovery,
+          args: providerArgs,
+        };
       }
     }
 
@@ -140,12 +163,15 @@ export async function loadDb(state: VaultState) {
     }
 
     const rawRecords = await state.enqueueStorage(async () => {
-      const connectArgs = connectArgsOverride ?? state.connectStorageArgs();
+      const connectArgs =
+        storageConnection.kind === StorageConnectionKind.RemoteRecovery
+          ? storageConnection.args
+          : state.connectStorageArgs();
       log.debug("loadDb connect", { mode: connectArgs[0] });
       const connectPromise =
         state.remoteVaultRecoveryState === RemoteVaultRecoveryState.ConnectFresh
-          ? state.manager!.connect_fresh(...connectArgs)
-          : state.manager!.connect(...connectArgs);
+          ? state.requireManager().connect_fresh(...connectArgs)
+          : state.requireManager().connect(...connectArgs);
       state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
@@ -218,18 +244,19 @@ export async function loadDb(state: VaultState) {
   }
 }
 
-type VaultManager = NonNullable<VaultState["manager"]>;
-
 async function runPasswordManagerImport(
   state: VaultState,
-  importFromManager: (manager: VaultManager) => Promise<NookImportResult>,
+  importFromManager: (manager: NookVaultManager) => Promise<NookImportResult>,
   sourceName: string,
   successKey: string,
   failureKey: string,
 ): Promise<NookImportResult> {
-  if (!state.manager) throw new Error(state.t("errors.engine_unavailable"));
-  const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) throw new Error(editBlockMessage);
+  if (!state.hasManager) throw new Error(state.t("errors.engine_unavailable"));
+  const manager = state.requireManager();
+  const editRestriction = state.editRestriction;
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    throw new Error(editRestriction.reason);
+  }
   state.errorMsg = "";
   state.dismissSuccess();
   state.isSaving = true;
@@ -237,9 +264,7 @@ async function runPasswordManagerImport(
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
   try {
-    const result = await state.enqueueStorage(() =>
-      importFromManager(state.manager!),
-    );
+    const result = await state.enqueueStorage(() => importFromManager(manager));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
     log.info(`${sourceName} import completed`, {
@@ -260,10 +285,10 @@ async function runPasswordManagerImport(
 }
 
 async function prepareSecretMutation(state: VaultState): Promise<boolean> {
-  if (!state.manager) return false;
-  const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) {
-    state.errorMsg = editBlockMessage;
+  if (!state.hasManager) return false;
+  const editRestriction = state.editRestriction;
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    state.errorMsg = editRestriction.reason;
     return false;
   }
   state.errorMsg = "";
@@ -278,14 +303,14 @@ async function prepareSecretMutation(state: VaultState): Promise<boolean> {
 export async function handleAddSecret(
   state: VaultState,
   id: string,
-  type: VaultItemType,
+  type: SecretType,
   data: string,
 ) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     await state.enqueueStorage(async () => {
       const rawRecords = (await state.raceStorageTimeout(
-        state.manager!.add_secret(id, type, data),
+        state.requireManager().add_secret(id, type, data),
         "Add secret",
       )) as NookSecretRecord[];
       freeSecretRecords(rawRecords);
@@ -396,10 +421,10 @@ export async function handleProtonPassImport(
 }
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
-  if (!state.manager) return;
-  const editBlockMessage = state.editBlockMessage;
-  if (editBlockMessage !== undefined) {
-    state.errorMsg = editBlockMessage;
+  if (!state.hasManager) return;
+  const editRestriction = state.editRestriction;
+  if (editRestriction.decision !== VaultEditDecision.Allowed) {
+    state.errorMsg = editRestriction.reason;
     return;
   }
   state.errorMsg = "";
@@ -417,9 +442,9 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
   });
   try {
     await state.enqueueStorage(async () => {
-      const rawRecords = (await state.manager!.delete_secret(
-        id,
-      )) as NookSecretRecord[];
+      const rawRecords = (await state
+        .requireManager()
+        .delete_secret(id)) as NookSecretRecord[];
       freeSecretRecords(rawRecords);
     });
     committed = true;
@@ -446,19 +471,16 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
 export async function handleReplaceSecret(
   state: VaultState,
   oldId: string,
-  type: VaultItemType,
+  type: SecretType,
   data: string,
 ) {
   if (!(await prepareSecretMutation(state))) return;
   try {
     const newId = generateSecretId();
     await state.enqueueStorage(async () => {
-      const rawRecords = (await state.manager!.replace_secret(
-        oldId,
-        newId,
-        type,
-        data,
-      )) as NookSecretRecord[];
+      const rawRecords = (await state
+        .requireManager()
+        .replace_secret(oldId, newId, type, data)) as NookSecretRecord[];
       freeSecretRecords(rawRecords);
     });
     await state.refreshSecretsFromSession();
@@ -476,7 +498,7 @@ export async function handleReplaceSecret(
 export async function refreshPasswordEntriesList(
   state: VaultState,
 ): Promise<boolean> {
-  if (!state.manager) return false;
+  if (!state.hasManager) return false;
   try {
     if (!state.hasRemoteCredentials()) {
       state.passwordEntries = [];
@@ -484,11 +506,19 @@ export async function refreshPasswordEntriesList(
     }
     await state.ensureOAuthTokensFresh();
     const raw = await state.enqueueStorage(() =>
-      state.manager!.fetchVaultPasswordEntries(...state.wasmStorageArgs()),
+      state
+        .requireManager()
+        .fetchVaultPasswordEntries(...state.wasmStorageArgs()),
     );
     state.passwordEntries = raw;
-    if (state.passwordEntries.length === 1 && !state.selectedPasswordEntryId) {
-      state.selectedPasswordEntryId = state.passwordEntries[0]!.id;
+    if (
+      state.passwordEntries.length === 1 &&
+      state.selectedPasswordEntry.kind ===
+        PasswordEntrySelectionKind.NotSelected
+    ) {
+      for (const entry of state.passwordEntries) {
+        state.selectPasswordEntry(entry.id);
+      }
     }
     return true;
   } catch {
@@ -511,7 +541,7 @@ export function generatePassword(
 export async function refreshSecretsFromSession(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     freeSecretRecords(state.secrets);
     state.secrets = [];
     state.secretTotal = 0;
@@ -527,7 +557,7 @@ export async function loadSecretPage(
   query: string,
   requestedOffset = 0,
 ): Promise<void> {
-  if (!state.manager) return;
+  if (!state.hasManager) return;
   // Publish the request immediately so maintenance refreshes queued behind it
   // cannot re-submit the previous query or page.
   state.secretQuery = query;
@@ -537,12 +567,14 @@ export async function loadSecretPage(
   // applying its result after a newer search has already been requested.
   const generation = ++state.secretPageGeneration;
   const page = await state.enqueueStorage(() =>
-    state.manager!.queryPreparedSecretPage(
-      query,
-      intoWasmStringValue(state.secretTypeFilter),
-      requestedOffset,
-      state.secretPageSize,
-    ),
+    state
+      .requireManager()
+      .queryPreparedSecretPage(
+        query,
+        state.secretTypeFilter,
+        requestedOffset,
+        state.secretPageSize,
+      ),
   );
   let records = page.takeItems();
   let total = page.total;
@@ -560,12 +592,14 @@ export async function loadSecretPage(
       state.secretPageSize,
     );
     const lastPage = await state.enqueueStorage(() =>
-      state.manager!.querySecretPage(
-        query,
-        intoWasmStringValue(state.secretTypeFilter),
-        lastOffset,
-        state.secretPageSize,
-      ),
+      state
+        .requireManager()
+        .querySecretPage(
+          query,
+          state.secretTypeFilter,
+          lastOffset,
+          state.secretPageSize,
+        ),
     );
     records = lastPage.takeItems();
     total = lastPage.total;
@@ -606,22 +640,22 @@ export async function decryptSecret(
   state: VaultState,
   id: string,
 ): Promise<NookSecretRecord> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }
-  return state.enqueueStorage(() => state.manager!.decryptSecret(id));
+  return state.enqueueStorage(() => state.requireManager().decryptSecret(id));
 }
 
 export async function currentAuthenticatorCode(
   state: VaultState,
   id: string,
 ): Promise<AuthenticatorCodeView> {
-  if (!state.manager) {
+  if (!state.hasManager) {
     throw new Error("Vault manager is not initialized.");
   }
   const unixSeconds = Math.floor(Date.now() / 1000);
   const result = await state.enqueueStorage(() =>
-    state.manager!.currentAuthenticatorCode(id, unixSeconds),
+    state.requireManager().currentAuthenticatorCode(id, unixSeconds),
   );
   try {
     return {

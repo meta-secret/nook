@@ -154,7 +154,7 @@ test('reject an empty folder before existing-vault recovery', async ({
           getFile: async () => new File([files.get(name) ?? ''], name),
           createWritable: async () => ({
             write: async (data: string) => files.set(name, data),
-            close: async () => undefined,
+            close: async () => {},
           }),
         }
       }

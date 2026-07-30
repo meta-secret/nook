@@ -1,8 +1,12 @@
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
-import { sendRuntimeMessage, setStatus } from './login-passkey-actions'
-import { pickerState, widgetState } from './state'
+import {
+  RuntimeMessageDeliveryKind,
+  sendRuntimeMessage,
+  setStatus,
+} from './login-passkey-actions'
+import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
 import type {
   AuthenticatorFillResponse,
   AuthenticatorOptionsResponse,
@@ -17,7 +21,7 @@ export async function fillAuthenticatorCode(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<boolean> {
-  const response = await sendRuntimeMessage<AuthenticatorFillResponse>({
+  const delivery = await sendRuntimeMessage<AuthenticatorFillResponse>({
     type: 'nook:website-authenticator-fill',
     payload: {
       origin: location.origin,
@@ -25,7 +29,7 @@ export async function fillAuthenticatorCode(
       secretId: account.secretId,
     },
   })
-  if (!response?.ok || !response.code) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
@@ -35,7 +39,23 @@ export async function fillAuthenticatorCode(
     )
     return false
   }
-  const code = { value: response.code }
+  const { response } = delivery
+  const codeValue = response.code
+  if (
+    response.ok !== true ||
+    typeof codeValue !== 'string' ||
+    codeValue.length === 0
+  ) {
+    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setStatus(
+      description,
+      continueButton,
+      translatedMessage('widgetAuthenticatorFillFailed'),
+      true,
+    )
+    return false
+  }
+  const code = { value: codeValue }
   response.code = ''
   const filled = fillOneTimeCode(code.value, workflow.root, workflow.formScope)
   code.value = ''
@@ -62,7 +82,12 @@ export async function continueWithAuthenticator(
   description: HTMLParagraphElement,
   continueButton: HTMLButtonElement,
 ): Promise<void> {
-  if (widgetState.busy || pickerState.pendingAuthenticator) return
+  if (
+    widgetState.busy ||
+    pickerState.authenticator.kind === AuthenticatorPickerKind.Open
+  ) {
+    return
+  }
   widgetState.busy = true
   continueButton.disabled = true
   setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
@@ -74,11 +99,14 @@ export async function continueWithAuthenticator(
   )
 
   try {
-    const response = await sendRuntimeMessage<AuthenticatorOptionsResponse>({
+    const delivery = await sendRuntimeMessage<AuthenticatorOptionsResponse>({
       type: 'nook:website-authenticator-picker-open',
       payload: { origin: location.origin },
     })
-    if (!response?.ok) {
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response?.ok
+    ) {
       setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
         description,
@@ -88,6 +116,7 @@ export async function continueWithAuthenticator(
       )
       return
     }
+    const { response } = delivery
     if (response.status === 'locked') {
       setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
       setStatus(
@@ -131,9 +160,14 @@ export async function continueWithAuthenticator(
     }
     const timeoutId = window.setTimeout(
       () => {
-        if (pickerState.pendingAuthenticator?.requestId !== requestId) return
-        const pending = pickerState.pendingAuthenticator
-        pickerState.pendingAuthenticator = undefined
+        if (
+          pickerState.authenticator.kind !== AuthenticatorPickerKind.Open ||
+          pickerState.authenticator.request.requestId !== requestId
+        ) {
+          return
+        }
+        const pending = pickerState.authenticator.request
+        pickerState.clearPendingAuthenticator()
         setStatus(
           pending.description,
           pending.continueButton,
@@ -149,7 +183,7 @@ export async function continueWithAuthenticator(
       },
       Math.max(0, response.expiresAt - Date.now()),
     )
-    pickerState.pendingAuthenticator = {
+    pickerState.openAuthenticator({
       requestId: response.requestId,
       workflow,
       step,
@@ -157,7 +191,7 @@ export async function continueWithAuthenticator(
       description,
       continueButton,
       timeoutId,
-    }
+    })
     setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
     setStatus(
       description,
@@ -168,7 +202,7 @@ export async function continueWithAuthenticator(
   } finally {
     widgetState.busy = false
     if (
-      !pickerState.pendingAuthenticator &&
+      pickerState.authenticator.kind === AuthenticatorPickerKind.Closed &&
       continueButton.isConnected &&
       !continueButton.hidden
     ) {
@@ -185,9 +219,9 @@ function cancelAuthenticatorPickerRequest(requestId: string): void {
 }
 
 export function cancelPendingAuthenticatorPickerRequest(): void {
-  const pending = pickerState.pendingAuthenticator
-  if (!pending) return
-  pickerState.pendingAuthenticator = undefined
+  if (pickerState.authenticator.kind === AuthenticatorPickerKind.Closed) return
+  const pending = pickerState.authenticator.request
+  pickerState.clearPendingAuthenticator()
   window.clearTimeout(pending.timeoutId)
   cancelAuthenticatorPickerRequest(pending.requestId)
 }

@@ -8,43 +8,51 @@ export type ImportPanelProps<Input> = {
   embedded?: boolean;
 };
 
-export type ImportAttempt = {
-  result: NookImportResult | undefined;
-  error: string;
-};
-
-export function selectedImportFile(event: Event): File | undefined {
-  return (event.currentTarget as HTMLInputElement).files?.[0] ?? undefined;
+export enum ImportAttemptKind {
+  Skipped = "skipped",
+  Completed = "completed",
+  Failed = "failed",
 }
 
+export type ImportAttempt =
+  | { kind: ImportAttemptKind.Skipped }
+  | { kind: ImportAttemptKind.Completed; result: NookImportResult }
+  | { kind: ImportAttemptKind.Failed; error: string };
+
 export async function importTextFile(
-  file: File | undefined,
+  file: File,
   isSaving: boolean,
   onImport: (text: string) => Promise<NookImportResult>,
 ): Promise<ImportAttempt> {
-  if (!file || isSaving) return { result: undefined, error: "" };
+  if (isSaving) return { kind: ImportAttemptKind.Skipped };
   try {
-    return { result: await onImport(await file.text()), error: "" };
+    return {
+      kind: ImportAttemptKind.Completed,
+      result: await onImport(await file.text()),
+    };
   } catch (cause: unknown) {
     return {
-      result: undefined,
+      kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),
     };
   }
 }
 
 export async function importBinaryFile(
-  file: File | undefined,
+  file: File,
   isSaving: boolean,
   onImport: (bytes: Uint8Array) => Promise<NookImportResult>,
 ): Promise<ImportAttempt> {
-  if (!file || isSaving) return { result: undefined, error: "" };
+  if (isSaving) return { kind: ImportAttemptKind.Skipped };
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
-    return { result: await onImport(bytes), error: "" };
+    return {
+      kind: ImportAttemptKind.Completed,
+      result: await onImport(bytes),
+    };
   } catch (cause: unknown) {
     return {
-      result: undefined,
+      kind: ImportAttemptKind.Failed,
       error: cause instanceof Error ? cause.message : String(cause),
     };
   } finally {

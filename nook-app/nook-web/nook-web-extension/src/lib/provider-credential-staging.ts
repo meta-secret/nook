@@ -1,5 +1,14 @@
 type UnknownRecord = Record<string, unknown>
 
+export enum ProviderCredentialStagingKind {
+  InvalidInput = 'invalid-input',
+  Staged = 'staged',
+}
+
+export type ProviderCredentialStaging =
+  | { kind: ProviderCredentialStagingKind.InvalidInput }
+  | { kind: ProviderCredentialStagingKind.Staged; providers: unknown[] }
+
 function isRecord(value: unknown): value is UnknownRecord {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
@@ -8,7 +17,12 @@ function cloneProvider(provider: unknown): unknown {
   if (!isRecord(provider)) return provider
   const clone = { ...provider }
   if (isRecord(provider.oauthFile)) {
-    clone.oauthFile = { ...provider.oauthFile }
+    clone.oauthFile = {
+      ...provider.oauthFile,
+      ...(isRecord(provider.oauthFile.config)
+        ? { config: { ...provider.oauthFile.config } }
+        : {}),
+    }
   }
   return clone
 }
@@ -17,11 +31,21 @@ export function scrubProviderCredentials(providers: unknown): void {
   if (!Array.isArray(providers)) return
   for (const provider of providers) {
     if (!isRecord(provider)) continue
-    if ('githubPat' in provider) provider.githubPat = undefined
+    if (typeof provider.githubPat === 'string') {
+      delete provider.githubPat
+    } else if ('githubPat' in provider) {
+      provider.githubPat = { state: 'missing' }
+    }
     if (isRecord(provider.oauthFile)) {
-      provider.oauthFile.accessToken = ''
+      if (isRecord(provider.oauthFile.config)) {
+        provider.oauthFile.config.accessToken = { state: 'signedOut' }
+        provider.oauthFile.config.refreshToken = { state: 'notIssued' }
+      }
+      if (typeof provider.oauthFile.accessToken === 'string') {
+        provider.oauthFile.accessToken = ''
+      }
       if ('refreshToken' in provider.oauthFile) {
-        provider.oauthFile.refreshToken = undefined
+        delete provider.oauthFile.refreshToken
       }
     }
   }
@@ -29,9 +53,11 @@ export function scrubProviderCredentials(providers: unknown): void {
 
 export function stageProviderCredentials(
   providers: unknown,
-): unknown[] | undefined {
-  if (!Array.isArray(providers)) return undefined
+): ProviderCredentialStaging {
+  if (!Array.isArray(providers)) {
+    return { kind: ProviderCredentialStagingKind.InvalidInput }
+  }
   const staged = providers.map(cloneProvider)
   scrubProviderCredentials(providers)
-  return staged
+  return { kind: ProviderCredentialStagingKind.Staged, providers: staged }
 }

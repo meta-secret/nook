@@ -12,7 +12,7 @@ export function installForcePinDeviceProtection(): void {
   Object.defineProperty(globalThis, 'PublicKeyCredential', {
     configurable: true,
     get() {
-      return undefined
+      return
     },
   })
 }

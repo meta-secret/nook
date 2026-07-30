@@ -1,22 +1,36 @@
 /** Canonical production host for nokey.sh (override with VITE_SITE_URL at build time). */
 export const DEFAULT_SITE_URL = "https://nokey.sh";
 
+const SitemapChangeFrequency = {
+  Weekly: "weekly",
+  Monthly: "monthly",
+} as const;
+
+type SitemapChangeFrequency =
+  (typeof SitemapChangeFrequency)[keyof typeof SitemapChangeFrequency];
+
 export type SitemapEntry = {
   path: string;
-  changefreq: "weekly" | "monthly";
+  changefreq: SitemapChangeFrequency;
   priority: string;
 };
 
 /** Public routes suitable for search indexing (keep in sync with LEGAL_PAGES paths). */
 export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
-  { path: "/", changefreq: "weekly", priority: "1.0" },
-  { path: "/privacy.html", changefreq: "monthly", priority: "0.6" },
-  { path: "/terms.html", changefreq: "monthly", priority: "0.6" },
+  { path: "/", changefreq: SitemapChangeFrequency.Weekly, priority: "1.0" },
+  {
+    path: "/privacy.html",
+    changefreq: SitemapChangeFrequency.Monthly,
+    priority: "0.6",
+  },
+  {
+    path: "/terms.html",
+    changefreq: SitemapChangeFrequency.Monthly,
+    priority: "0.6",
+  },
 ];
 
-export function siteUrlFromEnv(
-  env: Record<string, string | undefined> = process.env,
-): string {
+export function siteUrlFromEnv(env: typeof process.env = process.env): string {
   const trimmed = env.VITE_SITE_URL?.trim();
   if (trimmed) {
     return trimmed.replace(/\/$/, "");

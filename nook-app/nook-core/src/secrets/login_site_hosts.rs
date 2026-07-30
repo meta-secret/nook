@@ -50,9 +50,16 @@ impl<'de> Deserialize<'de> for LoginSiteHosts {
     }
 }
 
-static LOGIN_SITE_HOSTS: LazyLock<LoginSiteHosts> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../data/login_site_hosts.json"))
-        .expect("bundled login_site_hosts.json must deserialize")
+enum LoginSiteHostsState {
+    Ready(LoginSiteHosts),
+    InvalidBundledCatalog,
+}
+
+static LOGIN_SITE_HOSTS: LazyLock<LoginSiteHostsState> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../data/login_site_hosts.json")).map_or(
+        LoginSiteHostsState::InvalidBundledCatalog,
+        LoginSiteHostsState::Ready,
+    )
 });
 
 /// Normalize a hostname the same way login matching strips `www.`.
@@ -68,7 +75,10 @@ pub fn login_host_family(host: &str) -> Option<&'static str> {
     if host.is_empty() {
         return None;
     }
-    LOGIN_SITE_HOSTS.by_host.get(&host).map(String::as_str)
+    match &*LOGIN_SITE_HOSTS {
+        LoginSiteHostsState::Ready(hosts) => hosts.by_host.get(&host).map(String::as_str),
+        LoginSiteHostsState::InvalidBundledCatalog => None,
+    }
 }
 
 /// True when two hosts share an explicit login family allowlist entry.
@@ -85,10 +95,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deserializes_host_family_map() {
+    fn deserializes_host_family_map() -> anyhow::Result<()> {
         let hosts: LoginSiteHosts =
-            serde_json::from_str(r#"{ "Login.MicrosoftOnline.com": "microsoft" }"#)
-                .expect("valid hosts deserialize");
+            serde_json::from_str(r#"{ "Login.MicrosoftOnline.com": "microsoft" }"#)?;
         assert_eq!(
             hosts
                 .by_host
@@ -98,6 +107,7 @@ mod tests {
         );
         assert!(serde_json::from_str::<LoginSiteHosts>(r#"{ "": "microsoft" }"#).is_err());
         assert!(serde_json::from_str::<LoginSiteHosts>(r#"{ "microsoft.com": "" }"#).is_err());
+        Ok(())
     }
 
     #[test]

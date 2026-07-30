@@ -1,8 +1,16 @@
 import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
-import type { NookSecretListItem, NookSecretRecord } from '$lib/nook'
+import {
+  SecretType,
+  type NookSecretListItem,
+  type NookSecretRecord,
+} from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import SecretDetailRow from '$lib/components/SecretDetailRow.svelte'
+import {
+  SecretRevealKind,
+  type SecretReveal,
+} from '$lib/components/secret-vault-state'
 
 const vault = {
   t(key: string): string {
@@ -12,7 +20,7 @@ const vault = {
 
 const authenticatorItem = {
   id: 'legacy-authenticator',
-  type: 'authenticator',
+  type: SecretType.Authenticator,
   issuer: 'Legacy service',
   account: 'alice@example.com',
   backupCodeCount: 2,
@@ -27,19 +35,20 @@ const decryptedAuthenticator = {
   backupCodes: ['recovery-one', 'recovery-two'],
 } as unknown as NookSecretRecord
 
-function authenticatorProps(revealed: NookSecretRecord | undefined) {
+function authenticatorProps(
+  reveal: SecretReveal = { kind: SecretRevealKind.Hidden },
+) {
   return {
     item: authenticatorItem,
     index: 0,
     expanded: true,
-    decrypted: revealed,
-    copiedKey: undefined,
+    reveal,
     onToggleExpand: vi.fn(),
-    onToggleReveal: vi.fn(async () => undefined),
-    onEditItem: vi.fn(async () => undefined),
-    onDeleteSecret: vi.fn(async () => undefined),
-    onCopyToClipboard: vi.fn(async () => undefined),
-    onCopySecret: vi.fn(async () => undefined),
+    onToggleReveal: vi.fn(async () => {}),
+    onEditItem: vi.fn(async () => {}),
+    onDeleteSecret: vi.fn(async () => {}),
+    onCopyToClipboard: vi.fn(async () => {}),
+    onCopySecret: vi.fn(async () => {}),
     vault,
   }
 }
@@ -51,7 +60,7 @@ function loginItem(
 ): NookSecretListItem {
   return {
     id: 'secret_login',
-    type: 'login',
+    type: SecretType.Login,
     displayTitle: websiteUrl,
     groupKey: websiteHost || 'No Website',
     summary: username || websiteUrl,
@@ -66,14 +75,12 @@ function renderLogin(item: NookSecretListItem) {
     item,
     index: 0,
     expanded: false,
-    decrypted: undefined,
-    copiedKey: undefined,
     onToggleExpand: vi.fn(),
-    onToggleReveal: vi.fn(async () => undefined),
-    onEditItem: vi.fn(async () => undefined),
-    onDeleteSecret: vi.fn(async () => undefined),
-    onCopyToClipboard: vi.fn(async () => undefined),
-    onCopySecret: vi.fn(async () => undefined),
+    onToggleReveal: vi.fn(async () => {}),
+    onEditItem: vi.fn(async () => {}),
+    onDeleteSecret: vi.fn(async () => {}),
+    onCopyToClipboard: vi.fn(async () => {}),
+    onCopySecret: vi.fn(async () => {}),
     vault,
     titleAsHeader: true,
   })
@@ -81,14 +88,19 @@ function renderLogin(item: NookSecretListItem) {
 
 describe('SecretDetailRow authenticator recovery codes', () => {
   test('keeps legacy recovery codes masked until reveal, then displays them', async () => {
-    const view = render(SecretDetailRow, authenticatorProps(undefined))
+    const view = render(SecretDetailRow, authenticatorProps())
 
     expect(
       view.getByTestId('authenticator-backup-codes').textContent,
     ).toContain('••••••••')
     expect(view.queryByText('recovery-one')).not.toBeTruthy()
 
-    await view.rerender(authenticatorProps(decryptedAuthenticator))
+    await view.rerender(
+      authenticatorProps({
+        kind: SecretRevealKind.Revealed,
+        record: decryptedAuthenticator,
+      }),
+    )
 
     expect(view.getByText('recovery-one')).toBeTruthy()
     expect(view.getByText('recovery-two')).toBeTruthy()

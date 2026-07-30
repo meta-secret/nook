@@ -36,10 +36,7 @@ async function installInterceptedLocalFolderPickerMock(page: Page) {
 
 async function installUnsupportedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
-    Object.defineProperty(window, 'showDirectoryPicker', {
-      configurable: true,
-      value: undefined,
-    })
+    Reflect.deleteProperty(window, 'showDirectoryPicker')
   })
 }
 
@@ -150,20 +147,7 @@ test.describe('local folder backup provider', () => {
     await expect(
       page.getByTestId('secret-row').filter({ hasText: sourceSecretKey }),
     ).toBeVisible()
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookVault?: {
-                  existingVaultRecoverySummary?: unknown
-                }
-              }
-            ).__nookVault?.existingVaultRecoverySummary,
-        ),
-      )
-      .toBeUndefined()
+    await expect(recoverySummary).toHaveCount(0)
   })
 
   test('explains the AI-debug browser directory-picker boundary', async ({

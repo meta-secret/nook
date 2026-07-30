@@ -101,7 +101,12 @@ test('search a paginated vault through encrypted metadata', async ({
               const read = request.result.transaction('vault', 'readonly')
               const get = read.objectStore('vault').get(key)
               get.onerror = () => reject(get.error)
-              get.onsuccess = () => resolve(get.result === undefined)
+              get.onsuccess = () => {
+                const resultState = !get.result
+                  ? { kind: 'missing' as const }
+                  : { kind: 'found' as const, value: get.result }
+                resolve(resultState.kind === 'missing')
+              }
             }
           }),
         legacyCatalogKey,

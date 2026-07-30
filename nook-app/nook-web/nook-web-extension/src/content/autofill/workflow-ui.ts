@@ -1,8 +1,11 @@
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
-import { loadExtensionSetupState } from '../../lib/pairing-state'
-import { saveOfferState, widgetState } from './state'
+import {
+  ExtensionSetupLoadKind,
+  loadExtensionSetupState,
+} from '../../lib/pairing-state'
+import { WidgetHostKind, saveOfferState, widgetState } from './state'
 
 export type PilotVaultConnection = {
   connected: boolean
@@ -19,9 +22,18 @@ export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
 export const OUTCOME_EVIDENCE_POLL_MS = 250
 
+export enum LoginOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type LoginOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | LoginOptionsResponseStatus.Ready
+    | LoginOptionsResponseStatus.Locked
+    | LoginOptionsResponseStatus.Unavailable
   accounts?: WebsiteLoginAccountOption[]
   reason?: string
 }
@@ -109,9 +121,18 @@ export function setFlightProgress(
   }
 }
 
+export enum AuthenticatorOptionsResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type AuthenticatorOptionsResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | AuthenticatorOptionsResponseStatus.Ready
+    | AuthenticatorOptionsResponseStatus.Locked
+    | AuthenticatorOptionsResponseStatus.Unavailable
   requestId?: string
   expiresAt?: number
 }
@@ -121,9 +142,18 @@ export type AuthenticatorFillResponse = {
   code?: string
 }
 
+export enum LoginPickerOpenResponseStatus {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
 export type LoginPickerOpenResponse = {
   ok?: boolean
-  status?: 'ready' | 'locked' | 'unavailable'
+  status?:
+    | LoginPickerOpenResponseStatus.Ready
+    | LoginPickerOpenResponseStatus.Locked
+    | LoginPickerOpenResponseStatus.Unavailable
   requestId?: string
   expiresAt?: number
 }
@@ -141,8 +171,8 @@ export function translatedMessageWithSubstitution(
 
 export async function loadPilotVaultConnection(): Promise<PilotVaultConnection> {
   const setup = await loadExtensionSetupState()
-  return setup
-    ? { connected: true, vaultName: setup.selectedVaultName }
+  return setup.kind === ExtensionSetupLoadKind.Ready
+    ? { connected: true, vaultName: setup.setup.selectedVaultName }
     : { connected: false }
 }
 
@@ -157,10 +187,10 @@ export function vaultConnectionLabel(connection: PilotVaultConnection): string {
 }
 
 export function removeWidget(): void {
-  widgetState.host?.remove()
-  widgetState.host = undefined
-  widgetState.renderedWorkflowKey = undefined
-  widgetState.renderedWorkflowRoot = undefined
-  saveOfferState.activeOffer = undefined
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    widgetState.host.element.remove()
+  }
+  widgetState.clearRenderedWidget()
+  saveOfferState.clearActiveOffer()
   saveOfferState.confirmationActive = false
 }

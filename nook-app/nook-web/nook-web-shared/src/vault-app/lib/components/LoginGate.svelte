@@ -1,5 +1,6 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelVaultUnlockState,
@@ -11,7 +12,13 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
+  import {
+    DEFAULT_GITHUB_REPO,
+    localFolderHandle,
+    LocalFolderHandleKind,
+    oauthAccessToken,
+    OAuthAccessTokenKind,
+  } from '$lib/auth-providers'
   import {
     Card,
     CardContent,
@@ -25,27 +32,42 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
+  import {
+    LoginVaultEntryKind,
+    type LoginVaultEntry,
+  } from '$lib/components/login/login-unlock-state'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
+  import { LoginProviderManagementVariant } from '$lib/components/login/login-provider-management-state'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import type { AppKind } from '$lib/app-kind'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
+    NookEnrollmentEntryLabelState,
     SentinelGenesisPhase,
+    type VaultApplication,
   } from '$app-wasm'
-  import { takeWasmStringValue } from '$lib/wasm-string-value'
+  import {
+    ActiveVaultKind,
+    LocalFolderDraftKind,
+    LoginSetupKind,
+    LoginVaultSelectionKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
+    RecoveryDiscoveryKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
 
   let {
     vault,
     appKind,
     providers,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
@@ -76,9 +98,9 @@
     onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
-    appKind: AppKind
+    appKind: VaultApplication
     providers: StorageProvider[]
-    setupType?: StorageProviderType | undefined
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     isVerifying: boolean
@@ -97,16 +119,14 @@
       code: string,
       password: string,
     ) => void | Promise<void>
-    onUnlockWithPassword?: (
+    onUnlockWithPassword: (
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onSwitchVault?: () => void | Promise<void>
+    onSwitchVault: () => void | Promise<void>
     onSentinelUnlocked?: () => void | Promise<void>
-    onCreateDeviceVault?: (label: string) => void | Promise<void>
-    onStartSentinelGenesis?: (
-      args: StartSentinelGenesisArgs,
-    ) => boolean | void | Promise<boolean | void>
+    onCreateDeviceVault: (label: string) => void | Promise<void>
+    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
     onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
       | string
       | Promise<string>
@@ -129,8 +149,26 @@
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
 
+  const prefillEnrollmentEntryLabel = $derived.by(() => {
+    if (!prefillEnrollmentCode) return ''
+    const label = peekEnrollmentEntryLabel(prefillEnrollmentCode)
+    try {
+      return label.state === NookEnrollmentEntryLabelState.Labeled
+        ? label.value
+        : ''
+    } finally {
+      label.free()
+    }
+  })
+
   const hasProviders = $derived(providers.length > 0)
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
@@ -149,15 +187,23 @@
       !showProviderSetupLink &&
       !showVaultPicker,
   )
-  const activeLoginVault = $derived(
-    vault.localVaults.find(
-      (entry) =>
-        entry.storeId ===
-        (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
-    ) ??
-      vault.localVaults[0] ??
-      undefined,
-  )
+  const activeLoginVault = $derived.by((): LoginVaultEntry => {
+    const selectedStoreId =
+      vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
+        ? vault.selectedLoginVault.storeId
+        : vault.activeVault.kind === ActiveVaultKind.Open
+          ? vault.activeVault.storeId
+          : ''
+    for (const entry of vault.localVaults) {
+      if (entry.storeId === selectedStoreId) {
+        return { kind: LoginVaultEntryKind.Available, entry }
+      }
+    }
+    for (const entry of vault.localVaults) {
+      return { kind: LoginVaultEntryKind.Available, entry }
+    }
+    return { kind: LoginVaultEntryKind.Unavailable }
+  })
   const showQrOnboarding = $derived(
     Boolean(
       enrollmentFromUrlPending && prefillEnrollmentCode && onUseEnrollmentCode,
@@ -192,12 +238,28 @@
   )
 
   const setupCanConnect = $derived(
-    setupType === 'local' ||
-      (setupType === 'local-folder' &&
-        Boolean(vault.localFolder?.handleId?.trim())) ||
-      (setupType === 'oauth-file' &&
-        Boolean(vault.oauthFile?.accessToken?.trim())) ||
-      (setupType === 'github' && Boolean(githubPat.trim())),
+    setupIs('local') ||
+      (setupIs('local-folder') &&
+        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
+        localFolderHandle(vault.localFolderDraft.config).kind ===
+          LocalFolderHandleKind.Selected) ||
+      (setupIs('oauth-file') &&
+        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+        oauthAccessToken(vault.oauthFileDraft.config).kind ===
+          OAuthAccessTokenKind.Available) ||
+      (setupIs('github') && Boolean(githubPat.trim())),
+  )
+  const recoveryPasswordEntries = $derived(
+    vault.recoveryDiscovery.kind === RecoveryDiscoveryKind.Found
+      ? vault.recoveryDiscovery.summary.passwordEntries
+      : [],
+  )
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
   )
 
   function handleFirstConnectSubmit(e: Event) {
@@ -215,14 +277,14 @@
       showProviderSetupLink = false
     }
     if (showLocalUnlock) {
-      void vault.prepareLocalLogin()
+      untrack(() => void vault.prepareLocalLogin())
     }
     if (
       !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
     ) {
-      void vault.refreshSentinelUnlockStatus()
+      untrack(() => void vault.refreshSentinelUnlockStatus())
     }
   })
 </script>
@@ -246,17 +308,13 @@
     <EnrollmentQrOnboardCard
       {vault}
       code={prefillEnrollmentCode}
-      passwordEntryId={takeWasmStringValue(
-        peekEnrollmentEntryId(prefillEnrollmentCode),
-      )}
-      passwordEntryLabel={takeWasmStringValue(
-        peekEnrollmentEntryLabel(prefillEnrollmentCode),
-      )}
+      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
+      passwordEntryLabel={prefillEnrollmentEntryLabel}
       {isVerifying}
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
-  {:else if (showCreateVault || sentinelInvitationRequest.trim()) && onCreateDeviceVault}
+  {:else if showCreateVault || sentinelInvitationRequest.trim()}
     <LoginCreateVaultChooser
       {vault}
       {appKind}
@@ -264,8 +322,7 @@
       {isInitializing}
       {usesExtensionDeviceIdentity}
       {onCreateDeviceVault}
-      onStartSentinelGenesis={onStartSentinelGenesis ??
-        ((args) => vault.startSentinelGenesis(args))}
+      {onStartSentinelGenesis}
       onAddSentinelGenesisParticipantResponse={(payload, participantLabel) =>
         sentinelGenesisActions.addParticipantResponse(
           vault,
@@ -336,12 +393,11 @@
               {vault.t('login.open_vault_title')}
             {:else if showSetup}
               {vault.t('onboarding.connect_to', {
-                provider:
-                  setupType === 'github'
-                    ? 'GitHub'
-                    : setupType === 'local-folder'
-                      ? vault.t('provider_picker.local_folder')
-                      : vault.t('onboarding.local_storage'),
+                provider: setupIs('github')
+                  ? 'GitHub'
+                  : setupIs('local-folder')
+                    ? vault.t('provider_picker.local_folder')
+                    : vault.t('onboarding.local_storage'),
               })}
             {:else if addProviderOpen}
               {vault.t('onboarding.add_provider')}
@@ -361,7 +417,7 @@
             <CardDescription class="text-pretty">
               {vault.t('login.open_vault_subtitle')}
             </CardDescription>
-          {:else if showSetup && setupType === 'github'}
+          {:else if showSetup && setupIs('github')}
             <CardDescription class="text-pretty">
               {vault.t('onboarding.github_description')}
             </CardDescription>
@@ -405,19 +461,17 @@
             hasMultipleVaults={vault.hasMultipleLocalVaults}
             passwordEntries={vault.passwordEntries.length > 0
               ? vault.passwordEntries
-              : (vault.existingVaultRecoverySummary?.passwordEntries ?? [])}
-            bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
+              : recoveryPasswordEntries}
+            selectedPasswordEntry={vault.selectedPasswordEntry}
+            onSelectPasswordEntry={(selection) => {
+              vault.selectedPasswordEntry = selection
+            }}
             {isVerifying}
             {isInitializing}
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
-            onSwitchVault={() => {
-              if (onSwitchVault) {
-                return onSwitchVault()
-              }
-              vault.beginLoginVaultPicker()
-            }}
+            {onSwitchVault}
             onCreateAnotherVault={onCreateDeviceVault}
             onImportFromSync={() => {
               vault.beginExistingVaultOpen()
@@ -427,21 +481,19 @@
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}
           </p>
-        {:else if showSetup && setupType}
-          {#if setupType === 'oauth-file'}
+        {:else if showSetup}
+          {#if setupIs('oauth-file')}
             <OAuthProviderSetupWizard
               {vault}
               bind:githubRepo
               idPrefix="login"
-              preset={vault.oauthFile?.preset ??
-                vault.oauthSetupPreset ??
-                'google-drive'}
+              preset={oauthPreset}
               {isVerifying}
               {isInitializing}
               {onCancelSetup}
               onConnect={onUnlock}
             />
-          {:else if setupType === 'github'}
+          {:else if setupIs('github')}
             <GitHubProviderSetupWizard
               {vault}
               bind:githubPat
@@ -456,9 +508,7 @@
               onConnect={onUnlock}
             >
               {#snippet beforeConnect()}
-                {#if vault.clientPolicy.remoteRecoveryPromptVisible(
-                  vault.remoteVaultRecoveryState,
-                )}
+                {#if vault.clientPolicy.remoteRecoveryPromptVisible(vault.remoteVaultRecoveryState)}
                   <RemoteVaultRecoveryPanel
                     {vault}
                     state={vault.remoteVaultRecoveryState}
@@ -470,7 +520,7 @@
                 {/if}
               {/snippet}
             </GitHubProviderSetupWizard>
-          {:else if setupType === 'local-folder'}
+          {:else if setupIs('local-folder')}
             <LocalFolderProviderSetupWizard
               {vault}
               idPrefix="login"
@@ -523,7 +573,7 @@
           {/if}
           <LoginProviderManagement
             {vault}
-            variant="setup"
+            variant={LoginProviderManagementVariant.Setup}
             {providers}
             {isVerifying}
             {isInitializing}

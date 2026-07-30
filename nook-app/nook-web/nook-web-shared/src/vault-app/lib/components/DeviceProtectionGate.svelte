@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
+  import { DeviceProtectionSetupWorkflow } from './device-protection-gate-state'
   import {
     Card,
     CardContent,
@@ -19,7 +20,7 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
-  let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
+  let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === DeviceProtectionStatus.Missing ||
@@ -133,7 +134,7 @@
           : vault.t('device_protection.pin_setup_action')}
       </Button>
     {:else if needsSetup}
-      {#if setupWorkflow === 'authenticate'}
+      {#if setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
         <div
           class="space-y-4"
           data-testid="device-protection-authenticate-workflow"
@@ -167,7 +168,7 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-create-new-choice"
             onclick={() => {
-              setupWorkflow = 'create'
+              setupWorkflow = DeviceProtectionSetupWorkflow.Create
               vault.dismissError()
             }}
           >
@@ -195,7 +196,9 @@
               class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               type="text"
               autocomplete="off"
-              placeholder={vault.t('device_protection.passkey_label_placeholder')}
+              placeholder={vault.t(
+                'device_protection.passkey_label_placeholder',
+              )}
               bind:value={passkeyLabel}
               disabled={vault.isVerifying}
               data-testid="device-protection-label-input"

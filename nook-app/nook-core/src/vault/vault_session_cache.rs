@@ -52,7 +52,7 @@ mod tests {
     }
 
     #[test]
-    fn hydrate_fails_closed_for_sentinel_projection_yaml() -> VaultResult<()> {
+    fn hydrate_fails_closed_for_sentinel_projection_yaml() -> anyhow::Result<()> {
         use crate::{
             DeviceMode, SentinelPolicy, VaultArchitecture, VaultType,
             create_sentinel_share_records, generate_store_id, generate_vault_keys,
@@ -84,7 +84,10 @@ mod tests {
         )?;
 
         let err = hydrate_keys_from_projection_yaml(yaml.as_str(), &first)
-            .expect_err("vault session cache test should reject invalid input");
+            .err()
+            .ok_or_else(|| {
+                anyhow::anyhow!("vault session cache test should reject invalid input")
+            })?;
         assert!(
             matches!(
                 err,

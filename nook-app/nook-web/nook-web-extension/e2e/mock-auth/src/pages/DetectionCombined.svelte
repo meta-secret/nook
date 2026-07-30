@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { completePlainLogin, readLoginFields } from '../lib/plain-login'
+  import {
+    completePlainLogin,
+    PlainLoginResult,
+    readLoginFields,
+  } from '../lib/plain-login'
 
   let error = $state('')
 
@@ -12,7 +16,7 @@
       '[name="email"]',
       '[name="password"]',
     )
-    if (completePlainLogin(username, password) === 'invalid') {
+    if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }
   }

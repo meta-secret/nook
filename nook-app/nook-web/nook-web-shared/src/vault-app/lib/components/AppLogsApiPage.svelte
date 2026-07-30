@@ -1,13 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { loadAppLogsResponse, parseAppLogsQuery } from '$lib/app-logs-api'
   import {
-    loadAppLogsResponse,
-    parseAppLogsQuery,
-    type AppLogsResponse,
-  } from '$lib/app-logs-api'
+    LogsPageStateKind,
+    type LogsPageState,
+  } from './app-logs-api-page-state'
 
-  let payload = $state<AppLogsResponse>()
-  let error = $state<string>()
+  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
+
+  function preserveJsonValue(_key: string, value: unknown): unknown {
+    return value
+  }
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -15,10 +18,16 @@
     void (async () => {
       try {
         const query = parseAppLogsQuery(window.location.search)
-        payload = await loadAppLogsResponse(query)
+        state = {
+          kind: LogsPageStateKind.Loaded,
+          payload: await loadAppLogsResponse(query),
+        }
       } catch (cause) {
-        error =
-          cause instanceof Error ? cause.message : 'Failed to load app logs'
+        state = {
+          kind: LogsPageStateKind.Failed,
+          message:
+            cause instanceof Error ? cause.message : 'Failed to load app logs',
+        }
       }
     })()
   })
@@ -29,16 +38,16 @@
 </svelte:head>
 
 <main class="app-logs-api-page">
-  {#if error}
+  {#if state.kind === LogsPageStateKind.Failed}
     <pre data-testid="app-logs-error">{JSON.stringify(
-        { error },
-        undefined,
+        { error: state.message },
+        preserveJsonValue,
         2,
       )}</pre>
-  {:else if payload}
+  {:else if state.kind === LogsPageStateKind.Loaded}
     <pre data-testid="app-logs-json">{JSON.stringify(
-        payload,
-        undefined,
+        state.payload,
+        preserveJsonValue,
         2,
       )}</pre>
   {:else}

@@ -1,6 +1,12 @@
 /** log4j-style structured console logging for ci-agent. */
 
-export type LogLevel = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR";
+export enum LogLevel {
+  Trace = "TRACE",
+  Debug = "DEBUG",
+  Info = "INFO",
+  Warn = "WARN",
+  Error = "ERROR",
+}
 
 const LEVEL_RANK: Record<LogLevel, number> = {
   TRACE: 10,
@@ -17,7 +23,7 @@ function readMinLevel(): LogLevel {
   if (raw && raw in LEVEL_RANK) {
     return raw as LogLevel;
   }
-  return "INFO";
+  return LogLevel.Info;
 }
 
 const minLevel = readMinLevel();
@@ -49,11 +55,11 @@ function shouldLog(level: LogLevel): boolean {
 }
 
 function writeLine(level: LogLevel, line: string): void {
-  if (level === "ERROR") {
+  if (level === LogLevel.Error) {
     console.error(line);
     return;
   }
-  if (level === "WARN") {
+  if (level === LogLevel.Warn) {
     console.warn(line);
     return;
   }
@@ -82,11 +88,11 @@ export function createLogger(component: string): Logger {
     : `${ROOT_COMPONENT}/${component}`;
 
   return {
-    trace: (message) => log("TRACE", fullComponent, message),
-    debug: (message) => log("DEBUG", fullComponent, message),
-    info: (message) => log("INFO", fullComponent, message),
-    warn: (message) => log("WARN", fullComponent, message),
-    error: (message) => log("ERROR", fullComponent, message),
+    trace: (message) => log(LogLevel.Trace, fullComponent, message),
+    debug: (message) => log(LogLevel.Debug, fullComponent, message),
+    info: (message) => log(LogLevel.Info, fullComponent, message),
+    warn: (message) => log(LogLevel.Warn, fullComponent, message),
+    error: (message) => log(LogLevel.Error, fullComponent, message),
     child: (suffix) => createLogger(`${fullComponent}/${suffix}`),
   };
 }

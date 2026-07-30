@@ -1,8 +1,17 @@
-import { findPlainMockAuthAccount } from '../../accounts'
-import { findDynamicMockAuthAccount } from './dynamic-accounts'
+import {
+  findPlainMockAuthAccount,
+  MockAuthAccountLookupKind,
+} from '../../accounts'
+import {
+  DynamicMockAuthAccountLookupKind,
+  findDynamicMockAuthAccount,
+} from './dynamic-accounts'
 import { navigate, recordLoginSubmission } from './navigation'
 
-export type PlainLoginResult = 'success' | 'invalid'
+export enum PlainLoginResult {
+  Success = 'success',
+  Invalid = 'invalid',
+}
 
 /**
  * Validate a plain-login attempt against fixture accounts and navigate on
@@ -13,12 +22,16 @@ export function completePlainLogin(
   password: string,
 ): PlainLoginResult {
   recordLoginSubmission(username, password)
-  const account =
-    findPlainMockAuthAccount(username, password) ??
-    findDynamicMockAuthAccount(username, password)
-  if (!account) return 'invalid'
+  const fixtureAccount = findPlainMockAuthAccount(username, password)
+  const dynamicAccount = findDynamicMockAuthAccount(username, password)
+  if (
+    fixtureAccount.kind === MockAuthAccountLookupKind.Missing &&
+    dynamicAccount.kind === DynamicMockAuthAccountLookupKind.Missing
+  ) {
+    return PlainLoginResult.Invalid
+  }
   navigate('/plain/success')
-  return 'success'
+  return PlainLoginResult.Success
 }
 
 export function readLoginFields(

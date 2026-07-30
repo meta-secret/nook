@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
+import { NookSecretTypeFilter } from '$app-wasm'
 import { loadSecretPage, refreshSecretsFromSession } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 
@@ -38,10 +39,11 @@ describe('loadSecretPage', () => {
       ),
     }
     const state = {
-      manager,
+      hasManager: true,
+      requireManager: () => manager,
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
-      secretTypeFilter: undefined,
+      secretTypeFilter: NookSecretTypeFilter.All,
       secretPageSize: 25,
       secrets: [previousRecord],
       secretTotal: 1,
@@ -75,10 +77,11 @@ describe('loadSecretPage', () => {
         .mockReturnValueOnce(maintenance.promise),
     }
     const state = {
-      manager,
+      hasManager: true,
+      requireManager: () => manager,
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
-      secretTypeFilter: undefined,
+      secretTypeFilter: NookSecretTypeFilter.All,
       secretPageSize: 25,
       secrets: [],
       secretTotal: 50,

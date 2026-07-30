@@ -1,10 +1,15 @@
 import { createHash, createPrivateKey, createPublicKey } from 'node:crypto'
 
+export enum ExtensionReleaseChannel {
+  Production = 'production',
+  Development = 'development',
+  Local = 'local',
+}
+
+export type PullRequestExtensionChannel = `pr-${number}`
 export type ExtensionChannel =
-  | 'production'
-  | 'development'
-  | 'local'
-  | `pr-${number}`
+  | ExtensionReleaseChannel
+  | PullRequestExtensionChannel
 
 export type ExtensionChannelIdentity = {
   channel: ExtensionChannel
@@ -23,14 +28,14 @@ const EXTENSION_ID_ALPHABET = 'abcdefghijklmnop'
 export function parseExtensionChannel(value: string): ExtensionChannel {
   const channel = value.trim().toLowerCase()
   if (
-    channel === 'production' ||
-    channel === 'development' ||
-    channel === 'local'
+    channel === ExtensionReleaseChannel.Production ||
+    channel === ExtensionReleaseChannel.Development ||
+    channel === ExtensionReleaseChannel.Local
   ) {
     return channel
   }
   if (/^pr-[1-9][0-9]*$/.test(channel)) {
-    return channel as `pr-${number}`
+    return channel as PullRequestExtensionChannel
   }
   throw new Error(
     'NOOK_EXTENSION_CHANNEL must be production, development, local, or pr-<number>.',
@@ -69,11 +74,11 @@ export function extensionChannelIdentity(
   const channel = parseExtensionChannel(channelValue)
   const manifestKey = manifestKeyForChannel(channel).toString('base64')
   const suffix =
-    channel === 'production'
+    channel === ExtensionReleaseChannel.Production
       ? ''
-      : channel === 'development'
+      : channel === ExtensionReleaseChannel.Development
         ? ' (Development)'
-        : channel === 'local'
+        : channel === ExtensionReleaseChannel.Local
           ? ' (Local)'
           : ` (${channel.toUpperCase()})`
   return {
@@ -81,6 +86,7 @@ export function extensionChannelIdentity(
     extensionId: extensionIdFromManifestKey(manifestKey),
     manifestKey,
     name: `Nook Passwords${suffix}`,
-    shortName: channel === 'production' ? 'Nook' : 'Nook Dev',
+    shortName:
+      channel === ExtensionReleaseChannel.Production ? 'Nook' : 'Nook Dev',
   }
 }

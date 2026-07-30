@@ -108,11 +108,10 @@ impl NookVaultManager {
 
     /// Return the product device-protection mode persisted during device setup.
     #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
-    pub async fn device_protection_device_mode(&self) -> Result<String, JsError> {
-        Ok(indexed_db::device_identity_device_mode()
-            .await?
-            .as_str()
-            .to_owned())
+    pub async fn device_protection_device_mode(
+        &self,
+    ) -> Result<crate::DeviceProtectionDeviceModeState, JsError> {
+        Ok(indexed_db::device_identity_device_mode().await?)
     }
 
     #[wasm_bindgen(js_name = beginDeviceProtection)]
@@ -140,8 +139,13 @@ impl NookVaultManager {
         rp_name: &str,
         passkey_label: &str,
     ) -> Result<(), JsError> {
-        self.setup_device_protection_with_passkey_mode(rp_id, rp_name, passkey_label, "standard")
-            .await
+        self.setup_device_protection_with_passkey_mode(
+            rp_id,
+            rp_name,
+            passkey_label,
+            nook_core::DeviceMode::Standard,
+        )
+        .await
     }
 
     #[wasm_bindgen(js_name = setupDeviceProtectionWithPasskeyMode)]
@@ -150,9 +154,9 @@ impl NookVaultManager {
         rp_id: &str,
         rp_name: &str,
         passkey_label: &str,
-        device_mode: &str,
+        device_mode: nook_core::DeviceMode,
     ) -> Result<(), JsError> {
-        let mode = passkey_mode_from_device_mode(device_mode)?;
+        let mode = passkey_mode_from_device_mode(device_mode);
         let setup = self.begin_device_protection().await?;
         let user_handle = setup.user_handle();
         let prf_input = setup.prf_input();
@@ -216,7 +220,7 @@ impl NookVaultManager {
             user_handle,
             prf_input,
             prf_output,
-            "standard".to_owned(),
+            nook_core::DeviceMode::Standard,
         )
         .await
     }
@@ -228,9 +232,9 @@ impl NookVaultManager {
         user_handle: Vec<u8>,
         prf_input: Vec<u8>,
         mut prf_output: Vec<u8>,
-        device_mode: String,
+        device_mode: nook_core::DeviceMode,
     ) -> Result<(), JsError> {
-        let mode = passkey_mode_from_device_mode(&device_mode)?;
+        let mode = passkey_mode_from_device_mode(device_mode);
         let result = async {
             let material = nook_core::finish_passkey_device_identity_for_mode(
                 &credential_id,
@@ -392,13 +396,11 @@ impl NookVaultManager {
 }
 
 fn passkey_mode_from_device_mode(
-    device_mode: &str,
-) -> Result<nook_core::PasskeyDeviceProtectionMode, JsError> {
-    match nook_core::DeviceMode::parse(device_mode)
-        .map_err(|error| JsError::new(&error.to_string()))?
-    {
-        nook_core::DeviceMode::Standard => Ok(nook_core::PasskeyDeviceProtectionMode::Standard),
-        nook_core::DeviceMode::AntiHacker => Ok(nook_core::PasskeyDeviceProtectionMode::AntiHacker),
+    device_mode: nook_core::DeviceMode,
+) -> nook_core::PasskeyDeviceProtectionMode {
+    match device_mode {
+        nook_core::DeviceMode::Standard => nook_core::PasskeyDeviceProtectionMode::Standard,
+        nook_core::DeviceMode::AntiHacker => nook_core::PasskeyDeviceProtectionMode::AntiHacker,
     }
 }
 

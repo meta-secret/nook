@@ -7,6 +7,8 @@ import {
 import type { VaultState } from "$lib/vault.svelte";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
+import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
+import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
 
 function replaceOwnedWasmValues<T extends { free: () => void }>(
   current: T[],
@@ -47,8 +49,8 @@ export function applyFinalizeResult(
   result: NookSentinelGenesisFinalizeResult,
 ): void {
   state.sentinelGenesisPhase = result.phase;
-  state.sentinelGenesisStoreId = result.storeId;
-  state.activeVaultStoreId = result.storeId;
+  state.selectSentinelGenesisStore(result.storeId);
+  state.openActiveVault(result.storeId);
   state.replaceVaultArchitecture(result.architecture as VaultArchitecture);
   state.sentinelGenesisDeliveries = replaceOwnedWasmValues(
     state.sentinelGenesisDeliveries,
@@ -61,22 +63,24 @@ export async function start(
   state: VaultState,
   args: StartSentinelGenesisArgs,
 ): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   state.dismissSuccess();
   releaseResults(state);
-  state.sentinelGenesisStoreId = undefined;
+  state.clearSentinelGenesisStore();
   try {
     await state.initDeviceIdentity();
     const status = await state.enqueueStorage(() =>
-      state.manager!.startSentinelGenesis(args),
+      state.requireManager().startSentinelGenesis(args),
     );
-    state.sentinelGenesisRequest = state.manager.sentinelGenesisRequestJson();
+    state.sentinelGenesisRequest = state
+      .requireManager()
+      .sentinelGenesisRequestJson();
     applyStatus(state, status);
   } catch (error) {
-    state.sentinelGenesisPhase = state.manager.sentinelGenesisPhase;
+    state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -92,16 +96,18 @@ export async function addParticipantResponse(
   payload: string,
   participantLabel = "",
 ): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     const status = await state.enqueueStorage(() =>
-      state.manager!.addSentinelGenesisParticipantResponse(
-        payload.trim(),
-        participantLabel.trim(),
-      ),
+      state
+        .requireManager()
+        .addSentinelGenesisParticipantResponse(
+          payload.trim(),
+          participantLabel.trim(),
+        ),
     );
     applyStatus(state, status);
   } catch (error) {
@@ -118,16 +124,18 @@ export async function addParticipantResponse(
 export async function createPublicKeyAnnouncement(
   state: VaultState,
 ): Promise<string> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return "";
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     await state.initDeviceIdentity();
     return await state.enqueueStorage(() =>
-      state.manager!.createSentinelGenesisPublicKeyAnnouncement(
-        state.t("device_protection.passkey_label_placeholder"),
-      ),
+      state
+        .requireManager()
+        .createSentinelGenesisPublicKeyAnnouncement(
+          state.t("device_protection.passkey_label_placeholder"),
+        ),
     );
   } catch (error) {
     state.errorMsg =
@@ -144,13 +152,15 @@ export async function rememberRequest(
   state: VaultState,
   requestPayload: string,
 ): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     await state.enqueueStorage(() =>
-      state.manager!.rememberSentinelGenesisRequest(requestPayload.trim()),
+      state
+        .requireManager()
+        .rememberSentinelGenesisRequest(requestPayload.trim()),
     );
   } catch (error) {
     state.errorMsg =
@@ -167,17 +177,19 @@ export async function createParticipantResponse(
   state: VaultState,
   requestPayload: string,
 ): Promise<string> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return "";
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     await state.initDeviceIdentity();
     return await state.enqueueStorage(() =>
-      state.manager!.respondToSentinelGenesisRequest(
-        requestPayload.trim(),
-        state.t("device_protection.passkey_label_placeholder"),
-      ),
+      state
+        .requireManager()
+        .respondToSentinelGenesisRequest(
+          requestPayload.trim(),
+          state.t("device_protection.passkey_label_placeholder"),
+        ),
     );
   } catch (error) {
     state.errorMsg =
@@ -191,13 +203,13 @@ export async function createParticipantResponse(
 }
 
 export async function finalize(state: VaultState): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     const result = await state.enqueueStorage(() =>
-      state.manager!.finalizeSentinelGenesis(),
+      state.requireManager().finalizeSentinelGenesis(),
     );
     applyFinalizeResult(state, result);
   } catch (error) {
@@ -215,13 +227,13 @@ export async function acceptShareDelivery(
   state: VaultState,
   payload: string,
 ): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
   try {
     await state.enqueueStorage(() =>
-      state.manager!.acceptSentinelGenesisShareDelivery(payload.trim()),
+      state.requireManager().acceptSentinelGenesisShareDelivery(payload.trim()),
     );
     await listSentinelStoredDeliveries(state);
     state.showSuccess(state.t("login.sentinel_genesis_receive_share_success"));
@@ -237,17 +249,23 @@ export async function acceptShareDelivery(
 }
 
 export async function completeDelivery(state: VaultState): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
-  if (!state.sentinelGenesisStoreId || state.isVerifying) return;
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
+  if (
+    state.sentinelGenesisTarget.kind !== SentinelGenesisTargetKind.Selected ||
+    state.isVerifying
+  )
+    return;
+  const storeId = state.sentinelGenesisTarget.storeId;
   state.isVerifying = true;
   try {
-    await setActiveVault(state.sentinelGenesisStoreId);
+    await setActiveVault(storeId);
     await state.refreshLocalVaultCatalog();
-    state.selectedLoginVaultStoreId = state.sentinelGenesisStoreId;
-    state.localLoginPrepared = false;
+    state.selectLoginVault(storeId);
+    state.localLoginPreparation = LocalLoginPreparationState.Idle;
     state.sentinelCeremonyPrompt = true;
-    state.sentinelGenesisPhase =
-      state.manager.completeSentinelGenesisDelivery();
+    state.sentinelGenesisPhase = state
+      .requireManager()
+      .completeSentinelGenesisDelivery();
   } finally {
     state.isVerifying = false;
   }
@@ -257,15 +275,15 @@ export async function acceptOnboardingPackage(
   state: VaultState,
   packageJson: string,
 ): Promise<void> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   state.errorMsg = "";
   const storeId = await state.enqueueStorage(() =>
-    state.manager!.acceptSentinelOnboardingPackage(packageJson),
+    state.requireManager().acceptSentinelOnboardingPackage(packageJson),
   );
-  state.activeVaultStoreId = storeId;
+  state.openActiveVault(storeId);
   await setActiveVault(storeId);
   await state.loadProviders();
   state.applyActiveProviderCredentials();
   await state.loadDb();
-  state.sentinelGenesisPhase = state.manager.sentinelGenesisPhase;
+  state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
 }

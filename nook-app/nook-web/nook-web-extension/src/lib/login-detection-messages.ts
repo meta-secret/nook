@@ -1,12 +1,24 @@
+export enum QueryActiveTabLoginDetectionMessageType {
+  NookQueryActiveTabLoginDetection = 'nook:query-active-tab-login-detection',
+}
+
 export type QueryActiveTabLoginDetectionMessage = {
-  type: 'nook:query-active-tab-login-detection'
+  type: QueryActiveTabLoginDetectionMessageType.NookQueryActiveTabLoginDetection
+}
+
+export enum QueryLoginDetectionMessageType {
+  NookQueryLoginDetection = 'nook:query-login-detection',
 }
 
 export type QueryLoginDetectionMessage = {
-  type: 'nook:query-login-detection'
+  type: QueryLoginDetectionMessageType.NookQueryLoginDetection
 }
 
-export type LoginDetectionStatus = 'detected' | 'not-detected' | 'unavailable'
+export enum LoginDetectionStatus {
+  Detected = 'detected',
+  NotDetected = 'not-detected',
+  Unavailable = 'unavailable',
+}
 
 export type LoginDetectionResponse = {
   ok: true
@@ -20,7 +32,8 @@ export function isQueryActiveTabLoginDetectionMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:query-active-tab-login-detection'
+    message.type ===
+      QueryActiveTabLoginDetectionMessageType.NookQueryActiveTabLoginDetection
   )
 }
 
@@ -31,6 +44,6 @@ export function isQueryLoginDetectionMessage(
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:query-login-detection'
+    message.type === QueryLoginDetectionMessageType.NookQueryLoginDetection
   )
 }

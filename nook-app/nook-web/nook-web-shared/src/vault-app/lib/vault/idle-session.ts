@@ -2,26 +2,27 @@ import type { VaultState } from "$lib/vault.svelte";
 import { setVaultSessionLocked } from "$app-wasm";
 import { createLogger } from "$lib/log";
 import { createVaultIdleSessionTracker } from "$lib/vault-idle-session";
-import { intoWasmStringValue } from "$lib/wasm-string-value";
 
 const log = createLogger("vault-session");
 
 export function ensureIdleSessionTracker(state: VaultState): void {
-  if (state.idleSessionTracker) return;
-  state.idleSessionTracker = createVaultIdleSessionTracker({
-    timeoutMs: state.runtimeConfig.resolveVaultIdleTimeoutMs(
-      intoWasmStringValue(
-        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
-      ),
-    ),
-    warningMs: state.runtimeConfig.resolveVaultIdleWarningMs(
-      intoWasmStringValue(
-        import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
-      ),
-    ),
-    onExpire: () => lockVaultDueToIdle(state),
-    onWarning: () => showIdleLockWarning(state),
-  });
+  if (state.hasIdleSessionTracker()) return;
+  const idleTimeoutConfig = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS;
+  const idleWarningConfig = import.meta.env.VITE_VAULT_IDLE_WARNING_MS;
+  state.setIdleSessionTracker(
+    createVaultIdleSessionTracker({
+      timeoutMs:
+        typeof idleTimeoutConfig === "string"
+          ? state.runtimeConfig.resolveVaultIdleTimeoutMs(idleTimeoutConfig)
+          : state.runtimeConfig.resolveDefaultVaultIdleTimeoutMs(),
+      warningMs:
+        typeof idleWarningConfig === "string"
+          ? state.runtimeConfig.resolveVaultIdleWarningMs(idleWarningConfig)
+          : state.runtimeConfig.resolveDefaultVaultIdleWarningMs(),
+      onExpire: () => lockVaultDueToIdle(state),
+      onWarning: () => showIdleLockWarning(state),
+    }),
+  );
 }
 
 export function showIdleLockWarning(state: VaultState): void {
@@ -38,12 +39,12 @@ export function lockVaultDueToIdle(state: VaultState): void {
 export function startIdleSessionTracking(state: VaultState) {
   if (!state.isAuthenticated) return;
   state.ensureIdleSessionTracker();
-  state.idleSessionTracker!.start();
+  state.startIdleSessionTracker();
   log.debug("idle session tracking started");
 }
 
 export function stopIdleSessionTracking(state: VaultState) {
-  state.idleSessionTracker?.stop();
+  state.stopIdleSessionTracker();
 }
 
 export function lockVault(state: VaultState) {

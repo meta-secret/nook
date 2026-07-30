@@ -4,13 +4,46 @@ import { suspendWasmLogging } from "$lib/log";
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
 const TAB_ID = crypto.randomUUID();
 
-type LocalDataResetMessage = {
-  type: "request" | "seen" | "ready";
+enum LocalDataResetMessageType {
+  Request = "request",
+  Seen = "seen",
+  Ready = "ready",
+}
+
+type LocalDataResetRequest = {
+  type: LocalDataResetMessageType.Request;
   requestId: string;
   senderId: string;
-  responderId?: string;
-  error?: string;
 };
+
+type LocalDataResetSeen = {
+  type: LocalDataResetMessageType.Seen;
+  requestId: string;
+  senderId: string;
+  responderId: string;
+};
+
+enum LocalDataResetReadinessKind {
+  Ready = "ready",
+  Failed = "failed",
+}
+
+type LocalDataResetReadiness =
+  | { kind: LocalDataResetReadinessKind.Ready }
+  | { kind: LocalDataResetReadinessKind.Failed; error: string };
+
+type LocalDataResetReady = {
+  type: LocalDataResetMessageType.Ready;
+  requestId: string;
+  senderId: string;
+  responderId: string;
+  readiness: LocalDataResetReadiness;
+};
+
+type LocalDataResetMessage =
+  | LocalDataResetRequest
+  | LocalDataResetSeen
+  | LocalDataResetReady;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -74,7 +107,7 @@ async function clearBrowserManagedStorage(): Promise<void> {
     () => sessionStorage.clear(),
     () => clearAccessibleCookies(),
     async () => {
-      if (typeof caches === "undefined") return;
+      if (!("caches" in globalThis)) return;
       const cacheNames = await caches.keys();
       await Promise.all(cacheNames.map((name) => caches.delete(name)));
     },
@@ -94,13 +127,13 @@ async function clearBrowserManagedStorage(): Promise<void> {
 export function subscribeToLocalBrowserDataDeletion(
   handler: () => Promise<void>,
 ): () => void {
-  if (typeof BroadcastChannel === "undefined") return () => {};
+  if (!("BroadcastChannel" in globalThis)) return () => {};
   const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
   const handledRequests = new Set<string>();
 
   const handleRequest = async (message: LocalDataResetMessage) => {
     if (
-      message.type !== "request" ||
+      message.type !== LocalDataResetMessageType.Request ||
       message.senderId === TAB_ID ||
       handledRequests.has(message.requestId)
     ) {
@@ -108,7 +141,7 @@ export function subscribeToLocalBrowserDataDeletion(
     }
     handledRequests.add(message.requestId);
     channel.postMessage({
-      type: "seen",
+      type: LocalDataResetMessageType.Seen,
       requestId: message.requestId,
       senderId: message.senderId,
       responderId: TAB_ID,
@@ -116,18 +149,22 @@ export function subscribeToLocalBrowserDataDeletion(
     try {
       await handler();
       channel.postMessage({
-        type: "ready",
+        type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
+        readiness: { kind: LocalDataResetReadinessKind.Ready },
       } satisfies LocalDataResetMessage);
     } catch (error) {
       channel.postMessage({
-        type: "ready",
+        type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
-        error: errorMessage(error),
+        readiness: {
+          kind: LocalDataResetReadinessKind.Failed,
+          error: errorMessage(error),
+        },
       } satisfies LocalDataResetMessage);
     }
   };
@@ -141,29 +178,30 @@ export function subscribeToLocalBrowserDataDeletion(
 }
 
 async function quiesceOtherTabs(): Promise<void> {
-  if (typeof BroadcastChannel === "undefined") {
+  if (!("BroadcastChannel" in globalThis)) {
     throw new Error("Safe cross-tab local data deletion is unavailable");
   }
-  const request: LocalDataResetMessage = {
-    type: "request",
+  const request: LocalDataResetRequest = {
+    type: LocalDataResetMessageType.Request,
     requestId: crypto.randomUUID(),
     senderId: TAB_ID,
   };
   const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
   const seen = new Set<string>();
-  const ready = new Map<string, string | undefined>();
+  const ready = new Map<string, LocalDataResetReadiness>();
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
     const message = event.data;
     if (
       message.requestId !== request.requestId ||
       message.senderId !== TAB_ID ||
-      !message.responderId
+      message.type === LocalDataResetMessageType.Request
     ) {
       return;
     }
-    if (message.type === "seen") seen.add(message.responderId);
-    if (message.type === "ready") {
-      ready.set(message.responderId, message.error);
+    if (message.type === LocalDataResetMessageType.Seen)
+      seen.add(message.responderId);
+    if (message.type === LocalDataResetMessageType.Ready) {
+      ready.set(message.responderId, message.readiness);
     }
   };
   channel.postMessage(request);
@@ -178,9 +216,11 @@ async function quiesceOtherTabs(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   channel.close();
-  const errors = [...ready.values()].filter(
-    (error): error is string => error !== undefined,
-  );
+  const errors = [...ready.values()]
+    .filter(
+      (readiness) => readiness.kind === LocalDataResetReadinessKind.Failed,
+    )
+    .map((readiness) => readiness.error);
   if (errors.length > 0) {
     throw new Error(errors.join("; "));
   }

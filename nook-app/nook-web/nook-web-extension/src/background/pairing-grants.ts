@@ -16,8 +16,12 @@ export function pairingGrantStorageKey(vaultStoreId: string): string {
   return `nook:extension-pairing-grant:${vaultStoreId}`
 }
 
+export enum ExtensionReadySetupStateStatus {
+  Ready = 'ready',
+}
+
 export type ExtensionReadySetupState = {
-  status: 'ready'
+  status: ExtensionReadySetupStateStatus.Ready
   deviceLabel: string
   pairedVaults: string[]
   selectedVaultStoreId: string
@@ -72,7 +76,7 @@ export function isExtensionReadySetupState(
 
   const state = value as Record<string, unknown>
   return (
-    state.status === 'ready' &&
+    state.status === ExtensionReadySetupStateStatus.Ready &&
     typeof state.deviceLabel === 'string' &&
     Array.isArray(state.pairedVaults) &&
     state.pairedVaults.length > 0 &&
@@ -98,7 +102,7 @@ export function setupStateFromPairingGrant(
   grant: StoredExtensionPairingGrant,
 ): ExtensionReadySetupState {
   return {
-    status: 'ready',
+    status: ExtensionReadySetupStateStatus.Ready,
     deviceLabel: grant.deviceLabel,
     pairedVaults: [grant.vaultName],
     selectedVaultStoreId: grant.vaultStoreId,
@@ -170,16 +174,28 @@ export function extensionStoredPairingGrantStorageItems(
   }
 }
 
+export enum PairingSetupAfterRemovalKind {
+  NoPairedVault = 'no-paired-vault',
+  Ready = 'ready',
+}
+
+export type PairingSetupAfterRemoval =
+  | { kind: PairingSetupAfterRemovalKind.NoPairedVault }
+  | {
+      kind: PairingSetupAfterRemovalKind.Ready
+      setup: ExtensionReadySetupState
+    }
+
 export function setupAfterPairingGrantRemoval(
   stored: Record<string, unknown>,
   removedVaultStoreId: string,
-): ExtensionReadySetupState | undefined {
+): PairingSetupAfterRemoval {
   const current = stored[setupStorageKey]
   if (
     isExtensionReadySetupState(current) &&
     current.selectedVaultStoreId !== removedVaultStoreId
   ) {
-    return current
+    return { kind: PairingSetupAfterRemovalKind.Ready, setup: current }
   }
   const remaining = Object.entries(stored)
     .filter(
@@ -190,7 +206,13 @@ export function setupAfterPairingGrantRemoval(
     )
     .map(([, grant]) => grant as StoredExtensionPairingGrant)
     .sort((left, right) => right.approvedAt.localeCompare(left.approvedAt))
-  return remaining[0] ? setupStateFromPairingGrant(remaining[0]) : undefined
+  const remainingGrant = remaining[0]
+  return remainingGrant
+    ? {
+        kind: PairingSetupAfterRemovalKind.Ready,
+        setup: setupStateFromPairingGrant(remainingGrant),
+      }
+    : { kind: PairingSetupAfterRemovalKind.NoPairedVault }
 }
 
 export function selectedPairingGrantFirst(
@@ -198,9 +220,12 @@ export function selectedPairingGrantFirst(
   grants: StoredExtensionPairingGrant[],
 ): StoredExtensionPairingGrant[] {
   const setup = stored[setupStorageKey]
-  const selectedVaultStoreId = isExtensionReadySetupState(setup)
-    ? setup.selectedVaultStoreId
-    : undefined
+  if (!isExtensionReadySetupState(setup)) {
+    return [...grants].sort((left, right) =>
+      right.approvedAt.localeCompare(left.approvedAt),
+    )
+  }
+  const selectedVaultStoreId = setup.selectedVaultStoreId
   return [...grants].sort((left, right) => {
     const leftSelected = left.vaultStoreId === selectedVaultStoreId
     const rightSelected = right.vaultStoreId === selectedVaultStoreId
@@ -209,13 +234,45 @@ export function selectedPairingGrantFirst(
   })
 }
 
+export enum SelectedPairingGrantKind {
+  NotSelected = 'not-selected',
+  Selected = 'selected',
+}
+
+export type SelectedPairingGrant =
+  | { kind: SelectedPairingGrantKind.NotSelected }
+  | {
+      kind: SelectedPairingGrantKind.Selected
+      grant: StoredExtensionPairingGrant
+    }
+
 export function selectedPairingGrant(
   stored: Record<string, unknown>,
-): StoredExtensionPairingGrant | undefined {
+): SelectedPairingGrant {
   const setup = stored[setupStorageKey]
-  if (!isExtensionReadySetupState(setup)) return undefined
+  if (!isExtensionReadySetupState(setup)) {
+    return { kind: SelectedPairingGrantKind.NotSelected }
+  }
   const grant = stored[pairingGrantStorageKey(setup.selectedVaultStoreId)]
-  return isStoredExtensionPairingGrant(grant) ? grant : undefined
+  return isStoredExtensionPairingGrant(grant)
+    ? { kind: SelectedPairingGrantKind.Selected, grant }
+    : { kind: SelectedPairingGrantKind.NotSelected }
+}
+
+export function firstStoredPairingGrant(
+  stored: Record<string, unknown>,
+): SelectedPairingGrant {
+  const grants = Object.entries(stored)
+    .filter(
+      ([key, value]) =>
+        key.startsWith('nook:extension-pairing-grant:') &&
+        isStoredExtensionPairingGrant(value),
+    )
+    .map(([, grant]) => grant as StoredExtensionPairingGrant)
+  const first = selectedPairingGrantFirst(stored, grants)[0]
+  return first
+    ? { kind: SelectedPairingGrantKind.Selected, grant: first }
+    : { kind: SelectedPairingGrantKind.NotSelected }
 }
 
 type LegacyStoredExtensionPairingGrant = Omit<
@@ -256,7 +313,7 @@ function isLegacyExtensionReadySetupState(
   if (!value || typeof value !== 'object') return false
   const state = value as Record<string, unknown>
   return (
-    state.status === 'ready' &&
+    state.status === ExtensionReadySetupStateStatus.Ready &&
     typeof state.deviceLabel === 'string' &&
     Array.isArray(state.pairedVaults) &&
     state.pairedVaults.length > 0 &&

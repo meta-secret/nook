@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from '../vault-yaml'
 import { E2E_OAUTH_ONBOARD_PROVIDER } from './auth-providers'
 import {
@@ -222,7 +223,7 @@ export async function dismissSyncConflictIfVisible(page: Page) {
 
 export async function expectVaultPasswordStatus(
   page: Page,
-  count: number | 'none',
+  count: number,
   options?: { timeout?: number },
 ) {
   await expandSettingsSection(page, 'unlock')
@@ -230,16 +231,25 @@ export async function expectVaultPasswordStatus(
     .getByTestId('vault-unlock-section')
     .getByTestId('vault-password-status')
   const timeout = options?.timeout ?? UI_TIMEOUT_MS
-  if (count === 'none') {
-    await expect(status).toContainText('None', { timeout })
-    return
-  }
   if (count === 1) {
     await expect(status).toContainText(/1 (password|item)/, { timeout })
     return
   }
   await expect(status).toContainText(new RegExp(`${count} (passwords|items)`), {
     timeout,
+  })
+}
+
+export async function expectNoVaultPasswords(
+  page: Page,
+  options?: { timeout?: number },
+) {
+  await expandSettingsSection(page, 'unlock')
+  const status = page
+    .getByTestId('vault-unlock-section')
+    .getByTestId('vault-password-status')
+  await expect(status).toContainText('None', {
+    timeout: options?.timeout ?? UI_TIMEOUT_MS,
   })
 }
 
@@ -383,7 +393,7 @@ export async function revealSecretInRow(
 
 export async function selectLoginUnlockMethod(
   page: Page,
-  method: 'keys' | 'password',
+  method: UnlockMethod,
 ) {
   const button = page.getByTestId(`login-unlock-method-${method}`)
   await expect(button).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -518,7 +528,7 @@ export async function unlockVaultOnLogin(
   const localUnlock = page.getByTestId('login-local-unlock-step')
   if (await localUnlock.isVisible()) {
     if (opts?.password) {
-      await selectLoginUnlockMethod(page, 'password')
+      await selectLoginUnlockMethod(page, UnlockMethod.Password)
       await expect(
         page.getByTestId('login-password-entry-list').getByRole('button', {
           name: opts.entryLabel ?? /.+/,
@@ -536,7 +546,7 @@ export async function unlockVaultOnLogin(
       if (await keysMethod.isVisible()) {
         const checked = await keysMethod.getAttribute('aria-checked')
         if (checked !== 'true') {
-          await selectLoginUnlockMethod(page, 'keys')
+          await selectLoginUnlockMethod(page, UnlockMethod.Keys)
         }
       }
     }
@@ -568,5 +578,5 @@ export async function disableLoginAutoUnlock(page: Page) {
 
 /** @deprecated `disableLoginAutoUnlock` no longer adds a dummy provider. */
 export async function removeE2eDummyGithubSyncProvider(page: Page) {
-  await page.evaluate(() => undefined)
+  await page.evaluate(() => {})
 }

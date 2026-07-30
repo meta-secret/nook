@@ -6,25 +6,53 @@
 const DRIVE_FILES = 'https://www.googleapis.com/drive/v3/files'
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
-export type LiveDriveCredentials = {
-  ownerAccessToken: string
-  joinerEmail: string
-  joinerAccessToken?: string
+export enum LiveDriveCredentialsStateKind {
+  Missing = 'missing',
+  OwnerOnly = 'owner-only',
+  OwnerAndJoiner = 'owner-and-joiner',
 }
 
-export function readLiveDriveSharedGrantCredentials():
-  | LiveDriveCredentials
-  | undefined {
+export type LiveDriveCredentialsState =
+  | { kind: LiveDriveCredentialsStateKind.Missing }
+  | {
+      kind: LiveDriveCredentialsStateKind.OwnerOnly
+      ownerAccessToken: string
+      joinerEmail: string
+    }
+  | {
+      kind: LiveDriveCredentialsStateKind.OwnerAndJoiner
+      ownerAccessToken: string
+      joinerEmail: string
+      joinerAccessToken: string
+    }
+
+export function readLiveDriveSharedGrantCredentials(): LiveDriveCredentialsState {
   const ownerAccessToken = process.env.NOOK_GOOGLE_E2E_ACCESS_TOKEN?.trim()
   const joinerEmail = process.env.NOOK_GOOGLE_E2E_JOINER_EMAIL?.trim()
-  if (!ownerAccessToken || !joinerEmail) return undefined
+  if (!ownerAccessToken || !joinerEmail) {
+    return { kind: LiveDriveCredentialsStateKind.Missing }
+  }
   const joinerAccessToken =
-    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim() || undefined
-  return { ownerAccessToken, joinerEmail, joinerAccessToken }
+    process.env.NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN?.trim()
+  return joinerAccessToken
+    ? {
+        kind: LiveDriveCredentialsStateKind.OwnerAndJoiner,
+        ownerAccessToken,
+        joinerEmail,
+        joinerAccessToken,
+      }
+    : {
+        kind: LiveDriveCredentialsStateKind.OwnerOnly,
+        ownerAccessToken,
+        joinerEmail,
+      }
 }
 
 export function hasLiveDriveSharedGrantCredentials(): boolean {
-  return readLiveDriveSharedGrantCredentials() !== undefined
+  return (
+    readLiveDriveSharedGrantCredentials().kind !==
+    LiveDriveCredentialsStateKind.Missing
+  )
 }
 
 async function driveJson<T>(

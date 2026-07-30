@@ -29,21 +29,38 @@ export const MOCK_AUTH_SECOND_TOTP_SECRET = 'GEZDGNBVGY3TQOJQ'
 
 export const MOCK_AUTH_DEFAULT_PIN = '123456'
 
+export enum MockAuthAccountLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type MockAuthAccountLookup =
+  | { kind: MockAuthAccountLookupKind.Missing }
+  | { kind: MockAuthAccountLookupKind.Found; account: MockAuthAccount }
+
 export function findMockAuthAccount(
   username: string,
   password: string,
-): MockAuthAccount | undefined {
-  return MOCK_AUTH_ACCOUNTS.find(
+): MockAuthAccountLookup {
+  const account = MOCK_AUTH_ACCOUNTS.find(
     (account) => account.username === username && account.password === password,
   )
+  return account
+    ? { kind: MockAuthAccountLookupKind.Found, account }
+    : { kind: MockAuthAccountLookupKind.Missing }
 }
 
 /** Plain (non-2FA) accounts that can complete `/plain/success`. */
 export function findPlainMockAuthAccount(
   username: string,
   password: string,
-): MockAuthAccount | undefined {
-  const account = findMockAuthAccount(username, password)
-  if (!account || account.totpSecret) return undefined
-  return account
+): MockAuthAccountLookup {
+  const lookup = findMockAuthAccount(username, password)
+  if (
+    lookup.kind === MockAuthAccountLookupKind.Missing ||
+    lookup.account.totpSecret
+  ) {
+    return { kind: MockAuthAccountLookupKind.Missing }
+  }
+  return lookup
 }

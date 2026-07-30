@@ -8,13 +8,48 @@ import {
   type RepoRef,
   type RequiredPrWorkflow,
 } from "./github.js";
+import { prettyJson } from "./json.js";
 
-type WorkflowAudit = RequiredPrWorkflow & {
-  conclusion?: string;
-  runId?: number;
-  status?: string;
-  url?: string;
-};
+export enum WorkflowAuditState {
+  NotIndexed = "not-indexed",
+  Indexed = "indexed",
+}
+
+export enum WorkflowConclusionState {
+  Pending = "pending",
+  Reported = "reported",
+}
+
+export enum WorkflowRunStatusState {
+  Unavailable = "unavailable",
+  Completed = "completed",
+  Other = "other",
+}
+
+export enum GithubWorkflowConclusion {
+  Success = "success",
+}
+
+type WorkflowConclusion =
+  | { state: WorkflowConclusionState.Pending }
+  | { state: WorkflowConclusionState.Reported; value: string };
+
+type WorkflowRunStatus =
+  | { state: WorkflowRunStatusState.Unavailable }
+  | { state: WorkflowRunStatusState.Completed }
+  | { state: WorkflowRunStatusState.Other; value: string };
+
+type WorkflowAudit = RequiredPrWorkflow &
+  (
+    | { state: WorkflowAuditState.NotIndexed }
+    | {
+        state: WorkflowAuditState.Indexed;
+        conclusion: WorkflowConclusion;
+        runId: number;
+        status: WorkflowRunStatus;
+        url: string;
+      }
+  );
 
 type BranchProtectionAudit = {
   available: boolean;
@@ -22,6 +57,12 @@ type BranchProtectionAudit = {
   requiresConversationResolution?: boolean;
   requiredStatusChecks?: string[];
 };
+
+export enum PullRequestMergeability {
+  Conflicting = "conflicting",
+  Mergeable = "mergeable",
+  Unknown = "unknown",
+}
 
 export type PrAudit = {
   base: { branch: string; sha: string };
@@ -34,7 +75,7 @@ export type PrAudit = {
   mergeState: {
     behindBy: number;
     draft: boolean;
-    mergeability: "conflicting" | "mergeable" | "unknown";
+    mergeability: PullRequestMergeability;
     state: string;
   };
   number: number;
@@ -54,9 +95,11 @@ export async function runPrAudit(requireReady: boolean): Promise<void> {
   const octokit = createOctokit();
   const repoRef = parseRepository(repository);
   const audit = await buildPrAudit(octokit, repoRef, prNumber);
-  console.log(JSON.stringify(audit, null, 2));
+  console.log(prettyJson(audit));
   if (requireReady && !audit.ready) {
-    throw new Error(`PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`);
+    throw new Error(
+      `PR #${prNumber} is not ready: ${audit.reasons.join("; ")}`,
+    );
   }
 }
 
@@ -109,19 +152,37 @@ export async function buildPrAudit(
   if (pr.state !== "open") reasons.push(`state is ${pr.state}`);
   if (pr.draft) reasons.push("pull request is draft");
   const mergeability =
-    mergeable === true ? "mergeable" : mergeable === false ? "conflicting" : "unknown";
-  if (mergeability === "conflicting") reasons.push("pull request has a merge conflict");
-  if (mergeability === "unknown") reasons.push("pull request mergeability is unknown");
+    mergeable === true
+      ? PullRequestMergeability.Mergeable
+      : mergeable === false
+        ? PullRequestMergeability.Conflicting
+        : PullRequestMergeability.Unknown;
+  if (mergeability === PullRequestMergeability.Conflicting)
+    reasons.push("pull request has a merge conflict");
+  if (mergeability === PullRequestMergeability.Unknown)
+    reasons.push("pull request mergeability is unknown");
   if (comparison.data.behind_by > 0) {
-    reasons.push(`head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`);
+    reasons.push(
+      `head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`,
+    );
   }
   for (const workflow of requiredWorkflows) {
-    if (workflow.runId === undefined) {
-      reasons.push(`${workflow.workflowName} run is not indexed for the current head`);
-    } else if (workflow.status !== "completed") {
-      reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
-    } else if (workflow.conclusion !== "success") {
-      reasons.push(`${workflow.workflowName} run concluded ${workflow.conclusion}`);
+    if (workflow.state === WorkflowAuditState.NotIndexed) {
+      reasons.push(
+        `${workflow.workflowName} run is not indexed for the current head`,
+      );
+    } else if (workflow.status.state === WorkflowRunStatusState.Unavailable) {
+      reasons.push(`${workflow.workflowName} run has no status`);
+    } else if (workflow.status.state === WorkflowRunStatusState.Other) {
+      reasons.push(`${workflow.workflowName} run is ${workflow.status.value}`);
+    } else if (workflow.conclusion.state === WorkflowConclusionState.Pending) {
+      reasons.push(`${workflow.workflowName} run has no conclusion`);
+    } else if (
+      workflow.conclusion.value !== GithubWorkflowConclusion.Success
+    ) {
+      reasons.push(
+        `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
+      );
     }
   }
   if (
@@ -131,13 +192,19 @@ export async function buildPrAudit(
     reasons.push("exact-head github-pages deployment is not successful");
   }
   if (feedback.unresolvedThreads > 0) {
-    reasons.push(`${feedback.unresolvedThreads} unresolved review thread(s) already present`);
+    reasons.push(
+      `${feedback.unresolvedThreads} unresolved review thread(s) already present`,
+    );
   }
   if (feedback.substantiveComments > 0) {
-    reasons.push(`${feedback.substantiveComments} substantive PR comment(s) already present`);
+    reasons.push(
+      `${feedback.substantiveComments} substantive PR comment(s) already present`,
+    );
   }
   if (feedback.substantiveReviews > 0) {
-    reasons.push(`${feedback.substantiveReviews} substantive current-head review(s) already present`);
+    reasons.push(
+      `${feedback.substantiveReviews} substantive current-head review(s) already present`,
+    );
   }
   return {
     base: { branch: pr.base.ref, sha: pr.base.sha },
@@ -186,12 +253,28 @@ async function auditWorkflows(
             (pullRequest) => pullRequest.number === prNumber,
           ),
       );
+      if (!run) {
+        return { ...workflow, state: WorkflowAuditState.NotIndexed };
+      }
+      const conclusion: WorkflowConclusion = run.conclusion
+        ? {
+            state: WorkflowConclusionState.Reported,
+            value: run.conclusion,
+          }
+        : { state: WorkflowConclusionState.Pending };
+      const status: WorkflowRunStatus =
+        run.status === WorkflowRunStatusState.Completed
+          ? { state: WorkflowRunStatusState.Completed }
+          : typeof run.status === "string"
+            ? { state: WorkflowRunStatusState.Other, value: run.status }
+            : { state: WorkflowRunStatusState.Unavailable };
       return {
         ...workflow,
-        conclusion: run?.conclusion ?? undefined,
-        runId: run?.id,
-        status: run?.status ?? undefined,
-        url: run?.html_url ?? undefined,
+        state: WorkflowAuditState.Indexed,
+        conclusion,
+        runId: run.id,
+        status,
+        url: run.html_url,
       };
     }),
   );
@@ -203,14 +286,21 @@ async function inspectBranchProtection(
   branch: string,
 ): Promise<BranchProtectionAudit> {
   try {
-    const { data } = await octokit.rest.repos.getBranchProtection({ owner, repo, branch });
+    const { data } = await octokit.rest.repos.getBranchProtection({
+      owner,
+      repo,
+      branch,
+    });
     return {
       available: true,
       requiresApprovingReviews:
-        (data.required_pull_request_reviews?.required_approving_review_count ?? 0) > 0,
-      requiresConversationResolution: data.required_conversation_resolution?.enabled ?? false,
+        (data.required_pull_request_reviews?.required_approving_review_count ??
+          0) > 0,
+      requiresConversationResolution:
+        data.required_conversation_resolution?.enabled ?? false,
       requiredStatusChecks:
-        data.required_status_checks?.checks?.map((check) => check.context) ?? [],
+        data.required_status_checks?.checks?.map((check) => check.context) ??
+        [],
     };
   } catch (error: unknown) {
     if (isHttpStatus(error, 403) || isHttpStatus(error, 404)) {
@@ -244,26 +334,27 @@ async function inspectExactHeadDeployment(
       return {
         environment: deployment.environment,
         state: latest.state,
-        url: latest.environment_url ?? undefined,
+        ...(latest.environment_url ? { url: latest.environment_url } : {}),
       };
     }
   }
-  return undefined;
+  return;
 }
 
 function readPrNumber(): number {
   const raw = process.env.PR_NUMBER?.trim() ?? "";
   const value = Number(raw);
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`PR_NUMBER must be a positive integer (received ${raw || "empty"})`);
+    throw new Error(
+      `PR_NUMBER must be a positive integer (received ${raw || "empty"})`,
+    );
   }
   return value;
 }
 
 function isHttpStatus(error: unknown, status: number): boolean {
   return (
-    typeof error === "object" &&
-    error !== null &&
+    error instanceof Error &&
     "status" in error &&
     (error as { status: number }).status === status
   );

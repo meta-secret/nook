@@ -52,10 +52,10 @@ export function isSentinelPasswordUnlockForbiddenError(err: unknown): boolean {
 
 export function isSentinelVault(state: VaultState): boolean {
   if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true;
-  if (!state.manager) return false;
+  if (!state.hasManager) return false;
   try {
     return (
-      state.manager.sentinelUnlockStatus() !==
+      state.requireManager().sentinelUnlockStatus() !==
       SentinelVaultUnlockState.NotSentinel
     );
   } catch {
@@ -66,10 +66,10 @@ export function isSentinelVault(state: VaultState): boolean {
 async function getSentinelUnlockStatus(
   state: VaultState,
 ): Promise<SentinelVaultUnlockState> {
-  if (!state.manager) return SentinelVaultUnlockState.NotSentinel;
+  if (!state.hasManager) return SentinelVaultUnlockState.NotSentinel;
   try {
     return await state.enqueueStorage(() =>
-      state.manager!.sentinelUnlockStatus(),
+      state.requireManager().sentinelUnlockStatus(),
     );
   } catch {
     return SentinelVaultUnlockState.NotSentinel;
@@ -114,7 +114,7 @@ export async function refreshSentinelUnlockStatus(
 export async function ensureSentinelCeremonyHydrated(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager || state.isAuthenticated || state.isVerifying) return;
+  if (!state.hasManager || state.isAuthenticated || state.isVerifying) return;
   await state.initDeviceIdentity();
   try {
     await state.syncFromStorage({ force: true });
@@ -134,7 +134,7 @@ export async function ensureSentinelCeremonyHydrated(
   try {
     await state.enqueueStorage(async () => {
       const connectArgs = state.connectStorageArgs();
-      await state.manager!.connect(...connectArgs);
+      await state.requireManager().connect(...connectArgs);
     });
   } catch (e: unknown) {
     if (isSentinelCeremonyRequiredError(e)) {
@@ -146,15 +146,15 @@ export async function ensureSentinelCeremonyHydrated(
 }
 
 export async function startSentinelUnlock(state: VaultState): Promise<void> {
-  if (!state.manager || state.isVerifying) return;
+  if (!state.hasManager || state.isVerifying) return;
   state.errorMsg = "";
   await ensureSentinelCeremonyHydrated(state);
   const status = await state.enqueueStorage(() =>
-    state.manager!.startSentinelUnlock(),
+    state.requireManager().startSentinelUnlock(),
   );
   replaceUnlockSession(state, status);
   state.sentinelUnlockRequest = await state.enqueueStorage(() =>
-    state.manager!.sentinelUnlockRequestJson(),
+    state.requireManager().sentinelUnlockRequestJson(),
   );
 }
 
@@ -162,9 +162,9 @@ export async function addSentinelUnlockResponse(
   state: VaultState,
   response: string,
 ): Promise<void> {
-  if (!state.manager || !response.trim()) return;
+  if (!state.hasManager || !response.trim()) return;
   const status = await state.enqueueStorage(() =>
-    state.manager!.addSentinelUnlockResponse(response.trim()),
+    state.requireManager().addSentinelUnlockResponse(response.trim()),
   );
   replaceUnlockSession(state, status);
 }
@@ -172,10 +172,10 @@ export async function addSentinelUnlockResponse(
 export async function listSentinelStoredDeliveries(
   state: VaultState,
 ): Promise<SentinelStoredDeliverySummary[]> {
-  if (!state.manager) return [];
+  if (!state.hasManager) return [];
   await state.initDeviceIdentity();
   const summaries = await state.enqueueStorage(() =>
-    state.manager!.listSentinelGenesisShareDeliveries(),
+    state.requireManager().listSentinelGenesisShareDeliveries(),
   );
   for (const previous of state.sentinelStoredDeliveries) previous.free();
   state.sentinelStoredDeliveries = summaries;
@@ -187,19 +187,23 @@ export async function createSentinelUnlockResponse(
   storeId: string,
   request: string,
 ): Promise<string> {
-  if (!state.manager) throw new Error("Vault engine is not available.");
+  if (!state.hasManager) throw new Error("Vault engine is not available.");
   if (!storeId.trim() || !request.trim()) return "";
   await state.initDeviceIdentity();
   return state.enqueueStorage(async () => {
-    await state.manager!.loadSentinelGenesisShareDelivery(storeId.trim());
+    await state
+      .requireManager()
+      .loadSentinelGenesisShareDelivery(storeId.trim());
     state.refreshVaultArchitectureFromManager();
-    return state.manager!.respondToSentinelUnlockRequest(request.trim());
+    return state
+      .requireManager()
+      .respondToSentinelUnlockRequest(request.trim());
   });
 }
 
 export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
   if (
-    !state.manager ||
+    !state.hasManager ||
     state.isVerifying ||
     !state.sentinelUnlockSession.ready
   ) {
@@ -210,7 +214,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
   state.isVerifying = true;
   try {
     const rawRecords = (await state.enqueueStorage(() =>
-      state.manager!.finalizeSentinelUnlock(),
+      state.requireManager().finalizeSentinelUnlock(),
     )) as NookSecretRecord[];
     for (const record of rawRecords) record.free();
     await state.loadSecretPage("", 0);

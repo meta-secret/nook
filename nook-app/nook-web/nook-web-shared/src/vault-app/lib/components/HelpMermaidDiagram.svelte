@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { renderMermaidDiagram, type MermaidTheme } from '$lib/mermaid-diagram'
+  import { MermaidTheme, renderMermaidDiagram } from '$lib/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     source,
     sectionId,
-    theme = 'dark',
+    theme = MermaidTheme.Dark,
   }: {
     vault: VaultState
     source: string

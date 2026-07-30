@@ -1,17 +1,16 @@
-export type AppKind = "unified-development" | "simple" | "sentinel";
+import { VaultApplication } from "$app-wasm";
 
-declare const __NOOK_APP_KIND__: AppKind;
+declare const __NOOK_APP_KIND__: VaultApplication;
 
-export const APP_KIND: AppKind = __NOOK_APP_KIND__;
+export const APP_KIND: VaultApplication = __NOOK_APP_KIND__;
 
-export const IS_SIMPLE_APP = APP_KIND === "simple";
-export const IS_SENTINEL_APP = APP_KIND === "sentinel";
-export const SUPPORTS_EXTENSION = APP_KIND !== "sentinel";
+export const IS_SIMPLE_APP = APP_KIND === VaultApplication.Simple;
+export const IS_SENTINEL_APP = APP_KIND === VaultApplication.Sentinel;
+export const SUPPORTS_EXTENSION = APP_KIND !== VaultApplication.Sentinel;
 
 const SIMPLE_APP_URL =
   import.meta.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
 
-export function siblingAppUrl(): string | undefined {
-  if (IS_SENTINEL_APP) return `${SIMPLE_APP_URL.replace(/\/$/, "")}/`;
-  return undefined;
+export function simpleVaultAppUrl(): string {
+  return `${SIMPLE_APP_URL.replace(/\/$/, "")}/`;
 }

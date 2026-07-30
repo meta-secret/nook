@@ -8,14 +8,22 @@ import {
   deleteLocalBrowserData,
 } from "$lib/browser-data";
 import { setVaultSessionLocked } from "$app-wasm";
+import {
+  AdminAccordionSection,
+  SettingsAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
 
 export function openSettings(
   state: UiActionsContext,
-  { section = "storage", accordion = "devices" }: OpenSettingsArgs = {},
+  {
+    section = SettingsSection.Storage,
+    accordion = SettingsAccordionSection.Devices,
+  }: OpenSettingsArgs = {},
 ): void {
   state.helpOpen = false;
   state.settingsSection = section;
-  if (section === "storage") {
+  if (section === SettingsSection.Storage) {
     state.cancelProviderSetup();
     state.cancelAddProvider();
     state.settingsAccordionSection = accordion;
@@ -26,13 +34,13 @@ export function openSettings(
 
 export function openAdmin(
   state: UiActionsContext,
-  accordion: OpenAdminAccordion = "vaults",
+  accordion: OpenAdminAccordion = AdminAccordionSection.Vaults,
 ): void {
   state.helpOpen = false;
   state.cancelProviderSetup();
   state.cancelAddProvider();
   state.adminAccordionSection = accordion;
-  state.settingsSection = "admin";
+  state.settingsSection = SettingsSection.Admin;
   state.settingsOpen = true;
   void state.refreshLocalVaultCatalog();
   void state.refreshDeviceState();
@@ -45,7 +53,7 @@ export function closeSettings(state: UiActionsContext): void {
 }
 
 export async function deleteLocalData(state: UiActionsContext): Promise<void> {
-  if (!state.manager || state.isSaving || state.localDataDeletionStarted)
+  if (!state.hasManager || state.isSaving || state.localDataDeletionStarted)
     return;
   state.errorMsg = "";
   state.dismissSuccess();
@@ -53,7 +61,7 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
   state.stopIdleSessionTracking();
   state.stopVaultSync();
   try {
-    const manager = state.manager;
+    const manager = state.requireManager();
     await deleteLocalBrowserData(() => {
       const deletion = state.enqueueStorage(() =>
         manager.deleteLocalBrowserData(),
@@ -78,8 +86,8 @@ export async function handleRemoteLocalBrowserDataDeletion(
   state: UiActionsContext,
 ): Promise<void> {
   if (state.localDataDeletionStarted) return;
-  const resetManager = state.manager
-    ? state.enqueueStorage(() => state.manager!.resetVaultSession())
+  const resetManager = state.hasManager
+    ? state.enqueueStorage(() => state.requireManager().resetVaultSession())
     : state.waitForStorageChain();
   state.localDataDeletionStarted = true;
   state.stopIdleSessionTracking();

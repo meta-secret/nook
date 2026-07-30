@@ -195,19 +195,64 @@ pub async fn reconcile_extension_pairing_state(
     Ok(())
 }
 
-/// Find an existing provider whose sync target matches `candidate`, optionally
-/// excluding one provider id. Returns the matching provider or `undefined`.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookDuplicateSyncProviderState {
+    Unique,
+    Duplicate,
+}
+
+#[wasm_bindgen]
+pub struct NookDuplicateSyncProvider(Option<nook_core::StorageProviderData>);
+
+#[wasm_bindgen]
+impl NookDuplicateSyncProvider {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookDuplicateSyncProviderState {
+        if self.0.is_some() {
+            NookDuplicateSyncProviderState::Duplicate
+        } else {
+            NookDuplicateSyncProviderState::Unique
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn provider(&self) -> Result<nook_core::StorageProviderData, wasm_bindgen::JsError> {
+        self.0.clone().ok_or_else(|| {
+            wasm_bindgen::JsError::new("sync provider target does not have a duplicate")
+        })
+    }
+}
+
+/// Find an existing provider whose sync target matches `candidate`.
 #[wasm_bindgen(js_name = findDuplicateSyncProvider)]
+#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
-    exclude_id: Option<String>,
-) -> Result<Option<nook_core::StorageProviderData>, wasm_bindgen::JsError> {
-    Ok(nook_core::find_duplicate_sync_provider(
+) -> NookDuplicateSyncProvider {
+    NookDuplicateSyncProvider(nook_core::find_duplicate_sync_provider(
         &snapshot.providers,
         &candidate,
-        exclude_id.as_deref(),
+        None,
+    ))
+}
+
+/// Find a duplicate while editing an existing provider.
+#[wasm_bindgen(js_name = findDuplicateSyncProviderExcluding)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn find_duplicate_sync_provider_excluding(
+    snapshot: nook_core::AuthProvidersSnapshotData,
+    candidate: nook_core::StorageProviderData,
+    exclude_id: &str,
+) -> NookDuplicateSyncProvider {
+    NookDuplicateSyncProvider(nook_core::find_duplicate_sync_provider(
+        &snapshot.providers,
+        &candidate,
+        Some(exclude_id),
     ))
 }
 
@@ -217,13 +262,13 @@ pub fn find_duplicate_sync_provider(
 #[allow(clippy::needless_pass_by_value)]
 pub fn ensure_local_provider_row(
     snapshot: nook_core::AuthProvidersSnapshotData,
-    active_store_id: Option<String>,
+    active_store_id: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let new_id = nook_core::generate_id()?.to_string();
     let created_at: String = js_sys::Date::new_0().to_iso_string().into();
     let (next, _changed) = nook_core::ensure_local_provider_row(
         &snapshot,
-        active_store_id.as_deref(),
+        Some(active_store_id),
         &new_id,
         &created_at,
     );
@@ -238,16 +283,18 @@ fn validate_configured_application_for_content(content: &str) -> Result<(), Nook
 
 /// Configure the immutable application capability for this browser realm.
 #[wasm_bindgen(js_name = configureVaultApplication)]
-pub fn configure_vault_application_name(
-    application_name: &str,
-) -> Result<(), wasm_bindgen::JsError> {
-    let application = nook_core::VaultApplication::parse(application_name)?;
+pub fn configure_vault_application(application: nook_core::VaultApplication) {
     application::configure_vault_application(application);
-    Ok(())
 }
 
 /// Return the immutable capability configured by the current web app.
 #[wasm_bindgen(js_name = configuredVaultApplication)]
+pub fn configured_vault_application() -> nook_core::VaultApplication {
+    application::configured_vault_application()
+}
+
+/// Return the stable semantic application name used by browser debug hooks.
+#[wasm_bindgen(js_name = configuredVaultApplicationName)]
 pub fn configured_vault_application_name() -> String {
     application::configured_vault_application()
         .as_str()
@@ -341,6 +388,13 @@ pub struct NookLocalVaultEntry {
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookLocalVaultUnlockState {
+    NeverUnlocked,
+    Unlocked,
+}
+
+#[wasm_bindgen]
 impl NookLocalVaultEntry {
     #[wasm_bindgen(getter, js_name = storeId)]
     pub fn store_id(&self) -> String {
@@ -362,11 +416,22 @@ impl NookLocalVaultEntry {
         }
     }
 
+    #[wasm_bindgen(getter, js_name = unlockState)]
+    #[must_use]
+    pub fn unlock_state(&self) -> NookLocalVaultUnlockState {
+        if self.last_unlocked_at.is_some() {
+            NookLocalVaultUnlockState::Unlocked
+        } else {
+            NookLocalVaultUnlockState::NeverUnlocked
+        }
+    }
+
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
-    pub fn last_unlocked_at(&self) -> Option<String> {
+    pub fn last_unlocked_at(&self) -> Result<String, wasm_bindgen::JsError> {
         self.last_unlocked_at
             .as_ref()
             .map(nook_core::IsoTimestamp::to_string)
+            .ok_or_else(|| wasm_bindgen::JsError::new("local vault has never been unlocked"))
     }
 }
 
@@ -385,15 +450,46 @@ pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, wasm_bindge
     Ok(matching)
 }
 
-#[wasm_bindgen(js_name = getActiveVaultId)]
-pub async fn get_active_vault_id() -> Result<Option<String>, wasm_bindgen::JsError> {
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookActiveVaultSelectionState {
+    NotSelected,
+    Selected,
+}
+
+#[wasm_bindgen]
+pub struct NookActiveVaultSelection(Option<String>);
+
+#[wasm_bindgen]
+impl NookActiveVaultSelection {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn state(&self) -> NookActiveVaultSelectionState {
+        if self.0.is_some() {
+            NookActiveVaultSelectionState::Selected
+        } else {
+            NookActiveVaultSelectionState::NotSelected
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> Result<String, wasm_bindgen::JsError> {
+        self.0
+            .clone()
+            .ok_or_else(|| wasm_bindgen::JsError::new("no active local vault is selected"))
+    }
+}
+
+#[wasm_bindgen(js_name = getActiveVaultSelection)]
+pub async fn get_active_vault_selection() -> Result<NookActiveVaultSelection, wasm_bindgen::JsError>
+{
     let Some(store_id) = crate::storage::indexed_db::get_active_vault_id().await? else {
-        return Ok(None);
+        return Ok(NookActiveVaultSelection(None));
     };
     if local_vault_matches_compiled_application(&store_id).await? {
-        Ok(Some(store_id))
+        Ok(NookActiveVaultSelection(Some(store_id)))
     } else {
-        Ok(None)
+        Ok(NookActiveVaultSelection(None))
     }
 }
 
@@ -426,12 +522,20 @@ pub async fn prepare_new_local_vault_slot() -> Result<(), wasm_bindgen::JsError>
 }
 
 #[wasm_bindgen(js_name = importLocalVaultBlob)]
-pub async fn import_local_vault_blob(
+pub async fn import_local_vault_blob(content: String) -> Result<String, wasm_bindgen::JsError> {
+    validate_configured_application_for_content(&content)?;
+    crate::storage::indexed_db::import_vault_blob(&content, None)
+        .await
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = importNamedLocalVaultBlob)]
+pub async fn import_named_local_vault_blob(
     content: String,
-    label: Option<String>,
+    label: String,
 ) -> Result<String, wasm_bindgen::JsError> {
     validate_configured_application_for_content(&content)?;
-    crate::storage::indexed_db::import_vault_blob(&content, label.as_deref())
+    crate::storage::indexed_db::import_vault_blob(&content, Some(&label))
         .await
         .map_err(Into::into)
 }

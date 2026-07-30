@@ -3,11 +3,13 @@ import {
   DRIVE_APPDATA_SCOPE,
   DRIVE_FILE_SCOPE,
   DRIVE_READONLY_SCOPE,
+  GoogleDriveOAuthScope,
   isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
   requestGoogleAccessToken,
 } from '$lib/google-oauth'
+import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
 
 describe('google-oauth', () => {
   it('is configured with the committed client id', () => {
@@ -15,10 +17,13 @@ describe('google-oauth', () => {
   })
 
   it('detects expired oauth access tokens with skew', () => {
-    const expired = oauthTokensToConfig({
-      accessToken: 'token',
-      expiresAt: new Date(Date.now() - 1_000).toISOString(),
-    })
+    const expired = oauthTokensToConfig(
+      {
+        accessToken: 'token',
+        expiresAt: new Date(Date.now() - 1_000).toISOString(),
+      },
+      oauthConfigurationNotApplicable(),
+    )
     expect(isOAuthAccessTokenExpired(expired)).toBe(true)
   })
 
@@ -57,9 +62,13 @@ describe('google-oauth', () => {
       },
     })
 
-    const appdataToken = requestGoogleAccessToken({ scope: 'appdata' })
+    const appdataToken = requestGoogleAccessToken({
+      scope: GoogleDriveOAuthScope.AppData,
+    })
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
-    const fileToken = requestGoogleAccessToken({ scope: 'shared' })
+    const fileToken = requestGoogleAccessToken({
+      scope: GoogleDriveOAuthScope.Shared,
+    })
 
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()

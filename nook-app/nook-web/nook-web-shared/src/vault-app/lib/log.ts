@@ -27,14 +27,20 @@ import {
   nookLog,
   nookLogClear,
   nookLogCount,
-  nookLogDump,
+  nookLogDumpPage,
   nookLogFlush,
   nookLogGetLevel,
   nookLogInit,
   nookLogSetLevel,
+  nookLogWithData,
 } from "$app-wasm";
-
-export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
+export enum LogLevel {
+  Error = "error",
+  Warn = "warn",
+  Info = "info",
+  Debug = "debug",
+  Trace = "trace",
+}
 
 export type LogEntry = {
   ts: string;
@@ -45,11 +51,11 @@ export type LogEntry = {
 };
 
 const LOG_LEVELS: readonly LogLevel[] = [
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
+  LogLevel.Error,
+  LogLevel.Warn,
+  LogLevel.Info,
+  LogLevel.Debug,
+  LogLevel.Trace,
 ];
 
 /** How long to run the write-behind flush loop between IndexedDB writes. */
@@ -57,15 +63,40 @@ const FLUSH_INTERVAL_MS = 250;
 /** Cap the pre-init replay queue so early crash loops can't grow unbounded. */
 const PRE_INIT_QUEUE_MAX = 1000;
 
-type PendingRecord = {
-  level: LogLevel;
-  scope: string;
-  message: string;
-  data?: string;
-};
+enum PendingRecordKind {
+  MessageOnly = "message-only",
+  Structured = "structured",
+}
+
+type PendingRecord =
+  | {
+      kind: PendingRecordKind.MessageOnly;
+      level: LogLevel;
+      scope: string;
+      message: string;
+    }
+  | {
+      kind: PendingRecordKind.Structured;
+      level: LogLevel;
+      scope: string;
+      message: string;
+      data: string;
+    };
 
 let wasmReady = false;
-let flushTimer: ReturnType<typeof setInterval> | undefined = undefined;
+enum LogFlushScheduleKind {
+  Stopped = "stopped",
+  Scheduled = "scheduled",
+}
+
+type LogFlushSchedule =
+  | { kind: LogFlushScheduleKind.Stopped }
+  | {
+      kind: LogFlushScheduleKind.Scheduled;
+      timer: ReturnType<typeof setInterval>;
+    };
+
+let logFlushSchedule: LogFlushSchedule = { kind: LogFlushScheduleKind.Stopped };
 let flushing = false;
 let consolePatched = false;
 let diagnosticsInstalled = false;
@@ -77,11 +108,16 @@ const preInitQueue: PendingRecord[] = [];
  * print through these so patching never causes recursion or double-persist.
  */
 type ConsoleMethod = (...args: unknown[]) => void;
-const originalConsole: Record<
-  "error" | "warn" | "info" | "debug" | "log",
-  ConsoleMethod
-> =
-  typeof console !== "undefined"
+enum ConsoleMethodKind {
+  Error = "error",
+  Warn = "warn",
+  Info = "info",
+  Debug = "debug",
+  Log = "log",
+}
+
+const originalConsole: Record<ConsoleMethodKind, ConsoleMethod> =
+  "console" in globalThis
     ? {
         error: console.error.bind(console),
         warn: console.warn.bind(console),
@@ -97,29 +133,47 @@ const originalConsole: Record<
         log: () => {},
       };
 
-function parseLevel(raw: string | undefined): LogLevel | undefined {
-  const value = raw?.trim().toLowerCase();
+enum LogLevelParseKind {
+  Invalid = "invalid",
+  Valid = "valid",
+}
+
+type LogLevelParse =
+  | { kind: LogLevelParseKind.Invalid }
+  | { kind: LogLevelParseKind.Valid; level: LogLevel };
+
+function parseLevel(raw: unknown): LogLevelParse {
+  if (typeof raw !== "string") return { kind: LogLevelParseKind.Invalid };
+  const value = raw.trim().toLowerCase();
   return LOG_LEVELS.includes(value as LogLevel)
-    ? (value as LogLevel)
-    : undefined;
+    ? { kind: LogLevelParseKind.Valid, level: value as LogLevel }
+    : { kind: LogLevelParseKind.Invalid };
 }
 
 function initialLevel(): LogLevel {
-  if (typeof localStorage !== "undefined") {
+  if ("localStorage" in globalThis) {
     const stored = parseLevel(
-      localStorage.getItem("nook_log_level") ?? undefined,
+      localStorage.getItem("nook_log_level")?.valueOf(),
     );
-    if (stored) return stored;
+    if (stored.kind === LogLevelParseKind.Valid) return stored.level;
   }
-  const env =
-    typeof import.meta !== "undefined"
-      ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | undefined)
-      : undefined;
-  return env ?? "info";
+  const env = parseLevel(import.meta.env?.VITE_LOG_LEVEL);
+  return env.kind === LogLevelParseKind.Valid ? env.level : LogLevel.Info;
 }
 
-function serializeData(data: unknown): string | undefined {
-  if (data === undefined) return undefined;
+enum LogPayloadKind {
+  MessageOnly = "message-only",
+  Structured = "structured",
+}
+
+type LogPayload =
+  | { kind: LogPayloadKind.MessageOnly }
+  | { kind: LogPayloadKind.Structured; data: unknown };
+
+function serializeData(
+  payload: Extract<LogPayload, { data: unknown }>,
+): string {
+  const { data } = payload;
   try {
     return typeof data === "string" ? data : JSON.stringify(data);
   } catch {
@@ -174,14 +228,14 @@ function isEnabled(level: LogLevel): boolean {
 function echo(level: LogLevel, text: string) {
   const line = `${formatTimestamp()} ${text}`;
   switch (level) {
-    case "error":
+    case LogLevel.Error:
       originalConsole.error(line);
       break;
-    case "warn":
+    case LogLevel.Warn:
       originalConsole.warn(line);
       break;
-    case "debug":
-    case "trace":
+    case LogLevel.Debug:
+    case LogLevel.Trace:
       originalConsole.debug(line);
       break;
     default:
@@ -190,20 +244,45 @@ function echo(level: LogLevel, text: string) {
 }
 
 /** Persist one entry (no console echo). Queues until WASM is ready. */
-function persist(
-  level: LogLevel,
-  scope: string,
-  message: string,
-  serialized?: string,
-) {
+function persistMessage(level: LogLevel, scope: string, message: string) {
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
-      preInitQueue.push({ level, scope, message, data: serialized });
+      preInitQueue.push({
+        kind: PendingRecordKind.MessageOnly,
+        level,
+        scope,
+        message,
+      });
     }
     return;
   }
   try {
-    nookLog(level, scope, message, serialized ?? undefined);
+    nookLog(level, scope, message);
+  } catch {
+    // Logging must never break the app.
+  }
+}
+
+function persistStructured(
+  level: LogLevel,
+  scope: string,
+  message: string,
+  serialized: string,
+) {
+  if (!wasmReady) {
+    if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
+      preInitQueue.push({
+        kind: PendingRecordKind.Structured,
+        level,
+        scope,
+        message,
+        data: serialized,
+      });
+    }
+    return;
+  }
+  try {
+    nookLogWithData(level, scope, message, serialized);
   } catch {
     // Logging must never break the app.
   }
@@ -214,20 +293,22 @@ function record(
   level: LogLevel,
   scope: string,
   message: string,
-  data?: unknown,
+  payload: LogPayload,
 ) {
   if (!isEnabled(level)) return;
-  const serialized = serializeData(data);
-  const text = serialized
-    ? `[${scope}] ${message} ${serialized}`
-    : `[${scope}] ${message}`;
-  echo(level, text);
-  persist(level, scope, message, serialized);
+  if (payload.kind === LogPayloadKind.MessageOnly) {
+    echo(level, `[${scope}] ${message}`);
+    persistMessage(level, scope, message);
+    return;
+  }
+  const serialized = serializeData(payload);
+  echo(level, `[${scope}] ${message} ${serialized}`);
+  persistStructured(level, scope, message, serialized);
 }
 
 /** True for browser-extension scripts we should not persist as app errors. */
-export function isIgnoredErrorSource(source: string | undefined): boolean {
-  if (!source) return false;
+export function isIgnoredErrorSource(source: unknown): boolean {
+  if (typeof source !== "string") return false;
   const value = source.trim();
   if (!value) return false;
   return (
@@ -239,10 +320,8 @@ export function isIgnoredErrorSource(source: string | undefined): boolean {
 /** Strip query strings from URLs before persisting (tokens may appear in params). */
 export function sanitizeLogUrl(url: string): string {
   try {
-    const parsed = new URL(
-      url,
-      typeof location !== "undefined" ? location.href : undefined,
-    );
+    const parsed =
+      "location" in globalThis ? new URL(url, location.href) : new URL(url);
     parsed.search = "";
     parsed.hash = "";
     return parsed.toString();
@@ -263,40 +342,46 @@ function captureDiagnostic(
   level: LogLevel,
   scope: string,
   message: string,
-  data?: unknown,
+  data: unknown,
 ) {
-  record(level, scope, message, data);
+  record(level, scope, message, { kind: LogPayloadKind.Structured, data });
 }
 
 function installGlobalErrorHandlers() {
-  if (typeof window === "undefined") return;
+  if (!("window" in globalThis)) return;
 
   window.addEventListener("error", (event) => {
     if (isIgnoredErrorSource(event.filename)) return;
-    captureDiagnostic("error", "window", event.message || "Uncaught error", {
-      source: event.filename,
-      line: event.lineno,
-      column: event.colno,
-      ...(event.error instanceof Error && event.error.stack
-        ? { stack: event.error.stack }
-        : {}),
-    });
+    captureDiagnostic(
+      LogLevel.Error,
+      "window",
+      event.message || "Uncaught error",
+      {
+        source: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        ...(event.error instanceof Error && event.error.stack
+          ? { stack: event.error.stack }
+          : {}),
+      },
+    );
   });
 
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
-    const stack = reason instanceof Error ? reason.stack : undefined;
-    if (isIgnoredErrorSource(stack)) return;
+    if (reason instanceof Error && isIgnoredErrorSource(reason.stack)) return;
     const message =
       reason instanceof Error
         ? `${reason.name}: ${reason.message}`
         : stringifyArgs([reason]);
     if (isIgnoredErrorSource(message)) return;
     captureDiagnostic(
-      "error",
+      LogLevel.Error,
       "unhandledrejection",
       message,
-      stack ? { stack } : undefined,
+      reason instanceof Error && reason.stack
+        ? { stack: reason.stack }
+        : { reason: "stack-not-available" },
     );
   });
 }
@@ -315,7 +400,7 @@ function installFetchInstrumentation() {
       const url = sanitizeLogUrl(resolveFetchUrl(input));
       if (!isIgnoredErrorSource(url)) {
         captureDiagnostic(
-          "warn",
+          LogLevel.Warn,
           "fetch",
           `HTTP ${response.status} ${response.statusText}`,
           {
@@ -342,20 +427,37 @@ function installDiagnosticsCapture() {
 }
 
 export type ScopedLogger = {
-  error: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
-  info: (message: string, data?: unknown) => void;
-  debug: (message: string, data?: unknown) => void;
-  trace: (message: string, data?: unknown) => void;
+  error: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
+  warn: (...args: [message: string] | [message: string, data: unknown]) => void;
+  info: (...args: [message: string] | [message: string, data: unknown]) => void;
+  debug: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
+  trace: (
+    ...args: [message: string] | [message: string, data: unknown]
+  ) => void;
 };
+
+function logPayload(
+  args: [message: string] | [message: string, data: unknown],
+): LogPayload {
+  return args.length === 1
+    ? { kind: LogPayloadKind.MessageOnly }
+    : { kind: LogPayloadKind.Structured, data: args[1] };
+}
 
 export function createLogger(scope: string): ScopedLogger {
   return {
-    error: (message, data) => record("error", scope, message, data),
-    warn: (message, data) => record("warn", scope, message, data),
-    info: (message, data) => record("info", scope, message, data),
-    debug: (message, data) => record("debug", scope, message, data),
-    trace: (message, data) => record("trace", scope, message, data),
+    error: (...args) =>
+      record(LogLevel.Error, scope, args[0], logPayload(args)),
+    warn: (...args) => record(LogLevel.Warn, scope, args[0], logPayload(args)),
+    info: (...args) => record(LogLevel.Info, scope, args[0], logPayload(args)),
+    debug: (...args) =>
+      record(LogLevel.Debug, scope, args[0], logPayload(args)),
+    trace: (...args) =>
+      record(LogLevel.Trace, scope, args[0], logPayload(args)),
   };
 }
 
@@ -372,22 +474,25 @@ export function setLogLevel(level: LogLevel) {
 
 export function getLogLevel(): LogLevel {
   if (wasmReady) {
-    return parseLevel(nookLogGetLevel()) ?? "info";
+    const parsed = parseLevel(nookLogGetLevel());
+    return parsed.kind === LogLevelParseKind.Valid
+      ? parsed.level
+      : LogLevel.Info;
   }
   return initialLevel();
 }
 
 /** Read persisted entries (oldest first), optionally filtered/paginated. */
-export async function dumpLogs(options?: {
-  minLevel?: LogLevel;
-  limit?: number;
-  offset?: number;
+export async function dumpLogs(options: {
+  minLevel: LogLevel;
+  limit: number;
+  offset: number;
 }): Promise<LogEntry[]> {
   if (!wasmReady) return [];
-  const entries = await nookLogDump(
-    options?.minLevel ?? undefined,
-    options?.limit ?? undefined,
-    options?.offset ?? undefined,
+  const entries = await nookLogDumpPage(
+    options.minLevel,
+    options.limit,
+    options.offset,
   );
   try {
     return entries.toArray() as LogEntry[];
@@ -415,9 +520,9 @@ export async function flushLogs(): Promise<void> {
 
 /** Stop all persistence before the destructive local-browser cleanup runs. */
 export async function suspendWasmLogging(): Promise<void> {
-  if (flushTimer) {
-    clearInterval(flushTimer);
-    flushTimer = undefined;
+  if (logFlushSchedule.kind === LogFlushScheduleKind.Scheduled) {
+    clearInterval(logFlushSchedule.timer);
+    logFlushSchedule = { kind: LogFlushScheduleKind.Stopped };
   }
   while (flushing) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -432,26 +537,23 @@ export async function suspendWasmLogging(): Promise<void> {
  * level-gated (console output is never suppressed).
  */
 function patchConsole() {
-  if (consolePatched || typeof console === "undefined") return;
+  if (consolePatched || !("console" in globalThis)) return;
   consolePatched = true;
 
-  const wrap = (
-    method: "error" | "warn" | "info" | "debug" | "log",
-    level: LogLevel,
-  ) => {
+  const wrap = (method: ConsoleMethodKind, level: LogLevel) => {
     console[method] = (...args: unknown[]) => {
       originalConsole[method](...args);
       if (isEnabled(level)) {
-        persist(level, "console", stringifyArgs(args));
+        persistMessage(level, "console", stringifyArgs(args));
       }
     };
   };
 
-  wrap("error", "error");
-  wrap("warn", "warn");
-  wrap("info", "info");
-  wrap("debug", "debug");
-  wrap("log", "info");
+  wrap(ConsoleMethodKind.Error, LogLevel.Error);
+  wrap(ConsoleMethodKind.Warn, LogLevel.Warn);
+  wrap(ConsoleMethodKind.Info, LogLevel.Info);
+  wrap(ConsoleMethodKind.Debug, LogLevel.Debug);
+  wrap(ConsoleMethodKind.Log, LogLevel.Info);
 }
 
 /**
@@ -461,7 +563,7 @@ function patchConsole() {
  * Idempotent — safe to call on every `getVaultManager()`.
  */
 export function initWasmLogging() {
-  if (typeof window !== "undefined") {
+  if ("window" in globalThis) {
     window.__nookConsole = { echo };
   }
   installDiagnosticsCapture();
@@ -475,30 +577,32 @@ export function initWasmLogging() {
     const queued = preInitQueue.splice(0, preInitQueue.length);
     for (const entry of queued) {
       try {
-        nookLog(
-          entry.level,
-          entry.scope,
-          entry.message,
-          entry.data ?? undefined,
-        );
+        if (entry.kind === PendingRecordKind.Structured) {
+          nookLogWithData(entry.level, entry.scope, entry.message, entry.data);
+        } else {
+          nookLog(entry.level, entry.scope, entry.message);
+        }
       } catch {
         // Ignore — a broken early log must not block startup.
       }
     }
   }
 
-  if (!flushTimer) {
-    flushTimer = setInterval(() => {
-      if (flushing) return;
-      flushing = true;
-      void nookLogFlush()
-        .catch(() => {
-          // Drop the batch on storage errors; logging must never break the app.
-        })
-        .finally(() => {
-          flushing = false;
-        });
-    }, FLUSH_INTERVAL_MS);
+  if (logFlushSchedule.kind === LogFlushScheduleKind.Stopped) {
+    logFlushSchedule = {
+      kind: LogFlushScheduleKind.Scheduled,
+      timer: setInterval(() => {
+        if (flushing) return;
+        flushing = true;
+        void nookLogFlush()
+          .catch(() => {
+            // Drop the batch on storage errors; logging must never break the app.
+          })
+          .finally(() => {
+            flushing = false;
+          });
+      }, FLUSH_INTERVAL_MS),
+    };
   }
 }
 
@@ -519,7 +623,7 @@ declare global {
   }
 }
 
-if (typeof window !== "undefined") {
+if ("window" in globalThis) {
   installDiagnosticsCapture();
   window.__nookLog = {
     setLevel: setLogLevel,

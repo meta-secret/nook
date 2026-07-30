@@ -62,16 +62,18 @@ jobs:
           retries: 3
           script: |
             const {
+              BaseCoverageArtifactKind,
               findBaseCoverageArtifact,
             } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/base-coverage-artifact.cjs`)
-            const artifact = await findBaseCoverageArtifact({
+            const result = await findBaseCoverageArtifact({
               github,
               owner: context.repo.owner,
               repo: context.repo.repo,
               baseSha: process.env.BASE_SHA,
               defaultBranch: context.payload.repository.default_branch,
             })
-            if (artifact) {
+            if (result.kind === BaseCoverageArtifactKind.Found) {
+              const { artifact } = result
               core.info(`Using base coverage artifact ${artifact.artifactId} from Main run ${artifact.runId}`)
               core.setOutput('run-id', String(artifact.runId))
             } else {

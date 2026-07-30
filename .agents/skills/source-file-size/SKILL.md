@@ -1,18 +1,24 @@
 ---
 name: source-file-size
 description: >-
-  Enforce Nook's most critical source-structure rule: 1,000 lines for non-Rust
-  and 1,500 for Rust. Use whenever a source file approaches or crosses a limit,
-  the preflight scanner fails, or a large-file refactor is planned. Rust
-  compliance requires production domain or architectural decomposition;
-  separate unit-test files, test extraction, and arbitrary numbered splits are
-  prohibited. Crate-level integration tests remain separate.
+  Enforce Nook's most critical source-structure rule: every authored file,
+  including Rust, is limited to 1,000 lines. Use whenever a source file
+  approaches or crosses the limit, the preflight scanner fails, or a large-file
+  refactor is planned. Oversized Rust signals an overcomplicated domain model
+  or too many responsibilities and requires production domain or architectural
+  decomposition; separate unit-test files, test extraction, and arbitrary
+  numbered splits are prohibited. Crate-level integration tests remain
+  separate.
 ---
 
 # Critical Source File Size
 
 Read and follow the canonical project rule at
 [`.cortex/dynamic-skills/source-file-size.md`](../../../.cortex/dynamic-skills/source-file-size.md).
+
+Every authored source file has the same 1,000-line hard limit. Rust has no
+larger allowance: an oversized Rust module indicates excessive domain
+responsibility and must be decomposed along a real architectural seam.
 
 ## Required response to a violation
 

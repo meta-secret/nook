@@ -3,13 +3,20 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
-  import type { NookImportResult } from '$lib/nook'
   import {
     importBinaryFile,
     importTextFile,
-    selectedImportFile,
+    ImportAttemptKind,
     type ImportPanelProps,
   } from '$lib/components/import-panel'
+  import {
+    ImportFileSelectionKind,
+    PasswordImportFormat,
+    PasswordImportIcon,
+    PasswordImportOutcomeKind,
+    type ImportFileSelection,
+    type PasswordImportOutcome,
+  } from './password-manager-import-state'
 
   type CommonProps = {
     translationPrefix: string
@@ -19,17 +26,23 @@
     errorTestId: string
     resultTestId: string
     accept: string
-    icon: 'archive' | 'spreadsheet'
+    icon: PasswordImportIcon
   }
   type Props = CommonProps &
     (
-      | (ImportPanelProps<string> & { format: 'text' })
-      | (ImportPanelProps<Uint8Array> & { format: 'binary' })
+      | (ImportPanelProps<string> & { format: PasswordImportFormat.Text })
+      | (ImportPanelProps<Uint8Array> & {
+          format: PasswordImportFormat.Binary
+        })
     )
 
   let props: Props = $props()
-  let selectedFile = $state<File>()
-  let result = $state<NookImportResult>()
+  let selectedFile = $state<ImportFileSelection>({
+    kind: ImportFileSelectionKind.NotSelected,
+  })
+  let result = $state<PasswordImportOutcome>({
+    kind: PasswordImportOutcomeKind.NotRun,
+  })
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
@@ -38,30 +51,43 @@
     `${props.translationPrefix}.${suffix}`
 
   function selectFile(event: Event) {
-    selectedFile = selectedImportFile(event)
-    result = undefined
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    selectedFile = file
+      ? { kind: ImportFileSelectionKind.Selected, file }
+      : { kind: ImportFileSelectionKind.NotSelected }
+    result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
   }
 
   async function importFile() {
-    if (!selectedFile || busy) return
-    result = undefined
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
+    const file = selectedFile.file
+    result = { kind: PasswordImportOutcomeKind.NotRun }
     error = ''
     isImporting = true
     try {
-      if (props.format === 'text') {
-        ;({ result, error } = await importTextFile(
-          selectedFile,
-          false,
-          props.onImport,
-        ))
+      if (props.format === PasswordImportFormat.Text) {
+        const imported = await importTextFile(file, false, props.onImport)
+        if (imported.kind === ImportAttemptKind.Completed) {
+          result = {
+            kind: PasswordImportOutcomeKind.Completed,
+            result: imported.result,
+          }
+        } else if (imported.kind === ImportAttemptKind.Failed) {
+          error = imported.error
+        }
         return
       }
-      ;({ result, error } = await importBinaryFile(
-        selectedFile,
-        false,
-        props.onImport,
-      ))
+      const imported = await importBinaryFile(file, false, props.onImport)
+      if (imported.kind === ImportAttemptKind.Completed) {
+        result = {
+          kind: PasswordImportOutcomeKind.Completed,
+          result: imported.result,
+        }
+      } else if (imported.kind === ImportAttemptKind.Failed) {
+        error = imported.error
+      }
     } finally {
       isImporting = false
     }
@@ -83,7 +109,7 @@
   <Card class="gap-0 border-border/60 bg-card py-0">
     <CardContent class="space-y-4 p-4 sm:p-5">
       <div class="flex items-start gap-3">
-        {#if props.icon === 'archive'}
+        {#if props.icon === PasswordImportIcon.Archive}
           <Archive class="mt-0.5 size-5 shrink-0 text-primary" />
         {:else}
           <FileSpreadsheet class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -116,7 +142,8 @@
 
       <Button
         data-testid={props.submitTestId}
-        disabled={!selectedFile || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -138,20 +165,20 @@
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === PasswordImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
             {props.vault.t(messageKey('result_imported'), {
-              count: String(result.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {props.vault.t(messageKey('result_skipped'), {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

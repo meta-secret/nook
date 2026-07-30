@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ObserverSnapshot } from '../src/types';
+import { ObservedAlertKind, ObservedAlertSeverity } from '../src/types';
 
 const now = Date.now();
 
@@ -85,8 +86,8 @@ const snapshot: ObserverSnapshot = {
   alerts: [
     {
       id: 'task-failed:dependency-cache-repair',
-      kind: 'task-failed',
-      severity: 'critical',
+      kind: ObservedAlertKind.TaskFailed,
+      severity: ObservedAlertSeverity.Critical,
       task_id: 'dependency-cache-repair',
       first_observed_at: now - 9 * 60_000,
       reason: 'All permitted attempts have failed',

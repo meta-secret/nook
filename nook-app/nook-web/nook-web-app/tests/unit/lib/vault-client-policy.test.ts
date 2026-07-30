@@ -1,46 +1,65 @@
 import { describe, expect, test } from 'vitest'
 import {
   JoinEnrollmentState,
+  NookManagerStoreScope,
   NookVaultClientPolicy,
   NookVaultSwitchState,
   UnauthenticatedSyncDecision,
   VaultAccessStatus,
   activeVaultProviders,
   providersVisibleWhileDeviceLocked,
-  stagedRemoteStorageArgs,
+  stagedOauthRemoteStorageArgs,
   syncProvidersForActiveVault,
   type AuthProvidersSnapshot,
 } from '$app-wasm'
 import type { OAuthFilePreset } from '$app-wasm'
+import {
+  activeVaultScope,
+  defaultOAuthFileConfig,
+  providerPersistenceDefaults,
+  scopedProviderVault,
+  storedGithubPat,
+  storedGithubRepository,
+  type StorageProvider,
+} from '$lib/auth-providers'
 
-const providers = [
+const providers: StorageProvider[] = [
   {
+    ...providerPersistenceDefaults(),
     id: 'local-a',
     type: 'local',
     label: 'This device',
-    storeId: 'store-a',
+    storeId: scopedProviderVault('store-a'),
+    syncCheckpoint: { state: 'neverSynced' as const },
     createdAt: '2026-07-17T00:00:00.000Z',
   },
   {
+    ...providerPersistenceDefaults(),
     id: 'github-a',
     type: 'github',
     label: 'GitHub A',
-    githubPat: 'pat-a',
-    githubRepo: 'owner/a',
-    storeId: 'store-a',
+    githubPat: storedGithubPat('pat-a'),
+    githubRepo: storedGithubRepository('owner/a'),
+    storeId: scopedProviderVault('store-a'),
+    syncCheckpoint: { state: 'neverSynced' as const },
     createdAt: '2026-07-17T00:00:00.000Z',
   },
   {
+    ...providerPersistenceDefaults(),
     id: 'github-b',
     type: 'github',
     label: 'GitHub B',
-    githubPat: 'pat-b',
-    githubRepo: 'owner/b',
-    storeId: 'store-b',
+    githubPat: storedGithubPat('pat-b'),
+    githubRepo: storedGithubRepository('owner/b'),
+    storeId: scopedProviderVault('store-b'),
+    syncCheckpoint: { state: 'neverSynced' as const },
     createdAt: '2026-07-17T00:00:00.000Z',
   },
 ]
-const snapshot = { providers } as AuthProvidersSnapshot
+const snapshot: AuthProvidersSnapshot = {
+  providers,
+  activeVaultStoreId: activeVaultScope('store-a'),
+}
 
 describe('portable vault client policy', () => {
   test('owns automatic unlock and join approval transitions', () => {
@@ -84,32 +103,33 @@ describe('portable vault client policy', () => {
   })
 
   test('scopes providers and provider roles to the active vault', () => {
-    expect(
-      activeVaultProviders(snapshot, 'store-a').providers.map(
-        (provider) => provider.id,
-      ),
-    ).toEqual(['local-a', 'github-a'])
-    expect(
-      syncProvidersForActiveVault(snapshot, 'store-a').providers.map(
-        (provider) => provider.id,
-      ),
-    ).toEqual(['github-a'])
-    expect(
-      providersVisibleWhileDeviceLocked(snapshot).providers.map(
-        (provider) => provider.id,
-      ),
-    ).toEqual(['local-a'])
+    const scope = NookManagerStoreScope.scoped('store-a')
+    try {
+      expect(
+        activeVaultProviders(snapshot, scope).providers.map(
+          (provider) => provider.id,
+        ),
+      ).toEqual(['local-a', 'github-a'])
+      expect(
+        syncProvidersForActiveVault(snapshot, scope).providers.map(
+          (provider) => provider.id,
+        ),
+      ).toEqual(['github-a'])
+      expect(
+        providersVisibleWhileDeviceLocked(snapshot).providers.map(
+          (provider) => provider.id,
+        ),
+      ).toEqual(['local-a'])
+    } finally {
+      scope.free()
+    }
   })
 
   test('rejects an invalid OAuth preset without a legacy fallback', () => {
     expect(() =>
-      stagedRemoteStorageArgs('oauth-file', undefined, 'nook-events', {
+      stagedOauthRemoteStorageArgs({
+        ...defaultOAuthFileConfig('google-drive'),
         preset: '' as OAuthFilePreset,
-        accessToken: 'token',
-        fileId: 'file-id',
-        fileName: 'stored-name',
-        driveMode: 'private',
-        iCloudMode: 'private',
       }),
     ).toThrow('unknown variant ``, expected `google-drive` or `icloud`')
   })

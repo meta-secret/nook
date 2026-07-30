@@ -1,58 +1,86 @@
-import type { VaultAuthStepKey } from './vault-auth-workflow-messages'
+import { VaultAuthStepKey } from './vault-auth-workflow-messages'
+import { DemoVaultPresence as Presence } from '../../nook-auth/_shared/nook-auth-state'
 
-export type Presence = 'empty' | 'existing'
-export type VaultPath = 'undecided' | 'simple' | 'sentinel'
+export { DemoVaultPresence as Presence } from '../../nook-auth/_shared/nook-auth-state'
+
+export enum VaultPath {
+  Undecided = 'undecided',
+  Simple = 'simple',
+  Sentinel = 'sentinel',
+}
+
+export enum SentinelUi {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  CardStack = 'card-stack',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Terminal = 'terminal',
+}
+
+export enum VaultAuthExperimentStage {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Auth = 'auth',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Sentinel = 'sentinel',
+}
 
 class VaultAuthWorkflowState {
-  presence = $state<Presence>('empty')
+  presence = $state<Presence>(Presence.Empty)
   step = $state(0)
-  path = $state<VaultPath>('undecided')
+  path = $state<VaultPath>(VaultPath.Undecided)
 
   get steps(): VaultAuthStepKey[] {
-    if (this.presence === 'existing') {
+    if (this.presence === Presence.Existing) {
       return [
-        'unlock_existing_vault',
-        'confirm_vault_identity',
-        'unlock_with_passkey',
+        VaultAuthStepKey.UnlockExistingVault,
+        VaultAuthStepKey.ConfirmVaultIdentity,
+        VaultAuthStepKey.UnlockWithPasskey,
       ]
     }
-    if (this.path === 'simple') {
-      return ['name_vault', 'choose_vault_kind', 'create_locally']
-    }
-    if (this.path === 'sentinel') {
+    if (this.path === VaultPath.Simple) {
       return [
-        'name_vault',
-        'choose_vault_kind',
-        'choose_sentinel_interface',
-        'initialize_device',
+        VaultAuthStepKey.NameVault,
+        VaultAuthStepKey.ChooseVaultKind,
+        VaultAuthStepKey.CreateLocally,
       ]
     }
-    return ['name_vault', 'choose_vault_kind', 'create_or_configure']
+    if (this.path === VaultPath.Sentinel) {
+      return [
+        VaultAuthStepKey.NameVault,
+        VaultAuthStepKey.ChooseVaultKind,
+        VaultAuthStepKey.ChooseSentinelInterface,
+        VaultAuthStepKey.InitializeDevice,
+      ]
+    }
+    return [
+      VaultAuthStepKey.NameVault,
+      VaultAuthStepKey.ChooseVaultKind,
+      VaultAuthStepKey.CreateOrConfigure,
+    ]
   }
 
   setPresence(next: Presence): void {
     this.presence = next
     this.step = 0
-    this.path = 'undecided'
+    this.path = VaultPath.Undecided
   }
 
   continueAfterName(vaultName: string): void {
     if (vaultName.trim()) this.step = 1
   }
 
-  choose(path: Exclude<VaultPath, 'undecided'>): void {
+  choose(path: VaultPath.Simple | VaultPath.Sentinel): void {
     this.path = path
     this.step = 2
   }
 
   goBack(): void {
-    if (this.presence === 'empty' && this.step === 1) {
-      this.path = 'undecided'
+    if (this.presence === Presence.Empty && this.step === 1) {
+      this.path = VaultPath.Undecided
       this.step = 0
       return
     }
-    if (this.presence === 'empty' && this.step === 2) {
-      this.path = 'undecided'
+    if (this.presence === Presence.Empty && this.step === 2) {
+      this.path = VaultPath.Undecided
       this.step = 1
       return
     }

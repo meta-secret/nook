@@ -29,8 +29,13 @@ export type ExtensionDeploymentMetadata = {
   download_url: string
   checksum_url: string
   sha256: string
-  install_method: 'chrome_web_store' | 'manual_zip'
+  install_method: ExtensionInstallMethod
   install_url: string
+}
+
+enum ExtensionInstallMethod {
+  ChromeWebStore = 'chrome_web_store',
+  ManualZip = 'manual_zip',
 }
 
 const FIXED_ARCHIVE_TIMESTAMP = new Date('2000-01-01T00:00:00.000Z')
@@ -58,11 +63,14 @@ export function extensionInstallTarget(
   }
   if (channel === 'production') {
     return {
-      install_method: 'chrome_web_store',
+      install_method: ExtensionInstallMethod.ChromeWebStore,
       install_url: `https://chromewebstore.google.com/detail/${extensionId}`,
     }
   }
-  return { install_method: 'manual_zip', install_url: downloadUrl }
+  return {
+    install_method: ExtensionInstallMethod.ManualZip,
+    install_url: downloadUrl,
+  }
 }
 
 function normalizedHttpsBaseUrl(value: string, name: string): URL {
@@ -172,7 +180,7 @@ export async function packageExtensionDeployment(): Promise<ExtensionDeploymentM
   await Promise.all([
     writeFile(
       join(downloads, 'extension.json'),
-      `${JSON.stringify(metadata, undefined, 2)}\n`,
+      `${JSON.stringify(metadata, (_key, value) => value, 2)}\n`,
     ),
     writeFile(join(downloads, `${archive}.sha256`), `${digest}  ${archive}\n`),
   ])

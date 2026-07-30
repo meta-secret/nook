@@ -21,7 +21,7 @@ export function createEnrollmentQrOptions(
       mode: "Byte",
       errorCorrectionLevel: dense ? "L" : "Q",
     },
-    image: dense ? undefined : nookQrBadgeImage,
+    ...(dense ? {} : { image: nookQrBadgeImage }),
     imageOptions: {
       hideBackgroundDots: true,
       imageSize: dense ? 0 : 0.13,

@@ -86,7 +86,8 @@ function fixture() {
 
 function shiftFixtureHours(input, hours) {
   const shifted = structuredClone(input)
-  const shift = (value) => new Date(Date.parse(value) + hours * 60 * 60 * 1000).toISOString()
+  const shift = (value) =>
+    new Date(Date.parse(value) + hours * 60 * 60 * 1000).toISOString()
   for (const field of ['created_at', 'run_started_at', 'updated_at']) {
     shifted.run[field] = shift(shifted.run[field])
   }
@@ -118,7 +119,10 @@ test('builds stable Main timing metrics from completed run jobs and steps', () =
   })
   assert.equal(record.source_run.completed_at, '2026-07-22T10:20:00Z')
   assert.equal(record.jobs[0].duration_seconds, 1080)
-  assert.equal(record.source_pull_requests[0].title, 'CI: keep strings quoted\nwith context')
+  assert.equal(
+    record.source_pull_requests[0].title,
+    'CI: keep strings quoted\nwith context',
+  )
 })
 
 test('serializes JSON-compatible YAML without unsafe plain scalars', () => {
@@ -168,10 +172,13 @@ test('records persistent compiler and BuildKit cache telemetry from Main artifac
 
   const record = buildMainBuildStats(input)
 
-  assert.equal(record.schema_version, 2)
+  assert.equal(record.schema_version, 3)
   assert.equal(record.cache_telemetry.jobs[0].cache_backend.kind, 'remote')
   assert.equal(record.cache_telemetry.totals.sccache_hit_rate_percent, 80)
-  assert.equal(record.cache_telemetry.totals.buildkit_cache_hit_rate_percent, 70)
+  assert.equal(
+    record.cache_telemetry.totals.buildkit_cache_hit_rate_percent,
+    70,
+  )
   assert.equal(record.cache_telemetry.collection.complete, true)
 })
 
@@ -179,8 +186,17 @@ test('marks cache telemetry unavailable instead of inventing hit rates', () => {
   const record = buildMainBuildStats(fixture())
 
   assert.equal(record.cache_telemetry.totals.job_count, 0)
-  assert.equal(record.cache_telemetry.totals.sccache_hit_rate_percent, null)
-  assert.equal(record.cache_telemetry.totals.buildkit_cache_hit_rate_percent, null)
+  assert.equal(
+    Object.hasOwn(record.cache_telemetry.totals, 'sccache_hit_rate_percent'),
+    false,
+  )
+  assert.equal(
+    Object.hasOwn(
+      record.cache_telemetry.totals,
+      'buildkit_cache_hit_rate_percent',
+    ),
+    false,
+  )
   assert.deepEqual(record.cache_telemetry.collection.warnings, [
     'cache_telemetry_artifact_unavailable',
   ])
@@ -188,6 +204,7 @@ test('marks cache telemetry unavailable instead of inventing hit rates', () => {
 
 test('normalizes legacy schema-2 direct-compile telemetry', () => {
   const record = buildMainBuildStats(fixture())
+  record.schema_version = 2
   record.cache_telemetry.totals.local_fallback_job_count =
     record.cache_telemetry.totals.direct_compile_job_count
   delete record.cache_telemetry.totals.direct_compile_job_count
@@ -207,13 +224,11 @@ test('normalizes legacy schema-2 direct-compile telemetry', () => {
         cache_misses: 0,
         cache_errors: 0,
         cache_writes: 0,
-        hit_rate_percent: null,
       },
       buildkit: {
         build_record_count: 0,
         completed_steps: 0,
         cached_steps: 0,
-        cache_hit_rate_percent: null,
         measurement: 'buildx_target_record_steps',
       },
       collection: { complete: true, warnings: [] },
@@ -225,23 +240,35 @@ test('normalizes legacy schema-2 direct-compile telemetry', () => {
   const normalized = normalizeLegacyMainBuildStats(record)
 
   assert.equal(normalized.cache_telemetry.totals.direct_compile_job_count, 1)
-  assert.equal(normalized.cache_telemetry.totals.local_fallback_job_count, undefined)
-  assert.equal(normalized.cache_telemetry.jobs[0].cache_backend.kind, 'direct_compile')
+  assert.equal(
+    Object.hasOwn(
+      normalized.cache_telemetry.totals,
+      'local_fallback_job_count',
+    ),
+    false,
+  )
+  assert.equal(
+    normalized.cache_telemetry.jobs[0].cache_backend.kind,
+    'direct_compile',
+  )
   validateMainBuildStats(normalized)
 })
 
-test('retains incomplete failed steps with null timing instead of inventing duration', () => {
+test('retains incomplete failed steps without inventing duration', () => {
   const input = fixture()
   input.run.conclusion = 'cancelled'
   input.jobs[0].conclusion = 'cancelled'
   input.jobs[0].steps[1].conclusion = 'cancelled'
-  input.jobs[0].steps[1].completed_at = null
+  delete input.jobs[0].steps[1].completed_at
 
   const record = buildMainBuildStats(input)
 
   assert.equal(record.source_run.conclusion, 'cancelled')
-  assert.equal(record.jobs[0].steps[1].duration_seconds, null)
-  assert.equal(record.summary.build_seconds, null)
+  assert.equal(
+    Object.hasOwn(record.jobs[0].steps[1], 'duration_seconds'),
+    false,
+  )
+  assert.equal(Object.hasOwn(record.summary, 'build_seconds'), false)
   assert.equal(record.comparison.baseline_quality, 'not_applicable')
 })
 
@@ -269,7 +296,10 @@ test('rejects impossible timestamps for executed jobs', () => {
   input.jobs[0].started_at = '2026-07-26T00:23:10Z'
   input.jobs[0].completed_at = '2026-07-26T00:23:09Z'
 
-  assert.throws(() => buildMainBuildStats(input), /completion precedes its start/)
+  assert.throws(
+    () => buildMainBuildStats(input),
+    /completion precedes its start/,
+  )
 })
 
 test('excludes jobs reused from earlier attempts from rerun timing', () => {
@@ -341,7 +371,9 @@ test('does not use delayed collector records from the future as baselines', () =
     baselineRecords: [future, earlier],
   })
 
-  assert.deepEqual(current.comparison.baseline_runs, [{ run_id: 100001, run_attempt: 1 }])
+  assert.deepEqual(current.comparison.baseline_runs, [
+    { run_id: 100001, run_attempt: 1 },
+  ])
   assert.equal(current.comparison.baseline_quality, 'weak')
 })
 
@@ -349,7 +381,10 @@ test('rejects records whose summary cannot be derived from detailed jobs', () =>
   const record = buildMainBuildStats(fixture())
   record.summary.step_count += 1
 
-  assert.throws(() => validateMainBuildStats(record), /summary\.step_count mismatch/)
+  assert.throws(
+    () => validateMainBuildStats(record),
+    /summary\.step_count mismatch/,
+  )
 })
 
 test('workflow records completed trusted Main runs in Nook Workbench', () => {
@@ -358,10 +393,16 @@ test('workflow records completed trusted Main runs in Nook Workbench', () => {
     path.join(root, '.github/workflows/main-build-stats.yml'),
     'utf8',
   )
-  assert.match(collector, /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/)
+  assert.match(
+    collector,
+    /workflow_run:\n\s+workflows: \[Main\]\n\s+types: \[completed\]\n\s+branches: \[main\]/,
+  )
   assert.match(collector, /github\.event\.workflow_run\.event == 'push'/)
   assert.match(collector, /github\.event\.workflow_run\.head_branch == 'main'/)
-  assert.match(collector, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
+  assert.match(
+    collector,
+    /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/,
+  )
   assert.match(
     collector,
     /runs\/\{run_id\}\/attempts\/\{attempt_number\}'[\s\S]*attempt_number: eventRun\.run_attempt/,
@@ -370,7 +411,10 @@ test('workflow records completed trusted Main runs in Nook Workbench', () => {
     collector,
     /runs\/\{run_id\}\/attempts\/\{attempt_number\}\/jobs'[\s\S]*attempt_number: eventRun\.run_attempt/,
   )
-  assert.match(collector, /cache-telemetry-\$\{\{ github\.event\.workflow_run\.id \}\}/)
+  assert.match(
+    collector,
+    /cache-telemetry-\$\{\{ github\.event\.workflow_run\.id \}\}/,
+  )
   assert.match(collector, /run-id: \$\{\{ github\.event\.workflow_run\.id \}\}/)
   assert.match(collector, /github-token: \$\{\{ github\.token \}\}/)
   assert.doesNotMatch(collector, /filter: 'latest'/)
@@ -378,7 +422,10 @@ test('workflow records completed trusted Main runs in Nook Workbench', () => {
   assert.doesNotMatch(collector, /GH_TOKEN:.*github\.token/)
   assert.match(collector, /repository: meta-secret\/nook-workbench/)
   assert.match(collector, /path: workbench/)
-  assert.match(collector, /NOOK_GITHUB_PAT is required to publish Main build statistics/)
+  assert.match(
+    collector,
+    /NOOK_GITHUB_PAT is required to publish Main build statistics/,
+  )
   assert.match(
     collector,
     /workbench\/stats\/main-build\/\$\{run\.id\}-attempt-\$\{run\.run_attempt\}\.yaml/,

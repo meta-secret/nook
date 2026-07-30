@@ -4,18 +4,19 @@ import {
   type NookSecretRecord,
   type NookVaultSyncResult,
   type AuthenticatorCodeView,
-  type VaultItemType,
+  type SecretType,
 } from "$lib/nook";
-import { consumeEnrollmentFromLocation } from "$lib/enrollment-code";
 import {
   isVaultSessionLocked,
   DeviceProtectionStatus,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
+  VaultEditDecision,
   providerLabelById,
   resolveErrorMessage as wasmResolveErrorMessage,
   translateWithReplacements,
   type NookPendingSyncConflict,
+  type NookProviderSyncRevision,
   type NookSecretPage,
   type NookVaultManager,
   type NookAppLocale,
@@ -24,13 +25,14 @@ import {
   type StoreId,
 } from "$app-wasm";
 import {
+  activeVaultScope,
   type GoogleDriveMode,
   type ICloudMode,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
+  unselectedVaultScope,
 } from "$lib/auth-providers";
-import type { VaultIdleSessionTracker } from "$lib/vault-idle-session";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
@@ -49,15 +51,47 @@ import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { SerialOperationQueue } from "$lib/serial-operation-queue";
-import { VaultStateSlices } from "$lib/vault/state/index.svelte";
+import { ManualProviderSyncKind } from "$lib/vault/state/sync.svelte";
+import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
+import {
+  AdminAccordionSection,
+  SettingsAccordionSection,
+  SettingsSection,
+} from "$lib/vault/state/ui.svelte";
+import {
+  LoginSetupKind,
+  type LocalProviderLookup,
+  type StagedRemoteStorage,
+} from "$lib/vault/state/provider.svelte";
+import type { EventOutboxTarget } from "$lib/vault/sync-operation-state";
 
-export class VaultState extends VaultStateSlices {
+export type VaultEditRestriction =
+  | { decision: VaultEditDecision.Allowed }
+  | {
+      decision:
+        | VaultEditDecision.BlockedSecurityConflict
+        | VaultEditDecision.BlockedSyncConflict
+        | VaultEditDecision.BlockedByArchitecture;
+      reason: string;
+    };
+
+export enum SyncProviderLabelKind {
+  Idle = "idle",
+  Active = "active",
+}
+
+export type SyncProviderLabel =
+  | { kind: SyncProviderLabelKind.Idle }
+  | { kind: SyncProviderLabelKind.Active; label: string };
+
+export class VaultState extends VaultLifecycleState {
   secretPageGeneration = 0;
   secretPageRequestOffset = 0;
   architectureSecretCreationAllowed = $state(true);
 
   get syncBlocked(): boolean {
-    return this.pendingSyncConflict !== undefined;
+    return this.syncConflictRequiresDecision;
   }
 
   get syncConflictLabel(): string {
@@ -76,14 +110,23 @@ export class VaultState extends VaultStateSlices {
     return this.architectureSecretCreationAllowed;
   }
 
-  get editBlockMessage(): string | undefined {
-    return this.clientPolicy.editBlockMessage(
+  get editRestriction(): VaultEditRestriction {
+    const decision = this.clientPolicy.editBlockReason(
+      this.securityConflicts.length,
+      this.syncBlocked,
+      this.architectureCanCreateSecret,
+    );
+    if (decision === VaultEditDecision.Allowed) {
+      return { decision };
+    }
+    const reason = this.clientPolicy.editBlockMessage(
       this.securityConflicts.length,
       this.syncBlocked,
       this.architectureCanCreateSecret,
       this.translations,
       this.locale,
     );
+    return { decision, reason };
   }
 
   get deviceProtectionReady(): boolean {
@@ -94,23 +137,29 @@ export class VaultState extends VaultStateSlices {
     return this.syncProviders.length;
   }
 
-  get syncingProviderLabel(): string | undefined {
-    if (!this.syncingProviderId) return undefined;
-    return providerLabelById(
-      $state.snapshot({
-        providers: this.providers,
-        ...(this.activeVaultStoreId
-          ? { activeVaultStoreId: this.activeVaultStoreId }
-          : {}),
-      }),
-      this.syncingProviderId,
-    );
+  get syncingProviderLabel(): SyncProviderLabel {
+    if (this.manualProviderSync.kind === ManualProviderSyncKind.Idle) {
+      return { kind: SyncProviderLabelKind.Idle };
+    }
+    return {
+      kind: SyncProviderLabelKind.Active,
+      label: providerLabelById(
+        $state.snapshot({
+          providers: this.providers,
+          activeVaultStoreId:
+            this.activeVault.kind === ActiveVaultKind.Open
+              ? activeVaultScope(this.activeVault.storeId)
+              : unselectedVaultScope(),
+        }),
+        this.manualProviderSync.providerId,
+      ),
+    };
   }
 
   get isSyncActivityVisible(): boolean {
     return this.clientPolicy.isSyncActivityVisible(
       this.isFanOutSyncing,
-      this.syncingProviderId !== undefined,
+      this.manualProviderSyncRunning,
       this.isSyncing,
       this.isSaving,
     );
@@ -120,17 +169,10 @@ export class VaultState extends VaultStateSlices {
     return this.passwordEntries.length > 0;
   }
 
-  successDismissTimer: ReturnType<typeof setTimeout> | undefined;
-  idleSessionTracker: VaultIdleSessionTracker | undefined;
-  syncTimer: ReturnType<typeof setInterval> | undefined;
-  initPromise: Promise<void> | undefined;
   private storageQueue = new SerialOperationQueue();
   localDataDeletionStarted = false;
   /** Internal browser-orchestration flag shared with the device-protection actions. */
   deviceAuthorizationInProgress = false;
-  pendingEnrollmentFromUrl =
-    typeof window !== "undefined" ? consumeEnrollmentFromLocation() : undefined;
-
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.localDataDeletionStarted) {
       return Promise.reject(new Error("Local browser data deletion is active"));
@@ -176,7 +218,7 @@ export class VaultState extends VaultStateSlices {
     return providersActions.shouldUseJoinProviderForConnect(this);
   }
 
-  stagedRemoteStorageArgs(): [string, string, string] | undefined {
+  stagedRemoteStorageArgs(): StagedRemoteStorage {
     return providersActions.stagedRemoteStorageArgs(this);
   }
 
@@ -213,10 +255,7 @@ export class VaultState extends VaultStateSlices {
   }
 
   dismissSuccess() {
-    if (this.successDismissTimer !== undefined) {
-      clearTimeout(this.successDismissTimer);
-      this.successDismissTimer = undefined;
-    }
+    this.cancelSuccessDismissTimer();
     this.successMsg = "";
   }
 
@@ -227,12 +266,14 @@ export class VaultState extends VaultStateSlices {
   showSuccess(message: string) {
     this.dismissSuccess();
     this.successMsg = message;
-    this.successDismissTimer = setTimeout(() => {
-      this.dismissSuccess();
-    }, 5000);
+    this.scheduleSuccessDismiss(
+      setTimeout(() => {
+        this.dismissSuccess();
+      }, 5000),
+    );
   }
 
-  get localProvider(): StorageProvider | undefined {
+  get localProvider(): LocalProviderLookup {
     return providersActions.localProvider(this);
   }
 
@@ -333,7 +374,7 @@ export class VaultState extends VaultStateSlices {
       this.localVaultPresent,
       this.passwordEntries.length,
       this.syncProviders.length,
-      this.loginSetupType !== undefined,
+      this.loginSetup.kind === LoginSetupKind.Active,
       this.addProviderOpen,
     );
   }
@@ -584,16 +625,14 @@ export class VaultState extends VaultStateSlices {
     void this.runFanOutSyncAfterLocalSave();
   }
 
-  remoteEventProviderArgs(
-    provider?: StorageProvider,
-  ): [string, string, string] | undefined {
-    return syncActions.remoteEventProviderArgs(this, provider);
+  eventOutboxTarget(provider?: StorageProvider): EventOutboxTarget {
+    return syncActions.eventOutboxTarget(this, provider);
   }
 
   async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | undefined,
+    revision: NookProviderSyncRevision,
   ): Promise<void> {
     return syncActions.updateProviderSyncMetadata(
       this,
@@ -616,10 +655,6 @@ export class VaultState extends VaultStateSlices {
       oldSecretId,
       chosenSecretId,
     );
-  }
-
-  clearPendingSyncConflict() {
-    this.pendingSyncConflict = undefined;
   }
 
   dismissLocalFolderMultipleVaultsIssue() {
@@ -679,15 +714,13 @@ export class VaultState extends VaultStateSlices {
   }
 
   openSettings(
-    section: "storage" | "onboard" | "admin" = "storage",
-    accordion: "devices" | "language" | "danger" = "devices",
+    section: SettingsSection = SettingsSection.Storage,
+    accordion: SettingsAccordionSection = SettingsAccordionSection.Devices,
   ) {
     return uiActions.openSettings(this, { section, accordion });
   }
 
-  openAdmin(
-    accordion: "vaults" | "storage" | "passwords" | "import-export" = "vaults",
-  ) {
+  openAdmin(accordion: AdminAccordionSection = AdminAccordionSection.Vaults) {
     return uiActions.openAdmin(this, accordion);
   }
 
@@ -873,7 +906,7 @@ export class VaultState extends VaultStateSlices {
     );
   }
 
-  async handleAddSecret(id: string, type: VaultItemType, data: string) {
+  async handleAddSecret(id: string, type: SecretType, data: string) {
     return secretsActions.handleAddSecret(this, id, type, data);
   }
 
@@ -922,7 +955,7 @@ export class VaultState extends VaultStateSlices {
     return secretsActions.handleDeleteSecret(this, id);
   }
 
-  async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
+  async handleReplaceSecret(oldId: string, type: SecretType, data: string) {
     return secretsActions.handleReplaceSecret(this, oldId, type, data);
   }
 }

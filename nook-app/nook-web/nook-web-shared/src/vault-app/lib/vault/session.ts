@@ -8,6 +8,7 @@ import {
 import { VaultType } from "$lib/vault-architecture";
 import { createLogger } from "$lib/log";
 import { inactiveSentinelUnlockSession } from "$lib/vault/sentinel-unlock";
+import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 
 const log = createLogger("vault-session");
 
@@ -15,15 +16,15 @@ export function resetVaultSessionState(
   state: SessionActionsContext,
   resetManager = true,
 ): void {
-  if (resetManager && state.manager) {
+  if (resetManager && state.hasManager) {
     void state
-      .enqueueStorage(() => state.manager!.resetVaultSession())
+      .enqueueStorage(() => state.requireManager().resetVaultSession())
       .catch(() => {
         // Engine may be tearing down.
       });
   }
   state.passwordEntries = [];
-  state.selectedPasswordEntryId = undefined;
+  state.clearSelectedPasswordEntry();
   state.loginPasswordPrompt = false;
   state.sentinelCeremonyPrompt = false;
   state.sentinelUnlockStatus = SentinelVaultUnlockState.NotSentinel;
@@ -41,7 +42,7 @@ export function resetVaultSessionState(
   state.sentinelGenesisParticipantCount = 0;
   state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive;
   state.sentinelGenesisRequest = "";
-  state.sentinelGenesisStoreId = undefined;
+  state.clearSentinelGenesisStore();
   state.sharedJoinerIdentity = "";
   state.sharedGrantInstructions = "";
 }
@@ -60,6 +61,7 @@ export function clearUnlockedSession(
   state: SessionActionsContext,
   resetManager = true,
 ): void {
+  state.localLoginPreparation = LocalLoginPreparationState.Idle;
   state.secretPageGeneration += 1;
   state.stopIdleSessionTracking();
   state.stopVaultSync();
@@ -70,7 +72,7 @@ export function clearUnlockedSession(
   state.secretPageOffset = 0;
   state.secretPageRequestOffset = 0;
   state.secretQuery = "";
-  state.secretTypeFilter = undefined;
+  state.clearSecretTypeFilter();
   state.pendingJoins = [];
   state.vaultMembers = [];
   state.joinEnrollmentPrompt = JoinEnrollmentState.None;

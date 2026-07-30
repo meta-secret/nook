@@ -1,7 +1,10 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import initNookWasm, { configureVaultApplication } from '$app-wasm'
+import initNookWasm, {
+  configureVaultApplication,
+  VaultApplication,
+} from '$app-wasm'
 
 const wasmPath = join(
   process.cwd(),
@@ -9,10 +12,7 @@ const wasmPath = join(
 )
 const originalFetch = globalThis.fetch?.bind(globalThis)
 
-Object.defineProperty(WebAssembly, 'instantiateStreaming', {
-  configurable: true,
-  value: undefined,
-})
+Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input.toString()
@@ -28,4 +28,4 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 }
 
 await initNookWasm()
-configureVaultApplication('unified-development')
+configureVaultApplication(VaultApplication.UnifiedDevelopment)

@@ -64,14 +64,14 @@ mod wasm_tests {
         crypto: &nook_core::VaultCrypto,
         id: &str,
         value: nook_core::SecretValue,
-    ) {
+    ) -> anyhow::Result<()> {
         let secret_type = match &value {
             nook_core::SecretValue::Authenticator(_) => nook_core::SecretType::Authenticator,
             nook_core::SecretValue::SecureNote(_) => nook_core::SecretType::SecureNote,
-            _ => panic!("unsupported test secret"),
+            _ => anyhow::bail!("unsupported test secret"),
         };
-        let yaml = value.to_yaml().expect("serialize test secret");
-        let ciphertext = crypto.encrypt_value(yaml.as_str()).expect("encrypt secret");
+        let yaml = value.to_yaml()?;
+        let ciphertext = crypto.encrypt_value(yaml.as_str())?;
         manager.vault.meta.secrets.insert(
             nook_core::SecretId::from_vault_record(id),
             (
@@ -79,12 +79,13 @@ mod wasm_tests {
                 nook_core::StoredRecordPayload::from_age_armored(ciphertext),
             ),
         );
+        Ok(())
     }
 
     #[wasm_bindgen_test]
-    fn authenticator_listing_filters_by_type_and_non_secret_metadata() {
-        let keys = nook_core::generate_vault_keys().expect("vault keys");
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key).expect("vault crypto");
+    fn authenticator_listing_filters_by_type_and_non_secret_metadata() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_secret(
             &mut manager,
@@ -93,10 +94,9 @@ mod wasm_tests {
             nook_core::SecretValue::Authenticator(
                 nook_core::AuthenticatorSecret::from_otpauth_uri(
                     "otpauth://totp/Alpha:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Alpha",
-                )
-                .expect("authenticator"),
+                )?,
             ),
-        );
+        )?;
         insert_secret(
             &mut manager,
             &crypto,
@@ -104,10 +104,9 @@ mod wasm_tests {
             nook_core::SecretValue::Authenticator(
                 nook_core::AuthenticatorSecret::from_otpauth_uri(
                     "otpauth://totp/Beta:bob@example.com?secret=KRSXG5DSNFXGOIDB&issuer=Beta",
-                )
-                .expect("authenticator"),
+                )?,
             ),
-        );
+        )?;
         insert_secret(
             &mut manager,
             &crypto,
@@ -116,33 +115,24 @@ mod wasm_tests {
                 title: "Alpha recovery".to_owned(),
                 note: "not an authenticator".to_owned(),
             }),
-        );
+        )?;
         manager.vault.crypto = crate::manager::VaultCryptoState::Unlocked(crypto);
 
-        let all = manager
-            .list_authenticator_accounts("")
-            .expect("list authenticators");
+        let all = manager.list_authenticator_accounts("")?;
         assert_eq!(all.len(), 2);
 
-        let matching = manager
-            .list_authenticator_accounts("ALICE@EXAMPLE.COM")
-            .expect("search authenticators");
+        let matching = manager.list_authenticator_accounts("ALICE@EXAMPLE.COM")?;
         assert_eq!(matching.len(), 1);
         assert_eq!(matching[0].issuer(), "Alpha");
         assert_eq!(matching[0].account(), "alice@example.com");
 
+        assert!(manager.list_authenticator_accounts("recovery")?.is_empty());
         assert!(
             manager
-                .list_authenticator_accounts("recovery")
-                .expect("exclude non-authenticator matches")
+                .list_authenticator_accounts("JBSWY3DPEHPK3PXP")?
                 .is_empty()
         );
-        assert!(
-            manager
-                .list_authenticator_accounts("JBSWY3DPEHPK3PXP")
-                .expect("exclude secret material")
-                .is_empty()
-        );
+        Ok(())
     }
 }
 

@@ -27,6 +27,7 @@ import {
 } from '../lib/enrollment-messages'
 import {
   isQueryActiveTabLoginDetectionMessage,
+  LoginDetectionStatus,
   type LoginDetectionResponse,
 } from '../lib/login-detection-messages'
 import {
@@ -114,6 +115,7 @@ import {
   queryActiveTabLoginDetection,
 } from './service-worker/session-lifecycle'
 import {
+  AuthenticationWorkflowSnapshotKind,
   authenticationWorkflowSnapshot,
   classifyAuthenticationOutcome,
   generateSuggestedPassword,
@@ -248,7 +250,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           })),
         ),
       )
-      .then((snapshot) => sendResponse({ ok: true, snapshot }))
+      .then((result) =>
+        sendResponse(
+          result.kind === AuthenticationWorkflowSnapshotKind.Matched
+            ? { ok: true, snapshot: result.snapshot }
+            : { ok: true },
+        ),
+      )
       .catch(() =>
         sendResponse({ ok: false, reason: 'workflow-snapshot-failed' }),
       )
@@ -465,10 +473,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (isExtensionSessionLockMessage(message)) {
-    const extensionSender =
-      sender.id === chrome.runtime.id &&
-      (sender.url === undefined ||
+    const senderUrlAllowed =
+      !('url' in sender) ||
+      (typeof sender.url === 'string' &&
         sender.url.startsWith(chrome.runtime.getURL('')))
+    const extensionSender = sender.id === chrome.runtime.id && senderUrlAllowed
     if (!extensionSender) {
       sendResponse({ ok: false, reason: 'forbidden-sender' })
       return false
@@ -531,7 +540,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() =>
         sendResponse({
           ok: true,
-          status: 'unavailable',
+          status: LoginDetectionStatus.Unavailable,
         } satisfies LoginDetectionResponse),
       )
     return true

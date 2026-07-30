@@ -1,20 +1,37 @@
 import type { AuthenticationOutcomeObservationView } from './outcome-evidence-messages'
+import { NookWebsiteLoginSaveDecision } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
-export type WebsiteLoginSaveDecision =
-  | 'create'
-  | 'update'
-  | 'already-saved'
-  | 'invalid'
+export { NookWebsiteLoginSaveDecision }
 
 export type WebsiteLoginSaveOfferView = {
   offerId: string
-  decision: 'create' | 'update'
+  decision:
+    | NookWebsiteLoginSaveDecision.Create
+    | NookWebsiteLoginSaveDecision.Update
   vaultStoreId: string
   vaultName: string
 }
 
+export enum WebsiteLoginSavePendingState {
+  Unavailable = 'unavailable',
+  Available = 'available',
+}
+
+export type WebsiteLoginSavePendingResponse =
+  | { ok: true; state: WebsiteLoginSavePendingState.Unavailable }
+  | {
+      ok: true
+      state: WebsiteLoginSavePendingState.Available
+      offer: WebsiteLoginSaveOfferView
+    }
+  | { ok: false; reason: string }
+
+export enum WebsiteLoginSaveOfferMessageType {
+  NookWebsiteLoginSaveOffer = 'nook:website-login-save-offer',
+}
+
 export type WebsiteLoginSaveOfferMessage = {
-  type: 'nook:website-login-save-offer'
+  type: WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer
   payload: {
     origin: string
     username: string
@@ -22,15 +39,23 @@ export type WebsiteLoginSaveOfferMessage = {
   }
 }
 
+export enum WebsiteLoginSavePendingMessageType {
+  NookWebsiteLoginSavePending = 'nook:website-login-save-pending',
+}
+
 export type WebsiteLoginSavePendingMessage = {
-  type: 'nook:website-login-save-pending'
+  type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending
   payload: {
     origin: string
   }
 }
 
+export enum WebsiteLoginSaveCommitMessageType {
+  NookWebsiteLoginSaveCommit = 'nook:website-login-save-commit',
+}
+
 export type WebsiteLoginSaveCommitMessage = {
-  type: 'nook:website-login-save-commit'
+  type: WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit
   payload: {
     origin: string
     offerId: string
@@ -38,8 +63,12 @@ export type WebsiteLoginSaveCommitMessage = {
   }
 }
 
+export enum WebsiteLoginSaveDismissMessageType {
+  NookWebsiteLoginSaveDismiss = 'nook:website-login-save-dismiss',
+}
+
 export type WebsiteLoginSaveDismissMessage = {
-  type: 'nook:website-login-save-dismiss'
+  type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss
   payload: {
     origin: string
     offerId: string

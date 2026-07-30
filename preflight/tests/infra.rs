@@ -4,6 +4,8 @@ use std::{
     process::Command,
 };
 
+use anyhow::Context;
+
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
@@ -17,7 +19,7 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> std::io::Result<()> {
+fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")
         .arg(root.join("preflight/tests/neo4j_credentials.sh"))
@@ -33,10 +35,10 @@ fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> std::io::Res
     let task = read("infra/tasks/neo4j.yml");
     let credential_validation = task
         .find("reconcile_neo4j_credentials \"$secret_dir\" \"$retained_storage\"")
-        .expect("credential validation");
+        .context("Neo4j task must reconcile credentials")?;
     let tls_secret_apply = task
         .find("kubectl create secret generic hive-neo4j-tls")
-        .expect("TLS Secret apply");
+        .context("Neo4j task must publish its TLS secret")?;
     assert!(
         credential_validation < tls_secret_apply,
         "credentials must be validated before replacement TLS Secrets are published"
@@ -85,19 +87,20 @@ fn assert_no_shell_scripts(path: &Path) {
 }
 
 #[test]
-fn remote_cache_is_public_over_tls_and_zot_remains_private() {
-    assert_remote_compose_contract();
-    assert_infrastructure_deploy_contract();
-    assert_zot_registry_contract();
-    assert_mesh_node_contract();
+fn remote_cache_is_public_over_tls_and_zot_remains_private() -> anyhow::Result<()> {
+    assert_remote_compose_contract()?;
+    assert_infrastructure_deploy_contract()?;
+    assert_zot_registry_contract()?;
+    assert_mesh_node_contract()?;
+    Ok(())
 }
 
 #[test]
-fn neo4j_client_secret_normalization_is_upgrade_safe() {
+fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     let tasks = read("infra/tasks/neo4j.yml");
     let start = tasks
         .find("NEO4J_CREDENTIAL_RECONCILIATION_BEGIN")
-        .expect("Neo4j credential reconciliation starts");
+        .context("Neo4j task must delimit credential reconciliation")?;
     let reconciliation = &tasks[start..];
 
     for required in [
@@ -129,10 +132,10 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
     }
     let retained_probe = tasks
         .find("retained_storage=false")
-        .expect("retained storage probe");
+        .context("Neo4j task must probe retained storage")?;
     let storage_apply = tasks
         .find("manifests/neo4j/storage.yaml")
-        .expect("Neo4j storage apply");
+        .context("Neo4j task must apply its storage manifest")?;
     assert!(
         retained_probe < storage_apply,
         "retained storage must be detected before storage resources are applied"
@@ -161,18 +164,19 @@ fn neo4j_client_secret_normalization_is_upgrade_safe() {
 
     let neo4j_ready = reconciliation
         .find("kubectl rollout status statefulset/hive-neo4j")
-        .expect("Neo4j availability wait");
+        .context("Neo4j task must wait for the StatefulSet")?;
     let client_restart = reconciliation
         .find("hive.nook.sh/neo4j-client-sha256")
-        .expect("client checksum rollout gate");
+        .context("Neo4j task must restart clients for credential changes")?;
     assert!(
         client_restart > neo4j_ready,
         "clients restart only after Neo4j is available"
     );
+    Ok(())
 }
 
 #[test]
-fn hive_graph_clients_never_mix_schema_revisions() {
+fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
     for manifest in [
         "infra/k0s/manifests/hive/deployment.yaml",
         "infra/k0s/manifests/hive/dispatcher.yaml",
@@ -199,11 +203,11 @@ fn hive_graph_clients_never_mix_schema_revisions() {
     }
     let coordinator_start = worker_manifest
         .find("        - name: coordinator\n")
-        .expect("Hive coordinator container");
+        .ok_or_else(|| anyhow::anyhow!("Hive coordinator container"))?;
     let coordinator = &worker_manifest[coordinator_start..];
     let coordinator_end = coordinator
         .find("        - name: auth-broker\n")
-        .expect("container after Hive coordinator");
+        .ok_or_else(|| anyhow::anyhow!("container after Hive coordinator"))?;
     let coordinator = &coordinator[..coordinator_end];
     assert!(
         coordinator.contains(
@@ -227,17 +231,18 @@ fn hive_graph_clients_never_mix_schema_revisions() {
     }
     let drain = deployment_tasks
         .find("kubectl scale \"deployment/$deployment\"")
-        .expect("graph-client drain");
+        .context("graph-client drain must exist")?;
     let apply = deployment_tasks
         .find("kubectl apply -f \"$rendered\"")
-        .expect("Hive manifest apply");
+        .context("Hive manifest apply must exist")?;
     assert!(
         drain < apply,
         "every old graph client must stop before the new revision is applied"
     );
+    Ok(())
 }
 
-fn assert_remote_compose_contract() {
+fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [
         "6380:6380",
@@ -301,16 +306,13 @@ fn assert_remote_compose_contract() {
             "infra Taskfile must flatten the {domain} operational domain"
         );
     }
-    let mut actual_domain_taskfiles = fs::read_dir(repository_root().join("infra/tasks"))
-        .expect("infra/tasks must be readable")
+    let mut actual_domain_taskfiles = fs::read_dir(repository_root().join("infra/tasks"))?
         .map(|entry| {
-            entry
-                .expect("infra/tasks entries must be readable")
-                .file_name()
-                .into_string()
-                .expect("infra taskfile names must be UTF-8")
+            entry?.file_name().into_string().map_err(|name| {
+                anyhow::anyhow!("non-UTF-8 infra task filename: {}", name.display())
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<anyhow::Result<Vec<_>>>()?;
     actual_domain_taskfiles.sort();
     let mut expected_domain_taskfiles = expected_domains
         .map(|domain| format!("{domain}.yml"))
@@ -354,9 +356,10 @@ fn assert_remote_compose_contract() {
             "host firewall must preserve default-drop filtering and Docker forwarding: {required}"
         );
     }
+    Ok(())
 }
 
-fn assert_infrastructure_deploy_contract() {
+fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     let infra_root = read("infra/Taskfile.yml");
     let infra_tasks = infra_taskfile_graph();
     let host_services = read("infra/tasks/host-services.yml");
@@ -371,7 +374,7 @@ fn assert_infrastructure_deploy_contract() {
         .split("\n  deploy:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  k0s:sync:\n").next())
-        .expect("infra:deploy must be defined in the host-services Taskfile domain");
+        .context("host-services taskfile must define the deploy section")?;
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
         "ssh -n -o BatchMode=yes",
@@ -399,15 +402,16 @@ fn assert_infrastructure_deploy_contract() {
     let sync = operations
         .split("\n  redis:credential:sync:\n")
         .nth(1)
-        .expect("infra must provide local Redis credential synchronization");
+        .context("operations taskfile must define Redis credential sync")?;
     assert!(sync.contains(".nook/cache/redis-password"));
     assert!(sync.contains("chmod 0600"));
 
     assert!(read(".gitignore").contains("/infra/secrets/"));
     assert!(read(".dockerignore").contains("infra/secrets"));
+    Ok(())
 }
 
-fn assert_zot_registry_contract() {
+fn assert_zot_registry_contract() -> anyhow::Result<()> {
     let manifest = read("infra/k0s/manifests/registry/zot.yaml");
     assert!(
         manifest.contains("\"compat\": [\"docker2s2\"]"),
@@ -418,7 +422,7 @@ fn assert_zot_registry_contract() {
         .split("\n  registry:deploy:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  registry:check:\n").next())
-        .expect("infra must define the Zot deployment and migration task");
+        .context("infra must define the Zot deployment and migration task")?;
     for required in [
         "sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot",
         "kubectl rollout status deployment/nook-zot",
@@ -449,13 +453,13 @@ fn assert_zot_registry_contract() {
     }
     let copy = deploy
         .find("copy_legacy_registry")
-        .expect("legacy registry copy");
+        .context("Zot task must copy the legacy registry")?;
     let stop = deploy
         .find("docker stop \"$legacy_registry\"")
-        .expect("legacy registry stop");
+        .context("Zot task must stop the legacy registry")?;
     let enable = deploy
         .find("systemctl enable --now \"$unit\"")
-        .expect("Zot loopback enable");
+        .context("Zot task must enable the loopback service")?;
     assert!(
         copy < stop && stop < enable,
         "Zot must copy before stopping legacy storage and bind loopback afterward"
@@ -471,7 +475,7 @@ fn assert_zot_registry_contract() {
         .split("\n  registry:check:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  registry:diagnose:\n").next())
-        .expect("infra must define the Zot operational check");
+        .context("infra must define the Zot operational check")?;
     for required in [
         "systemctl is-enabled --quiet",
         "systemctl is-active --quiet",
@@ -492,15 +496,16 @@ fn assert_zot_registry_contract() {
             && uninstall.contains("test -d /var/lib/hive/zot"),
         "k0s uninstall must remove the forwarding unit and retain Zot data"
     );
+    Ok(())
 }
 
-fn assert_mesh_node_contract() {
+fn assert_mesh_node_contract() -> anyhow::Result<()> {
     let mesh_tasks = read("infra/tasks/mesh.yml");
     let mesh_add = mesh_tasks
         .split("\n  mesh:node:add:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  mesh:status:\n").next())
-        .expect("infra:mesh:node:add must be defined in the mesh Taskfile domain");
+        .context("mesh taskfile must define mesh node enrollment")?;
     for required in [
         "silent: true",
         "ssh -n -o BatchMode=yes",
@@ -544,4 +549,5 @@ fn assert_mesh_node_contract() {
             "Cloudflare Mesh node automation may expose credentials through: {forbidden}"
         );
     }
+    Ok(())
 }

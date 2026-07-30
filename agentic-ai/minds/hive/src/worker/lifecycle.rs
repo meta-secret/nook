@@ -3,11 +3,11 @@ use std::io::Write as _;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::Context;
 use tokio::sync::watch;
 
 use crate::model::{AgentId, ClaimOutcome, ClaimedTask};
 use crate::store::TaskStore;
+use crate::{HiveContext, HiveResult};
 
 pub(super) enum ClaimWindow<T> {
     Completed(T),
@@ -27,7 +27,7 @@ pub(super) async fn claim_once<S: TaskStore>(
     lease_seconds: i64,
     shutdown: watch::Receiver<bool>,
     lifecycle_marker: &Path,
-) -> anyhow::Result<ClaimStep> {
+) -> HiveResult<ClaimStep> {
     let claim = store.claim(agent_id, lease_seconds);
     match finish_claim_during_shutdown(claim, shutdown).await {
         ClaimWindow::Stopped => {
@@ -63,10 +63,10 @@ async fn release_during_shutdown<S: TaskStore>(store: &S, task: &ClaimedTask, ag
     }
 }
 
-pub(super) async fn mark_interrupted(lifecycle_marker: &Path) -> anyhow::Result<()> {
+pub(super) async fn mark_interrupted(lifecycle_marker: &Path) -> HiveResult<()> {
     tokio::fs::write(lifecycle_marker, b"rollout-before-execution")
         .await
-        .context("mark interrupted Pod for replacement")
+        .hive_context("mark interrupted Pod for replacement")
 }
 
 pub(super) async fn finish_claim_during_shutdown<F, T>(
@@ -92,15 +92,15 @@ where
     }
 }
 
-pub(super) async fn shutdown_requested(mut shutdown: watch::Receiver<bool>) -> anyhow::Result<()> {
+pub(super) async fn shutdown_requested(mut shutdown: watch::Receiver<bool>) -> HiveResult<()> {
     shutdown
         .wait_for(|requested| *requested)
         .await
         .map(|_| ())
-        .context("worker termination signal relay stopped")
+        .hive_context("worker termination signal relay stopped")
 }
 
-pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> anyhow::Result<()> {
+pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> HiveResult<()> {
     std::fs::create_dir_all(workspace)?;
     let startup_marker = workspace.join(".hive-worker-started");
     let startup_file = std::fs::OpenOptions::new()
@@ -111,9 +111,12 @@ pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> an
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             std::fs::write(workspace.join(".hive-task-finished"), pod_name)?;
-            return Err(error).context("refusing to restart a Hive worker inside an existing Pod");
+            return Err(error)
+                .hive_context("refusing to restart a Hive worker inside an existing Pod");
         }
-        Err(error) => return Err(error).context("failed to establish Hive worker lifecycle"),
+        Err(error) => {
+            return Err(error).hive_context("failed to establish Hive worker lifecycle");
+        }
     };
     startup_file.write_all(pod_name.as_bytes())?;
     startup_file.sync_all()?;
@@ -214,7 +217,8 @@ mod tests {
 
         establish_worker_lifecycle(workspace.path(), "pod-a")?;
         let error = establish_worker_lifecycle(workspace.path(), "pod-a")
-            .expect_err("the second worker process must be rejected");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("the second worker process must be rejected"))?;
 
         assert!(
             error
@@ -261,15 +265,19 @@ mod tests {
 
     #[async_trait]
     impl TaskStore for RecordingStore {
-        async fn migrate(&self) -> anyhow::Result<()> {
+        async fn migrate(&self) -> crate::HiveResult<()> {
             unreachable!("not used by claim lifecycle test")
         }
 
-        async fn register_agent(&self, _agent_id: &AgentId, _pod_name: &str) -> anyhow::Result<()> {
+        async fn register_agent(
+            &self,
+            _agent_id: &AgentId,
+            _pod_name: &str,
+        ) -> crate::HiveResult<()> {
             unreachable!("not used by claim lifecycle test")
         }
 
-        async fn enqueue(&self, _task: &EnqueueTask) -> anyhow::Result<()> {
+        async fn enqueue(&self, _task: &EnqueueTask) -> crate::HiveResult<()> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -277,22 +285,22 @@ mod tests {
             &self,
             _source_commit: &str,
             _kind: &str,
-        ) -> anyhow::Result<Option<TaskId>> {
+        ) -> crate::HiveResult<Option<TaskId>> {
             unreachable!("not used by claim lifecycle test")
         }
 
-        async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> anyhow::Result<bool> {
+        async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
         async fn cancellation_targets(
             &self,
             _task_id: &TaskId,
-        ) -> anyhow::Result<Vec<CancellationTarget>> {
+        ) -> crate::HiveResult<Vec<CancellationTarget>> {
             unreachable!("not used by claim lifecycle test")
         }
 
-        async fn finalize_cancellation(&self, _task_id: &TaskId) -> anyhow::Result<bool> {
+        async fn finalize_cancellation(&self, _task_id: &TaskId) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -300,7 +308,7 @@ mod tests {
             &self,
             _task: &ClaimedTask,
             _agent_id: &AgentId,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -308,7 +316,7 @@ mod tests {
             &self,
             _agent_id: &AgentId,
             _lease_seconds: i64,
-        ) -> anyhow::Result<ClaimOutcome> {
+        ) -> crate::HiveResult<ClaimOutcome> {
             self.claim_started.notify_one();
             self.finish_claim.notified().await;
             Ok(ClaimOutcome::Claimed(Box::new(self.task.clone())))
@@ -320,7 +328,7 @@ mod tests {
             _agent_id: &AgentId,
             _lease_token: &LeaseToken,
             _lease_seconds: i64,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -329,18 +337,22 @@ mod tests {
             _lease: &ActivityLease,
             _agent_id: &AgentId,
             _activity: &TaskActivity,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
-        async fn release(&self, task: &ClaimedTask, _agent_id: &AgentId) -> anyhow::Result<bool> {
+        async fn release(
+            &self,
+            task: &ClaimedTask,
+            _agent_id: &AgentId,
+        ) -> crate::HiveResult<bool> {
             assert_eq!(task.id, self.task.id);
             assert!(
                 !self.marker.exists(),
                 "worker lifecycle marker must follow the lease release"
             );
             if self.release_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-                anyhow::bail!("transient coordinator transport failure");
+                crate::hive_bail!("transient coordinator transport failure");
             }
             self.released.store(true, Ordering::SeqCst);
             Ok(true)
@@ -353,7 +365,7 @@ mod tests {
             _obsolete: bool,
             _summary: &str,
             _artifact: &CompletionArtifact,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -362,7 +374,7 @@ mod tests {
             _task: &ClaimedTask,
             _agent_id: &AgentId,
             _error: &str,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
 
@@ -372,7 +384,7 @@ mod tests {
             _agent_id: &AgentId,
             _blocker: &EnqueueTask,
             _reason: &str,
-        ) -> anyhow::Result<bool> {
+        ) -> crate::HiveResult<bool> {
             unreachable!("not used by claim lifecycle test")
         }
     }

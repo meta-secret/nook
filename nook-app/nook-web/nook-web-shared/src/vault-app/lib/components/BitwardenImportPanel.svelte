@@ -5,44 +5,57 @@
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import ImportProgress from '$lib/components/ImportProgress.svelte'
+  import {
+    ImportFileSelectionKind,
+    ImportOutcomeKind,
+    type ImportFileSelection,
+    type ImportOutcome,
+  } from './bitwarden-import-state'
 
   let {
     vault,
     isSaving,
     onImport,
-    onClose = undefined,
+    onClose,
     embedded = false,
   }: {
     vault: VaultState
     isSaving: boolean
-    onImport: (
-      json: string,
-      password: string,
-    ) => Promise<NookImportResult>
-    onClose?: (() => void) | undefined
+    onImport: (json: string, password: string) => Promise<NookImportResult>
+    onClose?: () => void
     embedded?: boolean
   } = $props()
 
-  let selectedFile = $state<File>()
-  let result = $state<NookImportResult>()
+  let selectedFile = $state<ImportFileSelection>({
+    kind: ImportFileSelectionKind.NotSelected,
+  })
+  let result = $state<ImportOutcome>({ kind: ImportOutcomeKind.NotRun })
   let error = $state('')
   let password = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || isSaving)
 
   function selectFile(event: Event) {
-    selectedFile = (event.currentTarget as HTMLInputElement).files?.[0]
-    result = undefined
+    const file = (event.currentTarget as HTMLInputElement).files?.[0]
+    selectedFile = file
+      ? { kind: ImportFileSelectionKind.Selected, file }
+      : { kind: ImportFileSelectionKind.NotSelected }
+    result = { kind: ImportOutcomeKind.NotRun }
     error = ''
   }
 
   async function importFile() {
-    if (!selectedFile || busy) return
+    if (selectedFile.kind === ImportFileSelectionKind.NotSelected || busy)
+      return
+    const file = selectedFile.file
     error = ''
-    result = undefined
+    result = { kind: ImportOutcomeKind.NotRun }
     isImporting = true
     try {
-      result = await onImport(await selectedFile.text(), password)
+      result = {
+        kind: ImportOutcomeKind.Completed,
+        result: await onImport(await file.text(), password),
+      }
       password = ''
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause)
@@ -124,7 +137,8 @@
 
       <Button
         data-testid="bitwarden-import-submit"
-        disabled={!selectedFile || busy}
+        disabled={selectedFile.kind === ImportFileSelectionKind.NotSelected ||
+          busy}
         onclick={() => void importFile()}
       >
         <Upload class="size-4" />
@@ -134,29 +148,32 @@
       </Button>
 
       {#if isImporting}
-        <ImportProgress vault={vault} testId="bitwarden-import-progress" />
+        <ImportProgress {vault} testId="bitwarden-import-progress" />
       {/if}
 
       {#if error}
-        <p class="text-sm text-destructive" data-testid="bitwarden-import-error">
+        <p
+          class="text-sm text-destructive"
+          data-testid="bitwarden-import-error"
+        >
           {error}
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === ImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
             {vault.t('bitwarden_import.result_imported', {
-              count: String(result.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t('bitwarden_import.result_skipped', {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

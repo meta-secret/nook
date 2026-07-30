@@ -511,7 +511,7 @@ async function buildChromeLocales() {
       await mkdir(localeDir, { recursive: true })
       await writeFile(
         join(localeDir, 'messages.json'),
-        `${JSON.stringify(messages, undefined, 2)}\n`,
+        `${JSON.stringify(messages, (_key, value) => value, 2)}\n`,
       )
     }),
   )
@@ -541,7 +541,7 @@ await writeFile(
       shortName: deployment.shortName,
       versionName,
     }),
-    undefined,
+    (_key, value) => value,
     2,
   )}\n`,
 )

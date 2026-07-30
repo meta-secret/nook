@@ -600,50 +600,70 @@ fn base64_url(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
+    use serde::de::DeserializeOwned;
 
-    fn to_json<T: serde::Serialize>(value: &T) -> Value {
-        serde_json::to_value(value).expect("json value")
+    fn through_json<T>(value: &T) -> Result<T, JsError>
+    where
+        T: serde::Serialize + DeserializeOwned,
+    {
+        let json = serde_json::to_vec(value).map_err(|error| {
+            JsError::new(&format!("Passkey fixture serialization failed: {error}"))
+        })?;
+        serde_json::from_slice(&json).map_err(|error| {
+            JsError::new(&format!(
+                "Passkey fixture typed deserialization failed: {error}"
+            ))
+        })
     }
 
     #[test]
     fn creation_options_use_passkey_prf_types() -> Result<(), JsError> {
         let value =
             creation_options_struct("localhost", "Nook", "Kitchen laptop", &[8; 32], &[9; 32])?;
-        let json = to_json(&value);
+        let options = through_json(&value)?;
+        let public_key = options.public_key;
 
-        assert_eq!(json["publicKey"]["rp"]["id"], "localhost");
-        assert_eq!(json["publicKey"]["rp"]["name"], "Nook");
-        assert_eq!(json["publicKey"]["user"]["name"], "Kitchen laptop");
-        assert_eq!(json["publicKey"]["user"]["displayName"], "Kitchen laptop");
-        let algorithms = json["publicKey"]["pubKeyCredParams"]
-            .as_array()
-            .expect("credential parameters")
+        assert_eq!(public_key.rp.id.as_deref(), Some("localhost"));
+        assert_eq!(public_key.rp.name, "Nook");
+        assert_eq!(public_key.user.name, "Kitchen laptop");
+        assert_eq!(public_key.user.display_name, "Kitchen laptop");
+        let algorithms = public_key
+            .pub_key_cred_params
             .iter()
-            .map(|param| param["alg"].as_i64().expect("credential algorithm"))
+            .map(|parameter| parameter.alg)
             .collect::<Vec<_>>();
-        assert!(algorithms.contains(&-7));
-        assert!(algorithms.contains(&-257));
+        assert!(algorithms.contains(&iana::Algorithm::ES256));
+        assert!(algorithms.contains(&iana::Algorithm::RS256));
+        let authenticator_selection = public_key
+            .authenticator_selection
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey authenticator selection is required"))?;
         assert_eq!(
-            json["publicKey"]["authenticatorSelection"]["residentKey"],
-            "required"
+            authenticator_selection.resident_key,
+            Some(ResidentKeyRequirement::Required)
+        );
+        assert!(authenticator_selection.require_resident_key);
+        assert_eq!(
+            authenticator_selection.user_verification,
+            UserVerificationRequirement::Required
         );
         assert_eq!(
-            json["publicKey"]["authenticatorSelection"]["requireResidentKey"],
-            true
+            public_key.attestation,
+            AttestationConveyancePreference::None
         );
-        assert_eq!(
-            json["publicKey"]["authenticatorSelection"]["userVerification"],
-            "required"
-        );
-        assert_eq!(json["publicKey"]["attestation"], "none");
-        assert_eq!(
-            json["publicKey"]["extensions"]["prf"]["eval"]["first"]
-                .as_array()
-                .expect("first prf input")
-                .len(),
-            32
-        );
+        let extensions = public_key
+            .extensions
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey extensions are required"))?;
+        let prf = extensions
+            .prf
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey PRF extension is required"))?;
+        let eval = prf
+            .eval
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey PRF input is required"))?;
+        assert_eq!(eval.first.len(), 32);
         Ok(())
     }
 
@@ -651,16 +671,16 @@ mod tests {
     fn blank_rp_id_uses_browser_origin_default() -> Result<(), JsError> {
         let creation =
             creation_options_struct("", "Nook", "Browser extension", &[8; 32], &[9; 32])?;
-        let creation_json = to_json(&creation);
-        assert!(creation_json["publicKey"]["rp"].get("id").is_none());
+        let creation = through_json(&creation)?;
+        assert!(matches!(&creation.public_key.rp.id, None));
 
         let request = request_options_struct("", &[7; 32], &[9; 32])?;
-        let request_json = to_json(&request);
-        assert!(request_json["publicKey"].get("rpId").is_none());
+        let request = through_json(&request)?;
+        assert!(matches!(&request.public_key.rp_id, None));
 
         let recovery = recovery_options_struct("", &[9; 32])?;
-        let recovery_json = to_json(&recovery);
-        assert!(recovery_json["publicKey"].get("rpId").is_none());
+        let recovery = through_json(&recovery)?;
+        assert!(matches!(&recovery.public_key.rp_id, None));
         Ok(())
     }
 
@@ -668,42 +688,63 @@ mod tests {
     fn request_options_key_prf_input_by_credential_id() -> Result<(), JsError> {
         let credential_id = [7u8; 32];
         let value = request_options_struct("localhost", &credential_id, &[9; 32])?;
-        let json = to_json(&value);
+        let options = through_json(&value)?;
+        let public_key = options.public_key;
         let key = base64_url(&credential_id);
 
-        assert_eq!(json["publicKey"]["rpId"], "localhost");
-        assert_eq!(
-            json["publicKey"]["allowCredentials"][0]["id"]
-                .as_array()
-                .expect("credential id")
-                .len(),
-            32
-        );
-        assert_eq!(
-            json["publicKey"]["extensions"]["prf"]["evalByCredential"][key]["first"]
-                .as_array()
-                .expect("first prf input")
-                .len(),
-            32
-        );
+        assert_eq!(public_key.rp_id.as_deref(), Some("localhost"));
+        let allowed_credentials = public_key
+            .allow_credentials
+            .as_ref()
+            .ok_or_else(|| JsError::new("Allowed passkey credential is required"))?;
+        let allowed_credential = allowed_credentials
+            .first()
+            .ok_or_else(|| JsError::new("Allowed passkey credential list must not be empty"))?;
+        assert_eq!(allowed_credential.id.len(), 32);
+        let extensions = public_key
+            .extensions
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey extensions are required"))?;
+        let prf = extensions
+            .prf
+            .as_ref()
+            .ok_or_else(|| JsError::new("Passkey PRF extension is required"))?;
+        let eval_by_credential = prf
+            .eval_by_credential
+            .as_ref()
+            .ok_or_else(|| JsError::new("Credential-specific PRF inputs are required"))?;
+        let credential_prf = eval_by_credential
+            .get(&key)
+            .ok_or_else(|| JsError::new("Allowed credential PRF input is required"))?;
+        assert_eq!(credential_prf.first.len(), 32);
         Ok(())
     }
 
     #[test]
     fn recovery_options_use_discoverable_credentials_and_global_prf_input() -> Result<(), JsError> {
         let value = recovery_options_struct("localhost", &[9; 32])?;
-        let json = to_json(&value);
+        let options = through_json(&value)?;
+        let public_key = options.public_key;
 
-        assert_eq!(json["publicKey"]["rpId"], "localhost");
-        assert!(json["publicKey"]["allowCredentials"].is_null());
-        assert_eq!(json["publicKey"]["userVerification"], "required");
+        assert_eq!(public_key.rp_id.as_deref(), Some("localhost"));
+        assert!(matches!(&public_key.allow_credentials, None));
         assert_eq!(
-            json["publicKey"]["extensions"]["prf"]["eval"]["first"]
-                .as_array()
-                .expect("first prf input")
-                .len(),
-            32
+            public_key.user_verification,
+            UserVerificationRequirement::Required
         );
+        let extensions = public_key
+            .extensions
+            .as_ref()
+            .ok_or_else(|| JsError::new("Recovery extensions are required"))?;
+        let prf = extensions
+            .prf
+            .as_ref()
+            .ok_or_else(|| JsError::new("Recovery PRF extension is required"))?;
+        let eval = prf
+            .eval
+            .as_ref()
+            .ok_or_else(|| JsError::new("Recovery PRF input is required"))?;
+        assert_eq!(eval.first.len(), 32);
         Ok(())
     }
 
@@ -737,17 +778,17 @@ mod wasm_tests {
     use super::*;
     use wasm_bindgen_test::*;
 
-    fn get(target: &js_sys::Object, field: &str) -> js_sys::Object {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
-            .unchecked_into()
+    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected field"))?
+            .unchecked_into())
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> String {
+    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
         js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected string field"))?
             .as_string()
-            .expect("js string")
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
     }
 
     fn assert_uint8_array(value: &js_sys::Object, expected_len: u32) {
@@ -760,19 +801,19 @@ mod wasm_tests {
     fn creation_options_serialize_webauthn_bytes_as_uint8_arrays()
     -> Result<(), wasm_bindgen::JsError> {
         let options = creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32])?;
-        let public_key = get(&options, "publicKey");
-        let user = get(&public_key, "user");
-        let extensions = get(&public_key, "extensions");
-        let prf = get(&extensions, "prf");
-        let eval = get(&prf, "eval");
+        let public_key = get(&options, "publicKey")?;
+        let user = get(&public_key, "user")?;
+        let extensions = get(&public_key, "extensions")?;
+        let prf = get(&extensions, "prf")?;
+        let eval = get(&prf, "eval")?;
 
         assert_eq!(
-            get_string(&user, "displayName"),
+            get_string(&user, "displayName")?,
             "Nook device - passkey 08080808...0808",
         );
-        assert_uint8_array(&get(&public_key, "challenge"), 32);
-        assert_uint8_array(&get(&user, "id"), 32);
-        assert_uint8_array(&get(&eval, "first"), 32);
+        assert_uint8_array(&get(&public_key, "challenge")?, 32);
+        assert_uint8_array(&get(&user, "id")?, 32);
+        assert_uint8_array(&get(&eval, "first")?, 32);
         Ok(())
     }
 
@@ -781,17 +822,17 @@ mod wasm_tests {
     -> Result<(), wasm_bindgen::JsError> {
         let credential_id = [7u8; 32];
         let options = request_options("localhost", &credential_id, &[9; 32])?;
-        let public_key = get(&options, "publicKey");
-        let credentials: js_sys::Array = get(&public_key, "allowCredentials").unchecked_into();
+        let public_key = get(&options, "publicKey")?;
+        let credentials: js_sys::Array = get(&public_key, "allowCredentials")?.unchecked_into();
         let first_credential: js_sys::Object = credentials.get(0).unchecked_into();
-        let extensions = get(&public_key, "extensions");
-        let prf = get(&extensions, "prf");
-        let eval_by_credential = get(&prf, "evalByCredential");
-        let keyed_eval = get(&eval_by_credential, &base64_url(&credential_id));
+        let extensions = get(&public_key, "extensions")?;
+        let prf = get(&extensions, "prf")?;
+        let eval_by_credential = get(&prf, "evalByCredential")?;
+        let keyed_eval = get(&eval_by_credential, &base64_url(&credential_id))?;
 
-        assert_uint8_array(&get(&public_key, "challenge"), 32);
-        assert_uint8_array(&get(&first_credential, "id"), 32);
-        assert_uint8_array(&get(&keyed_eval, "first"), 32);
+        assert_uint8_array(&get(&public_key, "challenge")?, 32);
+        assert_uint8_array(&get(&first_credential, "id")?, 32);
+        assert_uint8_array(&get(&keyed_eval, "first")?, 32);
         Ok(())
     }
 
@@ -799,13 +840,13 @@ mod wasm_tests {
     fn recovery_options_serialize_webauthn_bytes_as_uint8_arrays()
     -> Result<(), wasm_bindgen::JsError> {
         let options = recovery_options("localhost")?;
-        let public_key = get(&options, "publicKey");
-        let extensions = get(&public_key, "extensions");
-        let prf = get(&extensions, "prf");
-        let eval = get(&prf, "eval");
+        let public_key = get(&options, "publicKey")?;
+        let extensions = get(&public_key, "extensions")?;
+        let prf = get(&extensions, "prf")?;
+        let eval = get(&prf, "eval")?;
 
-        assert_uint8_array(&get(&public_key, "challenge"), 32);
-        assert_uint8_array(&get(&eval, "first"), 32);
+        assert_uint8_array(&get(&public_key, "challenge")?, 32);
+        assert_uint8_array(&get(&eval, "first")?, 32);
         Ok(())
     }
 }

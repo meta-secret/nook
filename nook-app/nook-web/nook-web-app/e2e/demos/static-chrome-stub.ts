@@ -1,7 +1,26 @@
+import {
+  AuthenticationOutcomeVerdict,
+  NookWebsiteLoginSaveDecision,
+} from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
+
+export const demoLoginSaveCreateDecision = NookWebsiteLoginSaveDecision.Create
+export const demoSufficientAuthenticationOutcome =
+  AuthenticationOutcomeVerdict.Sufficient
+export const demoInsufficientAuthenticationOutcome =
+  AuthenticationOutcomeVerdict.Insufficient
+export const demoDomainEnumArgs = {
+  loginSaveCreateDecision: demoLoginSaveCreateDecision,
+  sufficientAuthenticationOutcome: demoSufficientAuthenticationOutcome,
+  insufficientAuthenticationOutcome: demoInsufficientAuthenticationOutcome,
+}
+
 export type ChromeMessage = { message: string }
 
 export type DemoChromeStubArgs = {
   localizedMessages: Record<string, ChromeMessage>
+  loginSaveCreateDecision: NookWebsiteLoginSaveDecision
+  sufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
+  insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
@@ -30,13 +49,16 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeCallback = (response?: unknown) => void
   type StagedSaveOffer = {
     offerId: string
-    decision: 'create'
+    decision: NookWebsiteLoginSaveDecision.Create
     vaultStoreId: string
     vaultName: string
   }
 
   const {
     localizedMessages,
+    loginSaveCreateDecision,
+    sufficientAuthenticationOutcome,
+    insufficientAuthenticationOutcome,
     responsesByType = {},
     loginPilotFlow = false,
     savePilotFlow = false,
@@ -48,7 +70,16 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
-  let stagedOffer: StagedSaveOffer | undefined
+  enum StagedOfferKind {
+    Empty = 'empty',
+    Present = 'present',
+  }
+
+  let stagedOffer:
+    | { kind: StagedOfferKind.Empty }
+    | { kind: StagedOfferKind.Present; offer: StagedSaveOffer } = {
+    kind: StagedOfferKind.Empty,
+  }
   let enrollStaged = false
   const demoExtensionSetup = {
     status: 'ready' as const,
@@ -176,7 +207,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             return {
               ok: true,
               verdict: {
-                name: 'insufficient',
+                verdict: insufficientAuthenticationOutcome,
                 allowsCredentialCommit: false,
               },
             }
@@ -184,13 +215,16 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           if (observation?.successMarkerPresent && enrollStaged) {
             return {
               ok: true,
-              verdict: { name: 'sufficient', allowsCredentialCommit: true },
+              verdict: {
+                verdict: sufficientAuthenticationOutcome,
+                allowsCredentialCommit: true,
+              },
             }
           }
           return {
             ok: true,
             verdict: {
-              name: 'insufficient',
+              verdict: insufficientAuthenticationOutcome,
               allowsCredentialCommit: false,
             },
           }
@@ -257,7 +291,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             return {
               ok: true,
               verdict: {
-                name: 'insufficient',
+                verdict: insufficientAuthenticationOutcome,
                 allowsCredentialCommit: false,
               },
             }
@@ -265,37 +299,45 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           if (observation?.successMarkerPresent) {
             return {
               ok: true,
-              verdict: { name: 'sufficient', allowsCredentialCommit: true },
+              verdict: {
+                verdict: sufficientAuthenticationOutcome,
+                allowsCredentialCommit: true,
+              },
             }
           }
           return {
             ok: true,
             verdict: {
-              name: 'insufficient',
+              verdict: insufficientAuthenticationOutcome,
               allowsCredentialCommit: false,
             },
           }
         }
         case 'nook:website-login-save-offer':
           stagedOffer = {
-            offerId: 'demo-save-offer',
-            decision: 'create',
-            vaultStoreId: 'demo-vault',
-            vaultName: 'Demo vault',
+            kind: StagedOfferKind.Present,
+            offer: {
+              offerId: 'demo-save-offer',
+              decision: loginSaveCreateDecision,
+              vaultStoreId: 'demo-vault',
+              vaultName: 'Demo vault',
+            },
           }
           return {
             ok: true,
             status: 'ready',
-            decision: 'create',
-            offer: stagedOffer,
+            decision: loginSaveCreateDecision,
+            offer: stagedOffer.offer,
           }
         case 'nook:website-login-save-pending':
-          return { ok: true, offer: stagedOffer }
+          return stagedOffer.kind === StagedOfferKind.Present
+            ? { ok: true, offer: stagedOffer.offer }
+            : { ok: true }
         case 'nook:website-login-save-commit':
-          stagedOffer = undefined
-          return { ok: true, decision: 'create' }
+          stagedOffer = { kind: StagedOfferKind.Empty }
+          return { ok: true, decision: loginSaveCreateDecision }
         case 'nook:website-login-save-dismiss':
-          stagedOffer = undefined
+          stagedOffer = { kind: StagedOfferKind.Empty }
           return { ok: true }
         default:
           return { ok: true }
@@ -404,7 +446,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     },
     runtime: {
       id: 'demo-extension',
-      lastError: undefined,
       onMessage: {
         addListener(
           listener: (message: unknown, sender: { id: string }) => boolean,

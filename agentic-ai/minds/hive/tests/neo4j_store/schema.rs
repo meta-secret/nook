@@ -14,11 +14,13 @@ pub async fn verify_migrations(store: &Neo4jTaskStore, graph: &Graph) -> anyhow:
         ))
         .await
         .context("create schema-1 fixture")?;
+    let migration_error = store
+        .migrate()
+        .await
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("schema-1 legacy tasks must block schema 2"))?;
     assert!(
-        store
-            .migrate()
-            .await
-            .expect_err("schema-1 legacy tasks must block schema 2")
+        migration_error
             .to_string()
             .contains("without source_commit")
     );

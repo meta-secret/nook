@@ -2,15 +2,17 @@
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar from '../_shared/ScenarioBar.svelte'
+  import { DemoVaultPresence as Presence } from '../_shared/nook-auth-state'
+  import { VaultPath } from '../../vault-auth-workflow/_shared/vault-auth-workflow-state.svelte'
 
   let { navigate }: ExperimentProps = $props()
-  let presence = $state<Presence>('empty')
+  let presence = $state<Presence>(Presence.Empty)
   let step = $state(0)
-  let path = $state<'undecided' | 'simple' | 'sentinel'>('undecided')
+  let path = $state<VaultPath>(VaultPath.Undecided)
 
   const emptySteps = $derived(
-    path === 'sentinel'
+    path === VaultPath.Sentinel
       ? [
           'Choose Simple or Sentinel',
           'Choose Sentinel interface',
@@ -27,12 +29,14 @@
     'Confirm vault identity',
     'Unlock with passkey',
   ]
-  const steps = $derived(presence === 'empty' ? emptySteps : existingSteps)
+  const steps = $derived(
+    presence === Presence.Empty ? emptySteps : existingSteps,
+  )
 
   function setPresence(next: Presence) {
     presence = next
     step = 0
-    path = 'undecided'
+    path = VaultPath.Undecided
   }
 </script>
 
@@ -74,12 +78,12 @@
               >
                 {label}
               </p>
-              {#if presence === 'empty' && index === step && step === 0}
+              {#if presence === Presence.Empty && index === step && step === 0}
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button
                     class="rounded-full border border-black/15 px-4 py-2 text-sm"
                     onclick={() => {
-                      path = 'simple'
+                      path = VaultPath.Simple
                       step = 2
                     }}
                   >
@@ -88,14 +92,14 @@
                   <button
                     class="rounded-full bg-black px-4 py-2 text-sm text-white"
                     onclick={() => {
-                      path = 'sentinel'
+                      path = VaultPath.Sentinel
                       step = 1
                     }}
                   >
                     Build Sentinel vault
                   </button>
                 </div>
-              {:else if presence === 'empty' && index === step && step === 1}
+              {:else if presence === Presence.Empty && index === step && step === 1}
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button
                     class="rounded-full bg-black px-4 py-2 text-sm text-white"

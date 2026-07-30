@@ -3,6 +3,7 @@ import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
+  RuntimeMessageDeliveryKind,
   sendRuntimeMessage,
 } from './autofill/login-passkey-actions'
 import {
@@ -10,10 +11,19 @@ import {
   captureSubmittedLogin,
   evaluatePendingSaveEvidence,
   loadPendingSaveOffer,
+  PendingSaveOfferLoadKind,
   renderSaveOfferWidget,
 } from './autofill/login-save'
 import { removeScannedWidget } from './autofill/message-router'
-import { saveOfferState, scanState, widgetState } from './autofill/state'
+import {
+  SaveOfferDisplayKind,
+  SavePageWatchKind,
+  ScanScheduleKind,
+  WidgetWorkflowKeyKind,
+  saveOfferState,
+  scanState,
+  widgetState,
+} from './autofill/state'
 import {
   renderEnrollmentWidget,
   renderWidget,
@@ -33,23 +43,24 @@ async function scanAndRender(): Promise<void> {
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
   const sequence = ++scanState.sequence
-  if (saveOfferState.activeOffer) {
+  if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+    const { offer } = saveOfferState.display
     if (
-      widgetState.renderedWorkflowKey !==
-      `save:${saveOfferState.activeOffer.offerId}`
+      widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
+      widgetState.workflowKey.key !== `save:${offer.offerId}`
     ) {
-      renderSaveOfferWidget(saveOfferState.activeOffer)
+      renderSaveOfferWidget(offer)
     }
     return
   }
-  if (saveOfferState.pendingWatch) {
+  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
     void evaluatePendingSaveEvidence()
     return
   }
   const pendingOffer = await loadPendingSaveOffer()
   if (sequence !== scanState.sequence) return
-  if (pendingOffer) {
-    beginPendingSaveWatch(pendingOffer)
+  if (pendingOffer.kind === PendingSaveOfferLoadKind.Loaded) {
+    beginPendingSaveWatch(pendingOffer.offer)
     return
   }
   const enrollmentHints = detectEnrollmentHints()
@@ -77,7 +88,7 @@ async function scanAndRender(): Promise<void> {
   }
 
   const boundedCount = (count: number) => Math.min(count, 100)
-  const response = await sendRuntimeMessage<WorkflowSnapshotResponse>({
+  const delivery = await sendRuntimeMessage<WorkflowSnapshotResponse>({
     type: 'nook:authentication-workflow-snapshot',
     payload: {
       origin: location.origin,
@@ -100,29 +111,37 @@ async function scanAndRender(): Promise<void> {
     },
   })
   if (sequence !== scanState.sequence) return
-  if (!response?.ok || !response.snapshot) {
+  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
     return
   }
-  const selected = workflowForms[response.snapshot.observationIndex]
+  const { response } = delivery
+  const snapshot = response.snapshot
+  if (response.ok !== true || !snapshot) {
+    removeScannedWidget()
+    return
+  }
+  const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
     return
   }
   const vaultConnection = await loadPilotVaultConnection()
   if (sequence !== scanState.sequence) return
-  renderWidget(response.snapshot, selected, vaultConnection)
+  renderWidget(snapshot, selected, vaultConnection)
 }
 
 function scheduleScan() {
-  if (scanState.pendingTimer !== undefined) {
-    window.clearTimeout(scanState.pendingTimer)
+  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
+    window.clearTimeout(scanState.scheduleState.timer)
   }
 
-  scanState.pendingTimer = window.setTimeout(() => {
-    scanState.pendingTimer = undefined
-    void scanAndRender()
-  }, 150)
+  scanState.scheduleTimer(
+    window.setTimeout(() => {
+      scanState.clearPendingTimer()
+      void scanAndRender()
+    }, 150),
+  )
 }
 
 scanState.schedule = scheduleScan

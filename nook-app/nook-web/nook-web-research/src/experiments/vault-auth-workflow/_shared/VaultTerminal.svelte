@@ -7,15 +7,10 @@
     KeyRound,
     Terminal,
   } from '@lucide/svelte'
-
-  type WizardStep =
-    | 'name'
-    | 'total'
-    | 'threshold'
-    | 'device-name'
-    | 'public-key'
-    | 'confirm'
-    | 'sealed'
+  import {
+    VaultTerminalLineTone,
+    VaultTerminalStep,
+  } from './vault-terminal-state'
 
   interface ParticipantDevice {
     name: string
@@ -24,7 +19,7 @@
 
   interface Line {
     text: string
-    tone: 'muted' | 'success' | 'error' | 'answer' | 'accent'
+    tone: VaultTerminalLineTone
   }
 
   interface Props {
@@ -41,7 +36,9 @@
     backPositionClass = 'left-36',
   }: Props = $props()
   const seededName = untrack(() => initialName.trim())
-  let step = $state<WizardStep>(seededName ? 'total' : 'name')
+  let step = $state<VaultTerminalStep>(
+    seededName ? VaultTerminalStep.Total : VaultTerminalStep.Name,
+  )
   let promptValue = $state('')
   let name = $state(seededName)
   let total = $state(3)
@@ -55,54 +52,64 @@
 
   const rosterCount = $derived(1 + participants.length)
   const choices = $derived(
-    step === 'total'
+    step === VaultTerminalStep.Total
       ? [2, 3, 4, 5]
-      : step === 'threshold'
+      : step === VaultTerminalStep.Threshold
         ? Array.from({ length: total - 1 }, (_, index) => index + 2)
         : [],
   )
   const workflowStage = $derived(
-    step === 'name'
+    step === VaultTerminalStep.Name
       ? 1
-      : step === 'total' || step === 'threshold'
+      : step === VaultTerminalStep.Total || step === VaultTerminalStep.Threshold
         ? 2
-        : step === 'device-name' || step === 'public-key'
+        : step === VaultTerminalStep.DeviceName ||
+            step === VaultTerminalStep.PublicKey
           ? 3
-          : step === 'confirm'
+          : step === VaultTerminalStep.Confirm
             ? 4
             : 5,
   )
   const promptLabel = $derived(
-    step === 'name'
+    step === VaultTerminalStep.Name
       ? 'Vault name'
-      : step === 'device-name'
+      : step === VaultTerminalStep.DeviceName
         ? `Name participant device ${String(participants.length + 2).padStart(2, '0')}`
         : `Public key for ${pendingDeviceName}`,
   )
 
   const openingLines: Line[] = [
-    { text: 'NOOK SENTINEL INIT v0.3.0', tone: 'accent' },
+    {
+      text: 'NOOK SENTINEL INIT v0.3.0',
+      tone: VaultTerminalLineTone.Accent,
+    },
     {
       text: 'Guided threshold-vault setup. No commands required.',
-      tone: 'muted',
+      tone: VaultTerminalLineTone.Muted,
     },
     {
       text: 'This device is already included as Participant 01.',
-      tone: 'success',
+      tone: VaultTerminalLineTone.Success,
     },
     ...(seededName
       ? ([
-          { text: `◆ Vault name  ${seededName}`, tone: 'answer' },
+          {
+            text: `◆ Vault name  ${seededName}`,
+            tone: VaultTerminalLineTone.Answer,
+          },
           {
             text: 'Name carried from auth workflow. Continue with policy.',
-            tone: 'muted',
+            tone: VaultTerminalLineTone.Muted,
           },
         ] as Line[])
       : []),
   ]
   let lines = $state<Line[]>([...openingLines])
 
-  function write(text: string, tone: Line['tone'] = 'muted') {
+  function write(
+    text: string,
+    tone: Line['tone'] = VaultTerminalLineTone.Muted,
+  ) {
     lines = [...lines, { text, tone }]
   }
 
@@ -114,7 +121,11 @@
 
   async function focusPrompt() {
     await tick()
-    if (step === 'name' || step === 'device-name' || step === 'public-key') {
+    if (
+      step === VaultTerminalStep.Name ||
+      step === VaultTerminalStep.DeviceName ||
+      step === VaultTerminalStep.PublicKey
+    ) {
       inputElement?.focus()
     } else {
       choiceElement?.focus()
@@ -126,20 +137,26 @@
     const value = promptValue.trim()
     if (!value) return
 
-    if (step === 'name') {
+    if (step === VaultTerminalStep.Name) {
       name = value
-      write(`◆ Vault name  ${name}`, 'answer')
-      write('Draft created in volatile memory. No vault exists yet.', 'muted')
-      step = 'total'
+      write(`◆ Vault name  ${name}`, VaultTerminalLineTone.Answer)
+      write(
+        'Draft created in volatile memory. No vault exists yet.',
+        VaultTerminalLineTone.Muted,
+      )
+      step = VaultTerminalStep.Total
       choiceIndex = 1
-    } else if (step === 'device-name') {
+    } else if (step === VaultTerminalStep.DeviceName) {
       if (
         participants.some(
           (participant) =>
             participant.name.toLocaleLowerCase() === value.toLocaleLowerCase(),
         )
       ) {
-        write('Name already used. Choose a distinct device label.', 'error')
+        write(
+          'Name already used. Choose a distinct device label.',
+          VaultTerminalLineTone.Error,
+        )
         promptValue = ''
         await focusPrompt()
         return
@@ -147,15 +164,18 @@
       pendingDeviceName = value
       write(
         `◆ Participant ${String(participants.length + 2).padStart(2, '0')}  ${pendingDeviceName}`,
-        'answer',
+        VaultTerminalLineTone.Answer,
       )
-      step = 'public-key'
-    } else if (step === 'public-key') {
+      step = VaultTerminalStep.PublicKey
+    } else if (step === VaultTerminalStep.PublicKey) {
       if (
         value === 'pk_local_a9f2…91cc' ||
         participants.some((participant) => participant.publicKey === value)
       ) {
-        write('Public key already belongs to another participant.', 'error')
+        write(
+          'Public key already belongs to another participant.',
+          VaultTerminalLineTone.Error,
+        )
         promptValue = ''
         await focusPrompt()
         return
@@ -164,20 +184,20 @@
         ...participants,
         { name: pendingDeviceName, publicKey: value },
       ]
-      write(`✓ Key verified  ${shortKey(value)}`, 'success')
+      write(`✓ Key verified  ${shortKey(value)}`, VaultTerminalLineTone.Success)
       pendingDeviceName = ''
       if (participants.length < total - 1) {
         write(
           `${total - 1 - participants.length} participant device(s) remaining.`,
-          'muted',
+          VaultTerminalLineTone.Muted,
         )
-        step = 'device-name'
+        step = VaultTerminalStep.DeviceName
       } else {
         write(
           `ROSTER COMPLETE  ${total}/${total} verified public keys`,
-          'accent',
+          VaultTerminalLineTone.Accent,
         )
-        step = 'confirm'
+        step = VaultTerminalStep.Confirm
       }
     }
 
@@ -187,17 +207,23 @@
 
   async function confirmChoice() {
     const value = choices[choiceIndex]
-    if (value === undefined) return
-    if (step === 'total') {
+    if (!value) return
+    if (step === VaultTerminalStep.Total) {
       total = value
-      write(`◆ Total participants  ${total}`, 'answer')
-      step = 'threshold'
+      write(`◆ Total participants  ${total}`, VaultTerminalLineTone.Answer)
+      step = VaultTerminalStep.Threshold
       choiceIndex = 0
-    } else if (step === 'threshold') {
+    } else if (step === VaultTerminalStep.Threshold) {
       threshold = value
-      write(`◆ Unlock threshold  ${threshold}-of-${total}`, 'answer')
-      write(`Collect ${total - 1} external participant public key(s).`, 'muted')
-      step = 'device-name'
+      write(
+        `◆ Unlock threshold  ${threshold}-of-${total}`,
+        VaultTerminalLineTone.Answer,
+      )
+      write(
+        `Collect ${total - 1} external participant public key(s).`,
+        VaultTerminalLineTone.Muted,
+      )
+      step = VaultTerminalStep.DeviceName
     }
     await focusPrompt()
   }
@@ -216,16 +242,19 @@
   }
 
   async function sealVault() {
-    write('VERIFYING PARTICIPANT ROSTER .... OK', 'muted')
-    write(`SPLITTING ROOT ${threshold}-OF-${total} ........ OK`, 'muted')
-    write('ENCRYPTING MEMBER SHARES ....... OK', 'muted')
-    write(`VAULT SEALED  ${name}`, 'success')
-    step = 'sealed'
+    write('VERIFYING PARTICIPANT ROSTER .... OK', VaultTerminalLineTone.Muted)
+    write(
+      `SPLITTING ROOT ${threshold}-OF-${total} ........ OK`,
+      VaultTerminalLineTone.Muted,
+    )
+    write('ENCRYPTING MEMBER SHARES ....... OK', VaultTerminalLineTone.Muted)
+    write(`VAULT SEALED  ${name}`, VaultTerminalLineTone.Success)
+    step = VaultTerminalStep.Sealed
     await focusPrompt()
   }
 
   async function restart() {
-    step = seededName ? 'total' : 'name'
+    step = seededName ? VaultTerminalStep.Total : VaultTerminalStep.Name
     promptValue = ''
     name = seededName
     total = 3
@@ -281,17 +310,17 @@
           aria-live="polite"
         >
           {#each lines as line, index (index)}<p
-              class:mt-3={line.tone === 'answer'}
-              class:text-[#d4ffc7]={line.tone === 'answer'}
-              class:text-[#83e273]={line.tone === 'success'}
-              class:text-[#ff8d75]={line.tone === 'error'}
-              class:text-[#d9c365]={line.tone === 'accent'}
-              class:text-[#6f9f65]={line.tone === 'muted'}
+              class:mt-3={line.tone === VaultTerminalLineTone.Answer}
+              class:text-[#d4ffc7]={line.tone === VaultTerminalLineTone.Answer}
+              class:text-[#83e273]={line.tone === VaultTerminalLineTone.Success}
+              class:text-[#ff8d75]={line.tone === VaultTerminalLineTone.Error}
+              class:text-[#d9c365]={line.tone === VaultTerminalLineTone.Accent}
+              class:text-[#6f9f65]={line.tone === VaultTerminalLineTone.Muted}
               class="whitespace-pre-wrap"
             >
               {line.text}
             </p>{/each}
-          {#if step === 'confirm'}<div
+          {#if step === VaultTerminalStep.Confirm}<div
               class="mt-7 border border-[#4f7a46] bg-[#081008] p-5"
             >
               <p class="text-[#d9c365]">REVIEW GENESIS</p>
@@ -304,7 +333,7 @@
                   · {shortKey(participant.publicKey)}
                 </p>{/each}
             </div>{/if}
-          {#if step === 'sealed'}<div
+          {#if step === VaultTerminalStep.Sealed}<div
               class="mt-7 border border-[#83e273] bg-[#0c190b] p-5 text-[#a5f58f]"
             >
               <p class="flex items-center gap-2 font-bold">
@@ -316,7 +345,7 @@
               </p>
             </div>{/if}
           <div class="mt-7">
-            {#if step === 'name' || step === 'device-name' || step === 'public-key'}
+            {#if step === VaultTerminalStep.Name || step === VaultTerminalStep.DeviceName || step === VaultTerminalStep.PublicKey}
               <form
                 onsubmit={(event) => {
                   event.preventDefault()
@@ -329,7 +358,7 @@
                   ><span class="text-[#456440]">›</span><input
                     bind:this={inputElement}
                     class="min-w-0 flex-1 bg-transparent text-[#d4ffc7] outline-none placeholder:text-[#385334]"
-                    placeholder={step === 'public-key'
+                    placeholder={step === VaultTerminalStep.PublicKey
                       ? 'paste signed public key'
                       : 'type your answer'}
                     autocomplete="off"
@@ -346,12 +375,12 @@
                 >
               </form>
               <p class="mt-2 text-[9px] text-[#385334]">enter to continue</p>
-            {:else if step === 'total' || step === 'threshold'}
+            {:else if step === VaultTerminalStep.Total || step === VaultTerminalStep.Threshold}
               <div
                 bind:this={choiceElement}
                 tabindex="0"
                 role="listbox"
-                aria-label={step === 'total'
+                aria-label={step === VaultTerminalStep.Total
                   ? 'Total participant devices'
                   : 'Unlock threshold'}
                 class="outline-none"
@@ -359,7 +388,7 @@
               >
                 <p>
                   <span class="text-[#83e273]">?</span>
-                  {step === 'total'
+                  {step === VaultTerminalStep.Total
                     ? 'How many total participant devices?'
                     : 'How many shares are needed to unlock?'}
                 </p>
@@ -374,7 +403,7 @@
                       }}
                       ><span class="mr-2"
                         >{choiceIndex === index ? '❯' : ' '}</span
-                      >{choice}{step === 'total'
+                      >{choice}{step === VaultTerminalStep.Total
                         ? ' devices'
                         : ` of ${total}`}</button
                     >{/each}
@@ -383,7 +412,7 @@
                   ↑↓ navigate · enter select
                 </p>
               </div>
-            {:else if step === 'confirm'}
+            {:else if step === VaultTerminalStep.Confirm}
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <p>
                   <span class="text-[#83e273]">?</span> Seal this Sentinel vault?
@@ -436,9 +465,9 @@
           <div>
             <dt class="text-[#456440]">VAULT</dt>
             <dd
-              class={`mt-1 ${step === 'sealed' ? 'text-[#83e273]' : 'text-[#d9c365]'}`}
+              class={`mt-1 ${step === VaultTerminalStep.Sealed ? 'text-[#83e273]' : 'text-[#d9c365]'}`}
             >
-              {step === 'sealed' ? 'SEALED' : 'DOES NOT EXIST'}
+              {step === VaultTerminalStep.Sealed ? 'SEALED' : 'DOES NOT EXIST'}
             </dd>
           </div>
         </dl>

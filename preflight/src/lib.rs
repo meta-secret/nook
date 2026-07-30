@@ -1,5 +1,20 @@
 pub mod coverage;
+mod rust_tsify_state;
+mod rust_typed_json;
 pub mod source_size;
+mod typescript_discriminants;
+mod typescript_domain_boundary;
+mod typescript_state;
+
+pub use typescript_domain_boundary::*;
+
+pub use rust_tsify_state::rust_tsify_implicit_absence_overrides;
+pub use rust_typed_json::rust_test_untyped_json_assertions;
+pub use typescript_state::{
+    typescript_generic_optional_state, typescript_implicit_application_state,
+    typescript_mutable_void_state, typescript_null_absence_sentinels,
+    typescript_raw_string_discriminants,
+};
 
 use std::collections::HashSet;
 use std::fs;
@@ -44,77 +59,46 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
 ];
 
 const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
+    "AppKind",
+    "AuthenticationOutcomeVerdict",
+    "AuthenticationOutcomeVerdictName",
     "DeviceMode",
+    "DeviceProtectionStatus",
     "ExtensionDeviceMode",
+    "ExtensionDeviceProtectionStatus",
+    "PopupProtectionStatus",
+    "VaultApplication",
+    "WasmApplication",
     "VaultType",
     "ReplicationType",
+    "OnboardingType",
+    "WebsiteLoginSaveDecision",
+    "SecretFormInputType",
+    "SecretType",
     "StorageProviderType",
     "OAuthFilePreset",
     "GoogleDriveMode",
     "ICloudMode",
 ];
 
-const TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES: &[(&str, &str)] = &[
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-content.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-group-heading.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-group.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-item.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-label.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-scroll-down-button.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-scroll-up-button.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-separator.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/select/select-trigger.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/ui/separator/separator.svelte",
-        "ref = $bindable(null),",
-    ),
-    (
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/utils.ts",
-        "ref?: U | null;",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "getPublicKey: () => null,",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "fallback: () => Promise<Credential | null>,",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "): Promise<Credential | null> {",
-    ),
-    (
-        "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
-        "return new Promise<Credential | null>((resolve, reject) => {",
-    ),
+const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
+    "AppKind",
+    "AuthenticationOutcomeVerdict",
+    "AuthenticationOutcomeVerdictName",
+    "WasmApplication",
+    "ExtensionDeviceMode",
+    "ExtensionDeviceProtectionStatus",
+    "PopupProtectionStatus",
+    "VaultApplication",
+    "VaultItemType",
+    "DeviceMode",
+    "DeviceProtectionStatus",
+    "VaultType",
+    "ReplicationType",
+    "OnboardingType",
+    "WebsiteLoginSaveDecision",
+    "SecretFormInputType",
+    "SecretType",
 ];
 
 const RUST_WASM_UNCHECKED_TYPE_MARKERS: &[&str] =
@@ -153,688 +137,6 @@ pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violati
         BROWSER_RUST_MARKERS,
     )?);
     Ok(violations)
-}
-
-/// Finds TypeScript declarations that duplicate Rust-owned domain boundaries.
-///
-/// # Errors
-///
-/// Returns an error when the web source tree cannot be read.
-pub fn typescript_domain_boundary_boilerplate(root: &Path) -> io::Result<Vec<Violation>> {
-    source_violations(
-        root,
-        Path::new("nook-app/nook-web"),
-        &["ts", "svelte"],
-        typescript_boundary_violation_lines,
-    )
-}
-
-/// Finds JSON serialize/parse round trips used as cloning or reactive-proxy
-/// escape hatches in authored web source.
-///
-/// Rune modules must take a Svelte snapshot at the call boundary instead.
-///
-/// # Errors
-///
-/// Returns an error when the web source tree cannot be read.
-pub fn typescript_json_round_trip_clones(root: &Path) -> io::Result<Vec<Violation>> {
-    source_violations(
-        root,
-        Path::new("nook-app/nook-web"),
-        &["ts", "svelte"],
-        json_round_trip_clone_lines,
-    )
-}
-
-/// Finds redundant optional Svelte rune declarations, domain identifiers
-/// widened to `string` anywhere in authored web state, and domain unions in
-/// the central vault state.
-///
-/// # Errors
-///
-/// Returns an error when the authored web source tree cannot be read.
-pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Vec<Violation>> {
-    let mut violations = source_violations(
-        root,
-        Path::new("nook-app/nook-web"),
-        &["ts", "svelte"],
-        redundant_optional_state_lines,
-    )?;
-    violations.extend(source_violations(
-        root,
-        Path::new("nook-app/nook-web"),
-        &["ts", "svelte"],
-        widened_domain_identifier_state_lines,
-    )?);
-
-    let relative_path =
-        Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault.svelte.ts");
-    let source = fs::read_to_string(root.join(relative_path))?;
-    violations.extend(
-        domain_string_union_state_lines(&source)
-            .into_iter()
-            .map(|line| Violation {
-                path: relative_path.to_path_buf(),
-                line,
-            }),
-    );
-    violations.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then_with(|| left.line.cmp(&right.line))
-    });
-    Ok(violations)
-}
-
-fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
-    let mut compact = Vec::with_capacity(source.len());
-    let mut source_lines = Vec::with_capacity(source.len());
-    let mut line = 1;
-    for byte in source.bytes() {
-        if byte == b'\n' {
-            line += 1;
-        } else if !byte.is_ascii_whitespace() {
-            compact.push(byte);
-            source_lines.push(line);
-        }
-    }
-
-    let pattern = b"$state<string";
-    let mut lines = Vec::new();
-    for (start, window) in compact.windows(pattern.len()).enumerate() {
-        if window != pattern {
-            continue;
-        }
-        let Some(equals) = compact[..start].iter().rposition(|byte| *byte == b'=') else {
-            continue;
-        };
-        let identifier_start = compact[..equals]
-            .iter()
-            .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
-            .map_or(0, |index| index + 1);
-        let identifier = &compact[identifier_start..equals];
-        let is_domain_identifier = identifier.ends_with(b"switchingTo")
-            || identifier.ends_with(b"StoreId")
-            || identifier.ends_with(b"EntryId");
-        if is_domain_identifier {
-            lines.push(source_lines[start]);
-        }
-    }
-    lines.sort_unstable();
-    lines.dedup();
-    lines
-}
-
-fn domain_string_union_state_lines(source: &str) -> Vec<usize> {
-    const UI_ONLY_STATE: &[&[u8]] = &[
-        b"settingsSection",
-        b"settingsAccordionSection",
-        b"adminAccordionSection",
-    ];
-
-    let mut compact = Vec::with_capacity(source.len());
-    let mut source_lines = Vec::with_capacity(source.len());
-    let mut line = 1;
-    for byte in source.bytes() {
-        if byte == b'\n' {
-            line += 1;
-        } else if !byte.is_ascii_whitespace() {
-            compact.push(byte);
-            source_lines.push(line);
-        }
-    }
-
-    let prefix = b"$state<";
-    let mut lines = Vec::new();
-    for (start, window) in compact.windows(prefix.len()).enumerate() {
-        if window != prefix {
-            continue;
-        }
-        let generic_start = start + prefix.len();
-        let Some(generic_end) = compact[generic_start..]
-            .iter()
-            .position(|byte| *byte == b'>')
-            .map(|offset| generic_start + offset)
-        else {
-            continue;
-        };
-        let generic = &compact[generic_start..generic_end];
-        if !generic.contains(&b'|') || !(generic.contains(&b'"') || generic.contains(&b'\'')) {
-            continue;
-        }
-
-        let Some(equals) = compact[..start].iter().rposition(|byte| *byte == b'=') else {
-            continue;
-        };
-        let identifier_start = compact[..equals]
-            .iter()
-            .rposition(|byte| !(byte.is_ascii_alphanumeric() || *byte == b'_' || *byte == b'$'))
-            .map_or(0, |index| index + 1);
-        let identifier = &compact[identifier_start..equals];
-        if UI_ONLY_STATE.contains(&identifier) {
-            continue;
-        }
-        lines.push(source_lines[start]);
-    }
-    lines.sort_unstable();
-    lines.dedup();
-    lines
-}
-
-fn redundant_optional_state_lines(source: &str) -> Vec<usize> {
-    let mut compact = Vec::with_capacity(source.len());
-    let mut source_lines = Vec::with_capacity(source.len());
-    let mut line = 1;
-    for byte in source.bytes() {
-        if byte == b'\n' {
-            line += 1;
-        } else if !byte.is_ascii_whitespace() {
-            compact.push(byte);
-            source_lines.push(line);
-        }
-    }
-
-    let mut lines = Vec::new();
-    for prefix in [b"$state<".as_slice(), b"$state.raw<".as_slice()] {
-        for (start, window) in compact.windows(prefix.len()).enumerate() {
-            if window != prefix {
-                continue;
-            }
-            let tail = &compact[start + prefix.len()..];
-            let Some(end) = tail
-                .windows(b">(undefined)".len())
-                .position(|candidate| candidate == b">(undefined)")
-            else {
-                continue;
-            };
-            let generic = &tail[..end];
-            if generic.contains(&b';') {
-                continue;
-            }
-            if generic
-                .windows(b"|undefined".len())
-                .any(|candidate| candidate == b"|undefined")
-            {
-                lines.push(source_lines[start]);
-            }
-        }
-    }
-    lines.sort_unstable();
-    lines.dedup();
-    lines
-}
-
-fn json_round_trip_clone_lines(source: &str) -> Vec<usize> {
-    const PATTERN: &[u8] = b"JSON.parse(JSON.stringify(";
-
-    let mut compact = Vec::with_capacity(source.len());
-    let mut source_lines = Vec::with_capacity(source.len());
-    let mut line = 1;
-    for byte in source.bytes() {
-        if byte == b'\n' {
-            line += 1;
-        } else if !byte.is_ascii_whitespace() {
-            compact.push(byte);
-            source_lines.push(line);
-        }
-    }
-
-    compact
-        .windows(PATTERN.len())
-        .enumerate()
-        .filter_map(|(index, window)| (window == PATTERN).then_some(source_lines[index]))
-        .collect()
-}
-
-/// Finds authored TypeScript and Svelte source that uses `null` outside a
-/// platform-mandated boundary.
-///
-/// Ambient declarations mirror external APIs and are excluded. The explicit
-/// `WebAuthn` exceptions implement browser signatures whose return type requires
-/// `null`; all inbound nullable values must still be normalized to `undefined`
-/// before entering application state.
-///
-/// # Errors
-///
-/// Returns an error when the web source tree cannot be read.
-pub fn typescript_null_absence_sentinels(root: &Path) -> io::Result<Vec<Violation>> {
-    let directory = root.join("nook-app/nook-web");
-    let mut files = Vec::new();
-    for extension in ["ts", "svelte"] {
-        collect_files_with_extension(&directory, extension, &mut files)?;
-    }
-
-    files.retain(|path| {
-        !path
-            .file_name()
-            .and_then(std::ffi::OsStr::to_str)
-            .is_some_and(|name| name.ends_with(".d.ts"))
-    });
-
-    let mut violations = Vec::new();
-    for path in files {
-        let relative_path = path.strip_prefix(root).unwrap_or(&path);
-        let relative_path_string = relative_path.to_string_lossy();
-        let contents = fs::read_to_string(&path)?;
-        let lines = contents.lines().collect::<Vec<_>>();
-        for line_number in typescript_null_token_lines(&contents, path.extension()) {
-            let line = lines
-                .get(line_number.saturating_sub(1))
-                .copied()
-                .unwrap_or("");
-            if !TYPESCRIPT_NULL_EXTERNAL_BOUNDARIES.iter().any(
-                |(exception_path, exception_line)| {
-                    relative_path_string == *exception_path && line.trim() == *exception_line
-                },
-            ) {
-                violations.push(Violation {
-                    path: relative_path.to_path_buf(),
-                    line: line_number,
-                });
-            }
-        }
-    }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    Ok(violations)
-}
-
-fn typescript_null_token_lines(source: &str, extension: Option<&std::ffi::OsStr>) -> Vec<usize> {
-    if extension.is_some_and(|value| value == "svelte") {
-        return svelte_null_token_lines(source);
-    }
-
-    typescript_code_null_token_lines(source, 1)
-}
-
-fn typescript_code_null_token_lines(source: &str, first_line: usize) -> Vec<usize> {
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
-        .expect("bundled TypeScript grammar must load");
-    let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
-    };
-    let mut lines = Vec::new();
-    collect_null_nodes(tree.root_node(), first_line, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    lines
-}
-
-fn svelte_null_token_lines(source: &str) -> Vec<usize> {
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_svelte_next::LANGUAGE.into())
-        .expect("bundled Svelte grammar must load");
-    let Some(tree) = parser.parse(source, None) else {
-        return Vec::new();
-    };
-    let mut lines = Vec::new();
-    collect_svelte_typescript_fragments(tree.root_node(), source, &mut lines);
-    lines.sort_unstable();
-    lines.dedup();
-    lines
-}
-
-fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
-    if node.kind() == "null" {
-        lines.push(first_line + node.start_position().row);
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_null_nodes(child, first_line, lines);
-    }
-}
-
-fn collect_svelte_typescript_fragments(
-    node: tree_sitter::Node<'_>,
-    source: &str,
-    lines: &mut Vec<usize>,
-) {
-    if (node.kind() == "raw_text"
-        && node
-            .parent()
-            .is_some_and(|parent| parent.kind() == "script_element"))
-        || node.kind() == "svelte_raw_text"
-    {
-        if let Ok(fragment) = node.utf8_text(source.as_bytes()) {
-            lines.extend(typescript_code_null_token_lines(
-                fragment,
-                node.start_position().row + 1,
-            ));
-        }
-        return;
-    }
-
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_svelte_typescript_fragments(child, source, lines);
-    }
-}
-
-/// Reject declarations that make a raw JavaScript value look typed only in the
-/// generated declaration file. Provider/auth DTOs must use an actual Rust ABI
-/// type (for example a `Tsify` type), never `JsValue` plus an unchecked hint.
-///
-/// # Errors
-///
-/// Returns an error when the WASM source tree cannot be read.
-pub fn rust_wasm_domain_boundary_escape_hatches(root: &Path) -> io::Result<Vec<Violation>> {
-    source_violations(
-        root,
-        Path::new("nook-app/nook-wasm/src"),
-        &["rs"],
-        rust_wasm_boundary_violation_lines,
-    )
-}
-
-fn source_violations(
-    root: &Path,
-    relative_directory: &Path,
-    extensions: &[&str],
-    detector: fn(&str) -> Vec<usize>,
-) -> io::Result<Vec<Violation>> {
-    let directory = root.join(relative_directory);
-    let mut files = Vec::new();
-    for extension in extensions {
-        collect_files_with_extension(&directory, extension, &mut files)?;
-    }
-
-    let mut violations = Vec::new();
-    for path in files {
-        let contents = fs::read_to_string(&path)?;
-        for line in detector(&contents) {
-            violations.push(Violation {
-                path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
-                line,
-            });
-        }
-    }
-    violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
-    violations.dedup();
-    Ok(violations)
-}
-
-fn rust_wasm_boundary_violation_lines(contents: &str) -> Vec<usize> {
-    let lines = contents.lines().collect::<Vec<_>>();
-    let mut violations = Vec::new();
-
-    for (index, line) in lines.iter().enumerate() {
-        if RUST_WASM_UNCHECKED_TYPE_MARKERS
-            .iter()
-            .any(|marker| line.contains(marker))
-        {
-            violations.push(index + 1);
-        }
-    }
-
-    let mut index = 0;
-    while index < lines.len() {
-        let trimmed = lines[index].trim_start();
-        let function = trimmed
-            .strip_prefix("pub fn ")
-            .or_else(|| trimmed.strip_prefix("pub async fn "));
-        let Some(function) = function else {
-            index += 1;
-            continue;
-        };
-        let function_name = function
-            .split(|character: char| character == '(' || character.is_whitespace())
-            .next()
-            .unwrap_or_default();
-        let signature_end = (index..lines.len())
-            .find(|line| lines[*line].contains('{') || lines[*line].trim_end().ends_with(';'))
-            .unwrap_or(index);
-        let signature = lines[index..=signature_end].join(" ");
-        if RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS
-            .iter()
-            .any(|marker| function_name.contains(marker))
-            && signature.contains("JsValue")
-        {
-            violations.push(index + 1);
-        }
-        index = signature_end + 1;
-    }
-
-    violations.sort_unstable();
-    violations.dedup();
-    violations
-}
-
-fn typescript_boundary_violation_lines(contents: &str) -> Vec<usize> {
-    let lines = contents.lines().collect::<Vec<_>>();
-    let wasm_bindings = wasm_import_bindings(contents);
-    let mut violations = Vec::new();
-
-    for (index, line) in lines.iter().enumerate() {
-        if TYPESCRIPT_DOMAIN_MIRRORS
-            .iter()
-            .any(|marker| line.contains(marker))
-            || is_wasm_type_alias(line, &wasm_bindings)
-        {
-            violations.push(index + 1);
-        }
-    }
-
-    let mut index = 0;
-    while index < lines.len() {
-        let trimmed = lines[index].trim_start();
-        if !trimmed.starts_with("export function ")
-            && !trimmed.starts_with("export async function ")
-        {
-            index += 1;
-            continue;
-        }
-
-        let function_line = index + 1;
-        let Some(body_start) = function_body_start(&lines, index) else {
-            index += 1;
-            continue;
-        };
-        let declaration_indent = lines[index].len() - lines[index].trim_start().len();
-        let Some(body_end) = (body_start + 1..lines.len()).find(|line| {
-            lines[*line].trim() == "}"
-                && lines[*line].len() - lines[*line].trim_start().len() == declaration_indent
-        }) else {
-            index += 1;
-            continue;
-        };
-
-        let declaration = lines[index..=body_start].join(" ");
-        let body = lines[body_start + 1..body_end].join(" ");
-        if is_trivial_wasm_forwarder(&declaration, &body, &wasm_bindings) {
-            violations.push(function_line);
-        }
-        index = body_end + 1;
-    }
-
-    violations.sort_unstable();
-    violations.dedup();
-    violations
-}
-
-fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) -> bool {
-    let line = line.trim_start();
-    let line = line.strip_prefix("export ").unwrap_or(line);
-    let Some(alias) = line.strip_prefix("type ") else {
-        return false;
-    };
-    let Some((name, value)) = alias.split_once('=') else {
-        return false;
-    };
-    if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&name.trim()) {
-        return true;
-    }
-    let value = value.trim_start();
-    if value.starts_with("Nook") {
-        return true;
-    }
-    let value = value.trim_end_matches(';').trim();
-    is_typescript_identifier(value) && wasm_bindings.contains(value)
-}
-
-fn wasm_import_bindings(contents: &str) -> HashSet<String> {
-    let mut bindings = HashSet::new();
-    let lines = contents.lines().collect::<Vec<_>>();
-    let mut index = 0;
-    while index < lines.len() {
-        if !lines[index].trim_start().starts_with("import ") {
-            index += 1;
-            continue;
-        }
-
-        let start = index;
-        while index + 1 < lines.len() && !is_import_statement_complete(&lines, start, index) {
-            index += 1;
-        }
-        let statement = lines[start..=index].join("\n");
-        index += 1;
-
-        if !is_wasm_import(&statement) {
-            continue;
-        }
-        let Some(start) = statement.find('{') else {
-            continue;
-        };
-        let Some(end) = statement.rfind('}') else {
-            continue;
-        };
-        for binding in statement[start + 1..end].split(',') {
-            let binding = binding.trim();
-            if binding.is_empty() {
-                continue;
-            }
-            let binding = binding.strip_prefix("type ").unwrap_or(binding).trim();
-            let local_name = binding
-                .split_once(" as ")
-                .map_or(binding, |(_, local)| local)
-                .trim();
-            if is_typescript_identifier(local_name) {
-                bindings.insert(local_name.to_owned());
-            }
-        }
-    }
-    bindings
-}
-
-fn is_import_statement_complete(lines: &[&str], start: usize, end: usize) -> bool {
-    let statement = lines[start..=end].join("\n");
-    if statement.trim_end().ends_with(';') {
-        return true;
-    }
-
-    let braces = statement
-        .chars()
-        .fold(0_i32, |depth, character| match character {
-            '{' => depth + 1,
-            '}' => depth - 1,
-            _ => depth,
-        });
-    braces == 0
-        && (statement.contains(" from \"")
-            || statement.contains(" from '")
-            || statement.trim_start().starts_with("import \"")
-            || statement.trim_start().starts_with("import '"))
-}
-
-fn is_wasm_import(statement: &str) -> bool {
-    statement.contains("from \"$app-wasm\"")
-        || statement.contains("from '$app-wasm'")
-        || statement.contains("/nook-wasm/nook_wasm\"")
-        || statement.contains("/nook-wasm/nook_wasm'")
-}
-
-fn function_body_start(lines: &[&str], start: usize) -> Option<usize> {
-    let mut parentheses = 0_i32;
-    for (index, line) in lines.iter().enumerate().skip(start) {
-        for character in line.chars() {
-            match character {
-                '(' => parentheses += 1,
-                ')' => parentheses -= 1,
-                _ => {}
-            }
-        }
-        if parentheses == 0 && line.trim_end().ends_with('{') {
-            return Some(index);
-        }
-    }
-    None
-}
-
-fn is_trivial_wasm_forwarder(
-    declaration: &str,
-    body: &str,
-    wasm_bindings: &HashSet<String>,
-) -> bool {
-    if declaration.contains('=') {
-        return false;
-    }
-
-    let statement = body.split_whitespace().collect::<Vec<_>>().join(" ");
-    let expression = statement
-        .strip_prefix("return await ")
-        .or_else(|| statement.strip_prefix("return "))
-        .or_else(|| statement.strip_prefix("await "))
-        .unwrap_or_default()
-        .trim();
-    let expression = expression.strip_suffix(';').unwrap_or(expression).trim();
-    let Some(open) = expression.find('(') else {
-        return false;
-    };
-    let Some(close) = expression.rfind(')') else {
-        return false;
-    };
-    let callee = expression[..open].trim();
-    if !wasm_bindings.contains(callee) {
-        return false;
-    }
-    let trailing = expression[close + 1..].trim();
-    if !trailing.is_empty() && !trailing.starts_with("as ") {
-        return false;
-    }
-
-    let arguments = expression[open + 1..close]
-        .split(',')
-        .map(str::trim)
-        .filter(|argument| !argument.is_empty())
-        .collect::<Vec<_>>();
-    arguments
-        .iter()
-        .all(|argument| is_typescript_identifier(argument))
-        && forwarded_parameters(declaration).is_some_and(|parameters| parameters == arguments)
-}
-
-fn forwarded_parameters(declaration: &str) -> Option<Vec<&str>> {
-    let open = declaration.find('(')?;
-    let close = declaration.rfind(')')?;
-    let parameters = declaration[open + 1..close].trim();
-    if parameters.is_empty() {
-        return Some(Vec::new());
-    }
-    if parameters.contains("=>") || parameters.contains(['{', '[', '<']) {
-        return None;
-    }
-    parameters
-        .split(',')
-        .map(str::trim)
-        .filter(|parameter| !parameter.is_empty())
-        .map(|parameter| {
-            let end = parameter.find([':', '?']).unwrap_or(parameter.len());
-            let name = parameter[..end].trim();
-            is_typescript_identifier(name).then_some(name)
-        })
-        .collect()
-}
-
-fn is_typescript_identifier(value: &str) -> bool {
-    let mut characters = value.chars();
-    let Some(first) = characters.next() else {
-        return false;
-    };
-    (first.is_ascii_alphabetic() || matches!(first, '_' | '$'))
-        && characters
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '$'))
 }
 
 /// Finds authored `JsValue` paths in the WASM bridge.
@@ -1083,8 +385,9 @@ mod tests {
     #[test]
     fn fails_when_repository_root_contains_no_dockerfiles() -> anyhow::Result<()> {
         let root = temporary_directory()?;
-        let error =
-            dockerfile_cache_mounts(&root).expect_err("lib test should reject invalid input");
+        let error = dockerfile_cache_mounts(&root)
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("lib test should reject invalid input"))?;
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
         fs::remove_dir_all(root)?;
         Ok(())
@@ -1102,6 +405,12 @@ export type ProviderReplicationCapability = NookProviderReplicationCapability;
 export type VaultSyncAccessStatus = VaultAccessStatus;
 export type DeviceMode = 'standard' | 'anti-hacker';
 export type { NookVaultMember as VaultMember } from "$app-wasm";
+export enum AppKind {
+  Simple = 'simple',
+}
+enum DeviceProtectionStatus {
+  Missing = 'missing',
+}
 
 export function providerReplicationCapability(
   provider: StorageProvider,
@@ -1122,7 +431,7 @@ export function adaptedProviderCapability(
 
         assert_eq!(
             typescript_boundary_violation_lines(source),
-            vec![7, 8, 9, 12, 18]
+            vec![7, 8, 9, 11, 14, 18, 24]
         );
     }
 
@@ -1241,18 +550,18 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
         assert_eq!(rust_wasm_boundary_violation_lines(source), vec![4, 6]);
     }
 
-    #[test]
-    fn reports_authored_null_while_preserving_external_contracts() -> anyhow::Result<()> {
-        let root = temporary_directory()?;
+    fn write_authored_null_fixture(root: &Path) -> anyhow::Result<()> {
         let web_root = root.join("nook-app/nook-web");
         let app_source = web_root.join("nook-web-app/src");
         let extension_source = web_root.join("nook-web-extension/src/content");
         let select_source = web_root.join("nook-web-shared/src/vault-app/lib/components/ui/select");
         let scripts = web_root.join("nook-web-extension/scripts");
+        let github_scripts = root.join(".github/scripts");
         fs::create_dir_all(&app_source)?;
         fs::create_dir_all(&extension_source)?;
         fs::create_dir_all(&select_source)?;
         fs::create_dir_all(&scripts)?;
+        fs::create_dir_all(&github_scripts)?;
         fs::write(
             app_source.join("state.ts"),
             "const nullableName = 'annulled'\n// provider returned null\nconst message = \"provider returned null\"\nconst template = `provider returned null`\nconst matcher = /null|nil/\nconst interpolation = `value: ${null}`\nlet value: string | null = null\nconst ratio = amount / null\nconst assertedRatio = value! / (fallback ?? null)\nconst incrementedRatio = index++ / null\n",
@@ -1274,47 +583,89 @@ pub fn build_passkey_creation_options() -> Result<JsValue, JsError> {
             "ref = $bindable(null),\n",
         )?;
         fs::write(scripts.join("build.ts"), "const value = null\n")?;
+        fs::write(
+            github_scripts.join("validate.cjs"),
+            "const missing = null\n",
+        )?;
+        Ok(())
+    }
 
+    fn expected_authored_null_violations() -> Vec<Violation> {
+        vec![
+            Violation {
+                path: PathBuf::from(".github/scripts/validate.cjs"),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 3,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 5,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
+                line: 9,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 6,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 7,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 8,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 9,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
+                line: 10,
+            },
+            Violation {
+                path: PathBuf::from("nook-app/nook-web/nook-web-extension/scripts/build.ts"),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 1,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 2,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 3,
+            },
+            Violation {
+                path: PathBuf::from(
+                    "nook-app/nook-web/nook-web-extension/src/content/webauthn-page.ts",
+                ),
+                line: 4,
+            },
+        ]
+    }
+
+    #[test]
+    fn reports_all_authored_null_while_ignoring_generated_declarations() -> anyhow::Result<()> {
+        let root = temporary_directory()?;
+        write_authored_null_fixture(&root)?;
         assert_eq!(
             typescript_null_absence_sentinels(&root)?,
-            vec![
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 3,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 5,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/panel.svelte"),
-                    line: 9,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 6,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 7,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 8,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 9,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-app/src/state.ts"),
-                    line: 10,
-                },
-                Violation {
-                    path: PathBuf::from("nook-app/nook-web/nook-web-extension/scripts/build.ts"),
-                    line: 1,
-                },
-            ]
+            expected_authored_null_violations()
         );
         fs::remove_dir_all(root)?;
         Ok(())

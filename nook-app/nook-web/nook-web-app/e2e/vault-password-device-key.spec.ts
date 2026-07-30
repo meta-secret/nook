@@ -5,7 +5,7 @@ import {
   assertVaultReady,
   clearBrowserVault,
   createLocalVaultOnLogin,
-  expectVaultPasswordStatus,
+  expectNoVaultPasswords,
   expandSettingsSection,
   openStorageSettings,
 } from './helpers'
@@ -24,7 +24,7 @@ test.describe('vault password on device-key vault', () => {
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')
-    await expectVaultPasswordStatus(page, 'none')
+    await expectNoVaultPasswords(page)
     await expect(page.getByTestId('set-vault-password-btn')).toBeVisible()
 
     await addVaultPassword(page, 'Travel laptop', 'travel-pass-1')

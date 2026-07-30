@@ -5,9 +5,9 @@ use hive::{Neo4jTaskStore, TaskStore};
 use neo4rs::{Graph, query};
 use tokio::time::{Duration, sleep, timeout};
 
-fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
-    EnqueueTask {
-        id: TaskId::new(id).expect("valid task id"),
+fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
+    Ok(EnqueueTask {
+        id: TaskId::new(id)?,
         kind: "integration".to_owned(),
         trigger: TaskTrigger::ManualCli,
         prompt: "Exercise obsolete dependency rearming".to_owned(),
@@ -15,7 +15,7 @@ fn task(id: String, dependencies: Vec<TaskId>) -> EnqueueTask {
         priority: 0,
         max_attempts: 3,
         dependencies,
-    }
+    })
 }
 
 async fn complete(
@@ -76,7 +76,7 @@ pub async fn verify_completed_parent_gate(
     let consumer = task(
         format!("completed-parent-consumer-{suffix}"),
         vec![completed_parent.id.clone()],
-    );
+    )?;
     store.enqueue(&consumer).await?;
     let consumer_claim = store.claim(agent, 300).await?.into_claimed()?;
     assert_eq!(consumer_claim.id, consumer.id);
@@ -121,9 +121,9 @@ pub async fn verify_block_serializes_with_retirement(
     let mut blocker = task(
         format!("concurrent-retirement-blocker-{suffix}"),
         Vec::new(),
-    );
+    )?;
     blocker.kind = "blocker".to_owned();
-    let owner = task(format!("concurrent-retirement-owner-{suffix}"), Vec::new());
+    let owner = task(format!("concurrent-retirement-owner-{suffix}"), Vec::new())?;
     store.enqueue(&blocker).await?;
     store.enqueue(&owner).await?;
     let blocker_claim = store.claim(agent, 300).await?.into_claimed()?;
@@ -202,12 +202,12 @@ pub async fn verify_release_retry(
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
-    let mut blocker = task(format!("retry-obsolete-blocker-{suffix}"), Vec::new());
+    let mut blocker = task(format!("retry-obsolete-blocker-{suffix}"), Vec::new())?;
     blocker.kind = "blocker".to_owned();
     let mut owner = task(
         format!("main-failure-retry-obsolete-{suffix}"),
         vec![blocker.id.clone()],
-    );
+    )?;
     owner.kind = "main-repair".to_owned();
     owner.max_attempts = 1;
     store.enqueue(&blocker).await?;
@@ -308,13 +308,13 @@ pub async fn verify_blocked_release_retry(
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
-    let leaf = task(format!("stalled-leaf-{suffix}"), Vec::new());
-    let ready = task(format!("stalled-ready-{suffix}"), Vec::new());
-    let parent = task(format!("stalled-parent-{suffix}"), vec![leaf.id.clone()]);
+    let leaf = task(format!("stalled-leaf-{suffix}"), Vec::new())?;
+    let ready = task(format!("stalled-ready-{suffix}"), Vec::new())?;
+    let parent = task(format!("stalled-parent-{suffix}"), vec![leaf.id.clone()])?;
     let mut repair = task(
         format!("stalled-main-failure-{suffix}"),
         vec![parent.id.clone(), ready.id.clone()],
-    );
+    )?;
     repair.kind = "main-repair".to_owned();
     repair.max_attempts = 1;
     store.enqueue(&leaf).await?;
@@ -477,7 +477,7 @@ pub async fn verify_enqueue_serializes_with_retirement(
     agent: &AgentId,
     suffix: &str,
 ) -> anyhow::Result<()> {
-    let mut blocker = task(format!("enqueue-retirement-blocker-{suffix}"), Vec::new());
+    let mut blocker = task(format!("enqueue-retirement-blocker-{suffix}"), Vec::new())?;
     blocker.kind = "blocker".to_owned();
     store.enqueue(&blocker).await?;
     let blocker_claim = store.claim(agent, 300).await?.into_claimed()?;
@@ -493,7 +493,7 @@ pub async fn verify_enqueue_serializes_with_retirement(
     let consumer = task(
         format!("enqueue-retirement-consumer-{suffix}"),
         vec![blocker.id.clone()],
-    );
+    )?;
     let mut retirement = graph.start_txn().await?;
     retirement
         .run(

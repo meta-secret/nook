@@ -91,7 +91,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_empty_charset() {
+    fn rejects_empty_charset() -> anyhow::Result<()> {
         let err = generate_password(&PasswordOptions {
             length: 16,
             lowercase: false,
@@ -99,12 +99,14 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .expect_err("password test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("at least one character set"));
+        Ok(())
     }
 
     #[test]
-    fn rejects_invalid_length() {
+    fn rejects_invalid_length() -> anyhow::Result<()> {
         let err = generate_password(&PasswordOptions {
             length: 4,
             lowercase: true,
@@ -112,8 +114,10 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .expect_err("password test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("between 8 and 128"));
+        Ok(())
     }
 
     #[test]
@@ -156,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_length_above_max() {
+    fn rejects_length_above_max() -> anyhow::Result<()> {
         let err = generate_password(&PasswordOptions {
             length: MAX_PASSWORD_LENGTH + 1,
             lowercase: true,
@@ -164,8 +168,10 @@ mod tests {
             numbers: false,
             symbols: false,
         })
-        .expect_err("password test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("between 8 and 128"));
+        Ok(())
     }
 
     #[test]

@@ -14,9 +14,15 @@ import {
   cancelPendingLoginPickerRequest,
   continueWithNook,
   generatePasswordWithNook,
+  PasskeyWidgetAction,
   proposePasskeyWithNook,
 } from './login-passkey-actions'
-import { widgetState } from './state'
+import {
+  WidgetHostKind,
+  WidgetWorkflowKeyKind,
+  WidgetWorkflowRootKind,
+  widgetState,
+} from './state'
 import {
   buildEnrollmentFlowHost,
   createWidgetShell,
@@ -41,17 +47,23 @@ export function renderEnrollmentWidget(
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
-  if (widgetState.host && widgetState.renderedWorkflowKey === workflowKey) {
+  if (
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
+    widgetState.workflowKey.key === workflowKey
+  ) {
     return
   }
-  if (widgetState.host) removeWidget()
+  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
   const shell = createWidgetShell(enrollmentCopy(hints), vaultConnection, 1, 1)
   const { body, step, title, description, continueButton, openVaultButton } =
     shell
   continueButton.hidden = true
   openVaultButton.hidden = true
-  mountWidgetShell(shell, workflowKey, undefined)
+  mountWidgetShell(shell, workflowKey, {
+    kind: WidgetWorkflowRootKind.Unassigned,
+  })
 
   renderEnrollmentActions(
     buildEnrollmentFlowHost(
@@ -86,19 +98,21 @@ export function renderWidget(
     vaultConnection.vaultName ?? '',
   ].join(':')
   if (
-    widgetState.host &&
-    widgetState.renderedWorkflowKey === workflowKey &&
-    widgetState.renderedWorkflowRoot?.root === workflow.root &&
-    widgetState.renderedWorkflowRoot.formScope.kind ===
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
+    widgetState.workflowKey.key === workflowKey &&
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned &&
+    widgetState.renderedWorkflowRoot.observation.root === workflow.root &&
+    widgetState.renderedWorkflowRoot.observation.formScope.kind ===
       workflow.formScope.kind &&
-    (widgetState.renderedWorkflowRoot.formScope.kind !== 'owned' ||
+    (widgetState.renderedWorkflowRoot.observation.formScope.kind !== 'owned' ||
       (workflow.formScope.kind === 'owned' &&
-        widgetState.renderedWorkflowRoot.formScope.owner ===
+        widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
   ) {
     return
   }
-  if (widgetState.host) removeWidget()
+  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
   const shell = createWidgetShell(
     workflowCopy(snapshot.kind),
@@ -112,16 +126,16 @@ export function renderWidget(
     snapshot.action === 'continue-with-nook' ||
     snapshot.action === 'fill-totp' ||
     snapshot.action === 'generate-password' ||
-    snapshot.action === 'use-passkey' ||
-    snapshot.action === 'create-passkey'
+    snapshot.action === PasskeyWidgetAction.UsePasskey ||
+    snapshot.action === PasskeyWidgetAction.CreatePasskey
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? 'widgetFillAuthenticator'
       : snapshot.action === 'generate-password'
         ? 'widgetGeneratePassword'
-        : snapshot.action === 'use-passkey'
+        : snapshot.action === PasskeyWidgetAction.UsePasskey
           ? 'widgetUsePasskey'
-          : snapshot.action === 'create-passkey'
+          : snapshot.action === PasskeyWidgetAction.CreatePasskey
             ? 'widgetCreatePasskey'
             : canContinueWithNook
               ? 'widgetContinue'
@@ -158,8 +172,8 @@ export function renderWidget(
         continueButton,
       )
     } else if (
-      snapshot.action === 'use-passkey' ||
-      snapshot.action === 'create-passkey'
+      snapshot.action === PasskeyWidgetAction.UsePasskey ||
+      snapshot.action === PasskeyWidgetAction.CreatePasskey
     ) {
       void proposePasskeyWithNook(description, continueButton, snapshot.action)
     } else {
@@ -189,7 +203,10 @@ export function renderWidget(
   })
 
   body.append(takeOverButton)
-  mountWidgetShell(shell, workflowKey, workflow)
+  mountWidgetShell(shell, workflowKey, {
+    kind: WidgetWorkflowRootKind.Assigned,
+    observation: workflow,
+  })
 
   const enrollmentHints = detectEnrollmentHints()
   if (enrollmentHints.qr || enrollmentHints.backupCodes) {

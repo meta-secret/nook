@@ -3,23 +3,35 @@ import type { WebsiteAuthenticatorOption } from './login-fill-messages'
 
 export const MAX_AUTHENTICATOR_SEARCH_LENGTH = 200
 
+export enum WebsiteAuthenticatorPickerOpenMessageType {
+  NookWebsiteAuthenticatorPickerOpen = 'nook:website-authenticator-picker-open',
+}
+
 export type WebsiteAuthenticatorPickerOpenMessage = {
-  type: 'nook:website-authenticator-picker-open'
+  type: WebsiteAuthenticatorPickerOpenMessageType.NookWebsiteAuthenticatorPickerOpen
   payload: {
     origin: string
   }
 }
 
+export enum AuthenticatorPickerQueryMessageType {
+  NookAuthenticatorPickerQuery = 'nook:authenticator-picker-query',
+}
+
 export type AuthenticatorPickerQueryMessage = {
-  type: 'nook:authenticator-picker-query'
+  type: AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery
   payload: {
     requestId: string
     query: string
   }
 }
 
+export enum AuthenticatorPickerSelectMessageType {
+  NookAuthenticatorPickerSelect = 'nook:authenticator-picker-select',
+}
+
 export type AuthenticatorPickerSelectMessage = {
-  type: 'nook:authenticator-picker-select'
+  type: AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect
   payload: {
     requestId: string
     vaultStoreId: string
@@ -27,15 +39,23 @@ export type AuthenticatorPickerSelectMessage = {
   }
 }
 
+export enum AuthenticatorPickerCancelMessageType {
+  NookAuthenticatorPickerCancel = 'nook:authenticator-picker-cancel',
+}
+
 export type AuthenticatorPickerCancelMessage = {
-  type: 'nook:authenticator-picker-cancel'
+  type: AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel
   payload: {
     requestId: string
   }
 }
 
+export enum WebsiteAuthenticatorSelectedMessageType {
+  NookWebsiteAuthenticatorSelected = 'nook:website-authenticator-selected',
+}
+
 export type WebsiteAuthenticatorSelectedMessage = {
-  type: 'nook:website-authenticator-selected'
+  type: WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected
   payload: {
     origin: string
     requestId: string
@@ -43,8 +63,12 @@ export type WebsiteAuthenticatorSelectedMessage = {
   }
 }
 
+export enum WebsiteAuthenticatorCanceledMessageType {
+  NookWebsiteAuthenticatorCanceled = 'nook:website-authenticator-canceled',
+}
+
 export type WebsiteAuthenticatorCanceledMessage = {
-  type: 'nook:website-authenticator-canceled'
+  type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled
   payload: {
     origin: string
     requestId: string
@@ -68,7 +92,8 @@ export function isAuthenticatorPickerQueryMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authenticator-picker-query' ||
+    message.type !==
+      AuthenticatorPickerQueryMessageType.NookAuthenticatorPickerQuery ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -90,7 +115,8 @@ export function isAuthenticatorPickerSelectMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authenticator-picker-select' ||
+    message.type !==
+      AuthenticatorPickerSelectMessageType.NookAuthenticatorPickerSelect ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -112,7 +138,8 @@ export function isAuthenticatorPickerCancelMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:authenticator-picker-cancel' ||
+    message.type !==
+      AuthenticatorPickerCancelMessageType.NookAuthenticatorPickerCancel ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'
@@ -130,7 +157,8 @@ export function isWebsiteAuthenticatorSelectedMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:website-authenticator-selected' ||
+    message.type !==
+      WebsiteAuthenticatorSelectedMessageType.NookWebsiteAuthenticatorSelected ||
     !('payload' in message) ||
     !message.payload ||
     typeof message.payload !== 'object'

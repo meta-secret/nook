@@ -95,7 +95,10 @@ test("formatToolCompleted can omit shell output blocks", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall, { includeShellOutput: false }), ["shell exit 1"]);
+  assert.deepEqual(
+    formatToolCompleted(toolCall, { includeShellOutput: false }),
+    ["shell exit 1"],
+  );
 });
 
 test("formatToolCompleted includes task result suffix", () => {
@@ -131,7 +134,7 @@ test("formatToolCompleted skips noisy read completions", () => {
     },
   } satisfies ToolCall;
 
-  assert.equal(formatToolCompleted(toolCall), null);
+  assert.deepEqual(formatToolCompleted(toolCall), []);
 });
 
 test("formatToolCompleted surfaces tool errors", () => {
@@ -144,12 +147,20 @@ test("formatToolCompleted surfaces tool errors", () => {
     },
   } satisfies ToolCall;
 
-  assert.deepEqual(formatToolCompleted(toolCall), ["shell failed: command not found"]);
+  assert.deepEqual(formatToolCompleted(toolCall), [
+    "shell failed: command not found",
+  ]);
 });
 
 test("extractShellOutputChunk reads common event shapes", () => {
   assert.equal(extractShellOutputChunk({ text: "line 1\n" }), "line 1\n");
-  assert.equal(extractShellOutputChunk({ case: "stdout", value: { content: "ok" } }), "ok");
-  assert.equal(extractShellOutputChunk({ case: "stdoutDelta", value: { output: "live" } }), "live");
-  assert.equal(extractShellOutputChunk(undefined), "");
+  assert.equal(
+    extractShellOutputChunk({ case: "stdout", value: { content: "ok" } }),
+    "ok",
+  );
+  assert.equal(
+    extractShellOutputChunk({ case: "stdoutDelta", value: { output: "live" } }),
+    "live",
+  );
+  assert.equal(extractShellOutputChunk(), "");
 });

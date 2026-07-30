@@ -1,11 +1,15 @@
 import { mount } from 'svelte'
 import { initializeExtensionI18n } from '../lib/i18n'
-import { loadExtensionSetupState } from '../lib/pairing-state'
+import {
+  ExtensionSetupLoadKind,
+  loadExtensionSetupState,
+} from '../lib/pairing-state'
 import {
   extensionDeviceProtectionStatus,
   extensionSessionDevice,
-  type ExtensionDeviceProtectionResult,
-  type ExtensionDeviceProtectionStatus,
+  ExtensionSessionDeviceStateKind,
+  DeviceProtectionStatus,
+  type ExtensionSessionDeviceState,
 } from '../lib/nook-wasm'
 import PopupApp from './PopupApp.svelte'
 import AuthenticatorPicker from './AuthenticatorPicker.svelte'
@@ -17,8 +21,8 @@ async function loadCompanionVaultConnection(): Promise<{
   vaultName?: string
 }> {
   const setup = await loadExtensionSetupState()
-  return setup
-    ? { isConnected: true, vaultName: setup.selectedVaultName }
+  return setup.kind === ExtensionSetupLoadKind.Ready
+    ? { isConnected: true, vaultName: setup.setup.selectedVaultName }
     : { isConnected: false }
 }
 
@@ -50,12 +54,11 @@ async function main() {
   }
 
   const vaultConnection = await loadCompanionVaultConnection()
-  let protectionStatus: ExtensionDeviceProtectionStatus = 'missing'
-  let activeSessionDevice: ExtensionDeviceProtectionResult | undefined
-  protectionStatus = await extensionDeviceProtectionStatus()
-  if (protectionStatus === 'unlocked') {
-    activeSessionDevice = await extensionSessionDevice()
-  }
+  const protectionStatus = await extensionDeviceProtectionStatus()
+  const activeSessionDevice: ExtensionSessionDeviceState =
+    protectionStatus === DeviceProtectionStatus.Unlocked
+      ? await extensionSessionDevice()
+      : { kind: ExtensionSessionDeviceStateKind.Locked }
 
   mount(PopupApp, {
     target,

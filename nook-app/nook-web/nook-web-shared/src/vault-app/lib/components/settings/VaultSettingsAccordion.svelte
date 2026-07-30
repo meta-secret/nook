@@ -1,12 +1,12 @@
 <script lang="ts">
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
+  import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
+  import SettingsAccordionPanel from '$lib/components/settings/SettingsAccordionSection.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import { Button } from '$lib/components/ui/button'
-
-  export type VaultSettingsAccordionSection = 'devices' | 'language' | 'danger'
+  import { SettingsAccordionSection } from '$lib/vault/state/ui.svelte'
 
   let deleteConfirmationOpen = $state(false)
 
@@ -23,9 +23,7 @@
     onDenyJoin,
     onRenameDevice,
     onRevokeDevice,
-    accordionSection = $bindable(
-      undefined as VaultSettingsAccordionSection | undefined,
-    ),
+    accordionSection = $bindable(SettingsAccordionSection.Devices),
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -39,18 +37,23 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: VaultSettingsAccordionSection | undefined
+    accordionSection?: SettingsAccordionSection
   } = $props()
 
   const hasDevices = $derived(vaultMembers.length > 0)
+
+  function toggleSection(section: SettingsAccordionSection): void {
+    accordionSection =
+      accordionSection === section ? SettingsAccordionSection.Closed : section
+  }
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.devices')}
     subtitle={vault.t('settings.devices_desc')}
-    section="devices"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Devices}
+    onToggle={() => toggleSection(SettingsAccordionSection.Devices)}
     testId="vault-devices-section"
   >
     {#snippet badge()}
@@ -81,13 +84,13 @@
       {onRenameDevice}
       {onRevokeDevice}
     />
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.language')}
     subtitle={vault.t('settings.select_language')}
-    section="language"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Language}
+    onToggle={() => toggleSection(SettingsAccordionSection.Language)}
     testId="vault-language-section"
   >
     {#snippet badge()}
@@ -110,19 +113,19 @@
         class="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
         value={vault.locale}
         onchange={(e) =>
-          vault.updateLocale(e.currentTarget.value as 'en' | 'ru')}
+          vault.updateLocale(e.currentTarget.value as NookAppLocale)}
       >
         <option value="en">English</option>
         <option value="ru">Русский</option>
       </select>
     </div>
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 
-  <SettingsAccordionSection
+  <SettingsAccordionPanel
     title={vault.t('settings.delete_local_title')}
     subtitle={vault.t('settings.delete_local_desc')}
-    section="danger"
-    bind:activeSection={accordionSection}
+    open={accordionSection === SettingsAccordionSection.Danger}
+    onToggle={() => toggleSection(SettingsAccordionSection.Danger)}
     testId="vault-danger-section"
   >
     {#snippet badge()}
@@ -184,5 +187,5 @@
         </Button>
       {/if}
     </div>
-  </SettingsAccordionSection>
+  </SettingsAccordionPanel>
 </div>

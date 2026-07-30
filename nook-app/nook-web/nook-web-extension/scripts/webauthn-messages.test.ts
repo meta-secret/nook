@@ -4,6 +4,7 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
   parsedWebsitePasskeyRequest,
+  WebsitePasskeyRequestParseKind,
 } from '../src/lib/webauthn-messages'
 
 const requestJson = JSON.stringify({
@@ -61,6 +62,8 @@ describe('website passkey runtime messages', () => {
         },
       }),
     ).toBe(false)
-    expect(parsedWebsitePasskeyRequest('{')).toBeUndefined()
+    expect(parsedWebsitePasskeyRequest('{')).toEqual({
+      kind: WebsitePasskeyRequestParseKind.Rejected,
+    })
   })
 })

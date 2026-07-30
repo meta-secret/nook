@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { completePlainLogin } from '../lib/plain-login'
+  import { completePlainLogin, PlainLoginResult } from '../lib/plain-login'
 
   let error = $state('')
 
@@ -18,7 +18,7 @@
       )?.value ??
       form.querySelector<HTMLInputElement>('[name="LoginUserName"]')?.value ??
       ''
-    if (completePlainLogin(username, password) === 'invalid') {
+    if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }
   }

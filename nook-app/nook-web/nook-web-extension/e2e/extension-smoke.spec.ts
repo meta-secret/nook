@@ -10,7 +10,7 @@ import {
   getServiceWorker,
   installMockPasskeyRuntime,
   launchExtensionContext,
-  matchingSentinelVaultBaseUrl,
+  sentinelVaultBaseUrl,
   openSimpleVaultConnection,
   pairingGrantStorageKey,
   readExtensionStorage,
@@ -25,9 +25,11 @@ import {
   writeExtensionStorage,
   type ExtensionPairingApprovedMessage,
 } from './helpers/extension-smoke-runtime'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 const chromiumExecutablePath =
-  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
 
 test('sets up the extension device first and sends its public keys to Simple Vault', async ({
   browserName,
@@ -79,9 +81,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toBeHidden()
 
     await popupPage.getByTestId('device-protection-create-new-choice').click()
-    await expect(popupPage.getByTestId('device-mode-select')).toHaveValue(
-      'standard',
-    )
+    await expect(
+      popupPage.getByTestId('device-mode-select').locator('option:checked'),
+    ).toHaveText('Standard')
     await expect(
       popupPage.getByTestId('device-protection-setup-btn'),
     ).toHaveText('Create new passkey')
@@ -290,16 +292,14 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     }
 
     const sentinelPage = await context.newPage()
-    const sentinelUrl =
-      matchingSentinelVaultBaseUrl(simpleVaultBaseUrl) ??
-      'https://sentinel.nokey.sh/'
+    const sentinelUrl = sentinelVaultBaseUrl(simpleVaultBaseUrl)
     await sentinelPage.goto(sentinelUrl)
     await expect(sentinelPage.locator('#nook-auth-widget')).toHaveCount(0)
 
     const forgedGrant = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: 'sentinel',
+        vaultType: ExtensionPairingVaultType.Sentinel,
         deviceId: 'sentinel-device-e2e',
         devicePublicKey: 'age1sentinel',
         deviceSigningPublicKey: 'sentinel-signing-key',
@@ -307,7 +307,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         vaultStoreId: 'sentinel-store-e2e',
         vaultName: 'Sentinel safe',
         approvedAt: '2026-07-07T00:00:00.000Z',
-        scopes: ['vault-access'],
+        scopes: [ExtensionConnectScope.VaultAccess],
         providers: [],
       },
       eventLogRecords: syntheticEventLogRecords,
@@ -319,7 +319,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const approvedGrant: ExtensionPairingApprovedMessage = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: 'simple',
+        vaultType: ExtensionPairingVaultType.Simple,
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',
@@ -327,7 +327,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
         vaultStoreId: 'store-e2e',
         vaultName: 'Personal',
         approvedAt: '2026-07-07T00:00:00.000Z',
-        scopes: ['vault-access', 'password-filling'],
+        scopes: [
+          ExtensionConnectScope.VaultAccess,
+          ExtensionConnectScope.PasswordFilling,
+        ],
         providers: [],
       },
       eventLogRecords: syntheticEventLogRecords,
@@ -337,8 +340,8 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     ).toEqual({ ok: false, reason: 'event-log-import-failed' })
 
     const storage = await readExtensionStorage(context)
-    expect(storage[pairingGrantStorageKey]).toBeUndefined()
-    expect(storage[setupStorageKey]).toBeUndefined()
+    expect(Object.hasOwn(storage, pairingGrantStorageKey)).toBe(false)
+    expect(Object.hasOwn(storage, setupStorageKey)).toBe(false)
   } finally {
     await context.close()
     await loginServer.close()
@@ -468,11 +471,14 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await expect(
       verifiedPopupPage.getByTestId('companion-vault-status'),
     ).toContainText('Replacement vault')
-    const replacementGrant = repairedGrants.find(
+    const replacementGrantEntry = repairedGrants.find(
       ([, grant]) =>
-        (grant as { vaultName?: string }).vaultName === 'Replacement vault',
-    )?.[1]
-    expect(replacementGrant).toBeDefined()
+        (grant as { vaultName: string }).vaultName === 'Replacement vault',
+    )
+    if (!replacementGrantEntry) {
+      throw new Error('replacement vault grant must exist after repair')
+    }
+    const replacementGrant = replacementGrantEntry[1]
     const vaultBackedLookup = await verifiedPopupPage.evaluate(
       async (grant) => {
         await chrome.runtime.sendMessage({
@@ -500,7 +506,9 @@ test('shows extension unlock when a paired device identity is unavailable', asyn
   await mkdir(userDataDir, { recursive: true })
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    executablePath: chromiumExecutablePath,
+    ...(chromiumExecutablePath
+      ? { executablePath: chromiumExecutablePath }
+      : {}),
     args: [
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,

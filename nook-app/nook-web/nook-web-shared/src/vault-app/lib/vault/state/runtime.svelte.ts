@@ -7,7 +7,7 @@ import {
   type NookAppLocale,
 } from "$app-wasm";
 export class VaultRuntimeState {
-  browserLocale = new NookBrowserLocale();
+  browserLocale: NookBrowserLocale;
   clientPolicy = new NookVaultClientPolicy();
   runtimeConfig = new NookRuntimeConfig(
     NookClientRunModeUtil.parse(
@@ -24,4 +24,8 @@ export class VaultRuntimeState {
   isVerifying = $state(false);
   isSaving = $state(false);
   isInitializing = $state(true);
+
+  constructor(browserLocale = new NookBrowserLocale()) {
+    this.browserLocale = browserLocale;
+  }
 }

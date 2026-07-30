@@ -1,4 +1,9 @@
-import { createOctokit, parseRepository, requestCodexReview } from "./github.js";
+import {
+  createOctokit,
+  parseRepository,
+  requestCodexReview,
+} from "./github.js";
+import { prettyJson } from "./json.js";
 
 export async function runPrReviewRequest(): Promise<void> {
   const repository = process.env.GITHUB_REPOSITORY?.trim();
@@ -18,5 +23,5 @@ export async function runPrReviewRequest(): Promise<void> {
     parseRepository(repository),
     prNumber,
   );
-  console.log(JSON.stringify({ number: prNumber, repository, ...result }, null, 2));
+  console.log(prettyJson({ number: prNumber, repository, ...result }));
 }

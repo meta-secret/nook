@@ -1,20 +1,56 @@
 import {
+  LoginDetectionStatus,
   type LoginDetectionResponse,
-  type LoginDetectionStatus,
 } from '../../lib/login-detection-messages'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
+import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
 
-let extensionSessionDocumentCreation: Promise<void> | undefined
+enum ExtensionSessionDocumentStateKind {
+  Closed = 'closed',
+  Creating = 'creating',
+  Open = 'open',
+  Closing = 'closing',
+}
 
-let extensionSessionDocumentClosure: Promise<void> | undefined
+type ExtensionSessionDocumentState =
+  | { kind: ExtensionSessionDocumentStateKind.Closed }
+  | {
+      kind: ExtensionSessionDocumentStateKind.Creating
+      operation: Promise<void>
+    }
+  | { kind: ExtensionSessionDocumentStateKind.Open }
+  | {
+      kind: ExtensionSessionDocumentStateKind.Closing
+      operation: Promise<void>
+    }
+
+let extensionSessionDocumentState: ExtensionSessionDocumentState = {
+  kind: ExtensionSessionDocumentStateKind.Closed,
+}
 
 export async function ensureExtensionSessionDocument(): Promise<void> {
-  await extensionSessionDocumentClosure
-  extensionSessionDocumentCreation ??= chrome.offscreen
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Closing
+  ) {
+    await extensionSessionDocumentState.operation
+  }
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Open
+  )
+    return
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Creating
+  ) {
+    return extensionSessionDocumentState.operation
+  }
+  const operation = chrome.offscreen
     .createDocument({
       url: extensionSessionDocument,
       reasons: ['WORKERS'],
@@ -30,51 +66,94 @@ export async function ensureExtensionSessionDocument(): Promise<void> {
       }
       throw error
     })
-  return extensionSessionDocumentCreation
+    .then(() => {
+      if (
+        extensionSessionDocumentState.kind ===
+          ExtensionSessionDocumentStateKind.Creating &&
+        extensionSessionDocumentState.operation === operation
+      ) {
+        extensionSessionDocumentState = {
+          kind: ExtensionSessionDocumentStateKind.Open,
+        }
+      }
+    })
+  extensionSessionDocumentState = {
+    kind: ExtensionSessionDocumentStateKind.Creating,
+    operation,
+  }
+  return operation
 }
 
 export function closeExtensionSessionDocument(): Promise<void> {
-  extensionSessionDocumentCreation = undefined
-  if (extensionSessionDocumentClosure) return extensionSessionDocumentClosure
+  if (
+    extensionSessionDocumentState.kind ===
+    ExtensionSessionDocumentStateKind.Closing
+  ) {
+    return extensionSessionDocumentState.operation
+  }
   const closure = chrome.offscreen.closeDocument().finally(() => {
-    if (extensionSessionDocumentClosure === closure) {
-      extensionSessionDocumentClosure = undefined
+    if (
+      extensionSessionDocumentState.kind ===
+        ExtensionSessionDocumentStateKind.Closing &&
+      extensionSessionDocumentState.operation === closure
+    ) {
+      extensionSessionDocumentState = {
+        kind: ExtensionSessionDocumentStateKind.Closed,
+      }
     }
   })
-  extensionSessionDocumentClosure = closure
+  extensionSessionDocumentState = {
+    kind: ExtensionSessionDocumentStateKind.Closing,
+    operation: closure,
+  }
   return closure
 }
 
-export function isExtensionSessionExpiryMessage(
-  message: unknown,
-): message is { type: 'nook:extension-session-expired' } {
+export enum IsExtensionSessionExpiryMessageResultType {
+  NookExtensionSessionExpired = 'nook:extension-session-expired',
+}
+
+export function isExtensionSessionExpiryMessage(message: unknown): message is {
+  type: IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-session-expired'
+    message.type ===
+      IsExtensionSessionExpiryMessageResultType.NookExtensionSessionExpired
   )
 }
 
-export function isExtensionSessionLockMessage(
-  message: unknown,
-): message is { type: 'nook:extension-session-lock' } {
+export enum IsExtensionSessionLockMessageResultType {
+  NookExtensionSessionLock = 'nook:extension-session-lock',
+}
+
+export function isExtensionSessionLockMessage(message: unknown): message is {
+  type: IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:extension-session-lock'
+    message.type ===
+      IsExtensionSessionLockMessageResultType.NookExtensionSessionLock
   )
 }
 
-export function isExtensionSessionEnsureMessage(
-  message: unknown,
-): message is { type: 'nook:ensure-extension-session-runtime' } {
+export enum IsExtensionSessionEnsureMessageResultType {
+  NookEnsureExtensionSessionRuntime = 'nook:ensure-extension-session-runtime',
+}
+
+export function isExtensionSessionEnsureMessage(message: unknown): message is {
+  type: IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
+} {
   return (
     !!message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'nook:ensure-extension-session-runtime'
+    message.type ===
+      IsExtensionSessionEnsureMessageResultType.NookEnsureExtensionSessionRuntime
   )
 }
 
@@ -83,7 +162,7 @@ export function isUnlockedSessionStatus(status: unknown): boolean {
     status &&
     typeof status === 'object' &&
     'status' in status &&
-    status.status === 'unlocked',
+    status.status === DeviceProtectionStatus.Unlocked,
   )
 }
 
@@ -91,34 +170,49 @@ export function openSimpleVault(path = ''): void {
   chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
-function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
+enum ActiveTabQueryKind {
+  Found = 'found',
+  Unavailable = 'unavailable',
+}
+
+type ActiveTabQuery =
+  | { kind: ActiveTabQueryKind.Found; tab: chrome.tabs.Tab }
+  | { kind: ActiveTabQueryKind.Unavailable }
+
+function queryActiveTab(): Promise<ActiveTabQuery> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      resolve(tabs[0])
+      const tab = tabs[0]
+      resolve(
+        tab
+          ? { kind: ActiveTabQueryKind.Found, tab }
+          : { kind: ActiveTabQueryKind.Unavailable },
+      )
     })
   })
 }
 
 export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
-  const tab = await queryActiveTab()
-  const tabId = tab?.id
-  if (tabId === undefined) {
-    return { ok: true, status: 'unavailable' }
+  const activeTab = await queryActiveTab()
+  if (activeTab.kind === ActiveTabQueryKind.Unavailable) {
+    return { ok: true, status: LoginDetectionStatus.Unavailable }
+  }
+  const tabId = activeTab.tab.id
+  if (typeof tabId !== 'number' || !Number.isInteger(tabId)) {
+    return { ok: true, status: LoginDetectionStatus.Unavailable }
   }
   try {
-    const response = await new Promise<
-      { ok?: boolean; status?: LoginDetectionStatus } | undefined
-    >((resolve) => {
+    const response = await new Promise<LoginDetectionResponse>((resolve) => {
       chrome.tabs.sendMessage(
         tabId,
         { type: 'nook:query-login-detection' },
         (result: unknown) => {
           if (chrome.runtime.lastError) {
-            resolve(undefined)
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
           if (!result || typeof result !== 'object') {
-            resolve(undefined)
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
           const payload = result as {
@@ -127,24 +221,25 @@ export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResp
           }
           if (
             payload.ok !== true ||
-            (payload.status !== 'detected' &&
-              payload.status !== 'not-detected' &&
-              payload.status !== 'unavailable')
+            (payload.status !== LoginDetectionStatus.Detected &&
+              payload.status !== LoginDetectionStatus.NotDetected &&
+              payload.status !== LoginDetectionStatus.Unavailable)
           ) {
-            resolve(undefined)
+            resolve({ ok: true, status: LoginDetectionStatus.Unavailable })
             return
           }
-          resolve({ ok: true, status: payload.status })
+          resolve({
+            ok: true,
+            status: payload.status as LoginDetectionStatus,
+          })
         },
       )
     })
-    if (response?.ok === true && response.status) {
-      return { ok: true, status: response.status }
-    }
+    return response
   } catch {
     // Content script may be absent on restricted pages.
   }
-  return { ok: true, status: 'unavailable' }
+  return { ok: true, status: LoginDetectionStatus.Unavailable }
 }
 
 export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {

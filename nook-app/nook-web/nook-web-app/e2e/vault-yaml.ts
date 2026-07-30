@@ -1,9 +1,17 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 
 /** Parsed shape of nook-events (matches nook-core StoredVaultYaml). */
+enum StoredSecretRecordType {
+  Login = 'login',
+  ApiKey = 'api-key',
+  SeedPhrase = 'seed-phrase',
+  SecureNote = 'secure-note',
+}
+
 type StoredSecretRecord = {
   id: string
-  type: 'login' | 'api-key' | 'seed-phrase' | 'secure-note'
+  type: StoredSecretRecordType
   data: string
 }
 
@@ -83,6 +91,18 @@ type VaultEventYaml = {
   operations?: VaultEventOperation[]
 }
 
+export enum PasswordEnvelopeCiphertextStateKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+export type PasswordEnvelopeCiphertextState =
+  | { kind: PasswordEnvelopeCiphertextStateKind.Absent }
+  | {
+      kind: PasswordEnvelopeCiphertextStateKind.Present
+      ciphertext: string
+    }
+
 export type VaultYamlSnapshot = {
   raw: string
   secretIds: string[]
@@ -91,7 +111,7 @@ export type VaultYamlSnapshot = {
   memberPkIds: string[]
   /** Count of sentinel share records / issued share payloads observed. */
   sentinelShareCount: number
-  unlockMode: 'keys' | 'password'
+  unlockMode: UnlockMethod
   hasPasswordEnvelope: boolean
   /**
    * Raw ciphertext of the active password envelope (when present). Useful
@@ -99,7 +119,7 @@ export type VaultYamlSnapshot = {
    * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
    * against a previously-captured value is a reliable "rotated yet?" check.
    */
-  passwordEnvelopeCiphertext: string | undefined
+  passwordEnvelopeCiphertext: PasswordEnvelopeCiphertextState
 }
 
 function parseJoinValue(
@@ -138,13 +158,20 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const hasPasswordEnvelope = passwordEntries.length > 0
   // Device-key auth rows are primary; hybrid vaults keep auth alongside
   // password_entries.
-  const unlockMode: 'keys' | 'password' =
-    authPkIds.length > 0 ? 'keys' : hasPasswordEnvelope ? 'password' : 'keys'
+  const unlockMode =
+    authPkIds.length > 0
+      ? UnlockMethod.Keys
+      : hasPasswordEnvelope
+        ? UnlockMethod.Password
+        : UnlockMethod.Keys
   const activeEnvelope = passwordEntries[0]?.envelope
   const passwordEnvelopeCiphertext =
     typeof activeEnvelope?.ciphertext === 'string'
-      ? activeEnvelope.ciphertext.trim()
-      : undefined
+      ? {
+          kind: PasswordEnvelopeCiphertextStateKind.Present,
+          ciphertext: activeEnvelope.ciphertext.trim(),
+        }
+      : { kind: PasswordEnvelopeCiphertextStateKind.Absent }
 
   return {
     raw: yaml,
@@ -159,14 +186,24 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   }
 }
 
-function eventSecretToStored(
-  secret?: EventSecretRecord,
-): StoredSecretRecord | undefined {
-  if (!secret?.id) return undefined
+enum EventSecretParseKind {
+  Invalid = 'invalid',
+  Valid = 'valid',
+}
+
+type EventSecretParse =
+  | { kind: EventSecretParseKind.Invalid }
+  | { kind: EventSecretParseKind.Valid; secret: StoredSecretRecord }
+
+function eventSecretToStored(secret?: EventSecretRecord): EventSecretParse {
+  if (!secret?.id) return { kind: EventSecretParseKind.Invalid }
   return {
-    id: secret.id,
-    type: secret.type ?? 'api-key',
-    data: secret.ciphertext ?? '',
+    kind: EventSecretParseKind.Valid,
+    secret: {
+      id: secret.id,
+      type: secret.type ?? StoredSecretRecordType.ApiKey,
+      data: secret.ciphertext ?? '',
+    },
   }
 }
 
@@ -204,7 +241,9 @@ export function parseVaultEventLogSnapshot(
         case 'vault-imported':
           for (const secret of operation.secrets ?? []) {
             const stored = eventSecretToStored(secret)
-            if (stored) secrets.set(stored.id, stored)
+            if (stored.kind === EventSecretParseKind.Valid) {
+              secrets.set(stored.secret.id, stored.secret)
+            }
           }
           passwordEntries.clear()
           for (const entry of operation.password_entries ?? []) {
@@ -214,12 +253,16 @@ export function parseVaultEventLogSnapshot(
         case 'epoch-checkpoint':
           for (const secret of operation.secrets ?? []) {
             const stored = eventSecretToStored(secret)
-            if (stored) secrets.set(stored.id, stored)
+            if (stored.kind === EventSecretParseKind.Valid) {
+              secrets.set(stored.secret.id, stored.secret)
+            }
           }
           break
         case 'secret-created': {
           const stored = eventSecretToStored(operation.secret)
-          if (stored) secrets.set(stored.id, stored)
+          if (stored.kind === EventSecretParseKind.Valid) {
+            secrets.set(stored.secret.id, stored.secret)
+          }
           break
         }
         case 'secret-deleted':
@@ -273,7 +316,7 @@ export function parseVaultEventLogSnapshot(
             if (!deviceId) continue
             sentinelShares.set(deviceId, {
               id: `sentinel_share:${deviceId}`,
-              type: 'secure-note',
+              type: StoredSecretRecordType.SecureNote,
               data: share.ciphertext ?? '',
             })
           }
@@ -325,7 +368,7 @@ export function parseVaultEventLogSnapshot(
     auth: [...auth.values()],
     joins: [...joins.values()].map((join) => ({
       id: join.deviceId,
-      type: 'secure-note',
+      type: StoredSecretRecordType.SecureNote,
       data: JSON.stringify({
         device_id: join.deviceId,
         public_key: join.publicKey,

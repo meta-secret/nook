@@ -1,10 +1,30 @@
-export type BrowserOAuthProvider = "google-drive" | "icloud";
+export enum BrowserOAuthProvider {
+  GoogleDrive = "google-drive",
+  ICloud = "icloud",
+}
 
-export type OAuthOriginSupport = {
-  supported: boolean;
-  origin: string;
-  reason?: "cloudflare-pr-preview" | "unregistered-origin";
-};
+export enum OAuthOriginSupportKind {
+  Supported = "supported",
+  Unsupported = "unsupported",
+}
+
+export enum OAuthOriginUnsupportedReason {
+  CloudflarePreview = "cloudflare-pr-preview",
+  UnregisteredOrigin = "unregistered-origin",
+}
+
+export type OAuthOriginSupport =
+  | {
+      kind: OAuthOriginSupportKind.Supported;
+      supported: true;
+      origin: string;
+    }
+  | {
+      kind: OAuthOriginSupportKind.Unsupported;
+      supported: false;
+      origin: string;
+      reason: OAuthOriginUnsupportedReason;
+    };
 
 type BrowserLocation = Pick<Location, "origin" | "hostname">;
 
@@ -29,16 +49,12 @@ const ICLOUD_AUTHORIZED_ORIGINS = new Set([
 const CLOUDFLARE_PR_PREVIEW_HOST =
   /^pr-\d+\.(?:nook-1n8|nokey-(?:sh|simple|sentinel))\.pages\.dev$/i;
 
-function currentLocation(): BrowserLocation | undefined {
-  return typeof window === "undefined" ? undefined : window.location;
-}
-
 function isAuthorizedOrigin(
   provider: BrowserOAuthProvider,
   origin: string,
 ): boolean {
   const origins =
-    provider === "icloud"
+    provider === BrowserOAuthProvider.ICloud
       ? ICLOUD_AUTHORIZED_ORIGINS
       : GOOGLE_AUTHORIZED_ORIGINS;
   return origins.has(origin);
@@ -50,22 +66,32 @@ export function isCloudflarePrPreviewHost(hostname: string): boolean {
 
 export function resolveOAuthOriginSupport(
   provider: BrowserOAuthProvider,
-  location: BrowserLocation | undefined = currentLocation(),
+  location: BrowserLocation,
 ): OAuthOriginSupport {
-  if (!location) {
-    return { supported: true, origin: "" };
-  }
-
   const origin = location.origin;
   if (isAuthorizedOrigin(provider, origin)) {
-    return { supported: true, origin };
+    return { kind: OAuthOriginSupportKind.Supported, supported: true, origin };
   }
 
   return {
+    kind: OAuthOriginSupportKind.Unsupported,
     supported: false,
     origin,
     reason: isCloudflarePrPreviewHost(location.hostname)
-      ? "cloudflare-pr-preview"
-      : "unregistered-origin",
+      ? OAuthOriginUnsupportedReason.CloudflarePreview
+      : OAuthOriginUnsupportedReason.UnregisteredOrigin,
   };
+}
+
+export function resolveCurrentOAuthOriginSupport(
+  provider: BrowserOAuthProvider,
+): OAuthOriginSupport {
+  if (!("window" in globalThis)) {
+    return {
+      kind: OAuthOriginSupportKind.Supported,
+      supported: true,
+      origin: "",
+    };
+  }
+  return resolveOAuthOriginSupport(provider, window.location);
 }

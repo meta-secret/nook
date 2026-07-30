@@ -637,6 +637,7 @@ fn decode_uri_component(value: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
     use serde_json::json;
@@ -673,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn enrollment_link_roundtrip_normalizes_hash_and_query_forms() {
+    fn enrollment_link_roundtrip_normalizes_hash_and_query_forms() -> anyhow::Result<()> {
         let code = "abc-123_DEF";
         let link = build_enrollment_link(code, "https://nook.example/");
         assert_eq!(link, "https://nook.example/#enroll=abc-123_DEF");
@@ -684,6 +685,7 @@ mod tests {
         );
         assert_eq!(normalize_enrollment_code("#enroll=abc%2F123"), "abc/123");
         assert_eq!(normalize_enrollment_code("  raw-code  "), "raw-code");
+        Ok(())
     }
 
     #[test]
@@ -702,7 +704,8 @@ mod tests {
     fn rejects_wrong_password() -> anyhow::Result<()> {
         let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")?;
         let err = decrypt_enrollment_payload(&code, "wrong-pass")
-            .expect_err("enrollment test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(
             err.to_string(),
             "Vault password does not decrypt this enrollment code."
@@ -716,7 +719,8 @@ mod tests {
             serde_json::to_vec(&json!({"provider": {"type": "local"}}))?.as_slice(),
         );
         let err = decrypt_enrollment_payload(&malformed, "pw")
-            .expect_err("enrollment test should reject invalid input");
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(err.to_string(), "Invalid enrollment code.");
         assert!(peek_enrollment_entry_id(&malformed).is_err());
         Ok(())
@@ -777,16 +781,21 @@ mod tests {
             "joiner@example.com".to_owned(),
             "shared-folder-abc".to_owned(),
         ));
-        let value = serde_json::to_value(EnrollmentProviderPayload {
+        let payload = EnrollmentProviderPayload {
             provider,
             vault_name: "Shared vault".to_owned(),
-        })?;
-        assert_eq!(value["provider"]["onboardingType"], "shared-provider-grant");
-        assert_eq!(
-            value["provider"]["provider"]["type"],
-            "shared-provider-grant"
-        );
-        let serialized = value.to_string();
+        };
+        let encoded = serde_json::to_vec(&payload)?;
+        let decoded: EnrollmentProviderPayload = serde_json::from_slice(&encoded)?;
+        assert_eq!(decoded.vault_name, "Shared vault");
+        match decoded.provider.data() {
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
+                storage_target_id,
+                ..
+            }) => assert_eq!(storage_target_id, "shared-folder-abc"),
+            other => anyhow::bail!("expected shared Google Drive grant, got {other:?}"),
+        }
+        let serialized = String::from_utf8(encoded)?;
         assert!(!serialized.contains("access_token"));
         assert!(!serialized.contains("refresh_token"));
 

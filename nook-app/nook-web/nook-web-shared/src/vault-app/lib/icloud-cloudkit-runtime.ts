@@ -4,11 +4,27 @@ import {
   ICLOUD_ENVIRONMENT,
 } from "$lib/icloud-oauth-config";
 import { createLogger } from "$lib/log";
+import {
+  CloudKitButtonTheme,
+  CloudKitEnvironment,
+  CloudKitParticipantStatus,
+  CloudKitShareAccess,
+  CloudKitSharePermission,
+} from "$lib/icloud-cloudkit-state";
 
 const CLOUDKIT_SCRIPT_URL = "https://cdn.apple-cloudkit.com/ck/2/cloudkit.js";
 export const CLOUDKIT_SIGN_IN_BUTTON_ID = "apple-sign-in-button";
 export const CLOUDKIT_SIGN_OUT_BUTTON_ID = "apple-sign-out-button";
 const log = createLogger("icloud-oauth");
+
+enum CloudKitElementLookupKind {
+  Missing = "missing",
+  Found = "found",
+}
+
+type CloudKitElementLookup =
+  | { kind: CloudKitElementLookupKind.Missing }
+  | { kind: CloudKitElementLookupKind.Found; element: HTMLElement };
 
 export type CloudKitUserIdentity = {
   userRecordName?: string;
@@ -38,7 +54,7 @@ export type CloudKitRecordInfo = {
   zoneID?: CloudKitZoneID;
   rootRecordName?: string;
   rootRecord?: CloudKitRecord;
-  participantStatus?: "INVITED" | "ACCEPTED" | "REMOVED" | "UNKNOWN";
+  participantStatus?: CloudKitParticipantStatus;
 };
 
 export type CloudKitRecordInfosResponse = {
@@ -56,8 +72,8 @@ export type CloudKitDatabase = {
     zoneID: string | CloudKitZoneID;
     shareTitle: string;
     shareType: string;
-    supportedAccess: Array<"PRIVATE" | "PUBLIC">;
-    supportedPermissions: Array<"READ_WRITE" | "READ_ONLY">;
+    supportedAccess: CloudKitShareAccess[];
+    supportedPermissions: CloudKitSharePermission[];
   }) => Promise<unknown>;
 };
 
@@ -99,7 +115,7 @@ export type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean;
     persist?: boolean;
-  }) => Promise<CloudKitUserIdentity | undefined>;
+  }) => Promise<unknown>;
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>;
   fetchCurrentUserIdentity?: () => Promise<CloudKitUserIdentity>;
   acceptShares?: (shortGUIDs: string[]) => Promise<CloudKitRecordInfosResponse>;
@@ -119,17 +135,17 @@ export type CloudKitGlobal = {
   configure: (config: {
     containers: Array<{
       containerIdentifier: string;
-      environment: "development" | "production";
+      environment: CloudKitEnvironment;
       apiTokenAuth: {
         apiToken: string;
         persist: boolean;
         signInButton: {
           id: string;
-          theme?: "black" | "white" | "white-with-outline";
+          theme?: CloudKitButtonTheme;
         };
         signOutButton: {
           id: string;
-          theme?: "black" | "white" | "white-with-outline";
+          theme?: CloudKitButtonTheme;
         };
       };
     }>;
@@ -144,22 +160,32 @@ const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = "nook.icloud.webAuthToken.";
 
 export const webAuthTokenListeners = new Set<(token: string) => void>();
 
-export function tokenDiagnostics(token: string | undefined): {
+export enum WebAuthTokenLookupKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+export type WebAuthTokenLookup =
+  | { kind: WebAuthTokenLookupKind.Unavailable }
+  | { kind: WebAuthTokenLookupKind.Available; token: string };
+
+export function tokenDiagnostics(token: WebAuthTokenLookup): {
   present: boolean;
   length: number;
 } {
   return {
-    present: Boolean(token),
-    length: token?.length ?? 0,
+    present: token.kind === WebAuthTokenLookupKind.Available,
+    length:
+      token.kind === WebAuthTokenLookupKind.Available ? token.token.length : 0,
   };
 }
 
-export function sanitizedURLDiagnostics(url: string | undefined): {
+export function sanitizedURLDiagnostics(url: unknown): {
   present: boolean;
   origin?: string;
   pathname?: string;
 } {
-  if (!url) {
+  if (typeof url !== "string" || !url) {
     return { present: false };
   }
   try {
@@ -220,9 +246,9 @@ export function webAuthTokenStorageDiagnostics(): {
     }
   }
   const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`;
-  const expectedValue = sessionStorage.getItem(expectedKey) ?? undefined;
+  const expectedValue = sessionStorage.getItem(expectedKey)?.valueOf();
   return {
-    expectedKeyPresent: expectedValue !== undefined,
+    expectedKeyPresent: Boolean(expectedValue),
     storedKeyCount: storedKeys.length,
     storedKeys,
   };
@@ -242,7 +268,7 @@ export function iCloudConfigDiagnostics(): {
   };
 }
 
-function elementDiagnostics(element: Element | undefined): {
+function elementDiagnostics(lookup: CloudKitElementLookup): {
   present: boolean;
   tag?: string;
   id?: string;
@@ -251,21 +277,32 @@ function elementDiagnostics(element: Element | undefined): {
   childElementCount?: number;
   textLength?: number;
 } {
-  if (!element) {
+  if (lookup.kind === CloudKitElementLookupKind.Missing) {
     return { present: false };
   }
+  const { element } = lookup;
+  const role = element.getAttribute("role");
   return {
     present: true,
     tag: element.tagName,
-    id: element.id || undefined,
-    className:
-      typeof element.className === "string" && element.className
-        ? element.className
-        : undefined,
-    role: element.getAttribute("role") ?? undefined,
+    ...(element.id ? { id: element.id } : {}),
+    ...(typeof element.className === "string" && element.className
+      ? { className: element.className }
+      : {}),
+    ...(role ? { role } : {}),
     childElementCount: element.childElementCount,
     textLength: element.textContent?.trim().length ?? 0,
   };
+}
+
+function cloudKitElementById(id: string): CloudKitElementLookup {
+  if (!("document" in globalThis)) {
+    return { kind: CloudKitElementLookupKind.Missing };
+  }
+  const element = document.getElementById(id);
+  return element
+    ? { kind: CloudKitElementLookupKind.Found, element }
+    : { kind: CloudKitElementLookupKind.Missing };
 }
 
 export function cloudKitSignInControlDiagnostics(): {
@@ -273,18 +310,12 @@ export function cloudKitSignInControlDiagnostics(): {
   control: ReturnType<typeof elementDiagnostics>;
   signOutMount: ReturnType<typeof elementDiagnostics>;
 } {
-  const mount =
-    typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) ?? undefined);
-  const control =
-    mount?.querySelector<HTMLElement>(
-      'button, [role="button"], iframe, a, .apple-auth-button',
-    ) ?? undefined;
-  const signOutMount =
-    typeof document === "undefined"
-      ? undefined
-      : (document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID) ?? undefined);
+  const mount = cloudKitElementById(CLOUDKIT_SIGN_IN_BUTTON_ID);
+  const control: CloudKitElementLookup =
+    mount.kind === CloudKitElementLookupKind.Found
+      ? cloudKitSignInControl(mount.element)
+      : { kind: CloudKitElementLookupKind.Missing };
+  const signOutMount = cloudKitElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID);
   return {
     mount: elementDiagnostics(mount),
     control: elementDiagnostics(control),
@@ -292,11 +323,23 @@ export function cloudKitSignInControlDiagnostics(): {
   };
 }
 
-export function normalizeWebAuthToken(stored: unknown): string | undefined {
+function cloudKitSignInControl(mount: HTMLElement): CloudKitElementLookup {
+  const control = mount.querySelector<HTMLElement>(
+    'button, [role="button"], iframe, a, .apple-auth-button',
+  );
+  return control
+    ? { kind: CloudKitElementLookupKind.Found, element: control }
+    : { kind: CloudKitElementLookupKind.Missing };
+}
+
+export function normalizeWebAuthToken(stored: unknown): WebAuthTokenLookup {
   if (typeof stored === "string" && stored.trim()) {
-    return stored.trim();
+    return {
+      kind: WebAuthTokenLookupKind.Available,
+      token: stored.trim(),
+    };
   }
-  if (stored != undefined && typeof stored === "object") {
+  if (stored && typeof stored === "object") {
     const record = stored as Record<string, unknown>;
     for (const key of [
       "token",
@@ -307,25 +350,28 @@ export function normalizeWebAuthToken(stored: unknown): string | undefined {
     ]) {
       const candidate = record[key];
       if (typeof candidate === "string" && candidate.trim()) {
-        return candidate.trim();
+        return {
+          kind: WebAuthTokenLookupKind.Available,
+          token: candidate.trim(),
+        };
       }
     }
   }
-  return undefined;
+  return { kind: WebAuthTokenLookupKind.Unavailable };
 }
 
 export function storeCloudKitWebAuthToken(
   containerIdentifier: string,
   authToken: unknown,
-): string | undefined {
+): WebAuthTokenLookup {
   const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`;
-  if (authToken == undefined) {
+  if (!authToken) {
     sessionStorage.removeItem(key);
     log.info("CloudKit web auth token cleared", {
       container: containerIdentifier,
       expectedContainer: containerIdentifier === ICLOUD_CONTAINER_ID,
     });
-    return undefined;
+    return { kind: WebAuthTokenLookupKind.Unavailable };
   }
   sessionStorage.setItem(key, JSON.stringify(authToken));
   const token = normalizeWebAuthToken(authToken);
@@ -335,9 +381,12 @@ export function storeCloudKitWebAuthToken(
     tokenType: typeof authToken,
     normalized: tokenDiagnostics(token),
   });
-  if (containerIdentifier === ICLOUD_CONTAINER_ID && token) {
+  if (
+    containerIdentifier === ICLOUD_CONTAINER_ID &&
+    token.kind === WebAuthTokenLookupKind.Available
+  ) {
     for (const listener of webAuthTokenListeners) {
-      listener(token);
+      listener(token.token);
     }
   }
   return token;
@@ -348,7 +397,7 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
     log.debug("CloudKit putToken", {
       container: containerIdentifier,
       tokenType: typeof authToken,
-      hasValue: authToken != undefined,
+      hasValue: Boolean(authToken),
     });
     storeCloudKitWebAuthToken(containerIdentifier, authToken);
   },
@@ -357,12 +406,12 @@ export const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
       `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
     );
     if (!raw) {
-      return undefined;
+      return;
     }
     try {
       return JSON.parse(raw) as unknown;
     } catch {
-      return undefined;
+      return;
     }
   },
 };

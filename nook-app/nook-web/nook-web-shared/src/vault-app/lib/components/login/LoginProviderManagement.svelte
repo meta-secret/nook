@@ -14,17 +14,19 @@
     StorageProviderType,
   } from '$lib/auth-providers'
   import {
+    GITHUB_PROVIDER_TYPE,
     localizeProviderLabel,
     providerStorageDetail,
   } from '$lib/auth-providers'
   import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
+  import { LoginProviderManagementVariant } from './login-provider-management-state'
 
   let {
     vault,
     providers,
-    variant = 'manage',
+    variant = LoginProviderManagementVariant.Manage,
     isVerifying,
     isInitializing,
     open = $bindable(false),
@@ -36,7 +38,7 @@
   }: {
     vault: VaultState
     providers: StorageProvider[]
-    variant?: 'setup' | 'manage'
+    variant?: LoginProviderManagementVariant
     isVerifying: boolean
     isInitializing: boolean
     open?: boolean
@@ -50,7 +52,7 @@
     onBeginAddProvider?: () => void
   } = $props()
 
-  const isSetup = $derived(variant === 'setup')
+  const isSetup = $derived(variant === LoginProviderManagementVariant.Setup)
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
@@ -158,7 +160,7 @@
         >
           {#each providers as provider (provider.id)}
             <li class="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-              {#if provider.type === 'github'}
+              {#if provider.type === GITHUB_PROVIDER_TYPE}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               {:else}
                 <HardDrive

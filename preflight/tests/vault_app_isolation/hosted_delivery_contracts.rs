@@ -1,14 +1,16 @@
 use super::*;
+use anyhow::Context;
 
 #[test]
-fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() {
+fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
     let root = repository_root();
     assert_hosted_workflow_runtime_contract(&root);
-    assert_hosted_buildkit_cache_contract(&root);
+    assert_hosted_buildkit_cache_contract(&root)?;
     assert_docker_setup_contract(&root);
-    assert_pr_workflow_contract(&root);
-    assert_artifact_backed_e2e_contract(&root);
-    assert_release_and_main_delivery_contract(&root);
+    assert_pr_workflow_contract(&root)?;
+    assert_artifact_backed_e2e_contract(&root)?;
+    assert_release_and_main_delivery_contract(&root)?;
+    Ok(())
 }
 
 fn assert_hosted_workflow_runtime_contract(root: &Path) {
@@ -34,7 +36,7 @@ fn assert_hosted_workflow_runtime_contract(root: &Path) {
     }
 }
 
-fn assert_hosted_buildkit_cache_contract(root: &Path) {
+fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let bake = read(root, "nook-app/docker-bake.hcl");
     for required in [
         "GHA_CACHE_ENABLED",
@@ -118,8 +120,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) {
             && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
-    assert_main_producer_owned_cache_publish(root);
-    assert_main_split_pipeline(root);
+    assert_main_producer_owned_cache_publish(root)?;
+    assert_main_split_pipeline(root)?;
+    Ok(())
 }
 
 fn assert_rust_cache_export_hardening(bake: &str) {
@@ -138,32 +141,32 @@ fn assert_rust_cache_export_hardening(bake: &str) {
     );
 }
 
-fn assert_main_producer_owned_cache_publish(root: &Path) {
+fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
     let rust_verify = rust
         .find("task ci:pr:rust")
-        .expect("Main native verification");
+        .context("Main Rust job must verify")?;
     let rust_publish = rust
         .find("task ci:main:publish-native-cache")
-        .expect("Main native cache publish");
+        .context("Main Rust job must publish its cache")?;
     let wasm_verify = wasm
         .find("task ci:pr:wasm")
-        .expect("Main WASM verification");
+        .context("Main WASM job must verify")?;
     let wasm_node = wasm
         .find("task ci:wasm:node-test")
-        .expect("Main WASM Node verification");
+        .context("Main WASM job must run Node tests")?;
     let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")
-        .expect("Main WASM cache publish");
+        .context("Main WASM job must publish its cache")?;
     let web_verify = web
         .find("task ci:main:web:artifacts")
-        .expect("Main web verification");
+        .context("Main web job must build verified artifacts")?;
     let web_publish = web
         .find("task ci:main:publish-web-cache")
-        .expect("Main web cache publish");
+        .context("Main web job must publish its cache")?;
     assert!(
         rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -230,9 +233,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) {
             && !base_dockerfile.contains("cargo-chef:latest-rust-${RUST_VERSION}"),
         "Rust dependency stages must be self-contained on digest-pinned base images with an explicit reseed epoch"
     );
+    Ok(())
 }
 
-fn assert_main_split_pipeline(root: &Path) {
+fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
     assert!(
         main.contains("\n  rust:\n")
@@ -249,12 +253,13 @@ fn assert_main_split_pipeline(root: &Path) {
     let coverage_export = read(root, "nook-app/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")
         .nth(1)
-        .expect("coverage-export target")
+        .context("core bake file must define the coverage export target")?
         .to_owned();
     assert!(
         coverage_export.contains("cache-to   = rust_native_source_cache_to"),
         "coverage-export must retain the native-source GHA exporter for the Main native producer"
     );
+    Ok(())
 }
 
 fn assert_release_wasm_cache_contract(root: &Path) {
@@ -335,7 +340,7 @@ fn assert_docker_setup_contract(root: &Path) {
     );
 }
 
-fn assert_pr_workflow_contract(root: &Path) {
+fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let pr = read(root, ".github/workflows/pr.yml");
     for required in [
         "name: Native Rust verification",
@@ -544,7 +549,7 @@ fn assert_pr_workflow_contract(root: &Path) {
     );
     let extension_e2e_job = pr
         .split_once("  full-extension-e2e:\n")
-        .expect("PR CI must define the label-selected extension e2e job")
+        .context("PR workflow must define full extension E2E")?
         .1;
     assert!(
         extension_e2e_job.contains("needs: wasm")
@@ -574,6 +579,7 @@ fn assert_pr_workflow_contract(root: &Path) {
         "PR coverage reporting must consume structured JSON through the Rust preflight reporter"
     );
     assert_preflight_reporter_contract(root);
+    Ok(())
 }
 
 fn assert_preflight_reporter_contract(root: &Path) {
@@ -597,19 +603,18 @@ fn assert_preflight_reporter_contract(root: &Path) {
     );
 }
 
-fn assert_artifact_backed_e2e_contract(root: &Path) {
+fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     let pr = read(root, ".github/workflows/pr.yml");
     let ci_tasks = read(root, "nook-app/.task/ci.yml");
     let rust_host = section(&ci_tasks, "  _ci:pr:rust:host:\n", "  ci:pr:wasm:\n");
+    let preflight = rust_host
+        .find("task: preflight")
+        .context("native Rust CI must run preflight")?;
+    let rust_export = rust_host
+        .find("task: docker:ci:rust:export")
+        .context("native Rust CI must export its artifacts")?;
     assert!(
-        rust_host
-            .find("task: preflight")
-            .expect("native PR validation must run repository preflight")
-            < rust_host
-                .find("task: docker:ci:rust:export")
-                .expect("native PR validation must run the app solve")
-            && rust_host.contains("cmds:")
-            && !rust_host.contains("deps:"),
+        preflight < rust_export && rust_host.contains("cmds:") && !rust_host.contains("deps:"),
         "repository preflight must finish before the native app Docker solve begins"
     );
     let artifact_e2e = section(
@@ -655,13 +660,14 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
         "      - name: Wait for built WASM handoff\n",
         "      - name: Svelte checks, JS unit tests, lint, and preview build",
     );
+    let wasm_job_lookup = wasm_handoff
+        .find("wasm_job=\"$(")
+        .context("PR workflow must resolve the WASM producer job")?;
+    let artifact_lookup = wasm_handoff
+        .find("actions/runs/$GITHUB_RUN_ID/artifacts")
+        .context("PR workflow must resolve the WASM handoff artifact")?;
     assert!(
-        wasm_handoff
-            .find("wasm_job=\"$(")
-            .expect("PR verification must inspect the current WASM job")
-            < wasm_handoff
-                .find("actions/runs/$GITHUB_RUN_ID/artifacts")
-                .expect("PR verification must inspect the WASM handoff artifact")
+        wasm_job_lookup < artifact_lookup
             && wasm_handoff.contains("[ -z \"$wasm_job_id\" ]")
             && wasm_handoff.contains("nook-run-attempt")
             && wasm_handoff.contains("This failed-job rerun has no WASM producer"),
@@ -691,6 +697,7 @@ fn assert_artifact_backed_e2e_contract(root: &Path) {
         e2e_pr.contains("cache-write: \"false\""),
         "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
     );
+    Ok(())
 }
 
 pub(super) fn assert_main_web_e2e_core_contract(ci: &str) {
@@ -736,17 +743,17 @@ pub(super) fn assert_e2e_build_if_needed_contract(root: &Path) {
     );
 }
 
-fn assert_release_and_main_delivery_contract(root: &Path) {
+fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> {
     let release = read(root, ".github/workflows/release.yml");
     let release_source = release
         .find("- name: Checkout release source")
-        .expect("release must checkout its requested source");
+        .context("release workflow must check out release source")?;
     let release_tooling = release
         .find("- name: Checkout release workflow tooling")
-        .expect("release must preserve its workflow-ref tooling");
+        .context("release workflow must check out workflow tooling")?;
     let release_setup = release
         .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
-        .expect("release must use the safe workflow-ref Docker setup");
+        .context("release workflow must configure Docker through preserved tooling")?;
     assert!(
         release_source < release_tooling && release_tooling < release_setup,
         "release must fingerprint its requested source with preserved workflow-ref Docker tooling"
@@ -805,4 +812,5 @@ fn assert_release_and_main_delivery_contract(root: &Path) {
         cleanup.contains("--filter until=168h"),
         "runner cleanup must preserve the recent delivery cache"
     );
+    Ok(())
 }

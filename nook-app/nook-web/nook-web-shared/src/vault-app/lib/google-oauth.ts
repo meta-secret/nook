@@ -11,7 +11,11 @@
  *   collaborator can read the owner-created folder and immutable event files.
  */
 
-import type { OAuthFileConfig } from "$lib/auth-providers";
+import type {
+  OAuthFileConfig,
+  StoredOAuthFileConfiguration,
+} from "$lib/auth-providers";
+import { configuredOAuthFile } from "$lib/auth-providers";
 import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
 
@@ -22,12 +26,35 @@ export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
-export type GoogleDriveOAuthScope = "appdata" | "shared";
+export enum GoogleDriveOAuthScope {
+  AppData = "appdata",
+  Shared = "shared",
+}
+
+export enum GoogleOAuthPrompt {
+  /** @public Google Identity Services contract value. */
+  Default = "",
+  /** @public Google Identity Services contract value. */
+  None = "none",
+  /** @public Google Identity Services contract value. */
+  Consent = "consent",
+  /** @public Google Identity Services contract value. */
+  SelectAccount = "select_account",
+}
 
 export type GoogleOAuthTokens = {
   accessToken: string;
   expiresAt: string;
 };
+
+export enum GoogleAccountIdentityKind {
+  Unavailable = "unavailable",
+  Available = "available",
+}
+
+export type GoogleAccountIdentity =
+  | { kind: GoogleAccountIdentityKind.Unavailable }
+  | { kind: GoogleAccountIdentityKind.Available; label: string };
 
 type GoogleTokenResponse = {
   access_token: string;
@@ -56,14 +83,36 @@ declare global {
   }
 }
 
+enum TokenRequestKind {
+  Idle = "idle",
+  AwaitingResponse = "awaiting-response",
+}
+
+type TokenRequest =
+  | { kind: TokenRequestKind.Idle }
+  | {
+      kind: TokenRequestKind.AwaitingResponse;
+      resolve: (response: GoogleTokenResponse) => void;
+    };
+enum GoogleIdentityServicesKind {
+  NotLoaded = "not-loaded",
+  Loading = "loading",
+}
+
+type GoogleIdentityServices =
+  | { kind: GoogleIdentityServicesKind.NotLoaded }
+  | { kind: GoogleIdentityServicesKind.Loading; completion: Promise<void> };
+
 type TokenClientSlot = {
   scopeKey: string;
   client: TokenClient;
-  pendingResolve: ((response: GoogleTokenResponse) => void) | undefined;
+  request: TokenRequest;
 };
 
 const tokenClients = new Map<string, TokenClientSlot>();
-let gisReadyPromise: Promise<void> | undefined = undefined;
+let googleIdentityServices: GoogleIdentityServices = {
+  kind: GoogleIdentityServicesKind.NotLoaded,
+};
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
@@ -79,9 +128,9 @@ function googleClientId(): string {
 
 function scopeString(scope: GoogleDriveOAuthScope): string {
   switch (scope) {
-    case "shared":
+    case GoogleDriveOAuthScope.Shared:
       return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
-    case "appdata":
+    case GoogleDriveOAuthScope.AppData:
     default:
       return DRIVE_APPDATA_SCOPE;
   }
@@ -115,11 +164,15 @@ function loadGisScript(): Promise<void> {
 }
 
 async function ensureGisReady(): Promise<void> {
-  if (gisReadyPromise) {
-    return gisReadyPromise;
+  if (googleIdentityServices.kind === GoogleIdentityServicesKind.Loading) {
+    return googleIdentityServices.completion;
   }
-  gisReadyPromise = loadGisScript();
-  return gisReadyPromise;
+  const promise = loadGisScript();
+  googleIdentityServices = {
+    kind: GoogleIdentityServicesKind.Loading,
+    completion: promise,
+  };
+  return promise;
 }
 
 async function tokenClientForScope(
@@ -136,25 +189,29 @@ async function tokenClientForScope(
     scope: key,
     callback: (response) => {
       const current = tokenClients.get(key);
-      current?.pendingResolve?.(response);
-      if (current) {
-        current.pendingResolve = undefined;
+      if (current?.request.kind === TokenRequestKind.AwaitingResponse) {
+        current.request.resolve(response);
+        current.request = { kind: TokenRequestKind.Idle };
       }
     },
   });
-  const slot = { scopeKey: key, client, pendingResolve: undefined };
+  const slot: TokenClientSlot = {
+    scopeKey: key,
+    client,
+    request: { kind: TokenRequestKind.Idle },
+  };
   tokenClients.set(key, slot);
   return slot;
 }
 
 /** Private mode: initialize the default `drive.appdata` token client. */
 export async function initGoogleAuth(): Promise<void> {
-  await tokenClientForScope("appdata");
+  await tokenClientForScope(GoogleDriveOAuthScope.AppData);
 }
 
 /** Shared mode: initialize the per-file write + Drive read token client. */
 export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope("shared");
+  await tokenClientForScope(GoogleDriveOAuthScope.Shared);
 }
 
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
@@ -174,39 +231,44 @@ function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
 }
 
 export async function requestGoogleAccessToken(options?: {
-  prompt?: "" | "none" | "consent" | "select_account";
+  prompt?: GoogleOAuthPrompt;
   scope?: GoogleDriveOAuthScope;
 }): Promise<GoogleOAuthTokens> {
-  const scope = options?.scope ?? "appdata";
+  const scope = options?.scope ?? GoogleDriveOAuthScope.AppData;
   const slot = await tokenClientForScope(scope);
 
   return new Promise((resolve, reject) => {
-    slot.pendingResolve = (response) => {
-      try {
-        resolve(tokensFromResponse(response));
-      } catch (error) {
-        reject(error);
-      }
+    slot.request = {
+      kind: TokenRequestKind.AwaitingResponse,
+      resolve: (response) => {
+        try {
+          resolve(tokensFromResponse(response));
+        } catch (error) {
+          reject(error);
+        }
+      },
     };
-    slot.client.requestAccessToken(
-      options?.prompt !== undefined ? { prompt: options.prompt } : undefined,
-    );
+    if (options && "prompt" in options) {
+      slot.client.requestAccessToken({ prompt: options.prompt });
+      return;
+    }
+    slot.client.requestAccessToken();
   });
 }
 
 /** Request the scopes required for cross-account shared-folder replication. */
 export async function requestGoogleDriveSharedAccess(options?: {
-  prompt?: "" | "none" | "consent" | "select_account";
+  prompt?: GoogleOAuthPrompt;
 }): Promise<GoogleOAuthTokens> {
   return requestGoogleAccessToken({
-    prompt: options?.prompt ?? "consent",
-    scope: "shared",
+    prompt: options?.prompt ?? GoogleOAuthPrompt.Consent,
+    scope: GoogleDriveOAuthScope.Shared,
   });
 }
 
 export function oauthTokensToConfig(
   tokens: GoogleOAuthTokens,
-  existing?: OAuthFileConfig,
+  existing: StoredOAuthFileConfiguration,
 ): OAuthFileConfig {
   return googleOAuthTokensToConfigCore(
     tokens.accessToken,
@@ -219,8 +281,8 @@ export function isOAuthAccessTokenExpired(
   config: OAuthFileConfig,
   skewMs = 60_000,
 ): boolean {
-  if (!config.expiresAt) return false;
-  const expiresAt = Date.parse(config.expiresAt);
+  if (config.expiresAt.state === "unknown") return false;
+  const expiresAt = Date.parse(config.expiresAt.value);
   if (Number.isNaN(expiresAt)) return false;
   return Date.now() + skewMs >= expiresAt;
 }
@@ -232,15 +294,20 @@ export async function ensureValidOAuthFileConfig(
     return config;
   }
   const shared =
-    config.driveMode === "shared" || Boolean(config.folderId?.trim());
-  const scope: GoogleDriveOAuthScope = shared ? "shared" : "appdata";
-  const refreshed = await requestGoogleAccessToken({ prompt: "", scope });
-  return oauthTokensToConfig(refreshed, config);
+    config.driveMode === "shared" || config.folderId.state === "folderId";
+  const scope = shared
+    ? GoogleDriveOAuthScope.Shared
+    : GoogleDriveOAuthScope.AppData;
+  const refreshed = await requestGoogleAccessToken({
+    prompt: GoogleOAuthPrompt.Default,
+    scope,
+  });
+  return oauthTokensToConfig(refreshed, configuredOAuthFile(config));
 }
 
 export async function fetchGoogleAccountEmail(
   accessToken: string,
-): Promise<string | undefined> {
+): Promise<GoogleAccountIdentity> {
   const response = await fetch(
     "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
     {
@@ -248,10 +315,25 @@ export async function fetchGoogleAccountEmail(
     },
   );
   if (!response.ok) {
-    return undefined;
+    return { kind: GoogleAccountIdentityKind.Unavailable };
   }
-  const payload = (await response.json()) as {
-    user?: { emailAddress?: string; displayName?: string };
-  };
-  return payload.user?.emailAddress ?? payload.user?.displayName;
+  const payload: unknown = await response.json();
+  if (Object(payload) !== payload) {
+    return { kind: GoogleAccountIdentityKind.Unavailable };
+  }
+  const user: unknown = Reflect.get(payload as object, "user");
+  if (Object(user) !== user) {
+    return { kind: GoogleAccountIdentityKind.Unavailable };
+  }
+  const emailAddress: unknown = Reflect.get(user as object, "emailAddress");
+  if (typeof emailAddress === "string" && emailAddress.trim()) {
+    return {
+      kind: GoogleAccountIdentityKind.Available,
+      label: emailAddress,
+    };
+  }
+  const displayName: unknown = Reflect.get(user as object, "displayName");
+  return typeof displayName === "string" && displayName.trim()
+    ? { kind: GoogleAccountIdentityKind.Available, label: displayName }
+    : { kind: GoogleAccountIdentityKind.Unavailable };
 }

@@ -24,9 +24,7 @@ pub struct VaultEventSession {
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
-        let key_epoch = EventId::from_sha256_hex(crate::sha256_hex(store_id.as_bytes()).as_str())
-            .expect("store id hash is a valid SHA-256 digest")
-            .into_inner();
+        let key_epoch = nook_event_log::event_id_from_body_bytes(store_id.as_bytes()).into_inner();
         Self {
             store: LocalEventStore::new(),
             store_id,

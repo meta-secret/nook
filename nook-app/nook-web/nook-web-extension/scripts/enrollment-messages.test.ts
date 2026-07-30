@@ -119,6 +119,7 @@ describe('backup code candidate extraction', () => {
   test('does not treat 2fa inside emails as a backup-code page hint', () => {
     // happy-dom/document unavailable in bun unit tests — exercise the regex
     // through the same exported helper with a stubbed body when present.
+    const documentWasPresent = 'document' in globalThis
     const previous = globalThis.document
     const body = { innerText: 'Email: alice-2fa@nook.test\nPassword: secret' }
     Object.defineProperty(globalThis, 'document', {
@@ -132,7 +133,7 @@ describe('backup code candidate extraction', () => {
       body.innerText = 'Enable 2FA codes for your account'
       expect(pageHasBackupCodeHint()).toBe(true)
     } finally {
-      if (previous === undefined) {
+      if (!documentWasPresent) {
         Reflect.deleteProperty(globalThis, 'document')
       } else {
         Object.defineProperty(globalThis, 'document', {

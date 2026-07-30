@@ -17,15 +17,23 @@ export type WebsiteAuthenticatorOption = {
   account: string
 }
 
+export enum WebsiteLoginOptionsMessageType {
+  NookWebsiteLoginOptions = 'nook:website-login-options',
+}
+
 export type WebsiteLoginOptionsMessage = {
-  type: 'nook:website-login-options'
+  type: WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions
   payload: {
     origin: string
   }
 }
 
+export enum WebsiteLoginRevealMessageType {
+  NookWebsiteLoginFill = 'nook:website-login-fill',
+}
+
 export type WebsiteLoginRevealMessage = {
-  type: 'nook:website-login-fill'
+  type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill
   payload: {
     origin: string
     vaultStoreId: string
@@ -33,15 +41,23 @@ export type WebsiteLoginRevealMessage = {
   }
 }
 
+export enum WebsiteAuthenticatorOptionsMessageType {
+  NookWebsiteAuthenticatorOptions = 'nook:website-authenticator-options',
+}
+
 export type WebsiteAuthenticatorOptionsMessage = {
-  type: 'nook:website-authenticator-options'
+  type: WebsiteAuthenticatorOptionsMessageType.NookWebsiteAuthenticatorOptions
   payload: {
     origin: string
   }
 }
 
+export enum WebsiteAuthenticatorFillMessageType {
+  NookWebsiteAuthenticatorFill = 'nook:website-authenticator-fill',
+}
+
 export type WebsiteAuthenticatorFillMessage = {
-  type: 'nook:website-authenticator-fill'
+  type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill
   payload: {
     origin: string
     vaultStoreId: string
@@ -56,7 +72,7 @@ export function isWebsiteLoginOptionsMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:website-login-options' ||
+    message.type !== WebsiteLoginOptionsMessageType.NookWebsiteLoginOptions ||
     !('payload' in message) ||
     typeof message.payload !== 'object' ||
     !message.payload
@@ -95,7 +111,7 @@ export function isWebsiteLoginRevealMessage(
     !message ||
     typeof message !== 'object' ||
     !('type' in message) ||
-    message.type !== 'nook:website-login-fill' ||
+    message.type !== WebsiteLoginRevealMessageType.NookWebsiteLoginFill ||
     !('payload' in message) ||
     typeof message.payload !== 'object' ||
     !message.payload

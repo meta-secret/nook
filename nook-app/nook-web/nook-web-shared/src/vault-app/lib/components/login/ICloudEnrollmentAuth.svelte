@@ -14,7 +14,7 @@
     void prepareICloudSignInControl().catch((error: unknown) => {
       prepareError =
         error instanceof Error
-          ? error.message
+          ? vault.t(error.message)
           : vault.t("provider_setup.icloud_shared_sign_in_first");
     });
   });

@@ -21,7 +21,13 @@
   } from '$lib/auth-providers'
   import {
     DEFAULT_GITHUB_REPO,
+    GITHUB_PROVIDER_TYPE,
+    localFolderHandle,
+    LocalFolderHandleKind,
     localizeProviderLabel,
+    oauthAccessToken,
+    OAuthAccessTokenKind,
+    OAUTH_FILE_PROVIDER_TYPE,
     providerStorageDetail,
   } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
@@ -30,16 +36,27 @@
     providerSupportsReplication,
   } from '$lib/vault-architecture'
   import { formatProviderSyncStatus } from '$lib/provider-sync-status'
+  import {
+    LocalFolderDraftKind,
+    LoginSetupKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
+  import {
+    ManualProviderSyncKind,
+    type ManualProviderSync,
+  } from '$lib/vault/state/sync.svelte'
 
   let {
     vault,
     syncProviders,
-    syncingProviderId = undefined,
+    manualProviderSync,
     isVerifying,
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
@@ -52,12 +69,12 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | undefined
+    manualProviderSync: ManualProviderSync
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    setupType?: StorageProviderType | undefined
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     onReconnect: () => void | Promise<void>
@@ -92,15 +109,32 @@
     })
   }
 
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
   const addingProvider = $derived(addProviderOpen || showSetup)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const setupCanConnect = $derived(
-    setupType === 'local' ||
-      (setupType === 'local-folder' &&
-        Boolean(vault.localFolder?.handleId?.trim())) ||
-      (setupType === 'oauth-file' &&
-        Boolean(vault.oauthFile?.accessToken?.trim())) ||
-      (setupType === 'github' && Boolean(githubPat.trim())),
+    setupIs('local') ||
+      (setupIs('local-folder') &&
+        vault.localFolderDraft.kind === LocalFolderDraftKind.Configured &&
+        localFolderHandle(vault.localFolderDraft.config).kind ===
+          LocalFolderHandleKind.Selected) ||
+      (setupIs('oauth-file') &&
+        vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
+        oauthAccessToken(vault.oauthFileDraft.config).kind ===
+          OAuthAccessTokenKind.Available) ||
+      (setupIs('github') && Boolean(githubPat.trim())),
+  )
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
   )
 </script>
 
@@ -123,14 +157,13 @@
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
             {vault.t('auth_storage.connect_to_type', {
-              type:
-                setupType === 'github'
-                  ? vault.t('auth_storage.github')
-                  : setupType === 'oauth-file'
-                    ? vault.t('provider_picker.google_drive')
-                    : setupType === 'local-folder'
-                      ? vault.t('provider_picker.local_folder')
-                      : vault.t('auth_storage.this_device'),
+              type: setupIs('github')
+                ? vault.t('auth_storage.github')
+                : setupIs('oauth-file')
+                  ? vault.t('provider_picker.google_drive')
+                  : setupIs('local-folder')
+                    ? vault.t('provider_picker.local_folder')
+                    : vault.t('auth_storage.this_device'),
             })}
           {:else}
             {vault.t('settings.add_sync_provider')}
@@ -161,20 +194,18 @@
       class="space-y-4"
     >
       {#if showSetup}
-        {#if setupType === 'oauth-file'}
+        {#if setupIs('oauth-file')}
           <OAuthProviderSetupWizard
             {vault}
             bind:githubRepo
             idPrefix="settings"
-            preset={vault.oauthFile?.preset ??
-              vault.oauthSetupPreset ??
-              'google-drive'}
+            preset={oauthPreset}
             {isVerifying}
             {isInitializing}
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupType === 'github'}
+        {:else if setupIs('github')}
           <GitHubProviderSetupWizard
             {vault}
             bind:githubPat
@@ -185,7 +216,7 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else if setupType === 'local-folder'}
+        {:else if setupIs('local-folder')}
           <LocalFolderProviderSetupWizard
             {vault}
             idPrefix="settings"
@@ -249,7 +280,7 @@
                     class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
                     data-testid="settings-provider-{provider.type}"
                   >
-                    {#if provider.type === 'github' || provider.type === 'oauth-file'}
+                    {#if provider.type === GITHUB_PROVIDER_TYPE || provider.type === OAUTH_FILE_PROVIDER_TYPE}
                       <Cloud class="size-4 shrink-0 text-primary" />
                     {:else}
                       <HardDrive class="size-4 shrink-0 text-primary" />
@@ -285,21 +316,30 @@
                     </span>
                   </div>
                   {#if onSyncProvider}
+                    {@const providerSyncing =
+                      manualProviderSync.kind ===
+                        ManualProviderSyncKind.Running &&
+                      manualProviderSync.providerId === provider.id}
                     <button
+                      {...!supportsVaultReplication
+                        ? {
+                            title: vault.t(
+                              'provider_picker.unsupported_current_vault',
+                            ),
+                          }
+                        : {}}
                       type="button"
                       class="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
                       data-testid="sync-provider-{provider.id}"
                       disabled={isVerifying ||
                         isInitializing ||
                         !supportsVaultReplication ||
-                        syncingProviderId !== undefined}
-                      title={!supportsVaultReplication
-                        ? vault.t('provider_picker.unsupported_current_vault')
-                        : undefined}
-                      aria-busy={syncingProviderId === provider.id}
+                        manualProviderSync.kind ===
+                          ManualProviderSyncKind.Running}
+                      aria-busy={providerSyncing}
                       onclick={() => void onSyncProvider(provider.id)}
                     >
-                      {#if syncingProviderId === provider.id}
+                      {#if providerSyncing}
                         <RefreshCw class="size-3.5 animate-spin" />
                       {:else}
                         <RefreshCw class="size-3.5" />
@@ -338,7 +378,7 @@
         </fieldset>
       {/if}
 
-      {#if showSetup && setupType === 'local'}
+      {#if showSetup && setupIs('local')}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >

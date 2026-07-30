@@ -2,19 +2,26 @@
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { ExtensionI18n } from '../lib/i18n'
-  import type { LoginDetectionStatus } from '../lib/login-detection-messages'
+  import { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
     createExtensionPasskey,
     createExtensionPin,
+    DeviceMode,
+    DeviceProtectionStatus,
+    ExtensionSessionDeviceStateKind,
     recoverExtensionPasskey,
     unlockExtensionPasskey,
     unlockExtensionPin,
-    type ExtensionDeviceMode,
     type ExtensionDeviceProtectionResult,
-    type ExtensionDeviceProtectionStatus,
+    type ExtensionSessionDeviceState,
   } from '../lib/nook-wasm'
-
-  type PopupProtectionStatus = ExtensionDeviceProtectionStatus | 'pin-setup'
+  import {
+    PairingCandidateKind,
+    LoginDetectionViewKind,
+    type PairingCandidate,
+    type LoginDetectionView,
+  } from './popup-app-state'
+  import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
   let {
     i18n,
@@ -28,55 +35,82 @@
     isConnected: boolean
     vaultName?: string
     pairingRequested?: boolean
-    protectionStatus: ExtensionDeviceProtectionStatus
-    activeSessionDevice?: ExtensionDeviceProtectionResult
+    protectionStatus: DeviceProtectionStatus
+    activeSessionDevice: ExtensionSessionDeviceState
   } = $props()
 
-  function initialProtectionStatus(): PopupProtectionStatus {
+  function initialProtectionStatus(): DeviceProtectionStatus {
     return protectionStatus
   }
 
-  let status = $state<PopupProtectionStatus>(initialProtectionStatus())
+  let status = $state<DeviceProtectionStatus>(initialProtectionStatus())
   let busy = $state(false)
   let error = $state('')
   let passkeyLabel = $state('')
-  let deviceMode = $state<ExtensionDeviceMode>('standard')
-  let setupWorkflow = $state<'authenticate' | 'create'>('authenticate')
+  let deviceMode = $state<DeviceMode>(DeviceMode.Standard)
+  let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
   let pin = $state('')
   let pinConfirm = $state('')
-  let pendingDevice = $state<ExtensionDeviceProtectionResult | undefined>()
-  let loginDetectionStatus = $state<LoginDetectionStatus | 'loading'>('loading')
+  let pairingCandidate = $state<PairingCandidate>({
+    kind: PairingCandidateKind.NotSelected,
+  })
+  let loginDetectionView = $state<LoginDetectionView>({
+    kind: LoginDetectionViewKind.Loading,
+  })
 
-  const needsSetup = $derived(status === 'missing' || status === 'plaintext')
-  const showCompanionHome = $derived(status === 'unlocked')
+  const needsSetup = $derived(
+    status === DeviceProtectionStatus.Missing ||
+      status === DeviceProtectionStatus.Plaintext,
+  )
+  const showCompanionHome = $derived(status === DeviceProtectionStatus.Unlocked)
   const showExistingConnection = $derived(isConnected && !pairingRequested)
 
   const loginDetectionKey = $derived(
-    loginDetectionStatus === 'detected'
-      ? 'extension.companion.login_detected'
-      : loginDetectionStatus === 'not-detected'
-        ? 'extension.companion.login_not_detected'
-        : loginDetectionStatus === 'unavailable'
-          ? 'extension.companion.login_unavailable'
-          : 'extension.companion.login_checking',
+    loginDetectionView.kind === LoginDetectionViewKind.Loading
+      ? 'extension.companion.login_checking'
+      : loginDetectionView.status === LoginDetectionStatus.Detected
+        ? 'extension.companion.login_detected'
+        : loginDetectionView.status === LoginDetectionStatus.NotDetected
+          ? 'extension.companion.login_not_detected'
+          : loginDetectionView.status === LoginDetectionStatus.Unavailable
+            ? 'extension.companion.login_unavailable'
+            : 'extension.companion.login_checking',
   )
 
+  function isOkResponse(response: unknown): boolean {
+    return Boolean(
+      response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true,
+    )
+  }
+
   function refreshLoginDetection(): void {
-    loginDetectionStatus = 'loading'
+    loginDetectionView = { kind: LoginDetectionViewKind.Loading }
     chrome.runtime.sendMessage(
       { type: 'nook:query-active-tab-login-detection' },
-      (
-        response: { ok?: boolean; status?: LoginDetectionStatus } | undefined,
-      ) => {
+      (response: unknown) => {
         if (
           chrome.runtime.lastError ||
-          response?.ok !== true ||
-          !response.status
+          !isOkResponse(response) ||
+          !response ||
+          typeof response !== 'object' ||
+          !('status' in response) ||
+          (response.status !== LoginDetectionStatus.Detected &&
+            response.status !== LoginDetectionStatus.NotDetected &&
+            response.status !== LoginDetectionStatus.Unavailable)
         ) {
-          loginDetectionStatus = 'unavailable'
+          loginDetectionView = {
+            kind: LoginDetectionViewKind.Ready,
+            status: LoginDetectionStatus.Unavailable,
+          }
           return
         }
-        loginDetectionStatus = response.status
+        loginDetectionView = {
+          kind: LoginDetectionViewKind.Ready,
+          status: response.status as LoginDetectionStatus,
+        }
       },
     )
   }
@@ -104,8 +138,8 @@
     error = ''
     chrome.runtime.sendMessage(
       { type: 'nook:open-simple-vault' },
-      (response: { ok?: boolean } | undefined) => {
-        if (chrome.runtime.lastError || response?.ok !== true) {
+      (response: unknown) => {
+        if (chrome.runtime.lastError || !isOkResponse(response)) {
           error = i18n.t('extension.connect.start_failed')
           return
         }
@@ -125,9 +159,9 @@
           deviceLabel: i18n.t('extension.setup.profile_title'),
         },
       },
-      (response: { ok?: boolean } | undefined) => {
+      (response: unknown) => {
         busy = false
-        if (chrome.runtime.lastError || response?.ok !== true) {
+        if (chrome.runtime.lastError || !isOkResponse(response)) {
           error = i18n.t('extension.connect.start_failed')
           return
         }
@@ -141,15 +175,16 @@
   }
 
   function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
-    pendingDevice = device
-    status = 'unlocked'
+    pairingCandidate = { kind: PairingCandidateKind.Selected, device }
+    status = DeviceProtectionStatus.Unlocked
     busy = false
     error = ''
   }
 
   $effect(() => {
-    if (!activeSessionDevice) return
-    enterCompanionHome(activeSessionDevice)
+    if (activeSessionDevice.kind !== ExtensionSessionDeviceStateKind.Active)
+      return
+    enterCompanionHome(activeSessionDevice.device)
   })
 
   async function runDeviceAction(
@@ -167,7 +202,7 @@
         (caught.message.includes('PASSKEY_UNAVAILABLE') ||
           caught.message.includes('PASSKEY_PRF_UNAVAILABLE'))
       ) {
-        status = 'pin-setup'
+        status = DeviceProtectionStatus.PinSetup
         error = i18n.t(
           caught.message.includes('PASSKEY_UNAVAILABLE')
             ? 'device_protection.passkey_unavailable_pin_fallback_ready'
@@ -247,7 +282,9 @@
     <p
       class="login-detection"
       data-testid="companion-login-detection"
-      data-status={loginDetectionStatus}
+      data-status={loginDetectionView.kind === LoginDetectionViewKind.Ready
+        ? loginDetectionView.status
+        : LoginDetectionViewKind.Loading}
     >
       {i18n.t(loginDetectionKey)}
     </p>
@@ -260,13 +297,14 @@
       >
         {i18n.t('extension.companion.stay_ready')}
       </button>
-    {:else if pendingDevice}
+    {:else if pairingCandidate.kind === PairingCandidateKind.Selected}
       <button
         type="button"
         disabled={busy}
         data-testid="connect-simple-vault-btn"
         onclick={() => {
-          if (pendingDevice) beginPairing(pendingDevice)
+          if (pairingCandidate.kind === PairingCandidateKind.Selected)
+            beginPairing(pairingCandidate.device)
         }}
       >
         {busy
@@ -303,7 +341,7 @@
   <main class="device-setup" data-testid="extension-device-setup">
     <p class="step-label">{i18n.t('device_protection.step_label')}</p>
     <div class="shield-icon" aria-hidden="true">
-      {#if needsSetup || status === 'pin-setup'}
+      {#if needsSetup || status === DeviceProtectionStatus.PinSetup}
         <ShieldCheck size={26} />
       {:else}
         <KeyRound size={25} />
@@ -312,17 +350,18 @@
     <h1>{i18n.t('device_protection.title')}</h1>
     <p class="description">
       {i18n.t(
-        status === 'passkey' || status === 'unlocked'
+        status === DeviceProtectionStatus.Passkey ||
+          status === DeviceProtectionStatus.Unlocked
           ? 'device_protection.unlock_description'
-          : status === 'pin'
+          : status === DeviceProtectionStatus.Pin
             ? 'device_protection.pin_unlock_description'
-            : status === 'pin-setup'
+            : status === DeviceProtectionStatus.PinSetup
               ? 'device_protection.pin_setup_description'
               : 'device_protection.setup_description',
       )}
     </p>
 
-    {#if status === 'pin-setup'}
+    {#if status === DeviceProtectionStatus.PinSetup}
       <div class="field-group">
         <label for="device-protection-pin">
           {i18n.t('device_protection.pin_label')}
@@ -364,7 +403,7 @@
           ? i18n.t('device_protection.authorizing')
           : i18n.t('device_protection.pin_setup_action')}
       </button>
-    {:else if needsSetup && setupWorkflow === 'authenticate'}
+    {:else if needsSetup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
       <p class="field-hint">
         {i18n.t('device_protection.existing_passkey_hint')}
       </p>
@@ -390,7 +429,7 @@
         disabled={busy}
         data-testid="device-protection-create-new-choice"
         onclick={() => {
-          setupWorkflow = 'create'
+          setupWorkflow = DeviceProtectionSetupWorkflow.Create
           error = ''
         }}
       >
@@ -408,16 +447,16 @@
           disabled={busy}
           data-testid="device-mode-select"
         >
-          <option value="standard">
+          <option value={DeviceMode.Standard}>
             {i18n.t('device_protection.mode_standard_title')}
           </option>
-          <option value="anti-hacker">
+          <option value={DeviceMode.AntiHacker}>
             {i18n.t('device_protection.mode_anti_hacker_title')}
           </option>
         </select>
         <p class="field-hint">
           {i18n.t(
-            deviceMode === 'standard'
+            deviceMode === DeviceMode.Standard
               ? 'device_protection.mode_standard_description'
               : 'device_protection.mode_anti_hacker_description',
           )}
@@ -465,7 +504,7 @@
         <KeyRound size={17} />
         {i18n.t('device_protection.existing_passkey_action')}
       </button>
-    {:else if status === 'pin'}
+    {:else if status === DeviceProtectionStatus.Pin}
       <div class="field-group">
         <label for="device-protection-pin">
           {i18n.t('device_protection.pin_label')}

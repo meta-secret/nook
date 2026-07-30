@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 const {
+  BaseCoverageArtifactKind,
   coverageArtifactName,
   findBaseCoverageArtifact,
 } = require('./base-coverage-artifact.cjs')
@@ -39,7 +40,6 @@ function mainRun(overrides = {}) {
     head_sha: BASE_SHA,
     event: 'push',
     status: 'in_progress',
-    conclusion: undefined,
     ...overrides,
   }
 }
@@ -74,7 +74,10 @@ test('uses an artifact as soon as the Main Rust job publishes it', async () => {
       baseSha: BASE_SHA,
       defaultBranch: 'main',
     }),
-    { artifactId: 99, runId: 41 },
+    {
+      kind: BaseCoverageArtifactKind.Found,
+      artifact: { artifactId: 99, runId: 41 },
+    },
   )
   assert.equal(calls[0].options.name, name)
 })
@@ -107,7 +110,10 @@ test('uses a valid Rust artifact even if a later Main job failed', async () => {
       baseSha: BASE_SHA,
       defaultBranch: 'main',
     }),
-    { artifactId: 100, runId: 42 },
+    {
+      kind: BaseCoverageArtifactKind.Found,
+      artifact: { artifactId: 100, runId: 42 },
+    },
   )
 })
 
@@ -139,14 +145,12 @@ test('rejects expired and untrusted workflow artifacts', async () => {
     },
   })
 
-  assert.equal(
-    await findBaseCoverageArtifact({
-      github,
-      owner: 'meta-secret',
-      repo: 'nook',
-      baseSha: BASE_SHA,
-      defaultBranch: 'main',
-    }),
-    undefined,
-  )
+  const artifact = await findBaseCoverageArtifact({
+    github,
+    owner: 'meta-secret',
+    repo: 'nook',
+    baseSha: BASE_SHA,
+    defaultBranch: 'main',
+  })
+  assert.deepEqual(artifact, { kind: BaseCoverageArtifactKind.Unavailable })
 })

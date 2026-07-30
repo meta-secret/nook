@@ -1,8 +1,9 @@
-export type SessionOperationPriority =
-  | 'expiry'
-  | 'interactive'
-  | 'normal'
-  | 'probe'
+export enum SessionOperationPriority {
+  Expiry = 'expiry',
+  Interactive = 'interactive',
+  Normal = 'normal',
+  Probe = 'probe',
+}
 
 type QueueOptions = {
   priority?: SessionOperationPriority
@@ -23,23 +24,32 @@ type QueueEntry<T> = {
 }
 
 const priorityOrder: Record<SessionOperationPriority, number> = {
-  expiry: 0,
-  interactive: 1,
-  normal: 2,
-  probe: 3,
+  [SessionOperationPriority.Expiry]: 0,
+  [SessionOperationPriority.Interactive]: 1,
+  [SessionOperationPriority.Normal]: 2,
+  [SessionOperationPriority.Probe]: 3,
 }
 
 const expiredError = () => new Error('EXTENSION_SESSION_REQUEST_EXPIRED')
+
+enum QueueStateKind {
+  Open = 'open',
+  Closed = 'closed',
+}
+
+type QueueState =
+  | { kind: QueueStateKind.Open }
+  | { kind: QueueStateKind.Closed; error: Error }
 
 export class SessionOperationQueue {
   private entries: QueueEntry<unknown>[] = []
   private sequence = 0
   private running = false
-  private closedError: Error | undefined
+  private state: QueueState = { kind: QueueStateKind.Open }
 
   close(error = new Error('Extension session queue closed.')): void {
-    if (this.closedError) return
-    this.closedError = error
+    if (this.state.kind === QueueStateKind.Closed) return
+    this.state = { kind: QueueStateKind.Closed, error }
     const pending = this.entries
     this.entries = []
     for (const entry of pending) {
@@ -56,14 +66,15 @@ export class SessionOperationQueue {
     options: QueueOptions = {},
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (this.closedError) {
+      if (this.state.kind === QueueStateKind.Closed) {
         options.onExpire?.()
-        reject(this.closedError)
+        reject(this.state.error)
         return
       }
       const entry: QueueEntry<T> = {
         sequence: this.sequence++,
-        priority: priorityOrder[options.priority ?? 'normal'],
+        priority:
+          priorityOrder[options.priority ?? SessionOperationPriority.Normal],
         operation,
         resolve,
         reject,
@@ -71,7 +82,7 @@ export class SessionOperationQueue {
         onExpire: options.onExpire,
         settled: false,
       }
-      if (entry.expiresAt !== undefined) {
+      if (typeof entry.expiresAt === 'number') {
         const remaining = entry.expiresAt - Date.now()
         if (remaining <= 0) {
           entry.settled = true
@@ -103,7 +114,10 @@ export class SessionOperationQueue {
       let entry = this.entries.shift()
       while (entry) {
         if (!entry.settled) {
-          if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+          if (
+            typeof entry.expiresAt === 'number' &&
+            entry.expiresAt <= Date.now()
+          ) {
             entry.settled = true
             if (entry.expiryTimer) clearTimeout(entry.expiryTimer)
             entry.onExpire?.()

@@ -6,6 +6,12 @@
   import type { NookImportResult } from "$lib/nook";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
+  import {
+    AuthenticatorImportOutcomeKind,
+    ScannerLifecycleKind,
+    type AuthenticatorImportOutcome,
+    type ScannerLifecycle,
+  } from "./google-authenticator-import-state";
 
   let {
     vault,
@@ -20,14 +26,14 @@
   } = $props();
 
   let videoElement: HTMLVideoElement;
-  let scanner: QrScanner | undefined;
+  let scannerState: ScannerLifecycle = { kind: ScannerLifecycleKind.NotCreated };
   let scanning = $state(false);
   let migrationUris = $state<string[]>([]);
-  let result = $state<NookImportResult>();
+  let result = $state<AuthenticatorImportOutcome>({ kind: AuthenticatorImportOutcomeKind.NotRun });
   let error = $state("");
 
   function stopCamera() {
-    scanner?.stop();
+    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.stop();
     scanning = false;
   }
 
@@ -43,7 +49,7 @@
       return;
     }
     migrationUris = [...migrationUris, uri];
-    result = undefined;
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     error = "";
     stopCamera();
   }
@@ -54,20 +60,25 @@
       return;
     }
     error = "";
-    result = undefined;
-    scanner ??= new QrScanner(
-      videoElement,
-      (scanResult) => addMigrationUri(scanResult.data),
-      {
-        preferredCamera: "environment",
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-        returnDetailedScanResult: true,
-      },
-    );
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
+    if (scannerState.kind === ScannerLifecycleKind.NotCreated) {
+      scannerState = {
+        kind: ScannerLifecycleKind.Created,
+        scanner: new QrScanner(
+          videoElement,
+          (scanResult) => addMigrationUri(scanResult.data),
+          {
+            preferredCamera: "environment",
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+            returnDetailedScanResult: true,
+          },
+        ),
+      };
+    }
     scanning = true;
     try {
-      await scanner.start();
+      await scannerState.scanner.start();
     } catch {
       scanning = false;
       error = vault.t("google_authenticator_import.camera_failed");
@@ -80,7 +91,7 @@
     input.value = "";
     if (!file) return;
     error = "";
-    result = undefined;
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
       const scanResult = await QrScanner.scanImage(file, {
         returnDetailedScanResult: true,
@@ -93,7 +104,7 @@
 
   function clearScans() {
     migrationUris = [];
-    result = undefined;
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     error = "";
     stopCamera();
   }
@@ -101,9 +112,9 @@
   async function importScans() {
     if (migrationUris.length === 0 || isSaving) return;
     error = "";
-    result = undefined;
+    result = { kind: AuthenticatorImportOutcomeKind.NotRun };
     try {
-      result = await onImport(migrationUris);
+      result = { kind: AuthenticatorImportOutcomeKind.Completed, result: await onImport(migrationUris) };
       migrationUris = [];
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : String(cause);
@@ -111,7 +122,8 @@
   }
 
   onDestroy(() => {
-    scanner?.destroy();
+    if (scannerState.kind === ScannerLifecycleKind.Created) scannerState.scanner.destroy();
+    scannerState = { kind: ScannerLifecycleKind.NotCreated };
     migrationUris = [];
   });
 </script>
@@ -232,20 +244,20 @@
         </p>
       {/if}
 
-      {#if result}
+      {#if result.kind === AuthenticatorImportOutcomeKind.Completed}
         <div
           class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-foreground"
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
             {vault.t("google_authenticator_import.result_imported", {
-              count: String(result.imported),
+              count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
             {vault.t("google_authenticator_import.result_skipped", {
-              unsupported: String(result.skippedUnsupported),
-              duplicates: String(result.skippedDuplicates),
+              unsupported: String(result.result.skippedUnsupported),
+              duplicates: String(result.result.skippedDuplicates),
             })}
           </p>
         </div>

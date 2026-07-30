@@ -19,6 +19,8 @@
   import { Button } from '$lib/components/ui/button'
   import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
+    GITHUB_PROVIDER_TYPE,
+    isICloudProvider,
     localizeProviderLabel,
     providerStorageDetail,
     type OAuthFilePreset,
@@ -32,15 +34,36 @@
     type PasswordEntryId,
   } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
-  import { VaultType } from '$lib/vault-architecture'
-  import { takeWasmStringValue } from '$lib/wasm-string-value'
   import {
+    AdminAccordionSection,
+    SettingsAccordionSection,
+    SettingsSection,
+  } from '$lib/vault/state/ui.svelte'
+  import {
+    LoginSetupKind,
+    OAuthFileDraftKind,
+    OAuthSetupPresetKind,
+    type LoginSetup,
+  } from '$lib/vault/state/provider.svelte'
+  import { OnboardingType, VaultType } from '$lib/vault-architecture'
+  import {
+    CompatibleProviderSelectionKind,
     firstCompatibleProvider,
     onboardingType,
     providerCapabilityLabelKey,
     providerOnboardingType,
     providerSupportsReplication,
   } from '$lib/vault-architecture'
+  import {
+    PasswordEntrySelectionKind,
+    ProviderSelectionKind,
+    ResolvedOnboardingPasswordKind,
+    ResolvedOnboardingProviderKind,
+    type PasswordEntrySelection,
+    type ProviderSelection,
+    type ResolvedOnboardingPassword,
+    type ResolvedOnboardingProvider,
+  } from './onboard-device-state'
 
   let {
     vault,
@@ -52,7 +75,7 @@
     isVerifying,
     isInitializing,
     addProviderOpen = false,
-    setupType = $bindable(undefined as StorageProviderType | undefined),
+    loginSetup,
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     onIssueCode,
@@ -73,14 +96,14 @@
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | undefined
+    loginSetup: LoginSetup
     githubPat: string
     githubRepo: string
     onIssueCode: (
       entryId: PasswordEntryId,
       password: string,
       providerId: string,
-    ) => Promise<string | void>
+    ) => Promise<string>
     onClearCode: () => void
     onAddPassword: (label: string, password: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -106,8 +129,21 @@
   const hasCompatibleSyncProviders = $derived(
     compatibleSyncProviders.length > 0,
   )
-  const showSetup = $derived(setupType !== undefined)
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  function setupIs(type: StorageProviderType): boolean {
+    return (
+      loginSetup.kind === LoginSetupKind.Active &&
+      loginSetup.providerType === type
+    )
+  }
   const addingProvider = $derived(addProviderOpen || showSetup)
+  const oauthPreset = $derived(
+    vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
+      ? vault.oauthFileDraft.config.preset
+      : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
+        ? vault.oauthSetupSelection.preset
+        : 'google-drive',
+  )
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
   )
@@ -118,8 +154,12 @@
     vault.vaultArchitecture.sentinel_required_participants ?? 0,
   )
 
-  let providerId = $state<string>()
-  let passwordEntryId = $state<PasswordEntryId>()
+  let selectedProviderIdState = $state<ProviderSelection>({
+    kind: ProviderSelectionKind.Automatic,
+  })
+  let passwordEntry = $state<PasswordEntrySelection>({
+    kind: PasswordEntrySelectionKind.NotSelected,
+  })
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
@@ -134,44 +174,64 @@
   let generateStepOpen = $state(false)
 
   const effectiveProviderId = $derived.by(() => {
-    return (
-      firstCompatibleProvider(
-        syncProviders,
-        vault.vaultArchitecture.replication_type,
-        providerId,
-      )?.id ?? ''
+    const selection = firstCompatibleProvider(
+      syncProviders,
+      vault.vaultArchitecture.replication_type,
+      selectedProviderIdState,
     )
+    return selection.kind === CompatibleProviderSelectionKind.Selected
+      ? selection.provider.id
+      : ''
   })
   const effectivePasswordEntryId = $derived.by(() => {
-    if (
-      passwordEntryId !== undefined &&
-      passwordEntries.some((entry) => entry.id === passwordEntryId)
-    ) {
-      return passwordEntryId
+    if (passwordEntry.kind === PasswordEntrySelectionKind.Selected) {
+      const selectedEntryId = passwordEntry.entryId
+      if (passwordEntries.some((entry) => entry.id === selectedEntryId)) {
+        return selectedEntryId
+      }
     }
     return ''
   })
-  const selectedProvider = $derived(
-    syncProviders.find((provider) => provider.id === effectiveProviderId) ??
-      undefined,
-  )
+  const selectedProvider = $derived.by((): ResolvedOnboardingProvider => {
+    const provider = syncProviders.find(
+      (candidate) => candidate.id === effectiveProviderId,
+    )
+    return provider
+      ? { kind: ResolvedOnboardingProviderKind.Available, provider }
+      : { kind: ResolvedOnboardingProviderKind.Unavailable }
+  })
   const derivedOnboardingType = $derived(
-    selectedProvider
-      ? providerOnboardingType(selectedProvider, vault.vaultArchitecture)
+    selectedProvider.kind === ResolvedOnboardingProviderKind.Available
+      ? providerOnboardingType(
+          selectedProvider.provider,
+          vault.vaultArchitecture,
+        )
       : onboardingType(vault.vaultArchitecture),
   )
   const usesSharedProviderGrant = $derived(
-    derivedOnboardingType === 'shared-provider-grant',
+    derivedOnboardingType === OnboardingType.SharedProviderGrant,
+  )
+  const onboardingTypeTranslationSegment = $derived(
+    derivedOnboardingType === OnboardingType.SharedProviderGrant
+      ? 'shared-provider-grant'
+      : 'personal-credential-transfer',
   )
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
-      selectedProvider?.oauthFile?.preset !== 'icloud',
+      selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
+      !isICloudProvider(selectedProvider.provider),
   )
-  const selectedPassword = $derived(
-    passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
-      undefined,
+  const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
+    const entry = passwordEntries.find(
+      (candidate) => candidate.id === effectivePasswordEntryId,
+    )
+    return entry
+      ? { kind: ResolvedOnboardingPasswordKind.Available, entry }
+      : { kind: ResolvedOnboardingPasswordKind.Unavailable }
+  })
+  const hasPasswordSelection = $derived(
+    selectedPassword.kind === ResolvedOnboardingPasswordKind.Available,
   )
-  const hasPasswordSelection = $derived(selectedPassword !== undefined)
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
   )
@@ -180,16 +240,16 @@
   )
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    return takeWasmStringValue(peekEnrollmentIssuedAt(enrollmentCode)) ?? ''
+    return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,
   )
 
   const passwordStepSubtitle = $derived(
-    selectedPassword
+    selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
       ? vault.t('onboard_device.wizard_password_selected', {
-          label: selectedPassword.label,
+          label: selectedPassword.entry.label,
         })
       : hasPasswords
         ? passwordEntries.length === 1
@@ -282,11 +342,11 @@
   async function submitOnboard() {
     localError = ''
     onClearCode()
-    if (!selectedProvider) {
+    if (selectedProvider.kind === ResolvedOnboardingProviderKind.Unavailable) {
       localError = vault.t('onboard_device.choose_sync_provider_err')
       return
     }
-    if (!selectedPassword) {
+    if (selectedPassword.kind === ResolvedOnboardingPasswordKind.Unavailable) {
       localError = vault.t('onboard_device.choose_pw_err')
       return
     }
@@ -300,7 +360,11 @@
     }
     isGenerating = true
     try {
-      await onIssueCode(selectedPassword.id, passwordInput, selectedProvider.id)
+      await onIssueCode(
+        selectedPassword.entry.id,
+        passwordInput,
+        selectedProvider.provider.id,
+      )
       passwordInput = ''
     } catch (e: unknown) {
       localError =
@@ -401,7 +465,7 @@
           variant="outline"
           size="sm"
           data-testid="sentinel-manage-providers"
-          onclick={() => vault.openAdmin('storage')}
+          onclick={() => vault.openAdmin(AdminAccordionSection.Storage)}
         >
           <Cloud class="size-4" />
           {vault.t('onboard_device.sentinel_manage_providers')}
@@ -410,7 +474,11 @@
           type="button"
           size="sm"
           data-testid="sentinel-review-joins"
-          onclick={() => vault.openSettings('storage', 'devices')}
+          onclick={() =>
+            vault.openSettings(
+              SettingsSection.Storage,
+              SettingsAccordionSection.Devices,
+            )}
         >
           <ShieldCheck class="size-4" />
           {vault.t('onboard_device.sentinel_review_joins')}
@@ -450,7 +518,10 @@
                   data-testid="onboard-password-entry-{entry.id}"
                   disabled={isBusy || isGenerating}
                   onclick={() => {
-                    passwordEntryId = entry.id
+                    passwordEntry = {
+                      kind: PasswordEntrySelectionKind.Selected,
+                      entryId: entry.id,
+                    }
                     passwordInput = ''
                   }}
                 >
@@ -599,20 +670,18 @@
             </button>
 
             {#if showSetup}
-              {#if setupType === 'oauth-file'}
+              {#if setupIs('oauth-file')}
                 <OAuthProviderSetupWizard
                   {vault}
                   bind:githubRepo
                   idPrefix="onboard"
-                  preset={vault.oauthFile?.preset ??
-                    vault.oauthSetupPreset ??
-                    'google-drive'}
+                  preset={oauthPreset}
                   {isVerifying}
                   {isInitializing}
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupType === 'github'}
+              {:else if setupIs('github')}
                 <GitHubProviderSetupWizard
                   {vault}
                   bind:githubPat
@@ -623,7 +692,7 @@
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupType === 'local-folder'}
+              {:else if setupIs('local-folder')}
                 <LocalFolderProviderSetupWizard
                   {vault}
                   idPrefix="onboard"
@@ -676,7 +745,12 @@
                 data-testid="onboard-provider-{provider.id}"
                 disabled={isBusy || isGenerating || !compatible}
                 onclick={() => {
-                  if (compatible) providerId = provider.id
+                  if (compatible) {
+                    selectedProviderIdState = {
+                      kind: ProviderSelectionKind.Selected,
+                      providerId: provider.id,
+                    }
+                  }
                 }}
               >
                 <span
@@ -689,7 +763,7 @@
                     <span class="size-2 rounded-full bg-primary"></span>
                   {/if}
                 </span>
-                {#if provider.type === 'github'}
+                {#if provider.type === GITHUB_PROVIDER_TYPE}
                   <Cloud class="size-4 shrink-0 opacity-80" />
                 {:else}
                   <HardDrive class="size-4 shrink-0 opacity-80" />
@@ -763,7 +837,7 @@
             void submitOnboard()
           }}
         >
-          {#if selectedPassword}
+          {#if selectedPassword.kind === ResolvedOnboardingPasswordKind.Available}
             <div
               class="rounded-lg border border-border bg-muted/20 px-3 py-2.5"
               data-testid="onboard-password-selected-summary"
@@ -772,7 +846,7 @@
                 {vault.t('onboard_device.vault_password')}
               </p>
               <p class="truncate text-sm font-medium text-foreground">
-                {selectedPassword.label}
+                {selectedPassword.entry.label}
               </p>
             </div>
           {/if}
@@ -782,9 +856,10 @@
               for="onboard-password"
               class="text-xs font-medium text-foreground"
             >
-              {selectedPassword
+              {selectedPassword.kind ===
+              ResolvedOnboardingPasswordKind.Available
                 ? vault.t('vault_passwords.password_for', {
-                    label: selectedPassword.label,
+                    label: selectedPassword.entry.label,
                   })
                 : vault.t('vault_passwords.confirm_password')}
             </label>
@@ -808,7 +883,7 @@
               data-testid="onboarding-type-label"
             >
               {vault.t(
-                `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
+                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_title`,
               )}
             </p>
             <p
@@ -816,7 +891,7 @@
               data-testid="onboarding-type-description"
             >
               {vault.t(
-                `architecture_modes.onboarding_type_${derivedOnboardingType}_description`,
+                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_description`,
               )}
             </p>
           </div>

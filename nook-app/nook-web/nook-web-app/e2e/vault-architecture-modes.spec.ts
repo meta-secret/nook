@@ -1,5 +1,6 @@
+import { ReplicationType } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { expect, test, type Page } from './fixtures'
-import { generateKeyPairSync, sign } from 'node:crypto'
+import { generateKeyPairSync, webcrypto } from 'node:crypto'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
@@ -17,7 +18,7 @@ import {
   readPersistedAppLogs,
   revealSecretValue,
   seedGithubSyncProvidersWhileUnlocked,
-  seedExtraOauthFileProviders,
+  seedUnscopedOauthFileProvidersForEnrollment,
   seedOauthFileSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
@@ -30,7 +31,7 @@ const SHARED_JOINER_IDENTITY = 'joiner@example.com'
 const SHARED_SECRET_VALUE = 'architecture-shared-secret-value'
 const SHARED_JOINER_TOKEN = 'ya29.architecture-shared-joiner-token'
 
-function signedSentinelInvitation(): string {
+async function signedSentinelInvitation(): Promise<string> {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519')
   const signingPublicKey = publicKey
     .export({ format: 'der', type: 'spki' })
@@ -43,18 +44,24 @@ function signedSentinelInvitation(): string {
     initiatorDeviceId: '0123456789abcdef',
     initiatorSigningPublicKey: signingPublicKey,
   }
-  const signature = sign(
-    undefined,
-    Buffer.from(
-      JSON.stringify([
-        request.version,
-        request.sessionId,
-        request.policy,
-        request.initiatorDeviceId,
-        request.initiatorSigningPublicKey,
-      ]),
-    ),
-    privateKey,
+  const signingKey = await webcrypto.subtle.importKey(
+    'pkcs8',
+    privateKey.export({ format: 'der', type: 'pkcs8' }),
+    { name: 'Ed25519' },
+    false,
+    ['sign'],
+  )
+  const signaturePayload = Buffer.from(
+    JSON.stringify([
+      request.version,
+      request.sessionId,
+      request.policy,
+      request.initiatorDeviceId,
+      request.initiatorSigningPublicKey,
+    ]),
+  )
+  const signature = Buffer.from(
+    await webcrypto.subtle.sign('Ed25519', signingKey, signaturePayload),
   ).toString('hex')
   return JSON.stringify({ ...request, signature })
 }
@@ -92,7 +99,7 @@ async function chooseFirstOnboardPassword(page: Page) {
 async function assertAppLogsDoNotLeak(page: Page, sensitiveValues: string[]) {
   await flushNookLogPersistQueue(page)
   const entries = await readPersistedAppLogs(page, 1000)
-  const serialized = JSON.stringify(entries ?? [])
+  const serialized = JSON.stringify(entries)
   for (const value of sensitiveValues) {
     expect(serialized).not.toContain(value)
   }
@@ -116,18 +123,18 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
       const locator = page.getByTestId(testId)
       await expect(locator).toBeVisible()
       const box = await locator.boundingBox()
-      expect(box, `${testId} should have a layout box`).not.toBeNull()
-      return { testId, box: box! }
+      if (!box) throw new Error(`${testId} should have a layout box`)
+      return { testId, box }
     }),
   )
   const viewport = page.viewportSize()
-  expect(viewport).not.toBeNull()
+  if (!viewport) throw new Error('The test page must expose a viewport')
   for (const { testId, box } of boxes) {
     expect(box.x, `${testId} starts inside viewport`).toBeGreaterThanOrEqual(0)
     expect(
       box.x + box.width,
       `${testId} stays inside viewport width`,
-    ).toBeLessThanOrEqual(viewport!.width + 1)
+    ).toBeLessThanOrEqual(viewport.width + 1)
   }
   for (let left = 0; left < boxes.length; left += 1) {
     for (let right = left + 1; right < boxes.length; right += 1) {
@@ -151,11 +158,11 @@ async function continueToPathChooser(page: Page) {
 
 async function setLegacyReplicationForProviderTest(
   page: Page,
-  mode: 'personal' | 'shared',
+  mode: ReplicationType,
 ) {
   await page.evaluate((replicationMode) => {
     const testWindow = window as Window & {
-      __nookVault?: { draftReplicationType: 'personal' | 'shared' }
+      __nookVault?: { draftReplicationType: ReplicationType }
     }
     if (testWindow.__nookVault) {
       testWindow.__nookVault.draftReplicationType = replicationMode
@@ -564,7 +571,7 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     await createLocalVaultOnLogin(page)
-    const ownerRequest = signedSentinelInvitation()
+    const ownerRequest = await signedSentinelInvitation()
     await page.goto(
       `/app/?sentinel-request=${encodeURIComponent(ownerRequest)}`,
     )
@@ -583,7 +590,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await openLoginProviderSetup(page)
 
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -612,7 +619,7 @@ test.describe('vault architecture modes', () => {
       fileName: SHARED_PROVIDER.fileName,
     })
 
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
     const sharedSecretKey = uniqueSecretKey('architecture-shared')
     await addSecret(page, sharedSecretKey, SHARED_SECRET_VALUE)
@@ -699,8 +706,8 @@ test.describe('vault architecture modes', () => {
     }
 
     expect(envelope.ct).toBeTruthy()
-    expect(envelope.password).toBeUndefined()
-    expect(envelope.provider).toBeUndefined()
+    expect(Object.hasOwn(envelope, 'password')).toBe(false)
+    expect(Object.hasOwn(envelope, 'provider')).toBe(false)
     expect(JSON.stringify(envelope)).not.toContain(SHARED_PROVIDER.accessToken)
     expect(JSON.stringify(envelope)).not.toContain(ONBOARD_PASSWORD)
     await assertAppLogsDoNotLeak(page, [
@@ -724,7 +731,7 @@ test.describe('vault architecture modes', () => {
       ).toBeVisible({
         timeout: UI_TIMEOUT_MS,
       })
-      await seedExtraOauthFileProviders(joiner, [
+      await seedUnscopedOauthFileProvidersForEnrollment(joiner, [
         {
           id: 'architecture-shared-joiner-provider',
           label: 'Joiner shared architecture drive',
@@ -772,7 +779,7 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
 
-    await setLegacyReplicationForProviderTest(page, 'shared')
+    await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
     await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
@@ -843,7 +850,7 @@ test.describe('vault architecture modes', () => {
 
       // Sentinel genesis is provider-free and has its own creation ceremony.
       // Return to the chooser before exercising the legacy provider gates.
-      await setLegacyReplicationForProviderTest(page, 'shared')
+      await setLegacyReplicationForProviderTest(page, ReplicationType.Shared)
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()
       await expect(page.getByTestId('provider-option-github')).toBeDisabled()

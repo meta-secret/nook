@@ -91,8 +91,10 @@ mod tests {
     use super::*;
     use crate::SecretId;
 
-    fn secret_id(label: &str) -> SecretId {
-        crate::validate_secret_id(&format!("secret_SMypl8K0w9{label}")).expect("valid secret id")
+    fn secret_id(label: &str) -> anyhow::Result<SecretId> {
+        Ok(crate::validate_secret_id(&format!(
+            "secret_SMypl8K0w9{label}"
+        ))?)
     }
 
     fn login(website_url: &str, username: &str, password: &str) -> LoginSecret {
@@ -105,8 +107,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_blank_username_or_password() {
-        let id = secret_id("a");
+    fn rejects_blank_username_or_password() -> anyhow::Result<()> {
+        let id = secret_id("a")?;
         let existing = login("https://example.com", "alice", "old");
         let candidates = [WebsiteLoginSaveCandidate {
             secret_id: &id,
@@ -120,11 +122,12 @@ mod tests {
             decide_website_login_save("https://example.com", "alice", "", &candidates),
             WebsiteLoginSaveDecision::Invalid
         );
+        Ok(())
     }
 
     #[test]
-    fn creates_when_no_matching_username_for_origin() {
-        let id = secret_id("b");
+    fn creates_when_no_matching_username_for_origin() -> anyhow::Result<()> {
+        let id = secret_id("b")?;
         let existing = login("https://other.example", "alice", "old");
         let candidates = [WebsiteLoginSaveCandidate {
             secret_id: &id,
@@ -139,11 +142,12 @@ mod tests {
             ),
             WebsiteLoginSaveDecision::Create
         );
+        Ok(())
     }
 
     #[test]
-    fn updates_when_username_matches_with_different_password() {
-        let id = secret_id("c");
+    fn updates_when_username_matches_with_different_password() -> anyhow::Result<()> {
+        let id = secret_id("c")?;
         let existing = login("https://www.example.com/login", "alice", "old-password");
         let candidates = [WebsiteLoginSaveCandidate {
             secret_id: &id,
@@ -155,11 +159,12 @@ mod tests {
                 secret_id: id.clone()
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn skips_when_exact_login_already_saved() {
-        let id = secret_id("d");
+    fn skips_when_exact_login_already_saved() -> anyhow::Result<()> {
+        let id = secret_id("d")?;
         let existing = login("https://example.com", "alice", "same-password");
         let candidates = [WebsiteLoginSaveCandidate {
             secret_id: &id,
@@ -171,6 +176,7 @@ mod tests {
                 secret_id: id.clone()
             }
         );
+        Ok(())
     }
 
     #[test]

@@ -1,12 +1,20 @@
-import type { SvelteDate } from "svelte/reactivity";
-import type { NookPendingSyncConflict, NookRuntimeConfig } from "$app-wasm";
+import type {
+  NookPendingSyncConflict,
+  NookProviderSyncRevision,
+  NookRuntimeConfig,
+} from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type { StorageProvider } from "$lib/auth-providers";
-import type { VaultProviderState } from "$lib/vault/state/provider.svelte";
+import type {
+  LocalProviderLookup,
+  StagedRemoteStorage,
+  VaultProviderState,
+} from "$lib/vault/state/provider.svelte";
 import type { VaultRuntimeState } from "$lib/vault/state/runtime.svelte";
 import type { VaultSecretsState } from "$lib/vault/state/secrets.svelte";
 import type { VaultSentinelState } from "$lib/vault/state/sentinel.svelte";
 import type { VaultSessionState } from "$lib/vault/state/session.svelte";
+import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
 import type { VaultArchitecture } from "$lib/vault-architecture";
 import type {
@@ -17,25 +25,44 @@ import type {
 
 type ProviderStateFields = Pick<
   VaultProviderState,
-  | "activeVaultStoreId"
+  | "activeVault"
   | "addProviderOpen"
-  | "existingVaultRecoverySummary"
+  | "clearExistingVaultRecoverySummary"
+  | "clearLocalFolder"
+  | "clearLoginSetup"
+  | "clearOauthFile"
+  | "clearOauthSetupPreset"
+  | "activateLoginSetup"
+  | "recoveryDiscovery"
+  | "recordExistingVaultRecovery"
+  | "requireExistingVaultRecovery"
   | "githubPat"
   | "githubRepo"
+  | "hasActiveVaultStore"
   | "icloudOAuthBusy"
   | "icloudOAuthPreparing"
   | "icloudOAuthReady"
-  | "localFolder"
+  | "localFolderDraft"
+  | "configureLocalFolder"
+  | "requireLocalFolderConfig"
   | "localFolderBackupSupported"
+  | "localVaultCatalog"
   | "localVaults"
   | "localVaultPresent"
   | "loginRequiresExistingVault"
-  | "loginSetupType"
-  | "oauthFile"
-  | "oauthSetupPreset"
+  | "loginSetup"
+  | "oauthFileDraft"
+  | "configureOauthFile"
+  | "requireOauthFileConfig"
+  | "oauthSetupSelection"
+  | "selectOauthSetupPreset"
+  | "openActiveVault"
   | "providers"
   | "providersLoaded"
-  | "selectedLoginVaultStoreId"
+  | "requireActiveVaultStoreId"
+  | "hasSelectedLoginVaultStore"
+  | "selectedLoginVault"
+  | "selectLoginVault"
   | "storageMode"
 >;
 
@@ -48,7 +75,8 @@ type ProviderSessionFields = Pick<
   VaultSessionState,
   | "isAuthenticated"
   | "joinEnrollmentPrompt"
-  | "manager"
+  | "hasManager"
+  | "requireManager"
   | "remoteVaultRecoveryState"
 >;
 
@@ -59,7 +87,7 @@ interface SharedStorageActionsContext {
 
 interface ProviderActionPorts extends SharedStorageActionsContext {
   readonly activeVaultProviders: StorageProvider[];
-  readonly localProvider: StorageProvider | undefined;
+  readonly localProvider: LocalProviderLookup;
   readonly syncProviders: StorageProvider[];
   applyActiveProviderCredentials(): void;
   assessVaultConnectStatus(
@@ -81,7 +109,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   stageStagedProviderSyncIssue(
     args: [string, string, string],
   ): Promise<boolean>;
-  stagedRemoteStorageArgs(): [string, string, string] | undefined;
+  stagedRemoteStorageArgs(): StagedRemoteStorage;
   syncProviderById(
     providerId: string,
     options?: { quiet?: boolean; propagateError?: boolean },
@@ -92,22 +120,20 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
 export type ProviderActionsContext = ProviderStateFields &
   ProviderRuntimeFields &
   ProviderSessionFields &
-  ProviderActionPorts & {
-    localFolderMultipleVaultsIssue:
-      | {
-          message: string;
-        }
-      | undefined;
-  };
+  ProviderActionPorts &
+  Pick<VaultSyncState, "localFolderHealth">;
 
 type SyncProviderFields = Pick<
   VaultProviderState,
-  | "activeVaultStoreId"
+  | "activeVault"
   | "addProviderOpen"
+  | "clearLoginSetup"
+  | "activateLoginSetup"
   | "localVaultPresent"
-  | "loginSetupType"
+  | "loginSetup"
   | "providers"
-  | "selectedLoginVaultStoreId"
+  | "openActiveVault"
+  | "selectLoginVault"
 >;
 
 type SyncRuntimeFields = Pick<
@@ -122,35 +148,33 @@ type SyncSessionFields = Pick<
   | "isPasswordBusy"
   | "joinEnrollmentPrompt"
   | "loginPasswordPrompt"
-  | "manager"
+  | "hasManager"
+  | "requireManager"
   | "pendingJoins"
   | "remoteVaultRecoveryState"
   | "sessionExpiredByIdle"
   | "vaultMembers"
 >;
 
-interface SyncStateFields {
+type SyncStateFields = Pick<
+  VaultSyncState,
+  | "beginManualProviderSync"
+  | "clearLocalFolderMultipleVaultsIssue"
+  | "clearSyncingProvider"
+  | "isFanOutSyncing"
+  | "isSyncing"
+  | "localFolderHealth"
+  | "manualProviderSync"
+  | "markSynced"
+  | "replacementConflicts"
+  | "reportLocalFolderMultipleVaults"
+  | "securityConflicts"
+  | "syncConflictReview"
+> & {
   fanOutSyncChain: Promise<void>;
-  isFanOutSyncing: boolean;
-  isSyncing: boolean;
-  lastSyncedAt: SvelteDate | undefined;
-  localFolderMultipleVaultsIssue:
-    | {
-        providerId: string;
-        providerLabel: string;
-        storeIds: string[];
-        message: string;
-      }
-    | undefined;
-  pendingSyncConflict: NookPendingSyncConflict | undefined;
-  replacementConflicts: Array<{
-    oldSecretId: string;
-    candidates: Array<{ eventId: string; secretId: string }>;
-  }>;
-  securityConflicts: Array<{ events: string[]; reasons: string[] }>;
-  syncingProviderId: string | undefined;
-  syncTimer: ReturnType<typeof setInterval> | undefined;
-}
+  isSyncScheduled(): boolean;
+  scheduleSync(callback: () => void, intervalMs: number): void;
+};
 
 interface SyncActionPorts extends SharedStorageActionsContext {
   readonly deviceProtectionReady: boolean;
@@ -159,6 +183,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   readonly syncProviders: StorageProvider[];
   applyVaultSyncResult(result: NookVaultSyncResult): void;
   clearPendingSyncConflict(): void;
+  clearLocalFolderMultipleVaultsIssue(): void;
+  clearSyncingProvider(): void;
+  stopScheduledSync(): boolean;
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
   beginProviderSetup(type: "local-folder"): void;
@@ -189,7 +216,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   ensureProviderSaved(): Promise<boolean>;
   showSuccess(message: string): void;
   stagedProviderLabel(): string;
-  stagedRemoteStorageArgs(): [string, string, string] | undefined;
+  stagedRemoteStorageArgs(): StagedRemoteStorage;
   stageSyncConflict(conflict: NookPendingSyncConflict): void;
   stopVaultSync(): void;
   syncActiveVaultStoreIdToAuth(): Promise<void>;
@@ -205,7 +232,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | undefined,
+    revision: NookProviderSyncRevision,
   ): Promise<void>;
   wasmStorageArgs(): [string, string, string];
 }
@@ -227,7 +254,7 @@ export type ArchitectureActionsContext = Pick<
   | "draftVaultType"
   | "vaultArchitecture"
 > &
-  Pick<VaultSessionState, "manager"> & {
+  Pick<VaultSessionState, "hasManager" | "requireManager"> & {
     architectureSecretCreationAllowed: boolean;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;
     replaceVaultArchitecture(architecture: VaultArchitecture): void;
@@ -235,20 +262,23 @@ export type ArchitectureActionsContext = Pick<
 
 export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<VaultUiState, "settingsOpen"> &
-  Pick<VaultProviderState, "vaultArchitecture"> &
+  Pick<VaultProviderState, "localLoginPreparation" | "vaultArchitecture"> &
   Pick<
     VaultSessionState,
     | "awaitingJoinApproval"
+    | "clearSelectedPasswordEntry"
     | "enrollmentCode"
     | "enrollMembersKey"
     | "enrollSecretsKey"
     | "isAuthenticated"
     | "joinEnrollmentPrompt"
     | "loginPasswordPrompt"
-    | "manager"
+    | "hasManager"
+    | "requireManager"
     | "passwordEntries"
     | "pendingJoins"
-    | "selectedPasswordEntryId"
+    | "selectedPasswordEntry"
+    | "selectPasswordEntry"
     | "sessionExpiredByIdle"
     | "sharedGrantInstructions"
     | "sharedJoinerIdentity"
@@ -257,6 +287,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSecretsState,
     | "secretPageOffset"
+    | "clearSecretTypeFilter"
     | "secretQuery"
     | "secretTotal"
     | "secretTypeFilter"
@@ -265,12 +296,14 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
   Pick<
     VaultSentinelState,
     | "sentinelCeremonyPrompt"
+    | "clearSentinelGenesisStore"
     | "sentinelGenesisDeliveries"
     | "sentinelGenesisParticipantCount"
     | "sentinelGenesisParticipants"
     | "sentinelGenesisPhase"
     | "sentinelGenesisRequest"
-    | "sentinelGenesisStoreId"
+    | "sentinelGenesisTarget"
+    | "selectSentinelGenesisStore"
     | "sentinelStoredDeliveries"
     | "sentinelUnlockRequest"
     | "sentinelUnlockSession"
@@ -290,7 +323,7 @@ export type UiActionsContext = Pick<
   VaultRuntimeState,
   "errorMsg" | "isSaving"
 > &
-  Pick<VaultSessionState, "manager"> &
+  Pick<VaultSessionState, "hasManager" | "requireManager"> &
   Pick<
     VaultUiState,
     | "adminAccordionSection"

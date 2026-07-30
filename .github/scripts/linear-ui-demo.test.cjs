@@ -11,6 +11,7 @@ const {
   stateByType,
   syncUiDemoIssue,
   transitionUiDemoIssue,
+  UiDemoIssueTransitionKind,
 } = require('./linear-ui-demo.cjs')
 
 const config = {
@@ -77,7 +78,7 @@ test('creates one issue and one embedded-video comment for a new PR', async () =
       return [{ id: 'started-id', type: 'started' }]
     },
     async issue() {
-      return undefined
+      return
     },
     async createIssue(input) {
       calls.push(['createIssue', input])
@@ -194,7 +195,9 @@ test('moves an existing issue to completed or canceled and ignores absent issues
     merged: true,
     prNumber: 999,
   })
-  assert.equal(missing, undefined)
+  assert.deepEqual(missing, {
+    kind: UiDemoIssueTransitionKind.IssueAbsent,
+  })
 })
 
 test('requires the requested workflow state type', () => {

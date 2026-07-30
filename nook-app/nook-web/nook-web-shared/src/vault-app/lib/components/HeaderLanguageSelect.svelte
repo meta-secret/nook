@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   const LOCALES = [
@@ -11,7 +12,7 @@
   let open = $state(false)
   let root = $state<HTMLDivElement>()
 
-  function selectLocale(locale: 'en' | 'ru') {
+  function selectLocale(locale: NookAppLocale) {
     void vault.updateLocale(locale)
     open = false
   }

@@ -5,8 +5,8 @@
   let {
     title,
     subtitle,
-    section,
-    activeSection = $bindable<string | undefined>(undefined),
+    open,
+    onToggle,
     disabled = false,
     testId,
     badge,
@@ -14,19 +14,13 @@
   }: {
     title: string
     subtitle?: string
-    section: string
-    activeSection?: string | undefined
+    open: boolean
+    onToggle: () => void
     disabled?: boolean
     testId?: string
     badge?: Snippet
     children?: Snippet
   } = $props()
-
-  const open = $derived(activeSection === section)
-
-  function handleToggle() {
-    activeSection = open ? undefined : section
-  }
 </script>
 
 <section
@@ -42,7 +36,7 @@
       : 'border-l-transparent hover:bg-muted/25'}"
     aria-expanded={open}
     {disabled}
-    onclick={handleToggle}
+    onclick={onToggle}
   >
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-semibold text-foreground">{title}</span>

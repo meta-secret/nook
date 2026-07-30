@@ -4,13 +4,14 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookImportResult;
-use crate::types::{NookStringValue, NookStringValueRef};
-use crate::{NookSecretPage, NookSecretRecord, NookTotpCode};
+use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+mod secret_import;
+use secret_import::SecretImportSource;
 
 fn serialize_js_array<T: Serialize>(value: &T) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
     Ok(value
@@ -58,318 +59,6 @@ impl NookExtensionEventLogImportStatus {
     }
 }
 
-type ImportVersions = HashMap<
-    nook_core::SecretFingerprint,
-    Vec<(nook_core::StoredSecretRecord, nook_core::SecretFingerprint)>,
->;
-
-fn group_import_fingerprints(
-    dedup_state: Vec<(
-        nook_core::StoredSecretRecord,
-        nook_core::SecretFingerprint,
-        nook_core::SecretFingerprint,
-    )>,
-    incoming_count: usize,
-) -> ImportVersions {
-    let mut by_identity = HashMap::with_capacity(dedup_state.len() + incoming_count);
-    for (record, identity_fingerprint, fingerprint) in dedup_state {
-        by_identity
-            .entry(identity_fingerprint)
-            .or_insert_with(Vec::new)
-            .push((record, fingerprint));
-    }
-    by_identity
-}
-
-enum ImportItemOutcome {
-    Duplicate,
-    Operation(nook_core::VaultOperation),
-}
-
-fn coalesce_import_items(
-    items: Vec<nook_core::SecretValue>,
-    secrets_key: &nook_core::SymmetricKey,
-) -> (Vec<nook_core::SecretValue>, usize) {
-    let mut coalesced: Vec<nook_core::SecretValue> = Vec::with_capacity(items.len());
-    let mut indexes: HashMap<nook_core::SecretFingerprint, usize> =
-        HashMap::with_capacity(items.len());
-    let mut duplicates = 0;
-    for mut value in items {
-        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
-        if let Some(index) = indexes.get(&fingerprint).copied() {
-            let enriched = nook_core::enrich_secret(&coalesced[index], &value);
-            coalesced[index].zeroize_plaintext();
-            value.zeroize_plaintext();
-            coalesced[index] = enriched;
-            duplicates += 1;
-        } else {
-            indexes.insert(fingerprint, coalesced.len());
-            coalesced.push(value);
-        }
-    }
-    (coalesced, duplicates)
-}
-
-fn reconcile_import_item(
-    mut value: nook_core::SecretValue,
-    existing_by_identity: &ImportVersions,
-    seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
-    crypto: &nook_core::VaultCrypto,
-    secrets_key: &nook_core::SymmetricKey,
-) -> Result<ImportItemOutcome, NookError> {
-    let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key);
-    let fingerprint = nook_core::secret_fingerprint(&value, secrets_key);
-    if let Some((record, _)) = existing_by_identity
-        .get(&identity_fingerprint)
-        .and_then(|records| {
-            records
-                .iter()
-                .find(|(_, existing)| existing == &fingerprint)
-        })
-    {
-        let secret_type = record.secret_type.ok_or_else(|| {
-            NookError::Database(format!("Secret {} is missing its type.", record.key))
-        })?;
-        let ciphertext = nook_core::AgeArmoredCiphertext::parse(record.value.as_str())?;
-        let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-        let mut existing = nook_core::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-        plaintext.zeroize_plaintext();
-        let mut enriched = nook_core::enrich_secret(&existing, &value);
-        let outcome = if enriched == existing {
-            ImportItemOutcome::Duplicate
-        } else {
-            let mut yaml = enriched.to_yaml()?;
-            let ciphertext = crypto.encrypt_value(yaml.as_str())?;
-            yaml.zeroize_plaintext();
-            let new_id = nook_core::generate_secret_id()?;
-            ImportItemOutcome::Operation(nook_core::VaultOperation::SecretReplaced {
-                old_id: record.key.clone(),
-                new_secret: nook_core::encrypted_secret_from_armored(
-                    &new_id,
-                    secret_type,
-                    ciphertext.as_str(),
-                    identity_fingerprint,
-                    fingerprint,
-                ),
-            })
-        };
-        existing.zeroize_plaintext();
-        enriched.zeroize_plaintext();
-        value.zeroize_plaintext();
-        return Ok(outcome);
-    }
-    if !seen_versions.insert(fingerprint.clone()) {
-        value.zeroize_plaintext();
-        return Ok(ImportItemOutcome::Duplicate);
-    }
-    let mut yaml = value.to_yaml()?;
-    let secret_type = value.secret_type();
-    let ciphertext = crypto.encrypt_value(yaml.as_str())?;
-    yaml.zeroize_plaintext();
-    value.zeroize_plaintext();
-    let id = nook_core::generate_secret_id()?;
-    Ok(ImportItemOutcome::Operation(
-        nook_core::VaultOperation::SecretCreated {
-            secret: nook_core::encrypted_secret_from_armored(
-                &id,
-                secret_type,
-                ciphertext.as_str(),
-                identity_fingerprint,
-                fingerprint,
-            ),
-        },
-    ))
-}
-
-#[derive(Clone, Copy)]
-enum SecretImportSource {
-    ApplePasswords,
-    Bitwarden,
-    ChromePasswords,
-    GoogleAuthenticator,
-    LastPass,
-    OnePassword,
-    ProtonPass,
-}
-
-impl SecretImportSource {
-    const fn status(self) -> &'static str {
-        match self {
-            Self::ApplePasswords => "IMPORT_APPLE_PASSWORDS_START",
-            Self::Bitwarden => "IMPORT_BITWARDEN_START",
-            Self::ChromePasswords => "IMPORT_CHROME_PASSWORDS_START",
-            Self::GoogleAuthenticator => "IMPORT_GOOGLE_AUTHENTICATOR_START",
-            Self::LastPass => "IMPORT_LASTPASS_START",
-            Self::OnePassword => "IMPORT_ONEPASSWORD_START",
-            Self::ProtonPass => "IMPORT_PROTON_PASS_START",
-        }
-    }
-
-    const fn action(self) -> &'static str {
-        match self {
-            Self::ApplePasswords => "import-apple-passwords",
-            Self::Bitwarden => "import-bitwarden",
-            Self::ChromePasswords => "import-chrome-passwords",
-            Self::GoogleAuthenticator => "import-google-authenticator",
-            Self::LastPass => "import-lastpass",
-            Self::OnePassword => "import-onepassword",
-            Self::ProtonPass => "import-proton-pass",
-        }
-    }
-
-    const fn label(self) -> &'static str {
-        match self {
-            Self::ApplePasswords => "Apple Passwords",
-            Self::Bitwarden => "Bitwarden",
-            Self::ChromePasswords => "Chrome passwords",
-            Self::GoogleAuthenticator => "Google Authenticator",
-            Self::LastPass => "LastPass",
-            Self::OnePassword => "1Password",
-            Self::ProtonPass => "Proton Pass",
-        }
-    }
-}
-
-impl NookVaultManager {
-    async fn commit_secret_import(
-        &mut self,
-        items: Vec<nook_core::SecretValue>,
-        skipped_unsupported: usize,
-        source: SecretImportSource,
-    ) -> Result<NookImportResult, JsError> {
-        let _ = self.status.tx.send(source.status().to_owned());
-        self.ensure_vault_crypto_from_cache().await?;
-        if !self
-            .vault
-            .architecture
-            .can_create_secret_with_records(&self.stored_records_snapshot())
-        {
-            return Err(NookError::Database(
-                "Sentinel vault is not ready for secret import.".to_owned(),
-            )
-            .into());
-        }
-
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key);
-        let dedup_state = self.live_secret_dedup_state().await?;
-        let crypto = self.vault.crypto.get()?;
-        let existing_by_identity = group_import_fingerprints(dedup_state, items.len());
-        let mut seen_versions = existing_by_identity
-            .values()
-            .flatten()
-            .map(|(_, fingerprint)| fingerprint.clone())
-            .collect::<HashSet<_>>();
-        let mut skipped_duplicates = within_batch_duplicates;
-        let mut operations = Vec::with_capacity(items.len());
-
-        for value in items {
-            match reconcile_import_item(
-                value,
-                &existing_by_identity,
-                &mut seen_versions,
-                crypto,
-                &secrets_key,
-            )? {
-                ImportItemOutcome::Duplicate => skipped_duplicates += 1,
-                ImportItemOutcome::Operation(operation) => operations.push(operation),
-            }
-        }
-
-        let imported = operations
-            .iter()
-            .filter(|operation| {
-                matches!(
-                    operation,
-                    nook_core::VaultOperation::SecretCreated { .. }
-                        | nook_core::VaultOperation::SecretReplaced { .. }
-                )
-            })
-            .count();
-        if !operations.is_empty() {
-            self.append_vault_operations(operations).await?;
-        }
-        let _ = self.status.tx.send("READY".to_owned());
-        tracing::info!(
-            scope = "wasm-secrets",
-            action = source.action(),
-            import_source = source.label(),
-            imported,
-            skipped_unsupported,
-            skipped_duplicates,
-            "Secret import completed"
-        );
-        Ok(NookImportResult::new(
-            imported,
-            skipped_unsupported,
-            skipped_duplicates,
-        ))
-    }
-}
-
-#[cfg(test)]
-#[allow(clippy::items_after_test_module)]
-mod import_tests {
-    use super::*;
-
-    fn key() -> anyhow::Result<nook_core::SymmetricKey> {
-        Ok(nook_core::SymmetricKey::parse(&"ab".repeat(32))?)
-    }
-
-    #[test]
-    fn same_batch_provider_notes_are_coalesced_without_losing_metadata() -> anyhow::Result<()> {
-        let items = vec![
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
-                title: "Recovery".to_owned(),
-                note: "same note\n\n## LastPass\n- group: Personal".to_owned(),
-            }),
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
-                title: "Recovery".to_owned(),
-                note: "same note\n\n## Proton Pass\n- vault: Personal".to_owned(),
-            }),
-        ];
-
-        let (items, duplicates) = coalesce_import_items(items, &key()?);
-        assert_eq!(duplicates, 1);
-        assert_eq!(items.len(), 1);
-        let nook_core::SecretValue::SecureNote(note) = &items[0] else {
-            panic!("expected secure note")
-        };
-        assert!(note.note.contains("## LastPass"));
-        assert!(note.note.contains("## Proton Pass"));
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod prepared_page_tests {
-    use super::*;
-    use crate::manager::VaultCryptoState;
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()
-            .map_err(|error| JsError::new(&error.to_string()))?
-            .to_string();
-        manager.vault.last_synced_content = manager.serialize_current_projection_yaml()?;
-        manager.vault.secrets_key.clear();
-        manager.vault.members_key.clear();
-        manager.vault.crypto = VaultCryptoState::Locked;
-
-        manager
-            .query_prepared_secret_page_js("", NookStringValue::unavailable(), 0, 25)
-            .await?;
-
-        assert!(manager.vault.crypto.is_unlocked());
-        Ok(())
-    }
-}
-
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
@@ -390,7 +79,7 @@ impl NookVaultManager {
     pub async fn query_prepared_secret_page_js(
         &mut self,
         query: &str,
-        secret_type_filter: NookStringValue,
+        secret_type_filter: NookSecretTypeFilter,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
@@ -409,19 +98,13 @@ impl NookVaultManager {
     pub fn query_secret_page_js(
         &self,
         query: &str,
-        secret_type_filter: NookStringValue,
+        secret_type_filter: NookSecretTypeFilter,
         offset: u32,
         limit: u32,
     ) -> Result<NookSecretPage, JsError> {
-        let secret_type_filter = match secret_type_filter.as_ref() {
-            NookStringValueRef::Value(value) => {
-                nook_core::SecretTypeFilter::Only(nook_core::SecretType::parse(value)?)
-            }
-            NookStringValueRef::Unavailable => nook_core::SecretTypeFilter::All,
-        };
         Ok(NookSecretPage::from_core(self.query_secret_page(
             query,
-            secret_type_filter,
+            secret_type_filter.to_core(),
             offset,
             limit,
         )?)?)
@@ -505,7 +188,7 @@ impl NookVaultManager {
     pub async fn add_secret(
         &mut self,
         id: String,
-        secret_type: String,
+        secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
@@ -522,12 +205,11 @@ impl NookVaultManager {
         }
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
-        let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
         typed_value.zeroize_plaintext();
 
         let armored = self.vault.crypto.get()?.encrypt_value(&data)?;
@@ -708,7 +390,7 @@ impl NookVaultManager {
         &mut self,
         old_id: String,
         new_id: String,
-        secret_type: String,
+        secret_type: nook_core::SecretType,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
@@ -723,12 +405,11 @@ impl NookVaultManager {
             )
             .into());
         }
-        let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key);
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key);
+            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
         typed_value.zeroize_plaintext();
         let crypto = self.vault.crypto.get()?;
         nook_core::replace_encrypted_secret(
@@ -990,28 +671,29 @@ mod wasm_tests {
         event: SignedEvent,
     }
 
-    fn get(target: &js_sys::Object, field: &str) -> js_sys::Object {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
-            .unchecked_into()
+    fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
+        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected field"))?
+            .unchecked_into())
     }
 
-    fn get_number(target: &js_sys::Object, field: &str) -> f64 {
+    fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsError> {
         js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected numeric field"))?
             .as_f64()
-            .expect("js number")
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a number"))
     }
 
-    fn get_string(target: &js_sys::Object, field: &str) -> String {
+    fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
         js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .expect("js field")
+            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected string field"))?
             .as_string()
-            .expect("js string")
+            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
     }
 
     #[wasm_bindgen_test]
-    fn event_log_export_serializes_flattened_signed_events_as_plain_objects() {
+    fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
+    -> Result<(), wasm_bindgen::JsError> {
         let value = serialize_js_array(&vec![ExportedRecord {
             event_id: "event-1".to_owned(),
             event: SignedEvent {
@@ -1019,12 +701,13 @@ mod wasm_tests {
                 signature: "ed25519:test-signature".to_owned(),
             },
         }])
-        .expect("serialize event-log records");
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
         let record: js_sys::Object = value.get(0).unchecked_into();
-        let event = get(&record, "event");
+        let event = get(&record, "event")?;
 
-        assert_eq!(get_number(&event, "schema_version"), 1.0);
-        assert_eq!(get_string(&event, "signature"), "ed25519:test-signature");
+        assert_eq!(get_number(&event, "schema_version")?, 1.0);
+        assert_eq!(get_string(&event, "signature")?, "ed25519:test-signature");
+        Ok(())
     }
 
     /// WASM-side contract for file-sync reconnect after offline concurrent creates
@@ -1032,7 +715,7 @@ mod wasm_tests {
     /// Full multi-provider scenario coverage lives in
     /// `nook-core/tests/event_log_file_sync_replication.rs`.
     #[wasm_bindgen_test]
-    fn concurrent_same_identity_logins_both_survive_after_event_union() {
+    fn concurrent_same_identity_logins_both_survive_after_event_union() -> anyhow::Result<()> {
         use nook_core::{
             LoginSecret, SecretId, SecretType, SecretValue, SigningIdentity, VaultCrypto,
             VaultEventSession, VaultOperation, encrypted_secret_from_armored, generate_store_id,
@@ -1048,56 +731,51 @@ mod wasm_tests {
             secrets_key: &nook_core::SymmetricKey,
             secret_id: &str,
             password: &str,
-        ) {
+        ) -> anyhow::Result<()> {
             let value = SecretValue::Login(LoginSecret {
                 website_url: "https://login-a-1.example.com".to_owned(),
                 username: "alice".to_owned(),
                 password: password.to_owned(),
                 notes: String::new(),
             });
-            let identity = secret_identity_fingerprint(&value, secrets_key);
-            let version = secret_fingerprint(&value, secrets_key);
-            let ciphertext = crypto
-                .encrypt_value(value.to_yaml().expect("login yaml").as_str())
-                .expect("encrypt login");
-            session
-                .append_operations(
-                    vec![VaultOperation::SecretCreated {
-                        secret: encrypted_secret_from_armored(
-                            &SecretId::from_vault_record(secret_id),
-                            SecretType::Login,
-                            ciphertext.as_str(),
-                            identity,
-                            version,
-                        ),
-                    }],
-                    TS,
-                    Some("local-folder"),
-                )
-                .expect("append login");
+            let identity = secret_identity_fingerprint(&value, secrets_key)?;
+            let version = secret_fingerprint(&value, secrets_key)?;
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            session.append_operations(
+                vec![VaultOperation::SecretCreated {
+                    secret: encrypted_secret_from_armored(
+                        &SecretId::from_vault_record(secret_id),
+                        SecretType::Login,
+                        ciphertext.as_str(),
+                        identity,
+                        version,
+                    ),
+                }],
+                TS,
+                Some("local-folder"),
+            )?;
+            Ok(())
         }
 
-        let keys = generate_vault_keys().expect("vault keys");
-        let store_id = generate_store_id().expect("store id");
-        let (signing, signing_seed) = SigningIdentity::generate().expect("signing");
-        let crypto = VaultCrypto::new(&keys.secrets_key).expect("crypto");
+        let keys = generate_vault_keys()?;
+        let store_id = generate_store_id()?;
+        let (signing, signing_seed) = SigningIdentity::generate()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
 
         let mut device_a = VaultEventSession::new(
             store_id.to_string(),
             signing.clone(),
             signing_seed.clone().into_inner(),
         );
-        device_a
-            .append_operations(
-                vec![VaultOperation::VaultImported {
-                    source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
-                    secrets: Vec::new(),
-                    password_entries: Vec::new(),
-                }],
-                TS,
-                Some("local-folder"),
-            )
-            .expect("genesis");
+        device_a.append_operations(
+            vec![VaultOperation::VaultImported {
+                source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            }],
+            TS,
+            Some("local-folder"),
+        )?;
 
         let mut device_b =
             VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
@@ -1112,9 +790,7 @@ mod wasm_tests {
                     .map(|bytes| (id, bytes.to_vec()))
             })
             .collect();
-        device_b
-            .union_remote(&genesis_events)
-            .expect("device-b joins vault-a");
+        device_b.union_remote(&genesis_events)?;
 
         let shared_head = device_a.heads[0].clone();
         // Disconnect: each device appends offline from the same head.
@@ -1125,7 +801,7 @@ mod wasm_tests {
             &keys.secrets_key,
             "secret_logina1aaaa",
             "password-from-device-a",
-        );
+        )?;
         device_b.heads = vec![shared_head];
         append_login(
             &mut device_b,
@@ -1133,7 +809,7 @@ mod wasm_tests {
             &keys.secrets_key,
             "secret_logina1bbbb",
             "password-from-device-b",
-        );
+        )?;
 
         // Reconnect via file-sync style set-union.
         let a_events: Vec<_> = device_a
@@ -1158,28 +834,21 @@ mod wasm_tests {
                     .map(|bytes| (id, bytes.to_vec()))
             })
             .collect();
-        device_a.union_remote(&b_events).expect("union b into a");
-        device_b.union_remote(&a_events).expect("union a into b");
+        device_a.union_remote(&b_events)?;
+        device_b.union_remote(&a_events)?;
 
-        let graph = device_a
-            .store
-            .load_graph(device_a.store_id.as_str())
-            .expect("graph");
-        let projection = device_a.project().expect("project");
+        let graph = device_a.store.load_graph(device_a.store_id.as_str())?;
+        let projection = device_a.project()?;
         let live = projection.live_secrets(&graph);
         assert_eq!(live.len(), 2);
         assert!(!projection.has_blocking_conflicts());
 
         let mut passwords = BTreeSet::new();
         for record in live.values() {
-            let plaintext = crypto
-                .decrypt_value(
-                    &nook_core::AgeArmoredCiphertext::parse(record.value.as_str())
-                        .expect("age ciphertext"),
-                )
-                .expect("decrypt");
-            let value =
-                SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str()).expect("yaml");
+            let plaintext = crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::parse(
+                record.value.as_str(),
+            )?)?;
+            let value = SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str())?;
             let SecretValue::Login(login) = value else {
                 panic!("expected login");
             };
@@ -1200,5 +869,6 @@ mod wasm_tests {
             .map(|secret| secret.identity_fingerprint.as_str().to_owned())
             .collect();
         assert_eq!(identities.len(), 1, "same login identity on both records");
+        Ok(())
     }
 }

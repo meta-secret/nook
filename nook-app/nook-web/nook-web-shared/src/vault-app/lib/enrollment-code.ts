@@ -1,17 +1,43 @@
 import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
   normalizeEnrollmentCode,
+  VaultApplication,
 } from "$app-wasm";
-import { APP_KIND, type AppKind } from "$lib/app-kind";
+import { APP_KIND } from "$lib/app-kind";
 
 const ENROLLMENT_HASH_PREFIX = "#enroll=";
 
+enum EnrollmentHistoryState {
+  EnrollmentConsumed = "enrollment-consumed",
+}
+
+export enum EnrollmentLocationKind {
+  Absent = "absent",
+  Consumed = "consumed",
+}
+
+export type EnrollmentLocation =
+  | { kind: EnrollmentLocationKind.Absent }
+  | { kind: EnrollmentLocationKind.Consumed; payload: string };
+
+enum EnrollmentUrlCodeKind {
+  Absent = "absent",
+  Present = "present",
+}
+
+type EnrollmentUrlCode =
+  | { kind: EnrollmentUrlCodeKind.Absent }
+  | { kind: EnrollmentUrlCodeKind.Present; code: string };
+
 export function enrollmentAppRootUrl(
   siteRoot: string,
-  appKind: AppKind = APP_KIND,
+  appKind: VaultApplication = APP_KIND,
 ): string {
   const normalized = siteRoot.replace(/\/$/, "");
-  if (appKind === "simple" || appKind === "sentinel") {
+  if (
+    appKind === VaultApplication.Simple ||
+    appKind === VaultApplication.Sentinel
+  ) {
     return `${normalized}/`;
   }
   return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;
@@ -19,7 +45,7 @@ export function enrollmentAppRootUrl(
 
 /** Vault app root used in QR links (`/app/` below the public site root). */
 export function getEnrollmentLinkBase(): string {
-  if (typeof window === "undefined") {
+  if (!("window" in globalThis)) {
     return "";
   }
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
@@ -42,32 +68,41 @@ export function buildEnrollmentLink(
  * Read an enrollment code from the current page URL (hash or query), then
  * strip it from the address bar so secrets do not linger in history.
  */
-export function consumeEnrollmentFromLocation(): string | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
+export function consumeEnrollmentFromLocation(): EnrollmentLocation {
+  if (!("window" in globalThis)) {
+    return { kind: EnrollmentLocationKind.Absent };
   }
 
   const url = new URL(window.location.href);
-  let raw: string | undefined;
+  const raw = enrollmentCodeFromUrl(url);
 
-  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
-    raw = decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length));
-    url.hash = "";
-  } else {
-    raw = url.searchParams.get("enroll") ?? undefined;
-    if (raw) {
-      url.searchParams.delete("enroll");
-    }
-  }
-
-  if (!raw) {
-    return undefined;
+  if (raw.kind === EnrollmentUrlCodeKind.Absent) {
+    return { kind: EnrollmentLocationKind.Absent };
   }
 
   history.replaceState(
-    undefined,
+    { state: EnrollmentHistoryState.EnrollmentConsumed },
     "",
     `${url.pathname}${url.search}${url.hash}`,
   );
-  return normalizeEnrollmentCode(raw);
+  return {
+    kind: EnrollmentLocationKind.Consumed,
+    payload: normalizeEnrollmentCode(raw.code),
+  };
+}
+
+function enrollmentCodeFromUrl(url: URL): EnrollmentUrlCode {
+  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
+    const code = decodeURIComponent(
+      url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
+    );
+    url.hash = "";
+    return { kind: EnrollmentUrlCodeKind.Present, code };
+  }
+  const code = url.searchParams.get("enroll")?.valueOf();
+  if (code) {
+    url.searchParams.delete("enroll");
+    return { kind: EnrollmentUrlCodeKind.Present, code };
+  }
+  return { kind: EnrollmentUrlCodeKind.Absent };
 }

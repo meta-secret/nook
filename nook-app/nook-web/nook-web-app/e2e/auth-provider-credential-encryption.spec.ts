@@ -11,6 +11,7 @@ import {
   readRawAuthProvidersFromIdb,
   saveAuthProvidersInBrowser,
   UI_TIMEOUT_MS,
+  unselectedAuthProviderSeedScope,
   waitForAuthProvidersE2eHook,
   waitForStorageChainIdle,
   waitForVaultSyncIdle,
@@ -30,24 +31,31 @@ test.describe('sync provider credential encryption', () => {
     page,
   }) => {
     const pat = 'github_pat_11E2EsaveSEALtoken'
-    await saveAuthProvidersInBrowser(page, {
-      providers: [
-        {
-          id: 'gh-e2e-save',
-          type: 'github',
-          label: 'GitHub',
-          githubPat: pat,
-          githubRepo: 'nook',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    })
+    await saveAuthProvidersInBrowser(
+      page,
+      {
+        providers: [
+          {
+            id: 'gh-e2e-save',
+            type: 'github',
+            label: 'GitHub',
+            githubPat: pat,
+            githubRepo: 'nook',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      unselectedAuthProviderSeedScope(),
+    )
 
     const raw = await readRawAuthProvidersFromIdb(page)
     expectSealedCredential(raw.providers[0]?.githubPat, pat)
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(decrypted.providers[0]?.githubPat).toBe(pat)
+    expect(decrypted.providers[0]?.githubPat).toEqual({
+      state: 'token',
+      value: pat,
+    })
   })
 
   test('replacement conflict refresh avoids recursive wasm closure use', async ({
@@ -111,25 +119,29 @@ test.describe('sync provider credential encryption', () => {
   }) => {
     const access = 'ya29.e2e-oauth-access-token'
     const refresh = '1//e2e-refresh-token-secret'
-    await saveAuthProvidersInBrowser(page, {
-      providers: [
-        {
-          id: 'gd-e2e-oauth',
-          type: 'oauth-file',
-          label: 'Google Drive',
-          oauthFile: {
-            accessToken: access,
-            refreshToken: refresh,
-            preset: 'google-drive',
-            fileName: 'nook-events',
-            driveMode: 'private',
-            iCloudMode: 'private',
-            accountEmail: 'me@example.com',
+    await saveAuthProvidersInBrowser(
+      page,
+      {
+        providers: [
+          {
+            id: 'gd-e2e-oauth',
+            type: 'oauth-file',
+            label: 'Google Drive',
+            oauthFile: {
+              accessToken: access,
+              refreshToken: refresh,
+              preset: 'google-drive',
+              fileName: 'nook-events',
+              driveMode: 'private',
+              iCloudMode: 'private',
+              accountEmail: 'me@example.com',
+            },
+            createdAt: new Date().toISOString(),
           },
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    })
+        ],
+      },
+      unselectedAuthProviderSeedScope(),
+    )
 
     const raw = await readRawAuthProvidersFromIdb(page)
     const oauth = raw.providers[0]?.oauthFile
@@ -138,7 +150,14 @@ test.describe('sync provider credential encryption', () => {
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
     const decryptedOauth = decrypted.providers[0]?.oauthFile
-    expect(decryptedOauth?.accessToken).toBe(access)
-    expect(decryptedOauth?.refreshToken).toBe(refresh)
+    expect(decryptedOauth).toEqual(
+      expect.objectContaining({
+        state: 'configured',
+        config: expect.objectContaining({
+          accessToken: { state: 'accessToken', value: access },
+          refreshToken: { state: 'token', value: refresh },
+        }),
+      }),
+    )
   })
 })

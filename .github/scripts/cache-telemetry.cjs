@@ -35,26 +35,34 @@ function nonNegativeInteger(value, fallback = 0) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
 }
 
-function percentage(numerator, denominator) {
-  if (denominator === 0) return null
-  return Math.round((numerator / denominator) * 10_000) / 100
+function percentageField(field, numerator, denominator) {
+  if (denominator === 0) return {}
+  return {
+    [field]: Math.round((numerator / denominator) * 10_000) / 100,
+  }
 }
 
 function normalizeBuildRecord(record) {
   const completedSteps = nonNegativeInteger(
     record.completed_steps ?? record.NumCompletedSteps,
   )
-  const cachedSteps = nonNegativeInteger(record.cached_steps ?? record.NumCachedSteps)
+  const cachedSteps = nonNegativeInteger(
+    record.cached_steps ?? record.NumCachedSteps,
+  )
   return {
     ref: String(record.ref ?? record.Ref ?? ''),
     name: String(record.name ?? record.Name ?? ''),
     status: String(record.status ?? record.Status ?? '').toLowerCase(),
-    started_at: record.created_at ?? record.StartedAt ?? null,
-    completed_at: record.completed_at ?? record.CompletedAt ?? null,
+    ...(record.created_at || record.StartedAt
+      ? { started_at: record.created_at || record.StartedAt }
+      : {}),
+    ...(record.completed_at || record.CompletedAt
+      ? { completed_at: record.completed_at || record.CompletedAt }
+      : {}),
     completed_steps: completedSteps,
     total_steps: nonNegativeInteger(record.total_steps ?? record.NumTotalSteps),
     cached_steps: cachedSteps,
-    cache_hit_rate_percent: percentage(cachedSteps, completedSteps),
+    ...percentageField('cache_hit_rate_percent', cachedSteps, completedSteps),
   }
 }
 
@@ -85,7 +93,6 @@ function summarizeSccache(reports) {
     cache_misses: 0,
     cache_errors: 0,
     cache_writes: 0,
-    hit_rate_percent: null,
   }
   for (const report of reports) {
     for (const key of [
@@ -99,11 +106,14 @@ function summarizeSccache(reports) {
       summary[key] += report[key]
     }
   }
-  summary.hit_rate_percent = percentage(
-    summary.cache_hits,
-    summary.cache_hits + summary.cache_misses,
-  )
-  return summary
+  return {
+    ...summary,
+    ...percentageField(
+      'hit_rate_percent',
+      summary.cache_hits,
+      summary.cache_hits + summary.cache_misses,
+    ),
+  }
 }
 
 function summarizeBuildkit(records) {
@@ -111,12 +121,15 @@ function summarizeBuildkit(records) {
     (total, record) => total + record.completed_steps,
     0,
   )
-  const cachedSteps = records.reduce((total, record) => total + record.cached_steps, 0)
+  const cachedSteps = records.reduce(
+    (total, record) => total + record.cached_steps,
+    0,
+  )
   return {
     build_record_count: records.length,
     completed_steps: completedSteps,
     cached_steps: cachedSteps,
-    cache_hit_rate_percent: percentage(cachedSteps, completedSteps),
+    ...percentageField('cache_hit_rate_percent', cachedSteps, completedSteps),
     measurement: 'buildx_target_record_steps',
   }
 }
@@ -158,7 +171,9 @@ function listBuildHistory() {
   )
   if (result.error) throw result.error
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `buildx history exited ${result.status}`)
+    throw new Error(
+      result.stderr.trim() || `buildx history exited ${result.status}`,
+    )
   }
   return parseJsonObjects(result.stdout).map(normalizeBuildRecord)
 }
@@ -206,7 +221,8 @@ function readHistoryEvents(ref) {
 }
 
 function cacheBackendFromEnvironment(environment = process.env) {
-  const kind = environment.NOOK_SCCACHE_BACKEND === 'remote' ? 'remote' : 'direct_compile'
+  const kind =
+    environment.NOOK_SCCACHE_BACKEND === 'remote' ? 'remote' : 'direct_compile'
   return {
     kind,
     persistent: kind === 'remote',
@@ -217,30 +233,32 @@ function cacheBackendFromEnvironment(environment = process.env) {
 }
 
 function validateTelemetryRecord(record, expected = {}) {
-  if (!record || typeof record !== 'object') throw new Error('telemetry record is required')
-  if (record.schema_version !== 1) throw new Error('telemetry schema_version must be 1')
+  if (!record || typeof record !== 'object')
+    throw new Error('telemetry record is required')
+  if (record.schema_version !== 1)
+    throw new Error('telemetry schema_version must be 1')
   if (!record.github || typeof record.github !== 'object') {
     throw new Error('telemetry github context is required')
   }
   if (typeof record.github.run_id !== 'string') {
     throw new Error('telemetry github.run_id must be a string')
   }
-  if (!Number.isInteger(record.github.run_attempt) || record.github.run_attempt < 1) {
+  if (
+    !Number.isInteger(record.github.run_attempt) ||
+    record.github.run_attempt < 1
+  ) {
     throw new Error('telemetry github.run_attempt must be a positive integer')
   }
   if (typeof record.github.job !== 'string' || !record.github.job) {
     throw new Error('telemetry github.job must be a non-empty string')
   }
-  if (
-    expected.runId !== undefined &&
-    record.github.run_id !== String(expected.runId)
-  ) {
+  if ('runId' in expected && record.github.run_id !== String(expected.runId)) {
     throw new Error(
       `telemetry run ${record.github.run_id} does not match expected run ${expected.runId}`,
     )
   }
   if (
-    expected.runAttempt !== undefined &&
+    'runAttempt' in expected &&
     record.github.run_attempt !== Number(expected.runAttempt)
   ) {
     throw new Error(
@@ -259,7 +277,10 @@ function validateTelemetryRecord(record, expected = {}) {
   ) {
     throw new Error('telemetry cache backend persistence is inconsistent')
   }
-  if (typeof record.cache_backend.reason !== 'string' || !record.cache_backend.reason) {
+  if (
+    typeof record.cache_backend.reason !== 'string' ||
+    !record.cache_backend.reason
+  ) {
     throw new Error('telemetry cache_backend.reason is required')
   }
   for (const [section, fields] of [
@@ -285,15 +306,23 @@ function validateTelemetryRecord(record, expected = {}) {
         !Number.isInteger(record[section][field]) ||
         record[section][field] < 0
       ) {
-        throw new Error(`telemetry ${section}.${field} must be a non-negative integer`)
+        throw new Error(
+          `telemetry ${section}.${field} must be a non-negative integer`,
+        )
       }
     }
-    const rate =
-      section === 'sccache'
-        ? record[section].hit_rate_percent
-        : record[section].cache_hit_rate_percent
-    if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) {
-      throw new Error(`telemetry ${section} cache rate must be null or 0..100`)
+    const rateName =
+      section === 'sccache' ? 'hit_rate_percent' : 'cache_hit_rate_percent'
+    const rate = record[section][rateName]
+    if (Number.isFinite(rate) && (rate < 0 || rate > 100)) {
+      throw new Error(
+        `telemetry ${section} cache rate must be 0..100 when measured`,
+      )
+    }
+    if (!Number.isFinite(rate) && rateName in record[section]) {
+      throw new Error(
+        `telemetry ${section} cache rate must be numeric when present`,
+      )
     }
   }
   if (!record.collection || typeof record.collection.complete !== 'boolean') {
@@ -317,7 +346,9 @@ async function collectTelemetry({
   let records = []
   try {
     const baseline = new Set(baselineRefs)
-    records = listBuildHistory().filter((record) => record.ref && !baseline.has(record.ref))
+    records = listBuildHistory().filter(
+      (record) => record.ref && !baseline.has(record.ref),
+    )
   } catch (error) {
     warnings.push(`buildx_history_unavailable: ${error.message}`)
   }
@@ -327,7 +358,10 @@ async function collectTelemetry({
   for (const record of records) {
     try {
       reports.push(
-        ...extractSccacheReports(await readHistoryEvents(record.ref), seenReports),
+        ...extractSccacheReports(
+          await readHistoryEvents(record.ref),
+          seenReports,
+        ),
       )
     } catch (error) {
       warnings.push(`buildx_logs_unavailable:${record.ref}: ${error.message}`)
@@ -354,19 +388,20 @@ async function collectTelemetry({
 
 function writeJson(filename, value) {
   fs.mkdirSync(path.dirname(filename), { recursive: true })
-  fs.writeFileSync(filename, `${JSON.stringify(value, null, 2)}\n`)
+  fs.writeFileSync(
+    filename,
+    `${JSON.stringify(value, (_key, nestedValue) => nestedValue, 2)}\n`,
+  )
 }
 
 function appendJobSummary(record, filename = process.env.GITHUB_STEP_SUMMARY) {
   if (!filename) return
-  const compilerRate =
-    record.sccache.hit_rate_percent === null
-      ? 'n/a (no executed cacheable compiler requests)'
-      : `${record.sccache.hit_rate_percent}%`
-  const buildkitRate =
-    record.buildkit.cache_hit_rate_percent === null
-      ? 'n/a (no completed Buildx steps)'
-      : `${record.buildkit.cache_hit_rate_percent}%`
+  const compilerRate = !Number.isFinite(record.sccache.hit_rate_percent)
+    ? 'n/a (no executed cacheable compiler requests)'
+    : `${record.sccache.hit_rate_percent}%`
+  const buildkitRate = !Number.isFinite(record.buildkit.cache_hit_rate_percent)
+    ? 'n/a (no completed Buildx steps)'
+    : `${record.buildkit.cache_hit_rate_percent}%`
   fs.appendFileSync(
     filename,
     [
@@ -382,7 +417,8 @@ function appendJobSummary(record, filename = process.env.GITHUB_STEP_SUMMARY) {
 
 function argumentValue(arguments_, name) {
   const index = arguments_.indexOf(name)
-  if (index === -1 || !arguments_[index + 1]) throw new Error(`${name} is required`)
+  if (index === -1 || !arguments_[index + 1])
+    throw new Error(`${name} is required`)
   return arguments_[index + 1]
 }
 
@@ -393,7 +429,9 @@ async function main(arguments_ = process.argv.slice(2)) {
     const warnings = []
     let refs = []
     try {
-      refs = listBuildHistory().map((record) => record.ref).filter(Boolean)
+      refs = listBuildHistory()
+        .map((record) => record.ref)
+        .filter(Boolean)
     } catch (error) {
       warnings.push(`buildx_history_unavailable: ${error.message}`)
     }
@@ -402,7 +440,9 @@ async function main(arguments_ = process.argv.slice(2)) {
   }
   if (command !== 'collect') throw new Error('expected start or collect')
 
-  const baseline = JSON.parse(fs.readFileSync(argumentValue(arguments_, '--baseline'), 'utf8'))
+  const baseline = JSON.parse(
+    fs.readFileSync(argumentValue(arguments_, '--baseline'), 'utf8'),
+  )
   const record = await collectTelemetry({
     baselineRefs: baseline.refs ?? [],
     baselineWarnings: baseline.warnings ?? [],
@@ -429,7 +469,6 @@ module.exports = {
   normalizeBuildRecord,
   parseJsonObjects,
   parseRawJsonProgress,
-  percentage,
   summarizeBuildkit,
   summarizeSccache,
   validateTelemetryRecord,

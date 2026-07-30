@@ -3,7 +3,11 @@ import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { installDemoChromeStub, type ChromeMessage } from './static-chrome-stub'
+import {
+  demoDomainEnumArgs,
+  installDemoChromeStub,
+  type ChromeMessage,
+} from './static-chrome-stub'
 
 const DEMO_BEAT_MS = 900
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
@@ -33,23 +37,52 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   ) as Record<string, ChromeMessage>
   const stubArgs = {
     localizedMessages: messages,
+    ...demoDomainEnumArgs,
     enrollPilotFlow: true,
   }
 
   await page.addInitScript(installDemoChromeStub, stubArgs)
 
-  let signalWasmBootstrapStarted: (() => void) | undefined
+  enum BootstrapStartSignalKind {
+    WaitingForHandler = 'waiting-for-handler',
+    Ready = 'ready',
+  }
+
+  type BootstrapStartSignal =
+    | { kind: BootstrapStartSignalKind.WaitingForHandler }
+    | { kind: BootstrapStartSignalKind.Ready; signal: () => void }
+  let bootstrapStartSignal: BootstrapStartSignal = {
+    kind: BootstrapStartSignalKind.WaitingForHandler,
+  }
   const wasmBootstrapStarted = new Promise<void>((resolve) => {
-    signalWasmBootstrapStarted = resolve
+    bootstrapStartSignal = {
+      kind: BootstrapStartSignalKind.Ready,
+      signal: resolve,
+    }
   })
-  let releaseWasmBootstrap: (() => void) | undefined
+  enum BootstrapReleaseSignalKind {
+    Blocked = 'blocked',
+    Releasable = 'releasable',
+  }
+
+  type BootstrapReleaseSignal =
+    | { kind: BootstrapReleaseSignalKind.Blocked }
+    | { kind: BootstrapReleaseSignalKind.Releasable; release: () => void }
+  let bootstrapReleaseSignal: BootstrapReleaseSignal = {
+    kind: BootstrapReleaseSignalKind.Blocked,
+  }
   const wasmBootstrapReleased = new Promise<void>((resolve) => {
-    releaseWasmBootstrap = resolve
+    bootstrapReleaseSignal = {
+      kind: BootstrapReleaseSignalKind.Releasable,
+      release: resolve,
+    }
   })
   await page.route(/nook_wasm_bg.*\.wasm$/, async (route) => {
-    signalWasmBootstrapStarted?.()
+    if (bootstrapStartSignal.kind === BootstrapStartSignalKind.Ready) {
+      bootstrapStartSignal.signal()
+    }
     await wasmBootstrapReleased
-    await route.continue().catch(() => undefined)
+    await route.continue().catch(() => {})
   })
 
   // Replace the document while the real app bootstrap is active. This covers
@@ -120,7 +153,9 @@ test('uses the paired demo vault for authenticator enrollment', async ({
         </main>
       </body>
     </html>`)
-  releaseWasmBootstrap?.()
+  if (bootstrapReleaseSignal.kind === BootstrapReleaseSignalKind.Releasable) {
+    bootstrapReleaseSignal.release()
+  }
   const replacementChildCount = await page
     .locator('[data-bootstrap-sentinel="replacement-root"]')
     .evaluate((root) => root.children.length)

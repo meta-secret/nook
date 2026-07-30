@@ -3,9 +3,33 @@ import {
   EVENT_DIGEST_PATTERN,
   fulfillEventMetadata,
   parseEventMultipart as parseMultipartEvent,
+  EventMultipartParseKind,
 } from './event-log-stub'
 
 const DEFAULT_FILE_NAME = 'nook-events'
+
+enum DriveEventFileIdParseKind {
+  NotEvent = 'not-event',
+  Event = 'event',
+}
+
+type DriveEventFileIdParse =
+  | { kind: DriveEventFileIdParseKind.NotEvent }
+  | { kind: DriveEventFileIdParseKind.Event; digest: string }
+
+enum DriveEventUploadParseKind {
+  Invalid = 'invalid',
+  Valid = 'valid',
+}
+
+type DriveEventUploadParse =
+  | { kind: DriveEventUploadParseKind.Invalid }
+  | {
+      kind: DriveEventUploadParseKind.Valid
+      digest: string
+      content: string
+      parentId: string
+    }
 
 /** In-memory Google Drive stub (Drive v3 REST) for appDataFolder + shared folders. */
 export function createLocalE2eGoogleDriveVaultStub(
@@ -57,10 +81,13 @@ export function createLocalE2eGoogleDriveVaultStub(
     return `e2e-drive-event-${digest}`
   }
 
-  function eventDigestFromFileId(id: string) {
+  function parseEventFileId(id: string): DriveEventFileIdParse {
     return id.startsWith('e2e-drive-event-')
-      ? id.slice('e2e-drive-event-'.length)
-      : undefined
+      ? {
+          kind: DriveEventFileIdParseKind.Event,
+          digest: id.slice('e2e-drive-event-'.length),
+        }
+      : { kind: DriveEventFileIdParseKind.NotEvent }
   }
 
   function eventListEntries(parentId: string, digest?: string) {
@@ -76,13 +103,15 @@ export function createLocalE2eGoogleDriveVaultStub(
     return entries
   }
 
-  function parseEventMultipart(
-    body: string,
-  ): { digest: string; content: string; parentId: string } | undefined {
+  function parseEventMultipart(body: string): DriveEventUploadParse {
     const event = parseMultipartEvent(body)
-    return event
-      ? { ...event, parentId: parseParentsFromBody(body) }
-      : undefined
+    return event.kind === EventMultipartParseKind.Valid
+      ? {
+          kind: DriveEventUploadParseKind.Valid,
+          ...event,
+          parentId: parseParentsFromBody(body),
+        }
+      : { kind: DriveEventUploadParseKind.Invalid }
   }
 
   return {
@@ -113,7 +142,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         sharedPermissionStatus?: number
       },
     ) {
-      if (opts?.vaultYaml !== undefined) {
+      if (opts && 'vaultYaml' in opts) {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
@@ -259,10 +288,10 @@ export function createLocalE2eGoogleDriveVaultStub(
         const driveFileId = driveFileMatch?.[1]
 
         if (driveFileId && fullUrl.includes('alt=media')) {
-          const eventDigest = eventDigestFromFileId(driveFileId)
-          if (eventDigest) {
-            const content = allEventFiles().get(eventDigest)
-            if (content === undefined) {
+          const eventFile = parseEventFileId(driveFileId)
+          if (eventFile.kind === DriveEventFileIdParseKind.Event) {
+            const content = allEventFiles().get(eventFile.digest)
+            if (!content) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
@@ -303,16 +332,16 @@ export function createLocalE2eGoogleDriveVaultStub(
             })
             return
           }
-          const eventDigest = eventDigestFromFileId(driveFileId)
-          if (eventDigest) {
-            if (!allEventFiles().has(eventDigest)) {
+          const eventFile = parseEventFileId(driveFileId)
+          if (eventFile.kind === DriveEventFileIdParseKind.Event) {
+            if (!allEventFiles().has(eventFile.digest)) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
             await fulfillEventMetadata(
               route,
               driveFileId,
-              eventDigest,
+              eventFile.digest,
               'e2e-event-md5-',
             )
             return
@@ -335,7 +364,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           method === 'POST'
         ) {
           const event = parseEventMultipart(bodyText)
-          if (event) {
+          if (event.kind === DriveEventUploadParseKind.Valid) {
             eventFilesFor(event.parentId).set(event.digest, event.content)
             await route.fulfill({
               status: 200,

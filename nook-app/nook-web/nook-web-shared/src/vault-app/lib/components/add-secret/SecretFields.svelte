@@ -7,7 +7,7 @@
     RefreshCw,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import type { VaultItemType } from "$lib/nook";
+  import { SecretType } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
   import MarkdownEditor from "../MarkdownEditor.svelte";
   import SeedPhraseGrid from "../SeedPhraseGrid.svelte";
@@ -21,7 +21,7 @@
   }: {
     vault: VaultState;
     state: SecretFormState;
-    selectedType: VaultItemType;
+    selectedType: SecretType;
     onGeneratePassword: (
       length: number,
       lowercase: boolean,
@@ -87,7 +87,7 @@
   }
 </script>
 
-    {#if selectedType === 'login'}
+    {#if selectedType === SecretType.Login}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('add_secret.website_label')}</label
@@ -102,7 +102,7 @@
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
-    {:else if selectedType === 'api-key'}
+    {:else if selectedType === SecretType.ApiKey}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('add_secret.website_label')}</label
@@ -121,7 +121,7 @@
       </div>
     {/if}
 
-    {#if selectedType === 'login'}
+    {#if selectedType === SecretType.Login}
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="login-username"
@@ -248,7 +248,7 @@
           </div>
         {/if}
       </div>
-    {:else if selectedType === 'api-key'}
+    {:else if selectedType === SecretType.ApiKey}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-value"
           >{vault.t('vault.fields.key')}</label
@@ -276,7 +276,7 @@
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
-    {:else if selectedType === 'seed-phrase'}
+    {:else if selectedType === SecretType.SeedPhrase}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('vault.fields.account')}</label
@@ -300,7 +300,7 @@
           bind:valid={state.seedPhraseValid}
         />
       </div>
-    {:else if selectedType === 'authenticator'}
+    {:else if selectedType === SecretType.Authenticator}
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="authenticator-issuer"
@@ -361,7 +361,7 @@
           {vault.t('add_secret.authenticator_secret_hint')}
         </p>
       </div>
-    {:else if selectedType === 'credit-card'}
+    {:else if selectedType === SecretType.CreditCard}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('vault.fields.title')}</label
@@ -503,7 +503,7 @@
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
-    {:else if selectedType === 'file-attachment'}
+    {:else if selectedType === SecretType.FileAttachment}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="file-attachment-title"
           >{vault.t('vault.fields.title')}</label

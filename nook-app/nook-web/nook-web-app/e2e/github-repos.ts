@@ -30,7 +30,10 @@ function writeRegisteredRepos(repos: string[]) {
     }
     return
   }
-  fs.writeFileSync(REGISTRY_PATH, `${JSON.stringify(unique, undefined, 2)}\n`)
+  fs.writeFileSync(
+    REGISTRY_PATH,
+    `${JSON.stringify(unique, (_key, value) => value, 2)}\n`,
+  )
 }
 
 export function registerE2eGithubRepo(repoName: string) {

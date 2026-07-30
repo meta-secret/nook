@@ -13,9 +13,32 @@ type BarcodeDetectorLike = {
   ) => Promise<Array<{ rawValue?: string; format?: string }>>
 }
 
-function barcodeDetectorConstructor():
-  | (new (options?: { formats?: string[] }) => BarcodeDetectorLike)
-  | undefined {
+type BarcodeDetectorConstructor = new (options?: {
+  formats?: string[]
+}) => BarcodeDetectorLike
+
+enum BarcodeDetectorAvailabilityKind {
+  Unsupported = 'unsupported',
+  Available = 'available',
+}
+
+type BarcodeDetectorAvailability =
+  | { kind: BarcodeDetectorAvailabilityKind.Unsupported }
+  | {
+      kind: BarcodeDetectorAvailabilityKind.Available
+      Detector: BarcodeDetectorConstructor
+    }
+
+enum QrBitmapCaptureKind {
+  Captured = 'captured',
+  Unavailable = 'unavailable',
+}
+
+type QrBitmapCapture =
+  | { kind: QrBitmapCaptureKind.Captured; bitmap: ImageBitmap }
+  | { kind: QrBitmapCaptureKind.Unavailable }
+
+function barcodeDetectorConstructor(): BarcodeDetectorAvailability {
   const candidate = (
     globalThis as typeof globalThis & {
       BarcodeDetector?: new (options?: {
@@ -23,7 +46,9 @@ function barcodeDetectorConstructor():
       }) => BarcodeDetectorLike
     }
   ).BarcodeDetector
-  return typeof candidate === 'function' ? candidate : undefined
+  return typeof candidate === 'function'
+    ? { kind: BarcodeDetectorAvailabilityKind.Available, Detector: candidate }
+    : { kind: BarcodeDetectorAvailabilityKind.Unsupported }
 }
 
 function isVisibleElement(element: Element): boolean {
@@ -85,24 +110,35 @@ export function pageHasQrEnrollmentHint(): boolean {
 
 async function bitmapFromElement(
   element: HTMLElement,
-): Promise<ImageBitmap | undefined> {
+): Promise<QrBitmapCapture> {
   try {
     if (element instanceof HTMLCanvasElement) {
-      return await createImageBitmap(element)
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(element),
+      }
     }
     if (element instanceof HTMLImageElement) {
-      if (!element.complete || element.naturalWidth === 0) return undefined
-      return await createImageBitmap(element)
+      if (!element.complete || element.naturalWidth === 0) {
+        return { kind: QrBitmapCaptureKind.Unavailable }
+      }
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(element),
+      }
     }
     if (element instanceof SVGSVGElement) {
       const serialized = new XMLSerializer().serializeToString(element)
       const blob = new Blob([serialized], { type: 'image/svg+xml' })
-      return await createImageBitmap(blob)
+      return {
+        kind: QrBitmapCaptureKind.Captured,
+        bitmap: await createImageBitmap(blob),
+      }
     }
   } catch {
-    return undefined
+    return { kind: QrBitmapCaptureKind.Unavailable }
   }
-  return undefined
+  return { kind: QrBitmapCaptureKind.Unavailable }
 }
 
 function collectQrMedia(): HTMLElement[] {
@@ -135,17 +171,44 @@ function collectMarkedOtpauthCandidates(): DecodedOtpauthCandidate[] {
   return candidates
 }
 
+export enum DecodeVisibleOtpauthCandidatesResultStatus {
+  Ready = 'ready',
+  Unsupported = 'unsupported',
+  Empty = 'empty',
+  Ambiguous = 'ambiguous',
+}
+
 function finalizeOtpauthCandidates(candidates: DecodedOtpauthCandidate[]): {
-  status: 'ready' | 'empty' | 'ambiguous'
+  status:
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
   candidates: DecodedOtpauthCandidate[]
 } {
-  if (candidates.length === 0) return { status: 'empty', candidates: [] }
-  if (candidates.length > 1) return { status: 'ambiguous', candidates }
-  return { status: 'ready', candidates }
+  if (candidates.length === 0) {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Empty,
+      candidates: [],
+    }
+  }
+  if (candidates.length > 1) {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous,
+      candidates,
+    }
+  }
+  return {
+    status: DecodeVisibleOtpauthCandidatesResultStatus.Ready,
+    candidates,
+  }
 }
 
 export async function decodeVisibleOtpauthCandidates(): Promise<{
-  status: 'ready' | 'unsupported' | 'empty' | 'ambiguous'
+  status:
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ready
+    | DecodeVisibleOtpauthCandidatesResultStatus.Unsupported
+    | DecodeVisibleOtpauthCandidatesResultStatus.Empty
+    | DecodeVisibleOtpauthCandidatesResultStatus.Ambiguous
   candidates: DecodedOtpauthCandidate[]
 }> {
   // Prefer an explicit page-provided otpauth URI (fixtures and cooperative
@@ -155,18 +218,25 @@ export async function decodeVisibleOtpauthCandidates(): Promise<{
     return finalizeOtpauthCandidates(marked)
   }
 
-  const Detector = barcodeDetectorConstructor()
-  if (!Detector) {
-    return { status: 'unsupported', candidates: [] }
+  const detectorAvailability = barcodeDetectorConstructor()
+  if (
+    detectorAvailability.kind === BarcodeDetectorAvailabilityKind.Unsupported
+  ) {
+    return {
+      status: DecodeVisibleOtpauthCandidatesResultStatus.Unsupported,
+      candidates: [],
+    }
   }
+  const { Detector } = detectorAvailability
   const detector = new Detector({ formats: ['qr_code'] })
   const candidates: DecodedOtpauthCandidate[] = []
   const seen = new Set<string>()
   let index = 0
   for (const element of collectQrMedia()) {
     index += 1
-    const bitmap = await bitmapFromElement(element)
-    if (!bitmap) continue
+    const capture = await bitmapFromElement(element)
+    if (capture.kind === QrBitmapCaptureKind.Unavailable) continue
+    const { bitmap } = capture
     try {
       const codes = await detector.detect(bitmap)
       for (const code of codes) {

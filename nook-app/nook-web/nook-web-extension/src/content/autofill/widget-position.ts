@@ -31,7 +31,16 @@ export function attachPointerDrag(
   handle: HTMLElement,
   options?: { onTap?: () => void },
 ): void {
-  let pointerId: number | undefined
+  enum DragPointerStateKind {
+    Released = 'released',
+    Captured = 'captured',
+  }
+
+  type DragPointerState =
+    | { kind: DragPointerStateKind.Released }
+    | { kind: DragPointerStateKind.Captured; pointerId: number }
+
+  let pointer: DragPointerState = { kind: DragPointerStateKind.Released }
   let startX = 0
   let startY = 0
   let originLeft = 0
@@ -48,8 +57,11 @@ export function attachPointerDrag(
     ) {
       return
     }
-    pointerId = event.pointerId
-    handle.setPointerCapture(pointerId)
+    pointer = {
+      kind: DragPointerStateKind.Captured,
+      pointerId: event.pointerId,
+    }
+    handle.setPointerCapture(pointer.pointerId)
     const rect = host.getBoundingClientRect()
     startX = event.clientX
     startY = event.clientY
@@ -59,27 +71,38 @@ export function attachPointerDrag(
   })
 
   handle.addEventListener('pointermove', (event) => {
-    if (pointerId === undefined || event.pointerId !== pointerId) return
+    if (
+      pointer.kind !== DragPointerStateKind.Captured ||
+      event.pointerId !== pointer.pointerId
+    ) {
+      return
+    }
     const dx = event.clientX - startX
     const dy = event.clientY - startY
     if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
     dragged = true
     host.classList.add('dragging')
-    widgetState.position = clampWidgetPosition(
+    const position = clampWidgetPosition(
       originLeft + dx,
       originTop + dy,
       host.offsetWidth,
       host.offsetHeight,
     )
-    applyWidgetPosition(host, widgetState.position)
+    widgetState.setPosition(position)
+    applyWidgetPosition(host, position)
   })
 
   const endDrag = (event: PointerEvent) => {
-    if (pointerId === undefined || event.pointerId !== pointerId) return
-    if (handle.hasPointerCapture(pointerId)) {
-      handle.releasePointerCapture(pointerId)
+    if (
+      pointer.kind !== DragPointerStateKind.Captured ||
+      event.pointerId !== pointer.pointerId
+    ) {
+      return
     }
-    pointerId = undefined
+    if (handle.hasPointerCapture(pointer.pointerId)) {
+      handle.releasePointerCapture(pointer.pointerId)
+    }
+    pointer = { kind: DragPointerStateKind.Released }
     host.classList.remove('dragging')
     if (!dragged) options?.onTap?.()
   }

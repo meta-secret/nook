@@ -17,7 +17,7 @@ fn sid(label: &str) -> SecretId {
     let mut hasher = DefaultHasher::new();
     label.hash(&mut hasher);
     let token = URL_SAFE_NO_PAD.encode(hasher.finish().to_be_bytes());
-    SecretId::parse(&format!("secret_{token}")).expect("vault workflow test id should be valid")
+    SecretId::from_vault_record(&format!("secret_{token}"))
 }
 
 fn api_key(value: &str) -> SecretValue {
@@ -257,7 +257,8 @@ fn incremental_replace_secret_rejects_missing_old_id() -> anyhow::Result<()> {
             data_yaml: &api_key_yaml("value")?,
         },
     )
-    .expect_err("vault workflow test should reject invalid input");
+    .err()
+    .ok_or_else(|| anyhow::anyhow!("vault workflow test should reject invalid input"))?;
     assert!(err.to_string().contains("not found"));
     Ok(())
 }
@@ -308,7 +309,8 @@ fn incremental_replace_secret_rejects_duplicate_new_id() -> anyhow::Result<()> {
             data_yaml: &api_key_yaml("c")?,
         },
     )
-    .expect_err("vault workflow test should reject invalid input");
+    .err()
+    .ok_or_else(|| anyhow::anyhow!("vault workflow test should reject invalid input"))?;
     assert!(err.to_string().contains("already exists"));
     Ok(())
 }

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import {
+  BrowserOAuthProvider,
   isCloudflarePrPreviewHost,
+  OAuthOriginSupportKind,
+  OAuthOriginUnsupportedReason,
   resolveOAuthOriginSupport,
 } from '$lib/oauth-origin'
 
@@ -12,31 +15,31 @@ describe('oauth origin support', () => {
   test('allows the configured Google stable, development, and local origins', () => {
     expect(
       resolveOAuthOriginSupport(
-        'google-drive',
+        BrowserOAuthProvider.GoogleDrive,
         loc('https://simple.nokey.sh', 'simple.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'google-drive',
+        BrowserOAuthProvider.GoogleDrive,
         loc('https://sentinel.dev.nokey.sh', 'sentinel.dev.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'google-drive',
+        BrowserOAuthProvider.GoogleDrive,
         loc('https://localhost:5173', 'localhost'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'google-drive',
+        BrowserOAuthProvider.GoogleDrive,
         loc('http://localhost:5173', 'localhost'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'google-drive',
+        BrowserOAuthProvider.GoogleDrive,
         loc('http://127.0.0.1:5173', '127.0.0.1'),
       ).supported,
     ).toBe(true)
@@ -45,25 +48,25 @@ describe('oauth origin support', () => {
   test('allows the configured iCloud stable, development, and local HTTPS origins', () => {
     expect(
       resolveOAuthOriginSupport(
-        'icloud',
+        BrowserOAuthProvider.ICloud,
         loc('https://sentinel.nokey.sh', 'sentinel.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'icloud',
+        BrowserOAuthProvider.ICloud,
         loc('https://simple.dev.nokey.sh', 'simple.dev.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'icloud',
+        BrowserOAuthProvider.ICloud,
         loc('https://localhost:5173', 'localhost'),
       ).supported,
     ).toBe(true)
     expect(
       resolveOAuthOriginSupport(
-        'icloud',
+        BrowserOAuthProvider.ICloud,
         loc('https://localhost:5175', 'localhost'),
       ).supported,
     ).toBe(true)
@@ -73,37 +76,51 @@ describe('oauth origin support', () => {
     for (const origin of ['https://nokey.sh', 'https://dev.nokey.sh']) {
       const hostname = new URL(origin).hostname
       expect(
-        resolveOAuthOriginSupport('google-drive', loc(origin, hostname)),
-      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+        resolveOAuthOriginSupport(
+          BrowserOAuthProvider.GoogleDrive,
+          loc(origin, hostname),
+        ),
+      ).toMatchObject({
+        supported: false,
+        reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
+      })
       expect(
-        resolveOAuthOriginSupport('icloud', loc(origin, hostname)),
-      ).toMatchObject({ supported: false, reason: 'unregistered-origin' })
+        resolveOAuthOriginSupport(
+          BrowserOAuthProvider.ICloud,
+          loc(origin, hostname),
+        ),
+      ).toMatchObject({
+        supported: false,
+        reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
+      })
     }
   })
 
   test('blocks Cloudflare PR preview origins with a preview reason', () => {
     const support = resolveOAuthOriginSupport(
-      'google-drive',
+      BrowserOAuthProvider.GoogleDrive,
       loc('https://pr-191.nook-1n8.pages.dev', 'pr-191.nook-1n8.pages.dev'),
     )
 
     expect(support).toEqual({
+      kind: OAuthOriginSupportKind.Unsupported,
       supported: false,
       origin: 'https://pr-191.nook-1n8.pages.dev',
-      reason: 'cloudflare-pr-preview',
+      reason: OAuthOriginUnsupportedReason.CloudflarePreview,
     })
   })
 
   test('distinguishes non-preview unregistered origins', () => {
     expect(
       resolveOAuthOriginSupport(
-        'icloud',
+        BrowserOAuthProvider.ICloud,
         loc('http://localhost:5173', 'localhost'),
       ),
     ).toEqual({
+      kind: OAuthOriginSupportKind.Unsupported,
       supported: false,
       origin: 'http://localhost:5173',
-      reason: 'unregistered-origin',
+      reason: OAuthOriginUnsupportedReason.UnregisteredOrigin,
     })
   })
 

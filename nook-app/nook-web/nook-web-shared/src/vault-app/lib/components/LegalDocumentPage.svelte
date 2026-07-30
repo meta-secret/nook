@@ -9,7 +9,11 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import { appPath, legalPageForId, type LegalPageId } from '$lib/legal-content'
+  import {
+    LegalPageId,
+    appPath,
+    legalPageForId,
+  } from '$lib/legal-content'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -24,7 +28,9 @@
 
   const page = $derived(legalPageForId(pageId))
   const otherPageId = $derived<LegalPageId>(
-    pageId === 'privacy' ? 'terms' : 'privacy',
+    pageId === LegalPageId.Privacy
+      ? LegalPageId.Terms
+      : LegalPageId.Privacy,
   )
   const otherPage = $derived(legalPageForId(otherPageId))
 </script>

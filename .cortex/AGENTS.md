@@ -4,9 +4,12 @@ This is the system of record and entry point for all AI agents working in this r
 
 ## ⛔ P1 — most critical code-structure rule: oversized source is prohibited
 
-Authored source files MUST stay at or below **1,000 lines**, except Rust source
-files, which MUST stay at or below **1,500 lines**. Crossing either hard limit
-is a failed repository invariant and a P1 architecture finding.
+Every authored source file, including Rust, MUST stay at or below **1,000
+lines**. Crossing this uniform hard limit is a failed repository invariant and
+a P1 architecture finding. A Rust module that needs more than 1,000 lines
+signals an overcomplicated domain model or too many production
+responsibilities; the model must be decomposed rather than accommodated by a
+larger language-specific allowance.
 
 For Rust, moving `#[cfg(test)]` code or unit tests into another file is **not**
 an acceptable fix. Separate Rust unit-test files under `src` are prohibited:
@@ -96,17 +99,94 @@ Do not create one-variant wrapper enums merely to avoid the spelling
 not to reject idiomatic Rust. Full contract and examples:
 [dynamic-skills/rust-coding.md](dynamic-skills/rust-coding.md).
 
-Authored Rust must not call `.unwrap()`. Production paths propagate or classify
-failure. Rust tests that perform fallible setup or verification return
-`Result<(), E>` and propagate with `?`; converting `.unwrap()` mechanically to
-`.expect(...)` is forbidden. Keep `expect` only when the test is deliberately
-asserting an infallible local construction and the panic itself documents that
-specific invariant. Do not erase test errors behind
+Rust-owned `Tsify`/WASM domain contracts must not override a field type with
+TypeScript `undefined`, `null`, or `void`. In particular, an `Option<T>` field
+plus `#[tsify(type = "... | undefined")]` is two representations of the same
+unnamed absence and leaks it across the boundary. Replace that field with a
+named Rust enum whose variants explain the state and derive the generated
+boundary type from the enum. `void` remains valid only for TypeScript
+unit/effect returns, never as a serialized field state. The syntax-aware
+preflight rejects authored absence sentinels in `tsify(type = "...")`
+overrides, `Option<T>` fields on `Tsify` exports, and `Option<T>` parameters or
+returns on `wasm_bindgen` exports. `Option<T>` may remain inside Rust, but it
+must be converted to a named boundary state before TypeScript generation.
+
+Tests of known JSON contracts must deserialize into the concrete Rust wire or
+domain type before asserting field values. Raw `serde_json::Value` indexing and
+`Value::is_null()` are prohibited for those assertions because indexing treats
+both an omitted property and explicit JSON `null` as `Value::Null`, hiding the
+contract distinction and bypassing typed enums. Raw values remain appropriate
+when malformed, unknown, or deliberately partial JSON is itself the test
+subject, or for a narrow `.get()` assertion that an exact wire property was
+omitted or renamed.
+
+## ⛔ Non-negotiable: authored JavaScript/TypeScript state must be explicit
+
+Authored JavaScript, TypeScript, and Svelte must not contain the `undefined`
+value or type token. Model optional data and named product, workflow,
+lifecycle, resource, and UI states with discriminated unions whose variants
+own their data, or with generated Rust/WASM enums when the state is portable
+domain policy. Do not spread optional-value unions, zero-argument `$state<T>()`
+runes, parameterless `$bindable()` props, optional-field bags, and parallel
+booleans across a controller and then reconstruct the real state through
+condition chains. A parameterless `$bindable()` is still an implicit
+`undefined` default and is forbidden; use a truthful concrete input value or
+remove the unused binding surface.
+
+Classify ownership before authoring an enum. Authentication, vault, recovery,
+Sentinel, provider, sync, secret-schema, and other portable product
+vocabularies are Rust enums in `nook-core`, exposed directly through
+`nook-wasm`; TypeScript must not mirror or rename them. Browser protocol,
+browser lifecycle, and presentation-only closed vocabularies use a meaningfully
+named TypeScript enum. Union variants and protocol shapes reference enum
+members instead of raw string literal types for `kind`, `type`, `status`,
+`phase`, `stage`, `mode`, `action`, and `operation`. Serialized strings remain
+stable through enum values where wire or persistence compatibility requires
+them; unrelated state machines must not be collapsed into one generic enum.
+Constructors, comparisons, switch branches, and fixtures use those same enum
+members rather than repeating serialized strings. Any other authored closed
+string-literal union is also an enum; a field name outside the common
+discriminant list is not an escape hatch. Svelte components import runtime
+enums from a cohesive adjacent TypeScript state module because the Svelte
+compilation boundary does not preprocess runtime TypeScript enum syntax.
+
+External and browser contracts may still produce JavaScript absence values at
+runtime. Optional external input shape is normalized at its narrow boundary,
+and lookup/parser/browser results become a domain-specific union immediately.
+Authored code must not use `undefined` or `null` as values or types. Generated
+declarations may mirror external contracts and are excluded. Tests, build
+scripts, `.agents`, and `.github` code are authored code and are not excluded.
+Do not evade the rule with quoted sentinel names, casts, fake defaults,
+decorative wrappers, or sentinel strings.
+
+`void` is not an absence value when used as TypeScript's unit/effect type. It
+is permitted as the complete return of a function or callback, as
+`Promise<void>`, in `void | Promise<void>` for a synchronous-or-asynchronous
+effect, and in the unary `void` operator when a result is intentionally
+discarded. This is equivalent to Rust `()`, not `Option<T>`. Any union of a
+value with `void`, such as `T | void` or `Promise<T | void>`, is forbidden in
+storage, parameters, callbacks, and return types because it represents unnamed
+absence rather than effect completion. Tests assert semantic variants or
+structural property contracts, never `toBeUndefined`, `toBeNull`,
+`toBeDefined`, or equivalent absence matchers. Full contract:
+[dynamic-skills/typescript-explicit-state.md](dynamic-skills/typescript-explicit-state.md).
+
+Authored Rust must not call `.unwrap()` or `.expect(...)`. Production paths
+propagate or classify failure. Rust tests that perform fallible setup or
+verification return `Result<(), E>` and propagate with `?`; panic-based setup
+and verification are forbidden even for locally constructed fixtures. Do not
+erase test errors behind
 `Box<dyn std::error::Error>`: use the concrete crate error when one error family
 is involved, or `anyhow::Result` when a test composes unrelated fallible APIs.
-Workspace Clippy configuration enforces `unwrap_used` across all targets, and
-reviews treat repetitive test `expect` chains or boxed dynamic test errors as
-refactoring debt rather than acceptable test setup.
+Workspace Clippy configuration denies both `expect_used` and `unwrap_used`
+across all targets.
+
+Production Rust must not depend on, import, return, or invoke `anyhow`.
+Libraries, binaries, examples, and build scripts expose concrete error enums
+whose variants identify the failed operation and preserve typed sources.
+`anyhow` is permitted only in `#[cfg(test)]` unit-test code and integration
+tests under `tests/`, and it belongs in `[dev-dependencies]`. Repository
+preflight parses authored Rust and Cargo manifests to enforce that boundary.
 
 ## ⛔ Non-negotiable: squash merge every PR
 
@@ -295,21 +375,22 @@ build-performance PR. Full policy:
 * [references/cloudflare-operations.md](references/cloudflare-operations.md) — **Privileged Cloudflare operations** through the OAuth-authenticated `cloudflare-api` MCP connection in the local AI-agent environment.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
-* [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
-* [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
-* [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
-* [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
-* [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
-* [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
-* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
-* [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
-* [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
-* [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
-* [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
-* [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
-* [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
-* [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
+
+- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task format`** → commit/push → focused hosted tasks → explicit complete PR validation → fix loop → readiness audit → automatic agent-owned squash merge).
+- [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
+- [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
+- [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
+- [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
+- [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
+- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
+- [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
+- [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
+- [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
+- [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
+- [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
+- [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
+- [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
+- [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
 
 ## 7. Agent duties beyond code
 

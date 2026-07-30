@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { readExtensionPairingStorage } from './helpers/extension-pairing-storage'
 import { launchPairedPinExtension } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
+import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 
 async function listExtensionAuthenticators(
   context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context'],
@@ -20,7 +21,7 @@ async function listExtensionAuthenticators(
         typeof value.devicePublicKey === 'string' &&
         typeof value.deviceSigningPublicKey === 'string' &&
         Array.isArray(value.scopes) &&
-        value.scopes.includes('password-filling'),
+        value.scopes.includes(ExtensionConnectScope.PasswordFilling),
     )
     .map((value) => ({
       vaultStoreId: value.vaultStoreId as string,

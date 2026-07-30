@@ -5,25 +5,37 @@ export type PendingTotpSession = {
   totpSecret: string
 }
 
+export enum PendingTotpSessionLookupKind {
+  Missing = 'missing',
+  Found = 'found',
+}
+
+export type PendingTotpSessionLookup =
+  | { kind: PendingTotpSessionLookupKind.Missing }
+  | {
+      kind: PendingTotpSessionLookupKind.Found
+      session: PendingTotpSession
+    }
+
 export function setPendingTotpSession(session: PendingTotpSession): void {
   sessionStorage.setItem(PENDING_KEY, JSON.stringify(session))
 }
 
-export function readPendingTotpSession(): PendingTotpSession | undefined {
+export function readPendingTotpSession(): PendingTotpSessionLookup {
   const raw = sessionStorage.getItem(PENDING_KEY)
-  if (!raw) return undefined
+  if (!raw) return { kind: PendingTotpSessionLookupKind.Missing }
   try {
     const parsed = JSON.parse(raw) as PendingTotpSession
     if (
       typeof parsed?.username === 'string' &&
       typeof parsed?.totpSecret === 'string'
     ) {
-      return parsed
+      return { kind: PendingTotpSessionLookupKind.Found, session: parsed }
     }
   } catch {
     // ignore corrupt session
   }
-  return undefined
+  return { kind: PendingTotpSessionLookupKind.Missing }
 }
 
 export function clearPendingTotpSession(): void {

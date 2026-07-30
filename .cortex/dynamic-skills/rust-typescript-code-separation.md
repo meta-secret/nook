@@ -229,9 +229,9 @@ After: Rust owns provider rules (`StorageProviderType`, `OauthFilePreset`,
 thin helpers. TypeScript may keep the browser IndexedDB snapshot shape, but
 calls wasm for the app/domain decision.
 
-Authored TypeScript/Svelte must use `undefined`, not `null`, for absence. When a
-browser or generated wasm API returns `null`, normalize it at the boundary with
-`?? undefined` before it reaches app state.
+Authored TypeScript/Svelte uses neither `undefined` nor `null` for absence. When
+a browser or generated WASM API returns either sentinel, classify the outcome
+at the boundary and return a meaningfully named discriminated union.
 
 ### Model sum types as an enum-of-structs, wrap it for wasm
 
@@ -370,8 +370,10 @@ Apply this at the design layer that owns the data — usually `nook-core` — an
 When `Option<T>` is still acceptable (do not force an enum):
 
 - Standard-library / trait signatures that must return `Option` (`get`, `find`,
-  `FromStr`-adjacent helpers), and thin wasm boundary helpers returning
-  `Option<String>` to JS.
+  `FromStr`-adjacent helpers), internal parsers, and caches. A `Tsify` field or
+  `wasm_bindgen` parameter/return must not contain `Option<T>` because generated
+  TypeScript represents it as unnamed absence; convert it to a named Rust enum
+  first.
 - If absence is an error, use a typed `thiserror` variant and `Result<T, E>`;
   do not create an enum variant that merely renames failure.
 - When two or more `Option` fields co-vary (present/absent together), that is the

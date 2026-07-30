@@ -30,7 +30,7 @@ export function buildSentinelGenesisParticipantResponseLink(
  * the public ceremony request from browser history after Rust validates it.
  */
 export function consumeSentinelGenesisRequestFromLocation(): string {
-  if (typeof window === "undefined") return "";
+  if (!("window" in globalThis)) return "";
   const url = new URL(window.location.href);
   const hasRequest =
     url.hash.startsWith(SENTINEL_REQUEST_HASH_PREFIX) ||
@@ -41,7 +41,7 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
     const request = normalizeSentinelGenesisRequest(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-request");
-    history.replaceState(undefined, "", `${url.pathname}${url.search}`);
+    history.replaceState({}, "", `${url.pathname}${url.search}`);
     return request;
   } catch {
     return "";
@@ -49,7 +49,7 @@ export function consumeSentinelGenesisRequestFromLocation(): string {
 }
 
 export function consumeSentinelGenesisParticipantResponseFromLocation(): string {
-  if (typeof window === "undefined") return "";
+  if (!("window" in globalThis)) return "";
   const url = new URL(window.location.href);
   const hasResponse =
     url.hash.startsWith(SENTINEL_RESPONSE_HASH_PREFIX) ||
@@ -60,7 +60,7 @@ export function consumeSentinelGenesisParticipantResponseFromLocation(): string 
     const response = normalizeSentinelGenesisParticipantPayload(url.toString());
     url.hash = "";
     url.searchParams.delete("sentinel-response");
-    history.replaceState(undefined, "", `${url.pathname}${url.search}`);
+    history.replaceState({}, "", `${url.pathname}${url.search}`);
     return response;
   } catch {
     return "";

@@ -47,7 +47,7 @@ import { createLocalVaultOnLogin } from './vault-setup'
 
 export async function expectEmptyLocalFolderRejected(
   page: Page,
-  afterSetup: () => Promise<void> = async () => undefined,
+  afterSetup: () => Promise<void> = async () => {},
 ): Promise<void> {
   await page.getByTestId('login-connect-storage-btn').click()
   await expect(page.getByTestId('login-provider-setup')).toBeVisible()
@@ -295,7 +295,7 @@ export async function approveJoinFromBanner(
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(target, expectedMembers, undefined, page)
+  await assertEnrolledVaultOnGithub(target, expectedMembers, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
@@ -310,7 +310,7 @@ export async function approveJoinFromSettings(
   await waitForPendingJoinInSettings(page, deviceId)
   const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(target, expectedMembers, undefined, page)
+  await assertEnrolledVaultOnGithub(target, expectedMembers, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 

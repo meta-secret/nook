@@ -28,7 +28,26 @@ describe('authentication workflow snapshot messages', () => {
   })
 
   test('rejects missing, negative, fractional, and unbounded counts', () => {
-    for (const invalidCount of [undefined, -1, 0.5, 101]) {
+    const observationWithoutOneTimeCodeCount = {
+      ...validMessage.payload.observations[0],
+    }
+    expect(
+      Reflect.deleteProperty(
+        observationWithoutOneTimeCodeCount,
+        'oneTimeCodeFieldCount',
+      ),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [observationWithoutOneTimeCodeCount],
+        },
+      }),
+    ).toBe(false)
+
+    for (const invalidCount of [-1, 0.5, 101]) {
       expect(
         isAuthenticationWorkflowSnapshotMessage({
           ...validMessage,

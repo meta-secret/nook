@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_wraps)]
+
 use nook_preflight::coverage::{
     classify_coverage_inputs, coverage_report, validate_coverage_artifact,
 };
@@ -10,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[test]
-fn classifies_source_and_build_only_coverage_inputs() {
+fn classifies_source_and_build_only_coverage_inputs() -> anyhow::Result<()> {
     let source = classify_coverage_inputs([
         "README.md",
         "nook-app/nook-core/src/lib.rs",
@@ -31,6 +33,7 @@ fn classifies_source_and_build_only_coverage_inputs() {
     let unrelated = classify_coverage_inputs(["README.md", "nook-app/nook-web/package.json"]);
     assert!(!unrelated.coverage_inputs_changed);
     assert!(!unrelated.base_coverage_required);
+    Ok(())
 }
 
 #[test]
@@ -104,7 +107,8 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> anyhow::Result<()> 
     fs::write(current.join("summary.json"), "TOTAL 123 120 92.00%\n")?;
 
     let error = coverage_report(&current, &base)
-        .expect_err("coverage reporting test should reject invalid input");
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("coverage reporting test should reject invalid input"))?;
 
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("summary.json"));

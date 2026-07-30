@@ -2,15 +2,19 @@ import {
   isWebsitePasskeyCancelMessage,
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
-  type WebsitePasskeyCeremony,
+  WebsitePasskeyCeremony,
 } from '../../lib/webauthn-messages'
 import {
   isAuthorizedWebsiteSender,
   passkeyPairingGrants,
   requestOriginAndRpId,
   sendSessionMessage,
+  WebsitePasskeyRequestContextKind,
 } from './pairing-identity'
-import { ensureExtensionSessionDocument } from './session-lifecycle'
+import {
+  ensureExtensionSessionDocument,
+  isUnlockedSessionStatus,
+} from './session-lifecycle'
 
 const pendingWebsitePasskeyRequests = new Set<string>()
 
@@ -48,8 +52,7 @@ async function matchingPasskeyAccountCountForOrigin(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     return 0
   }
@@ -105,7 +108,10 @@ export async function websitePasskeyOptions(
     message.payload.ceremony,
     message.payload.requestJson,
   )
-  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+  if (
+    context.kind === WebsitePasskeyRequestContextKind.Rejected ||
+    !isAuthorizedWebsiteSender(sender, context.origin)
+  ) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
   const grants = await passkeyPairingGrants()
@@ -119,12 +125,11 @@ export async function websitePasskeyOptions(
   if (
     !status ||
     typeof status !== 'object' ||
-    !('status' in status) ||
-    status.status !== 'unlocked'
+    !isUnlockedSessionStatus(status)
   ) {
     return { ok: true, status: 'locked', options: [] }
   }
-  if (message.payload.ceremony === 'create') {
+  if (message.payload.ceremony === WebsitePasskeyCeremony.Create) {
     return {
       ok: true,
       status: 'ready',
@@ -182,7 +187,10 @@ export async function performWebsitePasskey(
     message.payload.ceremony,
     message.payload.requestJson,
   )
-  if (!context || !isAuthorizedWebsiteSender(sender, context.origin)) {
+  if (
+    context.kind === WebsitePasskeyRequestContextKind.Rejected ||
+    !isAuthorizedWebsiteSender(sender, context.origin)
+  ) {
     return { ok: false, reason: 'passkey-forbidden-origin' }
   }
   const key = passkeyRequestKey(sender, message.payload.requestId)
@@ -195,13 +203,16 @@ export async function performWebsitePasskey(
       (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
     )
     if (!grant) return { ok: false, reason: 'passkey-vault-not-granted' }
-    if (message.payload.ceremony === 'get' && message.payload.credentialId) {
+    if (
+      message.payload.ceremony === WebsitePasskeyCeremony.Get &&
+      message.payload.credentialId
+    ) {
       context.request.allowCredentials = [{ id: message.payload.credentialId }]
     }
     await ensureExtensionSessionDocument()
     return sendSessionMessage({
       type:
-        message.payload.ceremony === 'create'
+        message.payload.ceremony === WebsitePasskeyCeremony.Create
           ? 'nook:extension-session-register-passkey'
           : 'nook:extension-session-assert-passkey',
       payload: {

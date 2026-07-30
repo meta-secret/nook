@@ -13,19 +13,25 @@
     clearLogs,
     dumpLogs,
     getLogLevel,
+    LogLevel,
     logCount,
     setLogLevel,
     type LogEntry,
-    type LogLevel,
   } from '$lib/log'
 
   let { onClose }: { onClose: () => void } = $props()
 
-  const LEVELS: LogLevel[] = ['error', 'warn', 'info', 'debug', 'trace']
+  const LEVELS: LogLevel[] = [
+    LogLevel.Error,
+    LogLevel.Warn,
+    LogLevel.Info,
+    LogLevel.Debug,
+    LogLevel.Trace,
+  ]
   const PAGE_SIZE = 100
 
-  let minLevel = $state<LogLevel>('trace')
-  let captureLevel = $state<LogLevel>('info')
+  let minLevel = $state<LogLevel>(LogLevel.Trace)
+  let captureLevel = $state<LogLevel>(LogLevel.Info)
   let entries = $state<LogEntry[]>([])
   let total = $state(0)
   let offset = $state(0)
@@ -37,11 +43,11 @@
   const hasNewer = $derived(offset > 0)
 
   const LEVEL_CLASS: Record<LogLevel, string> = {
-    error: 'text-red-400',
-    warn: 'text-amber-400',
-    info: 'text-sky-400',
-    debug: 'text-emerald-400',
-    trace: 'text-muted-foreground',
+    [LogLevel.Error]: 'text-red-400',
+    [LogLevel.Warn]: 'text-amber-400',
+    [LogLevel.Info]: 'text-sky-400',
+    [LogLevel.Debug]: 'text-emerald-400',
+    [LogLevel.Trace]: 'text-muted-foreground',
   }
 
   async function load() {
@@ -55,13 +61,13 @@
   }
 
   function changeMinLevel(value: string) {
-    minLevel = (value as LogLevel) ?? 'trace'
+    minLevel = (value as LogLevel) ?? LogLevel.Trace
     offset = 0
     void load()
   }
 
   function changeCaptureLevel(value: string) {
-    captureLevel = (value as LogLevel) ?? 'info'
+    captureLevel = (value as LogLevel) ?? LogLevel.Info
     setLogLevel(captureLevel)
   }
 
@@ -86,7 +92,7 @@
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(
-        JSON.stringify(newestFirst, undefined, 2),
+        JSON.stringify(newestFirst, (_key, value) => value, 2),
       )
       copied = true
       setTimeout(() => {

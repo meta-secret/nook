@@ -1,5 +1,11 @@
 <script lang="ts">
   import {
+    NookSecretTypeFilter,
+    secretTypeName,
+    VaultEditDecision,
+  } from '$app-wasm'
+
+  import {
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
@@ -16,18 +22,14 @@
     Paperclip,
     TriangleAlert,
   } from '@lucide/svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { VaultEditRestriction, VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import * as Select from '$lib/components/ui/select'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type {
-    AuthenticatorCodeView,
-    NookSecretListItem,
-    NookSecretRecord,
-    VaultItemType,
-  } from '$lib/nook'
+  import type { AuthenticatorCodeView, NookSecretListItem } from '$lib/nook'
+  import { SecretType } from '$lib/nook'
   import {
     freeDecryptedSecrets,
     toggleSecretExposure,
@@ -35,12 +37,25 @@
     type DecryptedSecrets,
   } from '$lib/vault/secret-exposure'
   import { onDestroy, untrack } from 'svelte'
+  import {
+    SecretTypeSelectionKind,
+    type SecretTypeSelection,
+  } from '$lib/components/secret-form-state'
+  import {
+    AuthenticatorCodePresentationKind,
+    ClipboardNoticeKind,
+    SecretEditorKind,
+    SecretRevealKind,
+    type AuthenticatorCodePresentation,
+    type ClipboardNotice,
+    type SecretEditor,
+    type SecretReveal,
+  } from './secret-vault-state'
 
   let {
     vault,
     isSaving,
-    editsBlocked = false,
-    editBlockMessage = undefined,
+    editRestriction = { decision: VaultEditDecision.Allowed },
     secrets = [] as NookSecretListItem[],
     onAddSecret,
     onReplaceSecret,
@@ -50,17 +65,12 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    editsBlocked?: boolean
-    editBlockMessage?: string | undefined
+    editRestriction?: VaultEditRestriction
     secrets?: NookSecretListItem[]
-    onAddSecret: (
-      id: string,
-      type: VaultItemType,
-      data: string,
-    ) => Promise<void>
+    onAddSecret: (id: string, type: SecretType, data: string) => Promise<void>
     onReplaceSecret: (
       oldId: string,
-      type: VaultItemType,
+      type: SecretType,
       data: string,
     ) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
@@ -71,43 +81,91 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
+    onAddModeChange?: (open: boolean, selection: SecretTypeSelection) => void
   } = $props()
 
+  const editsBlocked = $derived(
+    editRestriction.decision !== VaultEditDecision.Allowed,
+  )
   let searchPattern = $derived(vault.secretQuery)
   let decryptedSecrets = $state<DecryptedSecrets>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<string>()
+  let copiedKey = $state<ClipboardNotice>({ kind: ClipboardNoticeKind.Hidden })
   let addSecretOpen = $state(false)
-  let formSelectedType = $state<VaultItemType>()
-  let editingItem = $state<NookSecretRecord>()
+  let formSelectedType = $state<SecretTypeSelection>({
+    kind: SecretTypeSelectionKind.ChoosingType,
+  })
+  let editingItem = $state<SecretEditor>({ kind: SecretEditorKind.Creating })
   let editLoadSequence = 0
   let authenticatorCodes = $state<Record<string, AuthenticatorCodeView>>({})
 
   const typeFilters: Array<{
-    value: VaultItemType
+    value: SecretType
+    filter: NookSecretTypeFilter
+    testId: string
     labelKey: string
   }> = [
-    { value: 'login', labelKey: 'vault.types.login' },
-    { value: 'authenticator', labelKey: 'vault.types.authenticator' },
-    { value: 'api-key', labelKey: 'vault.types.api_key' },
-    { value: 'seed-phrase', labelKey: 'vault.types.seed_phrase' },
-    { value: 'secure-note', labelKey: 'vault.types.secure_note' },
-    { value: 'credit-card', labelKey: 'vault.types.credit_card' },
-    { value: 'file-attachment', labelKey: 'vault.types.file_attachment' },
-    { value: 'passkey', labelKey: 'vault.types.passkey' },
+    {
+      value: SecretType.Login,
+      filter: NookSecretTypeFilter.Login,
+      testId: secretTypeName(SecretType.Login),
+      labelKey: 'vault.types.login',
+    },
+    {
+      value: SecretType.Authenticator,
+      filter: NookSecretTypeFilter.Authenticator,
+      testId: secretTypeName(SecretType.Authenticator),
+      labelKey: 'vault.types.authenticator',
+    },
+    {
+      value: SecretType.ApiKey,
+      filter: NookSecretTypeFilter.ApiKey,
+      testId: secretTypeName(SecretType.ApiKey),
+      labelKey: 'vault.types.api_key',
+    },
+    {
+      value: SecretType.SeedPhrase,
+      filter: NookSecretTypeFilter.SeedPhrase,
+      testId: secretTypeName(SecretType.SeedPhrase),
+      labelKey: 'vault.types.seed_phrase',
+    },
+    {
+      value: SecretType.SecureNote,
+      filter: NookSecretTypeFilter.SecureNote,
+      testId: secretTypeName(SecretType.SecureNote),
+      labelKey: 'vault.types.secure_note',
+    },
+    {
+      value: SecretType.CreditCard,
+      filter: NookSecretTypeFilter.CreditCard,
+      testId: secretTypeName(SecretType.CreditCard),
+      labelKey: 'vault.types.credit_card',
+    },
+    {
+      value: SecretType.FileAttachment,
+      filter: NookSecretTypeFilter.FileAttachment,
+      testId: secretTypeName(SecretType.FileAttachment),
+      labelKey: 'vault.types.file_attachment',
+    },
+    {
+      value: SecretType.Passkey,
+      filter: NookSecretTypeFilter.Passkey,
+      testId: secretTypeName(SecretType.Passkey),
+      labelKey: 'vault.types.passkey',
+    },
   ]
 
   const filteredItems = $derived(secrets)
 
   const visibleItemCount = $derived(secrets.length)
   const activeTypeFilterLabel = $derived.by(() => {
+    if (vault.secretTypeFilter === NookSecretTypeFilter.All) {
+      return vault.t('vault.filter_all_types')
+    }
     const active = typeFilters.find(
-      ({ value }) => value === vault.secretTypeFilter,
+      ({ filter }) => filter === vault.secretTypeFilter,
     )
-    return active
-      ? vault.t(active.labelKey)
-      : vault.t('vault.filter_all_types')
+    return active ? vault.t(active.labelKey) : vault.t('vault.filter_all_types')
   })
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
@@ -117,13 +175,16 @@
   )
 
   function getGroupIcon(items: NookSecretListItem[]) {
-    if (items.some((item) => item.type === 'login')) return Globe
-    if (items.some((item) => item.type === 'api-key')) return Braces
-    if (items.some((item) => item.type === 'seed-phrase')) return Sprout
-    if (items.some((item) => item.type === 'authenticator')) return ShieldCheck
-    if (items.some((item) => item.type === 'credit-card')) return CreditCard
-    if (items.some((item) => item.type === 'file-attachment')) return Paperclip
-    if (items.some((item) => item.type === 'passkey')) return KeyRound
+    if (items.some((item) => item.type === SecretType.Login)) return Globe
+    if (items.some((item) => item.type === SecretType.ApiKey)) return Braces
+    if (items.some((item) => item.type === SecretType.SeedPhrase)) return Sprout
+    if (items.some((item) => item.type === SecretType.Authenticator))
+      return ShieldCheck
+    if (items.some((item) => item.type === SecretType.CreditCard))
+      return CreditCard
+    if (items.some((item) => item.type === SecretType.FileAttachment))
+      return Paperclip
+    if (items.some((item) => item.type === SecretType.Passkey)) return KeyRound
     return StickyNote
   }
 
@@ -139,7 +200,7 @@
     return Object.entries(dict)
       .map(([site, items]) => ({
         site,
-        items: items.sort((a, b) => a.type.localeCompare(b.type)),
+        items: items.sort((a, b) => a.type - b.type),
       }))
       .sort((a, b) => a.site.localeCompare(b.site))
   })
@@ -148,16 +209,31 @@
     onAddModeChange?.(addSecretOpen, formSelectedType)
   }
 
-  function selectTypeFilter(value: string | undefined) {
-    const nextFilter = typeFilters.find((filter) => filter.value === value)
-    vault.secretTypeFilter = nextFilter?.value
+  function selectTypeFilter(value: unknown) {
+    if (typeof value !== 'string') return
+    if (value === 'all') {
+      vault.secretTypeFilter = NookSecretTypeFilter.All
+      void vault.loadSecretPage(searchPattern.trim(), 0)
+      return
+    }
+    const nextFilter = typeFilters.find(
+      (filter) => filter.filter === Number(value),
+    )
+    if (!nextFilter) return
+    vault.secretTypeFilter = nextFilter.filter
     void vault.loadSecretPage(searchPattern.trim(), 0)
+  }
+
+  function resetTransientSecretViews() {
+    freeDecryptedSecrets(untrack(() => decryptedSecrets))
+    decryptedSecrets = {}
+    authenticatorCodes = {}
   }
 
   function openAddSecret() {
     editLoadSequence += 1
     releaseEditingItem()
-    formSelectedType = undefined
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
     addSecretOpen = true
     notifyAddMode()
   }
@@ -166,13 +242,13 @@
     editLoadSequence += 1
     releaseEditingItem()
     addSecretOpen = false
-    formSelectedType = undefined
+    formSelectedType = { kind: SecretTypeSelectionKind.ChoosingType }
     notifyAddMode()
   }
 
   function releaseEditingItem() {
-    editingItem?.free()
-    editingItem = undefined
+    if (editingItem.kind === SecretEditorKind.Editing) editingItem.record.free()
+    editingItem = { kind: SecretEditorKind.Creating }
   }
 
   async function openEditItem(item: NookSecretListItem) {
@@ -184,8 +260,11 @@
       return
     }
     releaseEditingItem()
-    editingItem = record
-    formSelectedType = item.type as VaultItemType
+    editingItem = { kind: SecretEditorKind.Editing, record }
+    formSelectedType = {
+      kind: SecretTypeSelectionKind.EditingFields,
+      itemType: item.type,
+    }
     addSecretOpen = true
     notifyAddMode()
   }
@@ -207,19 +286,44 @@
   })
 
   const isSecureNoteEditor = $derived(
-    addSecretOpen && formSelectedType === 'secure-note',
+    addSecretOpen &&
+      formSelectedType.kind === SecretTypeSelectionKind.EditingFields &&
+      formSelectedType.itemType === SecretType.SecureNote,
   )
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
-    copiedKey = `${id}-${field}`
+    copiedKey = {
+      kind: ClipboardNoticeKind.Visible,
+      fieldKey: `${id}-${field}`,
+    }
     setTimeout(() => {
-      if (copiedKey === `${id}-${field}`) copiedKey = undefined
+      if (
+        copiedKey.kind === ClipboardNoticeKind.Visible &&
+        copiedKey.fieldKey === `${id}-${field}`
+      )
+        copiedKey = { kind: ClipboardNoticeKind.Hidden }
     }, 2000)
   }
 
+  function secretReveal(itemId: string): SecretReveal {
+    const record = decryptedSecrets[itemId]
+    return record
+      ? { kind: SecretRevealKind.Revealed, record }
+      : { kind: SecretRevealKind.Hidden }
+  }
+
+  function authenticatorCodePresentation(
+    itemId: string,
+  ): AuthenticatorCodePresentation {
+    const code = authenticatorCodes[itemId]
+    return code
+      ? { kind: AuthenticatorCodePresentationKind.Visible, code }
+      : { kind: AuthenticatorCodePresentationKind.Hidden }
+  }
+
   async function toggleReveal(id: string) {
-    const revealing = decryptedSecrets[id] === undefined
+    const revealing = !(id in decryptedSecrets)
     decryptedSecrets = await toggleSecretExposure(
       decryptedSecrets,
       id,
@@ -228,7 +332,8 @@
     if (revealing) {
       expandedSecrets = { ...expandedSecrets, [id]: true }
       if (
-        filteredItems.find((item) => item.id === id)?.type === 'authenticator'
+        filteredItems.find((item) => item.id === id)?.type ===
+        SecretType.Authenticator
       ) {
         await refreshAuthenticatorCode(id)
       }
@@ -250,7 +355,7 @@
 
   async function refreshAuthenticatorCode(id: string) {
     const code = await vault.currentAuthenticatorCode(id)
-    if (decryptedSecrets[id] === undefined) return
+    if (!(id in decryptedSecrets)) return
     authenticatorCodes = { ...authenticatorCodes, [id]: code }
   }
 
@@ -264,10 +369,7 @@
       const now = Math.floor(Date.now() / 1000)
       const nextCodes = { ...authenticatorCodes }
       for (const [id, current] of Object.entries(authenticatorCodes)) {
-        const secondsRemaining = Math.max(
-          0,
-          current.expiresAtUnixSeconds - now,
-        )
+        const secondsRemaining = Math.max(0, current.expiresAtUnixSeconds - now)
         if (secondsRemaining === 0) {
           delete nextCodes[id]
           void refreshAuthenticatorCode(id)
@@ -284,12 +386,11 @@
   })
 
   $effect(() => {
+    // These reads intentionally make the reset reactive to page changes.
     void vault.secretQuery
     void vault.secretPageOffset
     void vault.secretTypeFilter
-    freeDecryptedSecrets(untrack(() => decryptedSecrets))
-    decryptedSecrets = {}
-    authenticatorCodes = {}
+    resetTransientSecretViews()
   })
 
   onDestroy(() => {
@@ -314,7 +415,7 @@
         : ''}"
       data-testid="add-secret-panel"
     >
-      {#if formSelectedType === undefined}
+      {#if formSelectedType.kind === SecretTypeSelectionKind.ChoosingType}
         <div class="mb-3">
           <button
             type="button"
@@ -331,12 +432,12 @@
       <AddSecretForm
         {vault}
         {isSaving}
-        bind:selectedType={formSelectedType}
+        bind:selectedTypeState={formSelectedType}
         {onAddSecret}
         {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
-        initialItem={editingItem}
+        editor={editingItem}
       />
     </div>
   {:else}
@@ -363,7 +464,9 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            title={editsBlocked ? editBlockMessage : undefined}
+            {...editRestriction.decision !== VaultEditDecision.Allowed
+              ? { title: editRestriction.reason }
+              : {}}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -372,14 +475,14 @@
         </div>
       </div>
 
-      {#if editsBlocked && editBlockMessage}
+      {#if editRestriction.decision !== VaultEditDecision.Allowed}
         <div
           class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
           data-testid="secret-edit-blocked-banner"
         >
           <TriangleAlert class="mt-0.5 size-4 shrink-0 text-amber-600" />
           <p class="text-pretty text-xs text-muted-foreground">
-            {editBlockMessage}
+            {editRestriction.reason}
           </p>
         </div>
       {/if}
@@ -396,11 +499,14 @@
         <div class="absolute right-1 top-1/2 -translate-y-1/2">
           <Select.Root
             type="single"
-            value={vault.secretTypeFilter ?? 'all'}
+            value={vault.secretTypeFilter === NookSecretTypeFilter.All
+              ? 'all'
+              : String(vault.secretTypeFilter)}
             onValueChange={selectTypeFilter}
           >
             <Select.Trigger
-              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter
+              class="h-8 max-w-32 border-transparent bg-muted/45 px-2 text-xs hover:bg-muted/70 {vault.secretTypeFilter !==
+              NookSecretTypeFilter.All
                 ? 'border-primary/40 bg-primary/10 text-foreground'
                 : 'text-muted-foreground'}"
               data-testid="secret-type-filter"
@@ -414,10 +520,10 @@
               <Select.Item value="all" data-testid="secret-type-filter-all">
                 {vault.t('vault.filter_all_types')}
               </Select.Item>
-              {#each typeFilters as filter (filter.value)}
+              {#each typeFilters as filter (filter.filter)}
                 <Select.Item
-                  value={filter.value}
-                  data-testid={`secret-type-filter-${filter.value}`}
+                  value={String(filter.filter)}
+                  data-testid={`secret-type-filter-${filter.testId}`}
                 >
                   {vault.t(filter.labelKey)}
                 </Select.Item>
@@ -448,10 +554,10 @@
             {@const Icon = getGroupIcon(group.items)}
             {@const titleAsCardHeader =
               group.items.length === 1 &&
-              (group.items[0].type === 'secure-note' ||
-                group.items[0].type === 'file-attachment' ||
-                group.items[0].type === 'login' ||
-                group.items[0].type === 'credit-card')}
+              (group.items[0].type === SecretType.SecureNote ||
+                group.items[0].type === SecretType.FileAttachment ||
+                group.items[0].type === SecretType.Login ||
+                group.items[0].type === SecretType.CreditCard)}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"
@@ -493,14 +599,13 @@
                     {index}
                     titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
-                    decrypted={decryptedSecrets[item.id]}
-                    authenticatorCode={authenticatorCodes[item.id]}
-                    {copiedKey}
+                    reveal={secretReveal(item.id)}
+                    authenticatorCode={authenticatorCodePresentation(item.id)}
+                    copiedNotice={copiedKey}
                     onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
-                    editDisabled={editsBlocked}
-                    editDisabledReason={editBlockMessage}
+                    {editRestriction}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                     onCopySecret={copySecret}

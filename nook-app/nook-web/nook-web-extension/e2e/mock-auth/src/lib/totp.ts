@@ -2,12 +2,25 @@ import init, {
   generateTotpCode as wasmGenerateTotpCode,
   verifyTotpCode as wasmVerifyTotpCode,
 } from 'nook-wasm'
+enum WasmStartupKind {
+  NotStarted = 'not-started',
+  Initializing = 'initializing',
+}
 
-let ready: Promise<void> | undefined
+type WasmStartup =
+  | { kind: WasmStartupKind.NotStarted }
+  | { kind: WasmStartupKind.Initializing; completion: Promise<void> }
+
+let wasmStartup: WasmStartup = { kind: WasmStartupKind.NotStarted }
 
 async function ensureWasm(): Promise<void> {
-  ready ??= init().then(() => undefined)
-  await ready
+  if (wasmStartup.kind === WasmStartupKind.NotStarted) {
+    wasmStartup = {
+      kind: WasmStartupKind.Initializing,
+      completion: init().then(() => {}),
+    }
+  }
+  await wasmStartup.completion
 }
 
 /** Thin wrapper over nook-core TOTP via WASM — no hand-rolled crypto. */

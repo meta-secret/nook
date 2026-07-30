@@ -1,15 +1,23 @@
 import { hasOriginPayload } from './origin-runtime-message'
 
+export enum WebsiteAuthenticatorEnrollPreviewMessageType {
+  NookWebsiteAuthenticatorEnrollPreview = 'nook:website-authenticator-enroll-preview',
+}
+
 export type WebsiteAuthenticatorEnrollPreviewMessage = {
-  type: 'nook:website-authenticator-enroll-preview'
+  type: WebsiteAuthenticatorEnrollPreviewMessageType.NookWebsiteAuthenticatorEnrollPreview
   payload: {
     origin: string
     otpauthUri: string
   }
+}
+
+export enum WebsiteAuthenticatorEnrollStageMessageType {
+  NookWebsiteAuthenticatorEnrollStage = 'nook:website-authenticator-enroll-stage',
 }
 
 export type WebsiteAuthenticatorEnrollStageMessage = {
-  type: 'nook:website-authenticator-enroll-stage'
+  type: WebsiteAuthenticatorEnrollStageMessageType.NookWebsiteAuthenticatorEnrollStage
   payload: {
     origin: string
     vaultStoreId: string
@@ -17,16 +25,24 @@ export type WebsiteAuthenticatorEnrollStageMessage = {
   }
 }
 
+export enum WebsiteAuthenticatorEnrollCodeMessageType {
+  NookWebsiteAuthenticatorEnrollCode = 'nook:website-authenticator-enroll-code',
+}
+
 export type WebsiteAuthenticatorEnrollCodeMessage = {
-  type: 'nook:website-authenticator-enroll-code'
+  type: WebsiteAuthenticatorEnrollCodeMessageType.NookWebsiteAuthenticatorEnrollCode
   payload: {
     origin: string
     stageId: string
   }
 }
 
+export enum WebsiteAuthenticatorEnrollConfirmMessageType {
+  NookWebsiteAuthenticatorEnrollConfirm = 'nook:website-authenticator-enroll-confirm',
+}
+
 export type WebsiteAuthenticatorEnrollConfirmMessage = {
-  type: 'nook:website-authenticator-enroll-confirm'
+  type: WebsiteAuthenticatorEnrollConfirmMessageType.NookWebsiteAuthenticatorEnrollConfirm
   payload: {
     origin: string
     vaultStoreId: string
@@ -34,29 +50,48 @@ export type WebsiteAuthenticatorEnrollConfirmMessage = {
   }
 }
 
+export enum WebsiteAuthenticatorEnrollDismissMessageType {
+  NookWebsiteAuthenticatorEnrollDismiss = 'nook:website-authenticator-enroll-dismiss',
+}
+
 export type WebsiteAuthenticatorEnrollDismissMessage = {
-  type: 'nook:website-authenticator-enroll-dismiss'
+  type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss
   payload: {
     origin: string
     stageId: string
   }
 }
 
+export enum WebsiteAuthenticatorEnrollPendingMessageType {
+  NookWebsiteAuthenticatorEnrollPending = 'nook:website-authenticator-enroll-pending',
+}
+
 export type WebsiteAuthenticatorEnrollPendingMessage = {
-  type: 'nook:website-authenticator-enroll-pending'
+  type: WebsiteAuthenticatorEnrollPendingMessageType.NookWebsiteAuthenticatorEnrollPending
   payload: {
     origin: string
   }
 }
 
+export enum WebsiteAuthenticatorBackupAttachMessageType {
+  NookWebsiteAuthenticatorBackupAttach = 'nook:website-authenticator-backup-attach',
+}
+
+export enum WebsiteAuthenticatorBackupAttachMessageMode {
+  Replace = 'replace',
+  Merge = 'merge',
+}
+
 export type WebsiteAuthenticatorBackupAttachMessage = {
-  type: 'nook:website-authenticator-backup-attach'
+  type: WebsiteAuthenticatorBackupAttachMessageType.NookWebsiteAuthenticatorBackupAttach
   payload: {
     origin: string
     vaultStoreId: string
     secretId: string
     codes: string[]
-    mode: 'replace' | 'merge'
+    mode:
+      | WebsiteAuthenticatorBackupAttachMessageMode.Replace
+      | WebsiteAuthenticatorBackupAttachMessageMode.Merge
   }
 }
 
@@ -152,6 +187,7 @@ export function isWebsiteAuthenticatorBackupAttachMessage(
     payload.secretId.length > 0 &&
     Array.isArray(payload.codes) &&
     payload.codes.every((code) => typeof code === 'string') &&
-    (payload.mode === 'replace' || payload.mode === 'merge')
+    (payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Replace ||
+      payload.mode === WebsiteAuthenticatorBackupAttachMessageMode.Merge)
   )
 }

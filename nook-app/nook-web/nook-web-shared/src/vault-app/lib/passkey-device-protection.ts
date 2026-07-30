@@ -1,5 +1,4 @@
-import type { NookVaultManager } from "$app-wasm";
-import type { DeviceMode } from "$lib/vault-architecture";
+import { DeviceMode, type NookVaultManager } from "$app-wasm";
 
 const PASSKEY_PRF_UNAVAILABLE = "PASSKEY_PRF_UNAVAILABLE";
 const PASSKEY_UNAVAILABLE = "PASSKEY_UNAVAILABLE";
@@ -15,11 +14,12 @@ const SAFE_PASSKEY_ERROR_NAMES = new Set([
   "UnknownError",
 ]);
 
-export type PasskeyCeremonyOutcome =
-  | "passkey_unavailable"
-  | "passkey_prf_unavailable"
-  | "passkey_ceremony_not_allowed"
-  | "passkey_ceremony_failed";
+export enum PasskeyCeremonyOutcome {
+  PasskeyUnavailable = "passkey_unavailable",
+  PrfUnavailable = "passkey_prf_unavailable",
+  CeremonyNotAllowed = "passkey_ceremony_not_allowed",
+  CeremonyFailed = "passkey_ceremony_failed",
+}
 
 export function isPasskeyUnavailableError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(PASSKEY_UNAVAILABLE);
@@ -39,12 +39,16 @@ export function isPasskeyCeremonyNotAllowedError(error: unknown): boolean {
 }
 
 export function passkeyCeremonyOutcome(error: unknown): PasskeyCeremonyOutcome {
-  if (isPasskeyUnavailableError(error)) return "passkey_unavailable";
-  if (isPasskeyPrfUnavailableError(error)) return "passkey_prf_unavailable";
-  if (isPasskeyCeremonyNotAllowedError(error)) {
-    return "passkey_ceremony_not_allowed";
+  if (isPasskeyUnavailableError(error)) {
+    return PasskeyCeremonyOutcome.PasskeyUnavailable;
   }
-  return "passkey_ceremony_failed";
+  if (isPasskeyPrfUnavailableError(error)) {
+    return PasskeyCeremonyOutcome.PrfUnavailable;
+  }
+  if (isPasskeyCeremonyNotAllowedError(error)) {
+    return PasskeyCeremonyOutcome.CeremonyNotAllowed;
+  }
+  return PasskeyCeremonyOutcome.CeremonyFailed;
 }
 
 /** Sanitized fields safe to persist for AI-debug / app-log correlation. */
@@ -54,23 +58,41 @@ export function sanitizedPasskeyCeremonyData(error: unknown): {
 } {
   const outcome = passkeyCeremonyOutcome(error);
   const errorName = sanitizedPasskeyErrorName(error);
-  return errorName ? { outcome, errorName } : { outcome };
+  return errorName.kind === SanitizedPasskeyErrorNameKind.Safe
+    ? { outcome, errorName: errorName.name }
+    : { outcome };
 }
 
-function sanitizedPasskeyErrorName(error: unknown): string | undefined {
-  if (!(error instanceof Error)) return undefined;
-  if (SAFE_PASSKEY_ERROR_NAMES.has(error.name)) return error.name;
+enum SanitizedPasskeyErrorNameKind {
+  Omitted = "omitted",
+  Safe = "safe",
+}
+
+type SanitizedPasskeyErrorName =
+  | { kind: SanitizedPasskeyErrorNameKind.Omitted }
+  | { kind: SanitizedPasskeyErrorNameKind.Safe; name: string };
+
+function sanitizedPasskeyErrorName(error: unknown): SanitizedPasskeyErrorName {
+  if (!(error instanceof Error)) {
+    return { kind: SanitizedPasskeyErrorNameKind.Omitted };
+  }
+  if (SAFE_PASSKEY_ERROR_NAMES.has(error.name)) {
+    return { kind: SanitizedPasskeyErrorNameKind.Safe, name: error.name };
+  }
 
   const fromMessage = error.message.match(
     /\b(NotAllowedError|NotSupportedError|SecurityError|InvalidStateError|AbortError|NetworkError|UnknownError)\b/,
   );
-  return fromMessage?.[1];
+  const name = fromMessage?.[1];
+  return name
+    ? { kind: SanitizedPasskeyErrorNameKind.Safe, name }
+    : { kind: SanitizedPasskeyErrorNameKind.Omitted };
 }
 
 export async function setupDeviceProtection(
   manager: NookVaultManager,
   passkeyLabel: string,
-  deviceMode: DeviceMode = "standard",
+  deviceMode: DeviceMode = DeviceMode.Standard,
 ): Promise<void> {
   await manager.setupDeviceProtectionWithPasskeyMode(
     location.hostname,

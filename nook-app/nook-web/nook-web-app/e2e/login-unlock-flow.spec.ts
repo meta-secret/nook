@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { UnlockMethod } from '$lib/components/login/login-unlock-state'
 import {
   addVaultPassword,
   clearBrowserVault,
@@ -88,7 +89,7 @@ test.describe('login unlock flow (local-first)', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await selectLoginUnlockMethod(page, 'password')
+    await selectLoginUnlockMethod(page, UnlockMethod.Password)
     await expect(
       page.getByTestId('login-unlock-method-password'),
     ).toHaveAttribute('aria-checked', 'true')
@@ -114,7 +115,7 @@ test.describe('login unlock flow (local-first)', () => {
     })
     await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
 
-    await selectLoginUnlockMethod(page, 'password')
+    await selectLoginUnlockMethod(page, UnlockMethod.Password)
     await page
       .getByTestId('login-password-entry-list')
       .getByRole('button', { name: 'Recovery' })

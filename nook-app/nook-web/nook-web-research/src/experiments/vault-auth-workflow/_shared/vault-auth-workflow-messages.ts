@@ -1,15 +1,18 @@
-export type VaultAuthStepKey =
-  | 'choose_sentinel_interface'
-  | 'choose_vault_kind'
-  | 'confirm_vault_identity'
-  | 'create_locally'
-  | 'create_or_configure'
-  | 'initialize_device'
-  | 'name_vault'
-  | 'unlock_existing_vault'
-  | 'unlock_with_passkey'
+export enum VaultAuthStepKey {
+  ChooseSentinelInterface = 'choose_sentinel_interface',
+  ChooseVaultKind = 'choose_vault_kind',
+  ConfirmVaultIdentity = 'confirm_vault_identity',
+  CreateLocally = 'create_locally',
+  CreateOrConfigure = 'create_or_configure',
+  InitializeDevice = 'initialize_device',
+  NameVault = 'name_vault',
+  UnlockExistingVault = 'unlock_existing_vault',
+  UnlockWithPasskey = 'unlock_with_passkey',
+}
 
-type VaultAuthLocale = 'en'
+enum VaultAuthLocale {
+  English = 'en',
+}
 
 const VAULT_AUTH_STEP_CATALOG: Record<
   VaultAuthLocale,
@@ -30,7 +33,7 @@ const VAULT_AUTH_STEP_CATALOG: Record<
 
 export function vaultAuthStepMessage(
   key: VaultAuthStepKey,
-  locale: VaultAuthLocale = 'en',
+  locale: VaultAuthLocale = VaultAuthLocale.English,
 ): string {
   return VAULT_AUTH_STEP_CATALOG[locale][key]
 }

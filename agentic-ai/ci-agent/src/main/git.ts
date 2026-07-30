@@ -19,12 +19,24 @@ async function markSafeDirectory(repoRoot: string): Promise<void> {
   // Must run before any other git command: bind-mounted Actions checkouts are
   // owned by the runner user while the agent container often runs as root.
   try {
-    await execFileAsync("git", ["config", "--global", "--add", "safe.directory", repoRoot]);
+    await execFileAsync("git", [
+      "config",
+      "--global",
+      "--add",
+      "safe.directory",
+      repoRoot,
+    ]);
   } catch {
     // may already be present
   }
   try {
-    await execFileAsync("git", ["config", "--global", "--add", "safe.directory", "*"]);
+    await execFileAsync("git", [
+      "config",
+      "--global",
+      "--add",
+      "safe.directory",
+      "*",
+    ]);
   } catch {
     // optional wildcard
   }
@@ -63,7 +75,8 @@ export async function configureGitForCi(
       const { data } = await octokit.rest.users.getAuthenticated();
       userName = data.name?.trim() || data.login;
       userEmail =
-        data.email?.trim() || `${data.id}+${data.login}@users.noreply.github.com`;
+        data.email?.trim() ||
+        `${data.id}+${data.login}@users.noreply.github.com`;
     } catch {
       // Fall back to github-actions[bot] when the token cannot resolve a user.
     }
@@ -79,11 +92,20 @@ export async function configureGitForCi(
     await execFileAsync("git", ["config", "--global", key, value]);
   }
 
-  log.info(`Configured git identity as ${userName} <${userEmail}> in ${repoRoot}`);
+  log.info(
+    `Configured git identity as ${userName} <${userEmail}> in ${repoRoot}`,
+  );
 }
 
-export async function hasWorkingTreeChanges(repoRoot: string): Promise<boolean> {
-  const { stdout } = await execFileAsync("git", ["-C", repoRoot, "status", "--porcelain"]);
+export async function hasWorkingTreeChanges(
+  repoRoot: string,
+): Promise<boolean> {
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    repoRoot,
+    "status",
+    "--porcelain",
+  ]);
   return stdout.trim().length > 0;
 }
 
@@ -124,8 +146,7 @@ async function hasStagedChanges(repoRoot: string): Promise<boolean> {
 
 function isExecExitCode(err: unknown, code: number): boolean {
   return (
-    typeof err === "object" &&
-    err !== null &&
+    err instanceof Error &&
     "code" in err &&
     (err as { code: number }).code === code
   );
