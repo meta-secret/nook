@@ -292,6 +292,9 @@ type ReviewThreadPage = {
   };
 };
 
+type ReviewThreads =
+  ReviewThreadPage["repository"]["pullRequest"]["reviewThreads"];
+
 const REVIEW_THREADS_QUERY = `
   query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -342,15 +345,16 @@ export async function inspectPrFeedback(
     | { kind: PaginationKind.NextPage; cursor: string }
     | { kind: PaginationKind.Complete } = { kind: PaginationKind.FirstPage };
   while (pagination.kind !== PaginationKind.Complete) {
-    const page = await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
-      owner,
-      repo,
-      number: prNumber,
-      ...(pagination.kind === PaginationKind.NextPage
-        ? { cursor: pagination.cursor }
-        : {}),
-    });
-    const threads = page.repository.pullRequest.reviewThreads;
+    const page: ReviewThreadPage =
+      await octokit.graphql<ReviewThreadPage>(REVIEW_THREADS_QUERY, {
+        owner,
+        repo,
+        number: prNumber,
+        ...(pagination.kind === PaginationKind.NextPage
+          ? { cursor: pagination.cursor }
+          : {}),
+      });
+    const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
     unresolvedThreads += threads.nodes.filter(
       (thread) => !thread.isResolved,
     ).length;
@@ -472,12 +476,30 @@ function isRepositoryStatusComment(body: string): boolean {
 }
 
 function isCodexReviewer(actor: unknown): boolean {
+  if (typeof actor !== "object" || !actor) {
+    return false;
+  }
   return (
-    typeof actor === "object" &&
-    Boolean(actor) &&
     "login" in actor &&
     (actor as { login?: unknown }).login === CODEX_REVIEWER_LOGIN
   );
+}
+
+enum ReviewedCommitState {
+  Missing = "missing",
+  Found = "found",
+}
+
+type ReviewedCommit =
+  | { state: ReviewedCommitState.Missing }
+  | { state: ReviewedCommitState.Found; value: string };
+
+function reviewedCommitIn(body: string): ReviewedCommit {
+  const match = body.match(REVIEWED_COMMIT_PATTERN);
+  if (!match || typeof match[1] !== "string") {
+    return { state: ReviewedCommitState.Missing };
+  }
+  return { state: ReviewedCommitState.Found, value: match[1] };
 }
 
 function isCodexReviewStatusBody(body: string, actor: unknown): boolean {
@@ -521,8 +543,11 @@ function isCleanCodexReviewComment(
   if (!isCodexCleanReviewStatusComment(body, actor)) {
     return false;
   }
-  const reviewedCommit = body.match(REVIEWED_COMMIT_PATTERN)?.[1];
-  return Boolean(reviewedCommit) && headSha.startsWith(reviewedCommit);
+  const reviewedCommit = reviewedCommitIn(body);
+  return (
+    reviewedCommit.state === ReviewedCommitState.Found &&
+    headSha.startsWith(reviewedCommit.value)
+  );
 }
 
 function isCodexCleanReviewStatusComment(

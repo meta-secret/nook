@@ -20,9 +20,24 @@ export enum WorkflowConclusionState {
   Reported = "reported",
 }
 
+export enum WorkflowRunStatusState {
+  Unavailable = "unavailable",
+  Completed = "completed",
+  Other = "other",
+}
+
+export enum GithubWorkflowConclusion {
+  Success = "success",
+}
+
 type WorkflowConclusion =
   | { state: WorkflowConclusionState.Pending }
   | { state: WorkflowConclusionState.Reported; value: string };
+
+type WorkflowRunStatus =
+  | { state: WorkflowRunStatusState.Unavailable }
+  | { state: WorkflowRunStatusState.Completed }
+  | { state: WorkflowRunStatusState.Other; value: string };
 
 type WorkflowAudit = RequiredPrWorkflow &
   (
@@ -31,7 +46,7 @@ type WorkflowAudit = RequiredPrWorkflow &
         state: WorkflowAuditState.Indexed;
         conclusion: WorkflowConclusion;
         runId: number;
-        status: string;
+        status: WorkflowRunStatus;
         url: string;
       }
   );
@@ -156,11 +171,15 @@ export async function buildPrAudit(
       reasons.push(
         `${workflow.workflowName} run is not indexed for the current head`,
       );
-    } else if (workflow.status !== "completed") {
-      reasons.push(`${workflow.workflowName} run is ${workflow.status}`);
+    } else if (workflow.status.state === WorkflowRunStatusState.Unavailable) {
+      reasons.push(`${workflow.workflowName} run has no status`);
+    } else if (workflow.status.state === WorkflowRunStatusState.Other) {
+      reasons.push(`${workflow.workflowName} run is ${workflow.status.value}`);
     } else if (workflow.conclusion.state === WorkflowConclusionState.Pending) {
       reasons.push(`${workflow.workflowName} run has no conclusion`);
-    } else if (workflow.conclusion.value !== "success") {
+    } else if (
+      workflow.conclusion.value !== GithubWorkflowConclusion.Success
+    ) {
       reasons.push(
         `${workflow.workflowName} run concluded ${workflow.conclusion.value}`,
       );
@@ -237,17 +256,24 @@ async function auditWorkflows(
       if (!run) {
         return { ...workflow, state: WorkflowAuditState.NotIndexed };
       }
+      const conclusion: WorkflowConclusion = run.conclusion
+        ? {
+            state: WorkflowConclusionState.Reported,
+            value: run.conclusion,
+          }
+        : { state: WorkflowConclusionState.Pending };
+      const status: WorkflowRunStatus =
+        run.status === WorkflowRunStatusState.Completed
+          ? { state: WorkflowRunStatusState.Completed }
+          : typeof run.status === "string"
+            ? { state: WorkflowRunStatusState.Other, value: run.status }
+            : { state: WorkflowRunStatusState.Unavailable };
       return {
         ...workflow,
         state: WorkflowAuditState.Indexed,
-        conclusion: run.conclusion
-          ? {
-              state: WorkflowConclusionState.Reported,
-              value: run.conclusion,
-            }
-          : { state: WorkflowConclusionState.Pending },
+        conclusion,
         runId: run.id,
-        status: run.status,
+        status,
         url: run.html_url,
       };
     }),
