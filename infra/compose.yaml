@@ -76,34 +76,9 @@ services:
         max-size: 10m
         max-file: "3"
 
-  registry:
-    image: registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
-    restart: unless-stopped
-    ports:
-      - 127.0.0.1:5000:5000
-    environment:
-      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
-      REGISTRY_STORAGE_DELETE_ENABLED: "true"
-    volumes:
-      - registry-data:/var/lib/registry
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5000/v2/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    mem_limit: 1g
-    pids_limit: 256
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      options:
-        max-size: 10m
-        max-file: "3"
-
 volumes:
   redis-data:
   traefik-data:
-  registry-data:
 
 secrets:
   redis-password:

@@ -569,7 +569,14 @@ extension-route presence/absence before publishing the GitHub Release.
 No delivery workflow logs into GHCR for BuildKit or imports a registry cache
 manifest. Docker layers use GitHub's Actions cache backend; local builds use
 only their local BuildKit content store. Cache restoration is an optimization:
-an unavailable cache falls back to a correct cold build. `main.yml` attaches and upserts the three
+an unavailable cache falls back to a correct cold build. The production Linux
+node runs a private Zot registry in k0s for server-local Hive image publication
+and pulls. Zot is reachable from host Docker and containerd only through
+`127.0.0.1:5000`; it is not a hosted-delivery cache backend. Replacing GitHub
+Actions BuildKit scopes requires a separate trusted TLS and authorization
+design because pull-request code cannot receive a reusable shared-cache
+credential or write cache manifests.
+`main.yml` attaches and upserts the three
 custom domains, points the landing and both vault domains at their projects'
 `development` branch aliases so the main-channel build cannot replace a
 production deployment, and verifies landing-only routing, app identity markers,
