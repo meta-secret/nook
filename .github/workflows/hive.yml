@@ -13,8 +13,10 @@ on:
       - .github/scripts/k0s-firewall-rollback-test.py
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
+      - .github/scripts/zot-registry-migration-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
+      - infra/compose.yaml
       - infra/k0s/**
       - infra/tasks/**
       - infra/Taskfile.yml
@@ -27,8 +29,10 @@ on:
       - .github/scripts/k0s-firewall-rollback-test.py
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
+      - .github/scripts/zot-registry-migration-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
+      - infra/compose.yaml
       - infra/k0s/**
       - infra/tasks/**
       - infra/Taskfile.yml

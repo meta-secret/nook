@@ -1,0 +1,267 @@
+version: '3'
+
+# Private Zot registry operations.
+tasks:
+  registry:deploy:
+    desc: Deploy Zot, migrate the legacy registry, and cut over loopback access.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        manifest="$remote_dir/infra/k0s/manifests/registry/zot.yaml"
+        compose="$remote_dir/compose.yaml"
+        unit=nook-zot-registry-loopback.service
+        kubectl() { sudo -n k0s kubectl "$@"; }
+
+        sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl apply -f "$manifest"
+        kubectl rollout restart deployment/nook-zot --namespace hive-data
+        kubectl rollout status deployment/nook-zot \
+          --namespace hive-data \
+          --timeout=10m
+
+        work="$(mktemp -d)"
+        forward_pid=""
+        legacy_registry=""
+        legacy_was_running=false
+        cutover_complete=false
+        cleanup() {
+          if test -n "$forward_pid"; then
+            sudo -n kill "$forward_pid" >/dev/null 2>&1 || true
+            wait "$forward_pid" >/dev/null 2>&1 || true
+          fi
+          rm -rf "$work"
+        }
+        rollback() {
+          if test "$cutover_complete" = false &&
+            test "$legacy_was_running" = true; then
+            sudo -n systemctl disable --now "$unit" >/dev/null 2>&1 || true
+            docker start "$legacy_registry" >/dev/null 2>&1 || true
+          fi
+          cleanup
+        }
+        trap rollback EXIT
+
+        start_temporary_forward() {
+          sudo -n k0s kubectl port-forward \
+            --namespace hive-data \
+            --address 127.0.0.1 \
+            deployment/nook-zot \
+            5001:5000 > "$work/port-forward.log" 2>&1 &
+          forward_pid="$!"
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5001/v2/ >/dev/null; then
+              return
+            fi
+            if ! sudo -n kill -0 "$forward_pid" >/dev/null 2>&1; then
+              cat "$work/port-forward.log" >&2
+              return 1
+            fi
+            sleep 1
+          done
+          cat "$work/port-forward.log" >&2
+          echo "Timed out opening the temporary Zot migration path" >&2
+          return 1
+        }
+
+        registry_digest() {
+          registry="$1"
+          repository="$2"
+          reference="$3"
+          curl --fail --silent --show-error --head \
+            --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "$registry/v2/$repository/manifests/$reference" |
+            tr -d '\r' |
+            awk -F ': ' 'tolower($1) == "docker-content-digest" { print $2 }' |
+            tail -1
+        }
+
+        copy_legacy_registry() {
+          start_temporary_forward
+          curl --fail --silent --show-error \
+            --dump-header "$work/catalog.headers" \
+            --output "$work/catalog.json" \
+            'http://127.0.0.1:5000/v2/_catalog?n=10000'
+          if grep -Eiq '^link:' "$work/catalog.headers"; then
+            echo "Legacy registry catalog exceeds the bounded migration page" >&2
+            return 1
+          fi
+          jq -e '
+            type == "object" and
+            (.repositories | type == "array") and
+            all(.repositories[]; type == "string" and length > 0)
+          ' "$work/catalog.json" >/dev/null
+          mapfile -t repositories < <(
+            jq -r '.repositories[]' "$work/catalog.json"
+          )
+          for repository in "${repositories[@]}"; do
+            encoded_repository="$(
+              jq -rn --arg value "$repository" '$value | @uri' |
+                sed 's|%2F|/|g'
+            )"
+            curl --fail --silent --show-error \
+              --dump-header "$work/tags.headers" \
+              --output "$work/tags.json" \
+              "http://127.0.0.1:5000/v2/$encoded_repository/tags/list?n=10000"
+            if grep -Eiq '^link:' "$work/tags.headers"; then
+              echo "Legacy tag list exceeds the bounded migration page: $repository" >&2
+              return 1
+            fi
+            jq -e '
+              type == "object" and
+              ((.tags // []) | type == "array") and
+              all((.tags // [])[]; type == "string" and length > 0)
+            ' "$work/tags.json" >/dev/null
+            mapfile -t tags < <(jq -r '(.tags // [])[]' "$work/tags.json")
+            for tag in "${tags[@]}"; do
+              source="127.0.0.1:5000/$repository:$tag"
+              destination="127.0.0.1:5001/$repository:$tag"
+              source_digest="$(
+                registry_digest http://127.0.0.1:5000 "$encoded_repository" "$tag"
+              )"
+              case "$source_digest" in
+                sha256:????????????????????????????????????????????????????????????????) ;;
+                *)
+                  echo "Legacy registry returned an invalid digest for $repository:$tag" >&2
+                  return 1
+                  ;;
+              esac
+              docker pull "$source"
+              docker tag "$source" "$destination"
+              docker push "$destination"
+              destination_digest="$(
+                registry_digest http://127.0.0.1:5001 "$encoded_repository" "$tag"
+              )"
+              if test "$destination_digest" != "$source_digest"; then
+                echo "Refusing lossy registry migration for $repository:$tag" >&2
+                return 1
+              fi
+            done
+          done
+        }
+
+        legacy_registry="$(
+          docker ps --all --quiet \
+            --filter label=com.docker.compose.project=nook-infra \
+            --filter label=com.docker.compose.service=registry |
+            head -1
+        )"
+        if test -n "$legacy_registry"; then
+          if test "$(docker inspect --format '{{"{{.State.Running}}"}}' "$legacy_registry")" != true &&
+            ! sudo -n systemctl is-active --quiet "$unit"; then
+            docker start "$legacy_registry" >/dev/null
+          fi
+          if test "$(docker inspect --format '{{"{{.State.Running}}"}}' "$legacy_registry")" = true; then
+            legacy_was_running=true
+            copy_legacy_registry
+          fi
+        fi
+
+        k0s_bin="$(command -v k0s)"
+        test -x "$k0s_bin"
+        unit_file="$work/$unit"
+        {
+          printf '%s\n' \
+            '[Unit]' \
+            'Description=Nook Zot registry loopback endpoint' \
+            'After=k0scontroller.service network-online.target' \
+            'Requires=k0scontroller.service' \
+            '' \
+            '[Service]' \
+            'Type=simple' \
+            'Environment=HOME=/tmp' \
+            "ExecStart=$k0s_bin kubectl --namespace hive-data port-forward --address 127.0.0.1 deployment/nook-zot 5000:5000" \
+            'Restart=always' \
+            'RestartSec=2s' \
+            'NoNewPrivileges=true' \
+            'PrivateTmp=true' \
+            'ProtectHome=true' \
+            'ProtectSystem=strict' \
+            'ProtectKernelTunables=true' \
+            'ProtectKernelModules=true' \
+            'ProtectControlGroups=true' \
+            'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6' \
+            '' \
+            '[Install]' \
+            'WantedBy=multi-user.target'
+        } > "$unit_file"
+        sudo -n install -m 0644 \
+          "$unit_file" \
+          "/etc/systemd/system/$unit"
+        sudo -n systemctl daemon-reload
+
+        if test "$legacy_was_running" = true; then
+          docker stop "$legacy_registry" >/dev/null
+        fi
+        sudo -n systemctl enable --now "$unit"
+        for _ in $(seq 1 30); do
+          if curl -fsS http://127.0.0.1:5000/v2/ >/dev/null; then
+            cutover_complete=true
+            break
+          fi
+          sleep 1
+        done
+        if test "$cutover_complete" != true; then
+          sudo -n systemctl status "$unit" --no-pager --full >&2 || true
+          exit 1
+        fi
+        sudo -n systemctl is-enabled --quiet "$unit"
+        sudo -n systemctl is-active --quiet "$unit"
+        kubectl get pvc nook-zot-data --namespace hive-data
+        if test -n "$legacy_registry"; then
+          docker rm "$legacy_registry" >/dev/null
+        fi
+        trap cleanup EXIT
+        REMOTE
+
+  registry:check:
+    desc: Verify the private Zot workload, retained volume, and loopback API.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        unit=nook-zot-registry-loopback.service
+        sudo -n systemctl is-enabled --quiet "$unit"
+        sudo -n systemctl is-active --quiet "$unit"
+        sudo -n k0s kubectl rollout status deployment/nook-zot \
+          --namespace hive-data \
+          --timeout=2m
+        test "$(
+          sudo -n k0s kubectl get pvc nook-zot-data \
+            --namespace hive-data \
+            -o jsonpath='{.status.phase}'
+        )" = Bound
+        curl --fail --silent --show-error http://127.0.0.1:5000/v2/ >/dev/null
+        listeners="$(sudo -n ss --tcp --listening --numeric --no-header 'sport = :5000')"
+        grep -F '127.0.0.1:5000' <<<"$listeners" >/dev/null
+        if grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]|\*):5000([[:space:]]|$)' \
+          <<<"$listeners"; then
+          echo "Zot registry is not loopback-only" >&2
+          exit 1
+        fi
+        REMOTE
+
+  registry:diagnose:
+    desc: Show bounded Zot workload, storage, loopback, and recent log state.
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -u
+        sudo -n systemctl status nook-zot-registry-loopback.service \
+          --no-pager \
+          --full || true
+        sudo -n ss --tcp --listening --numeric --processes \
+          'sport = :5000' || true
+        sudo -n k0s kubectl get deployment,pod,pv,pvc \
+          --namespace hive-data \
+          -l app.kubernetes.io/name=nook-zot \
+          -o wide || true
+        sudo -n k0s kubectl logs deployment/nook-zot \
+          --namespace hive-data \
+          --tail=100 || true
+        REMOTE

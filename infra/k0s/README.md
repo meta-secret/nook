@@ -2,8 +2,8 @@
 
 This directory is deployed only through `infra/Taskfile.yml`. From the
 repository root, `task infra:deploy` validates the target, installs k0s and
-Kata, deploys persistent Neo4j, publishes the Hive image to the target's
-loopback registry, and rolls out four Kata-backed workers.
+Kata, deploys persistent Neo4j and Zot, publishes the Hive image to Zot through
+the target's loopback endpoint, and rolls out four Kata-backed workers.
 
 Pinned platform:
 
@@ -55,6 +55,10 @@ records an existing CNI's masquerade state before
 restarting k0s; a migration replaces existing Hive workload Pod sandboxes
 automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
+Zot uses a separate retained local PV at `/var/lib/hive/zot`. It has no public
+Service or Ingress; a hardened, restartable systemd port-forward binds only
+`127.0.0.1:5000` for host Docker and containerd. k0s uninstall removes that
+forwarding unit but never removes the registry data.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
