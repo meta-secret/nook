@@ -364,12 +364,9 @@ pub fn unlock_passkey_device_identity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        DeviceIdentity,
-        auth::mock_passkey::{
-            MemoryPasskeyAuthenticator, MockPasskeyAssertionRequest, MockPasskeyError,
-            MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyUserAuthorization,
-        },
+    use crate::auth::mock_passkey::{
+        MemoryPasskeyAuthenticator, MockPasskeyAssertionRequest, MockPasskeyError,
+        MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyUserAuthorization,
     };
 
     const TEST_RP_ID: &str = "localhost";
