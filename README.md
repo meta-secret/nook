@@ -353,7 +353,7 @@ suites.
 ```sh
 task format                # required local agent action (host-applied)
 task remote:list           # allowlisted focused GitHub-hosted task catalog
-task remote TASK_NAME=rust:test # run one focused task against exact pushed HEAD
+task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
 task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)

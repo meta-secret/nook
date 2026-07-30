@@ -176,6 +176,13 @@ writer also prevents short-lived lineages from exhausting the repository cache
 quota. The self-hosted `nook` label is reserved for runner cleanup while that
 machine remains registered.
 
+Focused `remote.yml` jobs retain the same hosted placement and read-only Main
+cache policy. The common Rust test and web/extension check routes use smaller
+source-sealed image targets so their solve graphs stop before unrelated
+coverage, WASM-test, browser, full-verification, and production-build stages.
+These remote-only routes preserve the exact check command while reducing
+preparation work; complete PR/Main/release graphs are unchanged.
+
 BuildKit cache records imported by a named target are local to that target's
 solve; they do not propagate through a named build context into the outer
 source, export, or application solve. Every outer WASM solve must therefore

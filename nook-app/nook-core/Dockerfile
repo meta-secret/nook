@@ -60,3 +60,25 @@ COPY nook-app/nook-wasm nook-wasm
 FROM scratch AS coverage-export
 
 COPY --from=builder-debug /opt/nook/coverage/nook-core/ /
+
+# Focused native tests need the manifest-keyed dependency graph and the exact source, but not the
+# unrelated coverage, clippy, WASM, or web build branches joined by the general nook-rust image.
+# Keep this source-sealed: the runtime command never mounts the checkout.
+FROM builder-deps AS nook-rust-test
+
+WORKDIR /meta-secret/nook
+
+COPY . .
+
+RUN find \
+      nook-app/nook-auth2/src \
+      nook-app/nook-replication/src \
+      nook-app/nook-event-log/src \
+      nook-app/nook-core/src \
+      -type f -name '*.rs' -exec touch {} + \
+    && test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-test source snapshot" >/dev/null

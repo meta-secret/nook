@@ -57,6 +57,18 @@ target "wasm-export" {
   cache-to   = rust_wasm_source_cache_to
 }
 
+target "focused-web-artifacts" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-wasm/Dockerfile"
+  target     = "focused-web-artifacts"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-wasm-deps = "target:builder-wasm-deps"
+  }
+  cache-from = rust_wasm_source_cache_from
+}
+
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.
 target "web-artifacts" {
   inherits   = ["_sccache"]

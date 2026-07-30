@@ -70,7 +70,7 @@ jobs:
         with:
           cache-write: "false"
           main-cache-only: "true"
-      - run: task rust:test
+      - run: task remote:rust:test
 
   rust-lint:
     if: inputs.task == 'rust:lint'
@@ -148,7 +148,7 @@ jobs:
         with:
           cache-write: "false"
           main-cache-only: "true"
-      - run: task web:check
+      - run: task remote:web:check
 
   web-test:
     if: inputs.task == 'web:test'
@@ -161,7 +161,7 @@ jobs:
         with:
           cache-write: "false"
           main-cache-only: "true"
-      - run: task web:test
+      - run: task remote:web:test
 
   web-build:
     if: inputs.task == 'web:build'
@@ -210,7 +210,7 @@ jobs:
         with:
           cache-write: "false"
           main-cache-only: "true"
-      - run: task extension:check
+      - run: task remote:extension:check
 
   extension-e2e:
     if: inputs.task == 'extension:e2e'
