@@ -90,6 +90,18 @@ FROM scratch AS wasm-export
 
 COPY --from=builder-wasm-build /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
 
+# Focused web/type-check tasks need the generated WASM package, but not wasm clippy, wasm-pack
+# tests, native coverage, or a production web build. Preserve the normal web-artifact shape with
+# an intentionally empty coverage directory.
+FROM builder-wasm-build AS focused-web-artifacts-source
+
+RUN mkdir -p /opt/nook/empty-coverage
+
+FROM scratch AS focused-web-artifacts
+
+COPY --from=focused-web-artifacts-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+COPY --from=focused-web-artifacts-source /opt/nook/empty-coverage /coverage
+
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
 # unformatted source. Normal `task setup` includes this target in its parallel prepare group.
 FROM builder-debug AS rust-format-check

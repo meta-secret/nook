@@ -199,6 +199,41 @@ tasks:
           sleep 2;
         done'
 
+  setup:web:focused:
+    desc: Build the narrow source-sealed web image for focused checks without full verification or production builds.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    env:
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        commit_id="${GIT_COMMIT_ID:?task setup:web:focused requires GIT_COMMIT_ID}";
+        if [ "${#commit_id}" -ne 40 ] || [[ "$commit_id" == *[!0-9a-f]* ]]; then
+          echo "task setup:web:focused: GIT_COMMIT_ID must be a full lowercase git SHA" >&2;
+          exit 1;
+        fi;
+        artifacts_parent="${TMPDIR:-/tmp}/nook-focused-web-artifacts";
+        artifacts_root="$artifacts_parent/$commit_id";
+        mkdir -p "$artifacts_root";
+        artifacts_dir="$(mktemp -d "$artifacts_root/invocation.XXXXXX")";
+        cleanup() {
+          rm -rf "$artifacts_dir";
+          rmdir "$artifacts_root" 2>/dev/null || true;
+          rmdir "$artifacts_parent" 2>/dev/null || true;
+        };
+        trap cleanup EXIT;
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "focused-web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" focused-web-artifacts web-deps;
+        artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
+        echo "task setup:web:focused: WASM handoff is ${artifact_kib} KiB";
+        test "$artifact_kib" -le 262144 || {
+          echo "task setup:web:focused: refusing oversized WASM handoff (${artifact_kib} KiB)" >&2;
+          exit 1;
+        };
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web-focused'
+
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
     dir: '{{.REPO_ROOT}}'
@@ -218,6 +253,16 @@ tasks:
           echo "task setup:rust: bake attempt $attempt failed; retrying in 5s..." >&2;
           sleep 5;
         done'
+
+  setup:rust:test:
+    desc: Build the narrow source-sealed native Rust test image without unrelated WASM or coverage branches.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-test
 
   setup:rust:fast:
     desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.

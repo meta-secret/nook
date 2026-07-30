@@ -83,3 +83,8 @@ target "_nook-web-ci-common" {
   inherits = ["_nook-web-base"]
   target   = "nook-web-ci"
 }
+
+target "_nook-web-focused-common" {
+  inherits = ["_nook-web-base"]
+  target   = "nook-web-source"
+}
