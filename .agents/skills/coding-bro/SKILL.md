@@ -5,7 +5,7 @@ description: >-
   publish a public-safe task plan to Workbench before implementation, branch
   from origin/main, implement, always host-apply task format (and the UI demo
   contract when UI paths change), commit and push/open the PR, run focused
-  allowlisted tasks on GitHub-hosted workers, then explicitly trigger complete
+  allowlisted tasks on the persistent Nook Actions runner pool, then explicitly trigger complete
   exact-head PR validation; on failure fix from CI logs, format, push, and
   trigger again until Nook's PR checks are green, resolve every actionable comment already present
   without waiting for reviewers, then squash merge; afterward publish the issue

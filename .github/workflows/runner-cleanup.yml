@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           # Keep one week of recent BuildKit/image state so local daemon builds can reuse
-          # expensive Rust and Chromium layers. Delivery CI itself uses ephemeral hosted
-          # builders plus GHA cache scopes; this age filter only bounds leftover host state.
+          # expensive Rust and Chromium layers used by focused remote tasks. Complete
+          # PR/Main/release delivery uses ephemeral hosted builders plus GHA cache scopes.
           # Docker does not support combining the age filter with --volumes.
           # Keep the age-bound cache/image cleanup, then remove unused volumes
           # separately (Docker volume prune has no supported age filter).

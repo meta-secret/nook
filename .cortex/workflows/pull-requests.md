@@ -12,7 +12,7 @@ blocked handoff:
 1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch,
    and define the PR title/body/scope before coding.
 2. **Implement functionality** — make the requested code/docs/tests changes on
-   the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
+   the feature branch. Focused build/test feedback runs on the persistent Nook Actions pool.
 3. **Push and create/update the PR** — run `task format` (and the UI demo
    contract when UI paths change), push a coherent commit, and open the PR;
    later fixes update that same PR.
@@ -122,8 +122,9 @@ grace period.
 
 ### 5. Hosted iteration and explicit validation
 
-**GitHub-hosted execution is the normal build/test path.** `remote.yml` runs
-allowlisted focused tasks repeatedly against an exact pushed branch head.
+**GitHub Actions is the normal build/test path.** `remote.yml` runs allowlisted
+focused tasks on the persistent Nook runner pool against an exact pushed branch
+head.
 `pr.yml` is the sole merge-validation pipeline and runs only when an agent
 explicitly applies a validation label through `task pr:validate`.
 
@@ -161,7 +162,7 @@ task pr:validate PR=<number> FULL_E2E=1
 | -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
 | Before every push          | `task format`                                    | Only required local product action              |
 | UI-facing path changes     | `ui-demo-contract.sh`                            | Cheap hygiene before hosted execution           |
-| Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one hosted worker for the selected task     |
+| Focused build/test feedback| `task remote TASK_NAME=<name>`                   | Use one persistent Nook runner for the selected task |
 | Final validation boundary  | `task pr:validate PR=<number>`                   | Start the complete exact-head PR gate           |
 | After complete CI failure  | fix → format → commit → push → validate again    | A push does not automatically refresh `pr.yml`  |
 

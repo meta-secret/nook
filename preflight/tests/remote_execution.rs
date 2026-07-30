@@ -54,7 +54,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn hosted_workflow_matches_the_taskfile_catalog() {
+fn persistent_workflow_matches_the_taskfile_catalog() {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let task_catalog = catalog_from_taskfile(&remote_tasks);
@@ -76,15 +76,46 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         "every selected remote job must correspond to exactly one Taskfile allowlist entry"
     );
     assert_eq!(
-        workflow.matches("runs-on: ubuntu-latest").count(),
+        workflow.matches("runs-on: nook").count(),
         task_catalog.len(),
-        "every catalog task must run on its own GitHub-hosted job"
+        "every catalog task must run on the persistent Nook runner pool"
     );
-    assert!(!workflow.contains("runs-on: nook"));
+    assert!(!workflow.contains("runs-on: ubuntu-latest"));
     assert!(!workflow.contains("secrets."));
     assert!(!workflow.contains("${{ inputs.command }}"));
-    assert!(workflow.contains("cache-write: \"false\""));
-    assert!(workflow.contains("main-cache-only: \"true\""));
+    assert!(workflow.contains("permissions:\n  actions: read\n  contents: read"));
+    for automatic_trigger in ["pull_request:", "push:", "schedule:"] {
+        assert!(
+            !workflow.contains(automatic_trigger),
+            "persistent runners must never receive automatic branch execution: {automatic_trigger}"
+        );
+    }
+    assert_eq!(
+        workflow.matches("uses: go-task/setup-task@v2").count(),
+        task_catalog.len(),
+        "every selected job must install Task without replacing the persistent Docker builder"
+    );
+    assert!(
+        !workflow.contains("nook-docker-setup")
+            && !workflow.contains("main-cache-only")
+            && !workflow.contains("GHA_CACHE_"),
+        "focused remote jobs must reuse the runner-local builder instead of ephemeral GHA caches"
+    );
+    for (image, tag) in [
+        ("DOCKER_IMAGE", "nook-web"),
+        ("DOCKER_E2E_IMAGE", "nook-web-e2e"),
+        ("DOCKER_RUST_IMAGE", "nook-rust"),
+        ("DOCKER_RUST_FAST_IMAGE", "nook-rust-fast"),
+        ("DOCKER_RUST_BROWSER_IMAGE", "nook-rust-browser"),
+        ("DOCKER_MKCERT_IMAGE", "nook-mkcert"),
+    ] {
+        assert!(
+            workflow.contains(&format!(
+                "{image}: {tag}:remote-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}"
+            )),
+            "shared runners need a run-scoped {image}"
+        );
+    }
 }
 
 #[test]

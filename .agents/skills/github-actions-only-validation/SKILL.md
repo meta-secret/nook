@@ -1,6 +1,6 @@
 ---
 name: github-actions-only-validation
-description: Format locally, run focused builds and tests through task remote on GitHub-hosted workers, and explicitly trigger complete PR validation with task pr:validate.
+description: Format locally, run focused builds and tests through task remote on the persistent Nook Actions pool, and explicitly trigger complete GitHub-hosted PR validation with task pr:validate.
 ---
 
 # GitHub-Hosted Execution and Validation
