@@ -8,7 +8,6 @@ import {
   expandSettingsSection,
   expandLoginEnrollmentPanel,
   expectNoVaultPasswords,
-  expectVaultPasswordStatus,
   openStorageSettings,
   revealSecretValue,
   rotateVaultPassword,

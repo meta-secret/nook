@@ -10,6 +10,7 @@ import {
   buildSitemapXml,
   siteUrlFromEnv,
 } from '../nook-web-shared/src/vault-app/lib/sitemap'
+import { VaultApplication } from '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =
@@ -208,7 +209,7 @@ export default defineConfig(({ mode }) => {
     // self-contained instead of coupling the site bundle to either mount path.
     base: appKind === 'site' ? './' : (viteBase ?? '/'),
     define: {
-      __NOOK_APP_KIND__: 'VaultApplication.UnifiedDevelopment',
+      __NOOK_APP_KIND__: JSON.stringify(VaultApplication.UnifiedDevelopment),
     },
     plugins: [
       tailwindcss(),

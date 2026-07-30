@@ -195,8 +195,6 @@ function waitForStoredWebAuthToken(
   log.info("CloudKit web auth token wait started", { timeoutMs });
 
   return new Promise((resolve, reject) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    let pollId: ReturnType<typeof setInterval>;
     let settled = false;
 
     const cleanup = () => {
@@ -224,7 +222,7 @@ function waitForStoredWebAuthToken(
     // Fallback: poll cookies / session storage so we detect tokens that
     // CloudKit JS stored outside the custom authTokenStore (e.g. via
     // cookie or a direct sessionStorage write after a SDK update).
-    pollId = setInterval(() => {
+    const pollId = setInterval(() => {
       const token = readStoredWebAuthToken();
       if (token.kind === WebAuthTokenLookupKind.Available) {
         cleanup();
@@ -235,7 +233,7 @@ function waitForStoredWebAuthToken(
       }
     }, 500);
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       cleanup();
       log.warn("CloudKit web auth token wait timed out", {
         timeoutMs,
@@ -759,7 +757,6 @@ async function requestDirectCloudKitWebAuthToken(
   }
   return new Promise((resolve, reject) => {
     let settled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
     const cleanup = () => {
       settled = true;
       window.removeEventListener("message", handleMessage);
@@ -784,7 +781,7 @@ async function requestDirectCloudKitWebAuthToken(
       resolve(token.token);
     };
     window.addEventListener("message", handleMessage);
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       if (settled) {
         return;
       }

@@ -6,7 +6,6 @@ import {
   clearBrowserVault,
   createLocalVaultOnLogin,
   expectNoVaultPasswords,
-  expectVaultPasswordStatus,
   expandSettingsSection,
   openStorageSettings,
 } from './helpers'

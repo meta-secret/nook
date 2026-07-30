@@ -1,0 +1,5 @@
+{
+  "name": "nook-web-shared",
+  "private": true,
+  "type": "module"
+}

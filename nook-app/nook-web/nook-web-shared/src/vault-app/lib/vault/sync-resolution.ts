@@ -240,9 +240,7 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true;
   state.errorMsg = "";
-  let providerSave: ConflictProviderSave = {
-    kind: ConflictProviderSaveKind.NotSaved,
-  };
+  let providerSave: ConflictProviderSave;
   let importedAsSeparateVault = false;
   try {
     let importedStoreId: string;

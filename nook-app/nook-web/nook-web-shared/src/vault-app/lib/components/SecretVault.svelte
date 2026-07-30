@@ -224,11 +224,7 @@
     void vault.loadSecretPage(searchPattern.trim(), 0)
   }
 
-  function resetTransientSecretViews(
-    _query: string,
-    _offset: number,
-    _filter: NookSecretTypeFilter,
-  ) {
+  function resetTransientSecretViews() {
     freeDecryptedSecrets(untrack(() => decryptedSecrets))
     decryptedSecrets = {}
     authenticatorCodes = {}
@@ -390,11 +386,11 @@
   })
 
   $effect(() => {
-    resetTransientSecretViews(
-      vault.secretQuery,
-      vault.secretPageOffset,
-      vault.secretTypeFilter,
-    )
+    // These reads intentionally make the reset reactive to page changes.
+    void vault.secretQuery
+    void vault.secretPageOffset
+    void vault.secretTypeFilter
+    resetTransientSecretViews()
   })
 
   onDestroy(() => {
