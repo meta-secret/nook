@@ -196,7 +196,7 @@ async function appendSealedAuthProviders(
     storedProvider(provider, seedScope),
   )
   await page.evaluate(
-    async ({ providers: additions, seedScope }) => {
+    async ({ providers: additions, seedScope, activeVaultKind }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
@@ -204,7 +204,7 @@ async function appendSealedAuthProviders(
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
       const fallbackActiveVaultScope =
-        seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
+        seedScope.kind === activeVaultKind
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
       const snapshot = await hook.loadAuthProviders()
@@ -221,7 +221,11 @@ async function appendSealedAuthProviders(
       snapshot.providers.push(...additions)
       await hook.saveAuthProviders(snapshot)
     },
-    { providers: storedAdditions, seedScope },
+    {
+      providers: storedAdditions,
+      seedScope,
+      activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
+    },
   )
 }
 
@@ -417,7 +421,7 @@ export async function saveAuthProvidersInBrowser(
     storedProvider(provider, seedScope),
   )
   await page.evaluate(
-    async ({ providers, seedScope }) => {
+    async ({ providers, seedScope, activeVaultKind }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
@@ -425,12 +429,16 @@ export async function saveAuthProvidersInBrowser(
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
       const activeVaultStoreId =
-        seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
+        seedScope.kind === activeVaultKind
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
       await hook.saveAuthProviders({ providers, activeVaultStoreId })
     },
-    { providers, seedScope },
+    {
+      providers,
+      seedScope,
+      activeVaultKind: AuthProviderSeedScopeKind.ActiveVault,
+    },
   )
 }
 
