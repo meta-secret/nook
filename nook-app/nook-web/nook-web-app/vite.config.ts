@@ -142,6 +142,11 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
 }
 
 /** Emit sitemap.xml and robots.txt for production deploys (nokey.sh). */
+enum SeoStaticFileKind {
+  Served = 'served',
+  PassThrough = 'pass-through',
+}
+
 function seoStaticFiles(outputDirectory: string): Plugin {
   const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
     server.middlewares.use((request, response, next) => {
@@ -150,18 +155,18 @@ function seoStaticFiles(outputDirectory: string): Plugin {
       const staticFile =
         pathname === '/robots.txt'
           ? {
-              kind: 'served' as const,
+              kind: SeoStaticFileKind.Served,
               body: buildRobotsTxt(siteUrl),
               contentType: 'text/plain; charset=utf-8',
             }
           : pathname === '/sitemap.xml'
             ? {
-                kind: 'served' as const,
+                kind: SeoStaticFileKind.Served,
                 body: buildSitemapXml(siteUrl),
                 contentType: 'application/xml; charset=utf-8',
               }
-            : { kind: 'pass-through' as const }
-      if (staticFile.kind === 'pass-through') {
+            : { kind: SeoStaticFileKind.PassThrough }
+      if (staticFile.kind === SeoStaticFileKind.PassThrough) {
         next()
         return
       }

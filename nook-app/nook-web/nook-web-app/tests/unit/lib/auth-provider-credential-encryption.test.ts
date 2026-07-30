@@ -4,10 +4,9 @@ import {
   configuredOAuthFile,
   defaultOAuthFileConfig,
   githubPatValue,
+  isConfiguredOAuthFile,
   oauthAccessToken,
   OAuthAccessTokenKind,
-  oauthProviderConfiguration,
-  OAuthProviderConfigurationKind,
   providerPersistenceDefaults,
   storedGithubPat,
   storedGithubRepository,
@@ -198,8 +197,8 @@ describe.sequential(
       const loaded = await manager.loadAuthProviders()
       const provider = loaded.providers[0]
       if (!provider) throw new Error('expected a loaded OAuth provider')
-      const loadedOauth = oauthProviderConfiguration(provider)
-      if (loadedOauth.kind !== OAuthProviderConfigurationKind.Configured) {
+      const loadedOauth = provider.oauthFile
+      if (!isConfiguredOAuthFile(loadedOauth)) {
         throw new Error('expected configured OAuth credentials')
       }
       const loadedAccess = oauthAccessToken(loadedOauth.config)

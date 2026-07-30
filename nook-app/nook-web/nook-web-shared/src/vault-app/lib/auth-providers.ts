@@ -19,6 +19,8 @@ import {
   setICloudProviderMode,
   wasmStorageModeForProvider,
   NookDuplicateSyncProviderState,
+  NookStoredOAuthFileConfigurationState,
+  storedOAuthFileConfigurationState,
   NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
@@ -402,33 +404,24 @@ export function localFolderHandle(
     : { kind: LocalFolderHandleKind.Unselected };
 }
 
-export enum OAuthProviderConfigurationKind {
-  Missing = "missing",
-  Configured = "configured",
-}
+export { NookStoredOAuthFileConfigurationState };
 
-export type OAuthProviderConfiguration =
-  | { kind: OAuthProviderConfigurationKind.Missing }
-  | {
-      kind: OAuthProviderConfigurationKind.Configured;
-      config: OAuthFileConfig;
-    };
-
-export function oauthProviderConfiguration(
-  provider: StorageProvider,
-): OAuthProviderConfiguration {
-  return provider.oauthFile.state === "configured"
-    ? {
-        kind: OAuthProviderConfigurationKind.Configured,
-        config: provider.oauthFile.config,
-      }
-    : { kind: OAuthProviderConfigurationKind.Missing };
+export function isConfiguredOAuthFile(
+  configuration: StoredOAuthFileConfiguration,
+): configuration is Extract<
+  StoredOAuthFileConfiguration,
+  { config: OAuthFileConfig }
+> {
+  return (
+    storedOAuthFileConfigurationState(configuration) ===
+    NookStoredOAuthFileConfigurationState.Configured
+  );
 }
 
 export function isICloudProvider(provider: StorageProvider): boolean {
-  const configuration = oauthProviderConfiguration(provider);
+  const configuration = provider.oauthFile;
   return (
-    configuration.kind === OAuthProviderConfigurationKind.Configured &&
+    isConfiguredOAuthFile(configuration) &&
     configuration.config.preset === "icloud"
   );
 }

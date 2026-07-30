@@ -2,6 +2,29 @@ use super::{NookStorageConnectArgs, wasm_bindgen};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookStoredOAuthFileConfigurationState {
+    NotApplicable,
+    Configured,
+}
+
+#[wasm_bindgen(js_name = storedOAuthFileConfigurationState)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn stored_oauth_file_configuration_state(
+    configuration: nook_core::StoredOAuthFileConfiguration,
+) -> NookStoredOAuthFileConfigurationState {
+    match configuration {
+        nook_core::StoredOAuthFileConfiguration::NotApplicable => {
+            NookStoredOAuthFileConfigurationState::NotApplicable
+        }
+        nook_core::StoredOAuthFileConfiguration::Configured(_) => {
+            NookStoredOAuthFileConfigurationState::Configured
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookExistingVaultProviderReadiness {
     Ready,
     MissingOauthFile,

@@ -52,12 +52,12 @@ import {
   githubRepositoryValue,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
+  isConfiguredOAuthFile,
   oauthAccessToken,
   OAuthAccessTokenKind,
   oauthFileName,
   OAuthFileNameKind,
-  oauthProviderConfiguration,
-  OAuthProviderConfigurationKind,
+  oauthConfigurationNotApplicable,
   OAUTH_FILE_PROVIDER_TYPE,
   providerPersistenceDefaults,
   storedGoogleDriveFolder,
@@ -336,8 +336,8 @@ function applySavedEnrollmentProvider(
     return;
   }
   if (provider.type === "oauth-file") {
-    const configuration = oauthProviderConfiguration(provider);
-    if (configuration.kind === OAuthProviderConfigurationKind.Missing) {
+    const configuration = provider.oauthFile;
+    if (!isConfiguredOAuthFile(configuration)) {
       throw new Error(
         "OAuth enrollment provider is missing its configuration.",
       );
@@ -462,13 +462,11 @@ export async function connectWithEnrollmentCode(
         const existingProvider = sharedProvider;
         const existingConfiguration =
           existingProvider.kind === SharedGrantProviderKind.Existing
-            ? oauthProviderConfiguration(existingProvider.provider)
-            : { kind: OAuthProviderConfigurationKind.Missing as const };
-        const existingConfig =
-          existingConfiguration.kind ===
-          OAuthProviderConfigurationKind.Configured
-            ? existingConfiguration.config
-            : defaultOAuthFileConfig("icloud", "nook-events");
+            ? existingProvider.provider.oauthFile
+            : oauthConfigurationNotApplicable();
+        const existingConfig = isConfiguredOAuthFile(existingConfiguration)
+          ? existingConfiguration.config
+          : defaultOAuthFileConfig("icloud", "nook-events");
         const existingCredential = oauthAccessToken(existingConfig);
         const tokens =
           existingCredential.kind === OAuthAccessTokenKind.Available
@@ -526,17 +524,14 @@ export async function connectWithEnrollmentCode(
       if (
         sharedProvider.kind === SharedGrantProviderKind.AuthorizationRequired
       ) {
-        throw new Error(
-          "Shared-provider enrollment requires this browser to have matching provider access before connecting.",
-        );
+        throw new Error(state.t("errors.shared_provider_access_required"));
       }
       let provider = sharedProvider.provider;
-      const providerConfiguration = oauthProviderConfiguration(provider);
+      const providerConfiguration = provider.oauthFile;
       if (
         storageTarget.kind === SharedStorageTargetKind.Bound &&
         preset === "google-drive" &&
-        providerConfiguration.kind ===
-          OAuthProviderConfigurationKind.Configured &&
+        isConfiguredOAuthFile(providerConfiguration) &&
         providerConfiguration.config.folderId.state === "root"
       ) {
         provider = {
@@ -738,14 +733,14 @@ export async function issueEnrollmentCode(
     }
     const githubPat = githubPatValue(selectedProvider.githubPat);
     const githubRepo = githubRepositoryValue(selectedProvider.githubRepo);
-    const selectedOauth = oauthProviderConfiguration(selectedProvider);
+    const selectedOauth = selectedProvider.oauthFile;
     const sharedJoinerIdentity = state.sharedJoinerIdentity.trim();
     const usesSharedProviderGrant =
       providerOnboardingType(selectedProvider, state.vaultArchitecture) ===
       OnboardingType.SharedProviderGrant;
     const usesSharedICloud =
       usesSharedProviderGrant &&
-      selectedOauth.kind === OAuthProviderConfigurationKind.Configured &&
+      isConfiguredOAuthFile(selectedOauth) &&
       selectedOauth.config.preset === "icloud";
     log.info("enrollment provider selected", {
       providerId,
@@ -762,9 +757,7 @@ export async function issueEnrollmentCode(
       !usesSharedProviderGrant &&
       (!githubPat || !githubRepo)
     ) {
-      throw new Error(
-        "GitHub sync provider is missing credentials. Reconnect in Settings and try again.",
-      );
+      throw new Error(state.t("errors.github_enrollment_credentials_required"));
     }
     state.sharedGrantInstructions = "";
     let sharedStorageTarget: SharedStorageTarget = {
@@ -784,10 +777,8 @@ export async function issueEnrollmentCode(
           storageTargetId: targetId,
         };
       } else {
-        if (selectedOauth.kind === OAuthProviderConfigurationKind.Missing) {
-          throw new Error(
-            "Shared-provider enrollment requires OAuth configuration.",
-          );
+        if (!isConfiguredOAuthFile(selectedOauth)) {
+          throw new Error(state.t("errors.shared_provider_oauth_required"));
         }
         const accessCredential = oauthAccessToken(selectedOauth.config);
         log.info("shared enrollment grant started", { providerId });
@@ -858,7 +849,7 @@ export async function issueEnrollmentCode(
         }
         if (
           sharedStorageTarget.kind === SharedStorageTargetKind.Bound &&
-          selectedOauth.kind === OAuthProviderConfigurationKind.Configured
+          isConfiguredOAuthFile(selectedOauth)
         ) {
           const updatedOauth = bindGoogleDriveSharedFolder(
             selectedOauth.config,

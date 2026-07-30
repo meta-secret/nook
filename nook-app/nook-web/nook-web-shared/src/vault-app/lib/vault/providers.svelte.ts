@@ -19,6 +19,7 @@ import {
   LocalFolderHandleKind,
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
+  isConfiguredOAuthFile,
   missingOAuthAccessToken,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
@@ -26,8 +27,7 @@ import {
   oauthRefreshCredentialNotIssued,
   oauthFileName,
   OAuthFileNameKind,
-  oauthProviderConfiguration,
-  OAuthProviderConfigurationKind,
+  oauthConfigurationNotApplicable,
   providerDefaultLabel,
   providerPersistenceDefaults,
   personalICloudShareTarget,
@@ -50,7 +50,6 @@ import {
   type LocalFolderHandle,
   type OAuthFileConfig,
   type OAuthFileName,
-  type OAuthProviderConfiguration,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
@@ -561,17 +560,18 @@ export function applyActiveProviderCredentials(state: ProviderActionsContext) {
   state.storageMode = syncProvider.type;
   state.githubPat = githubPatValue(syncProvider.githubPat);
   if (syncProvider.type === "oauth-file") {
-    const oauthConfiguration = oauthProviderConfiguration(syncProvider);
-    if (oauthConfiguration.kind === OAuthProviderConfigurationKind.Configured) {
+    const oauthConfiguration = syncProvider.oauthFile;
+    if (isConfiguredOAuthFile(oauthConfiguration)) {
       state.configureOauthFile(oauthConfiguration.config);
     } else {
       state.clearOauthFile();
     }
     state.clearLocalFolder();
-    const remoteFileName: OAuthFileName =
-      oauthConfiguration.kind === OAuthProviderConfigurationKind.Configured
-        ? oauthFileName(oauthConfiguration.config)
-        : { kind: OAuthFileNameKind.Unresolved };
+    const remoteFileName: OAuthFileName = isConfiguredOAuthFile(
+      oauthConfiguration,
+    )
+      ? oauthFileName(oauthConfiguration.config)
+      : { kind: OAuthFileNameKind.Unresolved };
     state.githubRepo =
       remoteFileName.kind === OAuthFileNameKind.Resolved
         ? remoteFileName.fileName
@@ -914,11 +914,10 @@ export async function ensureProviderSaved(
     if (oauthProviderToUpdate.kind === OAuthProviderUpdateKind.Required) {
       const oauthProviderToUpdateId = oauthProviderToUpdate.providerId;
       state.providers = state.providers.map((provider) => {
-        const providerOAuthConfiguration = oauthProviderConfiguration(provider);
+        const providerOAuthConfiguration = provider.oauthFile;
         if (
           provider.type !== "oauth-file" ||
-          providerOAuthConfiguration.kind !==
-            OAuthProviderConfigurationKind.Configured ||
+          !isConfiguredOAuthFile(providerOAuthConfiguration) ||
           provider.id !== oauthProviderToUpdateId
         ) {
           return provider;
@@ -965,11 +964,11 @@ export async function ensureProviderSaved(
       const updatedProvider = state.providers.find(
         (provider) => provider.id === oauthProviderToUpdateId,
       );
-      const updatedConfiguration: OAuthProviderConfiguration = updatedProvider
-        ? oauthProviderConfiguration(updatedProvider)
-        : { kind: OAuthProviderConfigurationKind.Missing };
+      const updatedConfiguration = updatedProvider
+        ? updatedProvider.oauthFile
+        : oauthConfigurationNotApplicable();
       state.configureOauthFile(
-        updatedConfiguration.kind === OAuthProviderConfigurationKind.Configured
+        isConfiguredOAuthFile(updatedConfiguration)
           ? updatedConfiguration.config
           : activeOauthFile,
       );

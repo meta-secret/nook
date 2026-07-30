@@ -205,7 +205,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn save_seals_github_pat_in_indexed_db() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_11WASMtestSECRET";
         save_auth_providers(&identity, &github_snapshot(pat)).await?;
@@ -218,7 +218,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn load_decrypts_sealed_github_pat() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_22LOADroundTRIP";
         save_auth_providers(&identity, &github_snapshot(pat)).await?;
@@ -232,7 +232,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn load_rejects_plaintext_credentials() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let pat = "github_pat_33PLAINTEXT";
         write_snapshot(&github_snapshot(pat)).await?;
@@ -242,7 +242,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn save_seals_oauth_tokens_in_indexed_db() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let access = "ya29.wasm-oauth-access";
         let refresh = "1//wasm-refresh-secret";
@@ -301,7 +301,7 @@ mod wasm_idb_tests {
     #[wasm_bindgen_test]
     async fn presealed_save_replaces_active_vault_and_preserves_other_vaults() -> anyhow::Result<()>
     {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_existing");
         existing.providers[0].store_id =
@@ -340,7 +340,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn presealed_save_rejects_existing_plaintext_provider_rows() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         write_snapshot(&github_snapshot_with_id(
             "gh-plaintext",
             "github_pat_plaintext",
@@ -367,7 +367,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn presealed_empty_save_clears_only_the_incoming_vault() -> anyhow::Result<()> {
-        clear_auth_snapshot().await;
+        clear_auth_snapshot().await?;
         let identity = DeviceIdentity::generate()?;
         let mut existing = github_snapshot_with_id("gh-removed", "github_pat_removed");
         existing.providers[0].store_id =

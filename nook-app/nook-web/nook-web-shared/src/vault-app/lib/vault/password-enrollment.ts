@@ -8,8 +8,7 @@ import {
 import {
   oauthAccessToken,
   OAuthAccessTokenKind,
-  oauthProviderConfiguration,
-  OAuthProviderConfigurationKind,
+  isConfiguredOAuthFile,
   oauthRefreshCredentialNotIssued,
   OAUTH_FILE_PROVIDER_TYPE,
   storedOAuthAccountEmail,
@@ -51,10 +50,10 @@ export function findSharedGrantProvider(
   target: SharedStorageTarget,
 ): SharedGrantProvider {
   const withToken = providers.filter((provider) => {
-    const configuration = oauthProviderConfiguration(provider);
+    const configuration = provider.oauthFile;
     return (
       provider.type === OAUTH_FILE_PROVIDER_TYPE &&
-      configuration.kind === OAuthProviderConfigurationKind.Configured &&
+      isConfiguredOAuthFile(configuration) &&
       configuration.config.preset === preset &&
       oauthAccessToken(configuration.config).kind ===
         OAuthAccessTokenKind.Available
@@ -62,8 +61,8 @@ export function findSharedGrantProvider(
   });
   if (target.kind === SharedStorageTargetKind.Bound) {
     const provider = withToken.find((candidate) => {
-      const configuration = oauthProviderConfiguration(candidate);
-      if (configuration.kind === OAuthProviderConfigurationKind.Missing) {
+      const configuration = candidate.oauthFile;
+      if (!isConfiguredOAuthFile(configuration)) {
         return false;
       }
       const { folderId, iCloudShareTarget } = configuration.config;
