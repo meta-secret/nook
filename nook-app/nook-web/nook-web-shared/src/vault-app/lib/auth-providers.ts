@@ -9,8 +9,7 @@ import {
   formatDriveStorageRef as formatDriveStorageRefCore,
   formatNewDriveStorageRef,
   maskGithubPatHint as maskGithubPatHintCore,
-  missingOAuthAccessToken,
-  oauthAccessToken,
+  oauthAccessToken as oauthAccessTokenWasm,
   localizeProviderLabel as localizeProviderLabelCore,
   providerDefaultLabel as providerDefaultLabelCore,
   providerDefaultLabelWithoutDetail,
@@ -44,6 +43,7 @@ import {
   type StoredOAuthTokenExpiry,
   type ProviderVaultScope,
   NookGithubPatHintState,
+  type NookOAuthAccessToken,
   type NookVaultManager,
 } from "$app-wasm";
 
@@ -83,10 +83,35 @@ export {
   setGoogleDriveProviderMode,
   setICloudProviderMode,
   wasmStorageModeForProvider,
-  missingOAuthAccessToken,
-  oauthAccessToken,
   OAuthAccessTokenKind,
 };
+
+export type OAuthAccessToken =
+  | { kind: OAuthAccessTokenKind.Missing }
+  | { kind: OAuthAccessTokenKind.Available; token: string };
+
+function copyOAuthAccessToken(
+  accessToken: NookOAuthAccessToken,
+): OAuthAccessToken {
+  try {
+    return accessToken.kind === OAuthAccessTokenKind.Available
+      ? {
+          kind: OAuthAccessTokenKind.Available,
+          token: accessToken.token,
+        }
+      : { kind: OAuthAccessTokenKind.Missing };
+  } finally {
+    accessToken.free();
+  }
+}
+
+export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
+  return copyOAuthAccessToken(oauthAccessTokenWasm(config));
+}
+
+export function missingOAuthAccessToken(): OAuthAccessToken {
+  return { kind: OAuthAccessTokenKind.Missing };
+}
 
 export enum DriveFileIdentityKind {
   New = "new",

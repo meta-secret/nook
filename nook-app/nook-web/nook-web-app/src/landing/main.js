@@ -3,6 +3,13 @@ import './vault-visual.css'
 import './product-sections.css'
 import './responsive.css'
 import { landingMessages } from './messages.js'
+import {
+  GitHubStarsCacheLookupKind,
+  GitHubStarsStateKind,
+  githubStarsNotLoaded,
+  loadedGitHubStars,
+  readCachedGitHubStarCount,
+} from './github-stars-state'
 
 const cryptoTerms = Array.from(document.querySelectorAll('.crypto-term'))
 const readoutCode = document.querySelector('.readout-code')
@@ -23,7 +30,7 @@ const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
 const extensionMetadataLoading = Object.freeze({})
 const extensionMetadataUnavailable = Object.freeze({})
 let extensionMetadataState = extensionMetadataLoading
-let githubStarsState = { kind: 'not-loaded' }
+let githubStarsState = githubStarsNotLoaded()
 let followsSystemTheme = true
 
 function selectCryptoTerm(term) {
@@ -136,7 +143,7 @@ async function loadExtensionMetadata() {
 
 function updateGitHubStars(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (githubStarsState.kind === 'not-loaded') {
+  if (githubStarsState.kind === GitHubStarsStateKind.NotLoaded) {
     githubStarsCount.textContent = '—'
     githubStarsLink.setAttribute('aria-label', messages['github.link_label'])
     return
@@ -152,26 +159,10 @@ function updateGitHubStars(locale = document.documentElement.lang) {
   )
 }
 
-function readCachedGitHubStarCount() {
-  try {
-    const cached = JSON.parse(localStorage.getItem('nook_github_stars') ?? '{}')
-    if (
-      Number.isSafeInteger(cached.count) &&
-      cached.count >= 0 &&
-      Number.isSafeInteger(cached.updatedAt)
-    ) {
-      return cached
-    }
-  } catch {
-    // A malformed or unavailable cache must not affect the header.
-  }
-  return
-}
-
 async function loadGitHubStars() {
-  const cached = readCachedGitHubStarCount()
-  if (cached) {
-    githubStarsState = { kind: 'loaded', count: cached.count }
+  const cached = readCachedGitHubStarCount(localStorage)
+  if (cached.kind === GitHubStarsCacheLookupKind.Found) {
+    githubStarsState = loadedGitHubStars(cached.count)
     updateGitHubStars()
   }
 
@@ -193,7 +184,7 @@ async function loadGitHubStars() {
     ) {
       throw new Error('Invalid GitHub repository metadata.')
     }
-    githubStarsState = { kind: 'loaded', count: repository.stargazers_count }
+    githubStarsState = loadedGitHubStars(repository.stargazers_count)
     try {
       localStorage.setItem(
         'nook_github_stars',

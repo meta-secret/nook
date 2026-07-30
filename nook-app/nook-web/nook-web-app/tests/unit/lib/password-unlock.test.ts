@@ -78,53 +78,48 @@ describe('shared enrollment provider selection', () => {
       accessToken: storedOAuthCredential('token-owner'),
     })
     const missing = missingOAuthAccessToken()
-    try {
-      expect(
-        shouldFlushSharedDriveGrant(
-          {
-            kind: 'granted',
-            note: 'architecture_modes.shared_grant_created',
-            target: {
-              state: 'identified',
-              storageTargetId: 'folder-required',
-            },
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'granted',
+          note: 'architecture_modes.shared_grant_created',
+          target: {
+            state: 'identified',
+            storageTargetId: 'folder-required',
           },
-          available,
-        ),
-      ).toBe(true)
-      expect(
-        shouldFlushSharedDriveGrant(
-          {
-            kind: 'manual-grant-required',
-            instructionsKey:
-              'architecture_modes.shared_grant_manual_instructions',
-            joinerIdentity: 'joiner@example.com',
-            target: {
-              state: 'identified',
-              storageTargetId: 'folder-required',
-            },
+        },
+        available,
+      ),
+    ).toBe(true)
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'manual-grant-required',
+          instructionsKey:
+            'architecture_modes.shared_grant_manual_instructions',
+          joinerIdentity: 'joiner@example.com',
+          target: {
+            state: 'identified',
+            storageTargetId: 'folder-required',
           },
-          available,
-        ),
-      ).toBe(true)
-      expect(
-        shouldFlushSharedDriveGrant(
-          {
-            kind: 'manual-grant-required',
-            instructionsKey:
-              'architecture_modes.shared_grant_manual_instructions',
-            joinerIdentity: 'joiner@example.com',
-            target: {
-              state: 'identified',
-              storageTargetId: 'folder-required',
-            },
+        },
+        available,
+      ),
+    ).toBe(true)
+    expect(
+      shouldFlushSharedDriveGrant(
+        {
+          kind: 'manual-grant-required',
+          instructionsKey:
+            'architecture_modes.shared_grant_manual_instructions',
+          joinerIdentity: 'joiner@example.com',
+          target: {
+            state: 'identified',
+            storageTargetId: 'folder-required',
           },
-          missing,
-        ),
-      ).toBe(false)
-    } finally {
-      available.free()
-      missing.free()
-    }
+        },
+        missing,
+      ),
+    ).toBe(false)
   })
 })

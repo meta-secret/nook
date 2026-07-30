@@ -159,6 +159,7 @@ const sentinelKeys = [
 
 const syncKeys = [
   "lastSync",
+  "markSynced",
   "isSyncing",
   "manualProviderSync",
   "manualProviderSyncRunning",
@@ -172,6 +173,7 @@ const syncKeys = [
   "stageSyncConflict",
   "clearPendingSyncConflict",
   "localFolderHealth",
+  "reportLocalFolderMultipleVaults",
   "clearLocalFolderMultipleVaultsIssue",
 ] as const satisfies readonly (keyof VaultSyncState)[];
 

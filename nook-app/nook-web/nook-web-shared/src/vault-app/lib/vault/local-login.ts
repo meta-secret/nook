@@ -99,8 +99,12 @@ export async function refreshLocalVaultCatalog(
   state.localVaults = await listLocalVaults();
   state.localVaultPresent = await hasActiveLocalVault();
   const activeSelection = await getActiveVaultSelection();
-  if (activeSelection.state === NookActiveVaultSelectionState.Selected) {
-    state.openActiveVault(activeSelection.storeId);
+  try {
+    if (activeSelection.state === NookActiveVaultSelectionState.Selected) {
+      state.openActiveVault(activeSelection.storeId);
+    }
+  } finally {
+    activeSelection.free();
   }
 }
 
