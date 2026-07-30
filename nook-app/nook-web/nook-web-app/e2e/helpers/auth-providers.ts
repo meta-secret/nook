@@ -1,21 +1,25 @@
 import { expect, type Page } from '@playwright/test'
 import {
   type ActiveVaultScope,
+  type AuthProvidersSnapshot,
   type GoogleDriveMode,
   type ICloudMode,
+  type OAuthFilePreset,
+  type StorageProvider,
 } from '$app-wasm'
 import { readLocalVaultYamlFromIdb } from './local-sync'
 import { ENROLLMENT_UNLOCK_TIMEOUT_MS, UI_TIMEOUT_MS } from './environment'
 
 export type SeededAuthProvider = {
   id: string
-  type: string
+  type: StorageProvider['type']
   label: string
   githubRepo?: string
   githubPat?: string
   oauthFile?: {
-    preset: string
+    preset: OAuthFilePreset
     accessToken: string
+    refreshToken?: string
     fileName: string
     driveMode: GoogleDriveMode
     iCloudMode: ICloudMode
@@ -47,15 +51,90 @@ export function activeAuthProviderSeedScope(
 
 type AuthProviderBrowserHooks = {
   activeVaultScope(storeId: string): ActiveVaultScope
-  loadAuthProviders: () => Promise<{
-    providers: SeededAuthProvider[]
-    activeVaultStoreId: ActiveVaultScope
-  }>
-  saveAuthProviders: (snapshot: {
-    providers: SeededAuthProvider[]
-    activeVaultStoreId: ActiveVaultScope
-  }) => Promise<void>
+  loadAuthProviders: () => Promise<AuthProvidersSnapshot>
+  saveAuthProviders: (snapshot: AuthProvidersSnapshot) => Promise<void>
   unselectedVaultScope(): ActiveVaultScope
+}
+
+function providerVaultScope(
+  provider: SeededAuthProvider,
+  seedScope: AuthProviderSeedScope,
+): StorageProvider['storeId'] {
+  if ('storeId' in provider && typeof provider.storeId === 'string') {
+    return { state: 'storeId', value: provider.storeId }
+  }
+  return seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
+    ? { state: 'storeId', value: seedScope.storeId }
+    : { state: 'unscoped' }
+}
+
+function storedProvider(
+  provider: SeededAuthProvider,
+  seedScope: AuthProviderSeedScope,
+): StorageProvider {
+  const createdAt =
+    'createdAt' in provider && typeof provider.createdAt === 'string'
+      ? provider.createdAt
+      : new Date().toISOString()
+  const common = {
+    id: provider.id,
+    type: provider.type,
+    label: provider.label,
+    githubPat: { state: 'missing' } as const,
+    githubRepo: { state: 'defaultRepository' } as const,
+    oauthFile: { state: 'notApplicable' } as const,
+    localFolder: { state: 'notApplicable' } as const,
+    storeId: providerVaultScope(provider, seedScope),
+    syncCheckpoint: { state: 'neverSynced' } as const,
+    createdAt,
+  }
+  if (provider.type === 'github') {
+    return {
+      ...common,
+      type: 'github',
+      githubPat:
+        'githubPat' in provider && typeof provider.githubPat === 'string'
+          ? { state: 'token', value: provider.githubPat }
+          : { state: 'missing' },
+      githubRepo:
+        'githubRepo' in provider && typeof provider.githubRepo === 'string'
+          ? { state: 'repository', value: provider.githubRepo }
+          : { state: 'defaultRepository' },
+    }
+  }
+  if (provider.type === 'oauth-file' && provider.oauthFile) {
+    const oauth = provider.oauthFile
+    return {
+      ...common,
+      type: 'oauth-file',
+      oauthFile: {
+        state: 'configured',
+        config: {
+          preset: oauth.preset,
+          accessToken: { state: 'accessToken', value: oauth.accessToken },
+          refreshToken:
+            'refreshToken' in oauth && typeof oauth.refreshToken === 'string'
+              ? { state: 'token', value: oauth.refreshToken }
+              : { state: 'notIssued' },
+          expiresAt: { state: 'unknown' },
+          fileId: { state: 'unresolved' },
+          fileName: { state: 'fileName', value: oauth.fileName },
+          accountEmail:
+            'accountEmail' in oauth && typeof oauth.accountEmail === 'string'
+              ? { state: 'email', value: oauth.accountEmail }
+              : { state: 'unknown' },
+          driveMode: oauth.driveMode,
+          folderId:
+            'folderId' in oauth && typeof oauth.folderId === 'string'
+              ? { state: 'folderId', value: oauth.folderId }
+              : { state: 'root' },
+          iCloudMode: oauth.iCloudMode,
+          iCloudShareTarget: { state: 'personal' },
+        },
+      },
+    }
+  }
+  return common
 }
 
 export async function appendAuthProviders(
@@ -113,6 +192,9 @@ async function appendSealedAuthProviders(
   providers: SeededAuthProvider[],
   seedScope: AuthProviderSeedScope,
 ): Promise<void> {
+  const storedAdditions = providers.map((provider) =>
+    storedProvider(provider, seedScope),
+  )
   await page.evaluate(
     async ({ providers: additions, seedScope }) => {
       const hook = (
@@ -122,37 +204,24 @@ async function appendSealedAuthProviders(
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
       const fallbackActiveVaultScope =
-        'storeId' in seedScope
+        seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
       const snapshot = await hook.loadAuthProviders()
       const resolvedActiveVaultScope =
-        'value' in snapshot.activeVaultStoreId
+        snapshot.activeVaultStoreId.state === 'storeId'
           ? snapshot.activeVaultStoreId
           : fallbackActiveVaultScope
-      snapshot.providers.push(
-        ...additions.map((provider) => {
-          if (provider.type !== 'oauth-file') {
-            return {
-              ...provider,
-              createdAt: new Date().toISOString(),
-            }
-          }
-          if (!('value' in resolvedActiveVaultScope)) {
-            throw new Error(
-              'E2E OAuth provider seeding requires an active vault',
-            )
-          }
-          return {
-            ...provider,
-            storeId: resolvedActiveVaultScope.value,
-            createdAt: new Date().toISOString(),
-          }
-        }),
-      )
+      if (
+        additions.some((provider) => provider.type === 'oauth-file') &&
+        resolvedActiveVaultScope.state !== 'storeId'
+      ) {
+        throw new Error('E2E OAuth provider seeding requires an active vault')
+      }
+      snapshot.providers.push(...additions)
       await hook.saveAuthProviders(snapshot)
     },
-    { providers, seedScope },
+    { providers: storedAdditions, seedScope },
   )
 }
 
@@ -325,11 +394,8 @@ export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
       window as Window & {
         __nookAuthProviders?: {
           loadAuthProviders: () => Promise<{
-            providers: Array<{
-              id?: string
-              githubPat?: string
-              oauthFile?: { accessToken?: string; refreshToken?: string }
-            }>
+            providers: StorageProvider[]
+            activeVaultStoreId: ActiveVaultScope
           }>
         }
       }
@@ -347,8 +413,11 @@ export async function saveAuthProvidersInBrowser(
   snapshot: { providers: SeededAuthProvider[] },
   seedScope: AuthProviderSeedScope,
 ) {
+  const providers = snapshot.providers.map((provider) =>
+    storedProvider(provider, seedScope),
+  )
   await page.evaluate(
-    async ({ snapshot, seedScope }) => {
+    async ({ providers, seedScope }) => {
       const hook = (
         window as Window & {
           __nookAuthProviders?: AuthProviderBrowserHooks
@@ -356,12 +425,12 @@ export async function saveAuthProvidersInBrowser(
       ).__nookAuthProviders
       if (!hook) throw new Error('E2E auth provider hooks are unavailable')
       const activeVaultStoreId =
-        'storeId' in seedScope
+        seedScope.kind === AuthProviderSeedScopeKind.ActiveVault
           ? hook.activeVaultScope(seedScope.storeId)
           : hook.unselectedVaultScope()
-      await hook.saveAuthProviders({ ...snapshot, activeVaultStoreId })
+      await hook.saveAuthProviders({ providers, activeVaultStoreId })
     },
-    { snapshot, seedScope },
+    { providers, seedScope },
   )
 }
 

@@ -52,7 +52,10 @@ test.describe('sync provider credential encryption', () => {
     expectSealedCredential(raw.providers[0]?.githubPat, pat)
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
-    expect(decrypted.providers[0]?.githubPat).toBe(pat)
+    expect(decrypted.providers[0]?.githubPat).toEqual({
+      state: 'token',
+      value: pat,
+    })
   })
 
   test('replacement conflict refresh avoids recursive wasm closure use', async ({
@@ -147,7 +150,14 @@ test.describe('sync provider credential encryption', () => {
 
     const decrypted = await loadDecryptedAuthProvidersInBrowser(page)
     const decryptedOauth = decrypted.providers[0]?.oauthFile
-    expect(decryptedOauth?.accessToken).toBe(access)
-    expect(decryptedOauth?.refreshToken).toBe(refresh)
+    expect(decryptedOauth).toEqual(
+      expect.objectContaining({
+        state: 'configured',
+        config: expect.objectContaining({
+          accessToken: { state: 'accessToken', value: access },
+          refreshToken: { state: 'token', value: refresh },
+        }),
+      }),
+    )
   })
 })

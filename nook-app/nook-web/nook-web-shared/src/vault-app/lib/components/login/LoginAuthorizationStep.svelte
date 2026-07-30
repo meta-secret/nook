@@ -22,26 +22,26 @@
   let {
     vault,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntry = $bindable<PasswordEntrySelection>({
-      kind: PasswordEntrySelectionKind.NotSelected,
-    }),
+    selectedPasswordEntry,
     isVerifying,
     isInitializing,
     isUnlocking = false,
     loginPasswordPrompt = false,
     onUnlock,
     passwordUnlock,
+    onSelectPasswordEntry,
     onConsumeLoginPasswordPrompt,
   }: {
     vault: VaultState
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntry?: PasswordEntrySelection
+    selectedPasswordEntry: PasswordEntrySelection
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean
     loginPasswordPrompt?: boolean
     onUnlock: () => void | Promise<void>
     passwordUnlock: PasswordUnlockCapability
+    onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
     onConsumeLoginPasswordPrompt: () => void
   } = $props()
 
@@ -68,10 +68,10 @@
         passwordEntries.length === 1 &&
         selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
       ) {
-        selectedPasswordEntry = {
+        onSelectPasswordEntry({
           kind: PasswordEntrySelectionKind.Selected,
           entryId: passwordEntries[0]!.id,
-        }
+        })
       }
       onConsumeLoginPasswordPrompt()
     }
@@ -83,10 +83,10 @@
       passwordEntries.length === 1 &&
       selectedPasswordEntry.kind === PasswordEntrySelectionKind.NotSelected
     ) {
-      selectedPasswordEntry = {
+      onSelectPasswordEntry({
         kind: PasswordEntrySelectionKind.Selected,
         entryId: passwordEntries[0]!.id,
-      }
+      })
     }
   })
 
@@ -178,10 +178,10 @@
                   : 'border-border bg-muted/20 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                 data-testid="login-password-entry-{entry.id}"
                 onclick={() => {
-                  selectedPasswordEntry = {
+                  onSelectPasswordEntry({
                     kind: PasswordEntrySelectionKind.Selected,
                     entryId: entry.id,
-                  }
+                  })
                 }}
               >
                 <UserRound class="size-4 shrink-0 text-primary" />

@@ -65,7 +65,11 @@ async function readNookLogEntries(
       }
     ).__nookLog
     if (!log) throw new Error('__nookLog is not available on the page')
-    return log.dump({ limit: lim })
+    return log.dump({
+      minLevel: 'trace',
+      limit: lim,
+      offset: 0,
+    })
   }, limit)
 }
 

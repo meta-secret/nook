@@ -461,7 +461,10 @@
             passwordEntries={vault.passwordEntries.length > 0
               ? vault.passwordEntries
               : recoveryPasswordEntries}
-            bind:selectedPasswordEntry={vault.selectedPasswordEntry}
+            selectedPasswordEntry={vault.selectedPasswordEntry}
+            onSelectPasswordEntry={(selection) => {
+              vault.selectedPasswordEntry = selection
+            }}
             {isVerifying}
             {isInitializing}
             {isUnlocking}

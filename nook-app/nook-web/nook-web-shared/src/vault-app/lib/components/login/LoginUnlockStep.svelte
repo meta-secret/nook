@@ -12,10 +12,7 @@
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { isSentinelVault } from '$lib/vault/sentinel-unlock'
-  import {
-    PasswordEntrySelectionKind,
-    type PasswordEntrySelection,
-  } from '$lib/vault/state/session.svelte'
+  import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
   import {
     LoginVaultEntryKind,
     LoginVaultWorkflow,
@@ -34,14 +31,13 @@
     vaultEntry,
     hasMultipleVaults = false,
     passwordEntries = [] as PasswordEntrySummary[],
-    selectedPasswordEntry = $bindable<PasswordEntrySelection>({
-      kind: PasswordEntrySelectionKind.NotSelected,
-    }),
+    selectedPasswordEntry,
     isVerifying,
     isInitializing,
     isUnlocking = false,
     onUnlock,
     onUnlockWithPassword,
+    onSelectPasswordEntry,
     onSwitchVault,
     onCreateAnotherVault,
     onImportFromSync,
@@ -50,7 +46,7 @@
     vaultEntry: LoginVaultEntry
     hasMultipleVaults?: boolean
     passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntry?: PasswordEntrySelection
+    selectedPasswordEntry: PasswordEntrySelection
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean
@@ -59,6 +55,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
+    onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
     onSwitchVault: () => void | Promise<void>
     onCreateAnotherVault: (label: string) => void | Promise<void>
     onImportFromSync: () => void
@@ -135,7 +132,7 @@
         <LoginAuthorizationStep
           {vault}
           {passwordEntries}
-          bind:selectedPasswordEntry
+          {selectedPasswordEntry}
           {isVerifying}
           {isInitializing}
           {isUnlocking}
@@ -145,6 +142,7 @@
           }}
           {onUnlock}
           {passwordUnlock}
+          {onSelectPasswordEntry}
         />
       </section>
     {/if}
