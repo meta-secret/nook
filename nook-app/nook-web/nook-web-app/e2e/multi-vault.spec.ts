@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { activeVaultScope } from '$lib/auth-providers'
 import {
   authorizeDeviceProtection,
   createLocalVaultOnLogin,
@@ -59,7 +60,7 @@ async function seedScopedSyncProviders(
   storeB: string,
 ) {
   await saveAuthProvidersInBrowser(page, {
-    activeVaultStoreId: storeA,
+    activeVaultStoreId: activeVaultScope(storeA),
     providers: [
       {
         id: 'provider-a',

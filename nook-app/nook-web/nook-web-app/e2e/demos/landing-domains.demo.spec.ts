@@ -38,6 +38,9 @@ test('public landing modules preserve locale, theme, and install behavior', asyn
   await expect(page.locator('.extension-install-action')).toHaveText(
     'Добавить в Chrome',
   )
+  await expect(page.locator('.extension-install-status')).toHaveText(
+    'Канал: production · Версия: 1.2.3',
+  )
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.locator('#cryptography').scrollIntoViewIfNeeded()

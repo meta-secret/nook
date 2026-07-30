@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures'
+import { unselectedVaultScope } from '$lib/auth-providers'
 import {
   appendAuthProviders,
   clearBrowserVault,
@@ -31,6 +32,7 @@ test.describe('sync provider credential encryption', () => {
   }) => {
     const pat = 'github_pat_11E2EsaveSEALtoken'
     await saveAuthProvidersInBrowser(page, {
+      activeVaultStoreId: unselectedVaultScope(),
       providers: [
         {
           id: 'gh-e2e-save',
@@ -112,6 +114,7 @@ test.describe('sync provider credential encryption', () => {
     const access = 'ya29.e2e-oauth-access-token'
     const refresh = '1//e2e-refresh-token-secret'
     await saveAuthProvidersInBrowser(page, {
+      activeVaultStoreId: unselectedVaultScope(),
       providers: [
         {
           id: 'gd-e2e-oauth',

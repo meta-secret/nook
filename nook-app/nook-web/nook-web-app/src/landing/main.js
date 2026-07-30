@@ -10,6 +10,12 @@ import {
   loadedGitHubStars,
   readCachedGitHubStarCount,
 } from './github-stars-state'
+import {
+  ExtensionMetadataStateKind,
+  loadedExtensionMetadata,
+  loadingExtensionMetadata,
+  unavailableExtensionMetadata,
+} from './extension-metadata-state'
 
 const cryptoTerms = Array.from(document.querySelectorAll('.crypto-term'))
 const readoutCode = document.querySelector('.readout-code')
@@ -27,9 +33,7 @@ const extensionManual = document.querySelector('.extension-manual')
 const githubStarsLink = document.querySelector('.github-stars')
 const githubStarsCount = document.querySelector('.github-stars-count')
 const landingColorScheme = matchMedia('(prefers-color-scheme: dark)')
-const extensionMetadataLoading = Object.freeze({})
-const extensionMetadataUnavailable = Object.freeze({})
-let extensionMetadataState = extensionMetadataLoading
+let extensionMetadataState = loadingExtensionMetadata()
 let githubStarsState = githubStarsNotLoaded()
 let followsSystemTheme = true
 
@@ -97,14 +101,14 @@ function validateExtensionMetadata(metadata) {
 
 function updateExtensionInstallState(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
-  if (extensionMetadataState === extensionMetadataUnavailable) {
+  if (extensionMetadataState.kind === ExtensionMetadataStateKind.Unavailable) {
     extensionInstallStatus.textContent = messages['extension.unavailable']
     extensionInstallAction.hidden = true
     extensionStoreNote.hidden = true
     extensionManual.hidden = true
     return
   }
-  if (extensionMetadataState === extensionMetadataLoading) {
+  if (extensionMetadataState.kind === ExtensionMetadataStateKind.Loading) {
     extensionInstallStatus.textContent = messages['extension.loading']
     return
   }
@@ -132,11 +136,11 @@ async function loadExtensionMetadata() {
       headers: { Accept: 'application/json' },
     })
     if (!response.ok) throw new Error('Extension metadata unavailable.')
-    extensionMetadataState = {
-      metadata: validateExtensionMetadata(await response.json()),
-    }
+    extensionMetadataState = loadedExtensionMetadata(
+      validateExtensionMetadata(await response.json()),
+    )
   } catch {
-    extensionMetadataState = extensionMetadataUnavailable
+    extensionMetadataState = unavailableExtensionMetadata()
   }
   updateExtensionInstallState()
 }
