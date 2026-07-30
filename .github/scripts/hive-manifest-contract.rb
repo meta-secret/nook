@@ -342,6 +342,9 @@ unless zot_config.dig("storage", "rootDirectory") == "/var/lib/registry" &&
        zot_config.dig("storage", "gc") == true
   raise "Zot must use persistent deduplicated storage with garbage collection"
 end
+unless zot_config.dig("http", "compat") == ["docker2s2"]
+  raise "Zot must preserve Docker Schema 2 manifests and digests"
+end
 zot_pv = zot_resource.call("PersistentVolume", "nook-zot-data")
 unless zot_pv.dig("spec", "persistentVolumeReclaimPolicy") == "Retain" &&
        zot_pv.dig("spec", "local", "path") == "/var/lib/hive/zot"

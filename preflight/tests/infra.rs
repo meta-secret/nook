@@ -408,6 +408,11 @@ fn assert_infrastructure_deploy_contract() {
 }
 
 fn assert_zot_registry_contract() {
+    let manifest = read("infra/k0s/manifests/registry/zot.yaml");
+    assert!(
+        manifest.contains("\"compat\": [\"docker2s2\"]"),
+        "Zot must accept legacy Docker Schema 2 manifests without changing their digests"
+    );
     let tasks = read("infra/tasks/registry.yml");
     let deploy = tasks
         .split("\n  registry:deploy:\n")
