@@ -11,6 +11,12 @@ import { assertNoVaultErrors } from './github-sync'
 import { openLoginProviderSetup } from './vault-setup'
 
 export async function clearBrowserVault(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => '__nookVault' in window), {
+      timeout: UI_TIMEOUT_MS,
+    })
+    .toBe(true)
+
   const clearedThroughManager = await page.evaluate(async () => {
     const vault = (
       window as Window & {

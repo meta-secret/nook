@@ -186,8 +186,8 @@ type VaultStateSliceFields = VaultRuntimeState &
   VaultSyncState;
 
 class VaultStateSlicesBase {
-  constructor() {
-    delegateState(this, new VaultRuntimeState(), runtimeKeys);
+  constructor(runtimeState = new VaultRuntimeState()) {
+    delegateState(this, runtimeState, runtimeKeys);
     delegateState(this, new VaultUiState(), uiKeys);
     delegateState(this, new VaultProviderState(), providerKeys);
     delegateState(this, new VaultSessionState(), sessionKeys);
@@ -197,8 +197,12 @@ class VaultStateSlicesBase {
   }
 }
 
-type VaultStateSlicesConstructor = new () => VaultStateSlicesBase &
-  VaultStateSliceFields;
+type VaultStateSlicesConstructor = {
+  new (): VaultStateSlicesBase & VaultStateSliceFields;
+  new (
+    runtimeState: VaultRuntimeState,
+  ): VaultStateSlicesBase & VaultStateSliceFields;
+};
 
 export const VaultStateSlices =
   VaultStateSlicesBase as VaultStateSlicesConstructor;
