@@ -5,50 +5,50 @@
     Smartphone,
     UserPlus,
     X,
-  } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
+  } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from '$lib/components/ui/card'
+  } from "$lib/components/ui/card";
 
-  import type { VaultState } from '$lib/vault.svelte'
-  import { JoinEnrollmentDialogVariant } from './join-enrollment-dialog-state'
+  import type { VaultState } from "$lib/vault.svelte";
+  import { JoinEnrollmentDialogVariant } from "./join-enrollment-dialog-state";
 
   let {
     vault,
     open,
     variant,
-    deviceId = '',
+    deviceId = "",
     isBusy = false,
-    enrollSecretsKey = $bindable(),
-    enrollMembersKey = $bindable(),
+    enrollSecretsKey = $bindable(""),
+    enrollMembersKey = $bindable(""),
     onConfirm,
     onEnrollWithKeys,
     onCreateFreshVault,
     onCancel,
   }: {
-    vault: VaultState
-    open: boolean
-    variant: JoinEnrollmentDialogVariant
-    deviceId?: string
-    isBusy?: boolean
-    enrollSecretsKey: string
-    enrollMembersKey: string
-    onConfirm?: () => void | Promise<void>
-    onEnrollWithKeys?: () => void | Promise<void>
-    onCreateFreshVault?: () => void | Promise<void>
-    onCancel: () => void
-  } = $props()
+    vault: VaultState;
+    open: boolean;
+    variant: JoinEnrollmentDialogVariant;
+    deviceId?: string;
+    isBusy?: boolean;
+    enrollSecretsKey: string;
+    enrollMembersKey: string;
+    onConfirm?: () => void | Promise<void>;
+    onEnrollWithKeys?: () => void | Promise<void>;
+    onCreateFreshVault?: () => void | Promise<void>;
+    onCancel: () => void;
+  } = $props();
 
-  let showTransferKeys = $state(false)
+  let showTransferKeys = $state(false);
 
   function truncate(value: string, head = 10, tail = 8) {
-    if (value.length <= head + tail + 3) return value
-    return `${value.slice(0, head)}…${value.slice(-tail)}`
+    if (value.length <= head + tail + 3) return value;
+    return `${value.slice(0, head)}…${value.slice(-tail)}`;
   }
 </script>
 
@@ -63,7 +63,7 @@
     <button
       type="button"
       class="absolute inset-0 bg-background/80 backdrop-blur-sm"
-      aria-label={vault.t('common.cancel')}
+      aria-label={vault.t("common.cancel")}
       onclick={onCancel}
     ></button>
 
@@ -79,24 +79,24 @@
             >
               {#if variant === JoinEnrollmentDialogVariant.NeedsRequest}
                 <UserPlus class="size-4 shrink-0" />
-                {vault.t('join_enrollment.title_join')}
+                {vault.t("join_enrollment.title_join")}
               {:else}
                 <ShieldCheck class="size-4 shrink-0" />
-                {vault.t('join_enrollment.title_pending')}
+                {vault.t("join_enrollment.title_pending")}
               {/if}
             </CardTitle>
             <CardDescription class="text-pretty">
               {#if variant === JoinEnrollmentDialogVariant.NeedsRequest}
-                {vault.t('join_enrollment.desc_join')}
+                {vault.t("join_enrollment.desc_join")}
               {:else}
-                {vault.t('join_enrollment.desc_pending')}
+                {vault.t("join_enrollment.desc_pending")}
               {/if}
             </CardDescription>
           </div>
           <button
             type="button"
             class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label={vault.t('common.cancel')}
+            aria-label={vault.t("common.cancel")}
             data-testid="join-enrollment-close"
             onclick={onCancel}
           >
@@ -115,7 +115,7 @@
               class="font-medium text-foreground inline-flex items-center gap-1.5"
             >
               <Smartphone class="size-3.5" />
-              {vault.t('join_enrollment.this_browser')}
+              {vault.t("join_enrollment.this_browser")}
             </p>
             <p class="mt-1 font-mono text-muted-foreground">
               {truncate(deviceId)}
@@ -123,22 +123,22 @@
           </div>
         {/if}
 
-        {#if variant === 'needs_request'}
+        {#if variant === "needs_request"}
           <ul
             class="list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-muted-foreground text-pretty"
             data-testid="join-enrollment-explainer"
           >
             <li>
-              {vault.t('join_enrollment.explainer_item1')}
+              {vault.t("join_enrollment.explainer_item1")}
             </li>
             <li>
-              {vault.t('join_enrollment.explainer_item2')}
+              {vault.t("join_enrollment.explainer_item2")}
             </li>
             <li>
-              {vault.t('join_enrollment.explainer_item3')}
+              {vault.t("join_enrollment.explainer_item3")}
             </li>
             <li>
-              {vault.t('join_enrollment.explainer_item4')}
+              {vault.t("join_enrollment.explainer_item4")}
             </li>
           </ul>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -150,7 +150,7 @@
               data-testid="join-enrollment-cancel"
               onclick={onCancel}
             >
-              {vault.t('common.cancel')}
+              {vault.t("common.cancel")}
             </Button>
             <Button
               type="button"
@@ -159,9 +159,9 @@
               onclick={() => void onConfirm?.()}
             >
               {#if isBusy}
-                {vault.t('join_enrollment.sending')}
+                {vault.t("join_enrollment.sending")}
               {:else}
-                {vault.t('join_enrollment.send_request')}
+                {vault.t("join_enrollment.send_request")}
               {/if}
             </Button>
           </div>
@@ -175,7 +175,7 @@
                 aria-expanded={showTransferKeys}
                 onclick={() => (showTransferKeys = !showTransferKeys)}
               >
-                <span>{vault.t('join_enrollment.have_transfer_keys')}</span>
+                <span>{vault.t("join_enrollment.have_transfer_keys")}</span>
                 <ChevronDown
                   class="size-3.5 shrink-0 transition-transform {showTransferKeys
                     ? 'rotate-180'
@@ -186,20 +186,20 @@
               {#if showTransferKeys}
                 <div class="space-y-2 border-t border-border px-3 py-3">
                   <p class="text-[11px] leading-relaxed text-muted-foreground">
-                    {vault.t('join_enrollment.transfer_keys_desc')}
+                    {vault.t("join_enrollment.transfer_keys_desc")}
                   </p>
                   <label
                     class="text-xs font-medium text-muted-foreground"
                     for="enroll-secrets-key"
                   >
-                    {vault.t('join_enrollment.secrets_key')}
+                    {vault.t("join_enrollment.secrets_key")}
                   </label>
                   <input
                     id="enroll-secrets-key"
                     type="password"
                     bind:value={enrollSecretsKey}
                     placeholder={vault.t(
-                      'join_enrollment.secrets_key_placeholder',
+                      "join_enrollment.secrets_key_placeholder",
                     )}
                     autocomplete="off"
                     data-testid="enroll-secrets-key-input"
@@ -209,14 +209,14 @@
                     class="text-xs font-medium text-muted-foreground"
                     for="enroll-members-key"
                   >
-                    {vault.t('join_enrollment.members_key')}
+                    {vault.t("join_enrollment.members_key")}
                   </label>
                   <input
                     id="enroll-members-key"
                     type="password"
                     bind:value={enrollMembersKey}
                     placeholder={vault.t(
-                      'join_enrollment.secrets_key_placeholder',
+                      "join_enrollment.secrets_key_placeholder",
                     )}
                     autocomplete="off"
                     data-testid="enroll-members-key-input"
@@ -233,7 +233,7 @@
                     data-testid="enroll-with-keys-btn"
                     onclick={() => void onEnrollWithKeys()}
                   >
-                    {vault.t('join_enrollment.enroll_with_keys')}
+                    {vault.t("join_enrollment.enroll_with_keys")}
                   </Button>
                 </div>
               {/if}
@@ -245,10 +245,10 @@
               class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
             >
               <p class="text-xs font-medium text-foreground">
-                {vault.t('join_enrollment.setup_from_scratch')}
+                {vault.t("join_enrollment.setup_from_scratch")}
               </p>
               <p class="text-[11px] leading-relaxed text-muted-foreground">
-                {vault.t('join_enrollment.setup_from_scratch_desc')}
+                {vault.t("join_enrollment.setup_from_scratch_desc")}
               </p>
               <Button
                 type="button"
@@ -259,16 +259,16 @@
                 onclick={() => void onCreateFreshVault()}
               >
                 {#if isBusy}
-                  {vault.t('join_enrollment.creating')}
+                  {vault.t("join_enrollment.creating")}
                 {:else}
-                  {vault.t('join_enrollment.create_new_vault')}
+                  {vault.t("join_enrollment.create_new_vault")}
                 {/if}
               </Button>
             </div>
           {/if}
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            {vault.t('join_enrollment.approve_on_enrolled')}
+            {vault.t("join_enrollment.approve_on_enrolled")}
           </p>
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
@@ -276,7 +276,7 @@
               data-testid="join-enrollment-dismiss"
               onclick={onCancel}
             >
-              {vault.t('join_enrollment.got_it')}
+              {vault.t("join_enrollment.got_it")}
             </Button>
           </div>
           {#if onCreateFreshVault}
@@ -284,10 +284,10 @@
               class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
             >
               <p class="text-xs font-medium text-foreground">
-                {vault.t('join_enrollment.starting_over')}
+                {vault.t("join_enrollment.starting_over")}
               </p>
               <p class="text-[11px] leading-relaxed text-muted-foreground">
-                {vault.t('join_enrollment.starting_over_desc')}
+                {vault.t("join_enrollment.starting_over_desc")}
               </p>
               <Button
                 type="button"
@@ -298,9 +298,9 @@
                 onclick={() => void onCreateFreshVault()}
               >
                 {#if isBusy}
-                  {vault.t('join_enrollment.creating')}
+                  {vault.t("join_enrollment.creating")}
                 {:else}
-                  {vault.t('join_enrollment.create_new_vault')}
+                  {vault.t("join_enrollment.create_new_vault")}
                 {/if}
               </Button>
             </div>

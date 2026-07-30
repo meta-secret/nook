@@ -575,10 +575,25 @@ fn collect_undefined_nodes(
         lines.push(first_line + node.start_position().row);
         return;
     }
+    if node.kind() == "call_expression" && is_parameterless_bindable(node, source) {
+        lines.push(first_line + node.start_position().row);
+        return;
+    }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_undefined_nodes(child, source, first_line, lines);
     }
+}
+
+fn is_parameterless_bindable(node: tree_sitter::Node<'_>, source: &str) -> bool {
+    let function_is_bindable = node
+        .child_by_field_name("function")
+        .and_then(|function| function.utf8_text(source.as_bytes()).ok())
+        .is_some_and(|function| function == "$bindable");
+    let has_arguments = node
+        .child_by_field_name("arguments")
+        .is_some_and(|arguments| arguments.named_child_count() > 0);
+    function_is_bindable && !has_arguments
 }
 
 fn collect_null_nodes(node: tree_sitter::Node<'_>, first_line: usize, lines: &mut Vec<usize>) {
@@ -866,11 +881,12 @@ const parenthesized = typeof(value)===`undefined`
 expect(value).toBeUndefined()
 expect(value).not.toBeDefined()
 expect(value).toBeNull()
+let implicitBinding = $bindable()
 "#;
 
         assert_eq!(
             typescript_code_undefined_token_lines(source, 1)?,
-            vec![5, 6, 8, 9, 10, 11, 12, 13]
+            vec![5, 6, 8, 9, 10, 11, 12, 13, 14]
         );
         Ok(())
     }

@@ -139,7 +139,8 @@ type ImportState =
 - [ ] Inventory every authored token before editing and classify boundary
       absence separately from named application state.
 - [ ] Replace modeled `undefined`, optional state fields, zero-argument runes,
-      value-or-void contracts, and coupled booleans with discriminated unions.
+      parameterless `$bindable()` props, value-or-void contracts, and coupled
+      booleans with discriminated unions or truthful concrete input values.
 - [ ] Reject generic optional-value wrappers and require semantic type and
       variant names at every application-state site.
 - [ ] Replace every raw string-literal discriminant with a member of a
@@ -152,12 +153,13 @@ type ImportState =
 ## Validation
 
 The AST-backed preflight rejects every executable or type-level `undefined` and
-`null` token, every quoted-sentinel comparison, every `T | void` value contract
-including nested generics and returns, every generic optional-state escape
-hatch, and assertion matchers that encode implicit absence in authored
-JavaScript, TypeScript, and Svelte. It accepts complete `void` function and
-callback returns, `Promise<void>`, `void | Promise<void>` effects, and unary
-discard expressions. The Rust-boundary preflight also rejects
+`null` token, parameterless `$bindable()` defaults, every quoted-sentinel
+comparison, every `T | void` value contract including nested generics and
+returns, every generic optional-state escape hatch, and assertion matchers that
+encode implicit absence in authored JavaScript, TypeScript, and Svelte. It
+accepts complete `void` function and callback returns, `Promise<void>`,
+`void | Promise<void>` effects, and unary discard expressions. The
+Rust-boundary preflight also rejects
 `#[tsify(type = "...")]` field overrides containing `undefined`, `null`, or
 `void`, `Option<T>` fields on `Tsify` exports, and `Option<T>` parameters or
 returns on `wasm_bindgen` exports. Rust-owned domain absence must be a named

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Check } from '@lucide/svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import { Check } from "@lucide/svelte";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     ChecksumStatusKind,
     FocusedWordKind,
     type ChecksumStatus,
     type FocusedWord,
-  } from './seed-phrase-grid-state'
+  } from "./seed-phrase-grid-state";
   import {
     inferBip39MnemonicLength,
     isBip39WordSequenceValid,
@@ -16,153 +16,153 @@
     parseBip39Words,
     suggestBip39Words,
     validateBip39Mnemonic,
-  } from '$app-wasm'
+  } from "$app-wasm";
 
-  type MnemonicLength = 12 | 24
+  type MnemonicLength = 12 | 24;
 
   let {
     vault,
-    value = $bindable(''),
-    // eslint-disable-next-line no-useless-assignment -- $bindable() default for parent bind:valid
+    value = $bindable(""),
+    // eslint-disable-next-line no-useless-assignment -- parent bind:valid output
     valid = $bindable(false),
     readonly = false,
     revealed = true,
   }: {
-    vault: VaultState
-    value?: string
-    valid?: boolean
-    readonly?: boolean
-    revealed?: boolean
-  } = $props()
+    vault: VaultState;
+    value?: string;
+    valid?: boolean;
+    readonly?: boolean;
+    revealed?: boolean;
+  } = $props();
 
-  let wordCount = $state<MnemonicLength>(12)
-  let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
-  let syncingFromCells = $state(false)
-  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None })
-  let suggestionIndex = $state(0)
-  let inputRefs = $state<HTMLInputElement[]>([])
+  let wordCount = $state<MnemonicLength>(12);
+  let cells = $state<string[]>(Array.from({ length: 24 }, () => ""));
+  let syncingFromCells = $state(false);
+  let focusedIndex = $state<FocusedWord>({ kind: FocusedWordKind.None });
+  let suggestionIndex = $state(0);
+  let inputRefs = $state<HTMLInputElement[]>([]);
   let checksumValid = $state<ChecksumStatus>({
     kind: ChecksumStatusKind.NotChecked,
-  })
+  });
 
-  const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
-  const activeCells = $derived(cells.slice(0, wordCount))
-  const perWordValid = $derived(isBip39WordSequenceValid(value, wordCount))
+  const gridCols = $derived(wordCount === 12 ? "grid-cols-3" : "grid-cols-4");
+  const activeCells = $derived(cells.slice(0, wordCount));
+  const perWordValid = $derived(isBip39WordSequenceValid(value, wordCount));
   const allWordsFilled = $derived(
     activeCells.every((word) => word.trim().length > 0),
-  )
+  );
   const hasPhraseContent = $derived(
     activeCells.some((word) => word.trim().length > 0) ||
       value.trim().length > 0,
-  )
+  );
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return []
-    const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? ''
-    if (!prefix || prefix.includes(' ')) return []
-    if (isKnownBip39Word(prefix)) return []
-    return suggestBip39Words(prefix, 8)
-  })
+    if (readonly || focusedIndex.kind !== FocusedWordKind.Focused) return [];
+    const prefix = cells[focusedIndex.index]?.trim().toLowerCase() ?? "";
+    if (!prefix || prefix.includes(" ")) return [];
+    if (isKnownBip39Word(prefix)) return [];
+    return suggestBip39Words(prefix, 8);
+  });
 
   function applyValueToCells(seed: string) {
-    const inferred = inferBip39MnemonicLength(seed)
-    if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12
-    if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24
+    const inferred = inferBip39MnemonicLength(seed);
+    if (inferred === NookBip39MnemonicLength.Words12) wordCount = 12;
+    if (inferred === NookBip39MnemonicLength.Words24) wordCount = 24;
 
-    const words = parseBip39Words(seed)
-    const next = Array.from({ length: 24 }, () => '')
+    const words = parseBip39Words(seed);
+    const next = Array.from({ length: 24 }, () => "");
     for (let index = 0; index < words.length && index < 24; index += 1) {
-      next[index] = words[index] ?? ''
+      next[index] = words[index] ?? "";
     }
-    cells = next
+    cells = next;
   }
 
   function syncValueFromCells() {
-    syncingFromCells = true
-    value = joinBip39Words(cells.slice(0, wordCount))
+    syncingFromCells = true;
+    value = joinBip39Words(cells.slice(0, wordCount));
     queueMicrotask(() => {
-      syncingFromCells = false
-    })
+      syncingFromCells = false;
+    });
   }
 
   function applyPastedMnemonic(text: string, startIndex = 0) {
-    const words = parseBip39Words(text)
-    if (words.length === 0) return
+    const words = parseBip39Words(text);
+    if (words.length === 0) return;
 
     if (words.length === 24) {
-      wordCount = 24
+      wordCount = 24;
     } else if (words.length > 12) {
-      wordCount = 24
+      wordCount = 24;
     } else {
-      wordCount = 12
+      wordCount = 12;
     }
 
-    const next = [...cells]
+    const next = [...cells];
     for (let offset = 0; offset < words.length; offset += 1) {
-      const targetIndex = startIndex + offset
-      if (targetIndex >= wordCount) break
-      next[targetIndex] = words[offset] ?? ''
+      const targetIndex = startIndex + offset;
+      if (targetIndex >= wordCount) break;
+      next[targetIndex] = words[offset] ?? "";
     }
-    cells = next
-    syncValueFromCells()
-    focusedIndex = { kind: FocusedWordKind.None }
-    focusCell(Math.min(startIndex + words.length, wordCount - 1))
+    cells = next;
+    syncValueFromCells();
+    focusedIndex = { kind: FocusedWordKind.None };
+    focusCell(Math.min(startIndex + words.length, wordCount - 1));
   }
 
   function setWordCount(count: MnemonicLength) {
-    if (readonly) return
-    wordCount = count
-    syncValueFromCells()
+    if (readonly) return;
+    wordCount = count;
+    syncValueFromCells();
   }
 
   function clearPhrase() {
-    if (readonly) return
-    cells = Array.from({ length: 24 }, () => '')
-    wordCount = 12
-    value = ''
-    checksumValid = { kind: ChecksumStatusKind.NotChecked }
-    focusedIndex = { kind: FocusedWordKind.None }
-    suggestionIndex = 0
-    focusCell(0)
+    if (readonly) return;
+    cells = Array.from({ length: 24 }, () => "");
+    wordCount = 12;
+    value = "";
+    checksumValid = { kind: ChecksumStatusKind.NotChecked };
+    focusedIndex = { kind: FocusedWordKind.None };
+    suggestionIndex = 0;
+    focusCell(0);
   }
 
   function setCellValue(index: number, nextValue: string) {
-    const next = [...cells]
-    next[index] = nextValue.toLowerCase()
-    cells = next
-    syncValueFromCells()
+    const next = [...cells];
+    next[index] = nextValue.toLowerCase();
+    cells = next;
+    syncValueFromCells();
   }
 
   function onCellInput(index: number, nextValue: string) {
     if (/\s/.test(nextValue)) {
-      applyPastedMnemonic(nextValue, index)
-      return
+      applyPastedMnemonic(nextValue, index);
+      return;
     }
 
-    setCellValue(index, nextValue)
-    suggestionIndex = 0
+    setCellValue(index, nextValue);
+    suggestionIndex = 0;
   }
 
   function onCellPaste(index: number, event: ClipboardEvent) {
-    if (readonly) return
-    const text = event.clipboardData?.getData('text')
-    if (!text?.trim()) return
-    event.preventDefault()
-    applyPastedMnemonic(text, index)
+    if (readonly) return;
+    const text = event.clipboardData?.getData("text");
+    if (!text?.trim()) return;
+    event.preventDefault();
+    applyPastedMnemonic(text, index);
   }
 
   function selectSuggestion(word: string, index: number) {
-    setCellValue(index, word)
-    focusedIndex = { kind: FocusedWordKind.None }
-    suggestionIndex = 0
-    focusCell(index + 1)
+    setCellValue(index, word);
+    focusedIndex = { kind: FocusedWordKind.None };
+    suggestionIndex = 0;
+    focusCell(index + 1);
   }
 
   function focusCell(index: number) {
-    if (index < 0 || index >= wordCount) return
+    if (index < 0 || index >= wordCount) return;
     queueMicrotask(() => {
-      inputRefs[index]?.focus()
-    })
+      inputRefs[index]?.focus();
+    });
   }
 
   function onCellKeyDown(index: number, event: KeyboardEvent) {
@@ -171,57 +171,63 @@
       focusedIndex.kind === FocusedWordKind.Focused &&
       focusedIndex.index === index
     ) {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1)
-        return
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1);
+        return;
       }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        suggestionIndex = Math.max(suggestionIndex - 1, 0)
-        return
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        suggestionIndex = Math.max(suggestionIndex - 1, 0);
+        return;
       }
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        selectSuggestion(suggestions[suggestionIndex] ?? suggestions[0]!, index)
-        return
+      if (event.key === "Enter") {
+        event.preventDefault();
+        selectSuggestion(
+          suggestions[suggestionIndex] ?? suggestions[0]!,
+          index,
+        );
+        return;
       }
-      if (event.key === 'Tab' && !event.shiftKey) {
-        event.preventDefault()
-        selectSuggestion(suggestions[suggestionIndex] ?? suggestions[0]!, index)
-        return
+      if (event.key === "Tab" && !event.shiftKey) {
+        event.preventDefault();
+        selectSuggestion(
+          suggestions[suggestionIndex] ?? suggestions[0]!,
+          index,
+        );
+        return;
       }
     }
 
-    if (event.key === 'Escape') {
-      focusedIndex = { kind: FocusedWordKind.None }
-      suggestionIndex = 0
+    if (event.key === "Escape") {
+      focusedIndex = { kind: FocusedWordKind.None };
+      suggestionIndex = 0;
     }
   }
 
   function cellInvalid(index: number): boolean {
-    const word = cells[index]?.trim()
-    if (!word) return false
-    return !isKnownBip39Word(word)
+    const word = cells[index]?.trim();
+    if (!word) return false;
+    return !isKnownBip39Word(word);
   }
 
   $effect(() => {
-    if (syncingFromCells) return
-    applyValueToCells(value)
-  })
+    if (syncingFromCells) return;
+    applyValueToCells(value);
+  });
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = { kind: ChecksumStatusKind.NotChecked }
-      valid = false
-      return
+      checksumValid = { kind: ChecksumStatusKind.NotChecked };
+      valid = false;
+      return;
     }
 
-    const mnemonic = value
-    const ok = validateBip39Mnemonic(mnemonic)
-    checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok }
-    valid = ok
-  })
+    const mnemonic = value;
+    const ok = validateBip39Mnemonic(mnemonic);
+    checksumValid = { kind: ChecksumStatusKind.Checked, valid: ok };
+    valid = ok;
+  });
 </script>
 
 <div class="space-y-3" data-testid="seed-phrase-grid">
@@ -236,7 +242,7 @@
         data-testid="seed-word-count-12"
         onclick={() => setWordCount(12)}
       >
-        {vault.t('add_secret.seed_word_count_12')}
+        {vault.t("add_secret.seed_word_count_12")}
       </button>
       <button
         type="button"
@@ -247,7 +253,7 @@
         data-testid="seed-word-count-24"
         onclick={() => setWordCount(24)}
       >
-        {vault.t('add_secret.seed_word_count_24')}
+        {vault.t("add_secret.seed_word_count_24")}
       </button>
       <button
         type="button"
@@ -256,7 +262,7 @@
         disabled={!hasPhraseContent}
         onclick={clearPhrase}
       >
-        {vault.t('add_secret.seed_phrase_clear')}
+        {vault.t("add_secret.seed_phrase_clear")}
       </button>
     </div>
   {/if}
@@ -299,12 +305,12 @@
             {...focusedIndex.kind === FocusedWordKind.Focused &&
             focusedIndex.index === index &&
             suggestions.length > 0
-              ? { 'aria-controls': `seed-word-suggestions-${index + 1}` }
+              ? { "aria-controls": `seed-word-suggestions-${index + 1}` }
               : {}}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
             {...cellInvalid(index)
-              ? { 'aria-describedby': `seed-word-error-${index + 1}` }
+              ? { "aria-describedby": `seed-word-error-${index + 1}` }
               : {}}
             class="flex h-10 w-full rounded-md border bg-background/80 px-2 pt-3 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background {cellInvalid(
               index,
@@ -314,8 +320,8 @@
             oninput={(event) => onCellInput(index, event.currentTarget.value)}
             onpaste={(event) => onCellPaste(index, event)}
             onfocus={() => {
-              focusedIndex = { kind: FocusedWordKind.Focused, index }
-              suggestionIndex = 0
+              focusedIndex = { kind: FocusedWordKind.Focused, index };
+              suggestionIndex = 0;
             }}
             onblur={() => {
               queueMicrotask(() => {
@@ -324,14 +330,14 @@
                     '[data-testid^="seed-word-suggestion-"]',
                   )
                 ) {
-                  return
+                  return;
                 }
                 if (
                   focusedIndex.kind === FocusedWordKind.Focused &&
                   focusedIndex.index === index
                 )
-                  focusedIndex = { kind: FocusedWordKind.None }
-              })
+                  focusedIndex = { kind: FocusedWordKind.None };
+              });
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}
           />
@@ -367,7 +373,7 @@
               id="seed-word-error-{index + 1}"
               class="mt-1 block text-[10px] text-destructive"
             >
-              {vault.t('add_secret.seed_word_invalid')}
+              {vault.t("add_secret.seed_word_invalid")}
             </span>
           {/if}
         {/if}
@@ -381,14 +387,14 @@
       data-testid="seed-phrase-valid"
     >
       <Check class="size-3.5 shrink-0" aria-hidden="true" />
-      {vault.t('add_secret.seed_phrase_valid')}
+      {vault.t("add_secret.seed_phrase_valid")}
     </p>
   {:else if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && !checksumValid.valid}
     <p
       class="text-xs text-destructive"
       data-testid="seed-phrase-checksum-error"
     >
-      {vault.t('add_secret.seed_phrase_invalid')}
+      {vault.t("add_secret.seed_phrase_invalid")}
     </p>
   {/if}
 </div>

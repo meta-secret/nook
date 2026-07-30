@@ -127,8 +127,11 @@ value or type token. Model optional data and named product, workflow,
 lifecycle, resource, and UI states with discriminated unions whose variants
 own their data, or with generated Rust/WASM enums when the state is portable
 domain policy. Do not spread optional-value unions, zero-argument `$state<T>()`
-runes, optional-field bags, and parallel booleans across a controller and then
-reconstruct the real state through condition chains.
+runes, parameterless `$bindable()` props, optional-field bags, and parallel
+booleans across a controller and then reconstruct the real state through
+condition chains. A parameterless `$bindable()` is still an implicit
+`undefined` default and is forbidden; use a truthful concrete input value or
+remove the unused binding surface.
 
 Classify ownership before authoring an enum. Authentication, vault, recovery,
 Sentinel, provider, sync, secret-schema, and other portable product
