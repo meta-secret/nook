@@ -67,14 +67,10 @@ export function installMockPasskeyRuntime() {
       }
     },
   }
-  if (localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable') {
-    Reflect.deleteProperty(window, 'PublicKeyCredential')
-  } else {
-    Object.defineProperty(window, 'PublicKeyCredential', {
-      configurable: true,
-      value: publicKeyCredential,
-    })
-  }
+  Object.defineProperty(window, 'PublicKeyCredential', {
+    configurable: true,
+    value: publicKeyCredential,
+  })
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
     value: {
@@ -92,6 +88,11 @@ export function installMockPasskeyRuntime() {
         }
       }) => {
         const mode = localStorage.getItem('nook_e2e_passkey_mode')
+        if (mode === 'unavailable') {
+          throw new Error(
+            'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
+          )
+        }
         if (mode === 'cancel') {
           throw new DOMException(
             'The operation was cancelled.',
