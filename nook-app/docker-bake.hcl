@@ -363,10 +363,27 @@ target "nook-rust" {
   output   = ["type=docker"]
 }
 
+// Focused native tests load a sealed dependency-plus-source image without the general Rust/WASM
+// join. The regular DOCKER_RUST_IMAGE tag keeps the existing runtime command surface unchanged.
+target "nook-rust-test" {
+  inherits = ["_nook-rust-test-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
 target "nook-rust-fast" {
   inherits = ["_nook-rust-fast-common"]
   tags     = [DOCKER_RUST_FAST_IMAGE]
   output   = ["type=docker"]
+}
+
+// Focused web/type-check tasks stop at the sealed source image. They do not build production
+// artifacts or re-run the complete in-image verification graph.
+target "nook-web-focused" {
+  inherits = ["_nook-web-focused-common"]
+  tags     = [DOCKER_IMAGE]
+  output   = ["type=docker"]
+  cache-from = web_cache_from
 }
 
 // Manual browser-wasm tests install Chromium only in this on-demand image.

@@ -11,7 +11,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`remote.yml`](../../.github/workflows/remote.yml)                                   | Manual allowlisted task dispatch            | One selected focused Taskfile command on the persistent `nook` runner pool; shared local BuildKit reuse; no merge authorization | No                                        |
+| [`remote.yml`](../../.github/workflows/remote.yml)                                   | Manual allowlisted task dispatch            | One selected focused Taskfile command on an independent GitHub-hosted runner; read-only Main cache lineage; no merge authorization | No                                        |
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | Explicit `ci:validate` / `ci:full-e2e` label | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
@@ -159,10 +159,8 @@ provider, those handlers read and write real event files under a temp directory.
 ## Runner placement
 
 PR, main, release, AI, scheduled, manual e2e, and research jobs use
-GitHub-hosted `ubuntu-latest`. Focused `remote.yml` tasks use the registered
-`nook` runner pool, whose shared persistent Docker builder accelerates repeated
-branch iterations without writing branch generations into the repository's
-full Actions-cache budget. Delivery builds
+GitHub-hosted `ubuntu-latest`, so concurrent work scales across the repository's
+hosted-runner allowance instead of queueing on one Docker host. Delivery builds
 restore distinct GitHub Actions BuildKit cache scopes; Main refreshes the
 default-branch scopes that new PRs may access. Every PR job restores only this
 trusted Main lineage and disables cache export. Exact-input handoffs own
@@ -175,8 +173,15 @@ contexts is not sufficient to run their dedicated exporters. Only a `push`
 event on `refs/heads/main` may write the shared scopes. Release, agent,
 manual, and PR workflows are read-only. Keeping Main as the sole hosted-cache
 writer also prevents short-lived lineages from exhausting the repository cache
-quota. Runner cleanup and focused remote tasks are the only workflows using the
-self-hosted `nook` label.
+quota. The self-hosted `nook` label is reserved for runner cleanup while that
+machine remains registered.
+
+Focused `remote.yml` jobs retain the same hosted placement and read-only Main
+cache policy. The common Rust test and web/extension check routes use smaller
+source-sealed image targets so their solve graphs stop before unrelated
+coverage, WASM-test, browser, full-verification, and production-build stages.
+These remote-only routes preserve the exact check command while reducing
+preparation work; complete PR/Main/release graphs are unchanged.
 
 BuildKit cache records imported by a named target are local to that target's
 solve; they do not propagate through a named build context into the outer

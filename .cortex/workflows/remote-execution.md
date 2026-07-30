@@ -1,11 +1,9 @@
-# GitHub Actions Remote Execution
+# GitHub-Hosted Remote Execution
 
-GitHub Actions is the normal execution environment for agent builds, tests,
-linting, coverage, and browser suites. Focused iterative tasks use Nook's
-persistent runner pool so Docker and BuildKit state survives between jobs;
-complete pull-request validation uses elastic GitHub-hosted runners. Agent
-machines remain responsive for editing, repository inspection, host-applied
-formatting, the UI demo contract, and interactive development servers.
+GitHub-hosted runners are the normal execution environment for agent builds,
+tests, linting, coverage, and browser suites. Agent machines remain responsive
+for editing, repository inspection, host-applied formatting, the UI demo
+contract, and interactive development servers.
 
 ## Two remote surfaces
 
@@ -40,15 +38,15 @@ task remote TASK_NAME=rust:test
 
 The command accepts only catalog names. The workflow contains the corresponding
 literal Taskfile command; user input is never evaluated as arbitrary shell.
-Remote jobs receive read-only repository and Actions permissions and use
-run-scoped image tags. They intentionally do not initialize the ephemeral
-GitHub Actions BuildKit cache backend: the registered `nook` pool shares its
-persistent Docker builder, avoiding a cold source rebuild on every dispatch
-without consuming or evicting Main's 10 GiB Actions-cache lineage.
+Remote jobs receive read-only repository and Actions permissions, restore only
+the trusted Main BuildKit lineage, and never write shared caches.
 
-This persistent execution surface is intentionally manual: GitHub restricts
-workflow dispatch to repository writers, and no pull-request event runs branch
-code on the pool automatically. The pool receives no repository secrets.
+The most frequently used checks have remote-only narrow orchestration:
+`rust:test` loads a source-sealed native dependency image, and `web:check`,
+`web:test`, and `extension:check` load a source-sealed web dependency + generated
+WASM image. This avoids building full coverage, WASM test, browser, verification,
+and production-dist branches before a focused command. It does not change the
+local task semantics or move branch execution onto persistent infrastructure.
 
 Every remote result is tied to source GitHub can reproduce. Before dispatch,
 `task remote` requires:
@@ -80,7 +78,7 @@ gh run watch <run-id> --compact --exit-status
 ```
 
 Dispatch independent catalog tasks separately when they can run in parallel;
-GitHub assigns each workflow to an available Nook runner:
+GitHub assigns each workflow to an available hosted worker:
 
 ```bash
 task remote TASK_NAME=rust:test

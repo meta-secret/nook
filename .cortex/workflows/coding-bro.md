@@ -30,7 +30,7 @@ Default PR-first loop:
 4. **Push and create/update the PR** — once the branch has a coherent formatted
    commit, push it and open the PR; subsequent experimental commits update the
    same PR without starting the complete validation pipeline.
-5. **Iterate on the remote runner pool, then validate explicitly** — run allowlisted
+5. **Iterate on hosted workers, then validate explicitly** — run allowlisted
    `task remote TASK_NAME=<name>` jobs as useful. At the final boundary, run
    `task pr:preflight PR=<number>` and `task pr:validate PR=<number>`, then monitor the path-applicable
    `PR / Verify and preview` and `Web research / Build and deploy research
@@ -76,7 +76,7 @@ Never use `task extension:format` alone before push — it formats inside the
 sealed image and discards the result. See
 [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-### ⛔ Format, push, execute through GitHub Actions
+### ⛔ Format, push, execute on GitHub-hosted workers
 
 Once the current change is coherent and checkable, run pre-push hygiene, then
 commit and push/open or update the PR. Ordinary pushes do not start complete PR

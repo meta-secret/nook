@@ -18,7 +18,7 @@ Agents push a coherent change, then burn a full remote cycle on:
 - Treating format as optional ("I barely changed anything") even though Verify
   always runs `format:check`
 - Running heavy local product gates (`task check`, `task ci:pr`) instead of
-  pushing and using the GitHub Actions remote catalog
+  pushing and using the GitHub-hosted remote catalog
 
 These show up in Nook Workbench `stats/ai-agent` records as waste-flagged PRs
 with early cancelled or failed Verify runs, or as duplicated local+remote

@@ -1,4 +1,4 @@
-# Focused, manually dispatched development tasks on the persistent Nook runner pool.
+# Focused, manually dispatched development tasks on GitHub-hosted runners.
 #
 # This workflow is an allowlisted remote execution surface, not an arbitrary
 # credential-bearing shell. Complete merge validation remains in pr.yml and is
@@ -44,120 +44,149 @@ env:
   CI: true
   DOCKER_IMAGE: nook-web:remote-${{ github.run_id }}-${{ github.run_attempt }}
   DOCKER_E2E_IMAGE: nook-web-e2e:remote-${{ github.run_id }}-${{ github.run_attempt }}
-  DOCKER_RUST_IMAGE: nook-rust:remote-${{ github.run_id }}-${{ github.run_attempt }}
-  DOCKER_RUST_FAST_IMAGE: nook-rust-fast:remote-${{ github.run_id }}-${{ github.run_attempt }}
-  DOCKER_RUST_BROWSER_IMAGE: nook-rust-browser:remote-${{ github.run_id }}-${{ github.run_attempt }}
-  DOCKER_MKCERT_IMAGE: nook-mkcert:remote-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   preflight:
     if: inputs.task == 'preflight'
     name: Remote / preflight
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task preflight
 
   rust-test:
     if: inputs.task == 'rust:test'
     name: Remote / rust:test
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-      - run: task rust:test
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task remote:rust:test
 
   rust-lint:
     if: inputs.task == 'rust:lint'
     name: Remote / rust:lint
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task rust:lint
 
   rust-coverage:
     if: inputs.task == 'rust:coverage'
     name: Remote / rust:coverage
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task rust:coverage
 
   wasm-build:
     if: inputs.task == 'wasm:build'
     name: Remote / wasm:build
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task wasm:build
 
   wasm-test:
     if: inputs.task == 'wasm:test'
     name: Remote / wasm:test
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task wasm:test
 
   wasm-test-browser:
     if: inputs.task == 'wasm:test:browser'
     name: Remote / wasm:test:browser
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task wasm:test:browser
 
   web-check:
     if: inputs.task == 'web:check'
     name: Remote / web:check
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-      - run: task web:check
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task remote:web:check
 
   web-test:
     if: inputs.task == 'web:test'
     name: Remote / web:test
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-      - run: task web:test
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task remote:web:test
 
   web-build:
     if: inputs.task == 'web:build'
     name: Remote / web:build
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task web:build
 
   web-e2e:
     if: inputs.task == 'web:e2e'
     name: Remote / web:e2e
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: >-
           task web:test:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
@@ -173,21 +202,27 @@ jobs:
   extension-check:
     if: inputs.task == 'extension:check'
     name: Remote / extension:check
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
-      - run: task extension:check
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
+      - run: task remote:extension:check
 
   extension-e2e:
     if: inputs.task == 'extension:e2e'
     name: Remote / extension:e2e
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: >-
           task extension:test:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
@@ -203,41 +238,53 @@ jobs:
   hive-verify:
     if: inputs.task == 'hive:verify'
     name: Remote / hive:verify
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task hive:verify
 
   check:
     if: inputs.task == 'check'
     name: Remote / check
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task check
 
   ci-pr:
     if: inputs.task == 'ci:pr'
     name: Remote / ci:pr
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: task ci:pr
 
   ci-pr-e2e:
     if: inputs.task == 'ci:pr:e2e'
     name: Remote / ci:pr:e2e
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - uses: go-task/setup-task@v2
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: "false"
+          main-cache-only: "true"
       - run: >-
           task ci:pr:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts

@@ -54,7 +54,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn persistent_workflow_matches_the_taskfile_catalog() {
+fn hosted_workflow_matches_the_taskfile_catalog() {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let task_catalog = catalog_from_taskfile(&remote_tasks);
@@ -76,46 +76,72 @@ fn persistent_workflow_matches_the_taskfile_catalog() {
         "every selected remote job must correspond to exactly one Taskfile allowlist entry"
     );
     assert_eq!(
-        workflow.matches("runs-on: nook").count(),
+        workflow.matches("runs-on: ubuntu-latest").count(),
         task_catalog.len(),
-        "every catalog task must run on the persistent Nook runner pool"
+        "every catalog task must run on its own GitHub-hosted job"
     );
-    assert!(!workflow.contains("runs-on: ubuntu-latest"));
+    assert!(!workflow.contains("runs-on: nook"));
     assert!(!workflow.contains("secrets."));
     assert!(!workflow.contains("${{ inputs.command }}"));
-    assert!(workflow.contains("permissions:\n  actions: read\n  contents: read"));
-    for automatic_trigger in ["pull_request:", "push:", "schedule:"] {
+    assert!(workflow.contains("cache-write: \"false\""));
+    assert!(workflow.contains("main-cache-only: \"true\""));
+    for (requested, focused) in [
+        ("rust:test", "remote:rust:test"),
+        ("web:check", "remote:web:check"),
+        ("web:test", "remote:web:test"),
+        ("extension:check", "remote:extension:check"),
+    ] {
         assert!(
-            !workflow.contains(automatic_trigger),
-            "persistent runners must never receive automatic branch execution: {automatic_trigger}"
+            workflow.contains(&format!("- run: task {focused}")),
+            "frequent remote task {requested} must use its narrow source-sealed route"
         );
     }
     assert_eq!(
-        workflow.matches("uses: go-task/setup-task@v2").count(),
-        task_catalog.len(),
-        "every selected job must install Task without replacing the persistent Docker builder"
+        workflow.matches("- run: task remote:").count(),
+        4,
+        "only the mechanically reviewed focused routes may bypass their full local task"
     );
-    assert!(
-        !workflow.contains("nook-docker-setup")
-            && !workflow.contains("main-cache-only")
-            && !workflow.contains("GHA_CACHE_"),
-        "focused remote jobs must reuse the runner-local builder instead of ephemeral GHA caches"
-    );
-    for (image, tag) in [
-        ("DOCKER_IMAGE", "nook-web"),
-        ("DOCKER_E2E_IMAGE", "nook-web-e2e"),
-        ("DOCKER_RUST_IMAGE", "nook-rust"),
-        ("DOCKER_RUST_FAST_IMAGE", "nook-rust-fast"),
-        ("DOCKER_RUST_BROWSER_IMAGE", "nook-rust-browser"),
-        ("DOCKER_MKCERT_IMAGE", "nook-mkcert"),
+    assert!(!workflow.contains("- run: task rust:test\n"));
+    assert!(!workflow.contains("- run: task web:check\n"));
+    assert!(!workflow.contains("- run: task web:test\n"));
+    assert!(!workflow.contains("- run: task extension:check\n"));
+}
+
+#[test]
+fn frequent_remote_checks_use_narrow_source_sealed_images() {
+    let app_tasks = read("nook-app/Taskfile.yml");
+    let core_tasks = read("nook-app/.task/core.yml");
+    let web_tasks = read("nook-app/nook-web/.task/web.yml");
+    let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
+    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
+    let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
+    let bake = read("nook-app/docker-bake.hcl");
+
+    for required in [
+        "setup:rust:test:",
+        "nook-rust-test",
+        "setup:web:focused:",
+        "focused-web-artifacts",
+        "nook-web-focused",
     ] {
         assert!(
-            workflow.contains(&format!(
-                "{image}: {tag}:remote-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}"
-            )),
-            "shared runners need a run-scoped {image}"
+            app_tasks.contains(required) || bake.contains(required),
+            "focused sealed-image contract missing: {required}"
         );
     }
+    assert!(core_tasks.contains("remote:rust:test:"));
+    assert!(web_tasks.contains("remote:web:check:"));
+    assert!(web_tasks.contains("remote:web:test:"));
+    assert!(extension_tasks.contains("remote:extension:check:"));
+    assert!(core_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
+    assert!(core_dockerfile.contains("COPY . ."));
+    assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
+    assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
+    assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
+    assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
+    assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
+    assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
+    assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
 }
 
 #[test]

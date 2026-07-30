@@ -78,6 +78,14 @@ tasks:
       - task: docker:rust:task
         vars: { TASK: _rust:test }
 
+  remote:rust:test:
+    desc: Run native Rust tests in the narrow source-sealed remote image.
+    deps:
+      - setup:rust:test
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:test }
+
   rust:coverage:
     desc: Report portable Rust crate line coverage (cargo llvm-cov + nextest).
     deps:

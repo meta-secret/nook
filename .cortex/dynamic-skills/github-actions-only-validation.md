@@ -1,10 +1,9 @@
-# GitHub Actions Execution and Validation
+# GitHub-Hosted Execution and Validation
 
 ## Purpose
 
-Keep agent machines on the lightest possible local work. Use the persistent
-Nook Actions runner pool for iterative builds/tests and GitHub-hosted runners
-for complete merge validation.
+Keep agent machines on the lightest possible local work and use GitHub-hosted
+runners for both iterative builds/tests and complete merge validation.
 
 ## Problem Pattern
 
@@ -32,7 +31,7 @@ git add -u
 #   .github/scripts/ui-demo-contract.sh "$(git rev-parse origin/main)"
 git commit …
 git push -u origin HEAD
-task remote TASK_NAME=rust:test       # repeat focused Actions tasks as useful
+task remote TASK_NAME=rust:test       # repeat focused hosted tasks as useful
 task pr:validate PR=<number>          # spend the full PR pipeline when ready
 ```
 

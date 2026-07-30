@@ -61,3 +61,16 @@ target "coverage-export" {
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }
+
+// Narrow source-sealed runtime for focused native tests. It deliberately branches before
+// builder-debug so a remote `rust:test` does not pay for coverage, clippy, or any WASM stage.
+target "_nook-rust-test-common" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-core/Dockerfile"
+  target     = "nook-rust-test"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-deps = "target:builder-deps"
+  }
+}

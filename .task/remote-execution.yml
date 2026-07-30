@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run one allowlisted task on the persistent Nook runner pool (TASK_NAME=<name>).
+    desc: Run one allowlisted task on a GitHub-hosted runner (TASK_NAME=<name>).
     requires:
       vars: [TASK_NAME]
     env:
@@ -59,7 +59,7 @@ tasks:
         echo "gh run list --workflow=remote.yml --branch=\"$branch\" --commit=\"$local_sha\" --event=workflow_dispatch"
 
   remote:list:
-    desc: Print the allowlisted GitHub Actions remote task catalog.
+    desc: Print the allowlisted GitHub-hosted remote task catalog.
     silent: true
     cmds:
       - |
