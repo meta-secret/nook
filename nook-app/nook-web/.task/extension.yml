@@ -27,6 +27,14 @@ tasks:
       - task: docker:task
         vars: { TASK: _extension:check }
 
+  remote:extension:check:
+    desc: Check the extension in the narrow source-sealed remote image.
+    deps:
+      - setup:web:focused
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:check }
+
   extension:check:fast:
     desc: Run host-cached extension format, unit/manifest, shell, and hosted-launcher checks without building WASM or Docker.
     preconditions:

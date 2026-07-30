@@ -37,10 +37,26 @@ tasks:
       - task: docker:task
         vars: { TASK: _web:check }
 
+  remote:web:check:
+    desc: Run Svelte and TypeScript checks in the narrow source-sealed remote image.
+    deps:
+      - setup:web:focused
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:check }
+
   web:test:
     desc: Run web unit tests in Docker.
     deps:
       - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test }
+
+  remote:web:test:
+    desc: Run web unit tests in the narrow source-sealed remote image.
+    deps:
+      - setup:web:focused
     cmds:
       - task: docker:task
         vars: { TASK: _web:test }

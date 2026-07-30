@@ -41,6 +41,13 @@ literal Taskfile command; user input is never evaluated as arbitrary shell.
 Remote jobs receive read-only repository and Actions permissions, restore only
 the trusted Main BuildKit lineage, and never write shared caches.
 
+The most frequently used checks have remote-only narrow orchestration:
+`rust:test` loads a source-sealed native dependency image, and `web:check`,
+`web:test`, and `extension:check` load a source-sealed web dependency + generated
+WASM image. This avoids building full coverage, WASM test, browser, verification,
+and production-dist branches before a focused command. It does not change the
+local task semantics or move branch execution onto persistent infrastructure.
+
 Every remote result is tied to source GitHub can reproduce. Before dispatch,
 `task remote` requires:
 

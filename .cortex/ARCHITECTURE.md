@@ -415,6 +415,13 @@ iteration and all other heavy agent feedback run through the allowlisted
 GitHub-hosted remote task catalog. Required product validation runs on GitHub
 Actions only after the coherent pushed iteration is explicitly selected with a
 validation label; agents do not run local `task check` / `task ci:pr` gates.
+The frequent `rust:test`, `web:check`, `web:test`, and `extension:check`
+dispatches use narrow source-sealed images: native tests branch directly from
+the manifest-keyed Rust dependency image, while web checks consume only web
+dependencies plus the generated WASM package. They do not join unrelated
+coverage, WASM-test, browser, full verification, or production-build stages.
+All branch code still executes on ephemeral GitHub-hosted runners; the
+self-hosted `nook` pool remains maintenance-only.
 
 ### Split Rust/WASM and web images
 
