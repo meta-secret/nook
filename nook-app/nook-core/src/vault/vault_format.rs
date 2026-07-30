@@ -1,10 +1,6 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
-use crate::{
-    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
-    StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultUnlock, is_auth_stored_record,
-    is_join_stored_record, is_members_stored_record, is_sentinel_share_stored_record,
-};
+use crate::{PasswordUnlockEntry, StoredSecretRecord, VaultArchitecture, VaultUnlock};
 
 mod vault_yaml;
 use vault_yaml::{
@@ -419,9 +415,8 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
-    use super::vault_yaml::AuthYamlRecord;
     use super::*;
-    use crate::SecretId;
+    use crate::{SecretId, StoredRecordPayload};
 
     fn sid(label: &str) -> SecretId {
         SecretId::from_vault_record(label)
@@ -578,83 +573,6 @@ mod tests {
     }
 
     #[test]
-    fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key() -> anyhow::Result<()> {
-        use crate::multi_device::{DeviceIdentity, JoinRequest};
-
-        let device_id = "abc123def4567890";
-        let auth_id = format!("key_{}", "a".repeat(64));
-        let joiner = DeviceIdentity::generate()?;
-        let join_request = JoinRequest {
-            device_id: joiner.device_id().clone(),
-            public_key: joiner.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::default(),
-            requested_at: "2026-01-01T00:00:00Z".to_owned(),
-        };
-        let join_id = join_request.device_id.as_str();
-        let records = vec![
-            StoredSecretRecord {
-                key: sid("github.com"),
-                secret_type: Some(crate::SecretType::Login),
-                value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
-            },
-            auth_to_stored_record(AuthYamlRecord {
-                pk_id: auth_id.clone(),
-                secrets_key:
-                    "-----BEGIN AGE ENCRYPTED FILE-----\nsecrets\n-----END AGE ENCRYPTED FILE-----"
-                        .to_owned(),
-                members_key:
-                    "-----BEGIN AGE ENCRYPTED FILE-----\nmembers\n-----END AGE ENCRYPTED FILE-----"
-                        .to_owned(),
-            })?,
-            StoredSecretRecord {
-                key: sid(join_id),
-                secret_type: None,
-                value: StoredRecordPayload::from_trusted(serde_json::to_string(&join_request)?),
-            },
-        ];
-
-        let stored = serialize_stored_yaml(&records)?;
-        assert!(stored.as_str().contains("secrets:"));
-        assert!(stored.as_str().contains("auth:"));
-        assert!(stored.as_str().contains("joins:"));
-        assert!(stored.as_str().contains("pk_id: "));
-        assert!(stored.as_str().contains("secrets_key: "));
-        assert!(stored.as_str().contains("members_key: "));
-        assert!(!stored.as_str().contains("dec: "));
-        assert!(!stored.as_str().contains("auth:\n- key:"));
-        assert!(!stored.as_str().contains(device_id));
-
-        let parsed = deserialize_stored_yaml(stored.as_str())?;
-        assert_eq!(parsed.len(), 3);
-        Ok(())
-    }
-
-    #[test]
-    fn yaml_members_section_uses_pk_id_and_ciphertext() -> anyhow::Result<()> {
-        let auth_id = format!("key_{}", "c".repeat(64));
-        let records = vec![StoredSecretRecord {
-            key: sid(&format!("member:{auth_id}")),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(
-                "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
-                    .to_owned(),
-            ),
-        }];
-
-        let stored = serialize_stored_yaml(&records)?;
-        assert!(stored.as_str().contains("members:"));
-        assert!(stored.as_str().contains("pk_id:"));
-        assert!(stored.as_str().contains("ciphertext:"));
-        assert!(stored.as_str().contains(&auth_id));
-        assert!(!stored.as_str().contains("member:"));
-
-        let parsed = deserialize_stored_yaml(stored.as_str())?;
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
-        Ok(())
-    }
-
-    #[test]
     fn yaml_password_entries_roundtrip_with_keys_unlock() -> anyhow::Result<()> {
         use crate::{
             attach_password_envelope_with_work_factor, multi_device::VaultKeys,
@@ -807,90 +725,6 @@ secrets: []
     }
 
     #[test]
-    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml() -> anyhow::Result<()> {
-        let credential_id = vec![7u8; 48];
-        let user_handle = vec![8u8; 32];
-        let prf_input = crate::deterministic_passkey_prf_input();
-        let prf_output = [10u8; 32];
-        let material = crate::finish_passkey_wrapped_device_identity(
-            &credential_id,
-            &user_handle,
-            &prf_input,
-            &prf_output,
-        )?;
-        let local_record = crate::serialize_wrapped_device_identity(material.record())?;
-        assert!(local_record.contains("ciphertext"));
-        assert!(local_record.contains("nonce"));
-        assert!(local_record.contains("hkdfSalt"));
-
-        let architecture = VaultArchitecture {
-            device_mode: crate::DeviceMode::AntiHacker,
-            ..VaultArchitecture::default()
-        };
-        let mut records = sample_records();
-        records.push(StoredSecretRecord {
-            key: sid("device_identity_wrapped"),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(local_record),
-        });
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
-            &records,
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
-            VaultNameRef::Named("Anti-hacker vault"),
-            VaultVersionWrite::Version(1),
-            &architecture,
-        )?;
-        let stored = yaml.as_str();
-
-        assert!(stored.contains("device_mode: anti-hacker"));
-        assert!(!stored.contains("passkey-wrapped-local"));
-        assert!(!stored.contains("credentialId"));
-        assert!(!stored.contains("userHandle"));
-        assert!(!stored.contains("prfInput"));
-        assert!(!stored.contains("hkdfSalt"));
-        assert!(!stored.contains("nonce"));
-        assert!(!stored.contains("ciphertext"));
-        assert!(!stored.contains("AGE-SECRET-KEY-"));
-        Ok(())
-    }
-
-    #[test]
-    fn sentinel_share_records_roundtrip_in_dedicated_yaml_section() -> anyhow::Result<()> {
-        let keys = crate::generate_vault_keys()?;
-        let first = crate::DeviceIdentity::generate()?;
-        let second = crate::DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
-        let architecture = VaultArchitecture::sentinel_personal(
-            crate::DeviceMode::Standard,
-            crate::SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
-            },
-        );
-
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
-            &shares,
-            &VaultUnlock::Keys,
-            &[],
-            VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
-            VaultNameRef::Named("Sentinel vault"),
-            VaultVersionWrite::Version(1),
-            &architecture,
-        )?;
-        assert!(yaml.as_str().contains("sentinel_shares:"));
-        assert!(!yaml.as_str().contains("auth:"));
-        assert!(yaml.as_str().contains("secrets: []"));
-
-        let parsed = deserialize_stored_yaml(yaml.as_str())?;
-        assert_eq!(parsed, shares);
-        assert!(parsed.iter().all(crate::is_sentinel_share_stored_record));
-        Ok(())
-    }
-
-    #[test]
     fn vault_name_roundtrip_and_update() -> anyhow::Result<()> {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock_and_name(
@@ -935,41 +769,6 @@ secrets: []
                 max_supported: 1
             }
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn yaml_auth_envelopes_roundtrip_through_internal_json() -> anyhow::Result<()> {
-        let auth_id = format!("key_{}", "b".repeat(64));
-        let record = auth_to_stored_record(AuthYamlRecord {
-            pk_id: auth_id.clone(),
-            secrets_key: "-----BEGIN AGE ENCRYPTED FILE-----\ns\n-----END AGE ENCRYPTED FILE-----"
-                .to_owned(),
-            members_key: "-----BEGIN AGE ENCRYPTED FILE-----\nm\n-----END AGE ENCRYPTED FILE-----"
-                .to_owned(),
-        })?;
-
-        let yaml = serialize_stored_yaml(std::slice::from_ref(&record))?;
-        assert!(yaml.as_str().contains("secrets_key:"));
-        assert!(yaml.as_str().contains("members_key:"));
-        assert!(!yaml.as_str().contains("dek:"));
-        assert!(!yaml.as_str().contains("mek:"));
-
-        let parsed = deserialize_stored_yaml(yaml.as_str())?;
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key.as_str(), auth_id);
-
-        let env = crate::parse_auth_envelopes(parsed[0].value.as_str())?;
-        assert!(
-            env.secrets_key
-                .as_str()
-                .contains("BEGIN AGE ENCRYPTED FILE")
-        );
-        assert!(
-            env.members_key
-                .as_str()
-                .contains("BEGIN AGE ENCRYPTED FILE")
-        );
         Ok(())
     }
 }

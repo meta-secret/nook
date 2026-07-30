@@ -39,7 +39,8 @@ describe('loadSecretPage', () => {
       ),
     }
     const state = {
-      manager,
+      hasManager: true,
+      requireManager: () => manager,
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
       secretTypeFilter: NookSecretTypeFilter.All,
@@ -76,7 +77,8 @@ describe('loadSecretPage', () => {
         .mockReturnValueOnce(maintenance.promise),
     }
     const state = {
-      manager,
+      hasManager: true,
+      requireManager: () => manager,
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
       secretTypeFilter: NookSecretTypeFilter.All,

@@ -28,6 +28,7 @@ vi.mock('$lib/auth-providers', () => ({
 }))
 
 import { renameLocalVaultLabel } from '$lib/vault/local-login'
+import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 
 describe('renameLocalVaultLabel', () => {
@@ -42,9 +43,12 @@ describe('renameLocalVaultLabel', () => {
       new Error('catalog refresh failed'),
     )
     const state = {
-      activeVaultStoreId: 'store-1',
+      activeVault: {
+        kind: ActiveVaultKind.Open,
+        storeId: 'store-1',
+      },
       localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      manager: { setVaultName },
+      requireManager: () => ({ setVaultName }),
       enqueueStorage: <T>(operation: () => T | Promise<T>) =>
         Promise.resolve(operation()),
       dismissSuccess: vi.fn(),

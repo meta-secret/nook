@@ -276,7 +276,9 @@ mod import_tests {
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
         let nook_core::SecretValue::SecureNote(note) = &items[0] else {
-            panic!("expected secure note")
+            return Err(anyhow::anyhow!(
+                "coalesced import item must be a secure note"
+            ));
         };
         assert!(note.note.contains("## LastPass"));
         assert!(note.note.contains("## Proton Pass"));
