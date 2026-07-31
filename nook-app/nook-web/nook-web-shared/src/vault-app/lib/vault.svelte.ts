@@ -931,8 +931,10 @@ export class VaultState extends VaultLifecycleState {
     return secretsActions.handleOnePasswordImport(this, archive);
   }
 
-  async handleApplePasswordsImport(csv: string): Promise<NookImportResult> {
-    return secretsActions.handleApplePasswordsImport(this, csv);
+  async handleApplePasswordsImport(
+    exportBytes: Uint8Array,
+  ): Promise<NookImportResult> {
+    return secretsActions.handleApplePasswordsImport(this, exportBytes);
   }
 
   async handleChromePasswordsImport(csv: string): Promise<NookImportResult> {

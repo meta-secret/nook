@@ -13,7 +13,7 @@ test('browse concise password import source labels', async ({ page }) => {
   await expandSettingsSection(page, 'import')
 
   const sources = [
-    ['apple-passwords-import-section', 'Apple Passwords'],
+    ['apple-passwords-import-section', 'Safari / Apple Passwords'],
     ['chrome-passwords-import-section', 'Chrome or another browser'],
     ['google-authenticator-import-section', 'Google Authenticator'],
     ['bitwarden-import-section', 'Bitwarden'],

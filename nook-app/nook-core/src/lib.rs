@@ -36,7 +36,8 @@ pub(crate) use vault::{
 };
 
 pub use apple_passwords_import::{
-    ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_import,
+    ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_export,
+    plan_apple_passwords_import,
 };
 pub use authentication_workflow::{
     AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
