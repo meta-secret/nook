@@ -547,6 +547,10 @@ mod tests {
             .err()
             .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
         assert!(matches!(err, crate::EventError::ParseRemoteEvent(_)));
+        assert!(
+            err.to_string()
+                .contains("failed to parse remote event: YAML parse failed:")
+        );
         Ok(())
     }
 
