@@ -25,10 +25,10 @@ pub enum EventError {
     #[error("failed to serialize event")]
     EventSerialize(String),
 
-    #[error("failed to parse stored event")]
+    #[error("failed to parse stored event: {0}")]
     ParseStoredEvent(String),
 
-    #[error("failed to parse remote event")]
+    #[error("failed to parse remote event: {0}")]
     ParseRemoteEvent(String),
 
     #[error("signature must start with ed25519: (got {raw:?})")]
