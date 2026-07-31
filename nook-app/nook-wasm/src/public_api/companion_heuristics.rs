@@ -139,12 +139,22 @@ impl NookOAuthOriginSupport {
         }
     }
 
+    #[wasm_bindgen(js_name = isUnsupported)]
+    #[must_use]
+    pub fn is_unsupported(&self) -> bool {
+        matches!(
+            self.inner,
+            nook_core::OAuthOriginSupport::Unsupported { .. }
+        )
+    }
+
+    /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
     #[wasm_bindgen(js_name = unsupportedReason)]
     #[must_use]
-    pub fn unsupported_reason(&self) -> Option<nook_core::OAuthOriginUnsupportedReason> {
+    pub fn unsupported_reason(&self) -> nook_core::OAuthOriginUnsupportedReason {
         match self.inner {
-            nook_core::OAuthOriginSupport::Unsupported { reason, .. } => Some(reason),
-            _ => None,
+            nook_core::OAuthOriginSupport::Unsupported { reason, .. } => reason,
+            _ => nook_core::OAuthOriginUnsupportedReason::UnregisteredOrigin,
         }
     }
 }
@@ -153,15 +163,16 @@ impl NookOAuthOriginSupport {
 #[must_use]
 pub fn resolve_oauth_origin_support(
     provider: nook_core::BrowserOAuthProvider,
-    origin: Option<String>,
-    hostname: Option<String>,
+    origin: &str,
+    hostname: &str,
 ) -> NookOAuthOriginSupport {
+    let (origin, hostname) = if origin.is_empty() || hostname.is_empty() {
+        (None, None)
+    } else {
+        (Some(origin), Some(hostname))
+    };
     NookOAuthOriginSupport {
-        inner: nook_core::resolve_oauth_origin_support(
-            provider,
-            origin.as_deref(),
-            hostname.as_deref(),
-        ),
+        inner: nook_core::resolve_oauth_origin_support(provider, origin, hostname),
     }
 }
 
@@ -186,11 +197,10 @@ pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen
     Ok(nook_core::simple_vault_match_pattern(base_url)?)
 }
 
+/// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen(js_name = matchingSentinelVaultBaseUrl)]
-pub fn matching_sentinel_vault_base_url(
-    base_url: &str,
-) -> Result<Option<String>, wasm_bindgen::JsError> {
-    Ok(nook_core::matching_sentinel_vault_base_url(base_url)?)
+pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
 }
 
 #[wasm_bindgen(js_name = sentinelVaultMatchPatterns)]
@@ -217,15 +227,18 @@ pub fn nook_vault_app_exclude_match_patterns(
     Ok(nook_core::nook_vault_app_exclude_match_patterns(base_url)?)
 }
 
+/// `base_url` may be empty when no configured vault base is available.
 #[wasm_bindgen(js_name = isNookVaultAppUrl)]
 pub fn is_nook_vault_app_url(
     candidate_url: &str,
-    base_url: Option<String>,
+    base_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::is_nook_vault_app_url(
-        candidate_url,
-        base_url.as_deref(),
-    )?)
+    let base_url = if base_url.is_empty() {
+        None
+    } else {
+        Some(base_url)
+    };
+    Ok(nook_core::is_nook_vault_app_url(candidate_url, base_url)?)
 }
 
 #[wasm_bindgen(js_name = belongsToSimpleVault)]
@@ -270,10 +283,11 @@ mod tests {
     fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() {
         let supported = resolve_oauth_origin_support(
             nook_core::BrowserOAuthProvider::GoogleDrive,
-            Some("https://simple.nokey.sh".to_owned()),
-            Some("simple.nokey.sh".to_owned()),
+            "https://simple.nokey.sh",
+            "simple.nokey.sh",
         );
         assert!(supported.is_supported());
+        assert!(!supported.is_unsupported());
 
         assert!(is_simple_vault_hostname("simple.dev.nokey.sh"));
         assert!(is_sentinel_vault_hostname("sentinel.nokey.sh"));

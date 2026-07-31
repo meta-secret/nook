@@ -1,9 +1,10 @@
 import {
   BrowserOAuthProvider as WasmBrowserOAuthProvider,
   OAuthOriginUnsupportedReason as WasmOAuthOriginUnsupportedReason,
-  isCloudflarePrPreviewHost as wasmIsCloudflarePrPreviewHost,
   resolveOAuthOriginSupport as wasmResolveOAuthOriginSupport,
 } from "$app-wasm";
+
+export { isCloudflarePrPreviewHost } from "$app-wasm";
 
 export enum BrowserOAuthProvider {
   GoogleDrive = "google-drive",
@@ -51,10 +52,6 @@ function fromWasmReason(
     : OAuthOriginUnsupportedReason.UnregisteredOrigin;
 }
 
-export function isCloudflarePrPreviewHost(hostname: string): boolean {
-  return wasmIsCloudflarePrPreviewHost(hostname);
-}
-
 export function resolveOAuthOriginSupport(
   provider: BrowserOAuthProvider,
   location: BrowserLocation,
@@ -65,22 +62,18 @@ export function resolveOAuthOriginSupport(
     location.hostname,
   );
   try {
-    if (resolved.isSupported()) {
+    if (resolved.isUnsupported()) {
       return {
-        kind: OAuthOriginSupportKind.Supported,
-        supported: true,
+        kind: OAuthOriginSupportKind.Unsupported,
+        supported: false,
         origin: resolved.origin,
+        reason: fromWasmReason(resolved.unsupportedReason()),
       };
     }
-    const reason = resolved.unsupportedReason();
     return {
-      kind: OAuthOriginSupportKind.Unsupported,
-      supported: false,
+      kind: OAuthOriginSupportKind.Supported,
+      supported: true,
       origin: resolved.origin,
-      reason:
-        reason === undefined
-          ? OAuthOriginUnsupportedReason.UnregisteredOrigin
-          : fromWasmReason(reason),
     };
   } finally {
     resolved.free();

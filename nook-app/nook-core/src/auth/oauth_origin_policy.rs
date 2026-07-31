@@ -30,7 +30,9 @@ pub enum OAuthOriginUnsupportedReason {
 pub enum OAuthOriginSupport {
     /// No browser location is available (SSR / missing window); treat as supported.
     LocationUnavailable,
-    Supported { origin: String },
+    Supported {
+        origin: String,
+    },
     Unsupported {
         origin: String,
         reason: OAuthOriginUnsupportedReason,
@@ -117,7 +119,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accepts_registered_origins_and_rejects_preview_hosts() -> anyhow::Result<()> {
+    fn accepts_registered_origins_and_rejects_preview_hosts() {
         assert!(matches!(
             resolve_oauth_origin_support(
                 BrowserOAuthProvider::GoogleDrive,
@@ -151,6 +153,5 @@ mod tests {
         ));
         assert!(is_cloudflare_pr_preview_host("pr-99.nook-1n8.pages.dev"));
         assert!(!is_cloudflare_pr_preview_host("simple.nokey.sh"));
-        Ok(())
     }
 }

@@ -45,23 +45,6 @@ pub use authentication_workflow::{
     AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
 };
-pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
-pub use oauth_origin_policy::{
-    BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
-    is_cloudflare_pr_preview_host, resolve_oauth_origin_support,
-};
-pub use page_field_classification::{
-    PageInputFieldObservation, PageInputType, expand_identity_text, has_login_context,
-    looks_like_email_verification_body, looks_like_manual_checkpoint_label,
-    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
-};
-pub use vault_host_policy::{
-    DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,
-    belongs_to_simple_vault, is_nook_vault_app_url, is_sentinel_vault_hostname,
-    is_simple_vault_hostname, matching_sentinel_vault_base_url,
-    nook_vault_app_exclude_match_patterns, normalize_simple_vault_base_url,
-    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
-};
 pub use authenticator::{
     AuthenticatorSecret, BackupCodeAttachMode, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,
     MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits,
@@ -71,6 +54,7 @@ pub use authenticator::{
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
 };
+pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
@@ -140,12 +124,21 @@ pub use nook_auth2::{
     SentinelUnlockStatus, add_sentinel_unlock_response, finalize_sentinel_unlock,
     sentinel_unlock_request, sentinel_unlock_status,
 };
+pub use oauth_origin_policy::{
+    BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
+    is_cloudflare_pr_preview_host, resolve_oauth_origin_support,
+};
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
 };
 pub use outcome_evidence::{
     AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,
     DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
+};
+pub use page_field_classification::{
+    PageInputFieldObservation, PageInputType, expand_identity_text, has_login_context,
+    looks_like_email_verification_body, looks_like_manual_checkpoint_label,
+    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
 };
 pub use passkey_authenticator::{
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
@@ -168,6 +161,13 @@ pub use secret_view::{
     LoginSecretForm, SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
     SeedPhraseSecretForm, authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form,
     hostname_from_url, login_host_matches_origin, resolve_entity_group_keys,
+};
+pub use vault_host_policy::{
+    DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,
+    belongs_to_simple_vault, is_nook_vault_app_url, is_sentinel_vault_hostname,
+    is_simple_vault_hostname, matching_sentinel_vault_base_url,
+    nook_vault_app_exclude_match_patterns, normalize_simple_vault_base_url,
+    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{

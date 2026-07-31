@@ -54,11 +54,10 @@ pub fn expand_identity_text(value: &str) -> String {
     for (index, c) in chars.iter().enumerate() {
         if index > 0 {
             let prev = chars[index - 1];
-            if prev.is_ascii_lowercase() && c.is_ascii_uppercase() {
-                with_breaks.push(' ');
-            } else if prev.is_ascii_alphabetic() && c.is_ascii_digit() {
-                with_breaks.push(' ');
-            } else if prev.is_ascii_digit() && c.is_ascii_alphabetic() {
+            let needs_break = (prev.is_ascii_lowercase() && c.is_ascii_uppercase())
+                || (prev.is_ascii_alphabetic() && c.is_ascii_digit())
+                || (prev.is_ascii_digit() && c.is_ascii_alphabetic());
+            if needs_break {
                 with_breaks.push(' ');
             }
         }
@@ -83,14 +82,7 @@ pub fn has_login_context(
     if contains_any_word(
         &form,
         &[
-            "login",
-            "log in",
-            "sign-in",
-            "sign in",
-            "signin",
-            "auth",
-            "account",
-            "sso",
+            "login", "log in", "sign-in", "sign in", "signin", "auth", "account", "sso",
         ],
     ) {
         return true;
@@ -100,14 +92,7 @@ pub fn has_login_context(
         if contains_any_word(
             &identity,
             &[
-                "login",
-                "log in",
-                "sign-in",
-                "sign in",
-                "signin",
-                "auth",
-                "account",
-                "sso",
+                "login", "log in", "sign-in", "sign in", "signin", "auth", "account", "sso",
             ],
         ) {
             return true;
@@ -116,7 +101,9 @@ pub fn has_login_context(
     let advance = expand_identity_text(advance_control_label);
     if contains_any_word(
         &advance,
-        &["next", "continue", "sign-in", "sign in", "log-in", "log in", "verify"],
+        &[
+            "next", "continue", "sign-in", "sign in", "log-in", "log in", "verify",
+        ],
     ) {
         return true;
     }
@@ -188,7 +175,7 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
         || has_autocomplete_token(&field.autocomplete_tokens, "one-time-code")
 }
 
-/// True when a labeled control advertises passkey / WebAuthn / platform authenticator.
+/// True when a labeled control advertises passkey / `WebAuthn` / platform authenticator.
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
@@ -212,9 +199,11 @@ pub fn looks_like_passkey_control_label(label: &str) -> bool {
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
     let lower = label.to_ascii_lowercase();
-    ["terms", "privacy", "agree", "accept", "policy", "consent", "eula"]
-        .iter()
-        .any(|needle| lower.contains(needle))
+    [
+        "terms", "privacy", "agree", "accept", "policy", "consent", "eula",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 /// True when body copy looks like an email-verification gate.
@@ -323,7 +312,9 @@ fn one_time_code_negative(identity: &str) -> bool {
 }
 
 fn contains_any_word(haystack: &str, needles: &[&str]) -> bool {
-    needles.iter().any(|needle| contains_word_phrase(haystack, needle))
+    needles
+        .iter()
+        .any(|needle| contains_word_phrase(haystack, needle))
 }
 
 fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
@@ -336,9 +327,14 @@ fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
             || !haystack
                 .as_bytes()
                 .get(start - 1)
+                .copied()
                 .is_some_and(is_word_byte);
         let after_ok = end >= haystack.len()
-            || !haystack.as_bytes().get(end).is_some_and(is_word_byte);
+            || !haystack
+                .as_bytes()
+                .get(end)
+                .copied()
+                .is_some_and(is_word_byte);
         if before_ok && after_ok {
             return true;
         }
@@ -352,8 +348,8 @@ fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
     }
 }
 
-const fn is_word_byte(byte: &u8) -> bool {
-    byte.is_ascii_alphanumeric() || *byte == b'_'
+const fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]
@@ -370,7 +366,10 @@ mod tests {
             input_type,
             disabled: false,
             read_only: false,
-            autocomplete_tokens: autocomplete.iter().map(|token| (*token).to_owned()).collect(),
+            autocomplete_tokens: autocomplete
+                .iter()
+                .map(|token| (*token).to_owned())
+                .collect(),
             identity_text: identity.to_owned(),
             login_context,
         }
@@ -378,7 +377,10 @@ mod tests {
 
     #[test]
     fn expands_camel_case_and_separators() {
-        assert_eq!(expand_identity_text("VerificationCode"), "verification code");
+        assert_eq!(
+            expand_identity_text("VerificationCode"),
+            "verification code"
+        );
         assert_eq!(expand_identity_text("login_email"), "login email");
     }
 

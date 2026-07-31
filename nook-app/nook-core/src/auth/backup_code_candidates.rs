@@ -41,9 +41,7 @@ pub fn extract_backup_code_candidates(text: &str) -> Vec<String> {
 
 fn normalize_candidate(value: &str) -> BackupCodeCandidate {
     let trimmed = collapse_whitespace(value.trim());
-    if trimmed.len() < MIN_CODE_LEN
-        || trimmed.len() > MAX_CODE_LEN
-        || !matches_code_line(&trimmed)
+    if trimmed.len() < MIN_CODE_LEN || trimmed.len() > MAX_CODE_LEN || !matches_code_line(&trimmed)
     {
         return BackupCodeCandidate::Rejected;
     }
@@ -58,7 +56,11 @@ fn normalize_candidate(value: &str) -> BackupCodeCandidate {
     if words.len() > 2 {
         return BackupCodeCandidate::Rejected;
     }
-    if words.len() == 2 && words.iter().all(|word| word.chars().all(|c| c.is_ascii_alphabetic())) {
+    if words.len() == 2
+        && words
+            .iter()
+            .all(|word| word.chars().all(|c| c.is_ascii_alphabetic()))
+    {
         return BackupCodeCandidate::Rejected;
     }
     let compact: String = trimmed
@@ -142,7 +144,9 @@ fn contains_recovery_hint(text: &str) -> bool {
         "authenticator code",
         "authenticator codes",
     ];
-    needles.iter().any(|needle| contains_word_phrase(&lower, needle))
+    needles
+        .iter()
+        .any(|needle| contains_word_phrase(&lower, needle))
 }
 
 fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
@@ -164,7 +168,9 @@ fn contains_word_phrase(haystack: &str, phrase: &str) -> bool {
         if before_ok && after_ok {
             return true;
         }
-        let next = haystack[start + 1..].find(phrase).map(|offset| start + 1 + offset);
+        let next = haystack[start + 1..]
+            .find(phrase)
+            .map(|offset| start + 1 + offset);
         match next {
             Some(index) => start = index,
             None => return false,

@@ -29,9 +29,10 @@ pub enum VaultHostPolicyError {
 
 /// Normalize a Simple Vault base URL (trailing slash, no hash/query).
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, VaultHostPolicyError> {
-    let mut url = Url::parse(value).map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
-    let local_http = url.scheme() == "http"
-        && matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
+    let mut url =
+        Url::parse(value).map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
+    let local_http =
+        url.scheme() == "http" && matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
     if url.scheme() != "https" && !local_http {
         return Err(VaultHostPolicyError::InsecureNonLocalhost);
     }
@@ -60,11 +61,17 @@ pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, VaultHostPol
     let normalized = normalize_simple_vault_base_url(base_url)?;
     let url = Url::parse(&normalized)
         .map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
-    Ok(format!("{}{}*", url.origin().ascii_serialization(), url.path()))
+    Ok(format!(
+        "{}{}*",
+        url.origin().ascii_serialization(),
+        url.path()
+    ))
 }
 
 /// Matching Sentinel base URL for a Simple Vault URL, when one can be derived.
-pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<Option<String>, VaultHostPolicyError> {
+pub fn matching_sentinel_vault_base_url(
+    base_url: &str,
+) -> Result<Option<String>, VaultHostPolicyError> {
     let normalized = normalize_simple_vault_base_url(base_url)?;
     let url = Url::parse(&normalized)
         .map_err(|error| VaultHostPolicyError::InvalidUrl(error.to_string()))?;
