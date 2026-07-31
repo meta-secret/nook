@@ -39,6 +39,8 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  // Stable vault origins stay authorized through the generated WASM OAuth policy enums.
+  await expect(page.getByTestId('icloud-origin-unsupported')).toHaveCount(0)
   await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
     'aria-checked',
     'true',
