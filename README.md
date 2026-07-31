@@ -294,9 +294,11 @@ never enter `nook-web:local`.
 
 Rust compilation can use authenticated SeaweedFS S3 sccache deployed from
 [`infra/`](infra/) at `https://sccache.dev.nokey.sh` (bucket `nook-sccache`).
-Run `task infra:sccache:credential:sync` once to create the ignored mode-`0600`
-`.nook/cache/sccache-access-key` and `sccache-secret-key` files. Without those
-files, local and untrusted CI builds compile normally without sccache. Hosted
+Run `task infra:sccache:credential:sync` and
+`task infra:registry:credential:sync` once to create mode-`0600` credentials in
+`~/.nook/cache/` (and a copy under the repo `.nook/cache/`). Registry sync also
+runs `docker login registry.dev.nokey.sh`. Without the S3 key files, local and
+untrusted CI builds compile normally without sccache. Hosted
 Main, pull-request, arbitrary-ref, dependency-update, and AI-authored jobs do
 not receive the S3 keys; keeping Main's cache publisher secret-free makes its
 BuildKit layers reusable by PRs. Override the endpoint with `SCCACHE_ENDPOINT`.

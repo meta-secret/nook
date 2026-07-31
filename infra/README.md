@@ -35,13 +35,15 @@ registry credentials when needed and never copies them into the repository. The
 containing `secrets/` directory is mode `0700`; credential files are mode
 `0600`.
 
-`task infra:sccache:credential:sync` copies the S3 keys into `.nook/cache/` and
-upserts GitHub Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
+`task infra:sccache:credential:sync` copies the S3 keys into `~/.nook/cache/`
+(shared across checkouts) and the repo `.nook/cache/`, then upserts GitHub
+Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
 `NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`.
 
 `task infra:registry:credential:sync` copies the registry token into
-`.nook/cache/` and upserts GitHub Actions secrets `NOOK_REGISTRY_HOST`,
-`NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
+`~/.nook/cache/` and the repo `.nook/cache/`, runs `docker login` for
+`registry.dev.nokey.sh`, and upserts GitHub Actions secrets
+`NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
 
 DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
 Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can

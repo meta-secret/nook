@@ -42,6 +42,8 @@ vars:
         printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
       elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-access-key" ]; then
         printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-access-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       fi
   SCCACHE_S3_SECRET_KEY_FILE:
     sh: >-
@@ -49,6 +51,8 @@ vars:
         printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
       elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key" ]; then
         printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       fi
   SCCACHE_S3_CREDENTIAL_MOUNTS:
     sh: >-
