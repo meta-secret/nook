@@ -10,6 +10,15 @@
 /** Build-time normalized Simple Vault base from the extension define. */
 export const SIMPLE_VAULT_BASE_URL = __NOOK_SIMPLE_VAULT_URL__
 
+enum MatchingSentinelBaseKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type MatchingSentinelBase =
+  | { kind: MatchingSentinelBaseKind.Absent }
+  | { kind: MatchingSentinelBaseKind.Present; url: string }
+
 function normalizeBaseUrl(value: string): URL {
   const url = new URL(value)
   url.hash = ''
@@ -42,29 +51,38 @@ function isSentinelVaultHostname(hostname: string): boolean {
   return host.endsWith('.nokey-sentinel.pages.dev')
 }
 
-function matchingSentinelBaseUrl(baseUrl: string): string | undefined {
+function matchingSentinelBaseUrl(baseUrl: string): MatchingSentinelBase {
   try {
     const base = normalizeBaseUrl(baseUrl)
     const host = base.hostname
     if (host.startsWith('simple.')) {
-      return `${base.protocol}//sentinel.${host.slice('simple.'.length)}/`
+      return {
+        kind: MatchingSentinelBaseKind.Present,
+        url: `${base.protocol}//sentinel.${host.slice('simple.'.length)}/`,
+      }
     }
     if (host.includes('.nokey-simple.pages.dev')) {
-      return `${base.protocol}//${host.replace(
-        '.nokey-simple.pages.dev',
-        '.nokey-sentinel.pages.dev',
-      )}/`
+      return {
+        kind: MatchingSentinelBaseKind.Present,
+        url: `${base.protocol}//${host.replace(
+          '.nokey-simple.pages.dev',
+          '.nokey-sentinel.pages.dev',
+        )}/`,
+      }
     }
     if (base.pathname.endsWith('/simple/')) {
-      return new URL(
-        `${base.pathname.slice(0, -'/simple/'.length)}/sentinel/`,
-        base,
-      ).href
+      return {
+        kind: MatchingSentinelBaseKind.Present,
+        url: new URL(
+          `${base.pathname.slice(0, -'/simple/'.length)}/sentinel/`,
+          base,
+        ).href,
+      }
     }
   } catch {
-    return undefined
+    return { kind: MatchingSentinelBaseKind.Absent }
   }
-  return undefined
+  return { kind: MatchingSentinelBaseKind.Absent }
 }
 
 export function runtimeSimpleVaultUrl(path = ''): string {
@@ -103,10 +121,10 @@ export function isRuntimeNookVaultAppUrl(candidateUrl: string): boolean {
       return true
     }
     const sentinelBase = matchingSentinelBaseUrl(SIMPLE_VAULT_BASE_URL)
-    if (!sentinelBase) {
+    if (sentinelBase.kind !== MatchingSentinelBaseKind.Present) {
       return false
     }
-    const base = normalizeBaseUrl(sentinelBase)
+    const base = normalizeBaseUrl(sentinelBase.url)
     return (
       candidate.origin === base.origin &&
       candidate.pathname.startsWith(base.pathname)

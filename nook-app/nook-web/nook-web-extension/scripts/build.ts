@@ -76,6 +76,27 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     splitting: false,
     naming: '[name].js',
     define: simpleVaultDefine,
+    plugins: [
+      {
+        name: 'companion-wasm-bytes',
+        setup(build) {
+          build.onLoad({ filter: /\.wasm$/ }, async (args) => {
+            const bytes = await Bun.file(args.path).bytes()
+            const base64 = Buffer.from(bytes).toString('base64')
+            return {
+              contents: `const binary = atob(${JSON.stringify(base64)});
+const bytes = new Uint8Array(binary.length);
+for (let index = 0; index < binary.length; index += 1) {
+  bytes[index] = binary.charCodeAt(index);
+}
+export default bytes;
+`,
+              loader: 'js',
+            }
+          })
+        },
+      },
+    ],
   })
 
   if (!result.success) {
