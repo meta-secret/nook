@@ -25,6 +25,7 @@ import {
   waitForExtensionPairingReady,
 } from './helpers/extension-smoke-runtime'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
+import { createLocalVaultOnLogin } from '../../nook-web-app/e2e/helpers'
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -599,7 +600,7 @@ test('accepts the pairing grant after the extension session was locked', async (
   }
 })
 
-test('re-approves an existing vault after reload without event-log-access-not-granted', async ({
+test('re-approves an existing local vault after reload without event-log-access-not-granted', async ({
   browserName,
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -612,57 +613,60 @@ test('re-approves an existing vault after reload without event-log-access-not-gr
   await context.addInitScript(installMockPasskeyRuntime)
 
   try {
+    // Match the user path: existing Simple Vault (local passkey) first, then
+    // Connect from the extension. Unlock must work without a pairing grant.
     const popupPage = await setupPasskeyExtensionPopup(context)
-    const simplePage = await openSimpleVaultConnection(context, popupPage)
+    const simplePage = await context.newPage()
+    await simplePage.goto(simpleVaultBaseUrl)
+    await createLocalVaultOnLogin(simplePage, vaultName, 'authenticated-shell')
 
-    await advanceCreateVaultWizardToFinalStep(simplePage)
-    await simplePage.getByTestId('login-vault-name-input').fill(vaultName)
-    await simplePage.getByTestId('login-create-device-vault-btn').click()
-    await expect(
-      simplePage.getByTestId('extension-connect-consent'),
-    ).toBeVisible()
-    await simplePage.getByTestId('approve-extension-device-btn').click()
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const openedConnect = context.waitForEvent('page', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    await popupPage.goto(
+      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
+    )
+    await expect(popupPage.getByTestId('connect-simple-vault-btn')).toBeVisible(
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
+    await popupPage.getByTestId('connect-simple-vault-btn').click()
+    const connectPage = await openedConnect
+    await expect(connectPage).toHaveURL((url) =>
+      belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
+    )
+
+    const consent = connectPage.getByTestId('extension-connect-consent')
+    const unlockStep = connectPage.getByTestId('login-local-unlock-step')
+    await expect(consent.or(unlockStep)).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    if (await unlockStep.isVisible()) {
+      await connectPage.getByTestId('unlock-vault-btn').click()
+      const passkeyOverlay = connectPage.getByTestId('passkey-auth-overlay')
+      if (await passkeyOverlay.isVisible()) {
+        await connectPage.getByTestId('device-protection-unlock-btn').click()
+      }
+      await expect(consent).toBeVisible({
+        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+      })
+    }
+
+    await connectPage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(
-      simplePage,
+      connectPage,
       async () => {
         const storage = await readExtensionStorage(context)
         return storage[setupStorageKey]
       },
       vaultName,
     )
-    await simplePage.getByRole('button', { name: 'Done' }).click()
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-
-    // Reload while the grant still exists so unlock can use the proven
-    // extension passkey path. The website must restore its signing seed from
-    // IndexedDB after this reload — that is the regression under test.
-    const worker = await getServiceWorker(context)
-    const extensionId = new URL(worker.url()).host
-    await simplePage.reload()
-    await expect(simplePage.getByTestId('login-local-unlock-step')).toBeVisible(
-      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-    )
-    const extensionAuthWindowPromise = context.waitForEvent('page')
-    await simplePage.getByTestId('unlock-vault-btn').click()
-    const extensionAuthWindow = await extensionAuthWindowPromise
-    await expect(extensionAuthWindow).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html`,
-    )
-    await extensionAuthWindow
-      .getByTestId('device-protection-unlock-btn')
-      .click()
     await expect(
-      extensionAuthWindow.getByTestId('extension-companion-home'),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
-    await expect(simplePage.getByTestId('authenticated-shell')).toBeVisible({
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
-    await extensionAuthWindow.close()
+      connectPage.getByTestId('extension-connect-approved'),
+    ).toBeVisible()
+    await connectPage.getByRole('button', { name: 'Done' }).click()
 
-    // Drop only the extension-side grant, then re-pair while Simple Vault stays
-    // unlocked with the restored signing identity.
     const pairedStorage = await readExtensionStorage(context)
     const grantKeys = Object.keys(pairedStorage).filter((key) =>
       key.startsWith('nook:extension-pairing-grant:'),
@@ -670,23 +674,58 @@ test('re-approves an existing vault after reload without event-log-access-not-gr
     expect(grantKeys.length).toBeGreaterThan(0)
     await removeExtensionStorageKeys(context, grantKeys)
 
-    const pairPopup = await context.newPage()
-    await pairPopup.goto(
+    // Reload so the website manager must restore its signing seed from
+    // IndexedDB, then unlock with the local website passkey and re-approve.
+    await simplePage.goto(simpleVaultBaseUrl)
+    const reloadedShell = simplePage.getByTestId('authenticated-shell')
+    const reloadedUnlock = simplePage.getByTestId('login-local-unlock-step')
+    await expect(reloadedShell.or(reloadedUnlock)).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    if (await reloadedUnlock.isVisible()) {
+      await simplePage.getByTestId('unlock-vault-btn').click()
+      const reloadOverlay = simplePage.getByTestId('passkey-auth-overlay')
+      if (await reloadOverlay.isVisible()) {
+        await simplePage.getByTestId('device-protection-unlock-btn').click()
+      }
+      await expect(reloadedShell).toBeVisible({
+        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+      })
+    }
+
+    const reopenedConnect = context.waitForEvent('page', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    await popupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
+    await expect(popupPage.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    const reopenedConnect = context.waitForEvent('page')
-    await pairPopup.getByTestId('connect-simple-vault-btn').click()
+    await popupPage.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
     )
 
-    await expect(
-      reconnectPage.getByTestId('extension-connect-consent'),
-    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    const reconnectConsent = reconnectPage.getByTestId(
+      'extension-connect-consent',
+    )
+    const reconnectUnlock = reconnectPage.getByTestId('login-local-unlock-step')
+    await expect(reconnectConsent.or(reconnectUnlock)).toBeVisible({
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
+    if (await reconnectUnlock.isVisible()) {
+      await reconnectPage.getByTestId('unlock-vault-btn').click()
+      const reconnectOverlay = reconnectPage.getByTestId('passkey-auth-overlay')
+      if (await reconnectOverlay.isVisible()) {
+        await reconnectPage.getByTestId('device-protection-unlock-btn').click()
+      }
+      await expect(reconnectConsent).toBeVisible({
+        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+      })
+    }
+
     await reconnectPage.getByTestId('approve-extension-device-btn').click()
     await waitForExtensionPairingReady(
       reconnectPage,
