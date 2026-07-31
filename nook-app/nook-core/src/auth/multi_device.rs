@@ -319,6 +319,10 @@ mod tests {
             &extension.public_key(),
             &signing.public_key(),
         )?);
+        let auth_id = dec_auth_id_from_public_key(&extension.public_key())?;
+        let mut meta = VaultMetaState::default();
+        materialize_vault_meta_from_graph(&graph, &mut meta)?;
+        assert!(meta.auth.contains_key(&auth_id));
         let (other_signing, _) = SigningIdentity::generate()?;
         assert!(!event_graph_has_active_device_access(
             &graph,

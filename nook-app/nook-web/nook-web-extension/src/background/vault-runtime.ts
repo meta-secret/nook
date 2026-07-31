@@ -251,16 +251,23 @@ function isImportedEventLogState(
 ): value is ImportedEventLogState {
   if (!value || typeof value !== 'object') return false
   const status = value as Record<string, unknown>
-  return (
-    typeof status.vaultStoreId === 'string' &&
-    typeof status.eventCount === 'number' &&
-    Number.isInteger(status.eventCount) &&
-    status.eventCount > 0 &&
-    typeof status.accessGranted === 'boolean' &&
-    Array.isArray(status.heads) &&
-    status.heads.length > 0 &&
-    status.heads.every((head) => typeof head === 'string')
-  )
+  if (
+    typeof status.vaultStoreId !== 'string' ||
+    typeof status.eventCount !== 'number' ||
+    !Number.isInteger(status.eventCount) ||
+    status.eventCount < 0 ||
+    typeof status.accessGranted !== 'boolean' ||
+    !Array.isArray(status.heads) ||
+    !status.heads.every((head) => typeof head === 'string')
+  ) {
+    return false
+  }
+  // Denied imports may report zero heads after rollback; granted imports must
+  // still prove a non-empty applicable projection.
+  if (status.accessGranted) {
+    return status.eventCount > 0 && status.heads.length > 0
+  }
+  return true
 }
 
 export async function importExtensionEventLog(
