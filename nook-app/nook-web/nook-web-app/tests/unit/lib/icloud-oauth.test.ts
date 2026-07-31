@@ -541,8 +541,8 @@ describe('icloud-oauth', () => {
       )
 
       await prepareICloudSignInControl()
+      // Programmatic click path may open the direct Web Services window.
       const pending = requestPreparedICloudWebAuthToken({
-        clickSignInControl: false,
         signInTimeoutMs: 5000,
       })
 
@@ -564,6 +564,51 @@ describe('icloud-oauth', () => {
         iCloudTokensWithoutAccountName('direct-web-auth-token'),
       )
       expect(close).toHaveBeenCalledOnce()
+    })
+
+    it('does not open a second Apple window after a native CloudKit button click', async () => {
+      Object.defineProperty(navigator, 'brave', {
+        configurable: true,
+        value: {},
+      })
+      const setUpAuth = resolvedCloudKitEffect()
+      const whenUserSignsIn = vi.fn().mockRejectedValue({
+        serverErrorCode: 'AUTHENTICATION_REQUIRED',
+        reason: 'request needs authorization',
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+      const open = vi.fn()
+      vi.stubGlobal('open', open)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('direct auth must not run')),
+      )
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+        signInTimeoutMs: 5000,
+      })
+
+      await vi.waitFor(() => {
+        expect(whenUserSignsIn).toHaveBeenCalledOnce()
+      })
+      expect(open).not.toHaveBeenCalled()
+
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://idmsa.apple.com',
+          data: { ckWebAuthToken: 'native-window-token' },
+        }),
+      )
+
+      await expect(pending).resolves.toEqual(
+        iCloudTokensWithoutAccountName('native-window-token'),
+      )
+      expect(open).not.toHaveBeenCalled()
     })
 
     it('uses direct web auth as the primary Brave flow to avoid duplicate Apple windows', async () => {
@@ -656,10 +701,9 @@ describe('icloud-oauth', () => {
 
       await expect(
         requestPreparedICloudWebAuthToken({
-          clickSignInControl: false,
           signInTimeoutMs: 5000,
         }),
-      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.SignInFailed)
+      ).rejects.toThrow(CloudKitAuthErrorTranslationKey.UnknownError)
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
