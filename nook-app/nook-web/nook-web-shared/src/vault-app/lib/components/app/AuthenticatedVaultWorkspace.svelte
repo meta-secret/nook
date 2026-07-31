@@ -169,6 +169,8 @@
             vault.handleApplePasswordsImport(exportBytes)}
           onImportChromePasswords={(csv) =>
             vault.handleChromePasswordsImport(csv)}
+          onImportDashlane={(exportBytes) =>
+            vault.handleDashlaneImport(exportBytes)}
           onImportGoogleAuthenticator={(migrationUris) =>
             vault.handleGoogleAuthenticatorImport(migrationUris)}
           onImportProtonPass={(exportBytes) =>

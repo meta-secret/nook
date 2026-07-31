@@ -363,6 +363,25 @@ impl NookVaultManager {
         .await
     }
 
+    /// Import supported items from an unencrypted Dashlane CSV or CSV ZIP export
+    /// in one signed event. The export is parsed only in memory.
+    #[wasm_bindgen(js_name = importDashlaneExport)]
+    pub async fn import_dashlane_export(
+        &mut self,
+        export: Vec<u8>,
+    ) -> Result<NookImportResult, JsError> {
+        let export = zeroize::Zeroizing::new(export);
+        let plan = nook_core::plan_dashlane_import(export.as_slice())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(export);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::Dashlane,
+        )
+        .await
+    }
+
     /// Import TOTP accounts from one complete Google Authenticator migration
     /// QR batch in one signed event. QR contents are decoded only in memory.
     #[wasm_bindgen(js_name = importGoogleAuthenticatorMigration)]

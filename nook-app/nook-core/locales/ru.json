@@ -540,6 +540,20 @@
     "result_imported": "Импортировано записей: {count}.",
     "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
   },
+  "dashlane_import": {
+    "source": "Dashlane",
+    "title": "Импорт из Dashlane",
+    "description": "Перенесите логины, защищённые заметки и банковские карты из незашифрованного CSV или CSV ZIP экспорта Dashlane в этот сейф.",
+    "export_hint_title": "Экспортируйте сейф Dashlane в CSV",
+    "export_hint": "В Dashlane откройте настройки, выберите экспорт данных и экспортируйте незашифрованный CSV или CSV ZIP. Экспорт не зашифрован: после импорта удалите файл и очистите Корзину.",
+    "file_label": "CSV или CSV ZIP экспорт Dashlane",
+    "supported_types": "Nook импортирует учётные данные, защищённые заметки, банковские карты и корректные секреты TOTP из незашифрованных CSV или CSV ZIP экспортов Dashlane. Документы, личные данные, Wi-Fi, банковские счета, ключи доступа, вложения и зашифрованные DASH-экспорты не импортируются.",
+    "import": "Импортировать записи",
+    "importing": "Импорт…",
+    "failed": "Не удалось импортировать данные Dashlane: {error}",
+    "result_imported": "Импортировано записей: {count}.",
+    "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
+  },
   "chrome_passwords_import": {
     "source": "Chrome или другой браузер",
     "title": "Импорт из Chrome или другого браузера",
@@ -956,6 +970,7 @@
     "item_updated": "Секрет успешно обновлен.",
     "apple_passwords_imported": "Импортировано записей Safari / Apple Passwords: {count}.",
     "chrome_passwords_imported": "Импортировано логинов браузера: {count}.",
+    "dashlane_imported": "Импортировано записей Dashlane: {count}.",
     "google_authenticator_imported": "Импортировано кодов подтверждения Google Authenticator: {count}.",
     "bitwarden_imported": "Импортировано записей Bitwarden: {count}.",
     "keepassxc_imported": "Импортировано записей KeePassXC: {count}.",

@@ -19,6 +19,7 @@
   import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
   import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
   import ChromePasswordsImportPanel from '$lib/components/ChromePasswordsImportPanel.svelte'
+  import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
   import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
   import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -85,6 +86,7 @@
     onImportOnePassword,
     onImportApplePasswords,
     onImportChromePasswords,
+    onImportDashlane,
     onImportGoogleAuthenticator,
     onImportProtonPass,
     activeSection = $bindable(AdminAccordionSection.Vaults),
@@ -133,6 +135,7 @@
       exportBytes: Uint8Array,
     ) => Promise<NookImportResult>
     onImportChromePasswords: (csv: string) => Promise<NookImportResult>
+    onImportDashlane: (exportBytes: Uint8Array) => Promise<NookImportResult>
     onImportGoogleAuthenticator: (
       migrationUris: string[],
     ) => Promise<NookImportResult>
@@ -608,6 +611,21 @@
           {isSaving}
           embedded
           onImport={onImportChromePasswords}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t('dashlane_import.source')}
+        subtitle={vault.t('dashlane_import.description')}
+        open={importProviderOpen('dashlane')}
+        onToggle={() => toggleImportProvider('dashlane')}
+        testId="dashlane-import-section"
+      >
+        <DashlaneImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportDashlane}
         />
       </SettingsAccordionSection>
 

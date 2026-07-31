@@ -407,6 +407,19 @@ export async function handleChromePasswordsImport(
   );
 }
 
+export async function handleDashlaneImport(
+  state: VaultState,
+  exportBytes: Uint8Array,
+): Promise<NookImportResult> {
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importDashlaneExport(exportBytes),
+    "Dashlane",
+    "toasts.dashlane_imported",
+    "dashlane_import.failed",
+  );
+}
+
 export async function handleGoogleAuthenticatorImport(
   state: VaultState,
   migrationUris: string[],
