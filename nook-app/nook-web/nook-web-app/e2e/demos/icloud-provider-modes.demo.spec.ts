@@ -12,8 +12,27 @@ async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('choose private or shared iCloud vault storage', async ({ page }) => {
+async function installCloudKitStub(page: Page) {
   await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'brave', {
+      configurable: true,
+      value: {},
+    })
+    const opened: string[] = []
+    ;(
+      window as Window & {
+        __nookDemoOpenedUrls?: string[]
+      }
+    ).__nookDemoOpenedUrls = opened
+    const originalOpen = window.open.bind(window)
+    window.open = ((url?: string | URL, ...rest: unknown[]) => {
+      opened.push(String(url ?? ''))
+      return originalOpen(
+        url,
+        ...(rest as [string | undefined, string | undefined]),
+      )
+    }) as typeof window.open
+
     const container = {
       setUpAuth: async () => {},
       whenUserSignsIn: () => new Promise(() => {}),
@@ -30,6 +49,10 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
       getDefaultContainer: () => container,
     }
   })
+}
+
+test('choose private or shared iCloud vault storage', async ({ page }) => {
+  await installCloudKitStub(page)
   await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
@@ -43,6 +66,19 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await expect(page.getByTestId('icloud-origin-unsupported')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  // Brave native-click flows must not open a second Apple window or show a
+  // premature sign-in failure while the origin gate is explaining the host.
+  await expect(page.getByTestId('icloud-oauth-error')).toHaveCount(0)
+  await expect(page.getByTestId('icloud-sign-in-btn')).toBeVisible()
+  const openedUrls = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __nookDemoOpenedUrls?: string[]
+        }
+      ).__nookDemoOpenedUrls ?? [],
+  )
+  expect(openedUrls).toEqual([])
   await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
     'aria-checked',
     'true',
