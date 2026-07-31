@@ -117,11 +117,13 @@ test('offer browser extension install on vault home and in Devices', async ({
   await expect(page.getByTestId('extension-connected-vault')).toContainText(
     'Previous vault',
   )
-  // Companion pair intent is the entry into Simple Vault /extension-connect
-  // consent; grant acceptance after Approve is covered by extension e2e.
+  // Companion pair intent opens Simple Vault /extension-connect consent.
+  // Grant acceptance (reload-safe signing-seed persistence and rejected-import
+  // rollback) is covered by extension passkey-session e2e.
   await expect(
     page.getByTestId('extension-install-setup-connect'),
   ).toBeVisible()
+  await expect(setupCard).toHaveAttribute('data-status', 'paired_elsewhere')
   await demoBeat(page)
 
   await page.getByTestId('vault-settings-tab').click()

@@ -85,26 +85,30 @@ async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookE
     Ok(())
 }
 
-#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-pub(crate) async fn remove_event_fixture(store_id: &str, event_id: &str) -> Result<(), NookError> {
+async fn store_delete(store_name: &str, key: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
-        .map_err(|error| NookError::IndexedDb(format!("Transaction error: {error:?}")))?;
+        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
-        .store(STORE_EVENTS)
-        .map_err(|error| NookError::IndexedDb(format!("Store error: {error:?}")))?;
-    let key = serde_wasm_bindgen::to_value(&event_key(store_id, event_id))
-        .map_err(|error| NookError::IndexedDb(format!("Serialization error: {error:?}")))?;
+        .store(store_name)
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
+    let js_key = serde_wasm_bindgen::to_value(key)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     store
-        .delete(key)
+        .delete(js_key)
         .await
-        .map_err(|error| NookError::IndexedDb(format!("Delete error: {error:?}")))?;
+        .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
     transaction
         .done()
         .await
-        .map_err(|error| NookError::IndexedDb(format!("Transaction done error: {error:?}")))?;
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
     Ok(())
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) async fn remove_event_fixture(store_id: &str, event_id: &str) -> Result<(), NookError> {
+    store_delete(STORE_EVENTS, &event_key(store_id, event_id)).await
 }
 
 pub(crate) async fn is_event_log_mode() -> Result<bool, NookError> {
@@ -165,6 +169,27 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
         }
     }
     Ok(local)
+}
+
+/// Drop a vault's local event-log projection (events, heads, epoch).
+///
+/// Used when an extension pairing import rejects access so a poisoned or
+/// quarantined partial import cannot permanently block later approvals.
+pub(crate) async fn clear_local_event_store(store_id: &str) -> Result<(), NookError> {
+    let index_key = format!("event_index:{store_id}");
+    let ids: Vec<String> = match store_get(STORE_EVENTS, &index_key).await? {
+        None => Vec::new(),
+        Some(json) => {
+            serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
+        }
+    };
+    for event_id in ids {
+        store_delete(STORE_EVENTS, &event_key(store_id, &event_id)).await?;
+    }
+    store_delete(STORE_EVENTS, &index_key).await?;
+    store_delete(STORE_PROJECTIONS, &heads_key(store_id)).await?;
+    store_delete(STORE_PROJECTIONS, &epoch_key(store_id)).await?;
+    Ok(())
 }
 
 pub(crate) async fn save_event_bytes(
