@@ -101,6 +101,20 @@ export const connectedSetupState = {
 export const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
   process.env.NOOK_SIMPLE_VAULT_URL || defaultSimpleVaultBaseUrl(),
 )
+
+/**
+ * Sentinel origin used to assert Pilot stays off vault-app hosts.
+ * Local Playwright Simple Vault (`http://127.0.0.1:5174/`) has no paired
+ * Sentinel URL; use the always-excluded production Sentinel host instead.
+ */
+export function e2eSentinelVaultBaseUrl(): string {
+  try {
+    return sentinelVaultBaseUrl(simpleVaultBaseUrl)
+  } catch {
+    return 'https://sentinel.nokey.sh/'
+  }
+}
+
 export const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
 export const extensionApprovalVaultName = isHostedSmoke
   ? 'test-vault'
