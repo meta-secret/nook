@@ -81,7 +81,18 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         "every catalog task must run on its own GitHub-hosted job"
     );
     assert!(!workflow.contains("runs-on: nook"));
-    assert!(!workflow.contains("secrets."));
+    assert!(
+        workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
+            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
+        "remote jobs must authenticate to registry.nokey.sh for BuildKit cache restore"
+    );
+    let secret_refs = workflow.matches("${{ secrets.").count();
+    assert_eq!(
+        secret_refs,
+        workflow.matches("secrets.NOOK_REGISTRY_USERNAME").count()
+            + workflow.matches("secrets.NOOK_REGISTRY_PASSWORD").count(),
+        "remote workflow may only use the Nook registry login secrets"
+    );
     assert!(!workflow.contains("${{ inputs.command }}"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
