@@ -15,6 +15,8 @@ mod provider_labels;
 pub use provider_labels::*;
 mod provider_state;
 pub use provider_state::*;
+mod companion_heuristics;
+pub use companion_heuristics::*;
 
 #[wasm_bindgen(js_name = isVaultSessionLocked)]
 #[must_use]

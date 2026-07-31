@@ -119,7 +119,7 @@
 
     let dataYaml: string
     try {
-      dataYaml = buildSecretYaml(state.toInput(selectedType, editor))
+      dataYaml = buildSecretYaml(state.toFormFields(selectedType, editor))
     } catch (error) {
       state.submitError = vault.resolveErrorMessage(
         error instanceof Error ? error.message : String(error),
