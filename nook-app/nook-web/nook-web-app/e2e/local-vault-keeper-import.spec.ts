@@ -1,21 +1,10 @@
-import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
   connectLocalVault,
-  expandSettingsSection,
   mockBip39Wordlist,
+  openPasswordManagerImport,
 } from './helpers'
-
-async function openKeeperImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('keeper-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('keeper-import-panel')).toBeVisible()
-}
 
 test.describe('local vault Keeper import', () => {
   test.beforeEach(async ({ page }) => {
@@ -35,7 +24,7 @@ test.describe('local vault Keeper import', () => {
       'Personal,Imported Keeper note,,,,"# Keeper note\n\nKeep offline",Team,,',
     ].join('\n')
 
-    await openKeeperImport(page)
+    await openPasswordManagerImport(page, 'keeper')
     await page.getByTestId('keeper-csv-file').setInputFiles({
       name: 'keeper_export.csv',
       mimeType: 'text/csv',
@@ -54,7 +43,7 @@ test.describe('local vault Keeper import', () => {
       'Imported Keeper note',
     )
 
-    await openKeeperImport(page)
+    await openPasswordManagerImport(page, 'keeper')
     await page.getByTestId('keeper-csv-file').setInputFiles({
       name: 'keeper_export.csv',
       mimeType: 'text/csv',
