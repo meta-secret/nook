@@ -342,6 +342,19 @@ export async function handleBitwardenImport(
   );
 }
 
+export async function handleKeePassXcImport(
+  state: VaultState,
+  csv: string,
+): Promise<NookImportResult> {
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importKeePassXcCsv(csv),
+    "KeePassXC",
+    "toasts.keepassxc_imported",
+    "keepassxc_import.failed",
+  );
+}
+
 export async function handleLastPassImport(
   state: VaultState,
   csv: string,

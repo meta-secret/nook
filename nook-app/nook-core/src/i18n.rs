@@ -355,6 +355,7 @@ mod tests {
             ("dashlane_import.source", "Dashlane"),
             ("google_authenticator_import.source", "Google Authenticator"),
             ("bitwarden_import.source", "Bitwarden"),
+            ("keepassxc_import.source", "KeePassXC"),
             ("lastpass_import.source", "LastPass"),
             ("onepassword_import.source", "1Password"),
             ("proton_pass_import.source", "Proton Pass"),
