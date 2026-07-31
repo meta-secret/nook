@@ -25,6 +25,9 @@ describe('Sentinel deployment exclusions', () => {
   })
 
   test('derives the matching per-PR Sentinel origin', () => {
+    expect(sentinelVaultBaseUrl('https://pr-408.nokey-simple.pages.dev/')).toBe(
+      'https://pr-408.nokey-sentinel.pages.dev/',
+    )
     expect(
       sentinelVaultMatchPatterns('https://pr-408.nokey-simple.pages.dev/'),
     ).toContain('https://pr-408.nokey-sentinel.pages.dev/*')
