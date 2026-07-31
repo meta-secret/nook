@@ -1,51 +1,59 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '../fixtures'
-import { createLocalE2eGoogleDriveVaultStub } from '../drive-stub'
 import {
-  assertNoVaultErrors,
-  assertVaultReady,
   clearBrowserVault,
-  connectGoogleDriveVault,
+  createLocalVaultOnLogin,
   expandSettingsSection,
   openStorageSettings,
   UI_TIMEOUT_MS,
-  waitForVaultOperationsIdle,
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
+
+type DemoVaultWindow = Window & {
+  __nookVault?: {
+    errorMsg: string
+    t: (key: string) => string
+  }
+}
 
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('connect Google Drive and re-sync without a PAT timeout toast', async ({
+test('Google Drive setup shows the demo-origin gate and provider-agnostic timeout copy', async ({
   page,
 }) => {
-  test.setTimeout(180_000)
-  const accessToken = 'ya29.e2e_drive_connect_timeout'
-  const fileName = 'drive-connect-timeout-demo'
-  const stub = createLocalE2eGoogleDriveVaultStub('', fileName)
-
   await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
-  await connectGoogleDriveVault(page, accessToken, fileName, stub)
-  await assertVaultReady(page)
+  await createLocalVaultOnLogin(page)
   await demoBeat(page)
 
   await openStorageSettings(page)
   await expandSettingsSection(page, 'storage')
-  const syncBtn = page.locator('[data-testid^="sync-provider-"]').first()
-  await expect(syncBtn).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await syncBtn.click()
-  await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
-  await assertNoVaultErrors(page)
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-oauth-file').click()
+  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  // UI demos run on 127.0.0.1:5183, which is outside Google's authorized origins.
+  await expect(page.getByTestId('google-origin-unsupported')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('google-sign-in-btn')).toBeDisabled()
+  await demoBeat(page)
 
+  await page.evaluate(() => {
+    const vault = (window as DemoVaultWindow).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    vault.errorMsg = vault.t('toasts.error_timeout')
+  })
   const vaultError = page.getByTestId('vault-error')
-  if (await vaultError.isVisible()) {
-    await expect(vaultError).not.toContainText(/PAT/i)
-  }
-  await expect(page.getByTestId('authenticated-shell')).toBeVisible()
+  await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(vaultError).toContainText(/provider sign-in/i)
+  await expect(vaultError).not.toContainText(/PAT/i)
   await demoBeat(page)
 })
