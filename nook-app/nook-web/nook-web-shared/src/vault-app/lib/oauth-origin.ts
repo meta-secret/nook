@@ -1,3 +1,11 @@
+import {
+  BrowserOAuthProvider as WasmBrowserOAuthProvider,
+  OAuthOriginUnsupportedReason as WasmOAuthOriginUnsupportedReason,
+  resolveOAuthOriginSupport as wasmResolveOAuthOriginSupport,
+} from "$app-wasm";
+
+export { isCloudflarePrPreviewHost } from "$app-wasm";
+
 export enum BrowserOAuthProvider {
   GoogleDrive = "google-drive",
   ICloud = "icloud",
@@ -28,59 +36,48 @@ export type OAuthOriginSupport =
 
 type BrowserLocation = Pick<Location, "origin" | "hostname">;
 
-const GOOGLE_AUTHORIZED_ORIGINS = new Set([
-  "https://localhost:5173",
-  "https://localhost:5175",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://simple.nokey.sh",
-  "https://sentinel.nokey.sh",
-  "https://simple.dev.nokey.sh",
-  "https://sentinel.dev.nokey.sh",
-]);
-const ICLOUD_AUTHORIZED_ORIGINS = new Set([
-  "https://localhost:5173",
-  "https://localhost:5175",
-  "https://simple.nokey.sh",
-  "https://sentinel.nokey.sh",
-  "https://simple.dev.nokey.sh",
-  "https://sentinel.dev.nokey.sh",
-]);
-const CLOUDFLARE_PR_PREVIEW_HOST =
-  /^pr-\d+\.(?:nook-1n8|nokey-(?:sh|simple|sentinel))\.pages\.dev$/i;
-
-function isAuthorizedOrigin(
+function toWasmProvider(
   provider: BrowserOAuthProvider,
-  origin: string,
-): boolean {
-  const origins =
-    provider === BrowserOAuthProvider.ICloud
-      ? ICLOUD_AUTHORIZED_ORIGINS
-      : GOOGLE_AUTHORIZED_ORIGINS;
-  return origins.has(origin);
+): WasmBrowserOAuthProvider {
+  return provider === BrowserOAuthProvider.ICloud
+    ? WasmBrowserOAuthProvider.ICloud
+    : WasmBrowserOAuthProvider.GoogleDrive;
 }
 
-export function isCloudflarePrPreviewHost(hostname: string): boolean {
-  return CLOUDFLARE_PR_PREVIEW_HOST.test(hostname);
+function fromWasmReason(
+  reason: WasmOAuthOriginUnsupportedReason,
+): OAuthOriginUnsupportedReason {
+  return reason === WasmOAuthOriginUnsupportedReason.CloudflarePrPreview
+    ? OAuthOriginUnsupportedReason.CloudflarePreview
+    : OAuthOriginUnsupportedReason.UnregisteredOrigin;
 }
 
 export function resolveOAuthOriginSupport(
   provider: BrowserOAuthProvider,
   location: BrowserLocation,
 ): OAuthOriginSupport {
-  const origin = location.origin;
-  if (isAuthorizedOrigin(provider, origin)) {
-    return { kind: OAuthOriginSupportKind.Supported, supported: true, origin };
+  const resolved = wasmResolveOAuthOriginSupport(
+    toWasmProvider(provider),
+    location.origin,
+    location.hostname,
+  );
+  try {
+    if (resolved.isUnsupported()) {
+      return {
+        kind: OAuthOriginSupportKind.Unsupported,
+        supported: false,
+        origin: resolved.origin,
+        reason: fromWasmReason(resolved.unsupportedReason()),
+      };
+    }
+    return {
+      kind: OAuthOriginSupportKind.Supported,
+      supported: true,
+      origin: resolved.origin,
+    };
+  } finally {
+    resolved.free();
   }
-
-  return {
-    kind: OAuthOriginSupportKind.Unsupported,
-    supported: false,
-    origin,
-    reason: isCloudflarePrPreviewHost(location.hostname)
-      ? OAuthOriginUnsupportedReason.CloudflarePreview
-      : OAuthOriginUnsupportedReason.UnregisteredOrigin,
-  };
 }
 
 export function resolveCurrentOAuthOriginSupport(
