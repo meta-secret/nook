@@ -54,9 +54,12 @@ async function companionWasmModuleOrPath(
 ): Promise<BufferSource | string | URL> {
   if (
     source.kind === CompanionWasmSourceKind.ModuleUrl &&
-    runningUnderNode()
+    runningUnderNode() &&
+    source.url.protocol === "file:"
   ) {
-    // Playwright/Bun load this module in Node, where file: fetch is unavailable.
+    // Playwright loads this module in Node with a file: WASM URL, where fetch
+    // is unavailable. Vitest may also set process.versions.node but resolve
+    // WASM through a non-file URL — leave those to the normal module path.
     // Keep Node module names as runtime strings so browser svelte-check stays
     // free of @types/node.
     const nodeFsModule = "node:fs";
