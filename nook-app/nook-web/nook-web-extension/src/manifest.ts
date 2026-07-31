@@ -60,6 +60,7 @@ export type ExtensionManifest = {
     exclude_matches: string[]
     js: string[]
     run_at: ContentScriptRunAt
+    type?: ExtensionManifestType.Module
     world?: ContentScriptWorld
   }>
   externally_connectable: {
@@ -123,6 +124,8 @@ export function createManifest(
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/autofill.js'],
+        // Companion-ready uses top-level await; classic content scripts reject TLA.
+        type: ExtensionManifestType.Module,
         run_at: ContentScriptRunAt.DocumentIdle,
       },
       {

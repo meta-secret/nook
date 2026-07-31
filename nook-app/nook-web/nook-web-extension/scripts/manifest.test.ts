@@ -83,6 +83,13 @@ describe('extension origin isolation', () => {
     ])
   })
 
+  test('loads autofill as a module so companion WASM top-level await can run', () => {
+    const autofill = createManifest('1.0.0').content_scripts.find((script) =>
+      script.js.includes('content/autofill.js'),
+    )
+    expect(autofill?.type).toBe('module')
+  })
+
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {
     const scripts = createManifest('1.0.0').content_scripts
     expect(
