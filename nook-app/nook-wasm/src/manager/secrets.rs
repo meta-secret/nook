@@ -272,6 +272,22 @@ impl NookVaultManager {
         .await
     }
 
+    /// Import logins and secure notes from a `KeePassXC` CSV export in one signed
+    /// event. The CSV is parsed in memory and never persisted.
+    #[wasm_bindgen(js_name = importKeePassXcCsv)]
+    pub async fn import_keepassxc_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
+        let csv = zeroize::Zeroizing::new(csv);
+        let plan = nook_core::plan_keepassxc_import(csv.as_str())
+            .map_err(|error| NookError::Database(error.to_string()))?;
+        drop(csv);
+        self.commit_secret_import(
+            plan.items,
+            plan.skipped_unsupported,
+            SecretImportSource::KeePassXc,
+        )
+        .await
+    }
+
     /// Import logins and secure notes from a plaintext `LastPass` generic CSV
     /// export in one signed event. The CSV is parsed in memory and never
     /// persisted.

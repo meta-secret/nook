@@ -484,6 +484,20 @@
     "result_imported": "Импортировано записей: {count}.",
     "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
   },
+  "keepassxc_import": {
+    "source": "KeePassXC",
+    "title": "Импорт из KeePassXC",
+    "description": "Перенесите логины и защищённые заметки из CSV-экспорта KeePassXC в этот сейф.",
+    "export_hint_title": "Экспортируйте CSV-файл из KeePassXC",
+    "export_hint": "В KeePassXC откройте «База данных», выберите «Экспорт», затем «CSV-файл». Подтвердите, что понимаете: экспорт не зашифрован, и сохраните файл. Удалите CSV после завершения импорта.",
+    "file_label": "CSV-экспорт KeePassXC",
+    "supported_types": "Nook импортирует логины сайтов и записи только с заметками. Группы и названия KeePassXC сохраняются в зашифрованных заметках записи. Допустимые otpauth-значения TOTP становятся аутентификаторами; остальные настройки TOTP остаются в заметках.",
+    "import": "Импортировать записи",
+    "importing": "Импорт…",
+    "failed": "Не удалось импортировать данные KeePassXC: {error}",
+    "result_imported": "Импортировано записей: {count}.",
+    "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
+  },
   "lastpass_import": {
     "source": "LastPass",
     "title": "Импорт из LastPass",
@@ -959,6 +973,7 @@
     "dashlane_imported": "Импортировано записей Dashlane: {count}.",
     "google_authenticator_imported": "Импортировано кодов подтверждения Google Authenticator: {count}.",
     "bitwarden_imported": "Импортировано записей Bitwarden: {count}.",
+    "keepassxc_imported": "Импортировано записей KeePassXC: {count}.",
     "lastpass_imported": "Импортировано записей LastPass: {count}.",
     "onepassword_imported": "Импортировано записей 1Password: {count}.",
     "proton_pass_imported": "Импортировано записей Proton Pass: {count}.",

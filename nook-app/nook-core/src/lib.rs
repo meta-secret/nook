@@ -21,8 +21,8 @@ pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
-    lastpass_import, login_site_hosts, onepassword_import, passkey_authenticator, password,
-    proton_pass_import, secret_fingerprint, secret_types, secret_view, session,
+    keepassxc_import, lastpass_import, login_site_hosts, onepassword_import, passkey_authenticator,
+    password, proton_pass_import, secret_fingerprint, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -112,6 +112,7 @@ pub use i18n::{
     resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
     translate_with_replacements,
 };
+pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 #[cfg(feature = "mock-passkey")]
