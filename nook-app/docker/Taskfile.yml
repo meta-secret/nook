@@ -355,6 +355,7 @@ tasks:
         artifacts="{{.CI_ARTIFACT_DIR}}";
         case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
         test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         for attempt in 1 2; do
@@ -376,6 +377,7 @@ tasks:
         artifacts="{{.CI_ARTIFACT_DIR}}";
         case "$artifacts" in /*) ;; *) artifacts="{{.REPO_ROOT}}/$artifacts" ;; esac;
         test -s "$artifacts/nook-wasm/nook_wasm.js";
+        test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
         for attempt in 1 2; do

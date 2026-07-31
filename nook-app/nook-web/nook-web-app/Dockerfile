@@ -35,7 +35,19 @@ RUN if command -v ffmpeg >/dev/null 2>&1; then \
       install -d "/opt/nook/ms-playwright/ffmpeg-${revision}"; \
       ln -s /usr/bin/ffmpeg "/opt/nook/ms-playwright/ffmpeg-${revision}/ffmpeg-linux"; \
     fi
-COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
+# WASM handoff nests companion under /nook-wasm/nook-companion-wasm so CI can ship both packages
+# through the existing artifact path. Split them into the two shared import roots.
+COPY --from=web-artifacts /nook-wasm /tmp/nook-wasm-handoff
+RUN mkdir -p \
+      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
+      /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
+    && find /tmp/nook-wasm-handoff -mindepth 1 -maxdepth 1 ! -name nook-companion-wasm \
+      -exec cp -a {} /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/ \; \
+    && if [ -d /tmp/nook-wasm-handoff/nook-companion-wasm ]; then \
+      cp -a /tmp/nook-wasm-handoff/nook-companion-wasm/. \
+        /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/; \
+    fi \
+    && rm -rf /tmp/nook-wasm-handoff
 COPY --from=web-artifacts /coverage /opt/nook/coverage
 
 # Workspace source, copied as late as possible so the cached web dependency layers above are never

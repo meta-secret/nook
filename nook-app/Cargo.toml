@@ -3,7 +3,9 @@ members = [
     "nook-auth2",
     "nook-replication",
     "nook-event-log",
+    "nook-companion-core",
     "nook-core",
+    "nook-companion-wasm",
     "nook-wasm",
 ]
 resolver = "3"

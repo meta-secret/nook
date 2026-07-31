@@ -274,12 +274,13 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile
                 .contains("COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed")
             && wasm_dockerfile.contains(
-                "CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm",
+                "CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm",
             )
             && wasm_dockerfile.contains(
-                "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm",
+                "cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm",
             )
             && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
+            && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
@@ -292,7 +293,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && !core_dockerfile
                 .contains("cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm")
             && dependency_dockerfile.contains(
-                "cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm",
+                "cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm",
             ),
         "the manifest-only WASM boundary must prewarm release tests without compiling a second debug graph"
     );
@@ -380,6 +381,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "steps.trusted-wasm.outputs.found != 'true'",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
+        "'nook-app/nook-companion-core/**'",
+        "'nook-app/nook-companion-wasm/**'",
         "'nook-app/nook-wasm/**'",
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",

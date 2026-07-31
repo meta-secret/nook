@@ -1,24 +1,31 @@
 //! Thin WASM exports for portable auth-companion heuristics and host policy.
 
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::must_use_candidate,
+    clippy::uninlined_format_args
+)]
+
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen(js_name = pageHasBackupCodeHint)]
 #[must_use]
 pub fn page_has_backup_code_hint(text: &str) -> bool {
-    nook_core::page_has_backup_code_hint(text)
+    nook_companion_core::page_has_backup_code_hint(text)
 }
 
 #[wasm_bindgen(js_name = extractBackupCodeCandidates)]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
-    nook_core::extract_backup_code_candidates(&text)
+    nook_companion_core::extract_backup_code_candidates(&text)
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookPageInputFieldObservation {
-    inner: nook_core::PageInputFieldObservation,
+    inner: nook_companion_core::PageInputFieldObservation,
 }
 
 #[wasm_bindgen]
@@ -26,7 +33,7 @@ impl NookPageInputFieldObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     pub fn new(
-        input_type: nook_core::PageInputType,
+        input_type: nook_companion_core::PageInputType,
         disabled: bool,
         read_only: bool,
         autocomplete_tokens: Vec<String>,
@@ -34,7 +41,7 @@ impl NookPageInputFieldObservation {
         login_context: bool,
     ) -> Self {
         Self {
-            inner: nook_core::PageInputFieldObservation {
+            inner: nook_companion_core::PageInputFieldObservation {
                 input_type,
                 disabled,
                 read_only,
@@ -49,13 +56,13 @@ impl NookPageInputFieldObservation {
 #[wasm_bindgen(js_name = expandIdentityText)]
 #[must_use]
 pub fn expand_identity_text(value: &str) -> String {
-    nook_core::expand_identity_text(value)
+    nook_companion_core::expand_identity_text(value)
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookLoginContextObservation {
-    inner: nook_core::LoginContextObservation,
+    inner: nook_companion_core::LoginContextObservation,
 }
 
 #[wasm_bindgen]
@@ -69,7 +76,7 @@ impl NookLoginContextObservation {
         path_context: String,
     ) -> Self {
         Self {
-            inner: nook_core::LoginContextObservation {
+            inner: nook_companion_core::LoginContextObservation {
                 form_identity,
                 ancestor_identities,
                 advance_control_label,
@@ -82,55 +89,55 @@ impl NookLoginContextObservation {
 #[wasm_bindgen(js_name = hasLoginContext)]
 #[must_use]
 pub fn has_login_context(observation: &NookLoginContextObservation) -> bool {
-    nook_core::has_login_context(&observation.inner)
+    nook_companion_core::has_login_context(&observation.inner)
 }
 
 #[wasm_bindgen(js_name = looksLikeUsernameField)]
 #[must_use]
 pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_core::looks_like_username_field(&field.inner)
+    nook_companion_core::looks_like_username_field(&field.inner)
 }
 
 #[wasm_bindgen(js_name = looksLikeOneTimeCodeField)]
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
-    nook_core::looks_like_one_time_code_field(&field.inner)
+    nook_companion_core::looks_like_one_time_code_field(&field.inner)
 }
 
 #[wasm_bindgen(js_name = looksLikePasskeyControlLabel)]
 #[must_use]
 pub fn looks_like_passkey_control_label(label: &str) -> bool {
-    nook_core::looks_like_passkey_control_label(label)
+    nook_companion_core::looks_like_passkey_control_label(label)
 }
 
 #[wasm_bindgen(js_name = looksLikeManualCheckpointLabel)]
 #[must_use]
 pub fn looks_like_manual_checkpoint_label(label: &str) -> bool {
-    nook_core::looks_like_manual_checkpoint_label(label)
+    nook_companion_core::looks_like_manual_checkpoint_label(label)
 }
 
 #[wasm_bindgen(js_name = looksLikeEmailVerificationBody)]
 #[must_use]
 pub fn looks_like_email_verification_body(body: &str) -> bool {
-    nook_core::looks_like_email_verification_body(body)
+    nook_companion_core::looks_like_email_verification_body(body)
 }
 
 #[wasm_bindgen(js_name = parsePageInputType)]
 #[must_use]
-pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
-    nook_core::PageInputType::parse(value)
+pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
+    nook_companion_core::PageInputType::parse(value)
 }
 
 #[wasm_bindgen(js_name = isCloudflarePrPreviewHost)]
 #[must_use]
 pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
-    nook_core::is_cloudflare_pr_preview_host(hostname)
+    nook_companion_core::is_cloudflare_pr_preview_host(hostname)
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookOAuthOriginSupport {
-    inner: nook_core::OAuthOriginSupport,
+    inner: nook_companion_core::OAuthOriginSupport,
 }
 
 #[wasm_bindgen]
@@ -140,8 +147,8 @@ impl NookOAuthOriginSupport {
     pub fn is_supported(&self) -> bool {
         matches!(
             self.inner,
-            nook_core::OAuthOriginSupport::LocationUnavailable
-                | nook_core::OAuthOriginSupport::Supported { .. }
+            nook_companion_core::OAuthOriginSupport::LocationUnavailable
+                | nook_companion_core::OAuthOriginSupport::Supported { .. }
         )
     }
 
@@ -149,9 +156,9 @@ impl NookOAuthOriginSupport {
     #[must_use]
     pub fn origin(&self) -> String {
         match &self.inner {
-            nook_core::OAuthOriginSupport::LocationUnavailable => String::new(),
-            nook_core::OAuthOriginSupport::Supported { origin }
-            | nook_core::OAuthOriginSupport::Unsupported { origin, .. } => origin.clone(),
+            nook_companion_core::OAuthOriginSupport::LocationUnavailable => String::new(),
+            nook_companion_core::OAuthOriginSupport::Supported { origin }
+            | nook_companion_core::OAuthOriginSupport::Unsupported { origin, .. } => origin.clone(),
         }
     }
 
@@ -160,17 +167,17 @@ impl NookOAuthOriginSupport {
     pub fn is_unsupported(&self) -> bool {
         matches!(
             self.inner,
-            nook_core::OAuthOriginSupport::Unsupported { .. }
+            nook_companion_core::OAuthOriginSupport::Unsupported { .. }
         )
     }
 
     /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
     #[wasm_bindgen(js_name = unsupportedReason)]
     #[must_use]
-    pub fn unsupported_reason(&self) -> nook_core::OAuthOriginUnsupportedReason {
+    pub fn unsupported_reason(&self) -> nook_companion_core::OAuthOriginUnsupportedReason {
         match self.inner {
-            nook_core::OAuthOriginSupport::Unsupported { reason, .. } => reason,
-            _ => nook_core::OAuthOriginUnsupportedReason::UnregisteredOrigin,
+            nook_companion_core::OAuthOriginSupport::Unsupported { reason, .. } => reason,
+            _ => nook_companion_core::OAuthOriginUnsupportedReason::UnregisteredOrigin,
         }
     }
 }
@@ -178,7 +185,7 @@ impl NookOAuthOriginSupport {
 #[wasm_bindgen(js_name = resolveOAuthOriginSupport)]
 #[must_use]
 pub fn resolve_oauth_origin_support(
-    provider: nook_core::BrowserOAuthProvider,
+    provider: nook_companion_core::BrowserOAuthProvider,
     origin: &str,
     hostname: &str,
 ) -> NookOAuthOriginSupport {
@@ -188,59 +195,63 @@ pub fn resolve_oauth_origin_support(
         (Some(origin), Some(hostname))
     };
     NookOAuthOriginSupport {
-        inner: nook_core::resolve_oauth_origin_support(provider, origin, hostname),
+        inner: nook_companion_core::resolve_oauth_origin_support(provider, origin, hostname),
     }
 }
 
 #[wasm_bindgen(js_name = defaultSimpleVaultUrl)]
 #[must_use]
 pub fn default_simple_vault_url() -> String {
-    nook_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
+    nook_companion_core::DEFAULT_SIMPLE_VAULT_URL.to_owned()
 }
 
 #[wasm_bindgen(js_name = normalizeSimpleVaultBaseUrl)]
 pub fn normalize_simple_vault_base_url(value: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::normalize_simple_vault_base_url(value)?)
+    Ok(nook_companion_core::normalize_simple_vault_base_url(value)?)
 }
 
 #[wasm_bindgen(js_name = simpleVaultUrl)]
 pub fn simple_vault_url(base_url: &str, path: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::simple_vault_url(base_url, path)?)
+    Ok(nook_companion_core::simple_vault_url(base_url, path)?)
 }
 
 #[wasm_bindgen(js_name = simpleVaultMatchPattern)]
 pub fn simple_vault_match_pattern(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::simple_vault_match_pattern(base_url)?)
+    Ok(nook_companion_core::simple_vault_match_pattern(base_url)?)
 }
 
 /// Matching Sentinel base URL for `base_url`, or an empty string when none matches.
 #[wasm_bindgen(js_name = matchingSentinelVaultBaseUrl)]
 pub fn matching_sentinel_vault_base_url(base_url: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
+    Ok(nook_companion_core::matching_sentinel_vault_base_url(base_url)?.unwrap_or_default())
 }
 
 #[wasm_bindgen(js_name = sentinelVaultMatchPatterns)]
 pub fn sentinel_vault_match_patterns(base_url: &str) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_core::sentinel_vault_match_patterns(base_url)?)
+    Ok(nook_companion_core::sentinel_vault_match_patterns(
+        base_url,
+    )?)
 }
 
 #[wasm_bindgen(js_name = isSimpleVaultHostname)]
 #[must_use]
 pub fn is_simple_vault_hostname(hostname: &str) -> bool {
-    nook_core::is_simple_vault_hostname(hostname)
+    nook_companion_core::is_simple_vault_hostname(hostname)
 }
 
 #[wasm_bindgen(js_name = isSentinelVaultHostname)]
 #[must_use]
 pub fn is_sentinel_vault_hostname(hostname: &str) -> bool {
-    nook_core::is_sentinel_vault_hostname(hostname)
+    nook_companion_core::is_sentinel_vault_hostname(hostname)
 }
 
 #[wasm_bindgen(js_name = nookVaultAppExcludeMatchPatterns)]
 pub fn nook_vault_app_exclude_match_patterns(
     base_url: &str,
 ) -> Result<Vec<String>, wasm_bindgen::JsError> {
-    Ok(nook_core::nook_vault_app_exclude_match_patterns(base_url)?)
+    Ok(nook_companion_core::nook_vault_app_exclude_match_patterns(
+        base_url,
+    )?)
 }
 
 /// `base_url` may be empty when no configured vault base is available.
@@ -254,7 +265,10 @@ pub fn is_nook_vault_app_url(
     } else {
         Some(base_url)
     };
-    Ok(nook_core::is_nook_vault_app_url(candidate_url, base_url)?)
+    Ok(nook_companion_core::is_nook_vault_app_url(
+        candidate_url,
+        base_url,
+    )?)
 }
 
 #[wasm_bindgen(js_name = belongsToSimpleVault)]
@@ -262,7 +276,10 @@ pub fn belongs_to_simple_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::belongs_to_simple_vault(base_url, candidate_url)?)
+    Ok(nook_companion_core::belongs_to_simple_vault(
+        base_url,
+        candidate_url,
+    )?)
 }
 
 #[wasm_bindgen(js_name = belongsToSentinelVault)]
@@ -270,7 +287,7 @@ pub fn belongs_to_sentinel_vault(
     base_url: &str,
     candidate_url: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::belongs_to_sentinel_vault(
+    Ok(nook_companion_core::belongs_to_sentinel_vault(
         base_url,
         candidate_url,
     )?)
@@ -298,7 +315,7 @@ mod tests {
     #[test]
     fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() {
         let supported = resolve_oauth_origin_support(
-            nook_core::BrowserOAuthProvider::GoogleDrive,
+            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
             "https://simple.nokey.sh",
             "simple.nokey.sh",
         );
@@ -316,7 +333,7 @@ mod tests {
     #[test]
     fn page_field_wasm_exports_classify_otp_and_username() {
         let otp = NookPageInputFieldObservation::new(
-            nook_core::PageInputType::Text,
+            nook_companion_core::PageInputType::Text,
             false,
             false,
             Vec::new(),
@@ -326,7 +343,7 @@ mod tests {
         assert!(looks_like_one_time_code_field(&otp));
 
         let username = NookPageInputFieldObservation::new(
-            nook_core::PageInputType::Text,
+            nook_companion_core::PageInputType::Text,
             false,
             false,
             Vec::new(),

@@ -1,3 +1,17 @@
+import "./companion-ready";
+import {
+  NookLoginContextObservation,
+  NookPageInputFieldObservation,
+  expandIdentityText as wasmExpandIdentityText,
+  hasLoginContext as wasmHasLoginContext,
+  looksLikeEmailVerificationBody as wasmLooksLikeEmailVerificationBody,
+  looksLikeManualCheckpointLabel as wasmLooksLikeManualCheckpointLabel,
+  looksLikeOneTimeCodeField as wasmLooksLikeOneTimeCodeField,
+  looksLikePasskeyControlLabel as wasmLooksLikePasskeyControlLabel,
+  looksLikeUsernameField as wasmLooksLikeUsernameField,
+  parsePageInputType,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
+
 export type PasswordFormSummary = {
   passwordFieldCount: number;
   currentPasswordFieldCount: number;
@@ -75,14 +89,6 @@ const usernameCandidateSelector = [
   'input[type="tel"]',
 ].join(",");
 
-/** Account-identity fields: username, email, Microsoft loginfmt, Slack login_email. */
-const usernamePositivePattern =
-  /\b(?:user(?:\s*name)?|e[\s-]*mail|login(?:\s*fmt)?|log\s*in|sign[\s-]*in|account|identifier|phone(?:\s*number)?|skype)\b/u;
-
-/** Ignore newsletter / search / contact fields that happen to accept email. */
-const usernameNegativePattern =
-  /\b(?:newsletter|subscribe|marketing|promo|search|filter|recipient|contact\s*us|feedback|support\s*email)\b/u;
-
 export const oneTimeCodeFieldSelectors = [
   'input[autocomplete~="one-time-code" i]',
   'input[name*="totp" i]',
@@ -106,14 +112,6 @@ const oneTimeCodeCandidateSelector = [
   'input[type="number"]',
   'input[type="password"]',
 ].join(",");
-
-/** Matches accessible names like "Enter OTP Code" and camelCase attrs like VerificationCode. */
-const oneTimeCodePositivePattern =
-  /\b(?:otp|totp|2\s*fa|mfa|two\s*fa|two\s*factor|one\s*time(?:\s*code)?|auth(?:entication)?\s*code|verification\s*code|authenticator(?:\s*code)?)\b/u;
-
-/** Avoid card CVV / postal / search fields that mention "code". */
-const oneTimeCodeNegativePattern =
-  /\b(?:card|credit|debit|cvv|cvc|csc|security\s*code|pin\s*code|postal|zip|search|coupon)\b/u;
 
 function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
@@ -199,15 +197,6 @@ export function findUsernameFields(
   return fields;
 }
 
-function expandIdentityText(value: string): string {
-  return value
-    .replace(/([a-z])([A-Z])/gu, "$1 $2")
-    .replace(/([A-Za-z])(\d)/gu, "$1 $2")
-    .replace(/(\d)([A-Za-z])/gu, "$1 $2")
-    .replace(/[_\-.]+/gu, " ")
-    .toLowerCase();
-}
-
 function associatedLabelText(field: HTMLInputElement): string {
   const parts: string[] = [];
   if (field.labels) {
@@ -227,145 +216,100 @@ function associatedLabelText(field: HTMLInputElement): string {
   return parts.join(" ");
 }
 
-function fieldIdentityText(field: HTMLInputElement): string {
-  return expandIdentityText(
-    [
-      field.name,
-      field.id,
-      field.placeholder,
-      field.title,
-      field.getAttribute("aria-label") ?? "",
-      field.getAttribute("autocomplete") ?? "",
-      field.getAttribute("data-qa") ?? "",
-      field.getAttribute("data-testid") ?? "",
-      associatedLabelText(field),
-    ].join(" "),
-  );
+function rawFieldIdentityText(field: HTMLInputElement): string {
+  return [
+    field.name,
+    field.id,
+    field.placeholder,
+    field.title,
+    field.getAttribute("aria-label") ?? "",
+    field.getAttribute("autocomplete") ?? "",
+    field.getAttribute("data-qa") ?? "",
+    field.getAttribute("data-testid") ?? "",
+    associatedLabelText(field),
+  ].join(" ");
 }
 
-function oneTimeCodeIdentityText(field: HTMLInputElement): string {
-  return fieldIdentityText(field);
+function autocompleteTokens(field: HTMLInputElement): string[] {
+  return (field.getAttribute("autocomplete") ?? "")
+    .split(/\s+/u)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
 function hasLoginContext(field: HTMLInputElement): boolean {
   const form = field.form;
-  if (form) {
-    const formIdentity = expandIdentityText(
-      [
-        form.id,
-        form.className,
-        form.getAttribute("action") ?? "",
-        form.name,
-      ].join(" "),
-    );
-    if (
-      /\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(
-        formIdentity,
-      )
-    ) {
-      return true;
-    }
-  }
-  enum AncestorTraversalKind {
-    Finished = "finished",
-    Visiting = "visiting",
-  }
-
-  type AncestorTraversal =
-    | { kind: AncestorTraversalKind.Finished }
-    | { kind: AncestorTraversalKind.Visiting; element: HTMLElement };
-  let containerState: AncestorTraversal = field.parentElement
-    ? { kind: AncestorTraversalKind.Visiting, element: field.parentElement }
-    : { kind: AncestorTraversalKind.Finished };
+  const ancestorIdentities: string[] = [];
+  let container = field.parentElement;
   let depth = 0;
-  while (containerState.kind === AncestorTraversalKind.Visiting && depth < 6) {
-    const container = containerState.element;
-    const identity = expandIdentityText(
-      [
-        container.id,
-        container.className,
-        container.getAttribute("role") ?? "",
-      ].join(" "),
+  while (container && depth < 6) {
+    ancestorIdentities.push(
+      [container.id, container.className, container.getAttribute("role") ?? ""].join(
+        " ",
+      ),
     );
-    if (
-      /\b(?:login|log\s*in|sign[\s-]*in|signin|auth|account|sso)\b/u.test(
-        identity,
-      )
-    ) {
-      return true;
-    }
-    containerState = container.parentElement
-      ? {
-          kind: AncestorTraversalKind.Visiting,
-          element: container.parentElement,
-        }
-      : { kind: AncestorTraversalKind.Finished };
+    container = container.parentElement;
     depth += 1;
   }
-  const doc = field.ownerDocument;
   const advanceControl = (form ?? field.parentElement)?.querySelector(
     'button[type="submit"], input[type="submit"], button:not([type])',
   );
-  if (advanceControl) {
-    const label = expandIdentityText(
-      [
-        advanceControl.textContent ?? "",
-        advanceControl.getAttribute("aria-label") ?? "",
-        (advanceControl as HTMLInputElement).value ?? "",
-      ].join(" "),
-    );
-    if (/\b(?:next|continue|sign[\s-]*in|log[\s-]*in|verify)\b/u.test(label)) {
-      return true;
-    }
+  const doc = field.ownerDocument;
+  const observation = new NookLoginContextObservation(
+    form
+      ? [form.id, form.className, form.getAttribute("action") ?? "", form.name].join(
+          " ",
+        )
+      : "",
+    ancestorIdentities,
+    advanceControl
+      ? [
+          advanceControl.textContent ?? "",
+          advanceControl.getAttribute("aria-label") ?? "",
+          (advanceControl as HTMLInputElement).value ?? "",
+        ].join(" ")
+      : "",
+    `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`,
+  );
+  try {
+    return wasmHasLoginContext(observation);
+  } finally {
+    observation.free();
   }
-  const path = `${doc.defaultView?.location?.pathname ?? ""} ${doc.defaultView?.location?.hostname ?? ""}`;
-  return /\b(?:login|signin|sign-in|account|oauth|sso|microsoftonline|live\.com)\b/iu.test(
-    path,
+}
+
+function pageInputObservation(
+  field: HTMLInputElement,
+  loginContext: boolean,
+): NookPageInputFieldObservation {
+  return new NookPageInputFieldObservation(
+    parsePageInputType(field.type),
+    field.disabled,
+    field.readOnly,
+    autocompleteTokens(field),
+    rawFieldIdentityText(field),
+    loginContext,
   );
 }
 
 function looksLikeUsernameField(field: HTMLInputElement): boolean {
-  if (
-    field.disabled ||
-    field.readOnly ||
-    !isRenderedInput(field) ||
-    !["text", "email", "tel"].includes(field.type)
-  ) {
-    return false;
+  if (!isRenderedInput(field)) return false;
+  const observation = pageInputObservation(field, hasLoginContext(field));
+  try {
+    return wasmLooksLikeUsernameField(observation);
+  } finally {
+    observation.free();
   }
-  if (
-    hasAutocompleteToken(field, "username") ||
-    hasAutocompleteToken(field, "email")
-  ) {
-    return true;
-  }
-  const identity = fieldIdentityText(field);
-  if (!identity || usernameNegativePattern.test(identity)) {
-    return false;
-  }
-  if (usernamePositivePattern.test(identity)) {
-    return true;
-  }
-  // Bare type=email only counts inside a login-looking container / path.
-  return field.type === "email" && hasLoginContext(field);
 }
 
 function looksLikeOneTimeCodeField(field: HTMLInputElement): boolean {
-  if (
-    field.disabled ||
-    field.readOnly ||
-    !isRenderedInput(field) ||
-    !["text", "tel", "number", "password"].includes(field.type)
-  ) {
-    return false;
+  if (!isRenderedInput(field)) return false;
+  const observation = pageInputObservation(field, false);
+  try {
+    return wasmLooksLikeOneTimeCodeField(observation);
+  } finally {
+    observation.free();
   }
-  const identity = oneTimeCodeIdentityText(field);
-  if (!identity || oneTimeCodeNegativePattern.test(identity)) {
-    return false;
-  }
-  // Prefer tokenized identity over CSS substring selectors so names like
-  // "hotpot" are not treated as OTP just because they contain "otp".
-  return oneTimeCodePositivePattern.test(identity);
 }
 
 export function findOneTimeCodeFields(
@@ -396,9 +340,6 @@ function hasAutocompleteToken(
     .filter(Boolean)
     .includes(expected);
 }
-
-const passkeyControlPositivePattern =
-  /\b(?:pass\s*key|passkey|webauthn|security\s*key|hardware\s*key|fido|touch\s*id|face\s*id|windows\s*hello)\b/iu;
 
 export enum PasskeyControlLookupKind {
   Absent = "absent",
@@ -433,7 +374,7 @@ export function findPasskeyControl(
       (control as HTMLInputElement).value ??
       ""
     ).trim();
-    if (labeled && passkeyControlPositivePattern.test(labeled)) {
+    if (labeled && wasmLooksLikePasskeyControlLabel(labeled)) {
       return { kind: PasskeyControlLookupKind.Found, control };
     }
   }
@@ -464,14 +405,11 @@ function pageHasManualCheckpoint(root: ParentNode): boolean {
       checkbox.id ??
       ""
     ).toLowerCase();
-    if (/terms|privacy|agree|accept|policy|consent|eula/.test(labeled)) {
+    if (wasmLooksLikeManualCheckpointLabel(labeled)) {
       return true;
     }
   }
-  const bodyText = (root.textContent ?? "").toLowerCase();
-  return /verify your email|check your email|email verification|confirm your email/.test(
-    bodyText,
-  );
+  return wasmLooksLikeEmailVerificationBody(root.textContent ?? "");
 }
 
 function summarizeRoot(
@@ -765,7 +703,7 @@ function clickAdvanceControl(
     if (control.disabled || control.getAttribute("aria-disabled") === "true") {
       continue;
     }
-    const label = expandIdentityText(
+    const label = wasmExpandIdentityText(
       [
         control.textContent ?? "",
         control.getAttribute("aria-label") ?? "",

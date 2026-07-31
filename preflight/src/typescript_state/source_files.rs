@@ -29,9 +29,12 @@ pub(super) fn collect_authored_source_files(
             .file_name()
             .and_then(std::ffi::OsStr::to_str)
             .is_some_and(|name| name.ends_with(".min.js") || name.ends_with(".umd.js"));
-        let is_generated_wasm = path
-            .components()
-            .any(|component| component.as_os_str() == "nook-wasm");
+        let is_generated_wasm = path.components().any(|component| {
+            matches!(
+                component.as_os_str().to_str(),
+                Some("nook-wasm" | "nook-companion-wasm")
+            )
+        });
         if is_source && !is_declaration && !is_generated_bundle && !is_generated_wasm {
             files.push(path);
         }
