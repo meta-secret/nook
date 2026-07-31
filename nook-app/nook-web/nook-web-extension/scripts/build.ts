@@ -10,13 +10,15 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
-import '../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   defaultSimpleVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
 } from '../src/lib/simple-vault-target'
 import { createManifest } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
+
+await companionWasmReady
 
 const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
@@ -76,27 +78,6 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     splitting: false,
     naming: '[name].js',
     define: simpleVaultDefine,
-    plugins: [
-      {
-        name: 'companion-wasm-bytes',
-        setup(build) {
-          build.onLoad({ filter: /\.wasm$/ }, async (args) => {
-            const bytes = await Bun.file(args.path).bytes()
-            const base64 = Buffer.from(bytes).toString('base64')
-            return {
-              contents: `const binary = atob(${JSON.stringify(base64)});
-const bytes = new Uint8Array(binary.length);
-for (let index = 0; index < binary.length; index += 1) {
-  bytes[index] = binary.charCodeAt(index);
-}
-export default bytes;
-`,
-              loader: 'js',
-            }
-          })
-        },
-      },
-    ],
   })
 
   if (!result.success) {

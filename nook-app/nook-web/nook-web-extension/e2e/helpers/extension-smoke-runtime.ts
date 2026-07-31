@@ -1,4 +1,6 @@
-import '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
+
+await companionWasmReady
 import {
   chromium,
   expect,

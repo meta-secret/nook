@@ -1,4 +1,4 @@
-import '../../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
@@ -147,7 +147,10 @@ function scheduleScan() {
 
 scanState.schedule = scheduleScan
 
-if (!isRuntimeNookVaultAppUrl(location.href)) {
+void companionWasmReady.then(() => {
+  if (isRuntimeNookVaultAppUrl(location.href)) {
+    return
+  }
   document.addEventListener('submit', captureSubmittedLogin, true)
   void scanAndRender()
 
@@ -168,4 +171,4 @@ if (!isRuntimeNookVaultAppUrl(location.href)) {
     childList: true,
     subtree: true,
   })
-}
+})
