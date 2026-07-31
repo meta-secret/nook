@@ -25,6 +25,7 @@ import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
   readExtensionPairingStorage,
+  removeExtensionPairingStorageKeys,
   writeExtensionPairingStorage,
 } from './extension-pairing-storage'
 import { lockExtensionSession } from './paired-pin-extension'
@@ -228,6 +229,14 @@ export async function writeExtensionStorage(
   items: Record<string, unknown>,
 ) {
   await writeExtensionPairingStorage(page, items)
+}
+
+export async function removeExtensionStorageKeys(
+  context: BrowserContext,
+  keys: string[],
+) {
+  const worker = await getServiceWorker(context)
+  await removeExtensionPairingStorageKeys(worker, keys)
 }
 
 export async function sendExternalMessage(

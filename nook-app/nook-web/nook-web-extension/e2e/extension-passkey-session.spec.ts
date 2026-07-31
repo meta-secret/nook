@@ -14,6 +14,7 @@ import {
   lockExtensionSession,
   openSimpleVaultConnection,
   readExtensionStorage,
+  removeExtensionStorageKeys,
   readPersistedAppLogs,
   registerWebsitePasskey,
   sendExternalMessage,
@@ -640,13 +641,7 @@ test('re-approves an existing vault after reload without event-log-access-not-gr
     const grantKeys = Object.keys(pairedStorage).filter((key) =>
       key.startsWith('nook:extension-pairing-grant:'),
     )
-    await popupPage.evaluate(
-      (keys) =>
-        new Promise<void>((resolve) => {
-          chrome.storage.local.remove(keys, resolve)
-        }),
-      [...grantKeys, setupStorageKey],
-    )
+    await removeExtensionStorageKeys(context, [...grantKeys, setupStorageKey])
 
     // Reload Simple Vault so the manager must restore the signing seed from
     // IndexedDB instead of the original in-memory identity handoff.
@@ -663,12 +658,17 @@ test('re-approves an existing vault after reload without event-log-access-not-gr
       })
     }
 
+    const worker = await getServiceWorker(context)
+    const extensionId = new URL(worker.url()).host
+    const pairPopup = await context.newPage()
+    await pairPopup.goto(
+      `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
+    )
+    await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
+      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
+    )
     const reopenedConnect = context.waitForEvent('page')
-    await popupPage.goto(`${popupPage.url().split('?')[0]}?intent=pair`)
-    await expect(
-      popupPage.getByTestId('connect-simple-vault-btn'),
-    ).toBeVisible()
-    await popupPage.getByTestId('connect-simple-vault-btn').click()
+    await pairPopup.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),

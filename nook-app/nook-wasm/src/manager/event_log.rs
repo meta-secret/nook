@@ -163,13 +163,10 @@ impl NookVaultManager {
         if self.event_log.signing_seed.is_empty() {
             if let Some(seed) = load_signing_seed().await? {
                 self.event_log.signing_seed = seed;
-            } else if !self.vault.store_id.is_empty() && self.event_log_has_events().await? {
-                // Minting a fresh signer against an existing log produces
-                // unauthorized JoinApproved events that the extension quarantines.
-                return Err(NookError::IndexedDb(
-                    "Vault event-log signing identity is missing. Unlock or restore this device before approving new members.".to_owned(),
-                ));
             } else {
+                // New devices still mint a signer so they can submit JoinRequested
+                // against an existing log. Unauthorized JoinApproved is blocked by
+                // the quarantine check in append_vault_operations.
                 let (identity, seed) = SigningIdentity::generate()?;
                 save_signing_seed(seed.as_str()).await?;
                 self.event_log.signing_seed = seed.into_inner();
