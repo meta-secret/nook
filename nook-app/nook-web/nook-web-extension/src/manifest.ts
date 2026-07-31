@@ -158,7 +158,12 @@ export function createManifest(
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {
-        resources: ['icons/nook.png'],
+        resources: [
+          'icons/nook.png',
+          // Content scripts fetch companion WASM via chrome.runtime.getURL;
+          // MV3 requires the package path to be web-accessible for page worlds.
+          'content/nook_companion_wasm_bg.wasm',
+        ],
         matches: ['<all_urls>'],
       },
     ],
