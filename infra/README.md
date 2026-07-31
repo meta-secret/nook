@@ -39,8 +39,11 @@ passwords when needed and never copies them into the repository. The containing
 `.nook/cache/` and upserts GitHub Actions secrets `NOOK_REGISTRY_HOST`,
 `NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
 
-DNS for `registry.nokey.sh` must point at the Borg public IP before HTTPS
-verification can succeed.
+DNS for `registry.nokey.sh` must point at the Borg public IP (DNS-only A/AAAA,
+not proxied) before HTTPS verification can succeed. Host-network Traefik and
+Redis also require nftables INPUT accepts for TCP `443` and `6380`;
+`task infra:deploy` ensures those edge rules stay present after k0s firewall
+updates.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
 `registry.nokey.sh`. Main alone publishes shared cache manifests; pull requests

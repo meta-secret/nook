@@ -2,6 +2,43 @@ version: '3'
 
 # host-services infrastructure operations.
 tasks:
+  services:ensure-edge-firewall:
+    desc: Ensure host nftables accepts Traefik HTTPS and Redis TLS on the public edge.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        # Host-network Traefik/Redis need INPUT accepts. k0s fragments must not
+        # leave the live chain without these ports after a chain rebuild.
+        if ! sudo -n nft list chain inet bynull_filter input |
+          grep -Fq 'tcp dport { 22, 443, 6380 }'; then
+          sudo -n nft add rule inet bynull_filter input \
+            tcp dport '{ 22, 443, 6380 }' accept
+        fi
+        cfg="$(mktemp)"
+        sudo -n cat /etc/nftables.conf > "$cfg"
+        if ! grep -Fq 'tcp dport { 22, 443, 6380 } accept' "$cfg"; then
+          if ! grep -Fq 'iifname "lo" accept' "$cfg"; then
+            echo "nftables.conf missing lo accept anchor" >&2
+            exit 1
+          fi
+          awk '
+            { print }
+            $0 ~ /iifname "lo" accept/ && !done {
+              print "    tcp dport { 22, 443, 6380 } accept"
+              done = 1
+            }
+          ' "$cfg" > "$cfg.next"
+          sudo -n install -m 0644 "$cfg.next" /etc/nftables.conf
+          rm -f "$cfg.next"
+        fi
+        rm -f "$cfg"
+        sudo -n nft --check --file /etc/nftables.conf
+        sudo -n nft list chain inet bynull_filter input |
+          grep -Fq 'tcp dport { 22, 443, 6380 }'
+        REMOTE
+
   services:repair-network:
     desc: Recreate only the Nook Compose network after an external firewall reload.
     silent: true
@@ -129,7 +166,9 @@ tasks:
            docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx traefik; \
            docker compose -f '$remote_compose' ps"
         BASH
+      - task: services:ensure-edge-firewall
       - task: k0s:install
+      - task: services:ensure-edge-firewall
       - task: registry:deploy
       - task: kata:install
       - task: kata:verify
