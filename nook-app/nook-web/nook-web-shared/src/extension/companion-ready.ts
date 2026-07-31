@@ -15,11 +15,9 @@ type CompanionWasmSource =
 
 function companionWasmSource(): CompanionWasmSource {
   const chromeGlobal = (globalThis as { chrome?: ChromeRuntime }).chrome;
-  const locationGlobal = (globalThis as { location?: Location }).location;
-  if (
-    chromeGlobal?.runtime?.getURL &&
-    locationGlobal?.protocol === "chrome-extension:"
-  ) {
+  // Content scripts run on https: pages but still expose chrome.runtime.getURL.
+  // Prefer the packaged extension wasm whenever the extension API is present.
+  if (chromeGlobal?.runtime?.getURL) {
     return {
       kind: CompanionWasmSourceKind.ExtensionUrl,
       url: chromeGlobal.runtime.getURL("content/nook_companion_wasm_bg.wasm"),
