@@ -42,7 +42,7 @@ function runningUnderNode(): boolean {
 }
 
 type NodeFsReadFileSync = {
-  readFileSync: (path: string) => Uint8Array;
+  readFileSync: (path: string) => ArrayLike<number>;
 };
 
 type NodeUrlFileURLToPath = {
@@ -65,7 +65,10 @@ async function companionWasmModuleOrPath(
       import(/* @vite-ignore */ nodeFsModule),
       import(/* @vite-ignore */ nodeUrlModule),
     ])) as [NodeFsReadFileSync, NodeUrlFileURLToPath];
-    return nodeFs.readFileSync(nodeUrl.fileURLToPath(source.url));
+    // Copy into a fresh ArrayBuffer-backed view for BufferSource typing.
+    return new Uint8Array(
+      nodeFs.readFileSync(nodeUrl.fileURLToPath(source.url)),
+    );
   }
   if (source.kind === CompanionWasmSourceKind.ExtensionUrl) {
     return source.url;
