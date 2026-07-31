@@ -2,13 +2,11 @@ import {
   belongsToSentinelVault,
   belongsToSimpleVault,
   isNookVaultAppUrl,
-  normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
 } from './simple-vault-target'
 
-export const SIMPLE_VAULT_BASE_URL = normalizeSimpleVaultBaseUrl(
-  __NOOK_SIMPLE_VAULT_URL__,
-)
+/** Build-time normalized Simple Vault base from the extension define. */
+export const SIMPLE_VAULT_BASE_URL = __NOOK_SIMPLE_VAULT_URL__
 
 export function runtimeSimpleVaultUrl(path = ''): string {
   return simpleVaultUrl(SIMPLE_VAULT_BASE_URL, path)

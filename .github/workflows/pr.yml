@@ -81,7 +81,7 @@ jobs:
       - name: Derive native validation key
         id: native-key
         run: |
-          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-replication/**', 'nook-app/nook-event-log/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-native-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'preflight/**', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-replication/**', 'nook-app/nook-event-log/**', 'nook-app/nook-companion-core/**', 'nook-app/nook-companion-wasm/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted native handoff
         id: trusted-native
@@ -199,7 +199,7 @@ jobs:
       - name: Derive WASM validation key
         id: wasm-key
         run: |
-          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-replication/**', 'nook-app/nook-event-log/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
+          echo "value=nook-trusted-wasm-validation-v2-${{ hashFiles('.dockerignore', '.github/workflows/pr.yml', '.github/workflows/pr-validation-handoff.yml', '.github/actions/nook-cache-connect/**', '.github/actions/nook-docker-setup/**', 'Taskfile.yml', 'nook-app/Taskfile.yml', 'nook-app/.task/ci.yml', 'nook-app/docker/**', 'nook-app/docker-bake.hcl', 'nook-app/nook-core/**', 'nook-app/nook-auth2/**', 'nook-app/nook-replication/**', 'nook-app/nook-event-log/**', 'nook-app/nook-companion-core/**', 'nook-app/nook-companion-wasm/**', 'nook-app/nook-wasm/**', 'nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/.cargo/**', 'nook-app/.config/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Locate trusted WASM handoff
         id: trusted-wasm
@@ -264,6 +264,9 @@ jobs:
             "$dir/nook-validation-manifest.json" >/dev/null
           for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
             test -s "$dir/$file"
+          done
+          for file in package.json nook_companion_wasm.js nook_companion_wasm.d.ts nook_companion_wasm_bg.wasm nook_companion_wasm_bg.wasm.d.ts; do
+            test -s "$dir/nook-companion-wasm/$file"
           done
 
       - name: WASM clippy and build

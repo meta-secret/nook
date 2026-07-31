@@ -10,7 +10,7 @@ tasks:
         vars: { TASK: _wasm:test }
 
   wasm:build:
-    desc: Build nook-wasm for the web app in Docker.
+    desc: Build nook-wasm and nook-companion-wasm for the web app in Docker.
     deps:
       - setup:rust
     cmds:
@@ -18,14 +18,14 @@ tasks:
         vars: { TASK: _wasm:build }
 
   wasm:build:fast:
-    desc: Build nook-wasm for the mounted web app without wasm-opt (local iteration).
+    desc: Build WASM packages for the mounted web app without wasm-opt (local iteration).
     deps:
       - setup:rust:fast
     cmds:
       - task: docker:wasm:build:fast
 
   wasm:build:prod:
-    desc: Build nook-wasm for the web app with optimized production wasm.
+    desc: Build WASM packages for the web app with optimized production wasm.
     cmds:
       - task setup:rust WASM_BUILD_MODE=prod
       - task: docker:rust:task
@@ -34,7 +34,7 @@ tasks:
           WASM_BUILD_MODE: prod
 
   _wasm:build:
-    desc: Build nook-wasm for the web app when sources changed (skips if image-seeded pkg is current).
+    desc: Build WASM packages for the web app when sources changed (skips if image-seeded pkgs are current).
     cmds:
       - task: _wasm:build:run
 
@@ -50,6 +50,8 @@ tasks:
         sh -c '
         current="$(cd "{{.APP_ROOT}}" && find "Cargo.toml" "Cargo.lock" \
           "nook-wasm/Cargo.toml" "nook-wasm/src" \
+          "nook-companion-wasm/Cargo.toml" "nook-companion-wasm/src" \
+          "nook-companion-core/Cargo.toml" "nook-companion-core/src" \
           "nook-core/Cargo.toml" "nook-core/src" "nook-core/locales" \
           "nook-auth2/Cargo.toml" "nook-auth2/src" \
           "nook-replication/Cargo.toml" "nook-replication/src" \
@@ -64,14 +66,19 @@ tasks:
           dev) wasm_opt_flag="--no-opt" ; stamp_mode="no-opt" ;;
           *) echo "Unsupported WASM_BUILD_MODE=${WASM_BUILD_MODE:-{{.WASM_BUILD_MODE}}} (expected dev or prod)" >&2; exit 1 ;;
         esac;
-        output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm";
-        stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/.wasm-source-sha256";
+        vault_output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm";
+        vault_stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/.wasm-source-sha256";
+        companion_output="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
+        companion_stamp="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/.wasm-source-sha256";
         desired="$current $stamp_mode";
-        stored="";
-        if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
-        if [ ! -f "$output" ] || [ "$desired" != "$stored" ]; then
+        vault_stored=""; companion_stored="";
+        if [ -f "$vault_stamp" ]; then vault_stored="$(cat "$vault_stamp")"; fi;
+        if [ -f "$companion_stamp" ]; then companion_stored="$(cat "$companion_stamp")"; fi;
+        if [ ! -f "$vault_output" ] || [ ! -f "$companion_output" ] || [ "$desired" != "$vault_stored" ] || [ "$desired" != "$companion_stored" ]; then
           cd "{{.APP_ROOT}}" && wasm-pack build nook-wasm --target web --out-dir "../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" --out-name nook_wasm $wasm_opt_flag;
-          echo "$desired" > "$stamp";
+          cd "{{.APP_ROOT}}" && wasm-pack build nook-companion-wasm --target web --out-dir "../nook-web/nook-web-shared/src/extension/nook-companion-wasm" --out-name nook_companion_wasm $wasm_opt_flag;
+          echo "$desired" > "$vault_stamp";
+          echo "$desired" > "$companion_stamp";
         fi'
 
   _wasm:test:

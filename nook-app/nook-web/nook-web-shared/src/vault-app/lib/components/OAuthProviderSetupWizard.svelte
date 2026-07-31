@@ -26,7 +26,6 @@
   import { createLogger } from '$lib/log'
   import {
     BrowserOAuthProvider,
-    OAuthOriginSupportKind,
     OAuthOriginUnsupportedReason,
     resolveCurrentOAuthOriginSupport,
   } from '$lib/oauth-origin'
@@ -107,10 +106,10 @@
   )
   const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
   const oauthOriginUnsupportedMessage = $derived.by(() => {
-    if (oauthOriginSupport.kind === OAuthOriginSupportKind.Supported) return ''
+    if (oauthOriginSupport.supported) return ''
     return vault.t(
       oauthOriginSupport.reason ===
-        OAuthOriginUnsupportedReason.CloudflarePreview
+        OAuthOriginUnsupportedReason.CloudflarePrPreview
         ? 'provider_setup.oauth_preview_origin_unsupported'
         : 'provider_setup.oauth_origin_unsupported',
       { origin: oauthOriginSupport.origin },

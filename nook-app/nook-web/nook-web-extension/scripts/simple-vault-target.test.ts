@@ -1,3 +1,4 @@
+import '../../nook-web-shared/src/extension/companion-ready'
 import { describe, expect, test } from 'bun:test'
 import {
   isNookVaultAppUrl,

@@ -1,5 +1,5 @@
 import {
-  DEFAULT_SIMPLE_VAULT_URL,
+  defaultSimpleVaultBaseUrl,
   nookVaultAppExcludeMatchPatterns,
   sentinelVaultMatchPatterns,
   simpleVaultMatchPattern,
@@ -83,7 +83,7 @@ const iconSet: ManifestIconSet = {
 
 export function createManifest(
   version: string,
-  simpleVaultBaseUrl = DEFAULT_SIMPLE_VAULT_URL,
+  simpleVaultBaseUrl = defaultSimpleVaultBaseUrl(),
   deployment?: {
     key: string
     name: string

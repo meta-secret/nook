@@ -10,11 +10,12 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
-import { createManifest } from '../src/manifest'
+import '../../nook-web-shared/src/extension/companion-ready'
 import {
-  DEFAULT_SIMPLE_VAULT_URL,
+  defaultSimpleVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
 } from '../src/lib/simple-vault-target'
+import { createManifest } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
 
 const projectRoot = resolve(import.meta.dir, '..')
@@ -25,7 +26,7 @@ const coreLocalesRoot = join(webGroupRoot, '..', 'nook-core', 'locales')
 const distDir = join(projectRoot, 'dist')
 const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
-  process.env.NOOK_SIMPLE_VAULT_URL?.trim() || DEFAULT_SIMPLE_VAULT_URL,
+  process.env.NOOK_SIMPLE_VAULT_URL?.trim() || defaultSimpleVaultBaseUrl(),
 )
 const simpleVaultDefine = {
   __NOOK_SIMPLE_VAULT_URL__: JSON.stringify(simpleVaultBaseUrl),
@@ -559,6 +560,13 @@ await Promise.all([
   copyStaticFile(
     join(sharedRoot, 'src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm'),
     'offscreen/nook_wasm_bg.wasm',
+  ),
+  copyStaticFile(
+    join(
+      sharedRoot,
+      'src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
+    ),
+    'content/nook_companion_wasm_bg.wasm',
   ),
 ])
 

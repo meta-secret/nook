@@ -23,7 +23,9 @@ COPY nook-app/.config .config
 COPY nook-app/nook-auth2 nook-auth2
 COPY nook-app/nook-replication nook-replication
 COPY nook-app/nook-event-log nook-event-log
+COPY nook-app/nook-companion-core nook-companion-core
 COPY nook-app/nook-core nook-core
+COPY nook-app/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-wasm nook-wasm
 
 # Docker COPY preserves source mtimes while the inherited dependency target can be newer. Touch
@@ -37,15 +39,14 @@ RUN touch nook-core/src/i18n.rs
 FROM builder-wasm-source AS builder-wasm-clippy
 
 RUN cargo clippy --release --target wasm32-unknown-unknown \
-      -p nook-wasm \
+      -p nook-wasm -p nook-companion-wasm \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
     && install -D /dev/null /opt/nook/wasm-clippy-passed
 
 FROM builder-wasm-source AS builder-wasm-build
 
-# Emit the single JS/WASM package directly into the shared web source tree where every app imports
-# it. target/ stays in-tree for reuse.
+# Emit the vault-app WASM package and the tiny companion package into the shared web source tree.
 RUN case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
@@ -54,8 +55,13 @@ RUN case "$WASM_BUILD_MODE" in \
     && wasm-pack build nook-wasm --target web \
          --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" \
          --out-name nook_wasm $wasm_opt_flag \
+    && wasm-pack build nook-companion-wasm --target web \
+         --out-dir "/meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm" \
+         --out-name nook_companion_wasm $wasm_opt_flag \
     && ( current="$(find Cargo.toml Cargo.lock \
            nook-wasm/Cargo.toml nook-wasm/src \
+           nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
+           nook-companion-core/Cargo.toml nook-companion-core/src \
            nook-core/Cargo.toml nook-core/src nook-core/locales \
            nook-auth2/Cargo.toml nook-auth2/src \
            nook-replication/Cargo.toml nook-replication/src \
@@ -65,15 +71,21 @@ RUN case "$WASM_BUILD_MODE" in \
          | xargs -0 sha256sum \
          | sha256sum \
          | cut -d' ' -f1)" \
-         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 ) \
+         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
+         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
+         && mkdir -p /opt/nook/wasm-handoff \
+         && cp -a nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ \
+         && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
+         && cp -a nook-web/nook-web-shared/src/extension/nook-companion-wasm/. \
+              /opt/nook/wasm-handoff/nook-companion-wasm/ ) \
     && nook-sccache-report wasm-build
 
 FROM builder-wasm-source AS builder-wasm-tests
 
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
-RUN CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm \
-    && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm \
+RUN CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
+    && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
 
 FROM builder-wasm-tests AS builder-wasm
@@ -82,15 +94,21 @@ COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clip
 COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
+COPY --from=builder-wasm-build \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm \
+    /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
+COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
 RUN wasm-pack test --node --release nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export
 
-COPY --from=builder-wasm-build /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+# Nest the companion package under the vault WASM handoff so the existing CI artifact path still
+# carries both packages without changing upload destinations.
+COPY --from=builder-wasm-build /opt/nook/wasm-handoff /nook-wasm
 
-# Focused web/type-check tasks need the generated WASM package, but not wasm clippy, wasm-pack
+# Focused web/type-check tasks need the generated WASM packages, but not wasm clippy, wasm-pack
 # tests, native coverage, or a production web build. Preserve the normal web-artifact shape with
 # an intentionally empty coverage directory.
 FROM builder-wasm-build AS focused-web-artifacts-source
@@ -99,7 +117,7 @@ RUN mkdir -p /opt/nook/empty-coverage
 
 FROM scratch AS focused-web-artifacts
 
-COPY --from=focused-web-artifacts-source /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+COPY --from=focused-web-artifacts-source /opt/nook/wasm-handoff /nook-wasm
 COPY --from=focused-web-artifacts-source /opt/nook/empty-coverage /coverage
 
 # Formatting is an independent validation leaf so `task format` can still load nook-rust and fix
@@ -113,7 +131,7 @@ RUN cargo fmt --all -- --check
 # context. The web solve never consumes or materializes the multi-GB builder-wasm snapshot.
 FROM scratch AS web-artifacts
 
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+COPY --from=builder-wasm /opt/nook/wasm-handoff /nook-wasm
 COPY --from=builder-debug /opt/nook/coverage /coverage
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting

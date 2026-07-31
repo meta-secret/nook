@@ -2,7 +2,7 @@
 //!
 //! DOM query, visibility, and fill stay in the host adapter. This module owns
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
-//! signals used to build [`AuthenticationPageObservation`](super::authentication_workflow::AuthenticationPageObservation).
+//! signals used to build authentication workflow observations in the host.
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -70,57 +70,54 @@ pub fn expand_identity_text(value: &str) -> String {
     with_breaks.to_ascii_lowercase()
 }
 
+/// Browser-collected login-surface identity text without DOM handles.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginContextObservation {
+    pub form_identity: String,
+    pub ancestor_identities: Vec<String>,
+    pub advance_control_label: String,
+    pub path_context: String,
+}
+
+const LOGIN_SURFACE_WORDS: &[&str] = &[
+    "login", "log in", "sign-in", "sign in", "signin", "auth", "account", "sso",
+];
+
+const LOGIN_ADVANCE_WORDS: &[&str] = &[
+    "next", "continue", "sign-in", "sign in", "log-in", "log in", "verify",
+];
+
+const LOGIN_PATH_WORDS: &[&str] = &[
+    "login",
+    "signin",
+    "sign-in",
+    "account",
+    "oauth",
+    "sso",
+    "microsoftonline",
+    "live.com",
+];
+
 /// True when form/path/ancestor context looks like a login surface.
 #[must_use]
-pub fn has_login_context(
-    form_identity: &str,
-    ancestor_identities: &[String],
-    advance_control_label: &str,
-    path_context: &str,
-) -> bool {
-    let form = expand_identity_text(form_identity);
-    if contains_any_word(
-        &form,
-        &[
-            "login", "log in", "sign-in", "sign in", "signin", "auth", "account", "sso",
-        ],
-    ) {
+pub fn has_login_context(observation: &LoginContextObservation) -> bool {
+    let form = expand_identity_text(&observation.form_identity);
+    if contains_any_word(&form, LOGIN_SURFACE_WORDS) {
         return true;
     }
-    for ancestor in ancestor_identities {
+    for ancestor in &observation.ancestor_identities {
         let identity = expand_identity_text(ancestor);
-        if contains_any_word(
-            &identity,
-            &[
-                "login", "log in", "sign-in", "sign in", "signin", "auth", "account", "sso",
-            ],
-        ) {
+        if contains_any_word(&identity, LOGIN_SURFACE_WORDS) {
             return true;
         }
     }
-    let advance = expand_identity_text(advance_control_label);
-    if contains_any_word(
-        &advance,
-        &[
-            "next", "continue", "sign-in", "sign in", "log-in", "log in", "verify",
-        ],
-    ) {
+    let advance = expand_identity_text(&observation.advance_control_label);
+    if contains_any_word(&advance, LOGIN_ADVANCE_WORDS) {
         return true;
     }
-    let path = path_context.to_ascii_lowercase();
-    contains_any_word(
-        &path,
-        &[
-            "login",
-            "signin",
-            "sign-in",
-            "account",
-            "oauth",
-            "sso",
-            "microsoftonline",
-            "live.com",
-        ],
-    )
+    let path = observation.path_context.to_ascii_lowercase();
+    contains_any_word(&path, LOGIN_PATH_WORDS)
 }
 
 /// Classify whether an input should count as a username/email identity field.
