@@ -67,7 +67,10 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-
+        with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Native Rust format, tests, and coverage
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
@@ -128,7 +131,10 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-
+        with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: WASM clippy, build, and package export
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:
@@ -190,7 +196,10 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-
+        with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
         with:
@@ -241,7 +250,10 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-
+        with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Download verified WASM handoff
         uses: actions/download-artifact@v8
         with:
@@ -286,6 +298,9 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
 
       - name: Download verified WASM handoff
@@ -331,6 +346,9 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
 
       - name: Download verified WASM handoff
@@ -451,6 +469,9 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
 
       - name: Download verified WASM handoff

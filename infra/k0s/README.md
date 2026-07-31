@@ -55,10 +55,11 @@ records an existing CNI's masquerade state before
 restarting k0s; a migration replaces existing Hive workload Pod sandboxes
 automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
-Zot uses a separate retained local PV at `/var/lib/hive/zot`. It has no public
-Service or Ingress; a hardened, restartable systemd port-forward binds only
-`127.0.0.1:5000` for host Docker and containerd. k0s uninstall removes that
-forwarding unit but never removes the registry data.
+Zot uses a separate retained local PV at `/var/lib/hive/zot` and a ClusterIP
+Service at `10.96.90.10:5000`. Traefik publishes it at
+`https://registry.nokey.sh` with htpasswd authentication. There is no host
+`:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
+registry data.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT

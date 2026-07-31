@@ -19,7 +19,7 @@ bake_args=(
   --set "*.args.SCCACHE_REDIS_MODE=$sccache_mode"
   --set "*.args.SCCACHE_REDIS_ENDPOINT=$sccache_endpoint"
   --set "*.output=type=cacheonly"
-  --set "builder-wasm-deps.cache-from=type=gha,scope=$cache_scope,version=2"
+  --set "builder-wasm-deps.cache-from=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/$cache_scope:buildcache"
   --set "builder-wasm-deps.cache-to="
 )
 

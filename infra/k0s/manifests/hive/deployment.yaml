@@ -26,6 +26,8 @@ spec:
       serviceAccountName: hive-auth-persistence
       runtimeClassName: kata-dragonball
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: nook-registry
       enableServiceLinks: false
       # Kubernetes terminates Pod containers concurrently. Keep the coordinator
       # socket alive while the worker handles SIGTERM and persists its lease

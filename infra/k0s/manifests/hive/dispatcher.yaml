@@ -23,6 +23,8 @@ spec:
     spec:
       runtimeClassName: kata-dragonball
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: nook-registry
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true

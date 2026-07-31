@@ -41,17 +41,18 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     for required in [
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
-        "type=gha,scope=nook-rust-base-v1",
-        "type=gha,scope=nook-rust-deps-v2",
-        "type=gha,scope=nook-rust-wasm-deps-v3",
-        "type=gha,scope=nook-rust-wasm-deps-v2",
-        "type=gha,scope=nook-rust-wasm-deps-v1",
-        "type=gha,scope=nook-rust-native-source-v2",
-        "type=gha,scope=nook-rust-wasm-source-v2",
-        "type=gha,scope=nook-web-deps-v1",
-        "type=gha,scope=nook-web-v1",
-        "type=gha,scope=nook-web-e2e-v1",
-        "mode=max,version=2",
+        "NOOK_REGISTRY_CACHE_HOST",
+        "default = \"registry.nokey.sh\"",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
+        "type=registry,ref=",
+        "mode=max,timeout=10m",
     ] {
         assert!(
             bake.contains(required),
@@ -64,8 +65,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
     );
     assert!(
-        !bake.contains("type=registry"),
-        "delivery caches must use the GitHub Actions cache service, not registry manifests"
+        !bake.contains("type=gha"),
+        "delivery caches must use registry.nokey.sh, not the GitHub Actions cache service"
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
@@ -128,10 +129,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
-        ) && !bake.contains(
-            "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true",
-        ),
+            "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
+        ) && !bake.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,ignore-error=true",),
         "Rust dependency cache exporters must not ignore upload failures"
     );
     assert!(
@@ -205,7 +204,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
-            && docker_tasks.contains("compression=zstd,force-compression=true")
+            && docker_tasks.contains(
+                "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/"
+            )
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
@@ -214,7 +215,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
-            && cache_verifier.contains("builder-wasm-deps.cache-from=type=gha")
+            && cache_verifier.contains("builder-wasm-deps.cache-from=type=registry")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
@@ -317,10 +318,14 @@ fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     for required in [
         "docker/setup-buildx-action@v3",
-        "crazy-max/ghaction-github-runtime@v3",
+        "docker/login-action@v3",
+        "registry-username",
+        "registry-password",
+        "registry.nokey.sh",
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
+        "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
         "event_name=\"${{ github.event_name }}\"",
@@ -335,8 +340,10 @@ fn assert_docker_setup_contract(root: &Path) {
         );
     }
     assert!(
-        !setup.contains("systemctl restart docker") && !setup.contains("/etc/docker/daemon.json"),
-        "delivery setup must not reconfigure or restart Docker"
+        !setup.contains("crazy-max/ghaction-github-runtime")
+            && !setup.contains("systemctl restart docker")
+            && !setup.contains("/etc/docker/daemon.json"),
+        "delivery setup must login to registry.nokey.sh and must not reconfigure or restart Docker"
     );
 }
 

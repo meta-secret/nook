@@ -12,4 +12,20 @@ tcp:
     redis:
       loadBalancer:
         servers:
-          - address: redis:6379
+          - address: 127.0.0.1:6379
+
+http:
+  routers:
+    registry:
+      entryPoints:
+        - websecure
+      rule: Host(`registry.nokey.sh`)
+      service: registry
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    registry:
+      loadBalancer:
+        servers:
+          - url: http://10.96.90.10:5000

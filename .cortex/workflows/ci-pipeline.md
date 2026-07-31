@@ -566,16 +566,16 @@ deploys an immutable semantic-version tag to GitHub Pages for the public
 Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
-No delivery workflow logs into GHCR for BuildKit or imports a registry cache
-manifest. Docker layers use GitHub's Actions cache backend; local builds use
-only their local BuildKit content store. Cache restoration is an optimization:
-an unavailable cache falls back to a correct cold build. The production Linux
-node runs a private Zot registry in k0s for server-local Hive image publication
-and pulls. Zot is reachable from host Docker and containerd only through
-`127.0.0.1:5000`; it is not a hosted-delivery cache backend. Replacing GitHub
-Actions BuildKit scopes requires a separate trusted TLS and authorization
-design because pull-request code cannot receive a reusable shared-cache
-credential or write cache manifests.
+Delivery BuildKit caches use authenticated `type=registry` refs on
+`registry.nokey.sh` (Zot behind Traefik HTTPS + htpasswd). Local builds use
+only their local BuildKit content store unless registry credentials are
+configured. Cache restoration is an optimization: an unavailable cache falls
+back to a correct cold build. Main alone publishes shared cache manifests after
+lane verification; pull-request, remote, release, and e2e jobs restore
+read-only after `docker login` with repository secrets. Fork pull requests do
+not receive those secrets. Hive images also publish and pull through
+`registry.nokey.sh`. There is no host `:5000` listener and no
+`kubectl port-forward` for the registry.
 `main.yml` attaches and upserts the three
 custom domains, points the landing and both vault domains at their projects'
 `development` branch aliases so the main-channel build cannot replace a

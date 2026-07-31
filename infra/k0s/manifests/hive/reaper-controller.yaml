@@ -18,6 +18,8 @@ spec:
     spec:
       serviceAccountName: hive-reaper-controller
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: nook-registry
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true

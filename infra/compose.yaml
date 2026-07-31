@@ -13,7 +13,7 @@ services:
         chmod 0700 /run/redis;
         umask 077;
         printf '%s\n'
-        'bind 0.0.0.0'
+        'bind 127.0.0.1'
         'protected-mode no'
         "requirepass $$password"
         'appendonly yes'
@@ -24,6 +24,7 @@ services:
         chown redis:redis /run/redis/redis.conf;
         exec /usr/local/bin/docker-entrypoint.sh redis-server /run/redis/redis.conf
     restart: unless-stopped
+    network_mode: host
     volumes:
       - redis-data:/data
     secrets:
@@ -32,7 +33,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "REDISCLI_AUTH=$$(cat /run/secrets/redis-password) redis-cli ping",
+          "REDISCLI_AUTH=$$(cat /run/secrets/redis-password) redis-cli -h 127.0.0.1 ping",
         ]
       interval: 5s
       timeout: 3s
@@ -58,9 +59,7 @@ services:
       - --certificatesResolvers.letsencrypt.acme.tlsChallenge=true
       - --accesslog=true
     restart: unless-stopped
-    ports:
-      - 443:443
-      - 6380:6380
+    network_mode: host
     volumes:
       - ./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro
       - traefik-data:/data

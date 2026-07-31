@@ -200,7 +200,10 @@ jobs:
       - name: Docker setup
         if: steps.task.outputs.ready == 'true'
         uses: ./.github/actions/nook-docker-setup
-
+        with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
       - name: Build split Rust/WASM and web images
         if: steps.task.outputs.ready == 'true'
         run: task setup WASM_BUILD_MODE=prod

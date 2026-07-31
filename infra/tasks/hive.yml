@@ -73,15 +73,20 @@ tasks:
         REMOTE
 
   hive:image:
-    desc: Build and publish the exact Hive source to the target loopback registry.
-    deps: [k0s:sync]
+    desc: Build and publish the exact Hive source to registry.nokey.sh.
+    deps: [k0s:sync, registry:credential:ensure]
     silent: true
     cmds:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
-        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        registry_host=registry.nokey.sh
+        username="$(cat "$remote_dir/secrets/registry-username")"
+        password="$(cat "$remote_dir/secrets/registry-password")"
+        code="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -u "$username:$password" "https://$registry_host/v2/")"
+        test "$code" = 200
         source_id="$(find \
           "$remote_dir/agentic-ai/minds/hive" \
           "$remote_dir/agentic-ai/minds/lace" \
@@ -95,7 +100,7 @@ tasks:
           "$remote_dir/agentic-ai/minds/Cargo.toml" |
           sha256sum |
           cut -c1-16)"
-        image="127.0.0.1:5000/nook-hive:$source_id-$manifest_id"
+        image="$registry_host/nook-hive:$source_id-$manifest_id"
         redis_password="$remote_dir/secrets/redis-password"
         secret_args=()
         if test -s "$redis_password"; then
@@ -324,7 +329,7 @@ tasks:
             ;;
         esac
         case "$image" in
-          127.0.0.1:5000/nook-hive@sha256:*) ;;
+          registry.nokey.sh/nook-hive@sha256:*) ;;
           *)
             echo "Refusing unpinned Hive image: $image" >&2
             exit 1

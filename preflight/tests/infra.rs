@@ -87,7 +87,7 @@ fn assert_no_shell_scripts(path: &Path) {
 }
 
 #[test]
-fn remote_cache_is_public_over_tls_and_zot_remains_private() -> anyhow::Result<()> {
+fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
     assert_remote_compose_contract()?;
     assert_infrastructure_deploy_contract()?;
     assert_zot_registry_contract()?;
@@ -245,8 +245,10 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
 fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [
-        "6380:6380",
-        "443:443",
+        "network_mode: host",
+        "bind 127.0.0.1",
+        "--entryPoints.redis.address=:6380",
+        "--entryPoints.websecure.address=:443",
         "requirepass $$password",
         "/run/redis/redis.conf",
         "docker-entrypoint.sh redis-server /run/redis/redis.conf",
@@ -272,7 +274,12 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         !compose.contains("--requirepass"),
         "the Redis password must be loaded from a restrictive config, not process argv"
     );
-    assert!(!compose.contains("6380:6379") && !compose.contains("5000:5000"));
+    assert!(
+        !compose.contains("6380:6379")
+            && !compose.contains("5000:5000")
+            && !compose.contains("ports:"),
+        "host-network Traefik/Redis must not publish bridge port maps"
+    );
     assert!(
         !compose.contains("\n  registry:") && !compose.contains("registry-data"),
         "the legacy Compose registry must be retired after the Zot migration"
@@ -329,11 +336,13 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
     for required in [
         "HostSNI(`redis-ovh-borg-1.bynull.link`)",
         "certResolver: letsencrypt",
-        "address: redis:6379",
+        "address: 127.0.0.1:6379",
+        "Host(`registry.nokey.sh`)",
+        "url: http://10.96.90.10:5000",
     ] {
         assert!(
             traefik.contains(required),
-            "Traefik Redis TLS routing is missing: {required}"
+            "Traefik TLS routing is missing: {required}"
         );
     }
 
@@ -422,53 +431,30 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         .split("\n  registry:deploy:\n")
         .nth(1)
         .and_then(|tail| tail.split("\n  registry:check:\n").next())
-        .context("infra must define the Zot deployment and migration task")?;
+        .context("infra must define the Zot deployment task")?;
     for required in [
         "sudo -n install -d -m 0750 -o 10001 -g 10001 /var/lib/hive/zot",
         "kubectl rollout status deployment/nook-zot",
         "deployment/nook-zot",
-        "5001:5000",
-        "pkill -TERM -P \"$forward_pid\"",
-        "pkill -KILL -P \"$forward_pid\"",
-        "/v2/_catalog?n=1000",
-        "/tags/list?n=1000",
-        "docker pull \"$source\"",
-        "docker push \"$destination\"",
-        "destination_digest",
-        "Refusing lossy registry migration",
-        "docker stop \"$legacy_registry\"",
         "nook-zot-registry-loopback.service",
-        "--address 127.0.0.1",
-        "5000:5000",
-        "Restart=always",
-        "NoNewPrivileges=true",
-        "ProtectSystem=strict",
-        "docker start \"$legacy_registry\"",
-        "cutover_complete=true",
+        "systemctl disable --now \"$unit\"",
+        "Host must not listen on :5000",
+        "kubectl.*port-forward.*nook-zot",
+        "NOOK_REGISTRY_CLUSTER_IP",
+        "docker-registry nook-registry",
+        "certs.d/{{.NOOK_REGISTRY_HOST}}",
     ] {
         assert!(
             deploy.contains(required),
             "Zot deployment is missing: {required}"
         );
     }
-    let copy = deploy
-        .find("copy_legacy_registry")
-        .context("Zot task must copy the legacy registry")?;
-    let stop = deploy
-        .find("docker stop \"$legacy_registry\"")
-        .context("Zot task must stop the legacy registry")?;
-    let enable = deploy
-        .find("systemctl enable --now \"$unit\"")
-        .context("Zot task must enable the loopback service")?;
     assert!(
-        copy < stop && stop < enable,
-        "Zot must copy before stopping legacy storage and bind loopback afterward"
-    );
-    assert!(
-        !deploy.contains("--address 0.0.0.0")
+        !deploy.contains("5001:5000")
+            && !deploy.contains("systemctl enable --now \"$unit\"")
             && !deploy.contains("NodePort")
-            && !deploy.contains("Ingress"),
-        "Zot deployment must not create a public registry path"
+            && !deploy.contains("kind: Ingress"),
+        "Zot deployment must not recreate loopback port-forward or NodePort/Ingress paths"
     );
 
     let check = tasks
@@ -477,12 +463,12 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         .and_then(|tail| tail.split("\n  registry:diagnose:\n").next())
         .context("infra must define the Zot operational check")?;
     for required in [
-        "systemctl is-enabled --quiet",
-        "systemctl is-active --quiet",
         "jsonpath='{.status.phase}'",
-        "127.0.0.1:5000/v2/",
-        "127.0.0.1:5000",
-        "Zot registry is not loopback-only",
+        "Host must not listen on :5000",
+        "https://$host/v2/",
+        "test \"$public_code\" = 401",
+        "test \"$public_auth\" = 200",
+        "Legacy loopback registry unit must be removed",
     ] {
         assert!(
             check.contains(required),
@@ -490,11 +476,25 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         );
     }
 
+    let credential = tasks
+        .split("\n  registry:credential:ensure:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  registry:credential:sync:\n").next())
+        .context("infra must define registry credential ensure")?;
+    assert!(
+        credential.contains("htpasswd")
+            && credential.contains("-nbB")
+            && credential.contains("nook-zot-htpasswd")
+            && credential.contains("registry-password"),
+        "registry credential ensure must materialize bcrypt htpasswd for Zot"
+    );
+
     let uninstall = read("infra/tasks/k0s.yml");
     assert!(
         uninstall.contains("disable --now nook-zot-registry-loopback.service")
-            && uninstall.contains("test -d /var/lib/hive/zot"),
-        "k0s uninstall must remove the forwarding unit and retain Zot data"
+            && uninstall.contains("test -d /var/lib/hive/zot")
+            && uninstall.contains("certs.d/registry.nokey.sh"),
+        "k0s uninstall must remove any legacy forwarding unit, retain Zot data, and use the public registry host config"
     );
     Ok(())
 }

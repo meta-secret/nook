@@ -55,6 +55,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task preflight
@@ -68,6 +71,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task remote:rust:test
@@ -81,6 +87,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task rust:lint
@@ -94,6 +103,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task rust:coverage
@@ -107,6 +119,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task wasm:build
@@ -120,6 +135,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task wasm:test
@@ -133,6 +151,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task wasm:test:browser
@@ -146,6 +167,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task remote:web:check
@@ -159,6 +183,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task remote:web:test
@@ -172,6 +199,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task web:build
@@ -185,6 +215,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: >-
@@ -208,6 +241,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task remote:extension:check
@@ -221,6 +257,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: >-
@@ -244,6 +283,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task hive:verify
@@ -257,6 +299,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task check
@@ -270,6 +315,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: task ci:pr
@@ -283,6 +331,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/nook-docker-setup
         with:
+          registry-host: registry.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
           main-cache-only: "true"
       - run: >-
