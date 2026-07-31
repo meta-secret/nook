@@ -170,6 +170,13 @@ fn assert_shared_wasm_build_contract(root: &Path) {
         wasm_dockerfile.matches("wasm-pack build nook-wasm").count() == 1,
         "delivery must compile and optimize nook-wasm exactly once"
     );
+    assert!(
+        wasm_dockerfile
+            .matches("wasm-pack build nook-companion-wasm")
+            .count()
+            == 1,
+        "delivery must compile the tiny companion WASM package exactly once"
+    );
     for forbidden in [
         "nook-wasm/apps/",
         "nook-wasm-simple",
@@ -186,7 +193,14 @@ fn assert_shared_wasm_build_contract(root: &Path) {
     assert_eq!(
         wasm_tasks.matches("wasm-pack build nook-wasm").count(),
         1,
-        "the fast rebuild path must compile the shared WASM package once"
+        "the fast rebuild path must compile the shared vault WASM package once"
+    );
+    assert_eq!(
+        wasm_tasks
+            .matches("wasm-pack build nook-companion-wasm")
+            .count(),
+        1,
+        "the fast rebuild path must compile the companion WASM package once"
     );
     for forbidden in [
         "nook-wasm-simple",
@@ -209,7 +223,12 @@ fn assert_shared_wasm_build_contract(root: &Path) {
             .matches("COPY --from=web-artifacts /nook-wasm ")
             .count(),
         1,
-        "web build must receive one shared WASM package"
+        "web build must receive the nested WASM handoff once"
+    );
+    assert!(
+        web_dockerfile.contains("nook-companion-wasm")
+            && web_dockerfile.contains("extension/nook-companion-wasm"),
+        "web build must split the companion package into the extension import root"
     );
 }
 
@@ -268,6 +287,10 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
     assert!(
         dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
     );
+    assert!(
+        dockerignore
+            .contains("nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm*")
+    );
     for ignored in [
         "**/target",
         "**/node_modules",
@@ -307,6 +330,15 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
             "extension manifest must preserve dynamic vault isolation through {required_contract}"
         );
     }
+    assert!(
+        vault_target.contains("nook-companion-wasm")
+            && vault_target.contains("defaultSimpleVaultUrl"),
+        "extension vault targeting must call companion WASM host policy"
+    );
+    let vault_host_policy = read(
+        &root,
+        "nook-app/nook-companion-core/src/vault_host_policy.rs",
+    );
     for production_boundary in [
         "https://simple.nokey.sh/",
         "https://simple.dev.nokey.sh/*",
@@ -315,8 +347,8 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
         "https://*.nokey-sentinel.pages.dev/*",
     ] {
         assert!(
-            vault_target.contains(production_boundary),
-            "extension vault targeting must preserve production boundary {production_boundary}"
+            vault_host_policy.contains(production_boundary),
+            "companion vault host policy must preserve production boundary {production_boundary}"
         );
     }
 
@@ -825,14 +857,14 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     assert_eq!(
         warmup
             .matches(
-                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass",
+                "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass",
             )
             .count(),
         1,
         "coverage dependencies must be warmed in one instrumented build"
     );
     assert!(warmup.contains(
-        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass"
+        "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass"
     ));
     assert!(
         source_dockerfile.contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
@@ -847,6 +879,10 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     );
     assert!(
         source_dockerfile
+            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core")
+    );
+    assert!(
+        source_dockerfile
             .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
     );
 
@@ -854,6 +890,8 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() -> anyhow::Resul
     for required in [
         "\"Cargo.toml\" \"Cargo.lock\"",
         "\"nook-wasm/Cargo.toml\" \"nook-wasm/src\"",
+        "\"nook-companion-wasm/Cargo.toml\" \"nook-companion-wasm/src\"",
+        "\"nook-companion-core/Cargo.toml\" \"nook-companion-core/src\"",
         "\"nook-core/Cargo.toml\" \"nook-core/src\" \"nook-core/locales\"",
         "\"nook-auth2/Cargo.toml\" \"nook-auth2/src\"",
         "\"nook-replication/Cargo.toml\" \"nook-replication/src\"",

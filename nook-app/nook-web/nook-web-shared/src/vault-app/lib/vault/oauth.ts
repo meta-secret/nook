@@ -51,6 +51,7 @@ import {
 } from "$lib/icloud-oauth";
 import {
   BrowserOAuthProvider,
+  OAuthOriginUnsupportedReason,
   resolveCurrentOAuthOriginSupport,
 } from "$lib/oauth-origin";
 import { createLogger } from "$lib/log";
@@ -547,7 +548,7 @@ function ensureSupportedOAuthOrigin(
     reason: support.reason,
   });
   state.errorMsg = state.t(
-    support.reason === "cloudflare-pr-preview"
+    support.reason === OAuthOriginUnsupportedReason.CloudflarePrPreview
       ? "provider_setup.oauth_preview_origin_unsupported"
       : "provider_setup.oauth_origin_unsupported",
     { origin: support.origin },

@@ -1,3 +1,4 @@
+import '../../../nook-web-shared/src/extension/companion-ready'
 import {
   chromium,
   expect,
@@ -16,7 +17,7 @@ import { installMockPasskeyRuntime } from '../../../nook-web-app/e2e/passkey-moc
 import {
   belongsToSentinelVault,
   belongsToSimpleVault,
-  DEFAULT_SIMPLE_VAULT_URL,
+  defaultSimpleVaultBaseUrl,
   sentinelVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
   simpleVaultUrl,
@@ -96,7 +97,7 @@ export const connectedSetupState = {
   lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
 }
 export const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
-  process.env.NOOK_SIMPLE_VAULT_URL || DEFAULT_SIMPLE_VAULT_URL,
+  process.env.NOOK_SIMPLE_VAULT_URL || defaultSimpleVaultBaseUrl(),
 )
 export const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
 export const extensionApprovalVaultName = isHostedSmoke

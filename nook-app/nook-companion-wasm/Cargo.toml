@@ -1,0 +1,17 @@
+[package]
+name = "nook-companion-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tiny WASM package for auth-companion heuristics and host policy."
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+nook-companion-core = { path = "../nook-companion-core" }
+wasm-bindgen = "=0.2.125"
+
+[lints]
+workspace = true

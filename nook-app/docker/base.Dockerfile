@@ -117,10 +117,12 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
 COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
+COPY nook-app/nook-companion-core/Cargo.toml nook-companion-core/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
+COPY nook-app/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
-RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-core/src nook-wasm/src \
-    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
+RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM rust-base AS builder-deps-common
@@ -134,12 +136,14 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
 COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
 COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
+COPY nook-app/nook-companion-core/Cargo.toml nook-companion-core/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
+COPY nook-app/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
 # nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
 # layer blobs — index-only refs to older scopes are not enough for PR restores.
-ARG NOOK_WASM_DEPS_CACHE_EPOCH=v4-self-contained-1
+ARG NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
 RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-release
@@ -149,9 +153,9 @@ RUN cargo fetch --locked
 
 FROM builder-deps-common AS builder-wasm-deps
 
-RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-core/src nook-wasm/src \
-    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
-RUN cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm \
+RUN mkdir -p nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
+    && touch nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
+RUN cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-test-dependencies
 
 FROM builder-wasm-deps AS builder-deps
@@ -162,6 +166,8 @@ RUN cargo nextest run --no-run -p nook-replication --profile ci \
     && nook-sccache-report native-replication-nextest-dependencies
 RUN cargo nextest run --no-run -p nook-event-log --profile ci \
     && nook-sccache-report native-event-log-nextest-dependencies
+RUN cargo nextest run --no-run -p nook-companion-core --profile ci \
+    && nook-sccache-report native-companion-core-nextest-dependencies
 RUN cargo nextest run --no-run -p nook-core --profile ci \
     && nook-sccache-report native-core-nextest-dependencies
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings \
@@ -170,9 +176,11 @@ RUN cargo clippy -p nook-replication --all-targets -- -D warnings \
     && nook-sccache-report native-replication-clippy-dependencies
 RUN cargo clippy -p nook-event-log --all-targets -- -D warnings \
     && nook-sccache-report native-event-log-clippy-dependencies
+RUN cargo clippy -p nook-companion-core --all-targets -- -D warnings \
+    && nook-sccache-report native-companion-core-clippy-dependencies
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy-dependencies
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-core --no-tests=pass \
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
 # --- Web/e2e branch ---------------------------------------------------------

@@ -31,6 +31,12 @@ RUN cargo clippy -p nook-event-log --all-targets -- -D warnings \
 RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-event-log \
     && nook-sccache-report native-event-log-coverage
 
+COPY nook-app/nook-companion-core nook-companion-core
+RUN cargo clippy -p nook-companion-core --all-targets -- -D warnings \
+    && nook-sccache-report native-companion-core-clippy
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
+    && nook-sccache-report native-companion-core-coverage
+
 COPY nook-app/nook-core nook-core
 # Docker COPY preserves source mtimes, while the inherited target directory can
 # contain newer artifacts. Touch the module that embeds locale JSON so changes
@@ -40,19 +46,20 @@ RUN touch nook-core/src/i18n.rs \
     && cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy
 # Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2,
-# nook-replication, and nook-event-log above, then runs nook-core with --no-clean so the final report combines all
-# portable crates while preserving cacheable dependency coverage. The same run also bakes the
-# coverage artifacts that PR CI copies out later;
+# nook-replication, nook-event-log, and nook-companion-core above, then runs nook-core with --no-clean
+# so the final report combines all portable crates while preserving cacheable dependency coverage.
+# The same run also bakes the coverage artifacts that PR CI copies out later;
 # export must not rerun the Rust tests.
 RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage
 
+COPY nook-app/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-wasm nook-wasm
 
 # Export only the small, already-computed coverage payload. This target deliberately branches
@@ -74,6 +81,7 @@ RUN find \
       nook-app/nook-auth2/src \
       nook-app/nook-replication/src \
       nook-app/nook-event-log/src \
+      nook-app/nook-companion-core/src \
       nook-app/nook-core/src \
       -type f -name '*.rs' -exec touch {} + \
     && test -f nook-app/Taskfile.yml \
