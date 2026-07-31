@@ -468,9 +468,21 @@ impl NookVaultManager {
         if self.vault.store_id.trim().is_empty() || remote_ids.is_empty() {
             return Ok(());
         }
-        let remote_events = self
-            .fetch_current_provider_events(remote_ids.iter().cloned())
-            .await?;
+        let local_ids: BTreeSet<EventId> = load_local_event_store(&self.vault.store_id)
+            .await?
+            .event_ids()
+            .into_iter()
+            .collect();
+        // Already-local remote ids share this store (content-addressed). Only fetch
+        // missing ids — foreign-store events never match local ids.
+        let missing = remote_ids
+            .difference(&local_ids)
+            .cloned()
+            .collect::<Vec<_>>();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let remote_events = self.fetch_current_provider_events(missing).await?;
         let classification =
             classify_remote_event_log(&remote_events, Some(self.vault.store_id.as_str()))?;
         self.guard_remote_event_log_classification("Sync provider", &classification)
@@ -572,14 +584,15 @@ impl NookVaultManager {
                 .event_ids()
                 .into_iter()
                 .collect();
-            let fetched = self.fetch_current_provider_events(remote_ids).await?;
+            let missing_ids = remote_ids
+                .difference(&local_ids)
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            let fetched = self.fetch_current_provider_events(missing_ids).await?;
             let classification =
                 classify_remote_event_log(&fetched, Some(self.vault.store_id.as_str()))?;
             self.guard_remote_event_log_classification("Sync provider", &classification)?;
             for (event_id, bytes) in fetched {
-                if local_ids.contains(&event_id) {
-                    continue;
-                }
                 if !nook_core::remote_event_belongs_to_store(
                     &event_id,
                     &bytes,

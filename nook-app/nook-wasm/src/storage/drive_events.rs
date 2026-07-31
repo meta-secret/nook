@@ -14,6 +14,21 @@ fn is_sha256_base64url_digest(digest: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
+/// Accept Drive list rows only when the filename digest matches Nook's
+/// `appProperties.event_id`. Name-only `{digest}.yaml` junk is ignored so assess
+/// / sync do not download leftover non-event files.
+fn drive_listed_event_id(name: &str, app_event_id: Option<&str>) -> Option<String> {
+    let digest = name.strip_suffix(".yaml")?;
+    if !is_sha256_base64url_digest(digest) {
+        return None;
+    }
+    let expected = format!("sha256u:{digest}");
+    match app_event_id {
+        Some(id) if id == expected => Some(expected),
+        Some(_) | None => None,
+    }
+}
+
 /// Select content-addressed event bytes from same-name Drive candidates.
 ///
 /// Unreadable or wrong-id candidates are skipped so a junk/empty duplicate cannot
@@ -79,7 +94,7 @@ pub(crate) async fn list_drive_event_ids(
         parent_query_fragment(parent)
     );
     let mut url = format!(
-        "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name)&pageSize=1000",
+        "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
         urlencoding::encode(&query)
     );
     if let Some(spaces) = list_spaces_query(parent) {
@@ -116,10 +131,12 @@ pub(crate) async fn list_drive_event_ids(
                 let Some(name) = file.get("name").and_then(|v| v.as_str()) else {
                     continue;
                 };
-                if let Some(digest) = name.strip_suffix(".yaml")
-                    && is_sha256_base64url_digest(digest)
-                {
-                    event_ids.push(format!("sha256u:{digest}"));
+                let app_event_id = file
+                    .get("appProperties")
+                    .and_then(|props| props.get("event_id"))
+                    .and_then(|value| value.as_str());
+                if let Some(event_id) = drive_listed_event_id(name, app_event_id) {
+                    event_ids.push(event_id);
                 }
             }
         }
@@ -385,5 +402,28 @@ mod tests {
             "unexpected error: {err}"
         );
         Ok(())
+    }
+
+    #[test]
+    fn listed_event_id_requires_matching_app_property() {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        let name = format!("{digest}.yaml");
+        let expected = format!("sha256u:{digest}");
+        assert_eq!(
+            drive_listed_event_id(&name, Some(expected.as_str())),
+            Some(expected.clone())
+        );
+        assert_eq!(drive_listed_event_id(&name, None), None);
+        assert_eq!(
+            drive_listed_event_id(
+                &name,
+                Some("sha256u:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            ),
+            None
+        );
+        assert_eq!(
+            drive_listed_event_id("notes.yaml", Some("sha256u:notes")),
+            None
+        );
     }
 }

@@ -33,6 +33,7 @@ import {
   EnrollmentLinkKind,
   VaultInitializationKind,
 } from "$lib/vault/state/lifecycle.svelte";
+import { startVaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
 
 const log = createLogger("vault-lifecycle");
 
@@ -331,21 +332,18 @@ export async function createFreshVault(state: VaultState) {
       const connectPromise = state
         .requireManager()
         .connect_fresh(...state.wasmStorageArgs());
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                "Connection timed out. Check your PAT, network, and try again.",
-              ),
-            ),
-          30_000,
-        );
-      });
-      return (await Promise.race([
-        connectPromise,
-        timeoutPromise,
-      ])) as NookSecretRecord[];
+      const timeout = startVaultDiscoveryTimeout(
+        state.t("toasts.error_timeout"),
+        30_000,
+      );
+      try {
+        return (await Promise.race([
+          connectPromise,
+          timeout.completion,
+        ])) as NookSecretRecord[];
+      } finally {
+        timeout.cancel();
+      }
     });
     for (const record of rawRecords) record.free();
     await state.loadSecretPage("", 0);
