@@ -937,6 +937,12 @@ export class VaultState extends VaultLifecycleState {
     return secretsActions.handleChromePasswordsImport(this, csv);
   }
 
+  async handleDashlaneImport(
+    exportBytes: Uint8Array,
+  ): Promise<NookImportResult> {
+    return secretsActions.handleDashlaneImport(this, exportBytes);
+  }
+
   async handleGoogleAuthenticatorImport(
     migrationUris: string[],
   ): Promise<NookImportResult> {

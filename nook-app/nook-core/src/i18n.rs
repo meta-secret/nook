@@ -352,6 +352,7 @@ mod tests {
                 "chrome_passwords_import.source",
                 "Chrome or another browser",
             ),
+            ("dashlane_import.source", "Dashlane"),
             ("google_authenticator_import.source", "Google Authenticator"),
             ("bitwarden_import.source", "Bitwarden"),
             ("lastpass_import.source", "LastPass"),
