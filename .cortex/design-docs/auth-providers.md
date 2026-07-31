@@ -394,9 +394,12 @@ origin, unauthenticated production requests should return
 challenge as `UNKNOWN_ERROR` after the real Apple click, Nook falls back to the
 Web Services challenge, opens the returned Apple sign-in URL, and listens for
 the `ckWebAuthToken` postMessage. Brave can open CloudKit JS's Apple window and
-the direct fallback window at the same time, so Brave uses the direct Web
-Services challenge as its primary sign-in path instead of forwarding the native
-CloudKit button click.
+the direct fallback window at the same time; a second `window.open` is often
+blocked and surfaces as an immediate **iCloud sign-in failed** while the first
+Apple window is still open. After a native CloudKit button click, Nook waits for
+the token or postMessage from that existing window and does not open another
+popup. Brave's direct Web Services challenge remains the primary path only for
+programmatic clicks that have not already opened Apple's window.
 
 Alternative provider-preview options:
 
