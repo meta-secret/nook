@@ -203,7 +203,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
-            && docker_tasks.contains("type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/")
+            && docker_tasks.contains(
+                "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/"
+            )
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
             && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),

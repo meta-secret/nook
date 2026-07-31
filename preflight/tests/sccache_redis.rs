@@ -98,9 +98,11 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> 
         );
     }
 
-    assert!(!repository_root()
-        .join("nook-app/docker/resolve-docker-host-ip.sh")
-        .exists());
+    assert!(
+        !repository_root()
+            .join("nook-app/docker/resolve-docker-host-ip.sh")
+            .exists()
+    );
     Ok(())
 }
 
@@ -274,8 +276,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
     assert!(bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
     assert!(bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
-    assert!(bake
-        .contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"));
+    assert!(
+        bake.contains(
+            "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"
+        )
+    );
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
         .context("bake file must define the WASM source cache inputs")?
@@ -322,8 +327,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        bake.contains("type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1")
-            && bake.contains("rust_wasm_deps_cache_from")
+        bake.contains(
+            "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1"
+        ) && bake.contains("rust_wasm_deps_cache_from")
             && bake.contains("registry.nokey.sh"),
         "WASM/native dependency restores must import registry.nokey.sh cache refs including rust-base"
     );
