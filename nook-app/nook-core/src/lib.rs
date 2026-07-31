@@ -13,8 +13,9 @@ mod sync;
 mod vault;
 
 pub(crate) use auth::{
-    authentication_workflow, device_key_protection, enrollment, extension_identity_handoff,
-    multi_device, outcome_evidence, password_envelope, website_login_save,
+    authentication_workflow, backup_code_candidates, device_key_protection, enrollment,
+    extension_identity_handoff, multi_device, oauth_origin_policy, outcome_evidence,
+    page_field_classification, password_envelope, vault_host_policy, website_login_save,
     website_passkey_proposal,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
@@ -43,6 +44,23 @@ pub use authentication_workflow::{
     AuthenticationWorkflowMatch, AuthenticationWorkflowNotDetected, AuthenticationWorkflowSnapshot,
     AuthenticationWorkflowStage, classify_authentication_workflow,
     classify_authentication_workflow_candidates,
+};
+pub use backup_code_candidates::{extract_backup_code_candidates, page_has_backup_code_hint};
+pub use oauth_origin_policy::{
+    BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
+    is_cloudflare_pr_preview_host, resolve_oauth_origin_support,
+};
+pub use page_field_classification::{
+    PageInputFieldObservation, PageInputType, expand_identity_text, has_login_context,
+    looks_like_email_verification_body, looks_like_manual_checkpoint_label,
+    looks_like_one_time_code_field, looks_like_passkey_control_label, looks_like_username_field,
+};
+pub use vault_host_policy::{
+    DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,
+    belongs_to_simple_vault, is_nook_vault_app_url, is_sentinel_vault_hostname,
+    is_simple_vault_hostname, matching_sentinel_vault_base_url,
+    nook_vault_app_exclude_match_patterns, normalize_simple_vault_base_url,
+    sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
 };
 pub use authenticator::{
     AuthenticatorSecret, BackupCodeAttachMode, MAX_AUTHENTICATOR_BACKUP_CODE_LEN,

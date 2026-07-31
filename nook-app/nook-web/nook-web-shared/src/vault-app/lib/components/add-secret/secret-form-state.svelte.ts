@@ -1,5 +1,6 @@
 import { authenticatorSetupKeyChanged, SecretType } from "$lib/nook";
-import type { NookSecretRecord, SecretFormInput } from "$lib/nook";
+import type { NookSecretRecord } from "$lib/nook";
+import { NookSecretFormFields } from "$app-wasm";
 import { defaultPasswordGenerationOptions } from "$web-shared/password/generator";
 import { SecretEditorKind, type SecretEditor } from "../secret-vault-state";
 
@@ -90,30 +91,30 @@ export class SecretFormState {
     }
   }
 
-  toInput(selectedType: SecretType, editor: SecretEditor): SecretFormInput {
+  toFormFields(
+    selectedType: SecretType,
+    editor: SecretEditor,
+  ): NookSecretFormFields {
     if (selectedType === SecretType.Login) {
-      return {
-        type: SecretType.Login,
-        websiteUrl: this.websiteUrl.trim(),
-        username: this.username.trim(),
-        password: this.password,
-        notes: this.notes.trim(),
-      };
+      return NookSecretFormFields.login(
+        this.websiteUrl.trim(),
+        this.username.trim(),
+        this.password,
+        this.notes.trim(),
+      );
     }
     if (selectedType === SecretType.ApiKey) {
-      return {
-        type: SecretType.ApiKey,
-        websiteUrl: this.websiteUrl.trim(),
-        key: this.apiKey,
-        expiresAt: this.expiresAt,
-      };
+      return NookSecretFormFields.apiKey(
+        this.websiteUrl.trim(),
+        this.apiKey,
+        this.expiresAt,
+      );
     }
     if (selectedType === SecretType.SeedPhrase) {
-      return {
-        type: SecretType.SeedPhrase,
-        name: this.accountName.trim(),
-        seed: this.seedPhrase.trim(),
-      };
+      return NookSecretFormFields.seedPhrase(
+        this.accountName.trim(),
+        this.seedPhrase.trim(),
+      );
     }
     if (selectedType === SecretType.Authenticator) {
       const setupKeyChanged =
@@ -123,45 +124,41 @@ export class SecretFormState {
           editor.record.totpSecret,
           this.authenticatorSecret,
         );
-      return {
-        type: SecretType.Authenticator,
-        websiteUrl: this.websiteUrl.trim(),
-        issuer: this.authenticatorIssuer.trim(),
-        account: this.authenticatorAccount.trim(),
-        totpSecret: this.authenticatorSecret.trim(),
-        algorithm: setupKeyChanged ? "SHA1" : this.authenticatorAlgorithm,
-        digits: setupKeyChanged ? "6" : this.authenticatorDigits,
-        period: setupKeyChanged ? "30" : this.authenticatorPeriod,
-        backupCodes: setupKeyChanged ? "" : this.authenticatorBackupCodes,
-      };
+      return NookSecretFormFields.authenticator(
+        this.authenticatorIssuer.trim(),
+        this.authenticatorAccount.trim(),
+        this.websiteUrl.trim(),
+        this.authenticatorSecret.trim(),
+        setupKeyChanged ? "SHA1" : this.authenticatorAlgorithm,
+        setupKeyChanged ? "6" : this.authenticatorDigits,
+        setupKeyChanged ? "30" : this.authenticatorPeriod,
+        setupKeyChanged ? "" : this.authenticatorBackupCodes,
+      );
     }
     if (selectedType === SecretType.CreditCard) {
-      return {
-        type: SecretType.CreditCard,
-        title: this.cardTitle.trim(),
-        cardholderName: this.cardholderName.trim(),
-        number: this.cardNumber.trim(),
-        expirationMonth: this.expirationMonth.trim(),
-        expirationYear: this.expirationYear.trim(),
-        cvv: this.cardCvv.trim(),
-        notes: this.cardNotes.trim(),
-      };
+      return NookSecretFormFields.creditCard(
+        this.cardTitle.trim(),
+        this.cardholderName.trim(),
+        this.cardNumber.trim(),
+        this.expirationMonth.trim(),
+        this.expirationYear.trim(),
+        this.cardCvv.trim(),
+        this.cardNotes.trim(),
+      );
     }
     if (selectedType === SecretType.FileAttachment) {
-      return {
-        type: SecretType.FileAttachment,
-        title: this.fileTitle.trim() || this.fileName.trim(),
-        fileName: this.fileName.trim(),
-        mimeType: this.fileMimeType.trim() || "application/octet-stream",
-        sizeBytes: this.fileSizeBytes,
-        contentBase64: this.fileContentBase64,
-      };
+      return NookSecretFormFields.fileAttachment(
+        this.fileTitle.trim() || this.fileName.trim(),
+        this.fileName.trim(),
+        this.fileMimeType.trim() || "application/octet-stream",
+        this.fileSizeBytes,
+        this.fileContentBase64,
+      );
     }
-    return {
-      type: SecretType.SecureNote,
-      title: this.noteTitle.trim(),
-      note: this.noteBody,
-    };
+    return NookSecretFormFields.secureNote(
+      this.noteTitle.trim(),
+      this.noteBody,
+    );
   }
 
   canSubmit(selectedType: SecretType, isSaving: boolean) {

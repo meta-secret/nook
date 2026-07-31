@@ -87,6 +87,9 @@ slice whenever possible.
 Mobile applications, native bindings, and mobile platform adapters are
 explicitly out of scope for this execution plan.
 
+Remaining content-script and Node/Manifest host-policy mirrors are tracked in
+[ts-domain-to-rust-remaining.md](ts-domain-to-rust-remaining.md).
+
 ## Deliberate non-migrations
 
 The following remain platform adapters rather than core logic:
