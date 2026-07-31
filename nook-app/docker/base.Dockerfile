@@ -32,8 +32,9 @@ ARG WASM_PACK_VERSION=0.15.0
 ARG LLVM_COV_VERSION=0.8.7
 ARG SCCACHE_VERSION=0.16.0
 ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
-ARG SCCACHE_REDIS_MODE=external
-ARG SCCACHE_REDIS_ENDPOINT=rediss://redis-ovh-borg-1.bynull.link:6380
+ARG SCCACHE_S3_MODE=external
+ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
+ARG SCCACHE_BUCKET=nook-sccache
 # Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
 # avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
@@ -45,12 +46,14 @@ ARG BINARYEN_VERSION=122
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_NET_RETRY=10
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
-ENV NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}
-ENV SCCACHE_REDIS_ENDPOINT=${SCCACHE_REDIS_ENDPOINT}
-ENV SCCACHE_REDIS_KEY_PREFIX=nook
+ENV NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}
+ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}
+ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
+ENV SCCACHE_REGION=auto
+ENV SCCACHE_S3_USE_SSL=true
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
 # Every BuildKit RUN gets its own filesystem namespace. A Unix socket therefore keeps the
-# short-lived local sccache daemons isolated even while their Redis storage is shared.
+# short-lived local sccache daemons isolated even while their S3 storage is shared.
 ENV SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock
 
 RUN apt-get update \

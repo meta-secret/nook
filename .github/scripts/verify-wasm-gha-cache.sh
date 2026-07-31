@@ -4,8 +4,10 @@ set -euo pipefail
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 docker_bin="${DOCKER:-docker}"
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
-sccache_mode="${SCCACHE_REDIS_MODE:-external}"
-sccache_endpoint="${SCCACHE_REDIS_ENDPOINT:-rediss://redis-ovh-borg-1.bynull.link:6380}"
+sccache_mode="${SCCACHE_S3_MODE:-external}"
+sccache_endpoint="${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+sccache_bucket="${SCCACHE_BUCKET:-nook-sccache}"
+registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
 
 bake_args=(
   --allow="fs.read=$repo_root"
@@ -16,10 +18,11 @@ bake_args=(
   -f "$repo_root/nook-app/docker/toolchain.docker-bake.hcl"
   -f "$repo_root/nook-app/nook-web/nook-web-app/docker-bake.hcl"
   --set "*.context=$repo_root"
-  --set "*.args.SCCACHE_REDIS_MODE=$sccache_mode"
-  --set "*.args.SCCACHE_REDIS_ENDPOINT=$sccache_endpoint"
+  --set "*.args.SCCACHE_S3_MODE=$sccache_mode"
+  --set "*.args.SCCACHE_ENDPOINT=$sccache_endpoint"
+  --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
   --set "*.output=type=cacheonly"
-  --set "builder-wasm-deps.cache-from=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/$cache_scope:buildcache"
+  --set "builder-wasm-deps.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
   --set "builder-wasm-deps.cache-to="
 )
 

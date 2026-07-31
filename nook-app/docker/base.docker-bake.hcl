@@ -8,7 +8,9 @@ target "rust-base" {
   target     = "rust-base"
   platforms  = ["linux/amd64"]
   args = {
-    SCCACHE_REDIS_ENDPOINT = SCCACHE_REDIS_ENDPOINT
+    SCCACHE_ENDPOINT = SCCACHE_ENDPOINT
+    SCCACHE_BUCKET   = SCCACHE_BUCKET
+    SCCACHE_S3_MODE  = SCCACHE_S3_MODE
   }
   cache-from = rust_base_cache_from
   cache-to   = rust_base_cache_to

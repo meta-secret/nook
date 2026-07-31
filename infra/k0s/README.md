@@ -57,7 +57,7 @@ automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
 Zot uses a separate retained local PV at `/var/lib/hive/zot` and a ClusterIP
 Service at `10.96.90.10:5000`. Traefik publishes it at
-`https://registry.nokey.sh` with htpasswd authentication. There is no host
+`https://registry.dev.nokey.sh` with htpasswd authentication. There is no host
 `:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
 registry data.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and

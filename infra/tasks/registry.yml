@@ -2,7 +2,7 @@ version: '3'
 
 # Public authenticated Zot registry operations.
 vars:
-  NOOK_REGISTRY_HOST: '{{default "registry.nokey.sh" .NOOK_REGISTRY_HOST}}'
+  NOOK_REGISTRY_HOST: '{{default "registry.dev.nokey.sh" .NOOK_REGISTRY_HOST}}'
   NOOK_REGISTRY_USERNAME: '{{default "nook" .NOOK_REGISTRY_USERNAME}}'
   NOOK_REGISTRY_CLUSTER_IP: '{{default "10.96.90.10" .NOOK_REGISTRY_CLUSTER_IP}}'
 

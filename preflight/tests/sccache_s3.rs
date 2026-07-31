@@ -40,21 +40,22 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
 }
 
 #[test]
-fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> anyhow::Result<()> {
+fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyhow::Result<()> {
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
-        "rediss://redis-ovh-borg-1.bynull.link:6380",
-        ".nook/cache/redis-password",
-        "no Redis credential; compiling without sccache",
-        "direct TLS Redis is unavailable; compiling without remote sccache",
-        "direct TLS Redis is healthy",
-        "SCCACHE_REDIS_TLS_SERVER_NAME",
-        "redis-cli --sni",
-        "--set '*.args.SCCACHE_REDIS_ENDPOINT={{.SCCACHE_REDIS_ENDPOINT}}'",
+        "https://sccache.dev.nokey.sh",
+        ".nook/cache/sccache-access-key",
+        ".nook/cache/sccache-secret-key",
+        "no S3 credential; compiling without sccache",
+        "SeaweedFS S3 is unavailable; compiling without remote sccache",
+        "SeaweedFS S3 sccache is healthy",
+        "--set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'",
+        "--set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'",
+        "--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'",
     ] {
         assert!(
             app_tasks.contains(required),
-            "direct sccache Redis configuration is missing: {required}"
+            "SeaweedFS sccache configuration is missing: {required}"
         );
     }
     assert!(
@@ -62,11 +63,10 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> 
         "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
     );
     assert!(
-        app_tasks
-            .matches("password_file=\"{{.SCCACHE_REDIS_PASSWORD_FILE}}\"")
-            .count()
-            >= 2,
-        "local runtime checks and mounts must use the resolved Task credential path"
+        !app_tasks.contains("SCCACHE_REDIS")
+            && !app_tasks.contains("redis-password")
+            && !app_tasks.contains("rediss://"),
+        "Taskfile must not retain Redis sccache wiring"
     );
     assert!(
         read(".dockerignore").lines().any(|line| line == ".nook"),
@@ -74,15 +74,20 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> 
     );
 
     let bake = read("nook-app/docker-bake.hcl");
-    assert!(bake.contains("variable \"SCCACHE_REDIS_ENDPOINT\""));
+    assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
+    assert!(bake.contains("variable \"SCCACHE_BUCKET\""));
+    assert!(bake.contains("variable \"SCCACHE_S3_MODE\""));
     assert!(bake.contains("target \"_sccache\""));
     assert!(!bake.contains("extra-hosts"));
+    assert!(!bake.contains("SCCACHE_REDIS"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(
-        rust_base.contains("ARG SCCACHE_REDIS_ENDPOINT=rediss://redis-ovh-borg-1.bynull.link:6380")
+        rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh")
     );
-    assert!(rust_base.contains("ENV SCCACHE_REDIS_ENDPOINT=${SCCACHE_REDIS_ENDPOINT}"));
+    assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
+    assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
+    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
     assert!(rust_base.contains("SCCACHE_SERVER_UDS=/tmp/nook-sccache.sock"));
 
     for path in [
@@ -94,7 +99,7 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> 
         assert!(
             !read(path).contains("host.docker.internal")
                 && !read(path).contains("SCCACHE_REDIS_HOST_IP"),
-            "{path} must not route Redis through the Docker host"
+            "{path} must not route the compiler cache through the Docker host"
         );
     }
 
@@ -126,25 +131,30 @@ fn assert_hosted_docker_builds_use_buildkit_only() {
         );
     }
     assert!(
-        !action.contains("cache-redis-password")
+        !action.contains("sccache-access-key")
+            && !action.contains("cache-redis-password")
             && !action.contains("uses: ./.github/actions/nook-cache-connect"),
-        "hosted Docker builds must rely on BuildKit without attaching Redis credentials"
+        "hosted Docker builds must rely on BuildKit without attaching S3 credentials"
     );
     assert!(!action.contains("cloudflare-client"));
     assert!(!action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"));
 
     let cache_action = read(".github/actions/nook-cache-connect/action.yml");
     assert!(cache_action.contains("using: node24"));
+    assert!(cache_action.contains("sccache-access-key"));
+    assert!(cache_action.contains("sccache-secret-key"));
     assert!(!cache_action.contains("cloudflare"));
     let cache_action_main = read(".github/actions/nook-cache-connect/main.js");
     for required in [
         "mode: 0o700",
         "mode: 0o600",
-        "delete process.env[inputName]",
-        "SCCACHE_REDIS_PASSWORD_FILE",
+        "delete process.env[accessKeyInput]",
+        "delete process.env[secretKeyInput]",
+        "SCCACHE_S3_ACCESS_KEY_FILE",
+        "SCCACHE_S3_SECRET_KEY_FILE",
         "NOOK_SCCACHE_BACKEND=direct_compile",
         "NOOK_SCCACHE_BACKEND=remote",
-        "NOOK_SCCACHE_BACKEND_REASON=persistent_tls_service",
+        "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
         "hosted_secret_free_by_design",
         "credentials_unavailable",
     ] {
@@ -158,6 +168,7 @@ fn assert_hosted_docker_builds_use_buildkit_only() {
     assert!(!cache_action_main.contains("process.stdout.write"));
     assert!(!cache_action_main.contains("spawnSync"));
     assert!(!cache_action_main.contains("cloudflare"));
+    assert!(!cache_action_main.contains("REDIS"));
 }
 
 fn assert_workflows_scope_cache_credentials() {
@@ -169,7 +180,12 @@ fn assert_workflows_scope_cache_credentials() {
         ".github/workflows/rust-dependency-updates.yml",
     ] {
         let workflow = read(path);
-        for secret in ["NOOK_CACHE_REDIS_PASSWORD", "NOOK_CLOUDFLARE_ACCESS"] {
+        for secret in [
+            "NOOK_SCCACHE_ACCESS_KEY",
+            "NOOK_SCCACHE_SECRET_KEY",
+            "NOOK_CACHE_REDIS_PASSWORD",
+            "NOOK_CLOUDFLARE_ACCESS",
+        ] {
             assert!(
                 !workflow.contains(secret),
                 "untrusted or arbitrary-ref workflow {path} must not receive {secret}"
@@ -179,39 +195,50 @@ fn assert_workflows_scope_cache_credentials() {
 
     let main = read(".github/workflows/main.yml");
     assert!(
-        !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
+        !main.contains("NOOK_SCCACHE_ACCESS_KEY")
+            && !main.contains("NOOK_SCCACHE_SECRET_KEY")
+            && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
         "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
+
+    let hive = read(".github/workflows/hive.yml");
+    assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
+    assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
+    assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
 }
 
 fn assert_rust_build_cache_boundary() {
     let bake = read("nook-app/docker-bake.hcl");
     let app_tasks = read("nook-app/Taskfile.yml");
     assert!(
-        !bake.contains("SCCACHE_REDIS_PASSWORD_FILE")
-            && !bake.contains("id=sccache_redis_password")
-            && !bake.contains("secret ="),
-        "Bake must not attach Redis credentials to hosted Docker builds"
+        !bake.contains("SCCACHE_S3_ACCESS_KEY")
+            && !bake.contains("id=sccache_s3_")
+            && !bake.contains("secret =")
+            && !bake.contains("SCCACHE_REDIS"),
+        "Bake must not attach S3 credentials to hosted Docker builds"
     );
     assert!(
         !app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
-        "Task must not grant BuildKit access to the local Redis credential"
+        "Task must not grant BuildKit access to local sccache credentials for delivery bake"
     );
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
-    assert!(wrapper.contains("/run/secrets/sccache_redis_password"));
-    assert!(wrapper.contains("NOOK_SCCACHE_REDIS_MODE"));
+    assert!(wrapper.contains("/run/secrets/sccache_s3_access_key"));
+    assert!(wrapper.contains("/run/secrets/sccache_s3_secret_key"));
+    assert!(wrapper.contains("NOOK_SCCACHE_S3_MODE"));
+    assert!(wrapper.contains("SCCACHE_S3_ENABLE_VIRTUAL_HOST_STYLE"));
     assert!(wrapper.contains("exec \"$@\""));
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
+    assert!(!wrapper.contains("REDIS"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
-    assert!(rust_base.contains("NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}"));
+    assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
 
-    assert!(bake.contains("SCCACHE_REDIS_MODE") && bake.contains("= SCCACHE_REDIS_MODE"));
-    assert!(app_tasks.contains("--set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'"));
+    assert!(bake.contains("SCCACHE_S3_MODE") && bake.contains("= SCCACHE_S3_MODE"));
+    assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
 
     let core_dockerfile = read("nook-app/nook-core/Dockerfile");
     let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
@@ -221,7 +248,7 @@ fn assert_rust_build_cache_boundary() {
     ] {
         assert!(
             !dockerfile.contains("--mount=type=secret")
-                && !dockerfile.contains("/run/secrets/sccache_redis_password"),
+                && !dockerfile.contains("/run/secrets/sccache_s3_"),
             "{path} must not attach secrets to compiler layers"
         );
     }
@@ -330,8 +357,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         bake.contains(
             "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1"
         ) && bake.contains("rust_wasm_deps_cache_from")
-            && bake.contains("registry.nokey.sh"),
-        "WASM/native dependency restores must import registry.nokey.sh cache refs including rust-base"
+            && bake.contains("registry.dev.nokey.sh"),
+        "WASM/native dependency restores must import registry.dev.nokey.sh cache refs including rust-base"
     );
 
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
@@ -396,6 +423,8 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         "cache_location",
         "SCCACHE_REDIS_PASSWORD",
         "SCCACHE_REDIS_ENDPOINT",
+        "AWS_SECRET_ACCESS_KEY",
+        "SCCACHE_SECRET",
     ] {
         assert!(
             !reporter.contains(forbidden),

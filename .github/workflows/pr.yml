@@ -72,7 +72,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.nokey.sh
+          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
@@ -190,7 +190,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.nokey.sh
+          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
@@ -337,7 +337,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.nokey.sh
+          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
@@ -847,7 +847,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.nokey.sh
+          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"
@@ -897,7 +897,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
-          registry-host: registry.nokey.sh
+          registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           cache-write: "false"

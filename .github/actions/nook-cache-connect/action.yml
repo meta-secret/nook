@@ -1,11 +1,23 @@
 name: Connect Nook Rust cache
-description: Materialize the direct TLS Redis credential as a runner-local file.
+description: Materialize SeaweedFS S3 sccache credentials as runner-local files.
 
 inputs:
-  cache-redis-password:
-    description: Password for the persistent remote Rust compiler cache.
+  sccache-access-key:
+    description: SeaweedFS S3 access key for the persistent remote Rust compiler cache.
     required: false
     default: ""
+  sccache-secret-key:
+    description: SeaweedFS S3 secret key for the persistent remote Rust compiler cache.
+    required: false
+    default: ""
+  sccache-endpoint:
+    description: Public HTTPS hostname for the SeaweedFS S3 endpoint (no scheme).
+    required: false
+    default: "sccache.dev.nokey.sh"
+  sccache-bucket:
+    description: S3 bucket name used by sccache.
+    required: false
+    default: "nook-sccache"
 runs:
   using: node24
   main: main.js
