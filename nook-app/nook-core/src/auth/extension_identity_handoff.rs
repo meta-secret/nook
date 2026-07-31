@@ -45,6 +45,41 @@ impl ExtensionIdentityHandoffMaterial {
     }
 }
 
+/// Which event-signing seed to keep after adopting an extension age identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HandoffSigningSeedChoice {
+    /// Keep the durable local signer; the handoff seed is not yet authorized.
+    KeepStored { seed: String },
+    /// Adopt the handoff signer (empty-log create, or no local signer yet).
+    AdoptHandoff { seed: String, persist: bool },
+}
+
+/// Choose the signing seed after extension identity handoff.
+///
+/// Age identity may come from a reinstalled extension, but Approve must keep
+/// signing as the already-authorized local actor when the event log exists.
+#[must_use]
+pub fn choose_signing_seed_after_identity_handoff(
+    mut handoff_seed: String,
+    stored_seed: Option<String>,
+    event_log_has_events: bool,
+) -> HandoffSigningSeedChoice {
+    if event_log_has_events {
+        if let Some(seed) = stored_seed.filter(|value| !value.is_empty()) {
+            handoff_seed.zeroize();
+            return HandoffSigningSeedChoice::KeepStored { seed };
+        }
+        return HandoffSigningSeedChoice::AdoptHandoff {
+            seed: handoff_seed,
+            persist: true,
+        };
+    }
+    HandoffSigningSeedChoice::AdoptHandoff {
+        seed: handoff_seed,
+        persist: true,
+    }
+}
+
 fn validate_nonce(nonce: &str) -> Result<(), ExtensionIdentityHandoffError> {
     if nonce.is_empty() || nonce.len() > MAX_NONCE_LEN || nonce.chars().any(char::is_whitespace) {
         return Err(ExtensionIdentityHandoffError::InvalidNonce);
@@ -157,6 +192,38 @@ mod tests {
             signing.public_key()
         );
         Ok(())
+    }
+
+    #[test]
+    fn keeps_stored_signer_when_event_log_already_has_events() {
+        assert_eq!(
+            choose_signing_seed_after_identity_handoff(
+                "handoff-seed".to_owned(),
+                Some("authorized-seed".to_owned()),
+                true,
+            ),
+            HandoffSigningSeedChoice::KeepStored {
+                seed: "authorized-seed".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn adopts_handoff_signer_for_empty_log_or_missing_local_seed() {
+        assert_eq!(
+            choose_signing_seed_after_identity_handoff("handoff-seed".to_owned(), None, false,),
+            HandoffSigningSeedChoice::AdoptHandoff {
+                seed: "handoff-seed".to_owned(),
+                persist: true,
+            }
+        );
+        assert_eq!(
+            choose_signing_seed_after_identity_handoff("handoff-seed".to_owned(), None, true,),
+            HandoffSigningSeedChoice::AdoptHandoff {
+                seed: "handoff-seed".to_owned(),
+                persist: true,
+            }
+        );
     }
 
     #[test]

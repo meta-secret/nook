@@ -78,16 +78,35 @@ impl NookVaultManager {
             &nook_core::DevicePublicKey::parse(expected_device_public_key)?,
             &nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?,
         )?;
-        let (identity, signing_seed) = material.into_parts();
+        let (identity, handoff_signing_seed) = material.into_parts();
 
         self.device.identity_private_key.zeroize();
-        self.event_log.signing_seed.zeroize();
         self.device.id = identity.device_id().as_str().to_owned();
         self.device.identity_private_key = identity.secret_string().into_inner();
-        self.event_log.signing_seed = signing_seed;
-        // Persist immediately so a later lock/reload cannot mint a different
-        // unauthorized signer before Approve.
-        crate::storage::event_db::save_signing_seed(&self.event_log.signing_seed).await?;
+
+        // Age identity may come from a reinstalled extension. Keep any durable
+        // authorized signer when the vault already has events so Approve does
+        // not append JoinApproved as an unauthorized actor.
+        let stored_seed = crate::storage::event_db::load_signing_seed().await?;
+        let has_events = self.event_log_has_events().await?;
+        let choice = nook_core::choose_signing_seed_after_identity_handoff(
+            handoff_signing_seed,
+            stored_seed,
+            has_events,
+        );
+        self.event_log.signing_seed.zeroize();
+        match choice {
+            nook_core::HandoffSigningSeedChoice::KeepStored { seed } => {
+                self.event_log.signing_seed = seed;
+            }
+            nook_core::HandoffSigningSeedChoice::AdoptHandoff { seed, persist } => {
+                self.event_log.signing_seed = seed;
+                if persist {
+                    crate::storage::event_db::save_signing_seed(&self.event_log.signing_seed)
+                        .await?;
+                }
+            }
+        }
         Ok(())
     }
 

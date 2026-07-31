@@ -437,10 +437,12 @@ re-sealed for the extension device before leaving the approving vault session.
 - Pairing grant import must not persist quarantined/unauthorized event bytes.
   A rejected import (`event-log-access-not-granted`) rolls back that vault's
   local event projection so a later Approve can succeed. Simple Vault must
-  persist the event-signing seed from identity handoff and refuse to append
-  events the causal graph would quarantine; otherwise unauthorized
-  `JoinApproved` reaches the extension and Approve appears to succeed while
-  browser handoff fails.
+  persist the event-signing seed from identity handoff when creating an empty
+  event log, keep any durable authorized local signer when the log already has
+  events (a reinstalled extension handoff must not overwrite it), and refuse to
+  append events the causal graph would quarantine; otherwise unauthorized
+  `JoinApproved` reaches the extension or Approve fails as an unauthorized
+  actor.
 - A replicated `DeviceRevoked` event clears connected state, disables
   matching/filling, and removes the stale grant metadata.
 - Rotation requires a new device request and approval.

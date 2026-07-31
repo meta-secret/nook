@@ -99,7 +99,8 @@ pub use errors::{
     VaultRecoveryErrorKind, VaultResult, VaultSyncError, classify_vault_recovery_error,
 };
 pub use extension_identity_handoff::{
-    ExtensionIdentityHandoffMaterial, open_extension_identity_handoff,
+    ExtensionIdentityHandoffMaterial, HandoffSigningSeedChoice,
+    choose_signing_seed_after_identity_handoff, open_extension_identity_handoff,
     seal_extension_identity_handoff,
 };
 pub use google_authenticator_import::{
