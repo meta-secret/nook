@@ -652,11 +652,16 @@ end
 unless infra_taskfile.include?("docker build") &&
        infra_taskfile.include?("--network host") &&
        infra_taskfile.include?("secret_args=()") &&
-       infra_taskfile.include?("if test -s \"$redis_password\"") &&
        infra_taskfile.include?(
-         "--secret \"id=sccache_redis_password,src=$redis_password\""
+         'if test -s "$access_file" && test -s "$secret_file"'
+       ) &&
+       infra_taskfile.include?(
+         '--secret "id=sccache_s3_access_key,src=$access_file"'
+       ) &&
+       infra_taskfile.include?(
+         '--secret "id=sccache_s3_secret_key,src=$secret_file"'
        )
-  raise "Hive image builds must optionally use authenticated Redis sccache"
+  raise "Hive image builds must optionally use authenticated SeaweedFS S3 sccache"
 end
 unless infra_taskfile.include?("hive:diagnose:") &&
        infra_taskfile.include?("kubectl get endpoints kubernetes") &&
@@ -780,12 +785,18 @@ unless hive_taskfile.include?("--target cache-publish") &&
   raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
 unless hive_taskfile.include?(
-         'SCCACHE_REDIS_PASSWORD_FILE: \'{{default "../../.nook/cache/redis-password"'
+         'SCCACHE_S3_ACCESS_KEY_FILE: \'{{default "../../.nook/cache/sccache-access-key"'
        ) &&
        hive_taskfile.include?(
-         '--secret "id=sccache_redis_password,src=$credential_file"'
+         'SCCACHE_S3_SECRET_KEY_FILE: \'{{default "../../.nook/cache/sccache-secret-key"'
+       ) &&
+       hive_taskfile.include?(
+         '--secret "id=sccache_s3_access_key,src=$access_file"'
+       ) &&
+       hive_taskfile.include?(
+         '--secret "id=sccache_s3_secret_key,src=$secret_file"'
        )
-  raise "Hive local verification must consume the ignored Redis credential as a BuildKit secret"
+  raise "Hive local verification must consume ignored SeaweedFS S3 credentials as BuildKit secrets"
 end
 unless hive_taskfile.include?("Refusing oversized Hive test export") &&
        hive_taskfile.include?("524288")

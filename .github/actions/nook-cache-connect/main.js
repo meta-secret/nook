@@ -3,8 +3,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const inputName = "INPUT_CACHE-REDIS-PASSWORD";
-const redisPassword = process.env[inputName] || "";
+const accessKeyInput = "INPUT_SCCACHE-ACCESS-KEY";
+const secretKeyInput = "INPUT_SCCACHE-SECRET-KEY";
+const endpointInput = "INPUT_SCCACHE-ENDPOINT";
+const bucketInput = "INPUT_SCCACHE-BUCKET";
+
+const accessKey = process.env[accessKeyInput] || "";
+const secretKey = process.env[secretKeyInput] || "";
+const endpoint = process.env[endpointInput] || "sccache.dev.nokey.sh";
+const bucket = process.env[bucketInput] || "nook-sccache";
+const credentialsPresent = Boolean(accessKey && secretKey);
 
 const githubEnvironmentPath = process.env.GITHUB_ENV;
 if (!githubEnvironmentPath) {
@@ -25,12 +33,14 @@ fs.appendFileSync(
   [
     "NOOK_SCCACHE_BACKEND=direct_compile",
     `NOOK_SCCACHE_BACKEND_REASON=${
-      redisPassword ? "persistent_credential_available" : missingCredentialReason
+      credentialsPresent
+        ? "persistent_credential_available"
+        : missingCredentialReason
     }`,
     "",
   ].join("\n"),
 );
-if (!redisPassword) {
+if (!credentialsPresent) {
   process.exit(0);
 }
 
@@ -53,15 +63,25 @@ function writeCredential(filename, value) {
   return credentialPath;
 }
 
-const redisPasswordFile = writeCredential("redis-password", redisPassword);
-delete process.env[inputName];
+const accessKeyFile = writeCredential("sccache-access-key", accessKey);
+const secretKeyFile = writeCredential("sccache-secret-key", secretKey);
+delete process.env[accessKeyInput];
+delete process.env[secretKeyInput];
+
+const endpointUrl = endpoint.startsWith("https://")
+  ? endpoint
+  : `https://${endpoint}`;
+
 fs.appendFileSync(
   githubEnvironmentPath,
   [
-    "SCCACHE_REDIS_MODE=external",
-    `SCCACHE_REDIS_PASSWORD_FILE=${redisPasswordFile}`,
+    "SCCACHE_S3_MODE=external",
+    `SCCACHE_S3_ACCESS_KEY_FILE=${accessKeyFile}`,
+    `SCCACHE_S3_SECRET_KEY_FILE=${secretKeyFile}`,
+    `SCCACHE_ENDPOINT=${endpointUrl}`,
+    `SCCACHE_BUCKET=${bucket}`,
     "NOOK_SCCACHE_BACKEND=remote",
-    "NOOK_SCCACHE_BACKEND_REASON=persistent_tls_service",
+    "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
     "",
   ].join("\n"),
 );

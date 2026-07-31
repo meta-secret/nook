@@ -36,7 +36,7 @@ Hive separates four responsibilities:
    containment and lifecycle tools, not a statement that the agent is hostile.
 
 Hive does not add NATS, Redis, PostgreSQL, RabbitMQ, KubeVirt, or a
-Kata-specific application orchestrator. Redis used by Hive CI is only an
+Kata-specific application orchestrator. SeaweedFS S3 used by Hive CI is only an
 optional remote `sccache` compiler-output cache; it is not runtime coordination
 or durable Hive state.
 
@@ -578,34 +578,36 @@ The Dockerfile follows Nook's cargo-chef boundary:
 
 Pull requests restore the `nook-hive-linux-amd64-v1` GitHub Actions BuildKit
 scope read-only. Only Main publishes it after both Hive checks and Neo4j-backed
-behavior tests pass. Redis compiler hits avoid recompilation, while the parallel
-BuildKit stages also remove Cargo metadata and linking work from the serial
-critical path.
+behavior tests pass. SeaweedFS S3 compiler hits avoid recompilation, while the
+parallel BuildKit stages also remove Cargo metadata and linking work from the
+serial critical path.
 
-Trusted same-repository Hive runs also use the remote TLS Redis compiler cache:
+Trusted same-repository Hive runs also use the remote SeaweedFS S3 compiler
+cache:
 
 ```text
-rediss://redis-ovh-borg-1.bynull.link:6380
+https://sccache.dev.nokey.sh
+bucket: nook-sccache
 key prefix: nook-hive
-credential: NOOK_CACHE_REDIS_PASSWORD
+credentials: NOOK_SCCACHE_ACCESS_KEY / NOOK_SCCACHE_SECRET_KEY
 ```
 
-Redis `sccache` and GHA BuildKit are separate layers:
+SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
 
-- Redis stores Rust compiler outputs.
-- GHA stores BuildKit layers and dependency/source graph snapshots.
+- SeaweedFS stores Rust compiler outputs.
+- Registry BuildKit stores layers and dependency/source graph snapshots.
 - Neither is a correctness dependency.
-- `task infra:redis:credential:sync` writes the ignored, mode-`0600`
-  `.nook/cache/redis-password` file. Hive build/check/test tasks use that path
-  by default, while an explicit `SCCACHE_REDIS_PASSWORD_FILE` still overrides
-  it in CI.
+- `task infra:sccache:credential:sync` writes the ignored, mode-`0600`
+  `.nook/cache/sccache-access-key` and `sccache-secret-key` files. Hive
+  build/check/test tasks use those paths by default, while explicit
+  `SCCACHE_S3_*_KEY_FILE` overrides still apply in CI.
 - Forks and local runs without either credential file compile normally and
   report the missing cache credential.
-- The Redis credential is mounted as a BuildKit secret or read-only runtime
-  secret and is never copied into an image or cache layer.
-- The Redis credential is not needed by the Hive worker. Worker tasks publish
+- The S3 credentials are mounted as BuildKit secrets or read-only runtime
+  secrets and are never copied into an image or cache layer.
+- The S3 credentials are not needed by the Hive worker. Worker tasks publish
   changes and rely on repository-owned GitHub verification, where the same
-  Redis cache is attached by the workflow.
+  SeaweedFS cache is attached by the workflow.
 
 ## 10. Taskfile operations
 

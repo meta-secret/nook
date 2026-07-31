@@ -1,0 +1,160 @@
+version: '3'
+
+# SeaweedFS S3 sccache operations.
+vars:
+  NOOK_SCCACHE_HOST: '{{default "sccache.dev.nokey.sh" .NOOK_SCCACHE_HOST}}'
+  NOOK_SCCACHE_BUCKET: '{{default "nook-sccache" .NOOK_SCCACHE_BUCKET}}'
+
+tasks:
+  sccache:credential:ensure:
+    desc: Ensure SeaweedFS S3 credentials and config exist on the Borg host.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        secrets_dir="$remote_dir/secrets"
+        access_file="$secrets_dir/sccache-access-key"
+        secret_file="$secrets_dir/sccache-secret-key"
+        s3_config="$secrets_dir/seaweedfs-s3.json"
+        data_dir="/var/lib/nook/seaweedfs"
+
+        install -d -m 0700 "$secrets_dir"
+        sudo -n install -d -m 0750 -o root -g root "$data_dir"
+        if test ! -s "$access_file"; then
+          umask 077
+          openssl rand -hex 20 > "$access_file"
+        fi
+        if test ! -s "$secret_file"; then
+          umask 077
+          openssl rand -hex 40 > "$secret_file"
+        fi
+        chmod 0600 "$access_file" "$secret_file"
+        access_key="$(cat "$access_file")"
+        secret_key="$(cat "$secret_file")"
+        umask 077
+        printf '%s\n' "{
+          \"identities\": [
+            {
+              \"name\": \"nook\",
+              \"credentials\": [
+                {
+                  \"accessKey\": \"$access_key\",
+                  \"secretKey\": \"$secret_key\"
+                }
+              ],
+              \"actions\": [\"Admin\", \"Read\", \"Write\", \"List\", \"Tagging\"]
+            }
+          ]
+        }" > "$s3_config"
+        chmod 0600 "$s3_config"
+        REMOTE
+
+  sccache:credential:sync:
+    desc: Sync SeaweedFS S3 credentials to local cache and GitHub Actions secrets.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        cache_dir="$repo_root/.nook/cache"
+        host="{{.NOOK_SCCACHE_HOST}}"
+        bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        install -d -m 0700 "$cache_dir"
+        umask 077
+        ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-access-key'" \
+          > "$cache_dir/sccache-access-key"
+        ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-secret-key'" \
+          > "$cache_dir/sccache-secret-key"
+        printf '%s\n' "$host" > "$cache_dir/sccache-host"
+        printf '%s\n' "$bucket" > "$cache_dir/sccache-bucket"
+        chmod 0600 \
+          "$cache_dir/sccache-access-key" \
+          "$cache_dir/sccache-secret-key" \
+          "$cache_dir/sccache-host" \
+          "$cache_dir/sccache-bucket"
+        gh secret set NOOK_SCCACHE_ENDPOINT --body "$host"
+        gh secret set NOOK_SCCACHE_ACCESS_KEY \
+          --body "$(cat "$cache_dir/sccache-access-key")"
+        gh secret set NOOK_SCCACHE_SECRET_KEY \
+          --body "$(cat "$cache_dir/sccache-secret-key")"
+        gh secret set NOOK_SCCACHE_BUCKET --body "$bucket"
+        echo "SeaweedFS sccache credentials synchronized"
+        BASH
+
+  sccache:bucket:ensure:
+    desc: Ensure the nook-sccache S3 bucket exists on the Borg SeaweedFS endpoint.
+    silent: true
+    deps: [sccache:credential:ensure]
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        access_key="$(cat "$remote_dir/secrets/sccache-access-key")"
+        secret_key="$(cat "$remote_dir/secrets/sccache-secret-key")"
+        bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        # Create bucket via path-style PutBucket against loopback S3.
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url http://127.0.0.1:8333 \
+          s3api create-bucket --bucket "$bucket" >/dev/null 2>&1 || true
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url http://127.0.0.1:8333 \
+          s3api head-bucket --bucket "$bucket"
+        REMOTE
+
+  sccache:check:
+    desc: Verify SeaweedFS S3 is authenticated on the public hostname.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        host="{{.NOOK_SCCACHE_HOST}}"
+        bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        access_key="$(cat "$remote_dir/secrets/sccache-access-key")"
+        secret_key="$(cat "$remote_dir/secrets/sccache-secret-key")"
+
+        if ss --tcp --listening --numeric --no-header 'sport = :6380' 2>/dev/null |
+          grep -q .; then
+          echo "Host must not listen on :6380 after Redis retirement" >&2
+          exit 1
+        fi
+        if docker compose -f "$remote_dir/compose.yaml" ps --services 2>/dev/null |
+          grep -qx redis; then
+          echo "Redis compose service must be removed" >&2
+          exit 1
+        fi
+
+        anon="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/$bucket" || true)"
+        case "$anon" in
+          401|403) ;;
+          *)
+            echo "anonymous sccache access must be denied, got $anon" >&2
+            exit 1
+            ;;
+        esac
+
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "https://$host" \
+          s3api head-bucket --bucket "$bucket"
+        echo "sccache.dev.nokey.sh authenticated S3 check passed"
+        REMOTE

@@ -372,7 +372,7 @@ tasks:
               -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
           )"
           case "$hive_image" in
-            registry.nokey.sh/nook-hive@sha256:*) ;;
+            registry.dev.nokey.sh/nook-hive@sha256:*) ;;
             *)
               echo "Refusing unpinned existing Hive image: $hive_image" >&2
               exit 1

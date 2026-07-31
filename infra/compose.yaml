@@ -1,45 +1,40 @@
 name: nook-infra
 
 services:
-  redis:
-    image: redis:8.2.2-alpine@sha256:59b6e694653476de2c992937ebe1c64182af4728e54bb49e9b7a6c26614d8933
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.03@sha256:d24be3bc1d6e8e305c095c446cb9a00d40e3afdac82fb2a1cc96f2d42c4a8e80
     command:
-      - sh
-      - -ec
-      - >-
-        password="$$(cat /run/secrets/redis-password)";
-        mkdir -p /run/redis;
-        chown redis:redis /run/redis;
-        chmod 0700 /run/redis;
-        umask 077;
-        printf '%s\n'
-        'bind 127.0.0.1'
-        'protected-mode no'
-        "requirepass $$password"
-        'appendonly yes'
-        'appendfsync everysec'
-        'maxmemory 12gb'
-        'maxmemory-policy allkeys-lru'
-        > /run/redis/redis.conf;
-        chown redis:redis /run/redis/redis.conf;
-        exec /usr/local/bin/docker-entrypoint.sh redis-server /run/redis/redis.conf
+      - server
+      - -dir=/data
+      - -ip=127.0.0.1
+      - -ip.bind=127.0.0.1
+      - -master.port=9333
+      # Avoid host :8080 — kube-router already listens there.
+      - -volume.port=18080
+      - -filer
+      - -filer.port=8888
+      - -s3
+      - -s3.port=8333
+      - -s3.ip.bind=127.0.0.1
+      - -s3.config=/etc/seaweedfs/s3.json
     restart: unless-stopped
     network_mode: host
     volumes:
-      - redis-data:/data
-    secrets:
-      - redis-password
+      - /var/lib/nook/seaweedfs:/data
+      - ./secrets/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
+      # Anonymous S3 correctly returns 403; treat that as healthy listener proof.
       test:
         [
           "CMD-SHELL",
-          "REDISCLI_AUTH=$$(cat /run/secrets/redis-password) redis-cli -h 127.0.0.1 ping",
+          "code=$$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8333/); case $$code in 200|401|403) exit 0;; *) exit 1;; esac",
         ]
       interval: 5s
-      timeout: 3s
-      retries: 12
-    mem_limit: 14g
-    pids_limit: 256
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+    mem_limit: 4g
+    pids_limit: 512
     security_opt:
       - no-new-privileges:true
     logging:
@@ -50,7 +45,6 @@ services:
   traefik:
     image: traefik:v3.7.1@sha256:6b9cbca6fac42ab0075f5437d8dc1685cfd188626d8d515839ea94f8b6271c42
     command:
-      - --entryPoints.redis.address=:6380
       - --entryPoints.websecure.address=:443
       - --providers.file.filename=/etc/traefik/dynamic.yaml
       - --providers.file.watch=true
@@ -64,7 +58,7 @@ services:
       - ./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro
       - traefik-data:/data
     depends_on:
-      redis:
+      seaweedfs:
         condition: service_healthy
     mem_limit: 256m
     pids_limit: 128
@@ -76,9 +70,4 @@ services:
         max-file: "3"
 
 volumes:
-  redis-data:
   traefik-data:
-
-secrets:
-  redis-password:
-    file: ./secrets/redis-password

@@ -20,7 +20,7 @@ def main() -> int:
     compose = read("infra/compose.yaml")
     hosts = read("infra/k0s/config/registry-hosts.toml")
 
-    assert "registry.nokey.sh" in registry_task
+    assert "registry.dev.nokey.sh" in registry_task
     assert "nook-zot-htpasswd" in registry_task
     assert "kubectl port-forward --" not in registry_task
     assert "port-forward --address" not in registry_task
@@ -30,27 +30,34 @@ def main() -> int:
     assert "gh secret set NOOK_REGISTRY_PASSWORD" in registry_task
     assert "kubectl.*port-forward.*nook-zot" in registry_task
 
-    assert 'clusterIP: 10.96.90.10' in zot
+    assert "clusterIP: 10.96.90.10" in zot
     assert '"htpasswd"' in zot
     assert "nook-zot-htpasswd" in zot
     assert "kind: Service" in zot
     assert re.search(r"cidr:\s*10\.0\.0\.0/8", zot)
 
-    assert "Host(`registry.nokey.sh`)" in traefik
+    assert "Host(`registry.dev.nokey.sh`)" in traefik
+    assert "Host(`sccache.dev.nokey.sh`)" in traefik
     assert "http://10.96.90.10:5000" in traefik
-    assert "127.0.0.1:6379" in traefik
+    assert "http://127.0.0.1:8333" in traefik
+    assert "127.0.0.1:6379" not in traefik
+    assert "HostSNI(" not in traefik
 
     assert "network_mode: host" in compose
-    assert "bind 127.0.0.1" in compose
-    assert "network_mode: host" in compose
+    assert "seaweedfs" in compose
+    assert "chrislusf/seaweedfs" in compose
+    assert "-s3.port=8333" in compose
+    assert "redis" not in compose.lower() or "seaweedfs" in compose
+    assert "\n  redis:" not in compose
     assert "443:443" not in compose
     assert "5000:5000" not in compose
+    assert "6380" not in compose
 
-    assert 'server = "https://registry.nokey.sh"' in hosts
+    assert 'server = "https://registry.dev.nokey.sh"' in hosts
     assert "127.0.0.1:5000" not in hosts
 
     hive = read("infra/tasks/hive.yml")
-    assert "registry.nokey.sh/nook-hive" in hive
+    assert "registry.dev.nokey.sh/nook-hive" in hive
     assert "127.0.0.1:5000" not in hive
 
     print("Public Zot registry contract: ok")

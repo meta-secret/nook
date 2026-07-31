@@ -246,18 +246,13 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [
         "network_mode: host",
-        "bind 127.0.0.1",
-        "--entryPoints.redis.address=:6380",
+        "chrislusf/seaweedfs:",
+        "-s3.port=8333",
+        "-s3.ip.bind=127.0.0.1",
+        "-s3.config=/etc/seaweedfs/s3.json",
+        "/var/lib/nook/seaweedfs:/data",
+        "./secrets/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro",
         "--entryPoints.websecure.address=:443",
-        "requirepass $$password",
-        "/run/redis/redis.conf",
-        "docker-entrypoint.sh redis-server /run/redis/redis.conf",
-        "/run/secrets/redis-password",
-        "file: ./secrets/redis-password",
-        "appendonly yes",
-        "maxmemory-policy allkeys-lru",
-        "allkeys-lru",
-        "redis-data:/data",
         "traefik:v3.7.1@sha256:",
         "--certificatesResolvers.letsencrypt.acme.tlsChallenge=true",
         "./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro",
@@ -271,14 +266,17 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        !compose.contains("--requirepass"),
-        "the Redis password must be loaded from a restrictive config, not process argv"
+        !compose.contains("\n  redis:")
+            && !compose.contains("redis-data")
+            && !compose.contains("redis-password")
+            && !compose.contains("--entryPoints.redis"),
+        "Redis must be fully retired from Compose after the SeaweedFS cutover"
     );
     assert!(
         !compose.contains("6380:6379")
             && !compose.contains("5000:5000")
             && !compose.contains("ports:"),
-        "host-network Traefik/Redis must not publish bridge port maps"
+        "host-network Traefik/SeaweedFS must not publish bridge port maps"
     );
     assert!(
         !compose.contains("\n  registry:") && !compose.contains("registry-data"),
@@ -301,6 +299,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "kata",
         "neo4j",
         "registry",
+        "sccache",
         "hive",
         "operations",
     ];
@@ -334,17 +333,24 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
 
     let traefik = read("infra/traefik-dynamic.yaml");
     for required in [
-        "HostSNI(`redis-ovh-borg-1.bynull.link`)",
         "certResolver: letsencrypt",
-        "address: 127.0.0.1:6379",
-        "Host(`registry.nokey.sh`)",
+        "Host(`registry.dev.nokey.sh`)",
         "url: http://10.96.90.10:5000",
+        "Host(`sccache.dev.nokey.sh`)",
+        "url: http://127.0.0.1:8333",
+        "passHostHeader: true",
     ] {
         assert!(
             traefik.contains(required),
             "Traefik TLS routing is missing: {required}"
         );
     }
+    assert!(
+        !traefik.contains("HostSNI(")
+            && !traefik.contains("127.0.0.1:6379")
+            && !traefik.contains("redis"),
+        "Traefik must not retain Redis TCP routing after the SeaweedFS cutover"
+    );
 
     let nftables = read("infra/nftables.conf");
     for required in [
@@ -352,7 +358,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "chain forward",
         "policy drop",
         "ct state established,related accept",
-        "tcp dport { 22, 443, 6380 } accept",
+        "tcp dport { 22, 443 } accept",
         "iifname \"docker0\" accept",
         "iifname \"br-*\" accept",
         "oifname \"docker0\" accept",
@@ -365,6 +371,10 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
             "host firewall must preserve default-drop filtering and Docker forwarding: {required}"
         );
     }
+    assert!(
+        !nftables.contains("6380"),
+        "host firewall must not expose retired Redis TCP 6380"
+    );
     Ok(())
 }
 
@@ -387,14 +397,16 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
         "ssh -n -o BatchMode=yes",
-        "docker compose -f '$remote_compose' up -d --wait redis traefik",
-        "openssl rand -hex 32",
-        "chmod 0600 '$remote_secrets/redis-password'",
+        "docker compose -f '$remote_compose' up -d --wait --remove-orphans seaweedfs traefik",
+        "sudo -n install -d -m 0750 /var/lib/nook/seaweedfs",
         "traefik-dynamic.yaml.next",
-        "cat /run/secrets/redis-password",
-        "redis-cli ping",
+        "grep -qx seaweedfs",
         "grep -qx traefik",
+        "task: sccache:credential:ensure",
+        "task: sccache:bucket:ensure",
         "task: registry:deploy",
+        "docker volume rm nook-infra_redis-data",
+        "rm -f '$remote_dir/secrets/redis-password'",
     ] {
         assert!(
             deploy.contains(required),
@@ -406,14 +418,32 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     assert!(!deploy.contains("chmod 0444"));
     assert!(!infra_tasks.contains("-e REDISCLI_AUTH"));
     assert!(!infra_tasks.contains("--env REDISCLI_AUTH"));
+    assert!(!deploy.contains("up -d --wait redis"));
     assert!(!deploy.contains("cloudflare"));
 
-    let sync = operations
-        .split("\n  redis:credential:sync:\n")
-        .nth(1)
-        .context("operations taskfile must define Redis credential sync")?;
-    assert!(sync.contains(".nook/cache/redis-password"));
-    assert!(sync.contains("chmod 0600"));
+    let sccache = read("infra/tasks/sccache.yml");
+    for required in [
+        "sccache:credential:ensure:",
+        "sccache:credential:sync:",
+        "sccache:bucket:ensure:",
+        "sccache:check:",
+        "cache_dir=\"$repo_root/.nook/cache\"",
+        "sccache-access-key",
+        "sccache-secret-key",
+        "gh secret set NOOK_SCCACHE_ACCESS_KEY",
+        "gh secret set NOOK_SCCACHE_SECRET_KEY",
+        "NOOK_SCCACHE_ENDPOINT",
+        "sccache.dev.nokey.sh",
+        "nook-sccache",
+        "chmod 0600",
+    ] {
+        assert!(
+            sccache.contains(required),
+            "SeaweedFS sccache credential lifecycle is missing: {required}"
+        );
+    }
+    assert!(!operations.contains("redis:credential"));
+    assert!(!operations.contains("redis:stats"));
 
     assert!(read(".gitignore").contains("/infra/secrets/"));
     assert!(read(".dockerignore").contains("infra/secrets"));
@@ -493,7 +523,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
     assert!(
         uninstall.contains("disable --now nook-zot-registry-loopback.service")
             && uninstall.contains("test -d /var/lib/hive/zot")
-            && uninstall.contains("certs.d/registry.nokey.sh"),
+            && uninstall.contains("certs.d/registry.dev.nokey.sh"),
         "k0s uninstall must remove any legacy forwarding unit, retain Zot data, and use the public registry host config"
     );
     Ok(())

@@ -1,4 +1,4 @@
-server = "https://registry.nokey.sh"
+server = "https://registry.dev.nokey.sh"
 
-[host."https://registry.nokey.sh"]
+[host."https://registry.dev.nokey.sh"]
   capabilities = ["pull", "resolve", "push"]

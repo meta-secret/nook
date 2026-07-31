@@ -292,17 +292,16 @@ commit-scoped host directory, then builds a web-only image. Concurrent builds
 cannot consume each other's handoff; Rust `target/` and the compiler toolchain
 never enter `nook-web:local`.
 
-Rust compilation can use the persistent password-protected Redis service
-deployed from [`infra/`](infra/) directly over verified TLS at
-`rediss://redis-ovh-borg-1.bynull.link:6380`. Run
-`task infra:redis:credential:sync` once to create the ignored mode-`0600`
-`.nook/cache/redis-password` file. Without that file, local and untrusted CI
-builds compile normally without sccache. Hosted Main, pull-request,
-arbitrary-ref, dependency-update, and AI-authored jobs do not receive the
-password; keeping Main's cache publisher secret-free makes its BuildKit layers
-reusable by PRs. Override the endpoint with
-`SCCACHE_REDIS_ENDPOINT`. Runtime containers receive an explicit 1,048,576
-open-file limit; override it with `DOCKER_NOFILE_LIMIT`.
+Rust compilation can use authenticated SeaweedFS S3 sccache deployed from
+[`infra/`](infra/) at `https://sccache.dev.nokey.sh` (bucket `nook-sccache`).
+Run `task infra:sccache:credential:sync` once to create the ignored mode-`0600`
+`.nook/cache/sccache-access-key` and `sccache-secret-key` files. Without those
+files, local and untrusted CI builds compile normally without sccache. Hosted
+Main, pull-request, arbitrary-ref, dependency-update, and AI-authored jobs do
+not receive the S3 keys; keeping Main's cache publisher secret-free makes its
+BuildKit layers reusable by PRs. Override the endpoint with `SCCACHE_ENDPOINT`.
+Runtime containers receive an explicit 1,048,576 open-file limit; override it
+with `DOCKER_NOFILE_LIMIT`.
 
 macOS has no inotify; Docker workloads use the inotify implementation in Docker
 Desktop's Linux VM. Reapply after Docker Desktop restarts:
@@ -380,8 +379,8 @@ task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deploymen
 task pr:review PR=410      # optional idempotent exact-head Codex review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
-task sccache:stats          # shared compiler-cache keys, memory, hits, and misses
-task infra:deploy           # deploy Redis/registry plus k0s, Kata, Neo4j, and Hive
+task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
+task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, Neo4j, and Hive
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
@@ -398,7 +397,7 @@ task infra:services:repair-network # recover Docker 26 chains without daemon res
 task hive:check             # format-check and lint the Rust Hive worker
 task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
-task infra:redis:stats      # remote compiler-cache memory and hit statistics
+task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 ```
 
 The explicitly triggered **Rust ecosystem checks** workflow adds dependency
@@ -437,7 +436,7 @@ Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
 fresh VM restores distinct BuildKit cache refs from the authenticated OCI
-registry at `registry.nokey.sh`. Main refreshes those refs after lane
+registry at `registry.dev.nokey.sh`. Main refreshes those refs after lane
 verification. Every PR job reads only that complete Main lineage and never
 exports PR-local caches. The WASM producer restores Main's dedicated, complete
 WASM dependency boundary so it does not compete with the larger native
@@ -450,9 +449,9 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 `task wasm:*` commands load a separate source-sealed Rust image on demand.
 
 Rust compilation has a second cache boundary below Docker layers: pinned
-`sccache` clients use the direct TLS Redis endpoint to reuse compatible
-source-sensitive compiler outputs whenever a credential is available. A
-secret-free build bypasses sccache. Redis does not cache Cargo downloads or
+`sccache` clients use authenticated SeaweedFS S3 to reuse compatible
+source-sensitive compiler outputs whenever credentials are available. A
+secret-free build bypasses sccache. SeaweedFS does not cache Cargo downloads or
 Docker layers.
 PR CI also uploads the small native coverage and generated WASM handoffs. After
 the complete PR workflow succeeds, default-branch-only

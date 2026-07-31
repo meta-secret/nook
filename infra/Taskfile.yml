@@ -53,6 +53,10 @@ includes:
     taskfile: tasks/registry.yml
     dir: ..
     flatten: true
+  sccache:
+    taskfile: tasks/sccache.yml
+    dir: ..
+    flatten: true
   hive:
     taskfile: tasks/hive.yml
     dir: ..

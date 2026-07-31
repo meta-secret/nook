@@ -1,26 +1,17 @@
-tcp:
-  routers:
-    redis:
-      entryPoints:
-        - redis
-      rule: HostSNI(`redis-ovh-borg-1.bynull.link`)
-      service: redis
-      tls:
-        certResolver: letsencrypt
-
-  services:
-    redis:
-      loadBalancer:
-        servers:
-          - address: 127.0.0.1:6379
-
 http:
   routers:
     registry:
       entryPoints:
         - websecure
-      rule: Host(`registry.nokey.sh`)
+      rule: Host(`registry.dev.nokey.sh`)
       service: registry
+      tls:
+        certResolver: letsencrypt
+    sccache:
+      entryPoints:
+        - websecure
+      rule: Host(`sccache.dev.nokey.sh`)
+      service: sccache
       tls:
         certResolver: letsencrypt
 
@@ -29,3 +20,8 @@ http:
       loadBalancer:
         servers:
           - url: http://10.96.90.10:5000
+    sccache:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://127.0.0.1:8333

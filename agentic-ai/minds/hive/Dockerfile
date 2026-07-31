@@ -7,14 +7,18 @@ FROM rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d8251
 
 ARG SCCACHE_VERSION=0.16.0
 ARG SCCACHE_SHA256=aec995a83ad3dff3d14b6314e08858b7b73d35ca85a5bcf3d3a9ec07dee35588
-ARG SCCACHE_REDIS_MODE=external
-ARG SCCACHE_REDIS_ENDPOINT=rediss://redis-ovh-borg-1.bynull.link:6380
+ARG SCCACHE_S3_MODE=external
+ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
+ARG SCCACHE_BUCKET=nook-sccache
 
 ENV CARGO_INCREMENTAL=0
 ENV RUSTC_WRAPPER=/usr/local/bin/nook-sccache
-ENV NOOK_SCCACHE_REDIS_MODE=${SCCACHE_REDIS_MODE}
-ENV SCCACHE_REDIS_ENDPOINT=${SCCACHE_REDIS_ENDPOINT}
-ENV SCCACHE_REDIS_KEY_PREFIX=nook-hive
+ENV NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}
+ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}
+ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}
+ENV SCCACHE_REGION=auto
+ENV SCCACHE_S3_USE_SSL=true
+ENV SCCACHE_S3_KEY_PREFIX=nook-hive
 ENV SCCACHE_IGNORE_SERVER_IO_ERROR=1
 ENV SCCACHE_SERVER_UDS=/tmp/nook-hive-sccache.sock
 
@@ -110,7 +114,7 @@ RUN mkdir -p lace/src hive/src \
 # Production image builds use a release-profile cargo-chef layer.
 FROM fetched-dependencies AS dependencies
 COPY --from=chef-planner /build/recipe.json recipe.json
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo chef cook --release --recipe-path recipe.json \
     && nook-sccache-report hive-chef-release
 
@@ -121,13 +125,13 @@ RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_re
 # Redis remains the compiler-object fallback while BuildKit preserves Cargo
 # metadata and linked dependencies.
 FROM fetched-dependencies AS test-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo test --locked -p hive --no-run \
     && nook-sccache-report hive-test-dependencies \
     && install -D /dev/null /opt/nook/hive-test-dependencies
 
 FROM fetched-dependencies AS clippy-dependencies
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     printf 'fn main() {}\n' > hive/src/main.rs \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy-dependencies \
@@ -140,7 +144,7 @@ COPY hive/tests hive/tests
 RUN find lace/src hive/src hive/tests -type f -exec touch {} +
 
 FROM check-source AS check
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo fmt --all -- --check \
     && cargo clippy --locked -p hive --all-targets -- -D warnings \
     && nook-sccache-report hive-clippy \
@@ -167,7 +171,7 @@ FROM test-source AS test-compile
 # Taskfile runs them in the pinned Rust base with normal container host
 # networking, so Neo4j remains reachable without loading Cargo target layers.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
     && cargo test --locked -p hive --no-run --message-format=json \
       > /tmp/hive-test-artifacts.jsonl \
@@ -211,7 +215,7 @@ COPY --from=test-dependencies /opt/nook/hive-test-dependencies /hive-test-depend
 COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies /hive-clippy-dependencies
 
 FROM release-source AS builder
-RUN --mount=type=secret,id=sccache_redis_password,target=/run/secrets/sccache_redis_password,required=false \
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo build --locked --release -p hive \
     && nook-sccache-report hive-release
 
