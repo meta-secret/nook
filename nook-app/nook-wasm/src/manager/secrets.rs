@@ -308,17 +308,18 @@ impl NookVaultManager {
         .await
     }
 
-    /// Import passwords and verification codes from an Apple Passwords CSV
-    /// export in one signed event. The plaintext CSV is parsed only in memory.
-    #[wasm_bindgen(js_name = importApplePasswordsCsv)]
-    pub async fn import_apple_passwords_csv(
+    /// Import passwords and verification codes from an Apple Passwords CSV or
+    /// Safari browsing-data ZIP export in one signed event. The export is
+    /// parsed only in memory.
+    #[wasm_bindgen(js_name = importApplePasswordsExport)]
+    pub async fn import_apple_passwords_export(
         &mut self,
-        csv: String,
+        export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
-        let csv = zeroize::Zeroizing::new(csv);
-        let plan = nook_core::plan_apple_passwords_import(csv.as_str())
+        let export = zeroize::Zeroizing::new(export);
+        let plan = nook_core::plan_apple_passwords_export(export.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
-        drop(csv);
+        drop(export);
         self.commit_secret_import(
             plan.items,
             plan.skipped_unsupported,

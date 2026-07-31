@@ -138,7 +138,7 @@ test.describe('local vault', () => {
     await page.getByTestId('vault-admin-tab').click()
     const importSection = page.getByTestId('vault-import-export-section')
     await expect(importSection).toBeVisible()
-    await expect(importSection).not.toContainText('Apple Passwords')
+    await expect(importSection).not.toContainText('Safari / Apple Passwords')
     await expect(importSection).not.toContainText('Proton Pass')
 
     await expandSettingsSection(page, 'import')
@@ -298,7 +298,7 @@ test.describe('local vault', () => {
     ).toContainText('1 duplicates')
   })
 
-  test('imports Apple Passwords logins and verification codes from CSV', async ({
+  test('imports Safari / Apple Passwords logins and verification codes from CSV', async ({
     page,
   }) => {
     const exportCsv = [
@@ -345,6 +345,41 @@ test.describe('local vault', () => {
     await expect(
       page.getByTestId('apple-passwords-import-result'),
     ).toContainText('2 duplicates')
+  })
+
+  test('imports Safari browsing-data ZIP passwords', async ({ page }) => {
+    const exportCsv = [
+      'Title,URL,Username,Password,Notes,OTPAuth',
+      [
+        '"Imported Safari account"',
+        'https://safari-import.example/login',
+        'safari-alice',
+        'safari-imported-password',
+        '"Imported from Safari"',
+        '',
+      ].join(','),
+    ].join('\n')
+    const exportZip = storedZip({
+      'Bookmarks.html': '<html></html>',
+      'Passwords.csv': exportCsv,
+      'PaymentCards.json': '{"payment_cards":[]}',
+    })
+
+    await openApplePasswordsImport(page)
+    await page.getByTestId('apple-passwords-csv-file').setInputFiles({
+      name: 'Safari Export.zip',
+      mimeType: 'application/zip',
+      buffer: exportZip,
+    })
+    await page.getByTestId('apple-passwords-import-submit').click()
+    await expect(
+      page.getByTestId('apple-passwords-import-result'),
+    ).toContainText('Imported 1 items')
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'safari-alice',
+    )
   })
 
   test('imports Bitwarden logins and secure notes from JSON', async ({
