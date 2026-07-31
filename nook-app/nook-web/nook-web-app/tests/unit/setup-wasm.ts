@@ -38,3 +38,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
 await initNookWasm()
 configureVaultApplication(VaultApplication.UnifiedDevelopment)
+
+const { companionWasmReady } =
+  await import('../../../nook-web-shared/src/extension/companion-ready')
+await companionWasmReady

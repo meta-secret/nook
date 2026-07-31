@@ -42,10 +42,17 @@ function toArrayBuffer(source: ArrayLike<number>): ArrayBuffer {
 }
 
 function embeddedCompanionWasmBytes(): CompanionWasmBytes {
-  const base64 =
-    typeof __NOOK_COMPANION_WASM_BYTES__ === "string"
-      ? __NOOK_COMPANION_WASM_BYTES__
-      : "";
+  let base64 = "";
+  try {
+    // Bun content builds define this identifier. In plain ESM unit tests the
+    // binding is absent, and `typeof` still throws ReferenceError in modules.
+    base64 =
+      typeof __NOOK_COMPANION_WASM_BYTES__ === "string"
+        ? __NOOK_COMPANION_WASM_BYTES__
+        : "";
+  } catch {
+    base64 = "";
+  }
   if (base64.length === 0) {
     return { kind: CompanionWasmBytesKind.Absent };
   }
@@ -127,10 +134,25 @@ async function fetchCompanionWasmBytes(
   }
 }
 
-async function companionWasmModuleOrPath(): Promise<BufferSource | string> {
+enum CompanionWasmModuleKind {
+  Absent = "absent",
+  Present = "present",
+}
+
+type CompanionWasmModule =
+  | { kind: CompanionWasmModuleKind.Absent }
+  | {
+      kind: CompanionWasmModuleKind.Present;
+      moduleOrPath: BufferSource | string;
+    };
+
+async function companionWasmModuleOrPath(): Promise<CompanionWasmModule> {
   const embedded = embeddedCompanionWasmBytes();
   if (embedded.kind === CompanionWasmBytesKind.Present) {
-    return embedded.bytes;
+    return {
+      kind: CompanionWasmModuleKind.Present,
+      moduleOrPath: embedded.bytes,
+    };
   }
 
   const chromeGlobal = (globalThis as { chrome?: ChromeRuntime }).chrome;
@@ -140,16 +162,33 @@ async function companionWasmModuleOrPath(): Promise<BufferSource | string> {
     );
     const packagedBytes = await fetchCompanionWasmBytes(packaged);
     if (packagedBytes.kind === CompanionWasmBytesKind.Present) {
-      return packagedBytes.bytes;
+      return {
+        kind: CompanionWasmModuleKind.Present,
+        moduleOrPath: packagedBytes.bytes,
+      };
     }
-    return packaged;
+    return { kind: CompanionWasmModuleKind.Present, moduleOrPath: packaged };
   }
 
   const diskBytes = await readCompanionWasmFromDisk();
   if (diskBytes.kind === CompanionWasmBytesKind.Present) {
-    return diskBytes.bytes;
+    return {
+      kind: CompanionWasmModuleKind.Present,
+      moduleOrPath: diskBytes.bytes,
+    };
   }
-  throw new Error("Companion WASM bytes are unavailable in this runtime.");
+
+  // Node/Vite unit tests: let wasm-bindgen resolve via import.meta.url next to
+  // the generated glue. Content bundles strip that fallback at build time.
+  return { kind: CompanionWasmModuleKind.Absent };
+}
+
+async function startCompanionWasm(): Promise<unknown> {
+  const resolved = await companionWasmModuleOrPath();
+  if (resolved.kind === CompanionWasmModuleKind.Present) {
+    return initCompanionWasm({ module_or_path: resolved.moduleOrPath });
+  }
+  return initCompanionWasm();
 }
 
 /**
@@ -158,6 +197,4 @@ async function companionWasmModuleOrPath(): Promise<BufferSource | string> {
  * Avoid top-level await and `import.meta` so Chrome classic content scripts can
  * parse the autofill bundle after companion WASM extraction.
  */
-export const companionWasmReady: Promise<unknown> = initCompanionWasm({
-  module_or_path: companionWasmModuleOrPath(),
-});
+export const companionWasmReady: Promise<unknown> = startCompanionWasm();
