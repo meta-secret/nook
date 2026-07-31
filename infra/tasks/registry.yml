@@ -64,11 +64,11 @@ tasks:
 
         cri_auth="$remote_dir/infra/k0s/config/registry-auth.toml"
         umask 077
-        cat > "$cri_auth" <<EOF
-        [plugins."io.containerd.cri.v1.images".registry.configs."{{.NOOK_REGISTRY_HOST}}".auth]
-          username = "$username"
-          password = "$password"
-        EOF
+        printf '%s\n' \
+          "[plugins.\"io.containerd.cri.v1.images\".registry.configs.\"{{.NOOK_REGISTRY_HOST}}\".auth]" \
+          "  username = \"$username\"" \
+          "  password = \"$password\"" \
+          > "$cri_auth"
         chmod 0600 "$cri_auth"
         sudo -n install -m 0600 "$cri_auth" /etc/k0s/containerd.d/registry-auth.toml
         REMOTE
