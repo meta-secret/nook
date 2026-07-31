@@ -24,8 +24,7 @@ data:
         "writeTimeout": "5m",
         "auth": {
           "htpasswd": {
-            "path": "/etc/zot/htpasswd",
-            "realm": "nook-registry"
+            "path": "/etc/zot/htpasswd"
           }
         }
       },
