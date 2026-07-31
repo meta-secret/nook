@@ -31,6 +31,16 @@ async function openLastPassImport(page: Page) {
   await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
 }
 
+async function openKeeperImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('keeper-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('keeper-import-panel')).toBeVisible()
+}
+
 async function openOnePasswordImport(page: Page) {
   await expandSettingsSection(page, 'import')
   const section = page.getByTestId('onepassword-import-section')
@@ -145,6 +155,7 @@ test.describe('local vault', () => {
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
     const lastPassSection = page.getByTestId('lastpass-import-section')
+    const keeperSection = page.getByTestId('keeper-import-section')
     const onePasswordSection = page.getByTestId('onepassword-import-section')
     const applePasswordsSection = page.getByTestId(
       'apple-passwords-import-section',
@@ -157,6 +168,7 @@ test.describe('local vault', () => {
     )
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
     const lastPassToggle = lastPassSection.getByRole('button').first()
+    const keeperToggle = keeperSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
     const applePasswordsToggle = applePasswordsSection
       .getByRole('button')
@@ -173,6 +185,7 @@ test.describe('local vault', () => {
     await expect(googleAuthenticatorSection).toBeVisible()
     await expect(bitwardenSection).toBeVisible()
     await expect(lastPassSection).toBeVisible()
+    await expect(keeperSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
     await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(chromePasswordsToggle).toHaveAttribute(
@@ -185,6 +198,7 @@ test.describe('local vault', () => {
     )
     await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(lastPassToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(keeperToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(
       page.getByTestId('apple-passwords-import-panel'),
@@ -196,6 +210,7 @@ test.describe('local vault', () => {
       page.getByTestId('google-authenticator-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await applePasswordsToggle.click()
@@ -205,6 +220,7 @@ test.describe('local vault', () => {
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await bitwardenToggle.click()
@@ -216,11 +232,18 @@ test.describe('local vault', () => {
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await lastPassToggle.click()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await keeperToggle.click()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await onePasswordToggle.click()
@@ -232,6 +255,7 @@ test.describe('local vault', () => {
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 
     await chromePasswordsToggle.click()
@@ -683,6 +707,49 @@ test.describe('local vault', () => {
       'Imported 0 items',
     )
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
+  test('imports Keeper logins and secure notes from CSV idempotently', async ({
+    page,
+  }) => {
+    const exportCsv = [
+      'Folder,Title,Login,Password,Website Address,Notes,Shared Folder,Custom Field1 Name,Custom Field1 Value',
+      'Work,Imported Keeper login,keeper-alice,keeper-secret,https://keeper.example/login,Recovery codes,,$oneTimeCode,otpauth://totp/Keeper?secret=ABC',
+      'Personal,Imported Keeper note,,,,"# Keeper note\n\nKeep offline",Team,,',
+    ].join('\n')
+
+    await openKeeperImport(page)
+    await page.getByTestId('keeper-csv-file').setInputFiles({
+      name: 'keeper_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('keeper-import-submit').click()
+    await expect(page.getByTestId('keeper-import-result')).toContainText(
+      'Imported 2 items',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'keeper-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported Keeper note',
+    )
+
+    await openKeeperImport(page)
+    await page.getByTestId('keeper-csv-file').setInputFiles({
+      name: 'keeper_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('keeper-import-submit').click()
+    await expect(page.getByTestId('keeper-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('keeper-import-result')).toContainText(
       '2 duplicates',
     )
   })

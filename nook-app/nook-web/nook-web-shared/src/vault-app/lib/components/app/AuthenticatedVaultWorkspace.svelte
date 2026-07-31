@@ -162,6 +162,7 @@
           onImportBitwarden={(json, password) =>
             vault.handleBitwardenImport(json, password)}
           onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
+          onImportKeeper={(csv) => vault.handleKeeperImport(csv)}
           onImportOnePassword={(archive) =>
             vault.handleOnePasswordImport(archive)}
           onImportApplePasswords={(csv) =>

@@ -576,6 +576,20 @@
     "result_imported": "Imported {count} items.",
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
+  "keeper_import": {
+    "source": "Keeper",
+    "title": "Import from Keeper",
+    "description": "Move logins and secure notes from a Keeper CSV export into this vault.",
+    "export_hint_title": "Export a CSV file from Keeper",
+    "export_hint": "In Keeper Web Vault or Desktop, open Settings, choose Export, then select CSV. Confirm with your master password. The CSV is unencrypted, so delete it after the import finishes. Encrypted KeePass/KDBX exports are not supported.",
+    "file_label": "Keeper CSV export",
+    "supported_types": "Nook imports website logins and secure notes. Folder, shared folder, TOTP, and custom-field metadata are preserved in encrypted item notes. Attachments, file records, and encrypted KeePass exports are skipped.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "Keeper import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "settings": {
     "title": "Settings",
     "storage": "Sync providers",
@@ -1210,6 +1224,7 @@
     "lastpass_imported": "Imported {count} LastPass items.",
     "onepassword_imported": "Imported {count} 1Password items.",
     "proton_pass_imported": "Imported {count} Proton Pass items.",
+    "keeper_imported": "Imported {count} Keeper items.",
     "error_timeout": "Connection timed out. Check your PAT, network, and try again.",
     "error_no_engine": "Vault engine is not available.",
     "error_unlock_required": "Unlock the vault before adding a password.",

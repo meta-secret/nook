@@ -18,6 +18,7 @@ test('browse concise password import source labels', async ({ page }) => {
     ['google-authenticator-import-section', 'Google Authenticator'],
     ['bitwarden-import-section', 'Bitwarden'],
     ['lastpass-import-section', 'LastPass'],
+    ['keeper-import-section', 'Keeper'],
     ['onepassword-import-section', '1Password'],
     ['proton-pass-import-section', 'Proton Pass'],
   ] as const
