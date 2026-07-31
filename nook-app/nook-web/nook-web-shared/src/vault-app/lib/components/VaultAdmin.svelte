@@ -14,6 +14,7 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
+  import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
   import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
   import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
   import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
@@ -79,6 +80,7 @@
     onIssueCode,
     onClearCode,
     onImportBitwarden,
+    onImportKeePassXc,
     onImportLastPass,
     onImportOnePassword,
     onImportApplePasswords,
@@ -124,6 +126,7 @@
       json: string,
       password: string,
     ) => Promise<NookImportResult>
+    onImportKeePassXc: (csv: string) => Promise<NookImportResult>
     onImportLastPass: (csv: string) => Promise<NookImportResult>
     onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
     onImportApplePasswords: (csv: string) => Promise<NookImportResult>
@@ -633,6 +636,21 @@
           {isSaving}
           embedded
           onImport={onImportBitwarden}
+        />
+      </SettingsAccordionSection>
+
+      <SettingsAccordionSection
+        title={vault.t('keepassxc_import.source')}
+        subtitle={vault.t('keepassxc_import.description')}
+        open={importProviderOpen('keepassxc')}
+        onToggle={() => toggleImportProvider('keepassxc')}
+        testId="keepassxc-import-section"
+      >
+        <KeePassXcImportPanel
+          {vault}
+          {isSaving}
+          embedded
+          onImport={onImportKeePassXc}
         />
       </SettingsAccordionSection>
 

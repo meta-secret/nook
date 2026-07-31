@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import type { NookImportResult } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
+import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
 import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
 import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
 import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
@@ -31,6 +32,45 @@ function importResult(): NookImportResult {
     skippedDuplicates: 3,
   } as NookImportResult
 }
+
+describe('KeePassXC import panel', () => {
+  test('enables submission after file selection and renders the result', async () => {
+    const onImport = vi.fn(async () => importResult())
+    const view = render(KeePassXcImportPanel, {
+      vault,
+      isSaving: false,
+      onImport,
+    })
+    const input = view.getByTestId('keepassxc-csv-file') as HTMLInputElement
+    const submit = view.getByTestId(
+      'keepassxc-import-submit',
+    ) as HTMLButtonElement
+
+    expect(submit.disabled).toBe(true)
+    await fireEvent.change(input, {
+      target: {
+        files: [
+          new File(
+            ['Group,Title,Username,Password,URL,Notes\n'],
+            'keepassxc.csv',
+          ),
+        ],
+      },
+    })
+    expect(submit.disabled).toBe(false)
+
+    await fireEvent.click(submit)
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    expect(onImport).toHaveBeenCalledWith(
+      'Group,Title,Username,Password,URL,Notes\n',
+    )
+    await waitFor(() => {
+      expect(view.getByTestId('keepassxc-import-result').textContent).toContain(
+        'keepassxc_import.result_imported 2',
+      )
+    })
+  })
+})
 
 describe('LastPass import panel', () => {
   test('shows progress and locks the file input until import finishes', async () => {

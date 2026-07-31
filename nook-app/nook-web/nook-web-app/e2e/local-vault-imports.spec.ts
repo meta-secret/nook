@@ -21,6 +21,16 @@ async function openBitwardenImport(page: Page) {
   await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
 }
 
+async function openKeePassXcImport(page: Page) {
+  await expandSettingsSection(page, 'import')
+  const section = page.getByTestId('keepassxc-import-section')
+  const toggle = section.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await expect(page.getByTestId('keepassxc-import-panel')).toBeVisible()
+}
+
 async function openLastPassImport(page: Page) {
   await expandSettingsSection(page, 'import')
   const section = page.getByTestId('lastpass-import-section')
@@ -144,6 +154,7 @@ test.describe('local vault', () => {
     await expandSettingsSection(page, 'import')
 
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
+    const keepassXcSection = page.getByTestId('keepassxc-import-section')
     const lastPassSection = page.getByTestId('lastpass-import-section')
     const onePasswordSection = page.getByTestId('onepassword-import-section')
     const applePasswordsSection = page.getByTestId(
@@ -156,6 +167,7 @@ test.describe('local vault', () => {
       'google-authenticator-import-section',
     )
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
+    const keepassXcToggle = keepassXcSection.getByRole('button').first()
     const lastPassToggle = lastPassSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
     const applePasswordsToggle = applePasswordsSection
@@ -172,6 +184,7 @@ test.describe('local vault', () => {
     await expect(chromePasswordsSection).toBeVisible()
     await expect(googleAuthenticatorSection).toBeVisible()
     await expect(bitwardenSection).toBeVisible()
+    await expect(keepassXcSection).toBeVisible()
     await expect(lastPassSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
     await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
@@ -184,6 +197,7 @@ test.describe('local vault', () => {
       'false',
     )
     await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(keepassXcToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(lastPassToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(
@@ -196,6 +210,7 @@ test.describe('local vault', () => {
       page.getByTestId('google-authenticator-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await applePasswordsToggle.click()
@@ -204,6 +219,7 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
@@ -215,11 +231,19 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await keepassXcToggle.click()
+    await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await lastPassToggle.click()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
@@ -231,6 +255,7 @@ test.describe('local vault', () => {
       page.getByTestId('chrome-passwords-import-panel'),
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 
@@ -683,6 +708,49 @@ test.describe('local vault', () => {
       'Imported 0 items',
     )
     await expect(page.getByTestId('lastpass-import-result')).toContainText(
+      '2 duplicates',
+    )
+  })
+
+  test('imports KeePassXC logins and secure notes from CSV idempotently', async ({
+    page,
+  }) => {
+    const exportCsv = [
+      'Group,Title,Username,Password,URL,Notes,TOTP',
+      'Root/Work,Imported KeePassXC login,keepassxc-alice,keepassxc-secret,https://keepassxc.example/login,"Recovery codes, elsewhere",',
+      'Root/Personal,Imported KeePassXC note,,,,"# KeePassXC note\n\nKeep offline",',
+    ].join('\n')
+
+    await openKeePassXcImport(page)
+    await page.getByTestId('keepassxc-csv-file').setInputFiles({
+      name: 'keepassxc_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('keepassxc-import-submit').click()
+    await expect(page.getByTestId('keepassxc-import-result')).toContainText(
+      'Imported 2 items',
+    )
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'keepassxc-alice',
+    )
+    await expect(page.getByTestId('vault-group-secure-note')).toContainText(
+      'Imported KeePassXC note',
+    )
+
+    await openKeePassXcImport(page)
+    await page.getByTestId('keepassxc-csv-file').setInputFiles({
+      name: 'keepassxc_export.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(exportCsv),
+    })
+    await page.getByTestId('keepassxc-import-submit').click()
+    await expect(page.getByTestId('keepassxc-import-result')).toContainText(
+      'Imported 0 items',
+    )
+    await expect(page.getByTestId('keepassxc-import-result')).toContainText(
       '2 duplicates',
     )
   })

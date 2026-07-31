@@ -17,6 +17,7 @@ test('browse concise password import source labels', async ({ page }) => {
     ['chrome-passwords-import-section', 'Chrome or another browser'],
     ['google-authenticator-import-section', 'Google Authenticator'],
     ['bitwarden-import-section', 'Bitwarden'],
+    ['keepassxc-import-section', 'KeePassXC'],
     ['lastpass-import-section', 'LastPass'],
     ['onepassword-import-section', '1Password'],
     ['proton-pass-import-section', 'Proton Pass'],
