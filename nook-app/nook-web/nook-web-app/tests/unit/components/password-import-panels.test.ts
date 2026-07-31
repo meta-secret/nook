@@ -3,6 +3,7 @@ import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import type { NookImportResult } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
+import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
 import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
 import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
 import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
@@ -166,6 +167,42 @@ describe('Safari / Apple Passwords import panel', () => {
       expect(
         view.getByTestId('apple-passwords-import-result').textContent,
       ).toContain('apple_passwords_import.result_imported 2')
+    })
+  })
+})
+
+describe('Dashlane import panel', () => {
+  test('reads selected export bytes and renders the result', async () => {
+    let receivedBytes: number[] = []
+    const onImport = vi.fn(async (bytes: Uint8Array) => {
+      receivedBytes = Array.from(bytes)
+      return importResult()
+    })
+    const view = render(DashlaneImportPanel, {
+      vault,
+      isSaving: false,
+      onImport,
+    })
+    const input = view.getByTestId('dashlane-export-file') as HTMLInputElement
+    const submit = view.getByTestId(
+      'dashlane-import-submit',
+    ) as HTMLButtonElement
+
+    expect(submit.disabled).toBe(true)
+    await fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([80, 75, 3, 4])], 'dashlane.zip')],
+      },
+    })
+    expect(submit.disabled).toBe(false)
+
+    await fireEvent.click(submit)
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1))
+    expect(receivedBytes).toEqual([80, 75, 3, 4])
+    await waitFor(() => {
+      expect(view.getByTestId('dashlane-import-result').textContent).toContain(
+        'dashlane_import.result_imported 2',
+      )
     })
   })
 })

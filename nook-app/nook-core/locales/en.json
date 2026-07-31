@@ -526,6 +526,20 @@
     "result_imported": "Imported {count} items.",
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
+  "dashlane_import": {
+    "source": "Dashlane",
+    "title": "Import from Dashlane",
+    "description": "Move logins, secure notes, and credit cards from an unencrypted Dashlane CSV or CSV ZIP export into this vault.",
+    "export_hint_title": "Export your Dashlane vault as CSV",
+    "export_hint": "In Dashlane, open Settings, choose Export Data, then export an unencrypted CSV or CSV ZIP. The export is unencrypted, so delete it and empty the Trash or Recycle Bin after the import finishes.",
+    "file_label": "Dashlane CSV or CSV ZIP export",
+    "supported_types": "Nook imports Dashlane credentials, secure notes, credit cards, and valid TOTP secrets from unencrypted CSV or CSV ZIP exports. IDs, personal information, Wi-Fi, bank accounts, passkeys, attachments, and encrypted DASH exports are not imported.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "Dashlane import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "chrome_passwords_import": {
     "source": "Chrome or another browser",
     "title": "Import from Chrome or another browser",
@@ -1219,6 +1233,7 @@
     "item_updated": "Item updated successfully.",
     "apple_passwords_imported": "Imported {count} Safari / Apple Passwords items.",
     "chrome_passwords_imported": "Imported {count} browser logins.",
+    "dashlane_imported": "Imported {count} Dashlane items.",
     "google_authenticator_imported": "Imported {count} Google Authenticator verification codes.",
     "bitwarden_imported": "Imported {count} Bitwarden items.",
     "lastpass_imported": "Imported {count} LastPass items.",
