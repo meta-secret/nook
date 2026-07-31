@@ -784,12 +784,8 @@ unless hive_taskfile.include?("--target cache-publish") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
-unless hive_taskfile.include?(
-         'SCCACHE_S3_ACCESS_KEY_FILE: \'{{default "../../.nook/cache/sccache-access-key"'
-       ) &&
-       hive_taskfile.include?(
-         'SCCACHE_S3_SECRET_KEY_FILE: \'{{default "../../.nook/cache/sccache-secret-key"'
-       ) &&
+unless hive_taskfile.include?('${HOME}/.nook/cache/sccache-access-key') &&
+       hive_taskfile.include?('${HOME}/.nook/cache/sccache-secret-key') &&
        hive_taskfile.include?(
          '--secret "id=sccache_s3_access_key,src=$access_file"'
        ) &&

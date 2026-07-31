@@ -46,6 +46,8 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "https://sccache.dev.nokey.sh",
         ".nook/cache/sccache-access-key",
         ".nook/cache/sccache-secret-key",
+        "${HOME}/.nook/cache/sccache-access-key",
+        "${HOME}/.nook/cache/sccache-secret-key",
         "no S3 credential; compiling without sccache",
         "SeaweedFS S3 is unavailable; compiling without remote sccache",
         "SeaweedFS S3 sccache is healthy",

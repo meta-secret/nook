@@ -427,7 +427,8 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "sccache:credential:sync:",
         "sccache:bucket:ensure:",
         "sccache:check:",
-        "cache_dir=\"$repo_root/.nook/cache\"",
+        "home_cache=\"${HOME}/.nook/cache\"",
+        "repo_cache=\"$repo_root/.nook/cache\"",
         "sccache-access-key",
         "sccache-secret-key",
         "gh secret set NOOK_SCCACHE_ACCESS_KEY",
@@ -436,10 +437,22 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "sccache.dev.nokey.sh",
         "nook-sccache",
         "chmod 0600",
+        "~/.nook/cache",
     ] {
         assert!(
             sccache.contains(required),
             "SeaweedFS sccache credential lifecycle is missing: {required}"
+        );
+    }
+    let registry = read("infra/tasks/registry.yml");
+    for required in [
+        "home_cache=\"${HOME}/.nook/cache\"",
+        "docker login \"$host\"",
+        "~/.nook/cache",
+    ] {
+        assert!(
+            registry.contains(required),
+            "registry credential sync is missing: {required}"
         );
     }
     assert!(!operations.contains("redis:credential"));

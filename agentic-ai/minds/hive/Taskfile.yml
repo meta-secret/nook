@@ -6,8 +6,28 @@ vars:
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
   HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
   NOOK_APP_CONTEXT: ../../nook-app
-  SCCACHE_S3_ACCESS_KEY_FILE: '{{default "../../.nook/cache/sccache-access-key" .SCCACHE_S3_ACCESS_KEY_FILE}}'
-  SCCACHE_S3_SECRET_KEY_FILE: '{{default "../../.nook/cache/sccache-secret-key" .SCCACHE_S3_SECRET_KEY_FILE}}'
+  SCCACHE_S3_ACCESS_KEY_FILE:
+    sh: >-
+      if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
+      elif [ -r "../../.nook/cache/sccache-access-key" ]; then
+        printf '%s' "../../.nook/cache/sccache-access-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
+      else
+        printf '%s' "../../.nook/cache/sccache-access-key";
+      fi
+  SCCACHE_S3_SECRET_KEY_FILE:
+    sh: >-
+      if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
+      elif [ -r "../../.nook/cache/sccache-secret-key" ]; then
+        printf '%s' "../../.nook/cache/sccache-secret-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
+      else
+        printf '%s' "../../.nook/cache/sccache-secret-key";
+      fi
 
 tasks:
   format:
