@@ -13,8 +13,10 @@ tasks:
           --namespace hive-data \
           -l app.kubernetes.io/name=nook-zot \
           -o wide || true
-        curl -sS -o /dev/null -w 'registry.nokey.sh/v2/ -> %{http_code}\n' \
-          https://registry.nokey.sh/v2/ || true
+        curl -sS -o /dev/null -w 'registry.dev.nokey.sh/v2/ -> %{http_code}\n' \
+          https://registry.dev.nokey.sh/v2/ || true
+        curl -sS -o /dev/null -w 'sccache.dev.nokey.sh/ -> %{http_code}\n' \
+          https://sccache.dev.nokey.sh/ || true
         REMOTE
 
   logs:
@@ -28,41 +30,3 @@ tasks:
           --namespace hive-data \
           --tail=100 || true
         REMOTE
-
-  redis:ping:
-    desc: Verify the remote Redis compiler-cache service.
-    silent: true
-    cmds:
-      - >-
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
-        'docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" exec -T redis
-        sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli ping'\'''
-
-  redis:credential:sync:
-    desc: Copy the remote Redis password into the ignored local cache credential file.
-    silent: true
-    cmds:
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-        repo_root="$(git rev-parse --show-toplevel)"
-        credential_dir="$repo_root/.nook/cache"
-        credential_file="$credential_dir/redis-password"
-        install -d -m 0700 "$credential_dir"
-        umask 077
-        ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-          "cat '{{.INFRA_REMOTE_DIR}}/secrets/redis-password'" > "$credential_file"
-        test -s "$credential_file"
-        chmod 0600 "$credential_file"
-        echo "Redis credential synchronized to .nook/cache/redis-password"
-        BASH
-
-  redis:stats:
-    desc: Show remote Redis cache size, memory, hits, misses, and evictions.
-    silent: true
-    cmds:
-      - >-
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}"
-        'set -eu;
-        compose="{{.INFRA_REMOTE_DIR}}/compose.yaml";
-        docker compose -f "$compose" exec -T redis sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; redis-cli DBSIZE; redis-cli INFO memory | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):"; redis-cli INFO stats | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'\'''

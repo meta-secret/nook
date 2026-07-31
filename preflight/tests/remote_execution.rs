@@ -84,7 +84,7 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     assert!(
         workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
             && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
-        "remote jobs must authenticate to registry.nokey.sh for BuildKit cache restore"
+        "remote jobs must authenticate to registry.dev.nokey.sh for BuildKit cache restore"
     );
     let secret_refs = workflow.matches("${{ secrets.").count();
     assert_eq!(

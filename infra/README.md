@@ -2,27 +2,26 @@
 
 This directory owns Nook's stateful server infrastructure:
 
-- Redis on host loopback, protected by a generated 256-bit password, with AOF
-  persistence and a 12 GiB LRU ceiling.
-- Traefik (host network) publishes native Redis TLS at
-  `rediss://redis-ovh-borg-1.bynull.link:6380`, obtains and renews certificates
-  through ACME on port `443`, and forwards only to loopback Redis.
+- SeaweedFS on host loopback S3 (`127.0.0.1:8333`), protected by generated
+  access/secret keys, with data under `/var/lib/nook/seaweedfs`.
+- Traefik (host network) publishes HTTPS on port `443` with ACME for:
+  - `https://sccache.dev.nokey.sh` → loopback SeaweedFS S3
+  - `https://registry.dev.nokey.sh` → Zot ClusterIP `10.96.90.10:5000`
 - A pinned Zot OCI registry runs in k0s with retained local storage at
-  `/var/lib/hive/zot`. Traefik publishes it at `https://registry.nokey.sh` with
-  Let's Encrypt TLS. Zot requires htpasswd authentication. There is no host
+  `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 
-Redis remains on the personal `*.bynull.link` edge hostname. The OCI registry
-uses the product hostname `registry.nokey.sh`. Do not expose anonymous registry
-access; every client authenticates with the generated token.
+Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
+expose anonymous S3 or registry access; every client authenticates with the
+generated credentials.
 
 Deploy and inspect the stack from the repository root:
 
 ```sh
 task infra:deploy
 task infra:status
-task infra:redis:credential:sync
-task infra:redis:stats
+task infra:sccache:credential:sync
+task infra:sccache:check
 task infra:registry:credential:ensure
 task infra:registry:credential:sync
 task infra:registry:check
@@ -31,27 +30,35 @@ task infra:registry:diagnose
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is
-`debian@ssh-ovh-borg-1.bynull.link`. Deployment creates the Redis and registry
-passwords when needed and never copies them into the repository. The containing
-`secrets/` directory is mode `0700`; password files are mode `0600`.
+`debian@ssh-ovh-borg-1.bynull.link`. Deployment creates the SeaweedFS S3 and
+registry credentials when needed and never copies them into the repository. The
+containing `secrets/` directory is mode `0700`; credential files are mode
+`0600`.
+
+`task infra:sccache:credential:sync` copies the S3 keys into `~/.nook/cache/`
+(shared across checkouts) and the repo `.nook/cache/`, then upserts GitHub
+Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
+`NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`.
 
 `task infra:registry:credential:sync` copies the registry token into
-`.nook/cache/` and upserts GitHub Actions secrets `NOOK_REGISTRY_HOST`,
-`NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
+`~/.nook/cache/` and the repo `.nook/cache/`, runs `docker login` for
+`registry.dev.nokey.sh`, and upserts GitHub Actions secrets
+`NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
 
-DNS for `registry.nokey.sh` must point at the Borg public IP (DNS-only A/AAAA,
-not proxied) before HTTPS verification can succeed. Host-network Traefik and
-Redis also require nftables INPUT accepts for TCP `443` and `6380`;
-`task infra:deploy` ensures those edge rules stay present after k0s firewall
-updates.
+DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
+Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can
+succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
+(and `22` for SSH); `task infra:deploy` ensures those edge rules stay present
+after k0s firewall updates. Public Redis `:6380` is retired.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
-`registry.nokey.sh`. Main alone publishes shared cache manifests; pull requests
-restore them read-only after `docker login`. Hive images also publish and pull
-through `registry.nokey.sh`.
+`registry.dev.nokey.sh`. Main alone publishes shared cache manifests; pull
+requests restore them read-only after `docker login`. Hive images also publish
+and pull through `registry.dev.nokey.sh`. Hosted delivery never receives
+SeaweedFS S3 keys so compiler vertices stay secret-free.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
-by the Redis cache.
+by the compiler cache.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 

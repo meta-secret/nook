@@ -194,7 +194,7 @@ named-target image, because republishing the parent target can change the
 downstream cache identity across hosted builders. `nook-app/docker-bake.hcl`
 owns the direct consumer import, and Main verifies every publication from a
 fresh BuildKit builder before accepting it. Repository invariants in
-`preflight/tests/sccache_redis.rs` and
+`preflight/tests/sccache_s3.rs` and
 `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 The split native and WASM producers additionally restore small validated
@@ -526,17 +526,18 @@ branch-local cache generations unnecessary. Native coverage and WASM
 source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
-Hosted Main, manual e2e, and PR Docker builds all omit the direct TLS Redis
-credential (`hosted_secret_free_by_design`). This makes Main's exported
+Hosted Main, manual e2e, and PR Docker builds all omit SeaweedFS S3 sccache
+credentials (`hosted_secret_free_by_design`). This makes Main's exported
 compiler vertices reusable by the secret-free PR solve; a secret-backed Main
 vertex would force every PR to recompile the dependency graph. The hosted remote
-cache is GitHub Actions BuildKit scopes; Redis sccache remains an optional
-authorized local optimization and never a correctness input.
+cache is authenticated registry BuildKit refs on `registry.dev.nokey.sh`;
+SeaweedFS S3 sccache remains an optional authorized local/Hive optimization and
+never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
-`task setup` verifies the direct TLS Redis endpoint when a credential file is
-available. Without one, the wrapper bypasses sccache. It does not replace
+`task setup` verifies authenticated SeaweedFS S3 when credential files are
+available. Without them, the wrapper bypasses sccache. It does not replace
 cargo-chef or change the build result when unavailable to a secret-free job.
 Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
@@ -551,10 +552,11 @@ test tasks use the same job-scoped Buildx builder, so the behavior image reuses
 the dependency graph produced earlier in the run without allowing parallel PRs
 or failed validation to replace the trusted cache. Unlike the product delivery
 graph, trusted same-repository Hive runs also mount
-`NOOK_CACHE_REDIS_PASSWORD` into compiler steps and use Redis `sccache` with the
-isolated `nook-hive` key prefix. GitHub withholds that secret from forked pull
-requests, and the shared wrapper then falls back to direct compilation. The
-credential is a BuildKit secret or read-only runtime mount, never image content.
+`NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` into compiler steps and use
+SeaweedFS S3 `sccache` with the isolated `nook-hive` key prefix. GitHub withholds
+those secrets from forked pull requests, and the shared wrapper then falls back
+to direct compilation. The credentials are BuildKit secrets or read-only runtime
+mounts, never image content.
 Main deploys `dist/site`, Simple, and Sentinel independently to
 `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same
 prepared image and without a second setup. The combined `dist` tree is reserved
@@ -567,14 +569,14 @@ Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
 Delivery BuildKit caches use authenticated `type=registry` refs on
-`registry.nokey.sh` (Zot behind Traefik HTTPS + htpasswd). Local builds use
+`registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd). Local builds use
 only their local BuildKit content store unless registry credentials are
 configured. Cache restoration is an optimization: an unavailable cache falls
 back to a correct cold build. Main alone publishes shared cache manifests after
 lane verification; pull-request, remote, release, and e2e jobs restore
 read-only after `docker login` with repository secrets. Fork pull requests do
 not receive those secrets. Hive images also publish and pull through
-`registry.nokey.sh`. There is no host `:5000` listener and no
+`registry.dev.nokey.sh`. There is no host `:5000` listener and no
 `kubectl port-forward` for the registry.
 `main.yml` attaches and upserts the three
 custom domains, points the landing and both vault domains at their projects'
@@ -624,9 +626,8 @@ only removes dangling images while `docker system df` includes tagged images
 that no container uses in its reclaimable estimate. That estimate can exceed
 the image-store total because shared image layers are counted for each image; it
 is not a physical-byte reclamation guarantee.
-The compiler cache is remote and is unaffected by runner pruning. Server Redis
-uses a 12 GiB `allkeys-lru` ceiling, so compiler-cache growth is controlled
-independently of BuildKit cleanup.
+The compiler cache is remote and is unaffected by runner pruning. SeaweedFS S3
+disk usage on Borg is controlled independently of BuildKit cleanup.
 
 ### CI verification — always check app logs
 

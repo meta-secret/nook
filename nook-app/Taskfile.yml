@@ -31,25 +31,39 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
-  # Local runtime Rust commands may connect directly to the password-protected TLS cache. Docker
-  # build stages never receive this credential and rely on BuildKit dependency layers instead.
-  SCCACHE_REDIS_IMAGE: '{{default "redis:8.2.2-alpine" .SCCACHE_REDIS_IMAGE}}'
-  SCCACHE_REDIS_ENDPOINT: '{{default "rediss://redis-ovh-borg-1.bynull.link:6380" .SCCACHE_REDIS_ENDPOINT}}'
-  SCCACHE_REDIS_TLS_SERVER_NAME: '{{default "redis-ovh-borg-1.bynull.link" .SCCACHE_REDIS_TLS_SERVER_NAME}}'
-  SCCACHE_REDIS_MODE: '{{default "external" .SCCACHE_REDIS_MODE}}'
-  SCCACHE_REDIS_PASSWORD_FILE:
+  # Local runtime Rust commands may use authenticated SeaweedFS S3 sccache. Docker build stages
+  # never receive these credentials and rely on BuildKit dependency layers instead.
+  SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
+  SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
+  SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
+  SCCACHE_S3_ACCESS_KEY_FILE:
     sh: >-
-      if [ -n "${SCCACHE_REDIS_PASSWORD_FILE:-}" ]; then
-        printf '%s' "$SCCACHE_REDIS_PASSWORD_FILE";
-      elif [ -r "{{.REPO_ROOT}}/.nook/cache/redis-password" ]; then
-        printf '%s' "{{.REPO_ROOT}}/.nook/cache/redis-password";
+      if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
+      elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-access-key" ]; then
+        printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-access-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       fi
-  SCCACHE_REDIS_PASSWORD_MOUNT:
+  SCCACHE_S3_SECRET_KEY_FILE:
     sh: >-
-      password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
-      if [ -n "$password_file" ]; then
-        printf '%s' '--mount type=bind,src='"$password_file"',dst=/run/secrets/sccache_redis_password,readonly';
+      if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
+        printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
+      elif [ -r "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key" ]; then
+        printf '%s' "{{.REPO_ROOT}}/.nook/cache/sccache-secret-key";
+      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       fi
+  SCCACHE_S3_CREDENTIAL_MOUNTS:
+    sh: >-
+      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+      mounts="";
+      if [ -n "$access_file" ] && [ -n "$secret_file" ]; then
+        mounts="--mount type=bind,src=$access_file,dst=/run/secrets/sccache_s3_access_key,readonly";
+        mounts="$mounts --mount type=bind,src=$secret_file,dst=/run/secrets/sccache_s3_secret_key,readonly";
+      fi;
+      printf '%s' "$mounts"
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -65,8 +79,9 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
-    --set '*.args.SCCACHE_REDIS_MODE={{.SCCACHE_REDIS_MODE}}'
-    --set '*.args.SCCACHE_REDIS_ENDPOINT={{.SCCACHE_REDIS_ENDPOINT}}'
+    --set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'
+    --set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'
+    --set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
@@ -107,39 +122,52 @@ tasks:
       - task: build
 
   sccache:ensure:
-    desc: Verify the direct TLS Redis backend when a local credential is available.
+    desc: Verify the SeaweedFS S3 sccache backend when local credentials are available.
     dir: '{{.REPO_ROOT}}'
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        image="{{.SCCACHE_REDIS_IMAGE}}";
-        password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
-        if [ -z "$password_file" ] || [ ! -r "$password_file" ]; then
-          echo "task sccache:ensure: no Redis credential; compiling without sccache";
+        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
+           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
+          echo "task sccache:ensure: no S3 credential; compiling without sccache";
           exit 0;
         fi;
-        if [ "$({{.DOCKER}} run --rm --mount "type=bind,src=$password_file,dst=/run/secrets/redis-password,readonly" "$image" sh -ec '\''export REDISCLI_AUTH="$(cat /run/secrets/redis-password)"; exec redis-cli --sni "$2" -u "$1" ping'\'' -- "{{.SCCACHE_REDIS_ENDPOINT}}" "{{.SCCACHE_REDIS_TLS_SERVER_NAME}}" 2>/dev/null || true)" != PONG ]; then
-          echo "task sccache:ensure: direct TLS Redis is unavailable; compiling without remote sccache" >&2;
+        if ! {{.DOCKER}} run --rm \
+          -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+          -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+          s3api head-bucket --bucket "{{.SCCACHE_BUCKET}}" >/dev/null 2>&1; then
+          echo "task sccache:ensure: SeaweedFS S3 is unavailable; compiling without remote sccache" >&2;
           exit 0;
         fi;
-        echo "task sccache:ensure: direct TLS Redis is healthy"'
+        echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
 
   sccache:stats:
-    desc: Show shared Rust compiler-cache key and memory statistics.
+    desc: Show shared Rust compiler-cache object count on SeaweedFS.
     deps:
       - sccache:ensure
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        image="{{.SCCACHE_REDIS_IMAGE}}";
-        password_file="{{.SCCACHE_REDIS_PASSWORD_FILE}}";
-        mount_args="";
-        if [ -n "$password_file" ]; then mount_args="--mount type=bind,src=$password_file,dst=/run/secrets/redis-password,readonly"; fi;
-        redis_cli="redis-cli --sni {{.SCCACHE_REDIS_TLS_SERVER_NAME}} -u {{.SCCACHE_REDIS_ENDPOINT}}";
-        redis_command="if [ -r /run/secrets/redis-password ]; then export REDISCLI_AUTH=\"\$(cat /run/secrets/redis-password)\"; fi; exec $redis_cli";
-        {{.DOCKER}} run --rm $mount_args "$image" sh -ec "$redis_command DBSIZE";
-        {{.DOCKER}} run --rm $mount_args "$image" sh -ec "$redis_command INFO memory" | grep -E "^(used_memory_human|maxmemory_human|maxmemory_policy):";
-        {{.DOCKER}} run --rm $mount_args "$image" sh -ec "$redis_command INFO stats" | grep -E "^(keyspace_hits|keyspace_misses|evicted_keys):"'
+        access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+        secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+        if [ -z "$access_file" ] || [ ! -r "$access_file" ] ||
+           [ -z "$secret_file" ] || [ ! -r "$secret_file" ]; then
+          echo "task sccache:stats: no S3 credential";
+          exit 0;
+        fi;
+        {{.DOCKER}} run --rm \
+          -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+          -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+          s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" --max-items 1 \
+          --query "{KeyCount:KeyCount,IsTruncated:IsTruncated}"'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.

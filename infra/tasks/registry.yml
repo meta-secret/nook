@@ -2,7 +2,7 @@ version: '3'
 
 # Public authenticated Zot registry operations.
 vars:
-  NOOK_REGISTRY_HOST: '{{default "registry.nokey.sh" .NOOK_REGISTRY_HOST}}'
+  NOOK_REGISTRY_HOST: '{{default "registry.dev.nokey.sh" .NOOK_REGISTRY_HOST}}'
   NOOK_REGISTRY_USERNAME: '{{default "nook" .NOOK_REGISTRY_USERNAME}}'
   NOOK_REGISTRY_CLUSTER_IP: '{{default "10.96.90.10" .NOOK_REGISTRY_CLUSTER_IP}}'
 
@@ -81,8 +81,9 @@ tasks:
         bash <<'BASH'
         set -euo pipefail
         repo_root="$(git rev-parse --show-toplevel)"
+        home_cache="${HOME}/.nook/cache"
         credential_dir="$repo_root/.nook/cache"
-        install -d -m 0700 "$credential_dir"
+        install -d -m 0700 "$home_cache" "$credential_dir"
         umask 077
         host="{{.NOOK_REGISTRY_HOST}}"
         username="$(
@@ -95,17 +96,27 @@ tasks:
         )"
         test -n "$username"
         test -n "$password"
-        printf '%s\n' "$host" > "$credential_dir/registry-host"
-        printf '%s\n' "$username" > "$credential_dir/registry-username"
-        printf '%s\n' "$password" > "$credential_dir/registry-password"
+        printf '%s\n' "$host" > "$home_cache/registry-host"
+        printf '%s\n' "$username" > "$home_cache/registry-username"
+        printf '%s\n' "$password" > "$home_cache/registry-password"
+        chmod 0600 \
+          "$home_cache/registry-host" \
+          "$home_cache/registry-username" \
+          "$home_cache/registry-password"
+        cp -f \
+          "$home_cache/registry-host" \
+          "$home_cache/registry-username" \
+          "$home_cache/registry-password" \
+          "$credential_dir/"
         chmod 0600 \
           "$credential_dir/registry-host" \
           "$credential_dir/registry-username" \
           "$credential_dir/registry-password"
+        printf '%s\n' "$password" | docker login "$host" -u "$username" --password-stdin
         printf '%s\n' "$host" | gh secret set NOOK_REGISTRY_HOST --repo meta-secret/nook
         printf '%s\n' "$username" | gh secret set NOOK_REGISTRY_USERNAME --repo meta-secret/nook
         printf '%s\n' "$password" | gh secret set NOOK_REGISTRY_PASSWORD --repo meta-secret/nook
-        echo "Registry credential synchronized to .nook/cache and GitHub Actions secrets"
+        echo "Registry credentials synchronized to ~/.nook/cache, .nook/cache, docker login, and GitHub Actions secrets"
         BASH
 
   registry:deploy:

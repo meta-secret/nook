@@ -43,7 +43,7 @@ permissions:
 env:
   # Pull requests restore the trusted Main lineage read-only. Only Main
   # publishes the shared dependency graph, so parallel PRs cannot evict it.
-  HIVE_CACHE_FROM: type=registry,ref=registry.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache
+  HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache
 
 concurrency:
   group: hive-${{ github.ref }}
@@ -99,7 +99,10 @@ jobs:
       - name: Configure persistent Rust compiler cache
         uses: ./.github/actions/nook-cache-connect
         with:
-          cache-redis-password: ${{ secrets.NOOK_CACHE_REDIS_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
 
       - name: Report Rust compiler cache selection
         run: >-
@@ -110,7 +113,7 @@ jobs:
       - name: Login to Nook OCI registry
         uses: docker/login-action@v3
         with:
-          registry: registry.nokey.sh
+          registry: registry.dev.nokey.sh
           username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
@@ -135,5 +138,5 @@ jobs:
       - name: Publish verified Hive cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          HIVE_CACHE_TO: type=registry,ref=registry.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max
+          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max
         run: task hive:cache:publish

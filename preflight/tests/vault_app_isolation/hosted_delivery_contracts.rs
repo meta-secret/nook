@@ -42,7 +42,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "GHA_CACHE_ENABLED",
         "GHA_CACHE_WRITE_ENABLED",
         "NOOK_REGISTRY_CACHE_HOST",
-        "default = \"registry.nokey.sh\"",
+        "default = \"registry.dev.nokey.sh\"",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
@@ -66,7 +66,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         !bake.contains("type=gha"),
-        "delivery caches must use registry.nokey.sh, not the GitHub Actions cache service"
+        "delivery caches must use registry.dev.nokey.sh, not the GitHub Actions cache service"
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
@@ -205,7 +205,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-from=\"")
             && docker_tasks.contains(
-                "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/"
+                "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}/nook/buildcache/"
             )
             && docker_tasks.contains("--set \"builder-wasm-deps.cache-to=\"")
             && docker_tasks.contains("--set \"wasm-export.cache-from=\"")
@@ -321,7 +321,7 @@ fn assert_docker_setup_contract(root: &Path) {
         "docker/login-action@v3",
         "registry-username",
         "registry-password",
-        "registry.nokey.sh",
+        "registry.dev.nokey.sh",
         "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}",
         "GHA_CACHE_ENABLED=1",
@@ -343,7 +343,7 @@ fn assert_docker_setup_contract(root: &Path) {
         !setup.contains("crazy-max/ghaction-github-runtime")
             && !setup.contains("systemctl restart docker")
             && !setup.contains("/etc/docker/daemon.json"),
-        "delivery setup must login to registry.nokey.sh and must not reconfigure or restart Docker"
+        "delivery setup must login to registry.dev.nokey.sh and must not reconfigure or restart Docker"
     );
 }
 

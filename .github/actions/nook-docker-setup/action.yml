@@ -17,7 +17,7 @@ inputs:
   registry-host:
     description: OCI registry hostname for BuildKit cache and image login.
     required: false
-    default: registry.nokey.sh
+    default: registry.dev.nokey.sh
   registry-username:
     description: OCI registry username.
     required: true

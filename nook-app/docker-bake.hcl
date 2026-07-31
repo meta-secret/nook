@@ -14,7 +14,7 @@
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
 // Rust snapshot never becomes a context or parent of the final image. Local builds reuse the
 // selected builder's content store; GitHub-hosted CI additionally imports/exports distinct
-// registry.nokey.sh BuildKit cache refs for Rust, web dependencies, and the two final web-image
+// registry.dev.nokey.sh BuildKit cache refs for Rust, web dependencies, and the two final web-image
 // variants.
 
 variable "DOCKER_IMAGE" {
@@ -44,11 +44,15 @@ variable "WASM_BUILD_MODE" {
   default = "dev"
 }
 
-variable "SCCACHE_REDIS_ENDPOINT" {
-  default = "rediss://redis-ovh-borg-1.bynull.link:6380"
+variable "SCCACHE_ENDPOINT" {
+  default = "https://sccache.dev.nokey.sh"
 }
 
-variable "SCCACHE_REDIS_MODE" {
+variable "SCCACHE_BUCKET" {
+  default = "nook-sccache"
+}
+
+variable "SCCACHE_S3_MODE" {
   default = "external"
 }
 
@@ -91,7 +95,7 @@ variable "GHA_RUST_WASM_DEPS_SCOPE" {
 }
 
 variable "NOOK_REGISTRY_CACHE_HOST" {
-  default = "registry.nokey.sh"
+  default = "registry.dev.nokey.sh"
 }
 
 rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
@@ -170,8 +174,9 @@ web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 
 target "_sccache" {
   args = {
-    SCCACHE_REDIS_MODE     = SCCACHE_REDIS_MODE
-    SCCACHE_REDIS_ENDPOINT = SCCACHE_REDIS_ENDPOINT
+    SCCACHE_S3_MODE    = SCCACHE_S3_MODE
+    SCCACHE_ENDPOINT   = SCCACHE_ENDPOINT
+    SCCACHE_BUCKET     = SCCACHE_BUCKET
   }
 }
 
