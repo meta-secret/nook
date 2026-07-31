@@ -22,6 +22,8 @@ spec:
         app.kubernetes.io/name: hive-observer
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: nook-registry
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true

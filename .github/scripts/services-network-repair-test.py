@@ -93,7 +93,10 @@ def run_case(existing, version="26.1.4"):
                 """
             ),
         )
-        write_executable(mock_bin / "curl", "#!/bin/sh\nexit 0\n")
+        write_executable(
+            mock_bin / "curl",
+            "#!/bin/sh\nprintf '401\\n'\nexit 0\n",
+        )
         harness = work / "harness.sh"
         write_executable(harness, repair_source(work))
         env = {

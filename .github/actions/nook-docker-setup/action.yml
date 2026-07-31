@@ -1,9 +1,9 @@
 name: Nook Docker setup
-description: Task, Buildx, and GitHub-hosted BuildKit cache setup.
+description: Task, Buildx, and authenticated registry BuildKit cache setup.
 
 inputs:
   cache-write:
-    description: Allow this workflow source to update the shared hosted BuildKit cache scopes.
+    description: Allow this workflow source to update the shared hosted BuildKit cache refs.
     required: false
     default: "true"
   main-cache-only:
@@ -14,6 +14,16 @@ inputs:
     description: Require the browser-image cache lineage for this job.
     required: false
     default: "false"
+  registry-host:
+    description: OCI registry hostname for BuildKit cache and image login.
+    required: false
+    default: registry.nokey.sh
+  registry-username:
+    description: OCI registry username.
+    required: true
+  registry-password:
+    description: OCI registry password or token.
+    required: true
 
 runs:
   using: composite
@@ -42,17 +52,18 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # The GHA cache exporter requires the docker-container driver. setup-buildx owns this ephemeral
-    # builder on GitHub-hosted VMs; all Task/Bake callers use it, so delivery does not depend on or
-    # mutate the Docker daemon's default image store.
+    # Registry cache exporters work with the docker-container driver. setup-buildx owns this
+    # ephemeral builder on GitHub-hosted VMs; all Task/Bake callers use it.
     - name: Setup Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    # Inline `task`/Bake calls do not receive GitHub's cache-service token automatically. This
-    # helper exposes ACTIONS_RUNTIME_TOKEN/ACTIONS_RESULTS_URL as documented by Docker for `type=gha`.
-    - name: Expose GitHub Actions cache runtime
-      uses: crazy-max/ghaction-github-runtime@v3
+    - name: Login to Nook OCI registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry-host }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
 
     - name: Select hosted BuildKit cache
       shell: bash
@@ -65,6 +76,7 @@ runs:
         echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
+        echo "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}" >> "$GITHUB_ENV"
 
         read_only=""
         if [ "$event_name" != "push" ] || [ "$git_ref" != "refs/heads/main" ]; then

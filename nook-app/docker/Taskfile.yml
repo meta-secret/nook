@@ -323,7 +323,7 @@ tasks:
         --set "*.output=type=cacheonly"
         --set "rust-base.cache-from="
         --set "builder-wasm-deps.cache-from="
-        --set "builder-wasm-deps.cache-to=type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,compression=zstd,force-compression=true,timeout=10m"
+        --set "builder-wasm-deps.cache-to=type=registry,ref=${NOOK_REGISTRY_CACHE_HOST:-registry.nokey.sh}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"
         rust-base builder-wasm-deps
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake

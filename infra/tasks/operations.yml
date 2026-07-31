@@ -9,11 +9,12 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -u
         docker compose -f "{{.INFRA_REMOTE_DIR}}/compose.yaml" ps
-        sudo -n k0s kubectl get deployment,pod,pvc \
+        sudo -n k0s kubectl get deployment,pod,svc,pvc \
           --namespace hive-data \
           -l app.kubernetes.io/name=nook-zot \
           -o wide || true
-        sudo -n systemctl is-active nook-zot-registry-loopback.service || true
+        curl -sS -o /dev/null -w 'registry.nokey.sh/v2/ -> %{http_code}\n' \
+          https://registry.nokey.sh/v2/ || true
         REMOTE
 
   logs:

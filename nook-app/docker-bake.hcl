@@ -13,8 +13,9 @@
 // invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
 // Rust snapshot never becomes a context or parent of the final image. Local builds reuse the
-// selected builder's content store; GitHub-hosted CI additionally imports/exports distinct GHA
-// cache scopes for Rust, web dependencies, and the two final web-image variants.
+// selected builder's content store; GitHub-hosted CI additionally imports/exports distinct
+// registry.nokey.sh BuildKit cache refs for Rust, web dependencies, and the two final web-image
+// variants.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
@@ -51,23 +52,23 @@ variable "SCCACHE_REDIS_MODE" {
   default = "external"
 }
 
-// Enabled only by the GitHub Actions Docker setup. Keeping the default empty preserves zero-network
-// local builds. Separate scopes are mandatory: Docker's GHA backend overwrites a scope when a
-// different image exports to it, so sharing the default `buildkit` scope loses sibling lineages.
-// Rust exporters omit ignore-error so a failed cook-layer upload fails Main instead of leaving PRs
-// with indexes that silently miss and redownload crates. Web exporters keep ignore-error.
+// Enabled only by the GitHub Actions Docker setup after registry login.
+// Keeping the default empty preserves zero-network local builds. Separate refs
+// are mandatory so sibling BuildKit lineages do not overwrite each other.
+// Rust exporters omit ignore-error so a failed cook-layer upload fails Main.
+// Web exporters keep ignore-error.
 variable "GHA_CACHE_ENABLED" {
   default = ""
 }
 
 // Some manual workflows build an arbitrary PR head while the Actions run itself belongs to the
-// default branch. They may restore shared layers, but must not overwrite main's cache scopes.
+// default branch. They may restore shared layers, but must not overwrite main's cache refs.
 variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
 // Retained for local/manual compatibility. Hosted delivery keeps this empty: Main owns the shared
-// scopes, while every other workflow restores them read-only.
+// refs, while every other workflow restores them read-only.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
   default = ""
 }
@@ -83,212 +84,88 @@ variable "GHA_CACHE_SEED_SCOPE_SUFFIX" {
 }
 
 // Main and pull requests derive this immutable scope from every file that defines the WASM
-// dependency graph and compiler environment. A new graph gets a new location instead of
+// dependency graph and compiler environment. A new graph gets a new registry ref instead of
 // overwriting the last complete dependency export with a different lineage.
 variable "GHA_RUST_WASM_DEPS_SCOPE" {
   default = "nook-rust-wasm-deps-v4-local"
 }
 
-rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-base-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-] : [
-  "type=gha,scope=nook-rust-base-v1,version=2",
-]) : [
-  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+variable "NOOK_REGISTRY_CACHE_HOST" {
+  default = "registry.nokey.sh"
+}
+
+rust_base_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 rust_base_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : [
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-]) : [
-  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+rust_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 rust_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-// The fingerprinted v4 scope is the self-contained WASM dependency lineage. Keep reading the
-// mutable v3/v2/v1 scopes during migration so already-warmed runners can still restore until Main
-// publishes the exact immutable graph.
-rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-deps-v3${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : [
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-]) : [
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
+rust_wasm_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 rust_wasm_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m",
 ] : []
 
-rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-native-source-v2,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-native-source-v2,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : [
-  "type=gha,scope=nook-rust-native-source-v2,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-]) : [
-  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
+rust_native_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 rust_native_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-// BuildKit does not propagate cache records imported by a named target context into the outer
-// source/export solve. Import the fingerprinted dependency lineage here as well as on
-// builder-wasm-deps, or outer targets rerun the otherwise unchanged cargo-chef layers.
-rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-] : [
-  "type=gha,scope=nook-rust-wasm-source-v2,version=2",
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v3,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v2,version=2",
-  "type=gha,scope=nook-rust-wasm-deps-v1,version=2",
-  "type=gha,scope=nook-rust-deps-v2,version=2",
-  "type=gha,scope=nook-rust-base-v1,version=2",
-  "type=gha,scope=nook-rust-v1,version=2",
-]) : [
-  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2",
+rust_wasm_source_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=10m",
 ] : []
 
-web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : [
-  "type=gha,scope=nook-web-deps-v1,version=2",
-]) : [
-  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+web_deps_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 web_deps_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
-web_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-web-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-web-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-web-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : [
-  "type=gha,scope=nook-web-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-]) : [
-  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+web_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 web_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
-web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_SCOPE_SUFFIX == "" ? [
-  "type=gha,scope=nook-web-e2e-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? concat([
-  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
-], GHA_CACHE_SEED_SCOPE_SUFFIX != "" ? [
-  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SEED_SCOPE_SUFFIX},version=2",
-  "type=gha,scope=nook-web-e2e-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-] : [
-  "type=gha,scope=nook-web-e2e-v1,version=2",
-  "type=gha,scope=nook-web-deps-v1,version=2",
-]) : [
-  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},version=2",
+web_e2e_cache_from = GHA_CACHE_ENABLED == "" ? [] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ]
 
 web_e2e_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=gha,scope=nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX},mode=max,version=2,ignore-error=true,timeout=10m",
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true,timeout=10m",
 ] : []
 
 target "_sccache" {

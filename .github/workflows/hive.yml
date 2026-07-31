@@ -13,7 +13,7 @@ on:
       - .github/scripts/k0s-firewall-rollback-test.py
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
-      - .github/scripts/zot-registry-migration-test.py
+      - .github/scripts/zot-registry-public-contract-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/compose.yaml
@@ -29,7 +29,7 @@ on:
       - .github/scripts/k0s-firewall-rollback-test.py
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
-      - .github/scripts/zot-registry-migration-test.py
+      - .github/scripts/zot-registry-public-contract-test.py
       - .task/agentic-ai.yml
       - agentic-ai/minds/**
       - infra/compose.yaml
@@ -43,7 +43,7 @@ permissions:
 env:
   # Pull requests restore the trusted Main lineage read-only. Only Main
   # publishes the shared dependency graph, so parallel PRs cannot evict it.
-  HIVE_CACHE_FROM: type=gha,scope=nook-hive-linux-amd64-v1
+  HIVE_CACHE_FROM: type=registry,ref=registry.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache
 
 concurrency:
   group: hive-${{ github.ref }}
@@ -107,6 +107,13 @@ jobs:
           ${NOOK_SCCACHE_BACKEND}
           (${NOOK_SCCACHE_BACKEND_REASON})"
 
+      - name: Login to Nook OCI registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.nokey.sh
+          username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+
       - name: Docker setup
         uses: docker/setup-buildx-action@v4
 
@@ -128,5 +135,5 @@ jobs:
       - name: Publish verified Hive cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          HIVE_CACHE_TO: type=gha,scope=nook-hive-linux-amd64-v1,mode=max
+          HIVE_CACHE_TO: type=registry,ref=registry.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max
         run: task hive:cache:publish

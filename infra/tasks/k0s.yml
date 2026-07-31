@@ -201,7 +201,7 @@ tasks:
         sudo -n install -m 0755 "$download_dir/$k0s_asset.next" /usr/local/bin/k0s
         mv "$download_dir/$k0s_asset.next" "$download_dir/$k0s_asset"
 
-        sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
+        sudo -n install -d -m 0755 /etc/k0s/containerd.d/certs.d/registry.nokey.sh
         sudo -n install -d -m 0700 /var/lib/hive/k0s-recovery
         if ! sudo -n test -s /var/lib/k0s/pki/hive-encryption-provider.yaml &&
           sudo -n test -s /var/lib/hive/k0s-recovery/encryption-provider.yaml; then
@@ -238,7 +238,8 @@ tasks:
           /etc/k0s/containerd.d/cri-registry.toml
         sudo -n install -m 0644 \
           "$remote_dir/infra/k0s/config/registry-hosts.toml" \
-          /etc/k0s/containerd.d/certs.d/127.0.0.1:5000/hosts.toml
+          /etc/k0s/containerd.d/certs.d/registry.nokey.sh/hosts.toml
+        sudo -n rm -rf /etc/k0s/containerd.d/certs.d/127.0.0.1:5000
 
         api_address_unit="$(mktemp)"
         cat > "$api_address_unit" <<'EOF'

@@ -371,14 +371,28 @@ unless zot_container["image"]&.match?(
 )
   raise "Zot image must use the upstream platform image pinned by digest"
 end
-if zot_resources.any? { |resource| %w[Service Ingress HTTPRoute].include?(resource["kind"]) }
-  raise "Zot must not have a public or cluster service endpoint"
+zot_service = zot_resource.call("Service", "nook-zot")
+unless zot_service.dig("spec", "type") == "ClusterIP" &&
+       zot_service.dig("spec", "clusterIP") == "10.96.90.10" &&
+       zot_service.dig("spec", "ports")&.any? { |port| port["port"] == 5000 }
+  raise "Zot must expose only a fixed ClusterIP Service for Traefik"
 end
-zot_network = zot_resource.call("NetworkPolicy", "nook-zot-default-deny")
+if zot_resources.any? { |resource| %w[Ingress HTTPRoute NodePort LoadBalancer].include?(resource["kind"]) } ||
+   zot_service.dig("spec", "type") != "ClusterIP"
+  raise "Zot must not have a public Kubernetes Ingress/NodePort/LoadBalancer endpoint"
+end
+zot_network = zot_resource.call("NetworkPolicy", "nook-zot")
+ingress_ports = zot_network.dig("spec", "ingress")&.flat_map { |rule| rule["ports"] || [] } || []
 unless zot_network.dig("spec", "policyTypes")&.sort == %w[Egress Ingress] &&
-       zot_network.dig("spec", "ingress").nil? &&
-       zot_network.dig("spec", "egress").nil?
-  raise "Zot must default-deny cluster ingress and egress"
+       ingress_ports.any? { |port| port["port"] == 5000 && port["protocol"] == "TCP" }
+  raise "Zot NetworkPolicy must allow only registry TCP/5000 ingress to the ClusterIP path"
+end
+htpasswd_volume = zot_pod.fetch("volumes").find { |volume| volume["name"] == "htpasswd" }
+unless htpasswd_volume&.dig("secret", "secretName") == "nook-zot-htpasswd"
+  raise "Zot must mount the htpasswd Secret"
+end
+unless zot_container.dig("volumeMounts")&.any? { |mount| mount["name"] == "htpasswd" }
+  raise "Zot container must mount htpasswd auth material"
 end
 
 infra_root_path = File.join(root, "infra/Taskfile.yml")

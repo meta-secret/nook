@@ -21,7 +21,13 @@ data:
         "port": "5000",
         "compat": ["docker2s2"],
         "readTimeout": "5m",
-        "writeTimeout": "5m"
+        "writeTimeout": "5m",
+        "auth": {
+          "htpasswd": {
+            "path": "/etc/zot/htpasswd",
+            "realm": "nook-registry"
+          }
+        }
       },
       "log": {
         "level": "info"
@@ -75,6 +81,24 @@ spec:
       storage: 1Ti
   storageClassName: nook-zot-local-retain
   volumeName: nook-zot-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nook-zot
+  namespace: hive-data
+  labels:
+    app.kubernetes.io/name: nook-zot
+spec:
+  type: ClusterIP
+  clusterIP: 10.96.90.10
+  selector:
+    app.kubernetes.io/name: nook-zot
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: registry
+      protocol: TCP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -147,22 +171,34 @@ spec:
               memory: 1Gi
           volumeMounts:
             - name: config
-              mountPath: /etc/zot
+              mountPath: /etc/zot/config.json
+              subPath: config.json
+              readOnly: true
+            - name: htpasswd
+              mountPath: /etc/zot/htpasswd
+              subPath: htpasswd
               readOnly: true
             - name: data
               mountPath: /var/lib/registry
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: config
           configMap:
             name: nook-zot
+        - name: htpasswd
+          secret:
+            secretName: nook-zot-htpasswd
         - name: data
           persistentVolumeClaim:
             claimName: nook-zot-data
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: nook-zot-default-deny
+  name: nook-zot
   namespace: hive-data
   labels:
     app.kubernetes.io/name: nook-zot
@@ -173,3 +209,16 @@ spec:
   policyTypes:
     - Ingress
     - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 5000
+      from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+        - ipBlock:
+            cidr: 172.16.0.0/12
+        - ipBlock:
+            cidr: 192.168.0.0/16
+  egress:
+    - {}

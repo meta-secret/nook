@@ -50,7 +50,8 @@ tasks:
         docker compose --file "$compose_file" down --remove-orphans
         docker compose --file "$compose_file" up --detach --wait
         docker compose --file "$compose_file" ps
-        curl -fsSL http://127.0.0.1:5000/v2/ >/dev/null
+        code="$(curl -sS -o /dev/null -w '%{http_code}' https://registry.nokey.sh/v2/ || true)"
+        test "$code" = 401
         REMOTE
 
   services:diagnose:

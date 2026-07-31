@@ -436,14 +436,14 @@ change, update this README in the same change (see
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
-fresh VM restores distinct BuildKit v2 cache scopes. Main refreshes the
-default-branch cache that new PRs may restore. Every PR job reads only that
-complete Main lineage and never exports PR-local caches, preventing short-lived
-branch generations from exhausting the repository cache quota. The WASM
-producer restores Main's dedicated, complete WASM dependency boundary so it
-does not compete with the larger native dependency lineage. Main explicitly
-publishes the native source target as well as both dependency targets; merely
-consuming those targets as BuildKit contexts does not run their cache exporters.
+fresh VM restores distinct BuildKit cache refs from the authenticated OCI
+registry at `registry.nokey.sh`. Main refreshes those refs after lane
+verification. Every PR job reads only that complete Main lineage and never
+exports PR-local caches. The WASM producer restores Main's dedicated, complete
+WASM dependency boundary so it does not compete with the larger native
+dependency lineage. Main explicitly publishes the native source target as well
+as both dependency targets; merely consuming those targets as BuildKit contexts
+does not run their cache exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

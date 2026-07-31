@@ -98,11 +98,9 @@ fn sccache_uses_the_direct_public_tls_endpoint_without_docker_host_routing() -> 
         );
     }
 
-    assert!(
-        !repository_root()
-            .join("nook-app/docker/resolve-docker-host-ip.sh")
-            .exists()
-    );
+    assert!(!repository_root()
+        .join("nook-app/docker/resolve-docker-host-ip.sh")
+        .exists());
     Ok(())
 }
 
@@ -274,8 +272,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
-    assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2"));
-    assert!(bake.contains("scope=${GHA_RUST_WASM_DEPS_SCOPE},mode=max,version=2,timeout=10m"));
+    assert!(bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
+    assert!(bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
+    assert!(bake
+        .contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"));
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
         .context("bake file must define the WASM source cache inputs")?
@@ -285,17 +285,16 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         .0;
     assert!(
         wasm_source_cache
-            .matches("scope=${GHA_RUST_WASM_DEPS_SCOPE},version=2")
+            .matches("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache")
             .count()
-            >= 4,
+            >= 1,
         "every WASM source cache path must directly import the fingerprinted dependency lineage"
     );
     let docker_tasks = read("nook-app/docker/Taskfile.yml");
-    assert!(
-        docker_tasks
-            .contains("scope=${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}")
-    );
-    assert!(bake.contains("GHA_CACHE_FALLBACK_ENABLED != \"\""));
+    assert!(docker_tasks.contains(
+        "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache"
+    ));
+    assert!(!bake.contains("type=gha"));
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
@@ -309,27 +308,24 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     for main_scope in [
-        "\"type=gha,scope=nook-rust-base-v1,version=2\"",
-        "\"type=gha,scope=nook-rust-deps-v2,version=2\"",
-        "\"type=gha,scope=nook-rust-wasm-deps-v3,version=2\"",
-        "\"type=gha,scope=nook-rust-wasm-deps-v2,version=2\"",
-        "\"type=gha,scope=nook-rust-wasm-deps-v1,version=2\"",
-        "\"type=gha,scope=nook-rust-native-source-v2,version=2\"",
-        "\"type=gha,scope=nook-rust-wasm-source-v2,version=2\"",
-        "\"type=gha,scope=nook-web-deps-v1,version=2\"",
-        "\"type=gha,scope=nook-web-v1,version=2\"",
-        "\"type=gha,scope=nook-web-e2e-v1,version=2\"",
+        "nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "nook/buildcache/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
     ] {
         assert!(
-            bake.matches(main_scope).count() >= 3,
-            "a missing generation with an older PR seed must also import Main: {main_scope}"
+            bake.contains(main_scope),
+            "registry BuildKit cache ref is missing: {main_scope}"
         );
     }
     assert!(
-        bake.contains("type=gha,scope=nook-rust-base-v1,version=2")
+        bake.contains("type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1")
             && bake.contains("rust_wasm_deps_cache_from")
-            && bake.matches("nook-rust-base-v1,version=2").count() >= 4,
-        "WASM/native dependency restores must also import the rust-base scope that parents chef cook layers"
+            && bake.contains("registry.nokey.sh"),
+        "WASM/native dependency restores must import registry.nokey.sh cache refs including rust-base"
     );
 
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");

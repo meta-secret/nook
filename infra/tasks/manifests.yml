@@ -10,4 +10,4 @@ tasks:
       - python3 .github/scripts/k0s-firewall-rollback-test.py
       - python3 .github/scripts/k0s-cni-migration-test.py
       - python3 .github/scripts/services-network-repair-test.py
-      - python3 .github/scripts/zot-registry-migration-test.py
+      - python3 .github/scripts/zot-registry-public-contract-test.py
