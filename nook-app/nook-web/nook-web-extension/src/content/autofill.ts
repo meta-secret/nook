@@ -1,6 +1,6 @@
 import '../../../nook-web-shared/src/extension/companion-ready'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
-import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+import { isNookVaultAppUrl as isRuntimeNookVaultAppUrl } from '../lib/simple-vault-target'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
 import {
   cancelPendingLoginPickerRequest,
