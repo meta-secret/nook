@@ -209,7 +209,13 @@ export function cloudKitAuthErrorTranslationKey(
   if (isMisdirectedRequest) {
     return CloudKitAuthErrorTranslationKey.SignInRequired;
   }
-  if (hasErrorToken(details, (value) => value.includes("UNKNOWN_ERROR"))) {
+  // AUTHENTICATION_FAILED means a bad API token or a disallowed browser Origin.
+  if (
+    hasErrorToken(details, (value) =>
+      value.includes("AUTHENTICATION_FAILED"),
+    ) ||
+    hasErrorToken(details, (value) => value.includes("UNKNOWN_ERROR"))
+  ) {
     return CloudKitAuthErrorTranslationKey.UnknownError;
   }
   return CloudKitAuthErrorTranslationKey.SignInFailed;

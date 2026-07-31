@@ -8,28 +8,49 @@ import {
 
 const DEMO_BEAT_MS = 700
 
+type DemoWindow = Window & {
+  __nookDemoOpenedUrls: string[]
+  CloudKit: {
+    configure: () => void
+    getDefaultContainer: () => {
+      setUpAuth: () => Promise<void>
+      whenUserSignsIn: () => Promise<never>
+    }
+  }
+}
+
 async function demoBeat(page: Page) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('choose private or shared iCloud vault storage', async ({ page }) => {
+async function installCloudKitStub(page: Page) {
   await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'brave', {
+      configurable: true,
+      value: {},
+    })
+    const opened: string[] = []
+    const demoWindow = window as DemoWindow
+    demoWindow.__nookDemoOpenedUrls = opened
+    const originalOpen = window.open.bind(window)
+    demoWindow.open = ((url: string | URL, target = '', features = '') => {
+      opened.push(String(url))
+      return originalOpen(url, target, features)
+    }) as typeof window.open
+
     const container = {
       setUpAuth: async () => {},
-      whenUserSignsIn: () => new Promise(() => {}),
+      whenUserSignsIn: () => new Promise<never>(() => {}),
     }
-    ;(
-      window as typeof window & {
-        CloudKit?: {
-          configure: () => void
-          getDefaultContainer: () => typeof container
-        }
-      }
-    ).CloudKit = {
+    demoWindow.CloudKit = {
       configure: () => {},
       getDefaultContainer: () => container,
     }
   })
+}
+
+test('choose private or shared iCloud vault storage', async ({ page }) => {
+  await installCloudKitStub(page)
   await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
@@ -43,6 +64,13 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await expect(page.getByTestId('icloud-origin-unsupported')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  // On the unsupported demo origin, show the host gate rather than a premature
+  // iCloud sign-in failure, and do not open a second Apple auth window.
+  await expect(page.getByTestId('icloud-oauth-error')).toHaveCount(0)
+  const openedUrls = await page.evaluate(
+    () => (window as DemoWindow).__nookDemoOpenedUrls,
+  )
+  expect(openedUrls).toEqual([])
   await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
     'aria-checked',
     'true',
