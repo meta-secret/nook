@@ -74,13 +74,20 @@ describe('extension origin isolation', () => {
     expect(createManifest('1.0.0').permissions).toContain('storage')
   })
 
-  test('exposes the official Nook icon to in-page auth gate content scripts', () => {
+  test('exposes the icon and companion WASM to in-page content scripts', () => {
     expect(createManifest('1.0.0').web_accessible_resources).toEqual([
       {
-        resources: ['icons/nook.png'],
+        resources: ['icons/nook.png', 'content/nook_companion_wasm_bg.wasm'],
         matches: ['<all_urls>'],
       },
     ])
+  })
+
+  test('loads autofill as a module so companion WASM top-level await can run', () => {
+    const autofill = createManifest('1.0.0').content_scripts.find((script) =>
+      script.js.includes('content/autofill.js'),
+    )
+    expect(autofill?.type).toBe('module')
   })
 
   test('installs isolated transport and page-world WebAuthn bridges at document start', () => {

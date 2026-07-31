@@ -1,4 +1,4 @@
-import "./companion-ready";
+import { companionWasmReady } from "./companion-ready";
 import {
   NookLoginContextObservation,
   NookPageInputFieldObservation,
@@ -11,6 +11,8 @@ import {
   looksLikeUsernameField as wasmLooksLikeUsernameField,
   parsePageInputType,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
+
+void companionWasmReady;
 
 export type PasswordFormSummary = {
   passwordFieldCount: number;

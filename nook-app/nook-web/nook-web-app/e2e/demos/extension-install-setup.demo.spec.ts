@@ -119,7 +119,8 @@ test('offer browser extension install on vault home and in Devices', async ({
   )
   // Companion pair intent opens Simple Vault /extension-connect consent.
   // Grant acceptance (reload-safe signing-seed persistence and rejected-import
-  // rollback) is covered by extension passkey-session e2e.
+  // rollback) is covered by extension passkey-session e2e. Companion WASM for
+  // that Node/Playwright path loads from disk when file: fetch is unavailable.
   await expect(
     page.getByTestId('extension-install-setup-connect'),
   ).toBeVisible()

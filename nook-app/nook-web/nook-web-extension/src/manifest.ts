@@ -60,6 +60,7 @@ export type ExtensionManifest = {
     exclude_matches: string[]
     js: string[]
     run_at: ContentScriptRunAt
+    type?: ExtensionManifestType.Module
     world?: ContentScriptWorld
   }>
   externally_connectable: {
@@ -123,6 +124,8 @@ export function createManifest(
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/autofill.js'],
+        // Companion-ready uses top-level await; classic content scripts reject TLA.
+        type: ExtensionManifestType.Module,
         run_at: ContentScriptRunAt.DocumentIdle,
       },
       {
@@ -158,7 +161,12 @@ export function createManifest(
     host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {
-        resources: ['icons/nook.png'],
+        resources: [
+          'icons/nook.png',
+          // Content scripts fetch companion WASM via chrome.runtime.getURL;
+          // MV3 requires the package path to be web-accessible for page worlds.
+          'content/nook_companion_wasm_bg.wasm',
+        ],
         matches: ['<all_urls>'],
       },
     ],

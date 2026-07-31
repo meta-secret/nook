@@ -47,6 +47,7 @@
     "../nook-web-shared/src/**/*.{ts,svelte}",
     "!../nook-web-shared/src/vault-app/lib/nook-wasm*/**",
     "!../nook-web-shared/src/extension/nook-companion-wasm*/**",
+    "!../nook-web-shared/src/extension/**/*.d.ts",
     "../nook-vault-{simple,sentinel}/src/**/*.{ts,svelte}",
     "../nook-vault-{simple,sentinel}/vite.config.ts",
     "../nook-web-extension/scripts/**/*.ts",

@@ -10,13 +10,15 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import packageJson from '../package.json'
-import '../../nook-web-shared/src/extension/companion-ready'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   defaultSimpleVaultBaseUrl,
   normalizeSimpleVaultBaseUrl,
 } from '../src/lib/simple-vault-target'
 import { createManifest } from '../src/manifest'
 import { extensionChannelIdentity } from './channel-identity'
+
+await companionWasmReady
 
 const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
@@ -65,6 +67,31 @@ async function ensureNodeModulesLink() {
   }
 }
 
+async function companionWasmBytesDefine(entrypoint: string): Promise<{
+  __NOOK_COMPANION_WASM_BYTES__: string
+}> {
+  // Content autofill must not fetch chrome-extension WASM (or use import.meta);
+  // embed the package bytes so classic content scripts can initialize Pilot.
+  if (!entrypoint.includes('/content/')) {
+    return { __NOOK_COMPANION_WASM_BYTES__: JSON.stringify('') }
+  }
+  const wasmPath = join(
+    sharedRoot,
+    'src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm',
+  )
+  const wasmBase64 = Buffer.from(await readFile(wasmPath)).toString('base64')
+  return { __NOOK_COMPANION_WASM_BYTES__: JSON.stringify(wasmBase64) }
+}
+
+function stripClassicContentScriptForbiddenSyntax(source: string): string {
+  // wasm-bindgen keeps a default path that references import.meta.url. Classic
+  // content scripts reject that at parse time even when callers always pass bytes.
+  return source.replace(
+    /module_or_path = new URL\(["']nook_companion_wasm_bg\.wasm["'],\s*import\.meta\.url\);/g,
+    'throw new Error("Companion WASM module_or_path must be provided.");',
+  )
+}
+
 async function buildEntrypoint(entrypoint: string, outdir: string) {
   const result = await Bun.build({
     entrypoints: [join(projectRoot, entrypoint)],
@@ -75,7 +102,10 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
     minify: false,
     splitting: false,
     naming: '[name].js',
-    define: simpleVaultDefine,
+    define: {
+      ...simpleVaultDefine,
+      ...(await companionWasmBytesDefine(entrypoint)),
+    },
   })
 
   if (!result.success) {
@@ -83,6 +113,28 @@ async function buildEntrypoint(entrypoint: string, outdir: string) {
       console.error(log)
     }
     throw new Error(`Failed to build ${entrypoint}`)
+  }
+
+  if (!entrypoint.includes('/content/')) {
+    return
+  }
+  const entryName = entrypoint.split('/').pop()?.replace(/\.ts$/, '.js')
+  if (!entryName) {
+    return
+  }
+  const outputPath = join(distDir, outdir, entryName)
+  const bundled = await readFile(outputPath, 'utf8')
+  const classicSafe = stripClassicContentScriptForbiddenSyntax(bundled)
+  if (
+    classicSafe.includes('import.meta') ||
+    /^\s*import\s/m.test(classicSafe)
+  ) {
+    throw new Error(
+      `Content bundle ${entryName} still contains classic-script-forbidden ESM syntax.`,
+    )
+  }
+  if (classicSafe !== bundled) {
+    await writeFile(outputPath, classicSafe)
   }
 }
 

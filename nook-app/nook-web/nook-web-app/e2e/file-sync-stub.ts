@@ -105,13 +105,20 @@ export function createLocalE2eFileSyncVaultStub(
   }
 
   function eventListEntries(digest?: string) {
-    const entries: Array<{ id: string; name: string; md5Checksum: string }> = []
+    const entries: Array<{
+      id: string
+      name: string
+      md5Checksum: string
+      appProperties: { event_id: string }
+    }> = []
     for (const key of eventDigests()) {
       if (digest && key !== digest) continue
       entries.push({
         id: eventFileId(key),
         name: `${key}.yaml`,
         md5Checksum: `e2e-file-event-md5-${key}`,
+        // Match Drive list filtering: digest filenames without appProperties are ignored.
+        appProperties: { event_id: `sha256u:${key}` },
       })
     }
     return entries

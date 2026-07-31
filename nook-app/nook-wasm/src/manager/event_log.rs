@@ -173,11 +173,23 @@ impl NookVaultManager {
                 return Ok(identity);
             }
         } else {
-            // Identity handoff installs the seed only in memory; persist it so
-            // lock/reload keeps the same authorized actor for later approvals.
-            let stored = load_signing_seed().await?;
-            if stored.as_deref() != Some(self.event_log.signing_seed.as_str()) {
-                save_signing_seed(&self.event_log.signing_seed).await?;
+            // Prefer a durable authorized signer over a transient handoff seed
+            // when the vault already has events. Persist in-memory seeds only
+            // for empty-log create paths.
+            match load_signing_seed().await? {
+                Some(stored) if stored != self.event_log.signing_seed => {
+                    if self.event_log_has_events().await? {
+                        self.event_log.signing_seed = stored;
+                    } else {
+                        save_signing_seed(&self.event_log.signing_seed).await?;
+                    }
+                }
+                None => {
+                    if !self.event_log_has_events().await? {
+                        save_signing_seed(&self.event_log.signing_seed).await?;
+                    }
+                }
+                Some(_) => {}
             }
         }
         Ok(SigningIdentity::from_seed_hex_stored(
