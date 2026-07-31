@@ -32,9 +32,11 @@ test('choose from the compact secret type picker', async ({ page }) => {
   await page.getByTestId('save-secret-btn').click()
   const saved = page
     .getByTestId('secret-row')
-    .filter({ hasText: 'https://login.example.com' })
+    .filter({ hasText: 'ada@example.com' })
   await expect(saved).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(saved).toContainText('ada@example.com')
+  await expect(saved.getByTestId('secret-row-heading')).toHaveText(
+    'login.example.com',
+  )
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.getByTestId('add-secret-btn').click()
