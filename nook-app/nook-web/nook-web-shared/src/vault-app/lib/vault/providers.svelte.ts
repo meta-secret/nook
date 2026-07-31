@@ -409,7 +409,7 @@ export async function assessVaultConnectStatus(
   return (await state.enqueueStorage(async () => {
     const assessPromise = manager.assess_vault_connect(...args);
     const timeout = startVaultDiscoveryTimeout(
-      "Connection timed out. Check your PAT, network, and try again.",
+      state.t("toasts.error_timeout"),
       30_000,
     );
     try {

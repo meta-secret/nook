@@ -91,13 +91,19 @@ export function createLocalE2eGoogleDriveVaultStub(
   }
 
   function eventListEntries(parentId: string, digest?: string) {
-    const entries: Array<{ id: string; name: string; md5Checksum: string }> = []
+    const entries: Array<{
+      id: string
+      name: string
+      md5Checksum: string
+      appProperties: { event_id: string }
+    }> = []
     for (const key of eventFilesFor(parentId).keys()) {
       if (digest && key !== digest) continue
       entries.push({
         id: eventFileId(key),
         name: `${key}.yaml`,
         md5Checksum: `e2e-event-md5-${key}`,
+        appProperties: { event_id: `sha256u:${key}` },
       })
     }
     return entries

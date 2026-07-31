@@ -182,7 +182,10 @@ only bytes whose content-derived event id matches the requested id, treats
 identical duplicates as one event, and reports divergent valid envelopes as
 corruption. When every same-name candidate is unreadable, the event is treated
 as absent so put-if-absent can publish good local bytes; outbox flush must not
-treat a listed name alone as proof the event is already present.
+treat a listed name alone as proof the event is already present. Drive list only
+counts files whose `appProperties.event_id` matches the filename digest, so
+name-only junk cannot inflate assess/sync downloads. Provider sync fetches only
+remote event ids that are missing locally.
 
 ## IndexedDB storage
 
