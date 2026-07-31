@@ -14,6 +14,38 @@ fn is_sha256_base64url_digest(digest: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
+/// Select content-addressed event bytes from same-name Drive candidates.
+///
+/// Unreadable or wrong-id candidates are skipped so a junk/empty duplicate cannot
+/// block a valid event file. Divergent valid events for one id are corruption.
+fn select_matching_drive_event_bytes(
+    event_id: &EventId,
+    candidates: impl IntoIterator<Item = Vec<u8>>,
+) -> Result<Option<Vec<u8>>, NookError> {
+    let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
+    for bytes in candidates {
+        let Ok(event) = parse_remote_event_storage_bytes(&bytes) else {
+            continue;
+        };
+        let Ok(parsed_id) = event.id() else {
+            continue;
+        };
+        if parsed_id != *event_id {
+            continue;
+        }
+        if let Some((existing_event, _)) = &accepted {
+            if existing_event == &event {
+                continue;
+            }
+            return Err(NookError::Drive(
+                "Drive duplicate event files contain different events.".to_owned(),
+            ));
+        }
+        accepted = Some((event, bytes));
+    }
+    Ok(accepted.map(|(_, bytes)| bytes))
+}
+
 fn parent_query_fragment(parent: &DriveEventParent) -> String {
     match parent {
         DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
@@ -107,6 +139,16 @@ pub(crate) async fn fetch_drive_event(
     parent: &DriveEventParent,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
+    fetch_drive_event_optional(token, parent, event_id)
+        .await?
+        .ok_or_else(|| NookError::Drive(DRIVE_EVENT_MISSING.to_owned()))
+}
+
+pub(crate) async fn fetch_drive_event_optional(
+    token: &str,
+    parent: &DriveEventParent,
+    event_id: &EventId,
+) -> Result<Option<Vec<u8>>, NookError> {
     let token = token.trim();
     let file_ids = lookup_drive_event_file_ids(
         token,
@@ -115,33 +157,18 @@ pub(crate) async fn fetch_drive_event(
     )
     .await?;
     if file_ids.is_empty() {
-        return Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned()));
+        return Ok(None);
     }
 
     let client = reqwest::Client::new();
-    let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
+    let mut candidates = Vec::with_capacity(file_ids.len());
     for file_id in file_ids {
-        let bytes = download_drive_event_file(&client, token, &file_id).await?;
-        let event = parse_remote_event_storage_bytes(&bytes)
-            .map_err(|e| NookError::Serialization(format!("Drive event parse: {e}")))?;
-        if event.id()? != *event_id {
-            continue;
-        }
-        if let Some((existing_event, _)) = &accepted {
-            if existing_event == &event {
-                continue;
-            }
-            return Err(NookError::Drive(
-                "Drive duplicate event files contain different events.".to_owned(),
-            ));
-        }
-        accepted = Some((event, bytes));
+        candidates.push(download_drive_event_file(&client, token, &file_id).await?);
     }
-    accepted.map(|(_, bytes)| bytes).ok_or_else(|| {
-        NookError::Drive(
-            "Drive event file name exists but no file content matches the requested id.".to_owned(),
-        )
-    })
+    // Same-name junk/empty files are skipped; only content-addressed matches count.
+    // When every candidate is unreadable, treat the event as absent so put-if-absent
+    // can publish good local bytes beside the leftover name.
+    select_matching_drive_event_bytes(event_id, candidates)
 }
 
 async fn lookup_drive_event_file_ids(
@@ -285,4 +312,78 @@ pub(crate) async fn put_drive_event_if_absent(
         .and_then(|v| v.as_str())
         .map(str::to_owned)
         .ok_or_else(|| NookError::Drive("Drive event create response missing file id.".to_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::{
+        Ed25519Signature, EventId, GenesisImportPayload, IsoTimestamp, Sha256Hex, SigningIdentity,
+        StoreId, VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
+    };
+
+    fn sample_genesis_event() -> anyhow::Result<(EventId, VaultEvent, Vec<u8>)> {
+        let (identity, _seed) = SigningIdentity::generate()?;
+        let event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11")?,
+            &identity.actor_id()?,
+            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            identity.signing_key(),
+        )?;
+        let event_id = event.id()?;
+        let bytes = serialize_event_storage_yaml(&event)?;
+        Ok((event_id, event, bytes))
+    }
+
+    #[test]
+    fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
+        let (event_id, _, bytes) = sample_genesis_event()?;
+        let selected = select_matching_drive_event_bytes(
+            &event_id,
+            [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
+        )?;
+        assert_eq!(selected, Some(bytes));
+        Ok(())
+    }
+
+    #[test]
+    fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
+        let (event_id, _, _) = sample_genesis_event()?;
+        let selected = select_matching_drive_event_bytes(
+            &event_id,
+            [b"not yaml".to_vec(), b"{bad:".to_vec()],
+        )?;
+        assert_eq!(selected, None);
+        Ok(())
+    }
+
+    #[test]
+    fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
+        let (event_id, _, bytes) = sample_genesis_event()?;
+        let selected =
+            select_matching_drive_event_bytes(&event_id, [bytes.clone(), bytes.clone()])?;
+        assert_eq!(selected, Some(bytes));
+        Ok(())
+    }
+
+    #[test]
+    fn select_matching_rejects_same_id_divergent_envelopes() -> anyhow::Result<()> {
+        let (event_id, mut event, bytes) = sample_genesis_event()?;
+        event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
+        let divergent = serialize_event_storage_yaml(&event)?;
+        let err = select_matching_drive_event_bytes(&event_id, [bytes, divergent])
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;
+        assert!(
+            matches!(err, NookError::Drive(ref message) if message.contains("different events")),
+            "unexpected error: {err}"
+        );
+        Ok(())
+    }
 }

@@ -12,7 +12,7 @@ use super::{EventLogSyncIssueState, NookVaultManager, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
-    fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
+    fetch_drive_event_optional, list_drive_event_ids, put_drive_event_if_absent,
 };
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
@@ -449,8 +449,14 @@ impl NookVaultManager {
     ) -> Result<Vec<(EventId, Vec<u8>)>, NookError> {
         let mut events = Vec::new();
         for event_id in event_ids {
-            let bytes = self.fetch_current_provider_event(&event_id).await?;
-            events.push((event_id, bytes));
+            // Listed names can outlive readable content (Drive junk duplicates).
+            // Skip absent ids so sync/assess can recover by publishing local bytes.
+            if let Some(bytes) = self
+                .fetch_current_provider_event_optional(&event_id)
+                .await?
+            {
+                events.push((event_id, bytes));
+            }
         }
         Ok(events)
     }
@@ -503,11 +509,11 @@ impl NookVaultManager {
         let pending = load_outbox(&provider_id).await?;
         for (raw_id, bytes) in pending {
             let event_id = EventId::parse(&raw_id)?;
-            if !remote_ids.contains(&event_id) {
-                self.put_current_provider_event_if_absent(&event_id, &bytes)
-                    .await?;
-                remote_ids.insert(event_id.clone());
-            }
+            // Always put-if-absent: a listed remote name may be unreadable junk.
+            // Only drop the outbox row after a successful idempotent publish.
+            self.put_current_provider_event_if_absent(&event_id, &bytes)
+                .await?;
+            remote_ids.insert(event_id);
             remove_outbox_entry(&provider_id, &raw_id).await?;
         }
 
