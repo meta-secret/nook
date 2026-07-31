@@ -82,9 +82,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(!bake.contains("SCCACHE_REDIS"));
 
     let rust_base = read("nook-app/docker/base.Dockerfile");
-    assert!(
-        rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh")
-    );
+    assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
     assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
     assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
     assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
