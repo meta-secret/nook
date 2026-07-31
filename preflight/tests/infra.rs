@@ -87,7 +87,7 @@ fn assert_no_shell_scripts(path: &Path) {
 }
 
 #[test]
-fn remote_cache_is_public_over_tls_and_zot_remains_private() -> anyhow::Result<()> {
+fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
     assert_remote_compose_contract()?;
     assert_infrastructure_deploy_contract()?;
     assert_zot_registry_contract()?;
@@ -245,8 +245,10 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
 fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let compose = read("infra/compose.yaml");
     for required in [
-        "6380:6380",
-        "443:443",
+        "network_mode: host",
+        "bind 127.0.0.1",
+        "--entryPoints.redis.address=:6380",
+        "--entryPoints.websecure.address=:443",
         "requirepass $$password",
         "/run/redis/redis.conf",
         "docker-entrypoint.sh redis-server /run/redis/redis.conf",
@@ -272,7 +274,12 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         !compose.contains("--requirepass"),
         "the Redis password must be loaded from a restrictive config, not process argv"
     );
-    assert!(!compose.contains("6380:6379") && !compose.contains("5000:5000"));
+    assert!(
+        !compose.contains("6380:6379")
+            && !compose.contains("5000:5000")
+            && !compose.contains("ports:"),
+        "host-network Traefik/Redis must not publish bridge port maps"
+    );
     assert!(
         !compose.contains("\n  registry:") && !compose.contains("registry-data"),
         "the legacy Compose registry must be retired after the Zot migration"
@@ -329,11 +336,13 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
     for required in [
         "HostSNI(`redis-ovh-borg-1.bynull.link`)",
         "certResolver: letsencrypt",
-        "address: redis:6379",
+        "address: 127.0.0.1:6379",
+        "Host(`registry.nokey.sh`)",
+        "url: http://10.96.90.10:5000",
     ] {
         assert!(
             traefik.contains(required),
-            "Traefik Redis TLS routing is missing: {required}"
+            "Traefik TLS routing is missing: {required}"
         );
     }
 
