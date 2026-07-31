@@ -41,6 +41,14 @@ function runningUnderNode(): boolean {
   return Boolean(nodeProcess?.versions?.node);
 }
 
+type NodeFsReadFileSync = {
+  readFileSync: (path: string) => Uint8Array;
+};
+
+type NodeUrlFileURLToPath = {
+  fileURLToPath: (url: URL) => string;
+};
+
 async function companionWasmModuleOrPath(
   source: CompanionWasmSource,
 ): Promise<BufferSource | string | URL> {
@@ -49,13 +57,15 @@ async function companionWasmModuleOrPath(
     runningUnderNode()
   ) {
     // Playwright/Bun load this module in Node, where file: fetch is unavailable.
-    const nodeFs = "node:fs";
-    const nodeUrl = "node:url";
-    const [{ readFileSync }, { fileURLToPath }] = await Promise.all([
-      import(nodeFs) as Promise<typeof import("node:fs")>,
-      import(nodeUrl) as Promise<typeof import("node:url")>,
-    ]);
-    return readFileSync(fileURLToPath(source.url));
+    // Keep Node module names as runtime strings so browser svelte-check stays
+    // free of @types/node.
+    const nodeFsModule = "node:fs";
+    const nodeUrlModule = "node:url";
+    const [nodeFs, nodeUrl] = (await Promise.all([
+      import(/* @vite-ignore */ nodeFsModule),
+      import(/* @vite-ignore */ nodeUrlModule),
+    ])) as [NodeFsReadFileSync, NodeUrlFileURLToPath];
+    return nodeFs.readFileSync(nodeUrl.fileURLToPath(source.url));
   }
   if (source.kind === CompanionWasmSourceKind.ExtensionUrl) {
     return source.url;
