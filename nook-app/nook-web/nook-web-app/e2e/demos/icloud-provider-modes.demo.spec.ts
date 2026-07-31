@@ -39,13 +39,10 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  // WASM OAuth origin policy drives the unsupported banner; PR preview hosts are
-  // intentionally rejected, while stable/local hosts keep the connect path.
-  await expect(
-    page
-      .getByTestId('icloud-origin-unsupported')
-      .or(page.getByTestId('icloud-sign-in-btn')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  // Demo harness serves on 127.0.0.1; WASM OAuth origin policy rejects it for iCloud.
+  await expect(page.getByTestId('icloud-origin-unsupported')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   await expect(page.getByTestId('icloud-mode-private')).toHaveAttribute(
     'aria-checked',
     'true',
