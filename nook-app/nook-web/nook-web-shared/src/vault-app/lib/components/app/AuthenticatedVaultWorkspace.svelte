@@ -165,8 +165,8 @@
           onImportKeeper={(csv) => vault.handleKeeperImport(csv)}
           onImportOnePassword={(archive) =>
             vault.handleOnePasswordImport(archive)}
-          onImportApplePasswords={(csv) =>
-            vault.handleApplePasswordsImport(csv)}
+          onImportApplePasswords={(exportBytes) =>
+            vault.handleApplePasswordsImport(exportBytes)}
           onImportChromePasswords={(csv) =>
             vault.handleChromePasswordsImport(csv)}
           onImportGoogleAuthenticator={(migrationUris) =>

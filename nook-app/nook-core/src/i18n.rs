@@ -347,7 +347,7 @@ mod tests {
     #[test]
     fn test_import_source_labels_do_not_repeat_the_import_action() {
         let sources = [
-            ("apple_passwords_import.source", "Apple Passwords"),
+            ("apple_passwords_import.source", "Safari / Apple Passwords"),
             (
                 "chrome_passwords_import.source",
                 "Chrome or another browser",

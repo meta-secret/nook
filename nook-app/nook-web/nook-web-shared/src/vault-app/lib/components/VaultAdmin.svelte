@@ -129,7 +129,9 @@
     onImportLastPass: (csv: string) => Promise<NookImportResult>
     onImportKeeper: (csv: string) => Promise<NookImportResult>
     onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
-    onImportApplePasswords: (csv: string) => Promise<NookImportResult>
+    onImportApplePasswords: (
+      exportBytes: Uint8Array,
+    ) => Promise<NookImportResult>
     onImportChromePasswords: (csv: string) => Promise<NookImportResult>
     onImportGoogleAuthenticator: (
       migrationUris: string[],

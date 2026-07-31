@@ -1,10 +1,18 @@
 use super::{
-    BTreeSet, EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event,
+    BTreeSet, EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event_optional,
     fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
     list_github_event_ids, list_icloud_event_ids, load_local_event_store,
     put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent,
     save_event_bytes, save_heads,
 };
+
+fn is_github_event_missing(message: &str) -> bool {
+    message.contains("Event file missing at")
+}
+
+fn is_icloud_event_missing(message: &str) -> bool {
+    message.contains("is missing.")
+}
 
 impl NookVaultManager {
     pub(super) async fn list_current_provider_event_ids(
@@ -33,21 +41,28 @@ impl NookVaultManager {
             .collect()
     }
 
-    pub(super) async fn fetch_current_provider_event(
+    pub(super) async fn fetch_current_provider_event_optional(
         &self,
         event_id: &EventId,
-    ) -> Result<Vec<u8>, NookError> {
+    ) -> Result<Option<Vec<u8>>, NookError> {
         match self.storage.mode {
             nook_core::StorageMode::Github => {
-                fetch_github_event(
+                match fetch_github_event(
                     &self.storage.access_token,
                     &self.storage.remote_ref,
                     event_id,
                 )
                 .await
+                {
+                    Ok(bytes) => Ok(Some(bytes)),
+                    Err(NookError::GitHub(message)) if is_github_event_missing(&message) => {
+                        Ok(None)
+                    }
+                    Err(err) => Err(err),
+                }
             }
             nook_core::StorageMode::GoogleDrive => {
-                fetch_drive_event(
+                fetch_drive_event_optional(
                     &self.storage.access_token,
                     &self.storage.drive_event_parent,
                     event_id,
@@ -55,14 +70,21 @@ impl NookVaultManager {
                 .await
             }
             nook_core::StorageMode::ICloud => {
-                fetch_icloud_event(
+                match fetch_icloud_event(
                     &self.storage.access_token,
                     &self.storage.icloud_event_target,
                     event_id,
                 )
                 .await
+                {
+                    Ok(bytes) => Ok(Some(bytes)),
+                    Err(NookError::ICloud(message)) if is_icloud_event_missing(&message) => {
+                        Ok(None)
+                    }
+                    Err(err) => Err(err),
+                }
             }
-            nook_core::StorageMode::Local => Ok(Vec::new()),
+            nook_core::StorageMode::Local => Ok(None),
         }
     }
 

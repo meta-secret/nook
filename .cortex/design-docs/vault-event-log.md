@@ -177,9 +177,12 @@ provider fan-out appends YAML event files and repairs missing provider events
 from the local event store.
 
 Drive event storage tolerates duplicate app-data files for the same event name:
-fetch downloads all matches, accepts only bytes whose content-derived event id
-matches the requested id, treats identical duplicates as one event, and reports
-different bytes as corruption.
+fetch downloads all matches, skips unreadable or wrong-id candidates, accepts
+only bytes whose content-derived event id matches the requested id, treats
+identical duplicates as one event, and reports divergent valid envelopes as
+corruption. When every same-name candidate is unreadable, the event is treated
+as absent so put-if-absent can publish good local bytes; outbox flush must not
+treat a listed name alone as proof the event is already present.
 
 ## IndexedDB storage
 
