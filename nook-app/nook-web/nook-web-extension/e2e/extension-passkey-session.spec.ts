@@ -622,20 +622,25 @@ test('re-approves an existing local vault after reload without event-log-access-
 
     const worker = await getServiceWorker(context)
     const extensionId = new URL(worker.url()).host
+    // Extension popups close after Connect opens Simple Vault — always use a
+    // fresh page for pairing instead of reusing the setup popup.
+    await popupPage.close()
+    const pairPopup = await context.newPage()
     const openedConnect = context.waitForEvent('page', {
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    await popupPage.goto(
+    await pairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    await expect(popupPage.getByTestId('connect-simple-vault-btn')).toBeVisible(
+    await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
-    await popupPage.getByTestId('connect-simple-vault-btn').click()
+    await pairPopup.getByTestId('connect-simple-vault-btn').click()
     const connectPage = await openedConnect
     await expect(connectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
     )
+    await pairPopup.close().catch(() => undefined)
 
     const consent = connectPage.getByTestId('extension-connect-consent')
     const unlockStep = connectPage.getByTestId('login-local-unlock-step')
@@ -693,20 +698,22 @@ test('re-approves an existing local vault after reload without event-log-access-
       })
     }
 
+    const repairPopup = await context.newPage()
     const reopenedConnect = context.waitForEvent('page', {
       timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
     })
-    await popupPage.goto(
+    await repairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    await expect(popupPage.getByTestId('connect-simple-vault-btn')).toBeVisible(
-      { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
-    )
-    await popupPage.getByTestId('connect-simple-vault-btn').click()
+    await expect(
+      repairPopup.getByTestId('connect-simple-vault-btn'),
+    ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    await repairPopup.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
     )
+    await repairPopup.close().catch(() => undefined)
 
     const reconnectConsent = reconnectPage.getByTestId(
       'extension-connect-consent',
