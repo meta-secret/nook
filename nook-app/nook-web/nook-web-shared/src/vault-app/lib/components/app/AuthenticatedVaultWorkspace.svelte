@@ -161,6 +161,7 @@
           onClearCode={() => vault.clearEnrollmentCode()}
           onImportBitwarden={(json, password) =>
             vault.handleBitwardenImport(json, password)}
+          onImportKeePassXc={(csv) => vault.handleKeePassXcImport(csv)}
           onImportLastPass={(csv) => vault.handleLastPassImport(csv)}
           onImportOnePassword={(archive) =>
             vault.handleOnePasswordImport(archive)}

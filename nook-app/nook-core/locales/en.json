@@ -484,6 +484,20 @@
     "result_imported": "Imported {count} items.",
     "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
   },
+  "keepassxc_import": {
+    "source": "KeePassXC",
+    "title": "Import from KeePassXC",
+    "description": "Move logins and secure notes from a KeePassXC CSV export into this vault.",
+    "export_hint_title": "Export a CSV file from KeePassXC",
+    "export_hint": "In KeePassXC, open Database, choose Export, then CSV File. Confirm that you understand the export is unencrypted, then save the file. Delete the CSV after the import finishes.",
+    "file_label": "KeePassXC CSV export",
+    "supported_types": "Nook imports website logins and note-only entries. KeePassXC group and title metadata are preserved in encrypted item notes. Valid otpauth TOTP values become authenticator items; other TOTP settings stay in notes.",
+    "import": "Import items",
+    "importing": "Importing…",
+    "failed": "KeePassXC import failed: {error}",
+    "result_imported": "Imported {count} items.",
+    "result_skipped": "Skipped {unsupported} unsupported items and {duplicates} duplicates."
+  },
   "lastpass_import": {
     "source": "LastPass",
     "title": "Import from LastPass",
@@ -1222,6 +1236,7 @@
     "dashlane_imported": "Imported {count} Dashlane items.",
     "google_authenticator_imported": "Imported {count} Google Authenticator verification codes.",
     "bitwarden_imported": "Imported {count} Bitwarden items.",
+    "keepassxc_imported": "Imported {count} KeePassXC items.",
     "lastpass_imported": "Imported {count} LastPass items.",
     "onepassword_imported": "Imported {count} 1Password items.",
     "proton_pass_imported": "Imported {count} Proton Pass items.",

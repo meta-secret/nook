@@ -917,6 +917,10 @@ export class VaultState extends VaultLifecycleState {
     return secretsActions.handleBitwardenImport(this, json, password);
   }
 
+  async handleKeePassXcImport(csv: string): Promise<NookImportResult> {
+    return secretsActions.handleKeePassXcImport(this, csv);
+  }
+
   async handleLastPassImport(csv: string): Promise<NookImportResult> {
     return secretsActions.handleLastPassImport(this, csv);
   }
