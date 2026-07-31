@@ -288,9 +288,8 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
         dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
     );
     assert!(
-        dockerignore.contains(
-            "nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm*"
-        )
+        dockerignore
+            .contains("nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm*")
     );
     for ignored in [
         "**/target",
