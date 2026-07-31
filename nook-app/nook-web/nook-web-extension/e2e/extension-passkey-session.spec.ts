@@ -640,7 +640,6 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(connectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
     )
-    await pairPopup.close().catch(() => undefined)
 
     const consent = connectPage.getByTestId('extension-connect-consent')
     const unlockStep = connectPage.getByTestId('login-local-unlock-step')
@@ -713,7 +712,6 @@ test('re-approves an existing local vault after reload without event-log-access-
     await expect(reconnectPage).toHaveURL((url) =>
       belongsToSimpleVault(simpleVaultBaseUrl, url.toString()),
     )
-    await repairPopup.close().catch(() => undefined)
 
     const reconnectConsent = reconnectPage.getByTestId(
       'extension-connect-consent',
