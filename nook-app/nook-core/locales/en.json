@@ -1255,7 +1255,7 @@
     "onepassword_imported": "Imported {count} 1Password items.",
     "proton_pass_imported": "Imported {count} Proton Pass items.",
     "keeper_imported": "Imported {count} Keeper items.",
-    "error_timeout": "Connection timed out. Check your PAT, network, and try again.",
+    "error_timeout": "Connection timed out. Check your network and provider sign-in, then try again.",
     "error_no_engine": "Vault engine is not available.",
     "error_unlock_required": "Unlock the vault before adding a password.",
     "password_added_rotate": "Added password. Please rotate the genesis password envelope on your other devices if you intend to unlock them with this password.",

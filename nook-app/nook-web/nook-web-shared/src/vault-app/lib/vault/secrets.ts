@@ -26,6 +26,7 @@ import {
 } from "$lib/vault/sentinel-unlock";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { PasswordEntrySelectionKind } from "$lib/vault/state/session.svelte";
+import { startVaultDiscoveryTimeout } from "$lib/vault/vault-discovery-timeout";
 enum StorageConnectionKind {
   Configured = "configured",
   RemoteRecovery = "remote-recovery",
@@ -173,21 +174,18 @@ export async function loadDb(state: VaultState) {
           ? state.requireManager().connect_fresh(...connectArgs)
           : state.requireManager().connect(...connectArgs);
       state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                "Connection timed out. Check your PAT, network, and try again.",
-              ),
-            ),
-          30_000,
-        );
-      });
-      return (await Promise.race([
-        connectPromise,
-        timeoutPromise,
-      ])) as NookSecretRecord[];
+      const timeout = startVaultDiscoveryTimeout(
+        state.t("toasts.error_timeout"),
+        30_000,
+      );
+      try {
+        return (await Promise.race([
+          connectPromise,
+          timeout.completion,
+        ])) as NookSecretRecord[];
+      } finally {
+        timeout.cancel();
+      }
     });
     freeSecretRecords(rawRecords);
     await state.loadSecretPage("", 0);
