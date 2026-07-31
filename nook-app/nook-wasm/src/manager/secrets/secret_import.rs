@@ -162,7 +162,7 @@ impl SecretImportSource {
 
     const fn label(self) -> &'static str {
         match self {
-            Self::ApplePasswords => "Apple Passwords",
+            Self::ApplePasswords => "Safari / Apple Passwords",
             Self::Bitwarden => "Bitwarden",
             Self::ChromePasswords => "Chrome passwords",
             Self::GoogleAuthenticator => "Google Authenticator",

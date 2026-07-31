@@ -370,12 +370,12 @@ export async function handleOnePasswordImport(
 
 export async function handleApplePasswordsImport(
   state: VaultState,
-  csv: string,
+  exportBytes: Uint8Array,
 ): Promise<NookImportResult> {
   return runPasswordManagerImport(
     state,
-    (manager) => manager.importApplePasswordsCsv(csv),
-    "Apple Passwords",
+    (manager) => manager.importApplePasswordsExport(exportBytes),
+    "Safari / Apple Passwords",
     "toasts.apple_passwords_imported",
     "apple_passwords_import.failed",
   );

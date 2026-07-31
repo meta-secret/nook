@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
@@ -7,121 +6,11 @@ import {
   expandSettingsSection,
   flushNookLogPersistQueue,
   mockBip39Wordlist,
+  openPasswordManagerImport,
   readPersistedAppLogs,
   revealSecretInRow,
+  storedZip,
 } from './helpers'
-
-async function openBitwardenImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('bitwarden-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('bitwarden-import-panel')).toBeVisible()
-}
-
-async function openLastPassImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('lastpass-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
-}
-
-async function openOnePasswordImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('onepassword-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
-}
-
-async function openApplePasswordsImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('apple-passwords-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('apple-passwords-import-panel')).toBeVisible()
-}
-
-async function openChromePasswordsImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('chrome-passwords-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('chrome-passwords-import-panel')).toBeVisible()
-}
-
-async function openProtonPassImport(page: Page) {
-  await expandSettingsSection(page, 'import')
-  const section = page.getByTestId('proton-pass-import-section')
-  const toggle = section.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
-  }
-  await expect(page.getByTestId('proton-pass-import-panel')).toBeVisible()
-}
-
-function crc32(bytes: Buffer): number {
-  let crc = 0xffffffff
-  for (const byte of bytes) {
-    crc ^= byte
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0
-}
-
-function storedZip(entries: Record<string, string>): Buffer {
-  const localRecords: Buffer[] = []
-  const centralRecords: Buffer[] = []
-  let offset = 0
-
-  for (const [name, text] of Object.entries(entries)) {
-    const fileName = Buffer.from(name)
-    const data = Buffer.from(text)
-    const checksum = crc32(data)
-    const local = Buffer.alloc(30)
-    local.writeUInt32LE(0x04034b50, 0)
-    local.writeUInt16LE(20, 4)
-    local.writeUInt32LE(checksum, 14)
-    local.writeUInt32LE(data.length, 18)
-    local.writeUInt32LE(data.length, 22)
-    local.writeUInt16LE(fileName.length, 26)
-    localRecords.push(local, fileName, data)
-
-    const central = Buffer.alloc(46)
-    central.writeUInt32LE(0x02014b50, 0)
-    central.writeUInt16LE(20, 4)
-    central.writeUInt16LE(20, 6)
-    central.writeUInt32LE(checksum, 16)
-    central.writeUInt32LE(data.length, 20)
-    central.writeUInt32LE(data.length, 24)
-    central.writeUInt16LE(fileName.length, 28)
-    central.writeUInt32LE(offset, 42)
-    centralRecords.push(central, fileName)
-    offset += local.length + fileName.length + data.length
-  }
-
-  const centralDirectory = Buffer.concat(centralRecords)
-  const end = Buffer.alloc(22)
-  end.writeUInt32LE(0x06054b50, 0)
-  end.writeUInt16LE(Object.keys(entries).length, 8)
-  end.writeUInt16LE(Object.keys(entries).length, 10)
-  end.writeUInt32LE(centralDirectory.length, 12)
-  end.writeUInt32LE(offset, 16)
-  return Buffer.concat([...localRecords, centralDirectory, end])
-}
 
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
@@ -138,7 +27,7 @@ test.describe('local vault', () => {
     await page.getByTestId('vault-admin-tab').click()
     const importSection = page.getByTestId('vault-import-export-section')
     await expect(importSection).toBeVisible()
-    await expect(importSection).not.toContainText('Apple Passwords')
+    await expect(importSection).not.toContainText('Safari / Apple Passwords')
     await expect(importSection).not.toContainText('Proton Pass')
 
     await expandSettingsSection(page, 'import')
@@ -268,7 +157,7 @@ test.describe('local vault', () => {
       ].join(','),
     ].join('\n')
 
-    await openChromePasswordsImport(page)
+    await openPasswordManagerImport(page, 'chrome-passwords')
     await page.getByTestId('chrome-passwords-csv-file').setInputFiles({
       name: 'Chrome Passwords.csv',
       mimeType: 'text/csv',
@@ -283,7 +172,7 @@ test.describe('local vault', () => {
     const loginGroup = page.getByTestId('vault-group-login')
     await expect(loginGroup).toContainText('chrome-alice')
 
-    await openChromePasswordsImport(page)
+    await openPasswordManagerImport(page, 'chrome-passwords')
     await page.getByTestId('chrome-passwords-csv-file').setInputFiles({
       name: 'Chrome Passwords.csv',
       mimeType: 'text/csv',
@@ -296,55 +185,6 @@ test.describe('local vault', () => {
     await expect(
       page.getByTestId('chrome-passwords-import-result'),
     ).toContainText('1 duplicates')
-  })
-
-  test('imports Apple Passwords logins and verification codes from CSV', async ({
-    page,
-  }) => {
-    const exportCsv = [
-      'Title,URL,Username,Password,Notes,OTPAuth',
-      [
-        '"Imported Apple account"',
-        'https://apple-import.example/login',
-        'apple-alice',
-        'apple-imported-password',
-        '"Imported from Apple Passwords"',
-        '"otpauth://totp/Apple%20Import%3Aapple-alice?secret=JBSWY3DPEHPK3PXP&issuer=Apple%20Import"',
-      ].join(','),
-    ].join('\n')
-
-    await openApplePasswordsImport(page)
-    await page.getByTestId('apple-passwords-csv-file').setInputFiles({
-      name: 'Passwords.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from(exportCsv),
-    })
-    await page.getByTestId('apple-passwords-import-submit').click()
-    await expect(
-      page.getByTestId('apple-passwords-import-result'),
-    ).toContainText('Imported 2 items')
-
-    await page.getByTestId('vault-secrets-tab').click()
-    await expect(page.getByTestId('vault-group-login')).toContainText(
-      'apple-alice',
-    )
-    await expect(page.getByTestId('vault-group-authenticator')).toContainText(
-      'apple-alice',
-    )
-
-    await openApplePasswordsImport(page)
-    await page.getByTestId('apple-passwords-csv-file').setInputFiles({
-      name: 'Passwords.csv',
-      mimeType: 'text/csv',
-      buffer: Buffer.from(exportCsv),
-    })
-    await page.getByTestId('apple-passwords-import-submit').click()
-    await expect(
-      page.getByTestId('apple-passwords-import-result'),
-    ).toContainText('Imported 0 items')
-    await expect(
-      page.getByTestId('apple-passwords-import-result'),
-    ).toContainText('2 duplicates')
   })
 
   test('imports Bitwarden logins and secure notes from JSON', async ({
@@ -392,7 +232,7 @@ test.describe('local vault', () => {
       ],
     })
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_export.json',
       mimeType: 'application/json',
@@ -417,7 +257,7 @@ test.describe('local vault', () => {
       'Imported card',
     )
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_export.json',
       mimeType: 'application/json',
@@ -495,7 +335,7 @@ test.describe('local vault', () => {
       }),
     })
 
-    await openOnePasswordImport(page)
+    await openPasswordManagerImport(page, 'onepassword')
     await page.getByTestId('onepassword-pux-file').setInputFiles({
       name: 'account.1pux',
       mimeType: 'application/zip',
@@ -517,7 +357,7 @@ test.describe('local vault', () => {
       'Imported 1Password note',
     )
 
-    await openOnePasswordImport(page)
+    await openPasswordManagerImport(page, 'onepassword')
     await page.getByTestId('onepassword-pux-file').setInputFiles({
       name: 'account.1pux',
       mimeType: 'application/zip',
@@ -598,7 +438,7 @@ test.describe('local vault', () => {
         }),
       })
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_export.json',
       mimeType: 'application/json',
@@ -609,7 +449,7 @@ test.describe('local vault', () => {
       'Imported 1 item',
     )
 
-    await openOnePasswordImport(page)
+    await openPasswordManagerImport(page, 'onepassword')
     await page.getByTestId('onepassword-pux-file').setInputFiles({
       name: 'account.1pux',
       mimeType: 'application/zip',
@@ -629,7 +469,7 @@ test.describe('local vault', () => {
     await expect(rows.first()).toContainText('field.source: Bitwarden')
     await expect(rows.first()).toContainText('tags: 1password')
 
-    await openOnePasswordImport(page)
+    await openPasswordManagerImport(page, 'onepassword')
     await page.getByTestId('onepassword-pux-file').setInputFiles({
       name: 'account.1pux',
       mimeType: 'application/zip',
@@ -653,7 +493,7 @@ test.describe('local vault', () => {
       'http://sn,,,"# LastPass note\n\nKeep offline",Imported LastPass note,Personal,0',
     ].join('\n')
 
-    await openLastPassImport(page)
+    await openPasswordManagerImport(page, 'lastpass')
     await page.getByTestId('lastpass-csv-file').setInputFiles({
       name: 'lastpass_export.csv',
       mimeType: 'text/csv',
@@ -672,7 +512,7 @@ test.describe('local vault', () => {
       'Imported LastPass note',
     )
 
-    await openLastPassImport(page)
+    await openPasswordManagerImport(page, 'lastpass')
     await page.getByTestId('lastpass-csv-file').setInputFiles({
       name: 'lastpass_export.csv',
       mimeType: 'text/csv',
@@ -766,7 +606,7 @@ test.describe('local vault', () => {
       }),
     })
 
-    await openProtonPassImport(page)
+    await openPasswordManagerImport(page, 'proton-pass')
     await page.getByTestId('proton-pass-export-file').setInputFiles({
       name: 'Proton Pass_export.zip',
       mimeType: 'application/zip',
@@ -791,7 +631,7 @@ test.describe('local vault', () => {
       'Imported Proton card',
     )
 
-    await openProtonPassImport(page)
+    await openPasswordManagerImport(page, 'proton-pass')
     await page.getByTestId('proton-pass-export-file').setInputFiles({
       name: 'Proton Pass_export.zip',
       mimeType: 'application/zip',
@@ -816,7 +656,7 @@ test.describe('local vault', () => {
       ),
     )
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_encrypted_export.json',
       mimeType: 'application/json',
@@ -852,7 +692,7 @@ test.describe('local vault', () => {
       items,
     })
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_large_export.json',
       mimeType: 'application/json',
@@ -903,7 +743,7 @@ test.describe('local vault', () => {
       },
     }))
 
-    await openBitwardenImport(page)
+    await openPasswordManagerImport(page, 'bitwarden')
     await page.getByTestId('bitwarden-json-file').setInputFiles({
       name: 'bitwarden_demand_decrypt.json',
       mimeType: 'application/json',
