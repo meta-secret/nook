@@ -115,6 +115,7 @@ instructions; see [Deployments](#deployments).
 | ------ | ------ | ------------ |
 | Bitwarden | JSON (plaintext or password-protected) | Logins, secure notes, credit cards |
 | LastPass | Unencrypted generic CSV | Logins, secure notes |
+| Keeper | Unencrypted CSV | Logins, secure notes |
 | 1Password | Unencrypted 1PUX | Logins, passwords, secure notes, credit cards |
 | Apple Passwords | Unencrypted CSV | Website logins, TOTP |
 | Chrome / Chromium / Brave / Edge | Unencrypted password CSV | Website logins |

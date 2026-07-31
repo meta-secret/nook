@@ -359,6 +359,7 @@ mod tests {
             ("lastpass_import.source", "LastPass"),
             ("onepassword_import.source", "1Password"),
             ("proton_pass_import.source", "Proton Pass"),
+            ("keeper_import.source", "Keeper"),
         ];
 
         for (key, expected) in sources {

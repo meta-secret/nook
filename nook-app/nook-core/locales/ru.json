@@ -604,6 +604,20 @@
     "result_imported": "Импортировано записей: {count}.",
     "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
   },
+  "keeper_import": {
+    "source": "Keeper",
+    "title": "Импорт из Keeper",
+    "description": "Перенесите логины и защищённые заметки из CSV-экспорта Keeper в этот сейф.",
+    "export_hint_title": "Экспортируйте CSV-файл из Keeper",
+    "export_hint": "В веб-сейфе или приложении Keeper Desktop откройте настройки, выберите экспорт, затем CSV. Подтвердите мастер-паролем. CSV не зашифрован: удалите его после завершения импорта. Зашифрованные экспорты KeePass/KDBX не поддерживаются.",
+    "file_label": "CSV-экспорт Keeper",
+    "supported_types": "Nook импортирует логины сайтов и защищённые заметки. Папки, общие папки, TOTP и пользовательские поля сохраняются в зашифрованных заметках записи. Вложения, файловые записи и зашифрованные экспорты KeePass пропускаются.",
+    "import": "Импортировать записи",
+    "importing": "Импорт…",
+    "failed": "Не удалось импортировать данные Keeper: {error}",
+    "result_imported": "Импортировано записей: {count}.",
+    "result_skipped": "Пропущено неподдерживаемых записей: {unsupported}; дубликатов: {duplicates}."
+  },
   "settings": {
     "title": "Настройки",
     "storage": "Провайдеры синхронизации",
@@ -977,6 +991,7 @@
     "lastpass_imported": "Импортировано записей LastPass: {count}.",
     "onepassword_imported": "Импортировано записей 1Password: {count}.",
     "proton_pass_imported": "Импортировано записей Proton Pass: {count}.",
+    "keeper_imported": "Импортировано записей Keeper: {count}.",
     "error_timeout": "Время подключения истекло. Проверьте ваш PAT, интернет-соединение и попробуйте снова.",
     "error_no_engine": "Движок сейфа недоступен.",
     "error_unlock_required": "Разблокируйте сейф перед добавлением пароля.",

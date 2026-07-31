@@ -368,6 +368,19 @@ export async function handleLastPassImport(
   );
 }
 
+export async function handleKeeperImport(
+  state: VaultState,
+  csv: string,
+): Promise<NookImportResult> {
+  return runPasswordManagerImport(
+    state,
+    (manager) => manager.importKeeperCsv(csv),
+    "Keeper",
+    "toasts.keeper_imported",
+    "keeper_import.failed",
+  );
+}
+
 export async function handleOnePasswordImport(
   state: VaultState,
   archive: Uint8Array,

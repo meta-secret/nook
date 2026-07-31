@@ -35,6 +35,7 @@ test.describe('local vault', () => {
     const bitwardenSection = page.getByTestId('bitwarden-import-section')
     const keepassXcSection = page.getByTestId('keepassxc-import-section')
     const lastPassSection = page.getByTestId('lastpass-import-section')
+    const keeperSection = page.getByTestId('keeper-import-section')
     const onePasswordSection = page.getByTestId('onepassword-import-section')
     const applePasswordsSection = page.getByTestId(
       'apple-passwords-import-section',
@@ -48,6 +49,7 @@ test.describe('local vault', () => {
     const bitwardenToggle = bitwardenSection.getByRole('button').first()
     const keepassXcToggle = keepassXcSection.getByRole('button').first()
     const lastPassToggle = lastPassSection.getByRole('button').first()
+    const keeperToggle = keeperSection.getByRole('button').first()
     const onePasswordToggle = onePasswordSection.getByRole('button').first()
     const applePasswordsToggle = applePasswordsSection
       .getByRole('button')
@@ -65,6 +67,7 @@ test.describe('local vault', () => {
     await expect(bitwardenSection).toBeVisible()
     await expect(keepassXcSection).toBeVisible()
     await expect(lastPassSection).toBeVisible()
+    await expect(keeperSection).toBeVisible()
     await expect(onePasswordSection).toBeVisible()
     await expect(applePasswordsToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(chromePasswordsToggle).toHaveAttribute(
@@ -78,6 +81,7 @@ test.describe('local vault', () => {
     await expect(bitwardenToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(keepassXcToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(lastPassToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(keeperToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(onePasswordToggle).toHaveAttribute('aria-expanded', 'false')
     await expect(
       page.getByTestId('apple-passwords-import-panel'),
@@ -90,6 +94,7 @@ test.describe('local vault', () => {
     ).not.toBeVisible()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await applePasswordsToggle.click()
@@ -100,6 +105,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await bitwardenToggle.click()
@@ -118,12 +124,19 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('keepassxc-import-panel')).toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await lastPassToggle.click()
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
+
+    await keeperToggle.click()
+    await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).not.toBeVisible()
 
     await onePasswordToggle.click()
@@ -136,6 +149,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('bitwarden-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('keepassxc-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('lastpass-import-panel')).not.toBeVisible()
+    await expect(page.getByTestId('keeper-import-panel')).not.toBeVisible()
     await expect(page.getByTestId('onepassword-import-panel')).toBeVisible()
 
     await chromePasswordsToggle.click()
