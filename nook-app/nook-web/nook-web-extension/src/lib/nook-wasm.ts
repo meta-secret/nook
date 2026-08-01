@@ -17,7 +17,6 @@ import {
   supportedAppLocaleCode,
   VaultApplication,
   type NookAppLocale,
-  type PasswordGenerationOptions,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 enum ExtensionWasmStartupKind {
@@ -373,11 +372,9 @@ export async function unlockExtensionPin(
   ).device
 }
 
-export async function generateSuggestedPassword(
-  options: PasswordGenerationOptions = wasmDefaultPasswordGenerationOptions(),
-): Promise<string> {
+export async function generateSuggestedPassword(): Promise<string> {
   await ensureNookWasm()
-  return wasmGeneratePassword(options)
+  return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
 }
 
 export async function parseStoredAppLocale(

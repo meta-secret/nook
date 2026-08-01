@@ -121,8 +121,6 @@ pub enum VaultApplication {
     Extension,
 }
 
-const DEFAULT_SIMPLE_VAULT_APP_URL: &str = "https://simple.nokey.sh";
-
 impl VaultApplication {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -195,17 +193,6 @@ impl VaultApplication {
         }
         self.validate_session_access(vault_type)
     }
-}
-
-#[must_use]
-pub fn simple_vault_app_url(configured_url: &str) -> String {
-    let configured_url = configured_url.trim();
-    let root = if configured_url.is_empty() {
-        DEFAULT_SIMPLE_VAULT_APP_URL
-    } else {
-        configured_url
-    };
-    format!("{}/", root.trim_end_matches('/'))
 }
 
 impl VaultType {
@@ -871,18 +858,6 @@ mod tests {
 
         assert!(VaultApplication::UnifiedDevelopment.supports_extension());
         assert!(VaultApplication::Extension.supports_extension());
-    }
-
-    #[test]
-    fn simple_vault_application_url_is_defaulted_and_normalized() {
-        assert_eq!(
-            simple_vault_app_url(""),
-            "https://simple.nokey.sh/".to_owned()
-        );
-        assert_eq!(
-            simple_vault_app_url("  https://preview-simple.example///  "),
-            "https://preview-simple.example/".to_owned()
-        );
     }
 
     #[test]

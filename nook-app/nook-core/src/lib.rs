@@ -306,7 +306,7 @@ pub use vault_architecture::{
     SharedJoinerIdentityKind, SharedStorageGrantCredential, SharedStorageGrantOutcome,
     SharedStorageGrantRequest, SharedStorageGrantTarget, SharedStorageTargetHint,
     SharedStorageTargetSelection, VaultApplication, VaultArchitecture, VaultConnectIntent,
-    VaultType, prepare_shared_storage_grant, provider_replication_capability, simple_vault_app_url,
+    VaultType, prepare_shared_storage_grant, provider_replication_capability,
     validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_client_policy::{

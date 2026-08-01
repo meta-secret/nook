@@ -334,6 +334,7 @@ pub(super) fn typescript_boundary_violation_lines(contents: &str) -> Vec<usize> 
             .iter()
             .any(|marker| line.contains(marker))
             || is_wasm_type_alias(line, &wasm_bindings)
+            || is_domain_mirror_interface(line)
             || is_domain_mirror_enum(line)
         {
             violations.push(index + 1);
@@ -396,18 +397,35 @@ pub(super) fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) ->
     let Some(alias) = line.strip_prefix("type ") else {
         return false;
     };
+    let declaration_name = alias
+        .split(|character: char| character.is_whitespace() || character == '=')
+        .next()
+        .unwrap_or_default();
+    if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&declaration_name) {
+        return true;
+    }
     let Some((name, value)) = alias.split_once('=') else {
         return false;
     };
-    if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&name.trim()) {
-        return true;
-    }
     let value = value.trim_start();
     if value.starts_with("Nook") {
         return true;
     }
     let value = value.trim_end_matches(';').trim();
     is_typescript_identifier(value) && wasm_bindings.contains(value)
+}
+
+fn is_domain_mirror_interface(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix("export ").unwrap_or(line);
+    let Some(declaration) = line.strip_prefix("interface ") else {
+        return false;
+    };
+    let name = declaration
+        .split(|character: char| character.is_whitespace() || character == '{')
+        .next()
+        .unwrap_or_default();
+    TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&name)
 }
 
 pub(super) fn wasm_import_bindings(contents: &str) -> HashSet<String> {

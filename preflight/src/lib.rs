@@ -83,6 +83,7 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "OAuthFilePreset",
     "GoogleDriveMode",
     "ICloudMode",
+    "PasswordGenerationOptions",
 ];
 
 const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
@@ -488,9 +489,21 @@ export type PasswordGenerationOptions = {
 interface PasswordGenerationOptions {
   symbols: boolean
 }
+type PasswordGenerationOptions = Readonly<{ numbers: boolean }>
+interface PasswordGenerationOptions
+{
+  uppercase: boolean
+}
+type PasswordGenerationOptions =
+{
+  lowercase: boolean
+}
 ";
 
-        assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
+        assert_eq!(
+            typescript_boundary_violation_lines(source),
+            vec![2, 5, 8, 9, 13]
+        );
     }
 
     #[test]
