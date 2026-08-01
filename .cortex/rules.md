@@ -85,8 +85,9 @@ This document defines the strict development standards, architectural boundaries
   declarations and generated WASM bindings may mirror external contracts.
 - **Svelte TypeScript enums:** Every Svelte build surface enables
   `vitePreprocess({ script: true })`. Presentation-only closed vocabularies use
-  named TypeScript enums directly in component script blocks when local to one
-  component; shared vocabularies live in cohesive adjacent `.ts` modules.
+  named TypeScript enums. Runtime enums consumed by a component instance live
+  in a cohesive adjacent `.ts` module and are imported normally; do not bridge
+  runtime values from a same-file `<script module>` into the instance script.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.
