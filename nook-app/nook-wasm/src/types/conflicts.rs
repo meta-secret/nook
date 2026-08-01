@@ -363,44 +363,6 @@ impl NookSecurityConflict {
     }
 }
 
-#[cfg(test)]
-mod projection_conflict_tests {
-    use super::*;
-
-    #[test]
-    fn replacement_conflict_exposes_candidate_ids_without_web_mapping() {
-        let conflict = NookReplacementConflict {
-            old_secret_id: "secret-old".to_owned(),
-            candidates: vec![
-                NookReplacementCandidate {
-                    event_id: "event-a".to_owned(),
-                    secret_id: "secret-a".to_owned(),
-                },
-                NookReplacementCandidate {
-                    event_id: "event-b".to_owned(),
-                    secret_id: "secret-b".to_owned(),
-                },
-            ],
-        };
-
-        assert_eq!(
-            conflict.candidate_secret_ids(),
-            vec!["secret-a".to_owned(), "secret-b".to_owned()]
-        );
-    }
-
-    #[test]
-    fn security_conflict_display_parts_are_owned_by_wasm() {
-        let conflict = NookSecurityConflict::from_display_parts(
-            vec!["event-a".to_owned()],
-            vec!["password-rotated".to_owned()],
-        );
-
-        assert_eq!(conflict.events(), vec!["event-a".to_owned()]);
-        assert_eq!(conflict.reasons(), vec!["password-rotated".to_owned()]);
-    }
-}
-
 pub(crate) fn security_conflicts_to_vec(
     conflicts: Vec<nook_core::SecurityConflict>,
 ) -> Result<Vec<NookSecurityConflict>, NookError> {
@@ -715,5 +677,43 @@ fn diagnostic_epoch_id(
             Err(wasm_bindgen::JsError::new("diagnostic epoch is unknown"))
         }
         nook_core::DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
+    }
+}
+
+#[cfg(test)]
+mod projection_conflict_tests {
+    use super::*;
+
+    #[test]
+    fn replacement_conflict_exposes_candidate_ids_without_web_mapping() {
+        let conflict = NookReplacementConflict {
+            old_secret_id: "secret-old".to_owned(),
+            candidates: vec![
+                NookReplacementCandidate {
+                    event_id: "event-a".to_owned(),
+                    secret_id: "secret-a".to_owned(),
+                },
+                NookReplacementCandidate {
+                    event_id: "event-b".to_owned(),
+                    secret_id: "secret-b".to_owned(),
+                },
+            ],
+        };
+
+        assert_eq!(
+            conflict.candidate_secret_ids(),
+            vec!["secret-a".to_owned(), "secret-b".to_owned()]
+        );
+    }
+
+    #[test]
+    fn security_conflict_display_parts_are_owned_by_wasm() {
+        let conflict = NookSecurityConflict::from_display_parts(
+            vec!["event-a".to_owned()],
+            vec!["password-rotated".to_owned()],
+        );
+
+        assert_eq!(conflict.events(), vec!["event-a".to_owned()]);
+        assert_eq!(conflict.reasons(), vec!["password-rotated".to_owned()]);
     }
 }

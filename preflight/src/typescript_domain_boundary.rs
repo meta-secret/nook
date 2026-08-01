@@ -111,29 +111,6 @@ pub(super) fn inline_object_collection_state_lines(source: &str) -> Vec<usize> {
     lines
 }
 
-#[cfg(test)]
-mod tests {
-    use super::inline_object_collection_state_lines;
-
-    #[test]
-    fn inline_object_collection_state_is_rejected() {
-        let source = r#"
-            const conflicts = $state<Array<{
-                events: string[];
-            }>>([]);
-            const raw = $state.raw<Array<{ id: string }>>([]);
-        "#;
-
-        assert_eq!(inline_object_collection_state_lines(source), [2, 5]);
-    }
-
-    #[test]
-    fn generated_domain_collection_state_is_accepted() {
-        let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
-        assert!(inline_object_collection_state_lines(source).is_empty());
-    }
-}
-
 pub(super) fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
     let mut compact = Vec::with_capacity(source.len());
     let mut source_lines = Vec::with_capacity(source.len());
@@ -648,4 +625,27 @@ pub(super) fn is_typescript_identifier(value: &str) -> bool {
     (first.is_ascii_alphabetic() || matches!(first, '_' | '$'))
         && characters
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '$'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inline_object_collection_state_lines;
+
+    #[test]
+    fn inline_object_collection_state_is_rejected() {
+        let source = r#"
+            const conflicts = $state<Array<{
+                events: string[];
+            }>>([]);
+            const raw = $state.raw<Array<{ id: string }>>([]);
+        "#;
+
+        assert_eq!(inline_object_collection_state_lines(source), [2, 5]);
+    }
+
+    #[test]
+    fn generated_domain_collection_state_is_accepted() {
+        let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
+        assert!(inline_object_collection_state_lines(source).is_empty());
+    }
 }
