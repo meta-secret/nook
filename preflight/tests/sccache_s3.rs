@@ -75,12 +75,17 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         dockerignore.lines().any(|line| line == ".nook"),
         "ignored local credentials must never enter a Docker build context"
     );
-    assert!(
-        dockerignore
-            .lines()
-            .any(|line| line == "**/docker-bake.hcl"),
-        "Bake policy files must not invalidate source-sensitive Rust COPY layers"
-    );
+    for dockerfile_ignore in [
+        "nook-app/nook-core/Dockerfile.dockerignore",
+        "nook-app/nook-wasm/Dockerfile.dockerignore",
+    ] {
+        assert!(
+            read(dockerfile_ignore)
+                .lines()
+                .any(|line| line == "**/docker-bake.hcl"),
+            "{dockerfile_ignore} must keep Bake policy out of source-sensitive Rust COPY layers"
+        );
+    }
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"SCCACHE_ENDPOINT\""));
