@@ -14,7 +14,10 @@ pub(super) async fn gh_output(repository: &Path, arguments: &[&str]) -> crate::H
         .await
         .hive_context("failed to execute gh")?;
     if !output.status.success() {
-        crate::hive_bail!("gh {:?} failed with status {}", arguments, output.status);
+        return Err(crate::error::HiveError::message(format!(
+            "gh {:?} failed with status {}",
+            arguments, output.status
+        )));
     }
     String::from_utf8(output.stdout)
         .hive_context("gh output is not UTF-8")
@@ -30,7 +33,10 @@ pub(super) async fn git_output(repository: &Path, arguments: &[&str]) -> crate::
         .await
         .hive_context("failed to execute git")?;
     if !output.status.success() {
-        crate::hive_bail!("git {:?} failed with status {}", arguments, output.status);
+        return Err(crate::error::HiveError::message(format!(
+            "git {:?} failed with status {}",
+            arguments, output.status
+        )));
     }
     String::from_utf8(output.stdout)
         .hive_context("git output is not UTF-8")
@@ -52,7 +58,9 @@ pub(super) async fn run_git_status(
         .await
         .with_hive_context(|| format!("failed to {operation}"))?;
     if !status.success() {
-        crate::hive_bail!("{operation} failed with status {status}");
+        return Err(crate::error::HiveError::message(format!(
+            "{operation} failed with status {status}"
+        )));
     }
     Ok(())
 }

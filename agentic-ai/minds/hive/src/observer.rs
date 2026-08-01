@@ -193,7 +193,9 @@ pub async fn run_observer_coordinator(
                 .observer_task_value(&task_id, &locale)
                 .await
                 .map(ObserverResponse::Task),
-            Err(error) => Err(crate::hive_error!("decode observer request: {error}")),
+            Err(error) => Err(crate::error::HiveError::message(format!(
+                "decode observer request: {error}"
+            ))),
         }
         .unwrap_or_else(|error| ObserverResponse::Error(format!("{error:#}")));
         writer.write_all(&serde_json::to_vec(&response)?).await?;

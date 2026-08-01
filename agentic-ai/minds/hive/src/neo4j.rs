@@ -62,9 +62,9 @@ impl TaskStore for Neo4jTaskStore {
             .and_then(|row| row.get::<i64>("version").ok())
             .unwrap_or(0);
         if installed_version > LATEST_SCHEMA_VERSION {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
-            );
+            )));
         }
         if installed_version == 1 {
             let mut rows = self
@@ -81,10 +81,10 @@ impl TaskStore for Neo4jTaskStore {
                 .and_then(|row| row.get::<i64>("legacy_tasks").ok())
                 .unwrap_or(0);
             if legacy_tasks > 0 {
-                crate::hive_bail!(
+                return Err(crate::error::HiveError::message(format!(
                     "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
                      drain or remove those legacy tasks before upgrading to schema 2"
-                );
+                )));
             }
         }
         if installed_version < 3 {
@@ -213,7 +213,10 @@ impl TaskStore for Neo4jTaskStore {
             .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
         if !created {
             transaction.rollback().await?;
-            crate::hive_bail!("task {} already exists", task.id);
+            return Err(crate::error::HiveError::message(format!(
+                "task {} already exists",
+                task.id
+            )));
         }
 
         for dependency in &task.dependencies {
@@ -233,9 +236,9 @@ impl TaskStore for Neo4jTaskStore {
                 .with_hive_context(|| format!("dependency {} does not exist", dependency))?;
             if rows.next(transaction.handle()).await?.is_none() {
                 transaction.rollback().await?;
-                return Err(crate::hive_error!(
+                return Err(crate::error::HiveError::message(format!(
                     "dependency {dependency} does not exist or targets a different source commit"
-                ));
+                )));
             }
             drop(rows);
             Self::rearm_obsolete_subtree(&mut transaction, dependency).await?;
@@ -640,8 +643,8 @@ impl TaskStore for Neo4jTaskStore {
                 },
             }
         }
-        Err(crate::hive_error!(
-            "Neo4j claim retry budget exhausted after transient failures"
+        Err(crate::error::HiveError::message(
+            "Neo4j claim retry budget exhausted after transient failures",
         ))
     }
 
@@ -943,10 +946,14 @@ impl TaskStore for Neo4jTaskStore {
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
         if blocker.source_commit != task.source_commit {
-            crate::hive_bail!("a blocker must target the same pinned repository revision");
+            return Err(crate::error::HiveError::message(
+                "a blocker must target the same pinned repository revision",
+            ));
         }
         if !blocker.dependencies.is_empty() {
-            crate::hive_bail!("a newly discovered blocker must not have undeclared dependencies");
+            return Err(crate::error::HiveError::message(
+                "a newly discovered blocker must not have undeclared dependencies",
+            ));
         }
         self.block_task(task, agent_id, blocker, reason).await
     }

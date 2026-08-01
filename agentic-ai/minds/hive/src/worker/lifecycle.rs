@@ -352,7 +352,9 @@ mod tests {
                 "worker lifecycle marker must follow the lease release"
             );
             if self.release_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-                crate::hive_bail!("transient coordinator transport failure");
+                return Err(crate::error::HiveError::message(
+                    "transient coordinator transport failure",
+                ));
             }
             self.released.store(true, Ordering::SeqCst);
             Ok(true)

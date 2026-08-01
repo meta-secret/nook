@@ -209,16 +209,15 @@ fn select_successful_main_run<'a>(
         if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
             continue;
         }
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery failed on Main: run at {} concluded {}",
-            run.head_sha,
-            run.conclusion
-        );
+            run.head_sha, run.conclusion
+        )));
     }
-    crate::hive_bail!(
+    Err(crate::error::HiveError::message(format!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
         merge_commit
-    )
+    )))
 }
 
 fn latest_delivery_generation<'a>(
@@ -243,9 +242,9 @@ fn latest_delivery_generation<'a>(
         .skip(1)
         .any(|(generation, _)| *generation == latest_generation)
     {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is ambiguous: multiple PRs use generation {latest_generation}"
-        );
+        )));
     }
     Ok(Some(latest))
 }
@@ -262,16 +261,16 @@ fn delivery_generation(base: &str, candidate: &str) -> Option<u64> {
 
 fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if !pull_request.title.starts_with("[Hive] ") {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} lacks the `[Hive]` title marker",
             pull_request.number
-        );
+        )));
     }
     if !pull_request.labels.iter().any(|label| label.name == "hive") {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} lacks the `hive` label",
             pull_request.number
-        );
+        )));
     }
     Ok(())
 }
@@ -290,10 +289,10 @@ async fn validate_squash_merge(
     )
     .await?;
     if parents.split_whitespace().count() != 1 {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery violated squash-only history: merge {} has multiple parents",
             merge_commit.oid
-        );
+        )));
     }
     let subject = git_output(
         repository,
@@ -302,28 +301,26 @@ async fn validate_squash_merge(
     .await?;
     let expected_suffix = format!("(#{})", pull_request.number);
     if !subject.ends_with(&expected_suffix) {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery violated squash-only history: merge {} lacks PR suffix {}",
-            merge_commit.oid,
-            expected_suffix
-        );
+            merge_commit.oid, expected_suffix
+        )));
     }
     Ok(())
 }
 
 fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if pull_request.state != "MERGED" {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} is {}",
-            pull_request.number,
-            pull_request.state
-        );
+            pull_request.number, pull_request.state
+        )));
     }
     if pull_request.merge_commit.is_none() {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} has no squash merge",
             pull_request.number
-        );
+        )));
     }
     Ok(())
 }
@@ -337,11 +334,10 @@ fn validate_full_e2e_checks(
         .iter()
         .any(|label| label.name == "ci:full-e2e")
     {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks `ci:full-e2e`",
-            pull_request.number,
-            pull_request.head_ref_oid
-        );
+            pull_request.number, pull_request.head_ref_oid
+        )));
     }
     for required_check in [
         "Full browser e2e (main fix)",
@@ -353,12 +349,10 @@ fn validate_full_e2e_checks(
             .filter(|check| check.name == required_check)
             .collect::<Vec<_>>();
         if !successful_or_merge_cancelled(&matching, successful_main_contains_merge) {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
-                pull_request.number,
-                pull_request.head_ref_oid,
-                required_check
-            );
+                pull_request.number, pull_request.head_ref_oid, required_check
+            )));
         }
     }
     Ok(())
@@ -374,11 +368,10 @@ fn validate_repository_checks(
         .filter(|check| check.name == "Verify and preview")
         .collect::<Vec<_>>();
     if !successful_or_merge_cancelled(&verify_checks, successful_main_contains_merge) {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
-            pull_request.number,
-            pull_request.head_ref_oid
-        );
+            pull_request.number, pull_request.head_ref_oid
+        )));
     }
     let mut repository_checks = HashMap::<&str, Vec<&DeliveryCheck>>::new();
     for check in &pull_request.status_check_rollup {
@@ -400,18 +393,18 @@ fn validate_repository_checks(
             continue;
         }
         if checks.iter().any(|check| check.status != "COMPLETED") {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Hive repair delivery is incomplete: repository check `{name}` is still running"
-            );
+            )));
         }
         if let Some(check) = checks
             .iter()
             .find(|check| !matches!(check.conclusion.as_str(), "SKIPPED" | "NEUTRAL"))
         {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
                 check.conclusion
-            );
+            )));
         }
     }
     Ok(())
@@ -504,17 +497,17 @@ async fn validate_review_and_deployment_readiness(
             .pointer("/pageInfo/endCursor")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
-        crate::hive_ensure!(
-            cursor.is_some(),
-            "GitHub review pagination omitted its cursor"
-        );
+        if cursor.is_none() {
+            return Err(crate::error::HiveError::message(
+                "GitHub review pagination omitted its cursor",
+            ));
+        }
     }
     if unresolved > 0 {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
-            pull_request.number,
-            unresolved
-        );
+            pull_request.number, unresolved
+        )));
     }
     validate_non_thread_feedback(repository, pull_request.number).await?;
 
@@ -570,11 +563,11 @@ async fn validate_review_and_deployment_readiness(
         }
     }
     if state.as_deref() != Some("success") {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
             pull_request.number,
             state.as_deref()
-        );
+        )));
     }
     Ok(())
 }
@@ -589,9 +582,9 @@ async fn validate_non_thread_feedback(repository: &Path, number: u64) -> crate::
         let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
         let bodies = gh_output(repository, &references).await?;
         if is_actionable_feedback(&bodies) {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
-            );
+            )));
         }
     }
     Ok(())
@@ -751,7 +744,7 @@ mod tests {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "OPEN", None))
             .err()
             .ok_or_else(|| {
-                crate::hive_error!("an open pull request cannot complete a Hive task")
+                crate::error::HiveError::message("an open pull request cannot complete a Hive task")
             })?;
 
         assert!(error.to_string().contains("PR #42 is OPEN"));
@@ -763,7 +756,9 @@ mod tests {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", None))
             .err()
             .ok_or_else(|| {
-                crate::hive_error!("a merge without its commit cannot prove Main delivery")
+                crate::error::HiveError::message(
+                    "a merge without its commit cannot prove Main delivery",
+                )
             })?;
 
         assert!(error.to_string().contains("no squash merge"));
@@ -806,7 +801,9 @@ mod tests {
         let error = latest_delivery_generation(&pull_requests, "codex/hive-task")
             .err()
             .ok_or_else(|| {
-                crate::hive_error!("duplicate generations cannot identify one delivery")
+                crate::error::HiveError::message(
+                    "duplicate generations cannot identify one delivery",
+                )
             })?;
 
         assert!(error.to_string().contains("multiple PRs use generation 2"));
@@ -839,7 +836,9 @@ mod tests {
         let error = validate_full_e2e_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
-                crate::hive_error!("a Hive repair without the opt-in label cannot complete")
+                crate::error::HiveError::message(
+                    "a Hive repair without the opt-in label cannot complete",
+                )
             })?;
 
         assert!(error.to_string().contains("lacks `ci:full-e2e`"));
@@ -875,8 +874,8 @@ mod tests {
         let error = validate_repository_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
-                crate::hive_error!(
-                    "a failed applicable repository workflow cannot complete a Hive task"
+                crate::error::HiveError::message(
+                    "a failed applicable repository workflow cannot complete a Hive task",
                 )
             })?;
         assert!(error.to_string().contains("Hive Rust"));
@@ -904,7 +903,9 @@ mod tests {
         let error = validate_full_e2e_checks(&pull_request, true)
             .err()
             .ok_or_else(|| {
-                crate::hive_error!("a failed exact-head e2e run remains a delivery failure")
+                crate::error::HiveError::message(
+                    "a failed exact-head e2e run remains a delivery failure",
+                )
             })?;
         assert!(error.to_string().contains("Full browser e2e"));
         Ok(())
@@ -923,7 +924,9 @@ mod tests {
 
         let error = validate_repository_checks(&pull_request, true)
             .err()
-            .ok_or_else(|| crate::hive_error!("Main does not exercise Hive-only verification"))?;
+            .ok_or_else(|| {
+                crate::error::HiveError::message("Main does not exercise Hive-only verification")
+            })?;
         assert!(error.to_string().contains("Hive Rust"));
         Ok(())
     }
@@ -945,7 +948,9 @@ mod tests {
         ];
         let error = select_successful_main_run(&runs, "merge")
             .err()
-            .ok_or_else(|| crate::hive_error!("an explicit failure must remain terminal"))?;
+            .ok_or_else(|| {
+                crate::error::HiveError::message("an explicit failure must remain terminal")
+            })?;
         assert!(error.to_string().contains("repair"));
         Ok(())
     }

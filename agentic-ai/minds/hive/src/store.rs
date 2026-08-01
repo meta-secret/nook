@@ -119,7 +119,9 @@ mod tests {
         fn expire(&self, task_id: &TaskId) -> crate::HiveResult<()> {
             self.tasks
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .get_mut(task_id.as_str())
                 .hive_context("task to expire must exist")?
                 .lease_until = Some(Instant::now() - Duration::from_secs(1));
@@ -201,10 +203,9 @@ mod tests {
 
         async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
             task.validate()?;
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             for dependency in &task.dependencies {
                 Self::rearm_obsolete(&mut tasks, dependency)?;
             }
@@ -246,7 +247,9 @@ mod tests {
             Ok(self
                 .tasks
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .values()
                 .find(|task| {
                     task.definition.source_commit == source_commit
@@ -257,10 +260,9 @@ mod tests {
         }
 
         async fn cancel(&self, task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let Some(root) = tasks.get(task_id.as_str()) else {
                 return Ok(false);
             };
@@ -320,10 +322,9 @@ mod tests {
             task: &ClaimedTask,
             _agent_id: &AgentId,
         ) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let Some(stored) = tasks.get_mut(task.id.as_str()) else {
                 return Ok(false);
             };
@@ -346,10 +347,9 @@ mod tests {
         }
 
         async fn finalize_cancellation(&self, task_id: &TaskId) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let Some(task) = tasks.get_mut(task_id.as_str()) else {
                 return Ok(false);
             };
@@ -367,10 +367,9 @@ mod tests {
             _agent_id: &AgentId,
             lease_seconds: i64,
         ) -> crate::HiveResult<ClaimOutcome> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let completed = tasks
                 .iter()
                 .filter(|(_, task)| task.status == "COMPLETED")
@@ -441,10 +440,9 @@ mod tests {
             lease_token: &LeaseToken,
             lease_seconds: i64,
         ) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let task = tasks
                 .get_mut(task_id.as_str())
                 .hive_context("heartbeat task must exist")?;
@@ -467,7 +465,9 @@ mod tests {
             Ok(self
                 .tasks
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .get(lease.task_id.as_str())
                 .is_some_and(|stored| {
                     stored.status == "RUNNING"
@@ -483,10 +483,9 @@ mod tests {
             _summary: &str,
             _artifact: &CompletionArtifact,
         ) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
@@ -541,10 +540,9 @@ mod tests {
             claimed: &ClaimedTask,
             _agent_id: &AgentId,
         ) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let task = tasks
                 .get_mut(claimed.id.as_str())
                 .hive_context("released task must exist")?;
@@ -564,10 +562,9 @@ mod tests {
             _agent_id: &AgentId,
             _error: &str,
         ) -> crate::HiveResult<bool> {
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let task = tasks
                 .get_mut(claimed.id.as_str())
                 .hive_context("failed task must exist")?;
@@ -592,10 +589,9 @@ mod tests {
             _reason: &str,
         ) -> crate::HiveResult<bool> {
             blocker.validate()?;
-            let mut tasks = self
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = self.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             let lease_valid = tasks
                 .get(claimed.id.as_str())
                 .is_some_and(|task| task.lease_token.as_ref() == Some(&claimed.lease_token));
@@ -700,10 +696,9 @@ mod tests {
         store.enqueue(&child).await?;
         store.enqueue(&parent).await?;
         {
-            let mut tasks = store
-                .tasks
-                .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?;
+            let mut tasks = store.tasks.lock().map_err(|_| {
+                crate::error::HiveError::message("shared test state mutex was poisoned")
+            })?;
             for retired in [&child.id, &parent.id] {
                 let task = tasks
                     .get_mut(retired.as_str())

@@ -23,7 +23,9 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     poll_seconds: u64,
 ) -> crate::HiveResult<()> {
     if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
-        crate::hive_bail!("Workbench polling must exceed the worker heartbeat interval");
+        return Err(crate::error::HiveError::message(
+            "Workbench polling must exceed the worker heartbeat interval",
+        ));
     }
     store.migrate().await?;
     let mut reconciled_revision = None;
@@ -69,10 +71,10 @@ async fn sync_workbench_checkout(
         .await?;
     } else {
         if checkout.exists() {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Workbench checkout {} exists without Git metadata",
                 checkout.display()
-            );
+            )));
         }
         let parent = checkout
             .parent()
@@ -86,10 +88,10 @@ async fn sync_workbench_checkout(
             .await
             .hive_context("start Workbench clone")?;
         if !output.status.success() {
-            crate::hive_bail!(
+            return Err(crate::error::HiveError::message(format!(
                 "Workbench clone failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
-            );
+            )));
         }
         git(
             checkout,
@@ -109,7 +111,9 @@ async fn sync_workbench_checkout(
         .trim()
         .to_owned();
     if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        crate::hive_bail!("Workbench checkout returned an invalid revision");
+        return Err(crate::error::HiveError::message(
+            "Workbench checkout returned an invalid revision",
+        ));
     }
     Ok(revision)
 }
@@ -123,10 +127,10 @@ async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
         .await
         .hive_context("start Workbench Git operation")?;
     if !output.status.success() {
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "Workbench Git operation failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
-        );
+        )));
     }
     Ok(output.stdout)
 }
@@ -229,9 +233,9 @@ async fn reconcile_delivery<S: TaskStore>(
             .await
             .with_hive_context(|| format!("cancel superseded delivery {}", active_id))?;
         terminate_cancelled_workers(store, &active_id).await?;
-        crate::hive_bail!(
+        return Err(crate::error::HiveError::message(format!(
             "superseded Hive delivery {active_id} cancellation_requested={cancelled}; retry after the worker acknowledges termination"
-        );
+        )));
     }
     let task = EnqueueTask {
         id: task_id,
@@ -258,12 +262,12 @@ async fn terminate_cancelled_workers<S: TaskStore>(
     for target in store.cancellation_targets(root_task_id).await? {
         delete_worker_pod(&target.pod_name).await?;
         let finalized = store.finalize_cancellation(&target.task_id).await?;
-        crate::hive_ensure!(
-            finalized,
-            "cancelled worker {} terminated but task {} could not be finalized",
-            target.pod_name,
-            target.task_id
-        );
+        if !finalized {
+            return Err(crate::error::HiveError::message(format!(
+                "cancelled worker {} terminated but task {} could not be finalized",
+                target.pod_name, target.task_id
+            )));
+        }
     }
     Ok(())
 }
@@ -274,7 +278,9 @@ async fn delete_worker_pod(pod_name: &str) -> crate::HiveResult<()> {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'.')
         })
     {
-        crate::hive_bail!("refusing invalid Hive worker Pod name");
+        return Err(crate::error::HiveError::message(
+            "refusing invalid Hive worker Pod name",
+        ));
     }
     let token = tokio::fs::read_to_string("/run/reaper-auth/token").await?;
     let url = format!("http://hive-reaper.hive-system.svc.cluster.local:8080/reap/{pod_name}");
@@ -311,17 +317,19 @@ async fn delete_worker_pod(pod_name: &str) -> crate::HiveResult<()> {
         .wait_with_output()
         .await
         .hive_context("call Hive lifecycle controller")?;
-    crate::hive_ensure!(
-        output.status.success(),
-        "Hive lifecycle-controller request failed"
-    );
+    if !output.status.success() {
+        return Err(crate::error::HiveError::message(
+            "Hive lifecycle-controller request failed",
+        ));
+    }
     let status: u16 = String::from_utf8(output.stdout)?
         .parse()
         .hive_context("decode Hive lifecycle-controller status")?;
-    crate::hive_ensure!(
-        status == 204,
-        "Hive lifecycle controller returned status {status}"
-    );
+    if status != 204 {
+        return Err(crate::error::HiveError::message(format!(
+            "Hive lifecycle controller returned status {status}"
+        )));
+    }
     Ok(())
 }
 
@@ -416,7 +424,10 @@ async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
         .await
         .hive_context("start Workbench fetch")?;
     if !output.status.success() {
-        crate::hive_bail!("Workbench fetch failed with status {}", output.status);
+        return Err(crate::error::HiveError::message(format!(
+            "Workbench fetch failed with status {}",
+            output.status
+        )));
     }
     Ok(output.stdout)
 }
@@ -461,7 +472,9 @@ mod tests {
         async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()> {
             self.enqueued
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .push(task.id.clone());
             Ok(())
         }
@@ -469,13 +482,17 @@ mod tests {
             Ok(self
                 .active
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .clone())
         }
         async fn cancel(&self, task_id: &TaskId, _: &str) -> crate::HiveResult<bool> {
             self.cancelled
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| {
+                    crate::error::HiveError::message("shared test state mutex was poisoned")
+                })?
                 .push(task_id.clone());
             Ok(true)
         }
@@ -653,11 +670,9 @@ mod tests {
     async fn current_generation_is_idempotent() -> crate::HiveResult<()> {
         let store = RecordingStore::default();
         let current = main_failure_task_id("main-failure-abcdef", 123, 2)?;
-        *store
-            .active
-            .lock()
-            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? =
-            Some(current);
+        *store.active.lock().map_err(|_| {
+            crate::error::HiveError::message("shared test state mutex was poisoned")
+        })? = Some(current);
 
         reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
 
@@ -665,14 +680,18 @@ mod tests {
             store
                 .cancelled
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::error::HiveError::message(
+                    "shared test state mutex was poisoned"
+                ))?
                 .is_empty()
         );
         assert!(
             store
                 .enqueued
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::error::HiveError::message(
+                    "shared test state mutex was poisoned"
+                ))?
                 .is_empty()
         );
         Ok(())
@@ -689,7 +708,7 @@ mod tests {
         )
         .await
         .err()
-        .ok_or_else(|| crate::hive_error!("sub-heartbeat polling must fail"))?;
+        .ok_or_else(|| crate::error::HiveError::message("sub-heartbeat polling must fail"))?;
         assert!(
             error
                 .to_string()
@@ -702,11 +721,9 @@ mod tests {
     async fn replacement_waits_for_superseded_worker_acknowledgement() -> crate::HiveResult<()> {
         let store = RecordingStore::default();
         let old = main_failure_task_id("main-failure-abcdef", 123, 1)?;
-        *store
-            .active
-            .lock()
-            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? =
-            Some(old.clone());
+        *store.active.lock().map_err(|_| {
+            crate::error::HiveError::message("shared test state mutex was poisoned")
+        })? = Some(old.clone());
 
         assert!(
             reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2)
@@ -717,7 +734,9 @@ mod tests {
             store
                 .cancelled
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::error::HiveError::message(
+                    "shared test state mutex was poisoned"
+                ))?
                 .as_slice(),
             &[old]
         );
@@ -725,20 +744,23 @@ mod tests {
             store
                 .enqueued
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::error::HiveError::message(
+                    "shared test state mutex was poisoned"
+                ))?
                 .is_empty()
         );
 
-        *store
-            .active
-            .lock()
-            .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))? = None;
+        *store.active.lock().map_err(|_| {
+            crate::error::HiveError::message("shared test state mutex was poisoned")
+        })? = None;
         reconcile_delivery(&store, "abcdef", "main-failure-abcdef", "issue", 123, 2).await?;
         assert_eq!(
             store
                 .enqueued
                 .lock()
-                .map_err(|_| crate::hive_error!("shared test state mutex was poisoned"))?
+                .map_err(|_| crate::error::HiveError::message(
+                    "shared test state mutex was poisoned"
+                ))?
                 .iter()
                 .map(TaskId::as_str)
                 .collect::<Vec<_>>(),
@@ -758,7 +780,11 @@ mod tests {
                 .arg(origin.path())
                 .args(args)
                 .status()?;
-            crate::hive_ensure!(status.success(), "test Git command failed: {args:?}");
+            if !status.success() {
+                return Err(crate::error::HiveError::message(format!(
+                    "test Git command failed: {args:?}"
+                )));
+            }
             Ok(())
         };
         git(&["init", "--initial-branch=main"])?;

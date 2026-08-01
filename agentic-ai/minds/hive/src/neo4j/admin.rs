@@ -18,7 +18,9 @@ impl Neo4jTaskStore {
 
     pub async fn queue_status(&self, limit: i64) -> crate::HiveResult<Vec<QueueTaskStatus>> {
         if !(1..=200).contains(&limit) {
-            crate::hive_bail!("queue status limit must be between 1 and 200");
+            return Err(crate::error::HiveError::message(
+                "queue status limit must be between 1 and 200",
+            ));
         }
         let mut rows = self
             .graph

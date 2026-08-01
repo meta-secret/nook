@@ -1,4 +1,5 @@
 pub mod coverage;
+mod rust_macros;
 mod rust_tsify_state;
 mod rust_typed_json;
 pub mod source_size;
@@ -8,6 +9,7 @@ mod typescript_state;
 
 pub use typescript_domain_boundary::*;
 
+pub use rust_macros::authored_rust_macro_definitions;
 pub use rust_tsify_state::rust_tsify_implicit_absence_overrides;
 pub use rust_typed_json::rust_test_untyped_json_assertions;
 pub use typescript_state::{

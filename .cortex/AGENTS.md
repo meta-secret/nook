@@ -188,6 +188,27 @@ whose variants identify the failed operation and preserve typed sources.
 tests under `tests/`, and it belongs in `[dev-dependencies]`. Repository
 preflight parses authored Rust and Cargo manifests to enforce that boundary.
 
+## ⛔ Non-negotiable: authored Rust macros are prohibited
+
+Repository-defined declarative and procedural macros are forbidden in authored
+Rust. A macro that generates ordinary structs, implementations, conversions,
+or control flow hides the code agents and maintainers need to read, makes
+navigation and diagnostics indirect, and is not justified by avoiding
+boilerplate. Write the explicit Rust items and branches instead. Small,
+repetitive, flat code is preferred when each type or operation remains locally
+understandable and independently changeable.
+
+This rule does not require mechanically expanding compiler- or
+ecosystem-provided integration macros. Standard derives and attributes such as
+`serde`, `thiserror`, `wasm_bindgen`, `Tsify`, and test attributes remain
+allowed, as do ordinary standard formatting, logging, assertion, and
+collection-construction macros. Generated sources and third-party dependencies
+are excluded. Any proposed new exception must demonstrate that explicit Rust
+cannot express the requirement clearly; convenience or fewer lines is not a
+reason. The syntax-aware preflight rejects authored `macro_rules!` definitions
+and procedural-macro entrypoints. Full contract:
+[dynamic-skills/rust-macro-minimization.md](dynamic-skills/rust-macro-minimization.md).
+
 ## ⛔ Non-negotiable: squash merge every PR
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).

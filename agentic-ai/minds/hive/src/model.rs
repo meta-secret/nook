@@ -37,40 +37,101 @@ pub enum ModelError {
     BlockedObsolete,
 }
 
-macro_rules! string_id {
-    ($name:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-        #[serde(transparent)]
-        pub struct $name(String);
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TaskId(String);
 
-        impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
-                let value = value.into();
-                if value.trim().is_empty() {
-                    return Err(ModelError::EmptyId {
-                        kind: stringify!($name),
-                    });
-                }
-                Ok(Self(value))
-            }
-
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
+impl TaskId {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ModelError::EmptyId { kind: "TaskId" });
         }
+        Ok(Self(value))
+    }
 
-        impl std::fmt::Display for $name {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str(&self.0)
-            }
-        }
-    };
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
-string_id!(TaskId);
-string_id!(AgentId);
-string_id!(AttemptId);
-string_id!(LeaseToken);
+impl std::fmt::Display for TaskId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AgentId(String);
+
+impl AgentId {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ModelError::EmptyId { kind: "AgentId" });
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for AgentId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AttemptId(String);
+
+impl AttemptId {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ModelError::EmptyId { kind: "AttemptId" });
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for AttemptId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LeaseToken(String);
+
+impl LeaseToken {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ModelError::EmptyId { kind: "LeaseToken" });
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for LeaseToken {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -460,7 +521,11 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(completed_with_blocker) {
-            Ok(_) => crate::hive_bail!("completed result with a blocker was accepted"),
+            Ok(_) => {
+                return Err(crate::error::HiveError::message(
+                    "completed result with a blocker was accepted",
+                ));
+            }
             Err(error) => error,
         };
         assert!(error.to_string().contains("must not report a blocker"));
@@ -479,7 +544,11 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_without_blocker) {
-            Ok(_) => crate::hive_bail!("blocked result without a blocker was accepted"),
+            Ok(_) => {
+                return Err(crate::error::HiveError::message(
+                    "blocked result without a blocker was accepted",
+                ));
+            }
             Err(error) => error,
         };
         assert!(error.to_string().contains("must report a blocker"));
@@ -498,7 +567,11 @@ mod tests {
             }
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_obsolete) {
-            Ok(_) => crate::hive_bail!("blocked obsolete result was accepted"),
+            Ok(_) => {
+                return Err(crate::error::HiveError::message(
+                    "blocked obsolete result was accepted",
+                ));
+            }
             Err(error) => error,
         };
         assert!(error.to_string().contains("cannot retire"));
@@ -523,7 +596,11 @@ mod tests {
         });
 
         let error = match serde_json::from_value::<TerminalResult>(terminal_result) {
-            Ok(_) => crate::hive_bail!("empty terminal content was accepted"),
+            Ok(_) => {
+                return Err(crate::error::HiveError::message(
+                    "empty terminal content was accepted",
+                ));
+            }
             Err(error) => error,
         };
         assert!(error.to_string().contains("summary must not be empty"));

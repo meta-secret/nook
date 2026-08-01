@@ -10,58 +10,309 @@ use zeroize::Zeroize;
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const HEX_32_BYTE_LEN: usize = 64;
 
-#[doc(hidden)]
-#[macro_export]
-macro_rules! transparent_str_newtype {
-    ($name:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(String);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SymmetricKey(String);
 
-        impl $name {
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
+impl SymmetricKey {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 
-            #[must_use]
-            pub fn into_inner(mut self) -> String {
-                std::mem::take(&mut self.0)
-            }
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
 
-            #[must_use]
-            pub fn from_trusted(value: String) -> Self {
-                Self(value)
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str(&self.0)
-            }
-        }
-
-        impl AsRef<str> for $name {
-            fn as_ref(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl serde::Serialize for $name {
-            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                serializer.serialize_str(&self.0)
-            }
-        }
-    };
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
 }
 
-transparent_str_newtype!(SymmetricKey);
-transparent_str_newtype!(AgeArmoredCiphertext);
-transparent_str_newtype!(DevicePublicKey);
-transparent_str_newtype!(MemberLabel);
-transparent_str_newtype!(PasswordEntryId);
-transparent_str_newtype!(OpaqueCiphertext);
-transparent_str_newtype!(DecryptedPlaintext);
-transparent_str_newtype!(SigningSeedHex);
+impl std::fmt::Display for SymmetricKey {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for SymmetricKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for SymmetricKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AgeArmoredCiphertext(String);
+
+impl AgeArmoredCiphertext {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for AgeArmoredCiphertext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for AgeArmoredCiphertext {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for AgeArmoredCiphertext {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DevicePublicKey(String);
+
+impl DevicePublicKey {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for DevicePublicKey {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for DevicePublicKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for DevicePublicKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MemberLabel(String);
+
+impl MemberLabel {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for MemberLabel {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for MemberLabel {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for MemberLabel {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PasswordEntryId(String);
+
+impl PasswordEntryId {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for PasswordEntryId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for PasswordEntryId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for PasswordEntryId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OpaqueCiphertext(String);
+
+impl OpaqueCiphertext {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for OpaqueCiphertext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for OpaqueCiphertext {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for OpaqueCiphertext {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DecryptedPlaintext(String);
+
+impl DecryptedPlaintext {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for DecryptedPlaintext {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for DecryptedPlaintext {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for DecryptedPlaintext {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SigningSeedHex(String);
+
+impl SigningSeedHex {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for SigningSeedHex {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for SigningSeedHex {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for SigningSeedHex {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
 
 impl DecryptedPlaintext {
     pub fn zeroize_plaintext(&mut self) {

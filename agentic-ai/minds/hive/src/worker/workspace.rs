@@ -52,8 +52,8 @@ pub(super) async fn prepare_workspace(
     tokio::fs::create_dir_all(workspace.join("temporary")).await?;
     let repository = workspace.join("repository");
     if repository.join(".git").is_dir() {
-        return Err(crate::hive_error!(
-            "refusing to reuse a repository left by an earlier worker process"
+        return Err(crate::error::HiveError::message(
+            "refusing to reuse a repository left by an earlier worker process",
         ));
     }
     tokio::fs::create_dir_all(&repository).await?;
@@ -68,7 +68,9 @@ pub(super) async fn prepare_workspace(
         .await
         .hive_context("failed to initialize the task repository")?;
     if !status.success() {
-        return Err(crate::hive_error!("git init failed with status {status}"));
+        return Err(crate::error::HiveError::message(format!(
+            "git init failed with status {status}"
+        )));
     }
     run_git_status(
         &repository,
@@ -151,10 +153,10 @@ pub(super) async fn prepare_workspace(
                 .await
                 .hive_context("inspect dependency conflicts")?;
             if unmerged.trim().is_empty() {
-                return Err(crate::hive_error!(
+                return Err(crate::error::HiveError::message(format!(
                     "dependency artifact {} failed to apply with status {status}",
                     artifact.id
-                ));
+                )));
             }
             let pending = repository.join(".hive-pending");
             tokio::fs::create_dir(&pending).await?;
@@ -195,11 +197,10 @@ pub(super) fn validate_dependency_artifacts(
 ) -> crate::HiveResult<()> {
     for artifact in dependency_artifacts {
         if artifact.kind != "git-patch" {
-            return Err(crate::hive_error!(
+            return Err(crate::error::HiveError::message(format!(
                 "dependency artifact {} has unsupported kind {}",
-                artifact.id,
-                artifact.kind
-            ));
+                artifact.id, artifact.kind
+            )));
         }
         let digest = Sha256::digest(artifact.content.as_bytes());
         let digest = format!(
@@ -213,10 +214,10 @@ pub(super) fn validate_dependency_artifacts(
             )
         );
         if digest != artifact.digest {
-            return Err(crate::hive_error!(
+            return Err(crate::error::HiveError::message(format!(
                 "dependency artifact {} failed digest verification",
                 artifact.id
-            ));
+            )));
         }
     }
     Ok(())
@@ -258,10 +259,14 @@ pub(super) struct WorkspacePreparation {
 pub(super) async fn ensure_dependencies_resolved(repository: &Path) -> crate::HiveResult<()> {
     let unmerged = git_output(repository, &["diff", "--name-only", "--diff-filter=U"]).await?;
     if !unmerged.trim().is_empty() {
-        crate::hive_bail!("dependency integration left unresolved Git conflicts");
+        return Err(crate::error::HiveError::message(
+            "dependency integration left unresolved Git conflicts",
+        ));
     }
     if repository.join(".hive-pending").exists() {
-        crate::hive_bail!("dependency integration did not apply every pending patch");
+        return Err(crate::error::HiveError::message(
+            "dependency integration did not apply every pending patch",
+        ));
     }
     Ok(())
 }
@@ -300,7 +305,10 @@ pub(super) async fn git_output(repository: &Path, arguments: &[&str]) -> crate::
         .await
         .hive_context("failed to execute git")?;
     if !output.status.success() {
-        crate::hive_bail!("git {:?} failed with status {}", arguments, output.status);
+        return Err(crate::error::HiveError::message(format!(
+            "git {:?} failed with status {}",
+            arguments, output.status
+        )));
     }
     String::from_utf8(output.stdout)
         .hive_context("git output is not UTF-8")
@@ -322,7 +330,9 @@ pub(super) async fn run_git_status(
         .await
         .with_hive_context(|| format!("failed to {operation}"))?;
     if !status.success() {
-        crate::hive_bail!("{operation} failed with status {status}");
+        return Err(crate::error::HiveError::message(format!(
+            "{operation} failed with status {status}"
+        )));
     }
     Ok(())
 }
@@ -344,9 +354,9 @@ pub(super) async fn persistable_patch(
         .await
         .hive_context("failed to stage untracked files for patch persistence")?;
     if !add_status.success() {
-        return Err(crate::hive_error!(
+        return Err(crate::error::HiveError::message(format!(
             "git add --intent-to-add failed with status {add_status}"
-        ));
+        )));
     }
 
     let output = Command::new("git")
@@ -357,21 +367,21 @@ pub(super) async fn persistable_patch(
         .await
         .hive_context("failed to collect the durable task patch")?;
     if !output.status.success() {
-        return Err(crate::hive_error!(
+        return Err(crate::error::HiveError::message(format!(
             "git diff failed with status {}",
             output.status
-        ));
+        )));
     }
     if output.stdout.len() > MAX_PERSISTED_PATCH_BYTES {
-        return Err(crate::hive_error!(
+        return Err(crate::error::HiveError::message(format!(
             "task patch exceeds the {} byte prototype limit",
             MAX_PERSISTED_PATCH_BYTES
-        ));
+        )));
     }
     if output.stdout.is_empty() {
         if !resumed && !result.changed_files().is_empty() {
-            return Err(crate::hive_error!(
-                "Codex reported changed files but produced no persistable git patch"
+            return Err(crate::error::HiveError::message(
+                "Codex reported changed files but produced no persistable git patch",
             ));
         }
         return Ok(CompletionArtifact::NotProduced);
