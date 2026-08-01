@@ -3,7 +3,7 @@
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app-lifecycle-state'
+  } from '$lib/app-extension-setup'
   import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
   import { ExtensionSetupStatus } from '$lib/extension-install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'

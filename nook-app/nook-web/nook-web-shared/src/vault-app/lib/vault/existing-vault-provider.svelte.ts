@@ -1,22 +1,37 @@
 import {
-  ExistingVaultProviderSnapshotKind,
-  type ExistingVaultProviderSnapshot,
-} from "$lib/app-lifecycle-state";
-import {
   existingVaultProviderReadiness,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
 import {
   GITHUB_PROVIDER_TYPE,
+  LOCAL_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
   type StorageProviderType,
+  type LocalFolderConfig,
+  type OAuthFileConfig,
 } from "$lib/auth-providers";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
   LocalFolderDraftKind,
   OAuthFileDraftKind,
 } from "$lib/vault/state/provider.svelte";
+
+export type ExistingVaultProviderSnapshot =
+  | { setupType: typeof LOCAL_PROVIDER_TYPE }
+  | {
+      setupType: typeof GITHUB_PROVIDER_TYPE;
+      githubPat: string;
+      githubRepo: string;
+    }
+  | {
+      setupType: typeof OAUTH_FILE_PROVIDER_TYPE;
+      oauthFile: OAuthFileConfig;
+    }
+  | {
+      setupType: typeof LOCAL_FOLDER_PROVIDER_TYPE;
+      localFolder: LocalFolderConfig;
+    };
 
 export type ExistingVaultProviderPreparation =
   | { kind: NookExistingVaultProviderReadiness.MissingOauthFile }
@@ -42,7 +57,6 @@ export function prepareExistingVaultProvider(
     return {
       kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
-        kind: ExistingVaultProviderSnapshotKind.Github,
         setupType,
         githubPat: state.githubPat,
         githubRepo: state.githubRepo,
@@ -53,7 +67,6 @@ export function prepareExistingVaultProvider(
     return {
       kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
-        kind: ExistingVaultProviderSnapshotKind.OAuthFile,
         setupType,
         oauthFile: $state.snapshot(state.requireOauthFileConfig()),
       },
@@ -63,7 +76,6 @@ export function prepareExistingVaultProvider(
     return {
       kind: NookExistingVaultProviderReadiness.Ready,
       provider: {
-        kind: ExistingVaultProviderSnapshotKind.LocalFolder,
         setupType,
         localFolder: $state.snapshot(state.requireLocalFolderConfig()),
       },
@@ -72,8 +84,7 @@ export function prepareExistingVaultProvider(
   return {
     kind: NookExistingVaultProviderReadiness.Ready,
     provider: {
-      kind: ExistingVaultProviderSnapshotKind.Local,
-      setupType,
+      setupType: LOCAL_PROVIDER_TYPE,
     },
   };
 }

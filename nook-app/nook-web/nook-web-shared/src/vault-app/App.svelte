@@ -2,31 +2,24 @@
   import { onMount } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
   import {
+    DeviceProtectedOperationState,
     DeviceProtectionStatus,
-    JoinEnrollmentState,
-    NookExistingVaultProviderReadiness,
+    PendingVaultCreationKind,
+    pendingVaultCreationResumesAutomatically,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import {
-    ColorMode,
-    EnrollmentSubmitQueueKind,
-    ExistingVaultProviderSnapshotKind,
-    ExistingVaultImportQueueKind,
     ExtensionConnectIntentKind,
-    ExtensionSetupOfferKind,
     LegalRouteKind,
-    PendingVaultCreationKind,
-    VaultCreationQueueKind,
     extensionConnectIntent,
     legalRoute,
-    manualColorMode,
-    systemColorMode,
-    type EnrollmentSubmitQueue,
-    type ExistingVaultImportQueue,
     type ExtensionConnectIntent,
-    type ExtensionSetupOffer,
-    type VaultCreationQueue,
-  } from '$lib/app-lifecycle-state'
+  } from '$lib/app-route-state'
+  import { ColorMode, manualColorMode, systemColorMode } from '$lib/app-theme'
+  import type {
+    EnrollmentSubmitQueue,
+    VaultCreationQueue,
+  } from '$lib/device-protected-operations'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
@@ -51,9 +44,11 @@
   } from '$lib/extension-connect'
   import {
     connectInstalledExtension,
+    ExtensionSetupOfferKind,
     loadExtensionSetupOffer,
     observeExtensionSetupChanges,
     openExtensionInstaller,
+    type ExtensionSetupOffer,
   } from '$lib/app-extension-setup'
   import {
     APP_SHELL_WIDTH,
@@ -77,7 +72,7 @@
   } from '$lib/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
+  import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
   import {
     mountBrowserLifecycle,
     THEME_STORAGE_KEY,
@@ -86,14 +81,13 @@
   import {
     ActiveVaultKind,
     LoginSetupKind,
-    RecoveryDiscoveryKind,
-    type ActiveVault,
   } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
   const IS_SIMPLE_APP = configuredVaultApplicationIsSimple()
   const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
   const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
   const vault = new VaultState()
+  const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
   const vaultSecurityRecommendations = $derived(
     assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
   )
@@ -259,7 +253,7 @@
           vault.errorMsg = vault.t('auth_storage.existing_vault_not_found')
           return
         }
-        rememberExistingVaultImport(activeStoreId)
+        existingVaultImportLifecycle.remember(activeStoreId)
       } catch (error) {
         vault.errorMsg =
           error instanceof Error
@@ -282,7 +276,9 @@
       )
       if (!adopted) return
       extensionBackedVaultSession = true
-      await (existingVaultImport ? resumeExistingVaultImport() : vault.loadDb())
+      await (existingVaultImport
+        ? existingVaultImportLifecycle.resume()
+        : vault.loadDb())
       return
     }
     if (
@@ -324,7 +320,7 @@
           if (!adopted) return
           extensionBackedVaultSession = true
           await (existingVaultImport
-            ? resumeExistingVaultImport()
+            ? existingVaultImportLifecycle.resume()
             : vault.loadDb())
           return
         }
@@ -336,7 +332,7 @@
       return
     }
     if (existingVaultImport) {
-      await resumeExistingVaultImport()
+      await existingVaultImportLifecycle.resume()
       return
     }
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
@@ -344,24 +340,6 @@
       return
     }
     await vault.loadDb()
-  }
-
-  async function handlePasswordUnlock(entryId: string, password: string) {
-    await vault.unlockWithPassword(entryId, password)
-    if (vault.isAuthenticated) {
-      if (
-        pendingExistingVaultImportState.kind ===
-        ExistingVaultImportQueueKind.WaitingForDevice
-      ) {
-        await vault.activateConnectedExistingVault(
-          pendingExistingVaultImportState.request.storeId,
-        )
-      }
-      pendingExistingVaultImportState = {
-        kind: ExistingVaultImportQueueKind.Idle,
-      }
-      vault.clearExistingVaultRecoverySummary()
-    }
   }
 
   async function handleSettingsReconnect() {
@@ -405,19 +383,17 @@
     !requiresPasskeyFirst && vault.providersLoaded,
   )
   let pendingVaultCreationState = $state<VaultCreationQueue>({
-    kind: VaultCreationQueueKind.Idle,
-  })
-  let pendingExistingVaultImportState = $state<ExistingVaultImportQueue>({
-    kind: ExistingVaultImportQueueKind.Idle,
+    kind: DeviceProtectedOperationState.Idle,
   })
   let pendingExistingVaultUnlock = $state(false)
   let pendingEnrollmentDeviceUnlock = $state(false)
   let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
-    kind: EnrollmentSubmitQueueKind.Idle,
+    kind: DeviceProtectedOperationState.Idle,
   })
   const showPasskeyOverlay = $derived(
     pendingVaultCreationState.kind ===
-      VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
+      DeviceProtectedOperationState.WaitingForDevice &&
+      !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
@@ -428,159 +404,18 @@
       !vault.deviceProtectionReady,
   )
 
-  function rememberExistingVaultImport(storeId: string): void {
-    if (vault.loginSetup.kind !== LoginSetupKind.Active) return
-    const preparation = prepareExistingVaultProvider(
-      vault,
-      vault.loginSetup.providerType,
-    )
-    if (
-      preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
-    ) {
-      vault.errorMsg = vault.t('errors.cloud_sync_provider_required')
-      return
-    }
-    if (
-      preparation.kind === NookExistingVaultProviderReadiness.MissingLocalFolder
-    ) {
-      vault.errorMsg = vault.t('auth_storage.local_folder_choose_err')
-      return
-    }
-    if (preparation.kind !== NookExistingVaultProviderReadiness.Ready) return
-    pendingExistingVaultImportState = {
-      kind: ExistingVaultImportQueueKind.WaitingForDevice,
-      request: {
-        storeId,
-        previousActiveVault: vault.activeVault,
-        provider: preparation.provider,
-      },
-    }
-  }
-
-  async function resumeExistingVaultImport(): Promise<void> {
-    if (
-      pendingExistingVaultImportState.kind !==
-      ExistingVaultImportQueueKind.WaitingForDevice
-    ) {
-      await vault.loadDb()
-      return
-    }
-    const pending = pendingExistingVaultImportState.request
-    if (vault.isAuthenticated) {
-      vault.clearUnlockedSession()
-    }
-    const existingLocalVault = vault.localVaults.some(
-      (entry) => entry.storeId === pending.storeId,
-    )
-    if (existingLocalVault) {
-      await vault.selectVaultForUnlock(pending.storeId)
-      if (
-        vault.activeVault.kind !== ActiveVaultKind.Open ||
-        vault.activeVault.storeId !== pending.storeId
-      ) {
-        throw new Error(vault.t('errors.vault_selection_failed'))
-      }
-    } else {
-      await vault.prepareExistingVaultImportSlot()
-    }
-    vault.loginRequiresExistingVault = true
-    vault.activateLoginSetup(pending.provider.setupType)
-    vault.storageMode = pending.provider.setupType
-    vault.githubPat =
-      pending.provider.kind === ExistingVaultProviderSnapshotKind.Github
-        ? pending.provider.githubPat
-        : ''
-    vault.githubRepo =
-      pending.provider.kind === ExistingVaultProviderSnapshotKind.Github
-        ? pending.provider.githubRepo
-        : ''
-    if (pending.provider.kind === ExistingVaultProviderSnapshotKind.OAuthFile) {
-      vault.configureOauthFile(pending.provider.oauthFile)
-    } else {
-      vault.clearOauthFile()
-    }
-    if (
-      pending.provider.kind === ExistingVaultProviderSnapshotKind.LocalFolder
-    ) {
-      vault.configureLocalFolder(pending.provider.localFolder)
-    } else {
-      vault.clearLocalFolder()
-    }
-    const recoveryDiscovery = vault.recoveryDiscovery
-    await vault.connectStagedProvider()
-    if (vault.isAuthenticated) {
-      await vault.activateConnectedExistingVault(pending.storeId)
-      pendingExistingVaultImportState = {
-        kind: ExistingVaultImportQueueKind.Idle,
-      }
-      vault.clearExistingVaultRecoverySummary()
-      return
-    }
-    if (vault.loginPasswordPrompt) {
-      if (
-        recoveryDiscovery.kind === RecoveryDiscoveryKind.Found &&
-        recoveryDiscovery.summary.passwordEntries.length
-      ) {
-        const recoverySummary = recoveryDiscovery.summary
-        if (recoverySummary.passwordEntries.length === 1) {
-          for (const entry of recoverySummary.passwordEntries) {
-            vault.selectPasswordEntry(entry.id)
-          }
-        } else {
-          vault.clearSelectedPasswordEntry()
-        }
-      }
-      return
-    }
-    if (
-      vault.joinEnrollmentPrompt !== JoinEnrollmentState.None ||
-      vault.sentinelCeremonyPrompt
-    ) {
-      return
-    }
-  }
-
-  async function finishExistingVaultImport(): Promise<void> {
-    if (
-      pendingExistingVaultImportState.kind !==
-        ExistingVaultImportQueueKind.WaitingForDevice ||
-      !vault.isAuthenticated
-    )
-      return
-    const pending = pendingExistingVaultImportState.request
-    await vault.activateConnectedExistingVault(pending.storeId)
-    pendingExistingVaultImportState = {
-      kind: ExistingVaultImportQueueKind.Idle,
-    }
-    vault.clearExistingVaultRecoverySummary()
-  }
-
-  async function leaveExistingVaultImport(): Promise<void> {
-    const previousActiveVault: ActiveVault =
-      pendingExistingVaultImportState.kind ===
-      ExistingVaultImportQueueKind.WaitingForDevice
-        ? pendingExistingVaultImportState.request.previousActiveVault
-        : { kind: ActiveVaultKind.Closed }
-    pendingExistingVaultImportState = {
-      kind: ExistingVaultImportQueueKind.Idle,
-    }
-    vault.clearExistingVaultRecoverySummary()
-    if (previousActiveVault.kind === ActiveVaultKind.Open) {
-      await vault.selectVaultForUnlock(previousActiveVault.storeId)
-    }
-    vault.beginLoginVaultPicker()
-  }
-
   async function handleUseEnrollmentCode(code: string, password: string) {
     if (!vault.deviceProtectionReady) {
       pendingEnrollmentSubmitState = {
-        kind: EnrollmentSubmitQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: { code, password },
       }
       pendingEnrollmentDeviceUnlock = true
       return
     }
-    pendingEnrollmentSubmitState = { kind: EnrollmentSubmitQueueKind.Idle }
+    pendingEnrollmentSubmitState = {
+      kind: DeviceProtectedOperationState.Idle,
+    }
     await vault.connectWithEnrollmentCode(code, password)
   }
 
@@ -653,12 +488,12 @@
     }
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Simple, label },
       }
       return
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     await vault.createLocalVaultWithDeviceKeys(label)
     if (
       extensionIdentityRequestState.kind ===
@@ -674,12 +509,12 @@
   ): Promise<boolean> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Sentinel, args },
       }
       return false
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     await vault.startSentinelGenesis(args)
     return true
   }
@@ -687,12 +522,12 @@
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     return sentinelGenesisActions.createPublicKeyAnnouncement(vault)
   }
 
@@ -701,7 +536,7 @@
   ): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: {
           kind: PendingVaultCreationKind.SentinelParticipantResponse,
           requestPayload,
@@ -709,7 +544,7 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     return sentinelGenesisActions.createParticipantResponse(
       vault,
       requestPayload,
@@ -719,7 +554,7 @@
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: VaultCreationQueueKind.WaitingForDevice,
+        kind: DeviceProtectedOperationState.WaitingForDevice,
         request: {
           kind: PendingVaultCreationKind.SentinelOnboarding,
           packageJson,
@@ -727,7 +562,7 @@
       }
       return
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     await sentinelGenesisActions.acceptOnboardingPackage(vault, packageJson)
     sentinelOnboardingPackage = ''
   }
@@ -770,27 +605,25 @@
   $effect(() => {
     if (
       pendingVaultCreationState.kind !==
-        VaultCreationQueueKind.WaitingForDevice ||
+        DeviceProtectedOperationState.WaitingForDevice ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     )
       return
     const pending = pendingVaultCreationState.request
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
     if (pending.kind === PendingVaultCreationKind.Simple) {
       void vault.createLocalVaultWithDeviceKeys(pending.label)
       return
     }
-    if (
-      pending.kind === PendingVaultCreationKind.SentinelParticipantKey ||
-      pending.kind === PendingVaultCreationKind.SentinelParticipantResponse
-    )
-      return
+    if (!pendingVaultCreationResumesAutomatically(pending.kind)) return
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {
       void handleAcceptSentinelOnboarding(pending.packageJson)
       return
     }
-    void vault.startSentinelGenesis(pending.args)
+    if (pending.kind === PendingVaultCreationKind.Sentinel) {
+      void vault.startSentinelGenesis(pending.args)
+    }
   })
 
   $effect(() => {
@@ -837,10 +670,9 @@
       return
     }
     pendingExistingVaultUnlock = false
-    const importPending =
-      pendingExistingVaultImportState.kind ===
-      ExistingVaultImportQueueKind.WaitingForDevice
-    void (importPending ? resumeExistingVaultImport() : vault.loadDb())
+    void (existingVaultImportLifecycle.waitingForDevice
+      ? existingVaultImportLifecycle.resume()
+      : vault.loadDb())
   })
 
   // `#enroll=` lands on an empty browser: open device protection immediately so
@@ -859,14 +691,16 @@
   $effect(() => {
     if (
       pendingEnrollmentSubmitState.kind !==
-        EnrollmentSubmitQueueKind.WaitingForDevice ||
+        DeviceProtectedOperationState.WaitingForDevice ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
       return
     }
     const pending = pendingEnrollmentSubmitState.request
-    pendingEnrollmentSubmitState = { kind: EnrollmentSubmitQueueKind.Idle }
+    pendingEnrollmentSubmitState = {
+      kind: DeviceProtectedOperationState.Idle,
+    }
     pendingEnrollmentDeviceUnlock = false
     void vault.connectWithEnrollmentCode(pending.code, pending.password)
   })
@@ -929,9 +763,10 @@
           onUnlock={handleUnlock}
           onUseEnrollmentCode={handleUseEnrollmentCode}
           onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
-          onUnlockWithPassword={handlePasswordUnlock}
-          onSwitchVault={leaveExistingVaultImport}
-          onSentinelUnlocked={finishExistingVaultImport}
+          onUnlockWithPassword={(entryId, password) =>
+            existingVaultImportLifecycle.unlockWithPassword(entryId, password)}
+          onSwitchVault={() => existingVaultImportLifecycle.leave()}
+          onSentinelUnlocked={() => existingVaultImportLifecycle.finish()}
           onCreateDeviceVault={handleCreateDeviceVault}
           onStartSentinelGenesis={handleStartSentinelGenesis}
           onCreateSentinelParticipantKey={handleCreateSentinelParticipantKey}
@@ -939,10 +774,7 @@
           onDismissPasskey={() => {
             if (showExistingVaultPasskeyOverlay) {
               pendingExistingVaultUnlock = false
-              pendingExistingVaultImportState = {
-                kind: ExistingVaultImportQueueKind.Idle,
-              }
-              vault.clearExistingVaultRecoverySummary()
+              existingVaultImportLifecycle.cancel()
               return
             }
             if (showEnrollmentPasskeyOverlay) {
@@ -950,7 +782,7 @@
               return
             }
             pendingVaultCreationState = {
-              kind: VaultCreationQueueKind.Idle,
+              kind: DeviceProtectedOperationState.Idle,
             }
           }}
         />

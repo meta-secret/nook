@@ -1,8 +1,5 @@
-import {
-  ColorMode,
-  LegalRouteKind,
-  type LegalRoute,
-} from "$lib/app-lifecycle-state";
+import { ColorMode } from "$lib/app-theme";
+import { LegalRouteKind, type LegalRoute } from "$lib/app-route-state";
 import {
   activeVaultScope,
   saveAuthProviders,

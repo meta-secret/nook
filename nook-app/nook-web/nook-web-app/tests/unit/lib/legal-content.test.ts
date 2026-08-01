@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { LegalRouteKind, legalRoute } from '$lib/app-lifecycle-state'
+import { LegalRouteKind, legalRoute } from '$lib/app-route-state'
 import {
   LEGAL_PAGES,
   LegalPageLookupKind,

@@ -84,6 +84,8 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "GoogleDriveMode",
     "ICloudMode",
     "PasswordGenerationOptions",
+    "DeviceProtectedOperationState",
+    "PendingVaultCreationKind",
 ];
 
 const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
@@ -104,6 +106,12 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "WebsiteLoginSaveDecision",
     "SecretFormInputType",
     "SecretType",
+    "DeviceProtectedOperationState",
+    "PendingVaultCreationKind",
+    "VaultCreationQueueKind",
+    "ExistingVaultProviderSnapshotKind",
+    "ExistingVaultImportQueueKind",
+    "EnrollmentSubmitQueueKind",
 ];
 
 const RUST_WASM_UNCHECKED_TYPE_MARKERS: &[&str] =
@@ -503,6 +511,32 @@ type PasswordGenerationOptions =
         assert_eq!(
             typescript_boundary_violation_lines(source),
             vec![2, 5, 8, 9, 13]
+        );
+    }
+
+    #[test]
+    fn reports_device_protected_operation_enum_mirrors() {
+        let source = r#"
+export enum PendingVaultCreationKind {
+  Simple = "simple",
+}
+enum VaultCreationQueueKind {
+  Idle = "idle",
+}
+export enum ExistingVaultProviderSnapshotKind {
+  Local = "local",
+}
+enum ExistingVaultImportQueueKind {
+  Idle = "idle",
+}
+export enum EnrollmentSubmitQueueKind {
+  Idle = "idle",
+}
+"#;
+
+        assert_eq!(
+            typescript_boundary_violation_lines(source),
+            vec![2, 5, 8, 11, 14]
         );
     }
 

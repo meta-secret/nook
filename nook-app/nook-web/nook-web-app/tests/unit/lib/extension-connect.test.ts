@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   ExtensionConnectIntentKind,
   extensionConnectIntent,
-} from '$lib/app-lifecycle-state'
+} from '$lib/app-route-state'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,

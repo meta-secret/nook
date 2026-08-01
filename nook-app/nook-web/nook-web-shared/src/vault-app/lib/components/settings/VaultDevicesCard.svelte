@@ -25,10 +25,12 @@
   import { VaultType } from '$lib/vault-architecture'
   import {
     ExtensionSetupOfferKind,
+    type ExtensionSetupOffer,
+  } from '$lib/app-extension-setup'
+  import {
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
-    type ExtensionSetupOffer,
     type MemberDetails,
     type MemberRename,
     type MemberRevocation,

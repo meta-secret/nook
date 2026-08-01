@@ -9,7 +9,7 @@
   import { LogoSize } from '$lib/components/nook-logo-state'
   import VaultSwitcher from '$lib/components/VaultSwitcher.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { ColorMode } from '$lib/app-lifecycle-state'
+  import { ColorMode } from '$lib/app-theme'
   import type { VaultState } from '$lib/vault.svelte'
 
   const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()

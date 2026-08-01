@@ -290,6 +290,7 @@ pub use validation::{
     validate_connect, validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
     validate_oauth_access_token, validate_storage_mode,
 };
+pub use vault::vault_operation::{DeviceProtectedOperationState, PendingVaultCreationKind};
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, VaultRecoverySummary,
     recovery_device_id_hint, vault_recovery_options,

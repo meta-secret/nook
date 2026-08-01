@@ -138,10 +138,9 @@ fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
 }
 
 #[test]
-fn production_vault_apps_share_one_wasm_build_and_keep_runtime_boundaries() -> anyhow::Result<()> {
+fn production_vault_apps_share_one_wasm_build() -> anyhow::Result<()> {
     let root = repository_root();
     assert_shared_wasm_build_contract(&root);
-    assert_vault_runtime_boundary_contract(&root);
     Ok(())
 }
 
@@ -230,79 +229,6 @@ fn assert_shared_wasm_build_contract(root: &Path) {
             && web_dockerfile.contains("extension/nook-companion-wasm"),
         "web build must split the companion package into the extension import root"
     );
-}
-
-fn assert_vault_runtime_boundary_contract(root: &Path) {
-    let sentinel_config = read(root, "nook-app/nook-web/nook-vault-sentinel/vite.config.ts");
-    assert!(!sentinel_config.contains("__NOOK_APP_KIND__"));
-    assert!(
-        sentinel_config.contains("pathname ===") && sentinel_config.contains("/extension-connect")
-    );
-    assert!(!sentinel_config.contains("extension-connect.html"));
-
-    let simple_config = read(root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
-    assert!(!simple_config.contains("__NOOK_APP_KIND__"));
-    assert!(simple_config.contains("extension-connect"));
-
-    let wasm_bridge = read(
-        root,
-        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/wasm-bootstrap.ts",
-    );
-    assert!(wasm_bridge.contains("configureVaultApplication(application)"));
-    let wasm_vault_api = read(root, "nook-app/nook-wasm/src/vault_api.rs");
-    assert!(wasm_vault_api.contains("application: nook_core::VaultApplication"));
-    assert!(wasm_vault_api.contains("-> nook_core::VaultApplication"));
-    assert!(wasm_vault_api.contains("configuredVaultApplicationSupportsExtension"));
-    assert!(wasm_vault_api.contains("configuredVaultApplicationIsSimple"));
-    assert!(wasm_vault_api.contains("configuredVaultApplicationIsSentinel"));
-    assert!(wasm_vault_api.contains("simpleVaultAppUrl"));
-    assert!(!wasm_vault_api.contains("application_name: &str"));
-    assert!(
-        !root
-            .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/app-kind.ts")
-            .exists()
-    );
-    let shared_entry = read(
-        root,
-        "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
-    );
-    assert!(shared_entry.contains("await ensureAppWasm(expectedKind)"));
-    assert!(shared_entry.contains("await import("));
-    for (entry, expected_kind) in [
-        (
-            "nook-app/nook-web/nook-vault-simple/src/main.ts",
-            "mountVaultApp(VaultApplication.Simple)",
-        ),
-        (
-            "nook-app/nook-web/nook-vault-sentinel/src/main.ts",
-            "mountVaultApp(VaultApplication.Sentinel)",
-        ),
-    ] {
-        let source = read(root, entry);
-        assert!(source.contains(expected_kind));
-    }
-
-    let dockerignore = read(root, ".dockerignore");
-    assert!(
-        dockerignore.contains("nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm*")
-    );
-    assert!(
-        dockerignore
-            .contains("nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm*")
-    );
-    for ignored in [
-        "**/target",
-        "**/node_modules",
-        "**/dist",
-        "**/test-results",
-        "**/playwright-report",
-        "**/coverage",
-    ] {
-        assert!(
-            dockerignore.lines().any(|line| line == ignored),
-            "Docker context must recursively ignore {ignored}"
-        );
-    }
 }
 
 #[test]

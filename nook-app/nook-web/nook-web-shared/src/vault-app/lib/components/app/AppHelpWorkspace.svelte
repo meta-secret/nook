@@ -1,7 +1,7 @@
 <script lang="ts">
   import HelpPage from '$lib/components/HelpPage.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { ColorMode } from '$lib/app-lifecycle-state'
+  import { ColorMode } from '$lib/app-theme'
   import { MermaidTheme } from '$lib/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'

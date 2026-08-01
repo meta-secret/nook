@@ -1,15 +1,21 @@
-import {
-  ExtensionSetupOfferKind,
-  type ExtensionSetupOffer,
-} from "$lib/app-lifecycle-state";
 import { openInstalledExtension } from "$lib/extension-connect";
 import {
+  type ExtensionSetupState,
   loadExtensionInstallTarget,
   openExtensionInstallTarget,
   resolveExtensionSetupState,
   shouldOfferExtensionSetup,
 } from "$lib/extension-install";
 import type { ActiveVault } from "$lib/vault/state/provider.svelte";
+
+export enum ExtensionSetupOfferKind {
+  Hidden = "hidden",
+  Visible = "visible",
+}
+
+export type ExtensionSetupOffer =
+  | { kind: ExtensionSetupOfferKind.Hidden }
+  | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };
 
 export async function loadExtensionSetupOffer(
   activeVault: ActiveVault,
