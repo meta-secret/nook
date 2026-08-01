@@ -8,7 +8,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { NookPendingSyncConflict } from '$app-wasm'
+  import type { NookSyncConflictReview } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultSyncConflictKind } from '$app-wasm'
 
@@ -22,7 +22,7 @@
     onCancel,
   }: {
     vault: VaultState
-    conflict: NookPendingSyncConflict
+    conflict: NookSyncConflictReview
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
@@ -44,7 +44,7 @@
       }
 
   const conflictView = $derived.by((): ConflictView => {
-    if (conflict.kind === VaultSyncConflictKind.StoreId) {
+    if (conflict.conflictKind === VaultSyncConflictKind.StoreId) {
       return {
         kind: VaultSyncConflictKind.StoreId,
         localStoreId: conflict.localStoreId(),

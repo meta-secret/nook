@@ -7,9 +7,9 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import { NookVaultLastSyncState, type NookVaultLastSync } from '$app-wasm'
   import type { StorageProviderType } from '$lib/auth/providers'
   import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
-  import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
   import { VaultStatusBarVariant } from './vault-status-bar-state'
 
   let {
@@ -34,7 +34,7 @@
     vault?: VaultState
     storageMode?: StorageProviderType
     githubRepo?: string
-    lastSync: LastSync
+    lastSync: NookVaultLastSync
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
@@ -59,11 +59,14 @@
     return () => clearInterval(timer)
   })
 
-  function formatLastSync(sync: LastSync): string {
-    if (sync.kind === LastSyncKind.NeverSynced) {
+  function formatLastSync(sync: NookVaultLastSync): string {
+    if (sync.state === NookVaultLastSyncState.NeverSynced) {
       return vault ? vault.t('status_bar.not_yet') : 'not yet'
     }
-    const secs = Math.max(0, Math.floor((now - sync.at.getTime()) / 1000))
+    const secs = Math.max(
+      0,
+      Math.floor((now - sync.syncedAtUnixMilliseconds) / 1000),
+    )
     if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'
     if (secs < 60)
       return vault

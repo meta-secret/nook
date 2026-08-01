@@ -1,6 +1,7 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   importNamedLocalVaultBlob,
+  NookSyncConflictReviewState,
   RemoteVaultRecoveryState,
   setActiveVault,
   setVaultSessionLocked,
@@ -11,7 +12,6 @@ import {
 import { createLogger } from "$lib/runtime/log";
 import type { NookSecretRecord } from "$lib/nook";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
-import { SyncConflictReviewKind } from "$lib/vault/state/sync.svelte";
 import {
   ConflictProviderSaveKind,
   type ConflictProviderSave,
@@ -111,17 +111,17 @@ export async function resolveSyncConflictKeepLocal(
 ): Promise<void> {
   const review = state.syncConflictReview;
   if (
-    review.kind !== SyncConflictReviewKind.RequiresDecision ||
+    review.state !== NookSyncConflictReviewState.RequiresDecision ||
     state.isVerifying
   )
     return;
-  const { conflict } = review;
+  const conflict = review;
 
   state.isVerifying = true;
   state.errorMsg = "";
   log.info("sync conflict resolved (keep local)", {
     provider: conflict.providerLabel,
-    kind: conflict.kind,
+    kind: conflict.conflictKind,
   });
   state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
   state.isVerifying = false;
@@ -132,15 +132,15 @@ export async function resolveSyncConflictKeepRemote(
 ): Promise<void> {
   const review = state.syncConflictReview;
   if (
-    review.kind !== SyncConflictReviewKind.RequiresDecision ||
+    review.state !== NookSyncConflictReviewState.RequiresDecision ||
     state.isVerifying
   )
     return;
-  const { conflict } = review;
+  const conflict = review;
 
   log.info("sync conflict resolved (keep remote)", {
     provider: conflict.providerLabel,
-    kind: conflict.kind,
+    kind: conflict.conflictKind,
   });
   state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
   state.isVerifying = false;
@@ -231,15 +231,17 @@ export async function resolveSyncConflictImportRemote(
 ): Promise<void> {
   const review = state.syncConflictReview;
   if (
-    review.kind !== SyncConflictReviewKind.RequiresDecision ||
-    review.conflict.kind !== VaultSyncConflictKind.StoreId ||
+    review.state !== NookSyncConflictReviewState.RequiresDecision ||
+    review.conflictKind !== VaultSyncConflictKind.StoreId ||
     state.isVerifying
   ) {
     return;
   }
-  const { conflict } = review;
+  const conflict = review;
   const remoteStoreId = conflict.remoteStoreId();
   if (!remoteStoreId) return;
+  const pendingProvider = conflict.isPendingProvider;
+  const providerLabel = conflict.providerLabel;
 
   state.isVerifying = true;
   state.errorMsg = "";
@@ -319,8 +321,8 @@ export async function resolveSyncConflictImportRemote(
       );
       await state.persistProviders();
     }
-    state.clearPendingSyncConflict();
     state.finishStagedProviderConnectAfterConflict(conflict);
+    state.clearPendingSyncConflict();
     await state.syncActiveVaultStoreIdToAuth();
     importedAsSeparateVault = true;
     setVaultSessionLocked(true);
@@ -331,7 +333,7 @@ export async function resolveSyncConflictImportRemote(
     }
     state.showSuccess(
       state.t("auth_storage.sync_conflict_imported_vault", {
-        provider: conflict.providerLabel,
+        provider: providerLabel,
       }),
     );
   } catch (error: unknown) {
@@ -350,7 +352,7 @@ export async function resolveSyncConflictImportRemote(
     await resumeConnectAfterSyncConflict(
       state,
       providerSave.providerId,
-      conflict.isPendingProvider,
+      pendingProvider,
     );
   }
 }

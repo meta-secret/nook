@@ -1,5 +1,9 @@
 <script lang="ts">
   import {
+    NookManualProviderSyncState,
+    type NookManualProviderSync,
+  } from '$app-wasm'
+  import {
     ShieldCheck,
     RefreshCw,
     HardDrive,
@@ -43,10 +47,6 @@
     OAuthSetupPresetKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
-  import {
-    ManualProviderSyncKind,
-    type ManualProviderSync,
-  } from '$lib/vault/state/sync.svelte'
 
   let {
     vault,
@@ -69,7 +69,7 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    manualProviderSync: ManualProviderSync
+    manualProviderSync: NookManualProviderSync
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
@@ -317,8 +317,8 @@
                   </div>
                   {#if onSyncProvider}
                     {@const providerSyncing =
-                      manualProviderSync.kind ===
-                        ManualProviderSyncKind.Running &&
+                      manualProviderSync.state ===
+                        NookManualProviderSyncState.Running &&
                       manualProviderSync.providerId === provider.id}
                     <button
                       {...!supportsVaultReplication
@@ -334,8 +334,8 @@
                       disabled={isVerifying ||
                         isInitializing ||
                         !supportsVaultReplication ||
-                        manualProviderSync.kind ===
-                          ManualProviderSyncKind.Running}
+                        manualProviderSync.state ===
+                          NookManualProviderSyncState.Running}
                       aria-busy={providerSyncing}
                       onclick={() => void onSyncProvider(provider.id)}
                     >

@@ -41,7 +41,7 @@
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
   import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
-  import type { ManualProviderSync } from '$lib/vault/state/sync.svelte'
+  import type { NookManualProviderSync } from '$app-wasm'
   import {
     ImportProviderSectionKind,
     VaultLabelEditorKind,
@@ -97,7 +97,7 @@
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
-    manualProviderSync: ManualProviderSync
+    manualProviderSync: NookManualProviderSync
     isAuthenticated: boolean
     isSaving: boolean
     addProviderOpen?: boolean

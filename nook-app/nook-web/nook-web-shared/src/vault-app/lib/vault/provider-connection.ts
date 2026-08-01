@@ -5,7 +5,7 @@ import {
   LocalFolderHandleKind,
   type LocalFolderHandle,
 } from "$lib/auth/providers";
-import { LocalFolderHealthKind } from "$lib/vault/state/sync.svelte";
+import { NookLocalFolderHealthState } from "$app-wasm";
 import {
   LocalFolderDraftKind,
   LoginSetupKind,
@@ -145,7 +145,8 @@ export async function connectAndSyncStagedProvider(
         : false;
     if (!stagedConflict) {
       state.errorMsg =
-        state.localFolderHealth.kind === LocalFolderHealthKind.MultipleVaults
+        state.localFolderHealth.state ===
+        NookLocalFolderHealthState.MultipleVaults
           ? state.t("auth_storage.local_folder_multiple_vaults_short")
           : error instanceof Error
             ? error.message

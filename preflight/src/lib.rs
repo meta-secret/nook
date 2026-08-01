@@ -84,6 +84,11 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "GoogleDriveMode",
     "ICloudMode",
     "PasswordGenerationOptions",
+    "LastSync",
+    "ManualProviderSync",
+    "SyncConflictReview",
+    "LocalFolderHealth",
+    "LocalFolderMultipleVaultsIssue",
 ];
 
 const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
@@ -103,6 +108,10 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "OnboardingType",
     "WebsiteLoginSaveDecision",
     "SecretFormInputType",
+    "LastSyncKind",
+    "ManualProviderSyncKind",
+    "SyncConflictReviewKind",
+    "LocalFolderHealthKind",
     "SecretType",
     "ExistingVaultProviderSnapshotKind",
 ];

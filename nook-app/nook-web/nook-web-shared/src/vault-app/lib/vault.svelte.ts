@@ -9,6 +9,7 @@ import {
 import {
   isVaultSessionLocked,
   DeviceProtectionStatus,
+  NookManualProviderSyncState,
   RemoteVaultRecoveryState,
   SentinelVaultUnlockState,
   VaultEditDecision,
@@ -17,6 +18,7 @@ import {
   translateWithReplacements,
   type NookPendingSyncConflict,
   type NookProviderSyncRevision,
+  type NookSyncConflictReview,
   type NookSecretPage,
   type NookVaultManager,
   type NookAppLocale,
@@ -51,7 +53,6 @@ import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
 import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
-import { ManualProviderSyncKind } from "$lib/vault/state/sync.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";
 import {
@@ -138,7 +139,7 @@ export class VaultState extends VaultLifecycleState {
   }
 
   get syncingProviderLabel(): SyncProviderLabel {
-    if (this.manualProviderSync.kind === ManualProviderSyncKind.Idle) {
+    if (this.manualProviderSync.state === NookManualProviderSyncState.Idle) {
       return { kind: SyncProviderLabelKind.Idle };
     }
     return {
@@ -693,13 +694,13 @@ export class VaultState extends VaultLifecycleState {
   }
 
   finishStagedProviderConnectAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): void {
     return syncActions.finishStagedProviderConnectAfterConflict(this, conflict);
   }
 
   async ensureProviderSavedAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): Promise<string> {
     return syncActions.ensureProviderSavedAfterConflict(this, conflict);
   }

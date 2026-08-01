@@ -159,7 +159,10 @@ this crate.
 - **`src/crypto/`:** Vault encryption and key-epoch re-encryption. Canonical
   event signing lives in `nook-event-log`.
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
-- **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
+- **`src/sync/`:** Storage-provider validation/configuration, credential sealing,
+  provider snapshot migration, vault reconciliation, and portable sync workflow
+  states (last-success observation, manual provider operation, conflict review,
+  and local-folder health).
 - **`src/vault/`:** In-memory database, vault formats, import/connect,
   event-session application services, session-cache workflows, typed access
   states, and portable idle/sync runtime policy. Signed history delegates to
@@ -216,9 +219,10 @@ this crate.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds
   metadata-only `NookSecretListItem` pages for reactivity, and requests one
   `NookSecretRecord` only for reveal/secret-copy. Portable client transitions,
-  provider scoping/staging/metadata rules, vault-architecture drafts, and page
-  normalization are owned by `nook-core` and exposed through typed WASM APIs;
-  the Svelte shell applies their outcomes to browser/UI state. Cohesive browser
+  provider scoping/staging/metadata rules, sync workflow variants,
+  vault-architecture drafts, and page normalization are owned by `nook-core`
+  and exposed through typed WASM APIs; the Svelte shell stores those generated
+  values reactively and applies their outcomes to browser/UI state. Cohesive browser
   workflows live in focused `lib/vault/*` action modules; `vault.svelte.ts`
   remains the reactive facade and must not grow duplicate implementations.
 - **`auth/providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).

@@ -15,17 +15,17 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync.svelte'
+  import type { NookLocalFolderHealth } from '$app-wasm'
 
   let {
     vault,
-    issue,
+    health,
     onChooseFolder,
     onDisconnect,
     onDismiss,
   }: {
     vault: VaultState
-    issue: LocalFolderMultipleVaultsIssue
+    health: NookLocalFolderHealth
     onChooseFolder: () => void | Promise<void>
     onDisconnect: () => void | Promise<void>
     onDismiss: () => void
@@ -59,7 +59,7 @@
           </CardTitle>
           <CardDescription class="text-pretty">
             {vault.t('auth_storage.local_folder_multiple_vaults_desc', {
-              provider: issue.providerLabel,
+              provider: health.providerLabel,
             })}
           </CardDescription>
         </div>
@@ -87,8 +87,8 @@
           {vault.t('auth_storage.local_folder_detected_vaults')}
         </div>
         <ul class="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
-          {#if issue.storeIds.length > 0}
-            {#each issue.storeIds as storeId (storeId)}
+          {#if health.storeIds.length > 0}
+            {#each health.storeIds as storeId (storeId)}
               <li data-testid="local-folder-multiple-vaults-store-id">
                 {storeId}
               </li>

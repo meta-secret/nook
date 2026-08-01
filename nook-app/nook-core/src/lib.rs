@@ -27,7 +27,7 @@ pub(crate) use secrets::{
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
-    vault_sync_session, vault_sync_store,
+    vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
@@ -177,6 +177,10 @@ pub use vault_sentinel_onboarding::{
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
+};
+pub use vault_sync_state::{
+    LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
+    VaultLastSync,
 };
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,

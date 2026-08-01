@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { JoinEnrollmentState } from '$app-wasm'
+  import {
+    JoinEnrollmentState,
+    NookLocalFolderHealthState,
+    NookSyncConflictReviewState,
+  } from '$app-wasm'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import { JoinEnrollmentDialogVariant } from '$lib/components/join-enrollment-dialog-state'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
@@ -7,10 +11,6 @@
   import { Button } from '$lib/components/ui/button'
   import * as multiDeviceActions from '$lib/vault/multi-device'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    LocalFolderHealthKind,
-    SyncConflictReviewKind,
-  } from '$lib/vault/state/sync.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -39,10 +39,10 @@
   onCancel={() => multiDeviceActions.dismissJoinEnrollment(vault)}
 />
 
-{#if vault.syncConflictReview.kind === SyncConflictReviewKind.RequiresDecision}
+{#if vault.syncConflictReview.state === NookSyncConflictReviewState.RequiresDecision}
   <VaultSyncConflictDialog
     {vault}
-    conflict={vault.syncConflictReview.conflict}
+    conflict={vault.syncConflictReview}
     isBusy={vault.isVerifying}
     onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
     onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
@@ -51,10 +51,10 @@
   />
 {/if}
 
-{#if vault.localFolderHealth.kind === LocalFolderHealthKind.MultipleVaults}
+{#if vault.localFolderHealth.state === NookLocalFolderHealthState.MultipleVaults}
   <LocalFolderMultipleVaultsDialog
     {vault}
-    issue={vault.localFolderHealth.issue}
+    health={vault.localFolderHealth}
     onChooseFolder={() => vault.chooseReplacementLocalFolderForIssue()}
     onDisconnect={() => vault.disconnectLocalFolderMultipleVaultsProvider()}
     onDismiss={() => vault.dismissLocalFolderMultipleVaultsIssue()}

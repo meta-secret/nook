@@ -2,6 +2,7 @@ import type {
   NookPendingSyncConflict,
   NookProviderSyncRevision,
   NookRuntimeConfig,
+  NookSyncConflictReview,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
 import type { StorageProvider } from "$lib/auth/providers";
@@ -195,10 +196,10 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   beginProviderSetup(type: "local-folder"): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): Promise<string>;
   finishStagedProviderConnectAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): void;
   hasRemoteCredentials(): boolean;
   hydrateMultiDeviceState(): Promise<void>;
