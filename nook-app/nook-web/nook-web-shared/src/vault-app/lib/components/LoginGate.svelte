@@ -175,7 +175,7 @@
   onMount(() => {
     try {
       devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
-        localStorage.getItem(devicesAccessNudgeStorageKey),
+        localStorage.getItem(devicesAccessNudgeStorageKey)?.valueOf(),
       )
     } catch {
       devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible

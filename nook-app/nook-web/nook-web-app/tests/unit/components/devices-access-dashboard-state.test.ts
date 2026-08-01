@@ -6,7 +6,7 @@ import {
 
 describe('Devices & access dashboard state', () => {
   test('normalizes persisted nudge preferences into explicit enum members', () => {
-    expect(parseDevicesAccessNudgePreference(null)).toBe(
+    expect(parseDevicesAccessNudgePreference()).toBe(
       DevicesAccessNudgePreference.Visible,
     )
     expect(parseDevicesAccessNudgePreference('dismissed')).toBe(

@@ -24,7 +24,7 @@ export enum DevicesAccessNudgePreference {
 }
 
 export function parseDevicesAccessNudgePreference(
-  serialized: string | null,
+  serialized?: string,
 ): DevicesAccessNudgePreference {
   return serialized === DevicesAccessNudgePreference.Dismissed ||
     serialized === "1"
