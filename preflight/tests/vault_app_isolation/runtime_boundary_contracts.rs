@@ -2,8 +2,7 @@ use super::*;
 
 #[test]
 fn vault_app_library_root_is_package_oriented() -> anyhow::Result<()> {
-    let lib_root = repository_root()
-        .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib");
+    let lib_root = repository_root().join("nook-app/nook-web/nook-web-shared/src/vault-app/lib");
     let mut root_files = fs::read_dir(&lib_root)?
         .map(|entry| entry.map(|value| value.path()))
         .collect::<Result<Vec<_>, _>>()?;
