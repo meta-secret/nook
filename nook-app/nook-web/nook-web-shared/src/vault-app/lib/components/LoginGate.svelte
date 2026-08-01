@@ -1,8 +1,17 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { untrack } from 'svelte'
+  import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    type DevicesAccessHostMount,
+    DevicesAccessHostMountKind,
+    DevicesAccessNudgePreference,
+    DevicesAccessTriggerKind,
+    parseDevicesAccessNudgePreference,
+    readDevicesAccessNudgeStorage,
+    shouldShowDevicesAccessNudge,
+  } from './devices-access-dashboard-state'
   import {
     SentinelVaultUnlockState,
     type StartSentinelGenesisArgs,
@@ -28,6 +37,7 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
+  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -149,6 +159,79 @@
 
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
+  let devicesAccessOpen = $state(false)
+  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
+  let devicesAccessHost = $state<DevicesAccessHostMount>({
+    kind: DevicesAccessHostMountKind.Unmounted,
+  })
+  let devicesAccessNudgePreference = $state(
+    DevicesAccessNudgePreference.Visible,
+  )
+  const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
+
+  function dismissDevicesAccessNudge(): void {
+    focusHostButton('login-devices-access')
+    devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed
+    try {
+      localStorage.setItem(
+        devicesAccessNudgeStorageKey,
+        DevicesAccessNudgePreference.Dismissed,
+      )
+    } catch {
+      // Browser preference only. Private browsing may reject local storage.
+    }
+  }
+
+  function captureDevicesAccessHost(element: HTMLDivElement) {
+    devicesAccessHost = {
+      kind: DevicesAccessHostMountKind.Mounted,
+      element,
+    }
+    return {
+      destroy() {
+        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
+      },
+    }
+  }
+
+  function focusHostButton(testId: string): void {
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+      ?.focus()
+  }
+
+  async function openDevicesAccess(
+    trigger: DevicesAccessTriggerKind,
+  ): Promise<void> {
+    devicesAccessTrigger = trigger
+    devicesAccessOpen = true
+    await tick()
+    focusHostButton('devices-access-back')
+  }
+
+  async function closeDevicesAccess(): Promise<void> {
+    devicesAccessOpen = false
+    await tick()
+    const testId =
+      devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
+        ? 'devices-access-nudge-review'
+        : 'login-devices-access'
+    focusHostButton(testId)
+  }
+
+  onMount(() => {
+    try {
+      devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
+        readDevicesAccessNudgeStorage(
+          localStorage,
+          devicesAccessNudgeStorageKey,
+        ),
+      )
+    } catch {
+      devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible
+    }
+  })
 
   const prefillEnrollmentEntryLabel = $derived.by(() => {
     if (!prefillEnrollmentCode) return ''
@@ -291,10 +374,74 @@
 </script>
 
 <div
+  use:captureDevicesAccessHost
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
+  {#if devicesAccessOpen}
+    <DevicesAccessDashboard
+      {vault}
+      onBack={() => void closeDevicesAccess()}
+      onManageVaultDevices={() => {}}
+      onManageVaultPasswords={() => {}}
+    />
+  {:else}
+    <div class="flex justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        class="min-h-11 gap-2 text-muted-foreground hover:text-foreground"
+        data-testid="login-devices-access"
+        onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Header)}
+      >
+        <KeyRound class="size-4" />
+        {vault.t(I18N_KEYS.DevicesAccessTitle)}
+      </Button>
+    </div>
+
+    {#if shouldShowDevicesAccessNudge(
+      vault.localVaultPresent,
+      vault.localVaults.length,
+      devicesAccessNudgePreference,
+    )}
+      <aside
+        class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="devices-access-nudge"
+      >
+        <div class="max-w-[65ch]">
+          <p class="text-sm font-medium text-foreground">
+            {vault.t(I18N_KEYS.DevicesAccessNudgeTitle)}
+          </p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {vault.t(I18N_KEYS.DevicesAccessNudgeDescription)}
+          </p>
+        </div>
+        <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+          <Button
+            type="button"
+            variant="outline"
+            class="min-h-11"
+            data-testid="devices-access-nudge-review"
+            onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
+          >
+            {vault.t(I18N_KEYS.DevicesAccessReviewAction)}
+          </Button>
+          <label class="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              class="size-4 rounded border-input accent-primary"
+              data-testid="devices-access-dont-show-again"
+              onchange={(event) => {
+                if (event.currentTarget.checked) dismissDevicesAccessNudge()
+              }}
+            />
+            {vault.t(I18N_KEYS.DevicesAccessDontShowAgain)}
+          </label>
+        </div>
+      </aside>
+    {/if}
+
   {#if vault.sessionExpiredByIdle}
     <p
       class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
@@ -598,5 +745,6 @@
         {onUseEnrollmentCode}
       />
     {/if}
+  {/if}
   {/if}
 </div>

@@ -1,0 +1,182 @@
+import { expect, test } from './fixtures'
+import {
+  addVaultPassword,
+  connectLocalVault,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installPasskeyMock,
+} from './helpers'
+
+test.describe('devices and access dashboard', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await installPasskeyMock(page)
+  })
+
+  test('is available before any vault and lets the suggestion stay dismissed', async ({
+    page,
+  }) => {
+    await page.goto('/app/')
+
+    await expect(page.getByTestId('devices-access-nudge')).toBeVisible()
+    await page.getByTestId('devices-access-nudge-review').click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('devices-access-nudge-review')).toBeFocused()
+
+    await page.getByTestId('devices-access-dont-show-again').check()
+    await expect(page.getByTestId('devices-access-nudge')).toBeHidden()
+    await expect(page.getByTestId('login-devices-access')).toBeFocused()
+
+    await page.getByTestId('login-devices-access').click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    const dashboard = page.getByTestId('devices-access-dashboard')
+    await expect(dashboard).toBeVisible()
+    await expect(dashboard).toContainText('Not prepared')
+    await expect(
+      page.getByTestId('devices-access-prepare-browser'),
+    ).toBeVisible()
+    await expect(dashboard).toContainText('No local vaults yet')
+    await page.getByTestId('device-protection-create-new-choice').click()
+    await page
+      .getByTestId('device-protection-label-input')
+      .fill('Dashboard focus passkey')
+    await page.getByTestId('device-protection-setup-btn').click()
+    await expect(
+      page.getByTestId('devices-access-device-identity').locator('summary'),
+    ).toBeFocused({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('login-devices-access')).toBeFocused()
+
+    await page.reload()
+    await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
+    await expect(page.getByTestId('login-devices-access')).toBeVisible()
+  })
+
+  test('shows observed passkey metadata, verified vault access, and unlocked vault context', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
+    await addVaultPassword(
+      page,
+      'Emergency recovery',
+      'correct horse battery staple',
+    )
+
+    await page.getByTestId('vault-devices-access-tab').click()
+    const dashboard = page.getByTestId('devices-access-dashboard')
+    await expect(dashboard).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked')
+    await expect(dashboard).toContainText('Passkey · recoverable identity')
+    await expect(dashboard).toContainText('Access verified')
+    const browserDeviceIdentifier = page.getByTestId(
+      'devices-access-device-identity',
+    )
+    await expect(browserDeviceIdentifier.locator('p').last()).toBeHidden()
+    await browserDeviceIdentifier
+      .getByText('Device identifier', { exact: true })
+      .click()
+    await expect(browserDeviceIdentifier.locator('p').last()).toBeVisible()
+    const vaultIdentifier = dashboard
+      .locator('details')
+      .filter({ hasText: 'Vault identifier' })
+    await expect(vaultIdentifier.locator('p')).toBeHidden()
+    await vaultIdentifier.getByText('Vault identifier', { exact: true }).click()
+    await expect(vaultIdentifier.locator('p')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-current-vault'),
+    ).toContainText('Emergency recovery')
+    const memberDetails = page
+      .getByTestId('devices-access-member-details')
+      .first()
+    await expect(memberDetails.locator('p')).toBeHidden()
+    await memberDetails.getByText('Device identifier', { exact: true }).click()
+    await expect(memberDetails.locator('p')).toBeVisible()
+
+    await page
+      .getByTestId('devices-access-provider-label')
+      .fill('Bitwarden family vault')
+    await page.getByTestId('devices-access-provider-save').click()
+    await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
+      'Bitwarden family vault',
+    )
+    await expect(
+      page.getByTestId('devices-access-provider-label'),
+    ).toBeFocused()
+
+    await page
+      .getByTestId('devices-access-provider-label')
+      .fill('Proton Pass family vault')
+    await page.evaluate(() => {
+      const originalTransaction = IDBDatabase.prototype.transaction
+      let transactionCount = 0
+      IDBDatabase.prototype.transaction = function (
+        storeNames: string | string[],
+        mode: IDBTransactionMode = 'readonly',
+        options?: IDBTransactionOptions,
+      ): IDBTransaction {
+        transactionCount += 1
+        if (transactionCount === 2) {
+          IDBDatabase.prototype.transaction = originalTransaction
+          throw new DOMException(
+            'Forced dashboard reload failure',
+            'InvalidStateError',
+          )
+        }
+        return originalTransaction.call(this, storeNames, mode, options)
+      }
+    })
+    await page.getByTestId('devices-access-provider-save').click()
+    await expect(page.getByTestId('devices-access-retry')).toBeFocused()
+    await page.getByTestId('devices-access-retry').click()
+    await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
+      'Proton Pass family vault',
+    )
+
+    await dashboard
+      .getByText('Technical details and browser observations')
+      .click()
+    await expect(dashboard).toContainText('Built into this platform')
+    await expect(dashboard).toContainText('Backed up or synced')
+    await expect(dashboard).toContainText('Nearby device or phone')
+    await expect(dashboard).toContainText('Built into this device')
+    await expect(dashboard).not.toContainText('hybrid, internal')
+    await expect(dashboard).toContainText(
+      '01010101-0101-0101-0101-010101010101',
+    )
+
+    await dashboard.getByRole('button', { name: 'Manage devices' }).click()
+    await expect(
+      page.getByTestId('vault-devices-section').locator('button').first(),
+    ).toBeFocused()
+    await page.getByTestId('vault-devices-access-tab').click()
+    await dashboard
+      .getByRole('button', { name: 'Manage backup passwords' })
+      .click()
+    await expect(
+      page.getByTestId('vault-unlock-section').locator('button').first(),
+    ).toBeFocused()
+    await page.getByTestId('vault-devices-access-tab').click()
+
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await page.getByTestId('login-devices-access').click()
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity locked')
+    await expect(page.getByTestId('devices-access-dashboard')).toContainText(
+      'Access verified',
+    )
+    await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(
+      0,
+    )
+  })
+})

@@ -16,8 +16,15 @@
     CardTitle,
   } from '$lib/components/ui/card'
 
-  let { vault, embedded = false }: { vault: VaultState; embedded?: boolean } =
-    $props()
+  let {
+    vault,
+    embedded = false,
+    onProtectionReady,
+  }: {
+    vault: VaultState
+    embedded?: boolean
+    onProtectionReady: () => void
+  } = $props()
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
@@ -34,6 +41,15 @@
       return
     }
     void deviceProtectionActions.resetDeviceProtectionForRecovery(vault)
+  }
+
+  async function completeProtectionAction(
+    action: () => Promise<void>,
+  ): Promise<void> {
+    await action()
+    if (vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked) {
+      onProtectionReady()
+    }
   }
 </script>
 
@@ -91,7 +107,6 @@
           id="device-protection-pin"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="new-password"
           bind:value={pin}
           disabled={vault.isVerifying}
@@ -109,7 +124,6 @@
           id="device-protection-pin-confirm"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="new-password"
           bind:value={pinConfirm}
           disabled={vault.isVerifying}
@@ -124,10 +138,12 @@
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-setup-btn"
         onclick={() =>
-          deviceProtectionActions.setupPinDeviceProtection(
-            vault,
-            pin,
-            pinConfirm,
+          void completeProtectionAction(() =>
+            deviceProtectionActions.setupPinDeviceProtection(
+              vault,
+              pin,
+              pinConfirm,
+            ),
           )}
       >
         {vault.isVerifying
@@ -148,7 +164,11 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-use-existing-choice"
             onclick={() =>
-              deviceProtectionActions.recoverDeviceProtectionWithPasskey(vault)}
+              void completeProtectionAction(() =>
+                deviceProtectionActions.recoverDeviceProtectionWithPasskey(
+                  vault,
+                ),
+              )}
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
@@ -210,10 +230,12 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-setup-btn"
             onclick={() =>
-              deviceProtectionActions.setupDeviceProtection(
-                vault,
-                passkeyLabel,
-                vault.draftDeviceMode,
+              void completeProtectionAction(() =>
+                deviceProtectionActions.setupDeviceProtection(
+                  vault,
+                  passkeyLabel,
+                  vault.draftDeviceMode,
+                ),
               )}
           >
             {vault.isVerifying
@@ -234,7 +256,11 @@
             disabled={vault.isVerifying}
             data-testid="device-protection-use-existing-choice"
             onclick={() =>
-              deviceProtectionActions.recoverDeviceProtectionWithPasskey(vault)}
+              void completeProtectionAction(() =>
+                deviceProtectionActions.recoverDeviceProtectionWithPasskey(
+                  vault,
+                ),
+              )}
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
@@ -252,7 +278,6 @@
           id="device-protection-pin"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="current-password"
           bind:value={pin}
           disabled={vault.isVerifying}

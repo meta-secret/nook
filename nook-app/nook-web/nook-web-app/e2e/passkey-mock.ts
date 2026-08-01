@@ -22,8 +22,15 @@ export function installMockPasskeyRuntime() {
       : Uint8Array.from(
           new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
         )
-  const result = (first: ArrayBuffer | ArrayBufferView, enabled: boolean) => {
+  const result = (
+    first: ArrayBuffer | ArrayBufferView,
+    enabled: boolean,
+    registration: boolean,
+  ) => {
     const prfOutput = derive(first)
+    const authenticatorData = new Uint8Array(53)
+    authenticatorData[32] = registration ? 0x5d : 0x1d
+    if (registration) authenticatorData.fill(1, 37, 53)
     Object.assign(window, {
       __nookE2eLastPrfOutput: btoa(
         String.fromCharCode(...new Uint8Array(prfOutput)),
@@ -33,7 +40,13 @@ export function installMockPasskeyRuntime() {
       id: 'nook-e2e-passkey',
       rawId: credentialId.buffer.slice(0),
       type: 'public-key',
-      response: { userHandle: userHandle.buffer.slice(0) },
+      authenticatorAttachment: 'platform',
+      response: {
+        userHandle: userHandle.buffer.slice(0),
+        authenticatorData: authenticatorData.buffer,
+        getAuthenticatorData: () => authenticatorData.buffer,
+        getTransports: () => (registration ? ['internal', 'hybrid'] : []),
+      },
       getClientExtensionResults: () => ({
         prf: {
           enabled,
@@ -130,7 +143,7 @@ export function installMockPasskeyRuntime() {
           throw new TypeError('WebAuthn creation PRF input must be binary')
         }
         if (!first) throw new Error('Missing E2E PRF create input')
-        return result(first, mode !== 'unsupported')
+        return result(first, mode !== 'unsupported', true)
       },
       get: async (options: {
         publicKey?: {
@@ -172,7 +185,7 @@ export function installMockPasskeyRuntime() {
         // A credential that accepted PRF during registration keeps supporting
         // it when it is used to unlock the vault. Returning `false` here makes
         // the browser boundary reject an otherwise valid PRF result.
-        return result(first, mode !== 'unsupported')
+        return result(first, mode !== 'unsupported', false)
       },
     },
   })

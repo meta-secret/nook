@@ -127,7 +127,7 @@ async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(),
     Ok(())
 }
 
-async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
+pub(super) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
@@ -156,7 +156,7 @@ async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     }
 }
 
-async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
+pub(super) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -179,7 +179,100 @@ async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     Ok(())
 }
 
-async fn idb_delete_key(key: &str) -> Result<(), NookError> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum StringUpdateGuard<'a> {
+    Unconditional,
+    WrappedCredentialFingerprint(&'a str),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum StringUpdateResult {
+    Applied,
+    GuardRejected,
+}
+
+pub(super) async fn idb_update_string<F>(
+    key: &str,
+    guard: StringUpdateGuard<'_>,
+    update: F,
+) -> Result<StringUpdateResult, NookError>
+where
+    F: FnOnce(Option<String>) -> Result<String, NookError>,
+{
+    let rexie = open_nook_database().await?;
+    // IndexedDB serializes read-write transactions that overlap one object
+    // store. Keeping both operations in this transaction prevents two tabs
+    // from reading the same profile and later overwriting each other's update.
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update transaction error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
+    })?;
+    if let StringUpdateGuard::WrappedCredentialFingerprint(expected) = guard {
+        let wrapped_key =
+            serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY).map_err(|error| {
+                NookError::IndexedDb(format!("Atomic string guard key error: {error:?}"))
+            })?;
+        let wrapped = store.get(wrapped_key).await.map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string guard read error: {error:?}"))
+        })?;
+        let fingerprint = match wrapped {
+            Some(value) if !value.is_undefined() && !value.is_null() => {
+                let raw: String = serde_wasm_bindgen::from_value(value).map_err(|error| {
+                    NookError::IndexedDb(format!("Atomic string guard decode error: {error:?}"))
+                })?;
+                let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
+                wrapped
+                    .credential_id_bytes()
+                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+                    .ok()
+            }
+            _ => None,
+        };
+        if fingerprint.as_deref() != Some(expected) {
+            transaction.done().await.map_err(|error| {
+                NookError::IndexedDb(format!("Atomic string guard completion error: {error:?}"))
+            })?;
+            return Ok(StringUpdateResult::GuardRejected);
+        }
+    }
+    let id_key = serde_wasm_bindgen::to_value(key).map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update key error: {error:?}"))
+    })?;
+    let current = store.get(id_key.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update read error: {error:?}"))
+    })?;
+    let current = match current {
+        None => None,
+        Some(value) if value.is_undefined() || value.is_null() => None,
+        Some(value) => Some(serde_wasm_bindgen::from_value(value).map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update decode error: {error:?}"))
+        })?),
+    };
+    let updated = update(current)?;
+    let updated_value = serde_wasm_bindgen::to_value(&updated).map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update encode error: {error:?}"))
+    })?;
+    store
+        .put(&updated_value, Some(&id_key))
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update write error: {error:?}"))
+        })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update completion error: {error:?}"))
+    })?;
+    Ok(StringUpdateResult::Applied)
+}
+
+pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
+    idb_delete_keys(&[key]).await
+}
+
+async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -187,12 +280,14 @@ async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     let store = transaction
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-    let id_key = serde_wasm_bindgen::to_value(key)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    store
-        .delete(id_key)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+    for key in keys {
+        let id_key = serde_wasm_bindgen::to_value(key)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        store
+            .delete(id_key)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+    }
     transaction
         .done()
         .await
@@ -436,11 +531,49 @@ pub(crate) async fn device_identity_device_mode()
 
 pub(crate) async fn load_wrapped_device_identity()
 -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
-    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+    let rexie = open_nook_database().await?;
+    // Writers replace the ID and wrapped credential together. Read both from
+    // the same snapshot so a concurrent replacement cannot fabricate a mixed
+    // identity from two different commits.
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Device identity read transaction error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Device identity read store error: {error:?}"))
+    })?;
+    let wrapped_key =
+        serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY).map_err(|error| {
+            NookError::IndexedDb(format!("Device identity wrapped key error: {error:?}"))
+        })?;
+    let device_id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY).map_err(|error| {
+        NookError::IndexedDb(format!("Device identity ID key error: {error:?}"))
+    })?;
+    let raw = store.get(wrapped_key).await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity wrapped read error: {error:?}"))
+    })?;
+    let device_id = store.get(device_id_key).await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity ID read error: {error:?}"))
+    })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity read completion error: {error:?}"))
+    })?;
+
+    let Some(raw) = raw.filter(|value| !value.is_undefined() && !value.is_null()) else {
         return Ok(None);
     };
-    let device_id = idb_get_string(DEVICE_ID_KEY)
-        .await?
+    let raw: String = serde_wasm_bindgen::from_value(raw).map_err(|error| {
+        NookError::IndexedDb(format!("Device identity wrapped decode error: {error:?}"))
+    })?;
+    let device_id: Option<String> = device_id
+        .filter(|value| !value.is_undefined() && !value.is_null())
+        .map(serde_wasm_bindgen::from_value)
+        .transpose()
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Device identity ID decode error: {error:?}"))
+        })?;
+    let device_id = device_id
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| {
             NookError::IndexedDb("Protected device identity is missing device_id.".to_owned())
@@ -504,8 +637,12 @@ pub(crate) async fn save_wrapped_device_identity(
 }
 
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
-    idb_delete_key(WRAPPED_DEVICE_IDENTITY_KEY).await?;
-    idb_delete_key(DEVICE_ID_KEY).await
+    idb_delete_keys(&[
+        super::device_access::DEVICE_ACCESS_PROFILE_KEY,
+        WRAPPED_DEVICE_IDENTITY_KEY,
+        DEVICE_ID_KEY,
+    ])
+    .await
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -560,6 +697,19 @@ mod device_identity_storage_tests {
             device_identity_device_mode().await?,
             DeviceProtectionDeviceModeState::Pin
         );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn wrapped_identity_without_device_id_is_rejected() -> Result<(), wasm_bindgen::JsError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let wrapped =
+            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+        idb_delete_key(DEVICE_ID_KEY).await?;
+
+        assert!(load_wrapped_device_identity().await.is_err());
         Ok(())
     }
 

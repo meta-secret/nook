@@ -456,6 +456,15 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
+    const pinDeviceId = await readDeviceId(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    await expect(
+      page.getByTestId('devices-access-device-identity'),
+    ).toContainText(pinDeviceId)
+    await expect(page.getByTestId('devices-access-dashboard')).toContainText(
+      'PIN or passphrase',
+    )
+
     await page.getByTestId('header-lock-vault-btn').click()
     await openExistingVaultProtectionOverlay(page)
     await expect(
@@ -519,7 +528,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-use-existing-choice').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'Set a local PIN to protect a new device identity instead',
+      'Set a local PIN or passphrase to protect a new device identity instead',
     )
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),

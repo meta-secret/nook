@@ -5,6 +5,7 @@
 //! methods are reachable when the vault is in password mode — the
 //! password-mode counterpart is `connectWithPassword` (`manager::password`).
 
+use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
@@ -146,7 +147,14 @@ impl NookVaultManager {
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
         self.vault.meta = meta;
         self.purge_legacy_plaintext_search_catalog().await?;
-        Ok(self.get_records()?)
+        let records = VerifiedVaultAccessFlow::EnrollAndConnect
+            .complete(
+                self.get_records(),
+                identity.device_id(),
+                &self.vault.store_id,
+            )
+            .await?;
+        Ok(records)
     }
 
     /// Device B publishes a join request record with its public key.
@@ -470,7 +478,14 @@ impl NookVaultManager {
         }
         self.persist_vault_change(Vec::new()).await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        Ok(self.get_records()?)
+        let records = VerifiedVaultAccessFlow::EnrollWithKeys
+            .complete(
+                self.get_records(),
+                identity.device_id(),
+                &self.vault.store_id,
+            )
+            .await?;
+        Ok(records)
     }
 
     /// Back-compat alias — `members_key` must equal `secrets_key` (legacy test path only).

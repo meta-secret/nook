@@ -1,9 +1,9 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
 use super::NookVaultManager;
-use crate::passkey_browser;
-use crate::storage::{auth_providers, indexed_db};
+use crate::storage::{auth_providers, device_access, indexed_db};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
+use crate::{passkey_browser, passkey_observation};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
@@ -128,6 +128,23 @@ impl NookVaultManager {
         Ok(indexed_db::device_identity_protection_status().await?)
     }
 
+    /// Project Devices & access from the live Rust session. Caller-owned web
+    /// state is not authoritative because a failed handoff may have populated
+    /// it before this manager rolls the identity back.
+    #[wasm_bindgen(js_name = deviceAccessSnapshotRequest)]
+    pub fn device_access_snapshot_request(
+        &self,
+    ) -> Result<crate::NookDeviceAccessSnapshotRequest, JsError> {
+        let session_device_id = if self.device.identity_private_key.is_empty() {
+            String::new()
+        } else {
+            self.device_identity()?.device_id().as_str().to_owned()
+        };
+        Ok(crate::NookDeviceAccessSnapshotRequest::new(
+            session_device_id,
+        ))
+    }
+
     /// Return the product device-protection mode persisted during device setup.
     #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
     pub async fn device_protection_device_mode(
@@ -179,17 +196,19 @@ impl NookVaultManager {
         device_mode: nook_core::DeviceMode,
     ) -> Result<(), JsError> {
         let mode = passkey_mode_from_device_mode(device_mode);
+        let passkey_label = passkey_browser::normalized_passkey_label(passkey_label);
         let setup = self.begin_device_protection().await?;
         let user_handle = setup.user_handle();
         let prf_input = setup.prf_input();
         let creation_options = passkey_browser::creation_options(
             rp_id,
             rp_name,
-            passkey_label,
+            &passkey_label,
             &user_handle,
             &prf_input,
         )?;
         let credential = passkey_browser::create_credential(&creation_options).await?;
+        let mut observation = passkey_observation::observe_registration(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
         let create_prf_output = passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
         let resolution = nook_core::resolve_passkey_registration_for_mode(
@@ -202,8 +221,11 @@ impl NookVaultManager {
             },
             mode,
         )?;
-        let material = match resolution {
-            nook_core::PasskeyRegistrationResolution::Complete(material) => *material,
+        let (material, ceremony) = match resolution {
+            nook_core::PasskeyRegistrationResolution::Complete(material) => (
+                *material,
+                device_access::PasskeyCreationCeremony::RegistrationOnly,
+            ),
             nook_core::PasskeyRegistrationResolution::NeedsAssertion(request) => {
                 let request_options = passkey_browser::request_options(
                     rp_id,
@@ -211,20 +233,32 @@ impl NookVaultManager {
                     request.prf_input(),
                 )?;
                 let credential = passkey_browser::get_credential(&request_options).await?;
+                observation.merge_usage(passkey_observation::observe_assertion(&credential));
                 let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
-                nook_core::finish_passkey_device_identity_for_mode(
-                    request.credential_id(),
-                    &user_handle,
-                    request.prf_input(),
-                    prf_output.as_slice(),
-                    mode,
-                )?
+                (
+                    nook_core::finish_passkey_device_identity_for_mode(
+                        request.credential_id(),
+                        &user_handle,
+                        request.prf_input(),
+                        prf_output.as_slice(),
+                        mode,
+                    )?,
+                    device_access::PasskeyCreationCeremony::RegistrationAndAssertion,
+                )
             }
         };
         let result = self.save_passkey_material(&material).await;
         let device_id = result?;
+        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+        let _ = device_access::record_passkey_created(
+            &credential_fingerprint,
+            &passkey_label,
+            observation,
+            ceremony,
+        )
+        .await;
         let updated_label =
-            passkey_browser::passkey_label_with_device_id(passkey_label, &device_id);
+            passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
         passkey_browser::signal_current_user_details(rp_id, &user_handle, &updated_label).await;
         Ok(())
     }
@@ -279,11 +313,19 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let request_options = passkey_browser::recovery_options(rp_id)?;
         let credential = passkey_browser::get_credential(&request_options).await?;
+        let observation = passkey_observation::observe_assertion(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
+        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
         let user_handle = passkey_browser::assertion_user_handle(&credential)?;
         let prf_output = passkey_browser::require_prf_output(&credential)?;
-        self.recover_device_protection_with_passkey_material(credential_id, user_handle, prf_output)
-            .await
+        self.recover_device_protection_with_passkey_material(
+            credential_id,
+            user_handle,
+            prf_output,
+        )
+        .await?;
+        let _ = device_access::record_passkey_used(&credential_fingerprint, observation).await;
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskeyMaterial)]
@@ -352,8 +394,13 @@ impl NookVaultManager {
         let options = self.passkey_unlock_options().await?;
         let request_options = options.request_options(rp_id)?;
         let credential = passkey_browser::get_credential(&request_options).await?;
+        let observation = passkey_observation::observe_assertion(&credential);
+        let credential_id = passkey_browser::credential_id(&credential)?;
+        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
         let prf_output = passkey_browser::require_prf_output(&credential)?;
-        self.unlock_device_identity(prf_output).await
+        self.unlock_device_identity(prf_output).await?;
+        let _ = device_access::record_passkey_used(&credential_fingerprint, observation).await;
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = unlockDeviceIdentity)]

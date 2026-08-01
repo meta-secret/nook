@@ -44,9 +44,12 @@ mutable flags create the same problem.
 - Use enum members in constructors, comparisons, switch cases, and fixtures,
   not only in the union declaration. Any authored closed string-literal union
   has the same requirement even when its field is not named `kind` or `type`.
-- Keep runtime enum declarations in cohesive adjacent `.ts` state modules and
-  import them into `.svelte` components. The repository's Svelte compilation
-  boundary does not preprocess runtime TypeScript enum syntax.
+- Svelte script blocks support runtime TypeScript enums through the required
+  Vite script preprocessor. Put runtime enums consumed by a component instance
+  in a cohesive adjacent `.ts` state module and import them normally. Do not
+  declare the enum in a same-file `<script module>`: Svelte can type-check that
+  cross-script reference while omitting the runtime binding from the instance
+  bundle.
 - Prefer one enum per cohesive state machine or protocol vocabulary. Do not
   create a repository-wide `StateKind`, `MessageType`, or other generic enum
   that merely centralizes unrelated strings.

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -11,6 +11,11 @@
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultAdmin from '$lib/components/VaultAdmin.svelte'
+  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
+  import {
+    type DevicesAccessHostMount,
+    DevicesAccessHostMountKind,
+  } from '$lib/components/devices-access-dashboard-state'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -65,6 +70,9 @@
     kind: SecretEditorModeKind.Closed,
   })
   let secretsEditorResetKey = $state(0)
+  let devicesAccessHost = $state<DevicesAccessHostMount>({
+    kind: DevicesAccessHostMountKind.Unmounted,
+  })
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -90,12 +98,61 @@
     onEditorOpenChange(false)
   }
 
+  function captureDevicesAccessHost(element: HTMLDivElement) {
+    devicesAccessHost = {
+      kind: DevicesAccessHostMountKind.Mounted,
+      element,
+    }
+    return {
+      destroy() {
+        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
+      },
+    }
+  }
+
+  async function closeDevicesAccess(): Promise<void> {
+    vault.closeSettings()
+    await tick()
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="vault-devices-access-tab"]',
+      )
+      ?.focus()
+  }
+
+  async function openVaultDevices(): Promise<void> {
+    vault.openSettings(
+      SettingsSection.Storage,
+      SettingsAccordionSection.Devices,
+    )
+    await tick()
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="vault-devices-section"] > button',
+      )
+      ?.focus()
+  }
+
+  async function openVaultPasswords(): Promise<void> {
+    vault.openAdmin(AdminAccordionSection.Passwords)
+    await tick()
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="vault-unlock-section"] > button',
+      )
+      ?.focus()
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false)
   })
 </script>
 
 <div
+  use:captureDevicesAccessHost
   class:authenticated-shell-editor={secretsAddOpen}
   class="authenticated-shell flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm [touch-action:pan-y_pinch-zoom] sm:border sm:border-border/60"
   data-testid="authenticated-shell"
@@ -130,7 +187,14 @@
           onAddDevice={() => vault.openSettings(SettingsSection.Onboard)}
         />
       {/if}
-      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
+      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
+        <DevicesAccessDashboard
+          {vault}
+          onBack={() => void closeDevicesAccess()}
+          onManageVaultDevices={() => void openVaultDevices()}
+          onManageVaultPasswords={() => void openVaultPasswords()}
+        />
+      {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
           bind:activeSection={vault.adminAccordionSection}
@@ -277,6 +341,10 @@
       onSelectSecrets={() => {
         leaveSecretsEditor()
         vault.closeSettings()
+      }}
+      onSelectDevicesAccess={() => {
+        leaveSecretsEditor()
+        vault.openSettings(SettingsSection.DevicesAccess)
       }}
       onSelectOnboard={() => {
         leaveSecretsEditor()

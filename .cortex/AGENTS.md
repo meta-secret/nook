@@ -146,9 +146,11 @@ them; unrelated state machines must not be collapsed into one generic enum.
 Constructors, comparisons, switch branches, and fixtures use those same enum
 members rather than repeating serialized strings. Any other authored closed
 string-literal union is also an enum; a field name outside the common
-discriminant list is not an escape hatch. Svelte components import runtime
-enums from a cohesive adjacent TypeScript state module because the Svelte
-compilation boundary does not preprocess runtime TypeScript enum syntax.
+discriminant list is not an escape hatch. Svelte script blocks support runtime
+TypeScript enums through the required Vite script preprocessor. Prefer keeping
+component-local presentation enums beside the union they discriminate; move an
+enum to a cohesive adjacent TypeScript state module only when multiple
+consumers share it.
 
 External and browser contracts may still produce JavaScript absence values at
 runtime. Optional external input shape is normalized at its narrow boundary,

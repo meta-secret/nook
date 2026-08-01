@@ -17,6 +17,18 @@ pub(crate) use auth::{
     website_passkey_proposal,
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
+pub use device_access::{
+    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
+    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
+    DeviceAccessProfileTransitionError, DeviceAccessProfileVersion, DeviceAccessProtectionKind,
+    DeviceAccessProviderLabelError, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
+    PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
+    PasskeyCreationCeremony, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
+    classify_device_access_identity_state, classify_device_access_protection,
+    decode_device_access_profile, normalize_device_access_provider_label,
+    passkey_credential_identifier, passkey_user_handle_identifier,
+};
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
@@ -29,10 +41,10 @@ pub(crate) use sync::{
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub(crate) use vault::{
-    database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
-    vault_event_session, vault_format, vault_ids, vault_runtime_policy, vault_search_catalog,
-    vault_security, vault_sentinel_genesis, vault_sentinel_onboarding, vault_sentinel_unlock,
-    vault_session, vault_session_cache, vault_wire,
+    database, device_access, vault_access_diagnostics, vault_architecture, vault_client_policy,
+    vault_connect, vault_event_session, vault_format, vault_ids, vault_runtime_policy,
+    vault_search_catalog, vault_security, vault_sentinel_genesis, vault_sentinel_onboarding,
+    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use apple_passwords_import::{

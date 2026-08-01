@@ -12,6 +12,8 @@
     onDismiss?: () => void
   } = $props()
 
+  function handleProtectionReady(): void {}
+
   function portal(node: HTMLElement) {
     const anchor = document.createComment('passkey-auth-overlay-home')
     node.before(anchor)
@@ -46,6 +48,10 @@
         <ArrowLeft class="size-4" aria-hidden="true" />
       </button>
     {/if}
-    <DeviceProtectionGate {vault} embedded />
+    <DeviceProtectionGate
+      {vault}
+      embedded
+      onProtectionReady={handleProtectionReady}
+    />
   </div>
 </div>
