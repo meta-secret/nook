@@ -397,7 +397,8 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
         "ssh -n -o BatchMode=yes",
-        "docker compose -f '$remote_compose' up -d --wait --remove-orphans seaweedfs traefik",
+        "docker compose -f '$remote_compose' up -d --wait --force-recreate seaweedfs",
+        "docker compose -f '$remote_compose' up -d --wait --remove-orphans traefik",
         "sudo -n install -d -m 0750 /var/lib/nook/seaweedfs",
         "traefik-dynamic.yaml.next",
         "grep -qx seaweedfs",
