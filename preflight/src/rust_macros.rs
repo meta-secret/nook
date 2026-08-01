@@ -56,8 +56,12 @@ pub fn authored_rust_macro_definitions(root: &Path) -> io::Result<Vec<Violation>
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            continue;
+        }
         let path = entry.path();
-        if path.is_dir() {
+        if file_type.is_dir() {
             if !path
                 .file_name()
                 .and_then(std::ffi::OsStr::to_str)
@@ -105,7 +109,16 @@ impl<'ast> Visit<'ast> for MacroDefinitionVisitor {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use std::path::PathBuf;
+    #[cfg(unix)]
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use super::MacroDefinitionVisitor;
+    #[cfg(unix)]
+    use super::authored_rust_macro_definitions;
     use syn::visit::Visit;
 
     #[test]
@@ -138,5 +151,36 @@ mod tests {
         visitor.visit_file(&syntax);
         assert!(visitor.lines.is_empty());
         Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_follow_symlinks_outside_the_scan_root() -> anyhow::Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let root = temporary_directory("root")?;
+        let external = temporary_directory("external")?;
+        let external_source = external.join("defined.rs");
+        fs::write(&external_source, "macro_rules! external { () => {}; }")?;
+        symlink(&external, root.join("linked-directory"))?;
+        symlink(&external_source, root.join("linked.rs"))?;
+
+        let violations = authored_rust_macro_definitions(&root)?;
+
+        fs::remove_dir_all(root)?;
+        fs::remove_dir_all(external)?;
+        assert!(violations.is_empty());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn temporary_directory(label: &str) -> anyhow::Result<PathBuf> {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "nook-rust-macros-{label}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir(&path)?;
+        Ok(path)
     }
 }
