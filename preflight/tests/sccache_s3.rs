@@ -70,9 +70,16 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
             && !app_tasks.contains("rediss://"),
         "Taskfile must not retain Redis sccache wiring"
     );
+    let dockerignore = read(".dockerignore");
     assert!(
-        read(".dockerignore").lines().any(|line| line == ".nook"),
+        dockerignore.lines().any(|line| line == ".nook"),
         "ignored local credentials must never enter a Docker build context"
+    );
+    assert!(
+        dockerignore
+            .lines()
+            .any(|line| line == "**/docker-bake.hcl"),
+        "Bake policy files must not invalidate source-sensitive Rust COPY layers"
     );
 
     let bake = read("nook-app/docker-bake.hcl");

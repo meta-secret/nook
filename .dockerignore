@@ -7,6 +7,7 @@
 **/playwright-report
 **/ui-demo-results
 **/coverage
+**/docker-bake.hcl
 infra/secrets
 nook-app/nook-web/src/lib/nook-wasm
 nook-app/nook-web/nook-web-app/src/lib/nook-wasm
