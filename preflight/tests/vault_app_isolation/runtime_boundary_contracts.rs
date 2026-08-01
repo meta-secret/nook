@@ -30,7 +30,6 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
         "configuredVaultApplicationIsSimple",
         "configuredVaultApplicationIsSentinel",
         "simpleVaultAppUrl",
-        "pendingVaultCreationResumesAutomatically",
     ] {
         assert!(wasm_vault_api.contains(rust_owned_api));
     }
@@ -43,9 +42,19 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
                 .exists()
         );
     }
-    let vault_operation = read(&root, "nook-app/nook-core/src/vault/vault_operation.rs");
-    assert!(vault_operation.contains("pub enum DeviceProtectedOperationState"));
-    assert!(vault_operation.contains("pub enum PendingVaultCreationKind"));
+    let browser_operations = read(
+        &root,
+        "nook-app/nook-web/nook-web-shared/src/vault-app/lib/device-protected-operations.ts",
+    );
+    for browser_lifecycle_enum in [
+        "PendingVaultCreationKind",
+        "VaultCreationQueueKind",
+        "ExistingVaultImportQueueKind",
+        "EnrollmentSubmitQueueKind",
+    ] {
+        assert!(browser_operations.contains(browser_lifecycle_enum));
+    }
+    assert!(!browser_operations.contains("DeviceProtectedOperationState"));
 
     let shared_entry = read(
         &root,

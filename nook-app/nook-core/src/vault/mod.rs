@@ -8,7 +8,6 @@ pub(crate) mod vault_connect;
 pub(crate) mod vault_event_session;
 pub(crate) mod vault_format;
 pub(crate) mod vault_ids;
-pub(crate) mod vault_operation;
 pub(crate) mod vault_recovery_options;
 pub(crate) mod vault_runtime_policy;
 pub(crate) mod vault_search_catalog;

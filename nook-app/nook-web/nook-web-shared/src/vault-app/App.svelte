@@ -2,10 +2,7 @@
   import { onMount } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
   import {
-    DeviceProtectedOperationState,
     DeviceProtectionStatus,
-    PendingVaultCreationKind,
-    pendingVaultCreationResumesAutomatically,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
   import {
@@ -19,6 +16,11 @@
   import type {
     EnrollmentSubmitQueue,
     VaultCreationQueue,
+  } from '$lib/device-protected-operations'
+  import {
+    EnrollmentSubmitQueueKind,
+    PendingVaultCreationKind,
+    VaultCreationQueueKind,
   } from '$lib/device-protected-operations'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
@@ -383,16 +385,16 @@
     !requiresPasskeyFirst && vault.providersLoaded,
   )
   let pendingVaultCreationState = $state<VaultCreationQueue>({
-    kind: DeviceProtectedOperationState.Idle,
+    kind: VaultCreationQueueKind.Idle,
   })
   let pendingExistingVaultUnlock = $state(false)
   let pendingEnrollmentDeviceUnlock = $state(false)
   let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
-    kind: DeviceProtectedOperationState.Idle,
+    kind: EnrollmentSubmitQueueKind.Idle,
   })
   const showPasskeyOverlay = $derived(
     pendingVaultCreationState.kind ===
-      DeviceProtectedOperationState.WaitingForDevice &&
+      VaultCreationQueueKind.WaitingForDevice &&
       !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
@@ -407,14 +409,14 @@
   async function handleUseEnrollmentCode(code: string, password: string) {
     if (!vault.deviceProtectionReady) {
       pendingEnrollmentSubmitState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: EnrollmentSubmitQueueKind.WaitingForDevice,
         request: { code, password },
       }
       pendingEnrollmentDeviceUnlock = true
       return
     }
     pendingEnrollmentSubmitState = {
-      kind: DeviceProtectedOperationState.Idle,
+      kind: EnrollmentSubmitQueueKind.Idle,
     }
     await vault.connectWithEnrollmentCode(code, password)
   }
@@ -488,12 +490,12 @@
     }
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Simple, label },
       }
       return
     }
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     await vault.createLocalVaultWithDeviceKeys(label)
     if (
       extensionIdentityRequestState.kind ===
@@ -509,12 +511,12 @@
   ): Promise<boolean> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Sentinel, args },
       }
       return false
     }
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     await vault.startSentinelGenesis(args)
     return true
   }
@@ -522,12 +524,12 @@
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
       }
       return ''
     }
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     return sentinelGenesisActions.createPublicKeyAnnouncement(vault)
   }
 
@@ -536,7 +538,7 @@
   ): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: VaultCreationQueueKind.WaitingForDevice,
         request: {
           kind: PendingVaultCreationKind.SentinelParticipantResponse,
           requestPayload,
@@ -544,7 +546,7 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     return sentinelGenesisActions.createParticipantResponse(
       vault,
       requestPayload,
@@ -554,7 +556,7 @@
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
-        kind: DeviceProtectedOperationState.WaitingForDevice,
+        kind: VaultCreationQueueKind.WaitingForDevice,
         request: {
           kind: PendingVaultCreationKind.SentinelOnboarding,
           packageJson,
@@ -562,7 +564,7 @@
       }
       return
     }
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     await sentinelGenesisActions.acceptOnboardingPackage(vault, packageJson)
     sentinelOnboardingPackage = ''
   }
@@ -605,18 +607,22 @@
   $effect(() => {
     if (
       pendingVaultCreationState.kind !==
-        DeviceProtectedOperationState.WaitingForDevice ||
+        VaultCreationQueueKind.WaitingForDevice ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     )
       return
     const pending = pendingVaultCreationState.request
-    pendingVaultCreationState = { kind: DeviceProtectedOperationState.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     if (pending.kind === PendingVaultCreationKind.Simple) {
       void vault.createLocalVaultWithDeviceKeys(pending.label)
       return
     }
-    if (!pendingVaultCreationResumesAutomatically(pending.kind)) return
+    if (
+      pending.kind === PendingVaultCreationKind.SentinelParticipantKey ||
+      pending.kind === PendingVaultCreationKind.SentinelParticipantResponse
+    )
+      return
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {
       void handleAcceptSentinelOnboarding(pending.packageJson)
       return
@@ -691,7 +697,7 @@
   $effect(() => {
     if (
       pendingEnrollmentSubmitState.kind !==
-        DeviceProtectedOperationState.WaitingForDevice ||
+        EnrollmentSubmitQueueKind.WaitingForDevice ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
@@ -699,7 +705,7 @@
     }
     const pending = pendingEnrollmentSubmitState.request
     pendingEnrollmentSubmitState = {
-      kind: DeviceProtectedOperationState.Idle,
+      kind: EnrollmentSubmitQueueKind.Idle,
     }
     pendingEnrollmentDeviceUnlock = false
     void vault.connectWithEnrollmentCode(pending.code, pending.password)
@@ -782,7 +788,7 @@
               return
             }
             pendingVaultCreationState = {
-              kind: DeviceProtectedOperationState.Idle,
+              kind: VaultCreationQueueKind.Idle,
             }
           }}
         />

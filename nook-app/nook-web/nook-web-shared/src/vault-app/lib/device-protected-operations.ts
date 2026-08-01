@@ -1,10 +1,14 @@
-import {
-  DeviceProtectedOperationState,
-  PendingVaultCreationKind,
-  type StartSentinelGenesisArgs,
-} from "$app-wasm";
+import type { StartSentinelGenesisArgs } from "$app-wasm";
 import type { ActiveVault } from "$lib/vault/state/provider.svelte";
 import type { ExistingVaultProviderSnapshot } from "$lib/vault/existing-vault-provider.svelte";
+
+export enum PendingVaultCreationKind {
+  Simple = "simple",
+  Sentinel = "sentinel",
+  SentinelParticipantKey = "sentinel-participant-key",
+  SentinelParticipantResponse = "sentinel-participant-response",
+  SentinelOnboarding = "sentinel-onboarding",
+}
 
 export type PendingVaultCreation =
   | { kind: PendingVaultCreationKind.Simple; label: string }
@@ -16,10 +20,15 @@ export type PendingVaultCreation =
     }
   | { kind: PendingVaultCreationKind.SentinelOnboarding; packageJson: string };
 
+export enum VaultCreationQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
+
 export type VaultCreationQueue =
-  | { kind: DeviceProtectedOperationState.Idle }
+  | { kind: VaultCreationQueueKind.Idle }
   | {
-      kind: DeviceProtectedOperationState.WaitingForDevice;
+      kind: VaultCreationQueueKind.WaitingForDevice;
       request: PendingVaultCreation;
     };
 
@@ -29,18 +38,28 @@ export type PendingExistingVaultImport = {
   provider: ExistingVaultProviderSnapshot;
 };
 
+export enum ExistingVaultImportQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
+
 export type ExistingVaultImportQueue =
-  | { kind: DeviceProtectedOperationState.Idle }
+  | { kind: ExistingVaultImportQueueKind.Idle }
   | {
-      kind: DeviceProtectedOperationState.WaitingForDevice;
+      kind: ExistingVaultImportQueueKind.WaitingForDevice;
       request: PendingExistingVaultImport;
     };
 
 export type PendingEnrollmentSubmit = { code: string; password: string };
 
+export enum EnrollmentSubmitQueueKind {
+  Idle = "idle",
+  WaitingForDevice = "waiting-for-device",
+}
+
 export type EnrollmentSubmitQueue =
-  | { kind: DeviceProtectedOperationState.Idle }
+  | { kind: EnrollmentSubmitQueueKind.Idle }
   | {
-      kind: DeviceProtectedOperationState.WaitingForDevice;
+      kind: EnrollmentSubmitQueueKind.WaitingForDevice;
       request: PendingEnrollmentSubmit;
     };

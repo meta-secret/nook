@@ -319,22 +319,6 @@ pub fn configured_vault_application_supports_extension() -> bool {
     application::configured_vault_application().supports_extension()
 }
 
-#[wasm_bindgen(js_name = deviceProtectedOperationIsWaiting)]
-#[must_use]
-pub fn device_protected_operation_is_waiting(
-    state: nook_core::DeviceProtectedOperationState,
-) -> bool {
-    state.is_waiting_for_device()
-}
-
-#[wasm_bindgen(js_name = pendingVaultCreationResumesAutomatically)]
-#[must_use]
-pub fn pending_vault_creation_resumes_automatically(
-    kind: nook_core::PendingVaultCreationKind,
-) -> bool {
-    kind.resumes_automatically()
-}
-
 /// Return the configured deployment-channel Simple Vault root URL.
 #[wasm_bindgen(js_name = simpleVaultAppUrl)]
 pub fn simple_vault_app_url(configured_url: &str) -> String {

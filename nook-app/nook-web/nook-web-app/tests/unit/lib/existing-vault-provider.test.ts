@@ -5,8 +5,9 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   LOCAL_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-  type LocalFolderConfig,
-  type OAuthFileConfig,
+  defaultOAuthFileConfig,
+  storedLocalFolderDirectory,
+  storedLocalFolderHandle,
 } from '$lib/auth-providers'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
@@ -16,8 +17,11 @@ import {
 } from '$lib/vault/state/provider.svelte'
 
 function providerState(): ProviderActionsContext {
-  const oauthFile = { accountId: 'account' } as OAuthFileConfig
-  const localFolder = { handleId: 'folder' } as LocalFolderConfig
+  const oauthFile = defaultOAuthFileConfig('google-drive')
+  const localFolder = {
+    directoryName: storedLocalFolderDirectory('Vaults'),
+    handleId: storedLocalFolderHandle('folder'),
+  }
   return {
     githubPat: 'github-token',
     githubRepo: 'vault-repository',

@@ -1,5 +1,4 @@
 import {
-  DeviceProtectedOperationState,
   JoinEnrollmentState,
   NookExistingVaultProviderReadiness,
 } from "$app-wasm";
@@ -8,7 +7,10 @@ import {
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
 } from "$lib/auth-providers";
-import type { ExistingVaultImportQueue } from "$lib/device-protected-operations";
+import {
+  ExistingVaultImportQueueKind,
+  type ExistingVaultImportQueue,
+} from "$lib/device-protected-operations";
 import type { VaultState } from "$lib/vault.svelte";
 import { prepareExistingVaultProvider } from "$lib/vault/existing-vault-provider.svelte";
 import {
@@ -21,13 +23,13 @@ import {
 /** Browser orchestration for an existing-vault import retained across device unlock. */
 export class ExistingVaultImportLifecycle {
   queue = $state<ExistingVaultImportQueue>({
-    kind: DeviceProtectedOperationState.Idle,
+    kind: ExistingVaultImportQueueKind.Idle,
   });
 
   constructor(private readonly vault: VaultState) {}
 
   get waitingForDevice(): boolean {
-    return this.queue.kind === DeviceProtectedOperationState.WaitingForDevice;
+    return this.queue.kind === ExistingVaultImportQueueKind.WaitingForDevice;
   }
 
   remember(storeId: string): void {
@@ -52,7 +54,7 @@ export class ExistingVaultImportLifecycle {
     }
     if (preparation.kind !== NookExistingVaultProviderReadiness.Ready) return;
     this.queue = {
-      kind: DeviceProtectedOperationState.WaitingForDevice,
+      kind: ExistingVaultImportQueueKind.WaitingForDevice,
       request: {
         storeId,
         previousActiveVault: this.vault.activeVault,
@@ -62,7 +64,7 @@ export class ExistingVaultImportLifecycle {
   }
 
   async resume(): Promise<void> {
-    if (this.queue.kind !== DeviceProtectedOperationState.WaitingForDevice) {
+    if (this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice) {
       await this.vault.loadDb();
       return;
     }
@@ -148,7 +150,7 @@ export class ExistingVaultImportLifecycle {
 
   async leave(): Promise<void> {
     const previousActiveVault: ActiveVault =
-      this.queue.kind === DeviceProtectedOperationState.WaitingForDevice
+      this.queue.kind === ExistingVaultImportQueueKind.WaitingForDevice
         ? this.queue.request.previousActiveVault
         : { kind: ActiveVaultKind.Closed };
     this.cancel();
@@ -159,12 +161,12 @@ export class ExistingVaultImportLifecycle {
   }
 
   cancel(): void {
-    this.queue = { kind: DeviceProtectedOperationState.Idle };
+    this.queue = { kind: ExistingVaultImportQueueKind.Idle };
     this.vault.clearExistingVaultRecoverySummary();
   }
 
   private async activatePendingVault(): Promise<void> {
-    if (this.queue.kind !== DeviceProtectedOperationState.WaitingForDevice) {
+    if (this.queue.kind !== ExistingVaultImportQueueKind.WaitingForDevice) {
       return;
     }
     await this.vault.activateConnectedExistingVault(this.queue.request.storeId);
