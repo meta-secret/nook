@@ -487,11 +487,49 @@ pub(crate) async fn device_identity_device_mode()
 
 pub(crate) async fn load_wrapped_device_identity()
 -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
-    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+    let rexie = open_nook_database().await?;
+    // Writers replace the ID and wrapped credential together. Read both from
+    // the same snapshot so a concurrent replacement cannot fabricate a mixed
+    // identity from two different commits.
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Device identity read transaction error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Device identity read store error: {error:?}"))
+    })?;
+    let wrapped_key =
+        serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY).map_err(|error| {
+            NookError::IndexedDb(format!("Device identity wrapped key error: {error:?}"))
+        })?;
+    let device_id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY).map_err(|error| {
+        NookError::IndexedDb(format!("Device identity ID key error: {error:?}"))
+    })?;
+    let raw = store.get(wrapped_key).await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity wrapped read error: {error:?}"))
+    })?;
+    let device_id = store.get(device_id_key).await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity ID read error: {error:?}"))
+    })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Device identity read completion error: {error:?}"))
+    })?;
+
+    let Some(raw) = raw.filter(|value| !value.is_undefined() && !value.is_null()) else {
         return Ok(None);
     };
-    let device_id = idb_get_string(DEVICE_ID_KEY)
-        .await?
+    let raw: String = serde_wasm_bindgen::from_value(raw).map_err(|error| {
+        NookError::IndexedDb(format!("Device identity wrapped decode error: {error:?}"))
+    })?;
+    let device_id: Option<String> = device_id
+        .filter(|value| !value.is_undefined() && !value.is_null())
+        .map(serde_wasm_bindgen::from_value)
+        .transpose()
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Device identity ID decode error: {error:?}"))
+        })?;
+    let device_id = device_id
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| {
             NookError::IndexedDb("Protected device identity is missing device_id.".to_owned())
@@ -615,6 +653,19 @@ mod device_identity_storage_tests {
             device_identity_device_mode().await?,
             DeviceProtectionDeviceModeState::Pin
         );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn wrapped_identity_without_device_id_is_rejected() -> Result<(), wasm_bindgen::JsError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let wrapped =
+            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+        idb_delete_key(DEVICE_ID_KEY).await?;
+
+        assert!(load_wrapped_device_identity().await.is_err());
         Ok(())
     }
 

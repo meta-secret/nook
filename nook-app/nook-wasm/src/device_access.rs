@@ -359,9 +359,7 @@ pub async fn device_access_snapshot(
         }
     };
     let validated_device_id = nook_core::DeviceId::parse(&device_id).ok();
-    let profile = device_access::load_device_access_profile()
-        .await
-        .unwrap_or_default();
+    let profile = device_access::load_device_access_profile().await?;
     let passkey = if session_uses_companion {
         device_access::PasskeyAccessProfile::default()
     } else {
