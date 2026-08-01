@@ -27,6 +27,11 @@ tasks:
         remote_username="{{.NOOK_REGISTRY_REMOTE_USERNAME}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
 
+        if [ "$username" = "$remote_username" ]; then
+          echo "Main and Remote Zot usernames must be distinct" >&2
+          exit 1
+        fi
+
         install -d -m 0700 "$secrets_dir"
         if test ! -s "$password_file"; then
           umask 077
@@ -178,6 +183,10 @@ tasks:
         case "$remote_username" in
           ''|*[!A-Za-z0-9._-]*) echo "Unsupported Zot Remote username" >&2; exit 1 ;;
         esac
+        if [ "$username" = "$remote_username" ]; then
+          echo "Main and Remote Zot usernames must be distinct" >&2
+          exit 1
+        fi
         sed \
           -e "s/__NOOK_REGISTRY_USERNAME__/$username/g" \
           -e "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g" \

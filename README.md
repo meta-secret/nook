@@ -322,8 +322,8 @@ Run `task infra:sccache:credential:sync` and
 `task infra:registry:credential:sync` once to create mode-`0600` credentials in
 `~/.nook/cache/` (and a copy under the repo `.nook/cache/`). Registry sync also
 runs `docker login registry.dev.nokey.sh`. Without the S3 key files, local and
-untrusted CI builds compile normally without sccache. Trusted Main and explicit
-Remote tasks receive the read-only bucket identity; pull-request,
+untrusted CI builds compile normally without sccache. Trusted Main receives the
+read/write bucket identity; explicit Remote tasks receive the read-only identity. Pull-request,
 arbitrary-ref, dependency-update, and AI-authored jobs receive neither. Stable
 BuildKit secret IDs keep credential values out of layer cache keys. Override the
 endpoint with `SCCACHE_ENDPOINT`.

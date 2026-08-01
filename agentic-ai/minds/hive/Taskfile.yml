@@ -85,6 +85,8 @@ tasks:
         command=(docker buildx build
           --platform linux/amd64
           --target check
+          --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
           --output type=cacheonly)
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
@@ -125,6 +127,8 @@ tasks:
         command=(docker buildx build
           --platform linux/amd64
           --target verify-export
+          --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
           --output "type=local,dest=$verified")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
@@ -201,6 +205,8 @@ tasks:
         command=(docker buildx build
           --platform linux/amd64
           --target test-export
+          --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
           --output "type=local,dest=$compiled")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
@@ -260,6 +266,8 @@ tasks:
         command=(docker buildx build
           --platform linux/amd64
           --target cache-publish
+          --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
           --output type=cacheonly
           --cache-to "$HIVE_CACHE_TO")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then

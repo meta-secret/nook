@@ -597,6 +597,13 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
             && tasks.contains("gh secret set NOOK_REGISTRY_REMOTE_PASSWORD"),
         "registry credential sync must publish only the scoped Remote Zot identity to Remote jobs"
     );
+    assert_eq!(
+        tasks
+            .matches("Main and Remote Zot usernames must be distinct")
+            .count(),
+        2,
+        "credential generation and manifest rendering must both reject a shared Zot principal"
+    );
 
     let uninstall = read("infra/tasks/k0s.yml");
     assert!(
