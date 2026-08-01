@@ -19,14 +19,15 @@ pub(crate) use auth::{
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
     DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
-    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileTransitionError,
-    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
-    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
-    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyLastUsedAtEvidence,
-    PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
+    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
+    DeviceAccessProfileTransitionError, DeviceAccessProfileVersion, DeviceAccessProtectionKind,
+    DeviceAccessProviderLabelError, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
+    PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
+    PasskeyCreationCeremony, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
     classify_device_access_identity_state, classify_device_access_protection,
-    normalize_device_access_provider_label, passkey_credential_identifier,
-    passkey_user_handle_identifier,
+    decode_device_access_profile, normalize_device_access_provider_label,
+    passkey_credential_identifier, passkey_user_handle_identifier,
 };
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,

@@ -9,6 +9,7 @@ fn svelte_build_surfaces_support_runtime_typescript_enums() {
         "nook-app/nook-web/nook-vault-sentinel/svelte.config.js",
         "nook-app/nook-web/nook-web-research/svelte.config.js",
         "nook-app/nook-web/nook-web-extension/e2e/mock-auth/svelte.config.js",
+        "agentic-ai/minds/hive-console/svelte.config.js",
     ] {
         let config = read(&root, path);
         assert!(

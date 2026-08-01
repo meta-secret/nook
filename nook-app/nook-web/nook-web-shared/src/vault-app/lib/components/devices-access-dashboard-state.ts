@@ -46,6 +46,18 @@ export enum DevicesAccessNudgePreference {
   Dismissed = "dismissed",
 }
 
+export function shouldShowDevicesAccessNudge(
+  hasActiveLocalVault: boolean,
+  localVaultCount: number,
+  preference: DevicesAccessNudgePreference,
+): boolean {
+  return (
+    !hasActiveLocalVault &&
+    localVaultCount === 0 &&
+    preference === DevicesAccessNudgePreference.Visible
+  );
+}
+
 export enum DevicesAccessTriggerKind {
   Header = "header",
   Nudge = "nudge",

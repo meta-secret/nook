@@ -4,6 +4,7 @@ import {
   DevicesAccessNudgeStorageKind,
   parseDevicesAccessNudgePreference,
   readDevicesAccessNudgeStorage,
+  shouldShowDevicesAccessNudge,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 
 describe('Devices & access dashboard state', () => {
@@ -51,5 +52,36 @@ describe('Devices & access dashboard state', () => {
         serialized: '1',
       }),
     ).toBe(DevicesAccessNudgePreference.Dismissed)
+  })
+
+  test('offers the first-run nudge only before any local vault exists', () => {
+    expect(
+      shouldShowDevicesAccessNudge(
+        false,
+        0,
+        DevicesAccessNudgePreference.Visible,
+      ),
+    ).toBe(true)
+    expect(
+      shouldShowDevicesAccessNudge(
+        false,
+        1,
+        DevicesAccessNudgePreference.Visible,
+      ),
+    ).toBe(false)
+    expect(
+      shouldShowDevicesAccessNudge(
+        true,
+        1,
+        DevicesAccessNudgePreference.Visible,
+      ),
+    ).toBe(false)
+    expect(
+      shouldShowDevicesAccessNudge(
+        false,
+        0,
+        DevicesAccessNudgePreference.Dismissed,
+      ),
+    ).toBe(false)
   })
 })

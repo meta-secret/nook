@@ -2,10 +2,13 @@
 
 ## Product statement
 
-Nook exposes one **Devices & access** dashboard per application origin. It is
-available before a vault exists, while a vault is locked, and while a vault is
-open. It explains access authority; it is not a universal passkey manager and
-does not merge the origin-isolated Simple, Sentinel, or extension identities.
+Nook exposes one **Devices & access** dashboard per vault-application origin.
+It is available before a vault exists, while a vault is locked, and while a
+vault is open. It explains access authority; it is not a universal passkey
+manager and does not merge the origin-isolated Simple or Sentinel identities.
+The browser extension remains a Simple Vault companion, not a third vault
+application: its separate identity is managed through extension setup and
+connection flows rather than this dashboard.
 
 ## Access model
 

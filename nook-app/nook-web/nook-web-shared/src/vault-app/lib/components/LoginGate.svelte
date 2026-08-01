@@ -10,6 +10,7 @@
     DevicesAccessTriggerKind,
     parseDevicesAccessNudgePreference,
     readDevicesAccessNudgeStorage,
+    shouldShowDevicesAccessNudge,
   } from './devices-access-dashboard-state'
   import {
     SentinelVaultUnlockState,
@@ -399,8 +400,11 @@
       </Button>
     </div>
 
-    {#if !vault.localVaultPresent &&
-    devicesAccessNudgePreference === DevicesAccessNudgePreference.Visible}
+    {#if shouldShowDevicesAccessNudge(
+      vault.localVaultPresent,
+      vault.localVaults.length,
+      devicesAccessNudgePreference,
+    )}
       <aside
         class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
         data-testid="devices-access-nudge"

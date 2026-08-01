@@ -3,11 +3,10 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
-use serde::Deserialize;
-
 pub(crate) use nook_core::{
-    DeviceAccessProfile, PasskeyAccessProfile, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
-    PasskeyCreationCeremony, PasskeyLastUsedAtEvidence,
+    DeviceAccessProfile, DeviceAccessProfileDecodeResult, PasskeyAccessProfile,
+    PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
+    PasskeyLastUsedAtEvidence, decode_device_access_profile,
 };
 
 use crate::NookError;
@@ -19,13 +18,6 @@ use super::indexed_db::{idb_get_string, idb_update_string, load_wrapped_device_i
 pub(super) const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
 const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
     "errors.device_access.profile_version_incompatible";
-
-#[derive(Debug, PartialEq, Eq)]
-enum DecodedDeviceAccessProfile {
-    Current(DeviceAccessProfile),
-    RecoverableDefault,
-    FutureVersion,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 enum DeviceAccessProfileUpdate {
@@ -50,35 +42,14 @@ impl DeviceAccessProfileUpdate {
     }
 }
 
-#[derive(Deserialize)]
-struct DeviceAccessProfileVersion {
-    version: u32,
-}
-
-fn decode_device_access_profile(raw: &str) -> DecodedDeviceAccessProfile {
-    let Ok(version) = serde_json::from_str::<DeviceAccessProfileVersion>(raw) else {
-        return DecodedDeviceAccessProfile::RecoverableDefault;
-    };
-    if version.version > nook_core::DEVICE_ACCESS_PROFILE_VERSION {
-        return DecodedDeviceAccessProfile::FutureVersion;
-    }
-    if version.version != nook_core::DEVICE_ACCESS_PROFILE_VERSION {
-        return DecodedDeviceAccessProfile::RecoverableDefault;
-    }
-    serde_json::from_str(raw).map_or(
-        DecodedDeviceAccessProfile::RecoverableDefault,
-        DecodedDeviceAccessProfile::Current,
-    )
-}
-
 pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, NookError> {
     let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
         return Ok(DeviceAccessProfile::default());
     };
     Ok(match decode_device_access_profile(&raw) {
-        DecodedDeviceAccessProfile::Current(profile) => profile,
-        DecodedDeviceAccessProfile::RecoverableDefault
-        | DecodedDeviceAccessProfile::FutureVersion => DeviceAccessProfile::default(),
+        DeviceAccessProfileDecodeResult::Current(profile) => *profile,
+        DeviceAccessProfileDecodeResult::RecoverableDefault
+        | DeviceAccessProfileDecodeResult::FutureVersion => DeviceAccessProfile::default(),
     })
 }
 
@@ -87,13 +58,13 @@ fn device_access_profile_for_update(raw: Option<&str>) -> DeviceAccessProfileUpd
         return DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default());
     };
     match decode_device_access_profile(raw) {
-        DecodedDeviceAccessProfile::Current(profile) => {
-            DeviceAccessProfileUpdate::Writable(profile)
+        DeviceAccessProfileDecodeResult::Current(profile) => {
+            DeviceAccessProfileUpdate::Writable(*profile)
         }
-        DecodedDeviceAccessProfile::RecoverableDefault => {
+        DeviceAccessProfileDecodeResult::RecoverableDefault => {
             DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default())
         }
-        DecodedDeviceAccessProfile::FutureVersion => {
+        DeviceAccessProfileDecodeResult::FutureVersion => {
             DeviceAccessProfileUpdate::PreserveFutureVersion
         }
     }
@@ -261,11 +232,11 @@ mod tests {
     fn corrupt_and_future_profiles_degrade_to_empty_metadata() {
         assert_eq!(
             decode_device_access_profile("not-json"),
-            DecodedDeviceAccessProfile::RecoverableDefault
+            DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
             decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
-            DecodedDeviceAccessProfile::FutureVersion
+            DeviceAccessProfileDecodeResult::FutureVersion
         );
     }
 

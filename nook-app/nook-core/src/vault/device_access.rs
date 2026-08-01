@@ -11,7 +11,24 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::{IsoTimestamp, WrappedDeviceIdentity};
 
 pub const DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS: usize = 80;
-pub const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct DeviceAccessProfileVersion(u32);
+
+impl DeviceAccessProfileVersion {
+    #[must_use]
+    pub const fn is_current(self) -> bool {
+        self.0 == DEVICE_ACCESS_PROFILE_VERSION.0
+    }
+
+    #[must_use]
+    pub const fn is_future(self) -> bool {
+        self.0 > DEVICE_ACCESS_PROFILE_VERSION.0
+    }
+}
+
+pub const DEVICE_ACCESS_PROFILE_VERSION: DeviceAccessProfileVersion = DeviceAccessProfileVersion(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeviceAccessProviderLabelError {
@@ -244,11 +261,40 @@ pub struct VerifiedVaultAccess {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceAccessProfile {
-    pub version: u32,
+    pub version: DeviceAccessProfileVersion,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passkey: Option<PasskeyAccessProfile>,
     #[serde(default)]
     pub verified_vaults: Vec<VerifiedVaultAccess>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DeviceAccessProfileDecodeResult {
+    Current(Box<DeviceAccessProfile>),
+    RecoverableDefault,
+    FutureVersion,
+}
+
+#[derive(Deserialize)]
+struct DeviceAccessProfileVersionEnvelope {
+    version: DeviceAccessProfileVersion,
+}
+
+#[must_use]
+pub fn decode_device_access_profile(raw: &str) -> DeviceAccessProfileDecodeResult {
+    let Ok(envelope) = serde_json::from_str::<DeviceAccessProfileVersionEnvelope>(raw) else {
+        return DeviceAccessProfileDecodeResult::RecoverableDefault;
+    };
+    if envelope.version.is_future() {
+        return DeviceAccessProfileDecodeResult::FutureVersion;
+    }
+    if !envelope.version.is_current() {
+        return DeviceAccessProfileDecodeResult::RecoverableDefault;
+    }
+    serde_json::from_str(raw).map_or(
+        DeviceAccessProfileDecodeResult::RecoverableDefault,
+        |profile| DeviceAccessProfileDecodeResult::Current(Box::new(profile)),
+    )
 }
 
 impl Default for DeviceAccessProfile {
@@ -502,6 +548,34 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Vec<PasskeyTransport>>(&serialized)?,
             transports
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn device_access_profile_version_is_typed_and_validated_during_decode() -> anyhow::Result<()> {
+        let profile = DeviceAccessProfile::default();
+        let serialized = serde_json::to_string(&profile)?;
+
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&serialized)?["version"],
+            1
+        );
+        assert_eq!(
+            decode_device_access_profile(&serialized),
+            DeviceAccessProfileDecodeResult::Current(Box::new(profile))
+        );
+        assert_eq!(
+            decode_device_access_profile(r#"{"version":0,"verifiedVaults":[]}"#),
+            DeviceAccessProfileDecodeResult::RecoverableDefault
+        );
+        assert_eq!(
+            decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
+            DeviceAccessProfileDecodeResult::FutureVersion
+        );
+        assert_eq!(
+            decode_device_access_profile("not-json"),
+            DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         Ok(())
     }
