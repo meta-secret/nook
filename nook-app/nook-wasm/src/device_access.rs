@@ -213,6 +213,26 @@ impl NookDeviceVaultAccess {
 }
 
 #[wasm_bindgen]
+pub struct NookDeviceAccessSnapshotRequest {
+    session_device_id: String,
+}
+
+impl NookDeviceAccessSnapshotRequest {
+    pub(crate) fn new(session_device_id: String) -> Self {
+        Self { session_device_id }
+    }
+}
+
+#[wasm_bindgen]
+impl NookDeviceAccessSnapshotRequest {
+    /// Resolve the browser-backed projection without retaining a borrow of the
+    /// live vault manager across `IndexedDB` work.
+    pub async fn resolve(&self) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
+        device_access_snapshot_for_session(&self.session_device_id).await
+    }
+}
+
+#[wasm_bindgen]
 pub struct NookDeviceAccessSnapshot {
     protection: nook_core::DeviceAccessProtectionKind,
     identity_state: nook_core::DeviceAccessIdentityState,

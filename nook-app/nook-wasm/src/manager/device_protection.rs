@@ -4,9 +4,8 @@ use super::NookVaultManager;
 use crate::storage::{auth_providers, device_access, indexed_db};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 use crate::{passkey_browser, passkey_observation};
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::{JsError, JsValue};
-use wasm_bindgen_futures::future_to_promise;
 use zeroize::{Zeroize, Zeroizing};
 
 #[wasm_bindgen]
@@ -132,26 +131,18 @@ impl NookVaultManager {
     /// Project Devices & access from the live Rust session. Caller-owned web
     /// state is not authoritative because a failed handoff may have populated
     /// it before this manager rolls the identity back.
-    #[wasm_bindgen(
-        js_name = deviceAccessSnapshot,
-        unchecked_return_type = "Promise<NookDeviceAccessSnapshot>"
-    )]
-    pub fn device_access_snapshot(&self) -> Result<js_sys::Promise, JsError> {
+    #[wasm_bindgen(js_name = deviceAccessSnapshotRequest)]
+    pub fn device_access_snapshot_request(
+        &self,
+    ) -> Result<crate::NookDeviceAccessSnapshotRequest, JsError> {
         let session_device_id = if self.device.identity_private_key.is_empty() {
             String::new()
         } else {
             self.device_identity()?.device_id().as_str().to_owned()
         };
-        // Capture the live session evidence before creating the future. An
-        // async `&self` export keeps wasm-bindgen's manager borrow alive across
-        // IndexedDB awaits and blocks the sync/lock lifecycle from reusing it.
-        Ok(future_to_promise(async move {
-            let snapshot =
-                crate::device_access::device_access_snapshot_for_session(&session_device_id)
-                    .await
-                    .map_err(JsValue::from)?;
-            Ok(snapshot.into())
-        }))
+        Ok(crate::NookDeviceAccessSnapshotRequest::new(
+            session_device_id,
+        ))
     }
 
     /// Return the product device-protection mode persisted during device setup.

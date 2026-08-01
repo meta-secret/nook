@@ -180,7 +180,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     const generation = ++loadGeneration
     loadState = { kind: DashboardLoadKind.Loading }
     try {
-      const snapshot = await vault.requireManager().deviceAccessSnapshot()
+      const snapshotRequest = vault
+        .requireManager()
+        .deviceAccessSnapshotRequest()
+      const snapshot = await snapshotRequest
+        .resolve()
+        .finally(() => snapshotRequest.free())
       try {
         const vaults = snapshot.vaults().map((entry): VaultAccessView => {
           try {
