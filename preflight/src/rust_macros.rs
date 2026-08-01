@@ -127,12 +127,12 @@ mod tests {
     #[test]
     fn allows_external_macro_invocations_and_attributes() -> anyhow::Result<()> {
         let syntax = syn::parse_file(
-            r#"
+            r"
                 #[derive(Debug, serde::Serialize)]
                 struct Visible;
                 external_items! { struct Generated; }
                 fn verify() { assert!(true); }
-            "#,
+            ",
         )?;
         let mut visitor = MacroDefinitionVisitor::default();
         visitor.visit_file(&syntax);
