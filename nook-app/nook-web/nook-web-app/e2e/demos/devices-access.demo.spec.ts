@@ -24,7 +24,7 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity unlocked',
   )
-  await expect(dashboard).toContainText('Browser access chain')
+  await expect(dashboard).toContainText('How to read this page')
   await page.waitForTimeout(BEAT_MS)
 
   await page
