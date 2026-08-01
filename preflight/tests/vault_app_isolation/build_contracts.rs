@@ -257,9 +257,11 @@ fn assert_vault_runtime_boundary_contract(root: &Path) {
     assert!(wasm_vault_api.contains("configuredVaultApplicationIsSentinel"));
     assert!(wasm_vault_api.contains("simpleVaultAppUrl"));
     assert!(!wasm_vault_api.contains("application_name: &str"));
-    assert!(!root
-        .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/app-kind.ts")
-        .exists());
+    assert!(
+        !root
+            .join("nook-app/nook-web/nook-web-shared/src/vault-app/lib/app-kind.ts")
+            .exists()
+    );
     let shared_entry = read(
         root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
