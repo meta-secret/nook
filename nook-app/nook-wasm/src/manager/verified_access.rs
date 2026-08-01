@@ -14,7 +14,7 @@ impl VerifiedVaultAccessFlow {
     pub(super) async fn complete<T>(
         self,
         result: Result<T, NookError>,
-        device_id: &str,
+        device_id: &nook_core::DeviceId,
         store_id: &str,
     ) -> Result<T, NookError> {
         let value = result?;
@@ -36,6 +36,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn requested_flows_record_only_after_the_final_fallible_step() -> Result<(), NookError> {
+        let device_id = nook_core::DeviceId::parse("0123456789abcdef")
+            .map_err(|error| NookError::Database(error.to_string()))?;
         for flow in [
             VerifiedVaultAccessFlow::SentinelUnlock,
             VerifiedVaultAccessFlow::EnrollAndConnect,
@@ -47,7 +49,7 @@ mod tests {
                     Err(NookError::Database(
                         "failure immediately before access recording".to_owned(),
                     )),
-                    "device-under-test",
+                    &device_id,
                     "store-under-test",
                 )
                 .await;
@@ -59,11 +61,11 @@ mod tests {
                     .is_empty()
             );
 
-            flow.complete(Ok(()), "device-under-test", "store-under-test")
+            flow.complete(Ok(()), &device_id, "store-under-test")
                 .await?;
             let profile = crate::storage::device_access::load_device_access_profile().await?;
             assert_eq!(profile.verified_vaults.len(), 1);
-            assert_eq!(profile.verified_vaults[0].device_id, "device-under-test");
+            assert_eq!(profile.verified_vaults[0].device_id, device_id);
             assert_eq!(profile.verified_vaults[0].store_id, "store-under-test");
         }
 

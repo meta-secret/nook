@@ -358,6 +358,7 @@ pub async fn device_access_snapshot(
             None => (String::new(), String::new(), String::new()),
         }
     };
+    let validated_device_id = nook_core::DeviceId::parse(&device_id).ok();
     let profile = device_access::load_device_access_profile()
         .await
         .unwrap_or_default();
@@ -377,7 +378,12 @@ pub async fn device_access_snapshot(
         let verified_at = profile
             .verified_vaults
             .iter()
-            .find(|access| access.device_id == device_id && access.store_id == entry.store_id)
+            .find(|access| {
+                validated_device_id
+                    .as_ref()
+                    .is_some_and(|current| &access.device_id == current)
+                    && access.store_id == entry.store_id
+            })
             .map(|access| access.verified_at.to_string());
         vaults.push(NookDeviceVaultAccess {
             store_id: entry.store_id,

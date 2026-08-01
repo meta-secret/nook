@@ -179,10 +179,10 @@ pub(crate) async fn set_passkey_provider_label(
 }
 
 pub(crate) async fn record_verified_vault_access(
-    device_id: &str,
+    device_id: &nook_core::DeviceId,
     store_id: &str,
 ) -> Result<(), NookError> {
-    if device_id.trim().is_empty() || store_id.trim().is_empty() {
+    if store_id.trim().is_empty() {
         return Ok(());
     }
     let now = browser_timestamp();
@@ -214,6 +214,10 @@ mod tests {
 
     fn timestamp(value: &str) -> nook_core::IsoTimestamp {
         nook_core::IsoTimestamp::from_trusted(value.to_owned())
+    }
+
+    fn device_id(value: &str) -> Result<nook_core::DeviceId, NookError> {
+        nook_core::DeviceId::parse(value).map_err(|error| NookError::Database(error.to_string()))
     }
 
     fn observation() -> PasskeyBrowserObservation {
@@ -467,18 +471,20 @@ mod tests {
     fn verified_access_is_scoped_by_identity_and_store_and_refreshes_one_pair() -> anyhow::Result<()>
     {
         let mut profile = DeviceAccessProfile::default();
+        let device_a = device_id("0123456789abcdef")?;
+        let device_b = device_id("fedcba9876543210")?;
         profile.record_verified_vault_access(
-            "device-a",
+            &device_a,
             "store-one",
             timestamp("2026-01-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
-            "device-b",
+            &device_b,
             "store-one",
             timestamp("2026-02-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
-            "device-a",
+            &device_a,
             "store-one",
             timestamp("2026-03-01T00:00:00.000Z"),
         );
@@ -487,7 +493,7 @@ mod tests {
         let refreshed = profile
             .verified_vaults
             .iter()
-            .find(|entry| entry.device_id == "device-a")
+            .find(|entry| entry.device_id == device_a)
             .ok_or_else(|| anyhow::anyhow!("verified device and vault pair is missing"))?;
         assert_eq!(refreshed.verified_at, timestamp("2026-03-01T00:00:00.000Z"));
         Ok(())
@@ -555,7 +561,8 @@ mod tests {
         const FUTURE_PROFILE: &str = r#"{"version":999,"futureField":"keep-me"}"#;
         idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
 
-        record_verified_vault_access("device-a", "store-one").await?;
+        let device_id = device_id("0123456789abcdef")?;
+        record_verified_vault_access(&device_id, "store-one").await?;
         assert!(
             set_passkey_provider_label("passkey:future", "1Password")
                 .await
@@ -574,9 +581,11 @@ mod tests {
     async fn concurrent_verified_access_updates_preserve_both_relationships()
     -> Result<(), NookError> {
         delete_device_access_profile().await?;
+        let device_a = device_id("0123456789abcdef")?;
+        let device_b = device_id("fedcba9876543210")?;
         let (first, second) = futures_util::future::join(
-            record_verified_vault_access("device-a", "store-one"),
-            record_verified_vault_access("device-b", "store-two"),
+            record_verified_vault_access(&device_a, "store-one"),
+            record_verified_vault_access(&device_b, "store-two"),
         )
         .await;
         first?;
@@ -587,13 +596,13 @@ mod tests {
             profile
                 .verified_vaults
                 .iter()
-                .any(|entry| { entry.device_id == "device-a" && entry.store_id == "store-one" })
+                .any(|entry| { entry.device_id == device_a && entry.store_id == "store-one" })
         );
         assert!(
             profile
                 .verified_vaults
                 .iter()
-                .any(|entry| { entry.device_id == "device-b" && entry.store_id == "store-two" })
+                .any(|entry| { entry.device_id == device_b && entry.store_id == "store-two" })
         );
 
         delete_device_access_profile().await?;

@@ -150,7 +150,7 @@ impl NookVaultManager {
         let records = VerifiedVaultAccessFlow::EnrollAndConnect
             .complete(
                 self.get_records(),
-                identity.device_id().as_str(),
+                identity.device_id(),
                 &self.vault.store_id,
             )
             .await?;
@@ -481,7 +481,7 @@ impl NookVaultManager {
         let records = VerifiedVaultAccessFlow::EnrollWithKeys
             .complete(
                 self.get_records(),
-                identity.device_id().as_str(),
+                identity.device_id(),
                 &self.vault.store_id,
             )
             .await?;

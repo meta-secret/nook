@@ -271,7 +271,7 @@ impl NookVaultManager {
         let records = VerifiedVaultAccessFlow::Connect
             .complete(
                 self.get_records(),
-                identity.device_id().as_str(),
+                identity.device_id(),
                 &self.vault.store_id,
             )
             .await?;
