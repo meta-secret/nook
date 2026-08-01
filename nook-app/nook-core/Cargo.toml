@@ -11,6 +11,7 @@ mock-passkey = ["nook-auth2/mock-passkey"]
 
 [dependencies]
 nook-companion-core = { path = "../nook-companion-core" }
+nook-app-common = { path = "../nook-app-common" }
 nook-auth2 = { path = "../nook-auth2" }
 nook-event-log = { path = "../nook-event-log" }
 serde = { version = "1.0.228", features = ["derive"] }

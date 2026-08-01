@@ -20,6 +20,7 @@ ARG WASM_BUILD_MODE=dev
 
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/.config .config
+COPY nook-app/nook-app-common nook-app-common
 COPY nook-app/nook-auth2 nook-auth2
 COPY nook-app/nook-replication nook-replication
 COPY nook-app/nook-event-log nook-event-log
@@ -30,7 +31,7 @@ COPY nook-app/nook-wasm nook-wasm
 
 # Docker COPY preserves source mtimes while the inherited dependency target can be newer. Touch
 # the module that embeds locale JSON so locale-only changes cannot reuse stale WASM outputs.
-RUN touch nook-core/src/i18n.rs
+RUN touch nook-app-common/src/i18n.rs
 
 # Clippy, package export, and release-test compilation are siblings from the shared source snapshot.
 # wasm-pack build uses `cargo build --lib`, while wasm-pack test uses `cargo build --tests` and
@@ -62,7 +63,8 @@ RUN case "$WASM_BUILD_MODE" in \
            nook-wasm/Cargo.toml nook-wasm/src \
            nook-companion-wasm/Cargo.toml nook-companion-wasm/src \
            nook-companion-core/Cargo.toml nook-companion-core/src \
-           nook-core/Cargo.toml nook-core/src nook-core/locales \
+           nook-app-common/Cargo.toml nook-app-common/src nook-app-common/locales \
+           nook-core/Cargo.toml nook-core/src \
            nook-auth2/Cargo.toml nook-auth2/src \
            nook-replication/Cargo.toml nook-replication/src \
            nook-event-log/Cargo.toml nook-event-log/src \

@@ -1,5 +1,6 @@
 //! Input validation and prefixed vault identifier errors.
 
+use nook_app_common::i18n_keys;
 use thiserror::Error;
 
 pub type ValidationResult<T> = Result<T, ValidationError>;
@@ -36,10 +37,7 @@ const ERRORS_VALIDATION_SIGNING_SEED_INVALID: &str = "errors.validation.signing_
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
-    #[error(
-        "{}:{mode}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_UNKNOWN_STORAGE_MODE
-    )]
+    #[error("{}:{mode}", i18n_keys::ERRORS_VALIDATION_UNKNOWN_STORAGE_MODE)]
     UnknownStorageMode { mode: String },
 
     #[error("{}:{mode}", ERRORS_VALIDATION_UNKNOWN_DEVICE_MODE)]
@@ -50,28 +48,25 @@ pub enum ValidationError {
 
     #[error(
         "{}:{application}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_UNKNOWN_VAULT_APPLICATION
+        i18n_keys::ERRORS_VALIDATION_UNKNOWN_VAULT_APPLICATION
     )]
     UnknownVaultApplication { application: String },
 
     #[error(
         "{}:{application}:{vault_type}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_VAULT_APPLICATION_TYPE_MISMATCH
+        i18n_keys::ERRORS_VALIDATION_VAULT_APPLICATION_TYPE_MISMATCH
     )]
     VaultApplicationTypeMismatch {
         application: String,
         vault_type: String,
     },
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SENTINEL_EXTENSION_FORBIDDEN
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SENTINEL_EXTENSION_FORBIDDEN)]
     SentinelExtensionForbidden,
 
     #[error(
         "{}:{application}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN
+        i18n_keys::ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN
     )]
     ExtensionApprovalApplicationForbidden { application: String },
 
@@ -96,107 +91,62 @@ pub enum ValidationError {
 
     #[error(
         "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SENTINEL_VAULT_HAS_FULL_KEY_ENVELOPES
+        i18n_keys::ERRORS_VALIDATION_SENTINEL_VAULT_HAS_FULL_KEY_ENVELOPES
     )]
     SentinelVaultHasFullKeyEnvelopes,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_SHARES
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_SHARES)]
     SimpleVaultHasSentinelShares,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET)]
     InvalidSentinelShareSet,
 
-    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY)]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY)]
     GithubPatEmpty,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_LENGTH
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_LENGTH)]
     GithubRepoLength,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_INVALID)]
     GithubRepoInvalid,
 
-    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_CHARS)]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_CHARS)]
     GithubRepoChars,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH)]
     DriveFileNameLength,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID)]
     DriveFileNameInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS)]
     DriveFileNameChars,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY)]
     OauthAccessTokenEmpty,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_REQUIRED)]
     SharedJoinerIdentityRequired,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_INVALID)]
     SharedJoinerIdentityInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED)]
     SharedStorageTargetRequired,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_INVALID)]
     SharedStorageTargetInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED)]
     SecretDataRequired,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_ID_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_ID_REQUIRED)]
     SecretIdRequired,
 
     #[error("{}", ERRORS_VALIDATION_SECRET_ID_INVALID)]
     SecretIdInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_ID_RESERVED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_SECRET_ID_RESERVED)]
     SecretIdReserved,
 
     #[error("{}", ERRORS_VALIDATION_STORE_ID_INVALID)]
@@ -211,70 +161,40 @@ pub enum ValidationError {
     #[error("{}", ERRORS_VALIDATION_DEVICE_ID_INVALID)]
     DeviceIdInvalid,
 
-    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_BIP39_EMPTY)]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_BIP39_EMPTY)]
     Bip39Empty,
 
-    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_BIP39_INVALID)]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_BIP39_INVALID)]
     Bip39Invalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_ISSUER_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_ISSUER_REQUIRED)]
     AuthenticatorIssuerRequired,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID)]
     AuthenticatorSecretInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID)]
     AuthenticatorDigitsInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_PERIOD_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_PERIOD_INVALID)]
     AuthenticatorPeriodInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID)]
     AuthenticatorUriInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_BACKUP_CODES_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_BACKUP_CODES_INVALID)]
     AuthenticatorBackupCodesInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_TITLE_REQUIRED
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_TITLE_REQUIRED)]
     CreditCardTitleRequired,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_NUMBER_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_NUMBER_INVALID)]
     CreditCardNumberInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_EXPIRATION_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_EXPIRATION_INVALID)]
     CreditCardExpirationInvalid,
 
-    #[error(
-        "{}",
-        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID
-    )]
+    #[error("{}", i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID)]
     CreditCardCvvInvalid,
 
     #[error("{}", ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID)]

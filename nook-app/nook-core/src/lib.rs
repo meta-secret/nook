@@ -7,8 +7,6 @@
 mod auth;
 mod crypto;
 mod errors;
-mod generated;
-mod i18n;
 mod secrets;
 mod sync;
 mod vault;
@@ -105,20 +103,20 @@ pub use extension_identity_handoff::{
     choose_signing_seed_after_identity_handoff, open_extension_identity_handoff,
     seal_extension_identity_handoff,
 };
-pub use generated::i18n_keys;
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
-};
-pub use i18n::{
-    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
-    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
-    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
-    translate_with_replacements,
 };
 pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};
 pub use keeper_import::{KeeperImportError, KeeperImportPlan, plan_keeper_import};
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
+pub use nook_app_common::i18n_keys;
+pub use nook_app_common::{
+    AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
+    parse_app_locale, resolve_app_locale_from_tag, resolve_app_locale_from_tags,
+    resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
+    translate_with_replacements,
+};
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,

@@ -24,7 +24,12 @@ const projectRoot = resolve(import.meta.dir, '..')
 const webGroupRoot = resolve(projectRoot, '..')
 const webRoot = join(webGroupRoot, 'nook-web-app')
 const sharedRoot = join(webGroupRoot, 'nook-web-shared')
-const coreLocalesRoot = join(webGroupRoot, '..', 'nook-core', 'locales')
+const appCommonLocalesRoot = join(
+  webGroupRoot,
+  '..',
+  'nook-app-common',
+  'locales',
+)
 const distDir = join(projectRoot, 'dist')
 const requireFromWeb = createRequire(join(webRoot, 'package.json'))
 const simpleVaultBaseUrl = normalizeSimpleVaultBaseUrl(
@@ -296,7 +301,7 @@ async function buildChromeLocales() {
   await Promise.all(
     ['en', 'ru'].map(async (locale) => {
       const catalog = JSON.parse(
-        await readFile(join(coreLocalesRoot, `${locale}.json`), 'utf8'),
+        await readFile(join(appCommonLocalesRoot, `${locale}.json`), 'utf8'),
       ) as NookLocaleCatalog
       const messages = {
         widgetOpenVault: { message: catalog.extension.widget.open_vault },

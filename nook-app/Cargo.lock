@@ -1642,6 +1642,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-app-common"
+version = "1.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "nook-auth2"
 version = "1.0.0"
 dependencies = [
@@ -1654,6 +1661,7 @@ dependencies = [
  "getrandom 0.2.17",
  "hex",
  "hkdf",
+ "nook-app-common",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "serde",
@@ -1705,6 +1713,7 @@ dependencies = [
  "hex",
  "hkdf",
  "hmac 0.12.1",
+ "nook-app-common",
  "nook-auth2",
  "nook-companion-core",
  "nook-event-log",

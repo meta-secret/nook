@@ -16,7 +16,6 @@ pub mod errors;
 
 mod auth;
 mod crypto;
-mod generated;
 mod ids;
 mod records;
 mod wire;

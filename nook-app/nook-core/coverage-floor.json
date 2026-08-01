@@ -1,7 +1,7 @@
 {
   "lines_percent": 90.0,
   "package": "nook-core+nook-auth2+nook-replication+nook-event-log",
-  "tool": "cargo llvm-cov nextest --profile ci -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log",
+  "tool": "cargo llvm-cov nextest --profile ci -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log",
   "updated": "2026-06-30",
   "note": "Minimum combined line coverage for Nook's portable Rust crates (90%). CI fails below this threshold. When measured coverage is under 90%, agents should add Rust tests in the same task."
 }
