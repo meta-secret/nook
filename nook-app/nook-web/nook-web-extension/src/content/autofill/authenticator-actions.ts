@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
@@ -30,11 +31,17 @@ export async function fillAuthenticatorCode(
     },
   })
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
@@ -46,11 +53,17 @@ export async function fillAuthenticatorCode(
     typeof codeValue !== 'string' ||
     codeValue.length === 0
   ) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
@@ -60,17 +73,31 @@ export async function fillAuthenticatorCode(
   const filled = fillOneTimeCode(code.value, workflow.root, workflow.formScope)
   code.value = ''
   if (!filled) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
   }
-  setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
-  description.textContent = translatedMessage('widgetAuthenticatorFilled')
+  setFlightProgress(
+    step,
+    title,
+    2,
+    3,
+    BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+  )
+  description.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFilled,
+  )
   continueButton.hidden = true
   return true
 }
@@ -90,11 +117,11 @@ export async function continueWithAuthenticator(
   }
   widgetState.busy = true
   continueButton.disabled = true
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
-    translatedMessage('widgetAuthenticatorWorking'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorWorking),
     false,
   )
 
@@ -107,33 +134,51 @@ export async function continueWithAuthenticator(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
         true,
       )
       return
     }
     const { response } = delivery
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorUnlock'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorUnlock),
         true,
       )
       return
     }
 
     if (response.status === 'unavailable') {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetConnectVault'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
         true,
       )
       return
@@ -144,11 +189,17 @@ export async function continueWithAuthenticator(
       typeof response.expiresAt !== 'number' ||
       response.expiresAt <= Date.now()
     ) {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
         true,
       )
       return
@@ -171,7 +222,7 @@ export async function continueWithAuthenticator(
         setStatus(
           pending.description,
           pending.continueButton,
-          translatedMessage('widgetAuthenticatorFillFailed'),
+          translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
           true,
         )
         if (
@@ -192,11 +243,17 @@ export async function continueWithAuthenticator(
       continueButton,
       timeoutId,
     })
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorPickerOpened'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorPickerOpened),
       true,
     )
   } finally {

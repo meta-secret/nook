@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { FolderKey } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
@@ -32,7 +33,7 @@
   />
   <span class="min-w-0 space-y-0.5">
     <span class="block text-sm font-semibold text-foreground">
-      {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
+      {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
     </span>
     <span class="block truncate font-mono text-xs text-muted-foreground">
       {entry.storeId}

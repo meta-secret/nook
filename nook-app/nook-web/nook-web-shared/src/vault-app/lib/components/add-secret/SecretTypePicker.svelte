@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     Globe,
     Braces,
@@ -25,10 +26,10 @@
 <div class="space-y-5">
     <div class="space-y-1">
       <h3 class="text-base font-semibold text-foreground">
-        {vault.t('add_secret.what_saving')}
+        {vault.t(I18N_KEYS.AddSecretWhatSaving)}
       </h3>
       <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t('add_secret.choose_type_desc')}
+        {vault.t(I18N_KEYS.AddSecretChooseTypeDesc)}
       </p>
     </div>
     <div
@@ -48,10 +49,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.login')}</span
+            >{vault.t(I18N_KEYS.VaultTypesLogin)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.website_account_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretWebsiteAccountDesc)}</span
           >
         </span>
         <ChevronRight
@@ -71,10 +72,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.authenticator')}</span
+            >{vault.t(I18N_KEYS.VaultTypesAuthenticator)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.authenticator_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretAuthenticatorDesc)}</span
           >
         </span>
         <ChevronRight
@@ -94,10 +95,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.api_key')}</span
+            >{vault.t(I18N_KEYS.VaultTypesApiKey)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.token_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretTokenDesc)}</span
           >
         </span>
         <ChevronRight
@@ -117,10 +118,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.seed_phrase')}</span
+            >{vault.t(I18N_KEYS.VaultTypesSeedPhrase)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.bip39_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretBip39Desc)}</span
           >
         </span>
         <ChevronRight
@@ -140,10 +141,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.secure_note')}</span
+            >{vault.t(I18N_KEYS.VaultTypesSecureNote)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.private_text_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretPrivateTextDesc)}</span
           >
         </span>
         <ChevronRight
@@ -163,10 +164,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.credit_card')}</span
+            >{vault.t(I18N_KEYS.VaultTypesCreditCard)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.credit_card_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretCreditCardDesc)}</span
           >
         </span>
         <ChevronRight
@@ -186,10 +187,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.file_attachment')}</span
+            >{vault.t(I18N_KEYS.VaultTypesFileAttachment)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.file_attachment_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretFileAttachmentDesc)}</span
           >
         </span>
         <ChevronRight
@@ -209,10 +210,10 @@
         </div>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('vault.types.passkey')}</span
+            >{vault.t(I18N_KEYS.VaultTypesPasskey)}</span
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
-            >{vault.t('add_secret.passkey_desc')}</span
+            >{vault.t(I18N_KEYS.AddSecretPasskeyDesc)}</span
           >
         </span>
         <ChevronRight

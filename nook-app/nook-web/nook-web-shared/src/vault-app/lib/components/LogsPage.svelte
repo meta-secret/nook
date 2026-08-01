@@ -17,7 +17,7 @@
     logCount,
     setLogLevel,
     type LogEntry,
-  } from '$lib/log'
+  } from '$lib/runtime/log'
 
   let { onClose }: { onClose: () => void } = $props()
 

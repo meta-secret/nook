@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   setActiveVault,
   type NookSentinelGenesisFinalizeResult,
@@ -5,7 +6,7 @@ import {
   type StartSentinelGenesisArgs,
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
-import type { VaultArchitecture } from "$lib/vault-architecture";
+import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";
@@ -134,7 +135,7 @@ export async function createPublicKeyAnnouncement(
       state
         .requireManager()
         .createSentinelGenesisPublicKeyAnnouncement(
-          state.t("device_protection.passkey_label_placeholder"),
+          state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
         ),
     );
   } catch (error) {
@@ -188,7 +189,7 @@ export async function createParticipantResponse(
         .requireManager()
         .respondToSentinelGenesisRequest(
           requestPayload.trim(),
-          state.t("device_protection.passkey_label_placeholder"),
+          state.t(I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder),
         ),
     );
   } catch (error) {
@@ -236,7 +237,9 @@ export async function acceptShareDelivery(
       state.requireManager().acceptSentinelGenesisShareDelivery(payload.trim()),
     );
     await listSentinelStoredDeliveries(state);
-    state.showSuccess(state.t("login.sentinel_genesis_receive_share_success"));
+    state.showSuccess(
+      state.t(I18N_KEYS.LoginSentinelGenesisReceiveShareSuccess),
+    );
   } catch (error) {
     state.errorMsg =
       error instanceof Error

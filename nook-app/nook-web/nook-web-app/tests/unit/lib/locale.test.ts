@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookAppLocaleParse,
@@ -11,7 +12,7 @@ import initNookWasm, {
   supportedAppLocaleCode,
   translateFromCatalog,
 } from '$app-wasm'
-import { HELP_SECTIONS } from '$lib/help-content'
+import { HELP_SECTIONS } from '$lib/content/help'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -73,16 +74,16 @@ describe('locale', () => {
   test('catalogs include provider picker strings', () => {
     for (const locale of ['en', 'ru'] as const) {
       const catalog = getTranslationCatalog(locale)
-      expect(lookupTranslation(catalog, 'provider_picker.google_drive')).toBe(
-        'Google Drive',
-      )
       expect(
-        lookupTranslation(catalog, 'provider_picker.google_drive_desc'),
+        lookupTranslation(catalog, I18N_KEYS.ProviderPickerGoogleDrive),
+      ).toBe('Google Drive')
+      expect(
+        lookupTranslation(catalog, I18N_KEYS.ProviderPickerGoogleDriveDesc),
       ).toBeTypeOf('string')
       expect(
         lookupTranslation(
           catalog,
-          'provider_picker.unsupported_replication_desc',
+          I18N_KEYS.ProviderPickerUnsupportedReplicationDesc,
         ),
       ).toBeTypeOf('string')
     }
@@ -90,39 +91,39 @@ describe('locale', () => {
 
   test('catalogs include vault feedback and accessibility strings', () => {
     const keys = [
-      'common.dismiss_success',
-      'common.dismiss_error',
-      'errors.validation.oauth_access_token_empty',
-      'errors.google_sign_in_required',
-      'errors.engine_loading',
-      'errors.engine_unavailable',
-      'errors.manager_uninitialized',
-      'errors.local_backup_folder_required',
-      'errors.connection_in_progress',
-      'errors.vault_password_required',
-      'errors.cloud_sync_provider_required',
-      'errors.github_credentials_required',
-      'errors.vault_selection_failed',
-      'errors.vault_creation_failed',
-      'errors.vault_rename_failed',
-      'errors.conflict_resolution_failed',
-      'errors.whole_vault_conflict_resolution_retired',
-      'toasts.google_drive_connected',
-      'toasts.secret_conflict_resolved',
-      'app.secret_sync_conflicts',
-      'app.security_conflict',
-      'app.conflict_original',
-      'app.conflict_keep',
-      'help.diagram.label',
-      'legal.manager_description',
-      'legal.documents_label',
-      'legal.source',
-      'vault.copy_website_url',
-      'vault.copy_username',
-      'vault.copy_secret',
-      'vault.copy_expiration_date',
-      'vault.copy_account_name',
-      'vault.copy_note',
+      I18N_KEYS.CommonDismissSuccess,
+      I18N_KEYS.CommonDismissError,
+      I18N_KEYS.ErrorsValidationOauthAccessTokenEmpty,
+      I18N_KEYS.ErrorsGoogleSignInRequired,
+      I18N_KEYS.ErrorsEngineLoading,
+      I18N_KEYS.ErrorsEngineUnavailable,
+      I18N_KEYS.ErrorsManagerUninitialized,
+      I18N_KEYS.ErrorsLocalBackupFolderRequired,
+      I18N_KEYS.ErrorsConnectionInProgress,
+      I18N_KEYS.ErrorsVaultPasswordRequired,
+      I18N_KEYS.ErrorsCloudSyncProviderRequired,
+      I18N_KEYS.ErrorsGithubCredentialsRequired,
+      I18N_KEYS.ErrorsVaultSelectionFailed,
+      I18N_KEYS.ErrorsVaultCreationFailed,
+      I18N_KEYS.ErrorsVaultRenameFailed,
+      I18N_KEYS.ErrorsConflictResolutionFailed,
+      I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired,
+      I18N_KEYS.ToastsGoogleDriveConnected,
+      I18N_KEYS.ToastsSecretConflictResolved,
+      I18N_KEYS.AppSecretSyncConflicts,
+      I18N_KEYS.AppSecurityConflict,
+      I18N_KEYS.AppConflictOriginal,
+      I18N_KEYS.AppConflictKeep,
+      I18N_KEYS.HelpDiagramLabel,
+      I18N_KEYS.LegalManagerDescription,
+      I18N_KEYS.LegalDocumentsLabel,
+      I18N_KEYS.LegalSource,
+      I18N_KEYS.VaultCopyWebsiteUrl,
+      I18N_KEYS.VaultCopyUsername,
+      I18N_KEYS.VaultCopySecret,
+      I18N_KEYS.VaultCopyExpirationDate,
+      I18N_KEYS.VaultCopyAccountName,
+      I18N_KEYS.VaultCopyNote,
     ]
 
     for (const locale of ['en', 'ru'] as const) {
@@ -137,53 +138,53 @@ describe('locale', () => {
 
   test('catalogs include architecture mode strings', () => {
     const modeKeys = [
-      'device_protection.mode_group_label',
-      'device_protection.mode_standard_title',
-      'device_protection.mode_standard_description',
-      'device_protection.mode_anti_hacker_title',
-      'device_protection.mode_anti_hacker_description',
-      'architecture_modes.vault_type_title',
-      'architecture_modes.vault_type_simple_title',
-      'architecture_modes.vault_type_simple_description',
-      'architecture_modes.vault_type_sentinel_title',
-      'architecture_modes.vault_type_sentinel_description',
-      'architecture_modes.replication_type_title',
-      'architecture_modes.replication_type_personal_title',
-      'architecture_modes.replication_type_personal_description',
-      'architecture_modes.replication_type_shared_title',
-      'architecture_modes.replication_type_shared_description',
-      'architecture_modes.onboarding_type_title',
-      'architecture_modes.onboarding_type_personal-credential-transfer_title',
-      'architecture_modes.onboarding_type_personal-credential-transfer_description',
-      'architecture_modes.onboarding_type_shared-provider-grant_title',
-      'architecture_modes.onboarding_type_shared-provider-grant_description',
-      'architecture_modes.provider_capability_title',
-      'architecture_modes.provider_capability_description',
-      'architecture_modes.shared_grant_manual_instructions',
-      'architecture_modes.shared_grant_success',
-      'architecture_modes.shared_grant_unsupported',
-      'architecture_modes.sentinel_gate_title',
-      'architecture_modes.sentinel_gate_description',
-      'architecture_modes.sentinel_secret_creation_blocked',
-      'architecture_modes.sentinel_ceremony_title',
-      'architecture_modes.sentinel_ceremony_instructions',
-      'architecture_modes.sentinel_ceremony_awaiting_shares',
-      'architecture_modes.sentinel_ceremony_open_local',
-      'architecture_modes.sentinel_ceremony_copy_share',
-      'architecture_modes.sentinel_ceremony_paste_peer',
-      'architecture_modes.sentinel_ceremony_unlock',
-      'architecture_modes.sentinel_password_forbidden',
-      'errors.validation.shared_joiner_identity_required',
-      'errors.validation.shared_joiner_identity_invalid',
-      'errors.validation.shared_storage_target_required',
-      'onboard_device.shared_identity_label',
-      'onboard_device.shared_identity_placeholder',
-      'onboard_device.shared_identity_hint',
-      'onboard_device.shared_identity_required',
-      'onboard_device.no_compatible_sync_providers',
-      'provider_picker.unsupported_current_vault',
-      'provider_picker.capability_personal_only',
-      'provider_picker.capability_personal_shared',
+      I18N_KEYS.DeviceProtectionModeGroupLabel,
+      I18N_KEYS.DeviceProtectionModeStandardTitle,
+      I18N_KEYS.DeviceProtectionModeStandardDescription,
+      I18N_KEYS.DeviceProtectionModeAntiHackerTitle,
+      I18N_KEYS.DeviceProtectionModeAntiHackerDescription,
+      I18N_KEYS.ArchitectureModesVaultTypeTitle,
+      I18N_KEYS.ArchitectureModesVaultTypeSimpleTitle,
+      I18N_KEYS.ArchitectureModesVaultTypeSimpleDescription,
+      I18N_KEYS.ArchitectureModesVaultTypeSentinelTitle,
+      I18N_KEYS.ArchitectureModesVaultTypeSentinelDescription,
+      I18N_KEYS.ArchitectureModesReplicationTypeTitle,
+      I18N_KEYS.ArchitectureModesReplicationTypePersonalTitle,
+      I18N_KEYS.ArchitectureModesReplicationTypePersonalDescription,
+      I18N_KEYS.ArchitectureModesReplicationTypeSharedTitle,
+      I18N_KEYS.ArchitectureModesReplicationTypeSharedDescription,
+      I18N_KEYS.ArchitectureModesOnboardingTypeTitle,
+      I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferTitle,
+      I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
+      I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantTitle,
+      I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription,
+      I18N_KEYS.ArchitectureModesProviderCapabilityTitle,
+      I18N_KEYS.ArchitectureModesProviderCapabilityDescription,
+      I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
+      I18N_KEYS.ArchitectureModesSharedGrantSuccess,
+      I18N_KEYS.ArchitectureModesSharedGrantUnsupported,
+      I18N_KEYS.ArchitectureModesSentinelGateTitle,
+      I18N_KEYS.ArchitectureModesSentinelGateDescription,
+      I18N_KEYS.ArchitectureModesSentinelSecretCreationBlocked,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyTitle,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyInstructions,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyAwaitingShares,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyOpenLocal,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyCopyShare,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyPastePeer,
+      I18N_KEYS.ArchitectureModesSentinelCeremonyUnlock,
+      I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
+      I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired,
+      I18N_KEYS.ErrorsValidationSharedJoinerIdentityInvalid,
+      I18N_KEYS.ErrorsValidationSharedStorageTargetRequired,
+      I18N_KEYS.OnboardDeviceSharedIdentityLabel,
+      I18N_KEYS.OnboardDeviceSharedIdentityPlaceholder,
+      I18N_KEYS.OnboardDeviceSharedIdentityHint,
+      I18N_KEYS.OnboardDeviceSharedIdentityRequired,
+      I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders,
+      I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
+      I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
+      I18N_KEYS.ProviderPickerCapabilityPersonalShared,
     ]
 
     for (const locale of ['en', 'ru'] as const) {
@@ -198,20 +199,20 @@ describe('locale', () => {
 
   test('catalogs include complete help page strings', () => {
     const commonHelpKeys = [
-      'help.title',
-      'help.subtitle',
-      'help.in_this_guide',
-      'help.jump_to_section',
-      'help.diagram.device',
-      'help.diagram.local_projection',
-      'help.diagram.event_store',
-      'help.diagram.device_keys',
-      'help.diagram.sync',
-      'help.diagram.nook_log',
-      'help.diagram.provider_events',
-      'help.diagram.set_union',
-      'legal.privacy_policy',
-      'legal.terms_of_service',
+      I18N_KEYS.HelpTitle,
+      I18N_KEYS.HelpSubtitle,
+      I18N_KEYS.HelpInThisGuide,
+      I18N_KEYS.HelpJumpToSection,
+      I18N_KEYS.HelpDiagramDevice,
+      I18N_KEYS.HelpDiagramLocalProjection,
+      I18N_KEYS.HelpDiagramEventStore,
+      I18N_KEYS.HelpDiagramDeviceKeys,
+      I18N_KEYS.HelpDiagramSync,
+      I18N_KEYS.HelpDiagramNookLog,
+      I18N_KEYS.HelpDiagramProviderEvents,
+      I18N_KEYS.HelpDiagramSetUnion,
+      I18N_KEYS.LegalPrivacyPolicy,
+      I18N_KEYS.LegalTermsOfService,
     ]
 
     for (const locale of ['en', 'ru'] as const) {
@@ -222,19 +223,18 @@ describe('locale', () => {
         )
       }
       for (const section of HELP_SECTIONS) {
-        const prefix = `help.sections.${section.id}`
         expect(
-          lookupTranslation(catalog, `${prefix}.title`),
-          `${locale}:${prefix}.title`,
+          lookupTranslation(catalog, section.titleKey),
+          `${locale}:${section.titleKey}`,
         ).toBeTypeOf('string')
         expect(
-          lookupTranslation(catalog, `${prefix}.summary`),
-          `${locale}:${prefix}.summary`,
+          lookupTranslation(catalog, section.summaryKey),
+          `${locale}:${section.summaryKey}`,
         ).toBeTypeOf('string')
-        for (let index = 1; index <= section.bulletCount; index += 1) {
+        for (const bulletKey of section.bulletKeys) {
           expect(
-            lookupTranslation(catalog, `${prefix}.bullet${index}`),
-            `${locale}:${prefix}.bullet${index}`,
+            lookupTranslation(catalog, bulletKey),
+            `${locale}:${bulletKey}`,
           ).toBeTypeOf('string')
         }
       }
@@ -252,10 +252,10 @@ describe('locale', () => {
       staleWasm,
       getTranslationCatalog('ru'),
     )
-    expect(lookupTranslation(merged, 'provider_picker.google_drive')).toBe(
+    expect(lookupTranslation(merged, I18N_KEYS.ProviderPickerGoogleDrive)).toBe(
       'Google Drive',
     )
-    expect(lookupTranslation(merged, 'provider_picker.this_device')).toBe(
+    expect(lookupTranslation(merged, I18N_KEYS.ProviderPickerThisDevice)).toBe(
       'Это устройство',
     )
   })
@@ -267,10 +267,10 @@ describe('locale', () => {
       },
     })
     expect(
-      translateFromCatalog(staleRu, 'ru', 'provider_picker.google_drive'),
+      translateFromCatalog(staleRu, 'ru', I18N_KEYS.ProviderPickerGoogleDrive),
     ).toBe('Google Drive')
     expect(
-      translateFromCatalog(staleRu, 'en', 'provider_picker.google_drive'),
-    ).toBe('provider_picker.google_drive')
+      translateFromCatalog(staleRu, 'en', I18N_KEYS.ProviderPickerGoogleDrive),
+    ).toBe(I18N_KEYS.ProviderPickerGoogleDrive)
   })
 })

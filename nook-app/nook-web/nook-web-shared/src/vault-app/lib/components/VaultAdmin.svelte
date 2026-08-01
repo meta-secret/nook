@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     Check,
     CheckCircle2,
@@ -35,13 +36,13 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     ActiveVaultKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
   import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
-  import type { ManualProviderSync } from '$lib/vault/state/sync.svelte'
+  import type { NookManualProviderSync } from '$app-wasm'
   import {
     ImportProviderSectionKind,
     VaultLabelEditorKind,
@@ -97,7 +98,7 @@
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
-    manualProviderSync: ManualProviderSync
+    manualProviderSync: NookManualProviderSync
     isAuthenticated: boolean
     isSaving: boolean
     addProviderOpen?: boolean
@@ -200,7 +201,7 @@
     const next: Record<string, string> = {}
     for (const entry of vaults) {
       next[entry.storeId] = entry.displayLabel(
-        vault.t('login.vault_picker_unnamed'),
+        vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
       )
     }
     drafts = next
@@ -219,7 +220,7 @@
   function draftFor(entry: NookLocalVaultEntry) {
     return (
       drafts[entry.storeId] ??
-      entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+      entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
     )
   }
 
@@ -232,13 +233,13 @@
     return (
       !isBusy &&
       draft.length > 0 &&
-      draft !== entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+      draft !== entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
     )
   }
 
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
-    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
+    setDraft(entry, entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)))
     editingStoreId = {
       kind: VaultLabelEditorKind.Editing,
       storeId: entry.storeId,
@@ -246,7 +247,7 @@
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
+    setDraft(entry, entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)))
     if (
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
       editingStoreId.storeId === entry.storeId
@@ -301,8 +302,8 @@
 
 <div class="space-y-2" data-testid="vault-admin-panel">
   <SettingsAccordionSection
-    title={vault.t('vault.admin_vaults_title')}
-    subtitle={vault.t('vault.admin_vaults_desc')}
+    title={vault.t(I18N_KEYS.VaultAdminVaultsTitle)}
+    subtitle={vault.t(I18N_KEYS.VaultAdminVaultsDesc)}
     open={activeSection === AdminAccordionSection.Vaults}
     onToggle={() => toggleAdminSection(AdminAccordionSection.Vaults)}
     testId="vault-admin-vaults-section"
@@ -313,7 +314,7 @@
         data-testid="vault-admin-vault-count"
       >
         <CheckCircle2 class="size-3" />
-        {vault.t('vault.admin_vault_count', { count: String(vaults.length) })}
+        {vault.t(I18N_KEYS.VaultAdminVaultCount, { count: String(vaults.length) })}
       </span>
     {/snippet}
 
@@ -326,12 +327,12 @@
             for="vault-admin-create-input"
             class="text-xs font-medium text-muted-foreground"
           >
-            {vault.t('vault.admin_new_vault_label')}
+            {vault.t(I18N_KEYS.VaultAdminNewVaultLabel)}
           </label>
           <input
             id="vault-admin-create-input"
             class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-            placeholder={vault.t('login.vault_name_placeholder')}
+            placeholder={vault.t(I18N_KEYS.LoginVaultNamePlaceholder)}
             data-testid="vault-admin-create-input"
             value={newVaultName}
             disabled={isBusy}
@@ -358,7 +359,7 @@
           {:else}
             <Plus class="size-4" />
           {/if}
-          {vault.t('vault.switcher_create_new')}
+          {vault.t(I18N_KEYS.VaultSwitcherCreateNew)}
         </Button>
       </div>
 
@@ -390,7 +391,7 @@
               {#if isEditing}
                 <input
                   class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                  aria-label={vault.t('vault.manager_name_label')}
+                  aria-label={vault.t(I18N_KEYS.VaultManagerNameLabel)}
                   data-testid="vault-admin-name-input"
                   data-store-id={entry.storeId}
                   value={draftFor(entry)}
@@ -417,7 +418,7 @@
                   data-store-id={entry.storeId}
                 >
                   <span class="truncate text-sm font-medium text-foreground">
-                    {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
+                    {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
                   </span>
                 </div>
               {/if}
@@ -445,7 +446,7 @@
                   onclick={() => cancelRename(entry)}
                 >
                   <X class="size-4" />
-                  {vault.t('common.cancel')}
+                  {vault.t(I18N_KEYS.CommonCancel)}
                 </Button>
               {:else if !isActive}
                 <Button
@@ -461,7 +462,7 @@
                   {#if switchingTo.kind === VaultSwitchOperationKind.Switching && switchingTo.storeId === entry.storeId}
                     <RefreshCw class="size-4 animate-spin" />
                   {/if}
-                  {vault.t('common.switch')}
+                  {vault.t(I18N_KEYS.CommonSwitch)}
                 </Button>
               {:else}
                 <span
@@ -469,7 +470,7 @@
                   data-testid="vault-admin-active-badge"
                 >
                   <Check class="size-4" />
-                  {vault.t('vault.switcher_open_badge')}
+                  {vault.t(I18N_KEYS.VaultSwitcherOpenBadge)}
                 </span>
               {/if}
               <Button
@@ -488,7 +489,7 @@
                 {:else if !isEditing}
                   <PencilLine class="size-4" />
                 {/if}
-                {vault.t('common.rename')}
+                {vault.t(I18N_KEYS.CommonRename)}
               </Button>
             </div>
           </li>
@@ -498,8 +499,8 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t('settings.storage')}
-    subtitle={vault.t('settings.storage_desc')}
+    title={vault.t(I18N_KEYS.SettingsStorage)}
+    subtitle={vault.t(I18N_KEYS.SettingsStorageDesc)}
     open={activeSection === AdminAccordionSection.Storage}
     onToggle={() => toggleAdminSection(AdminAccordionSection.Storage)}
     testId="storage-providers-section"
@@ -511,7 +512,7 @@
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
-          {vault.t('settings.vault_unlocked')}
+          {vault.t(I18N_KEYS.SettingsVaultUnlocked)}
         </span>
       {/if}
     {/snippet}
@@ -537,8 +538,8 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t('settings.passwords')}
-    subtitle={vault.t('settings.passwords_desc')}
+    title={vault.t(I18N_KEYS.SettingsPasswords)}
+    subtitle={vault.t(I18N_KEYS.SettingsPasswordsDesc)}
     open={activeSection === AdminAccordionSection.Passwords}
     onToggle={() => toggleAdminSection(AdminAccordionSection.Passwords)}
     testId="vault-unlock-section"
@@ -553,13 +554,13 @@
         {#if hasPasswords}
           <ShieldCheck class="size-3" />
           {passwordEntries.length === 1
-            ? vault.t('settings.password_count_singular')
-            : vault.t('settings.password_count_plural', {
+            ? vault.t(I18N_KEYS.SettingsPasswordCountSingular)
+            : vault.t(I18N_KEYS.SettingsPasswordCountPlural, {
                 count: String(passwordEntries.length),
               })}
         {:else}
           <Lock class="size-3" />
-          {vault.t('settings.no_passwords')}
+          {vault.t(I18N_KEYS.SettingsNoPasswords)}
         {/if}
       </span>
     {/snippet}
@@ -580,16 +581,16 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t('settings.import_export')}
-    subtitle={vault.t('settings.import_export_desc')}
+    title={vault.t(I18N_KEYS.SettingsImportExport)}
+    subtitle={vault.t(I18N_KEYS.SettingsImportExportDesc)}
     open={activeSection === AdminAccordionSection.ImportExport}
     onToggle={() => toggleAdminSection(AdminAccordionSection.ImportExport)}
     testId="vault-import-export-section"
   >
     <div class="space-y-2">
       <SettingsAccordionSection
-        title={vault.t('apple_passwords_import.source')}
-        subtitle={vault.t('apple_passwords_import.description')}
+        title={vault.t(I18N_KEYS.ApplePasswordsImportSource)}
+        subtitle={vault.t(I18N_KEYS.ApplePasswordsImportDescription)}
         open={importProviderOpen('apple-passwords')}
         onToggle={() => toggleImportProvider('apple-passwords')}
         testId="apple-passwords-import-section"
@@ -603,8 +604,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('chrome_passwords_import.source')}
-        subtitle={vault.t('chrome_passwords_import.description')}
+        title={vault.t(I18N_KEYS.ChromePasswordsImportSource)}
+        subtitle={vault.t(I18N_KEYS.ChromePasswordsImportDescription)}
         open={importProviderOpen('chrome-passwords')}
         onToggle={() => toggleImportProvider('chrome-passwords')}
         testId="chrome-passwords-import-section"
@@ -618,8 +619,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('dashlane_import.source')}
-        subtitle={vault.t('dashlane_import.description')}
+        title={vault.t(I18N_KEYS.DashlaneImportSource)}
+        subtitle={vault.t(I18N_KEYS.DashlaneImportDescription)}
         open={importProviderOpen('dashlane')}
         onToggle={() => toggleImportProvider('dashlane')}
         testId="dashlane-import-section"
@@ -633,8 +634,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('google_authenticator_import.source')}
-        subtitle={vault.t('google_authenticator_import.description')}
+        title={vault.t(I18N_KEYS.GoogleAuthenticatorImportSource)}
+        subtitle={vault.t(I18N_KEYS.GoogleAuthenticatorImportDescription)}
         open={importProviderOpen('google-authenticator')}
         onToggle={() => toggleImportProvider('google-authenticator')}
         testId="google-authenticator-import-section"
@@ -648,8 +649,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('bitwarden_import.source')}
-        subtitle={vault.t('bitwarden_import.description')}
+        title={vault.t(I18N_KEYS.BitwardenImportSource)}
+        subtitle={vault.t(I18N_KEYS.BitwardenImportDescription)}
         open={importProviderOpen('bitwarden')}
         onToggle={() => toggleImportProvider('bitwarden')}
         testId="bitwarden-import-section"
@@ -663,8 +664,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('keepassxc_import.source')}
-        subtitle={vault.t('keepassxc_import.description')}
+        title={vault.t(I18N_KEYS.KeepassxcImportSource)}
+        subtitle={vault.t(I18N_KEYS.KeepassxcImportDescription)}
         open={importProviderOpen('keepassxc')}
         onToggle={() => toggleImportProvider('keepassxc')}
         testId="keepassxc-import-section"
@@ -678,8 +679,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('lastpass_import.source')}
-        subtitle={vault.t('lastpass_import.description')}
+        title={vault.t(I18N_KEYS.LastpassImportSource)}
+        subtitle={vault.t(I18N_KEYS.LastpassImportDescription)}
         open={importProviderOpen('lastpass')}
         onToggle={() => toggleImportProvider('lastpass')}
         testId="lastpass-import-section"
@@ -693,8 +694,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('keeper_import.source')}
-        subtitle={vault.t('keeper_import.description')}
+        title={vault.t(I18N_KEYS.KeeperImportSource)}
+        subtitle={vault.t(I18N_KEYS.KeeperImportDescription)}
         open={importProviderOpen('keeper')}
         onToggle={() => toggleImportProvider('keeper')}
         testId="keeper-import-section"
@@ -708,8 +709,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('onepassword_import.source')}
-        subtitle={vault.t('onepassword_import.description')}
+        title={vault.t(I18N_KEYS.OnepasswordImportSource)}
+        subtitle={vault.t(I18N_KEYS.OnepasswordImportDescription)}
         open={importProviderOpen('onepassword')}
         onToggle={() => toggleImportProvider('onepassword')}
         testId="onepassword-import-section"
@@ -723,8 +724,8 @@
       </SettingsAccordionSection>
 
       <SettingsAccordionSection
-        title={vault.t('proton_pass_import.source')}
-        subtitle={vault.t('proton_pass_import.description')}
+        title={vault.t(I18N_KEYS.ProtonPassImportSource)}
+        subtitle={vault.t(I18N_KEYS.ProtonPassImportDescription)}
         open={importProviderOpen('proton-pass')}
         onToggle={() => toggleImportProvider('proton-pass')}
         testId="proton-pass-import-section"

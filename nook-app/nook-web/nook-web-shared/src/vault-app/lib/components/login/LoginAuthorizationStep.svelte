@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { KeyRound, RefreshCw, ShieldCheck, UserRound } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { NookPasswordEntrySummary } from '$app-wasm'
@@ -138,11 +139,11 @@
 
 <form class="space-y-3" onsubmit={handleSubmit}>
   <fieldset class="space-y-3" data-testid="login-unlock-method-fieldset">
-    <legend class="sr-only">{vault.t('login.unlock_vault')}</legend>
+    <legend class="sr-only">{vault.t(I18N_KEYS.LoginUnlockVault)}</legend>
     <div
       class="grid gap-2 overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
       role="radiogroup"
-      aria-label={vault.t('login.unlock_vault')}
+      aria-label={vault.t(I18N_KEYS.LoginUnlockVault)}
     >
       <button
         type="button"
@@ -160,7 +161,7 @@
         }}
       >
         <ShieldCheck class="size-4 shrink-0" />
-        {vault.t('login.unlock_keys')}
+        {vault.t(I18N_KEYS.LoginUnlockKeys)}
       </button>
       {#if showPasswordUnlockOption}
         <button
@@ -178,7 +179,7 @@
           }}
         >
           <KeyRound class="size-4 shrink-0" />
-          {vault.t('login.unlock_backup')}
+          {vault.t(I18N_KEYS.LoginUnlockBackup)}
         </button>
       {/if}
     </div>
@@ -190,7 +191,7 @@
       >
         {deviceKeysUnlock.kind === DeviceKeysUnlockCapabilityKind.Unavailable
           ? deviceKeysUnlock.reason
-          : vault.t('login.unlock_device_keys_unavailable')}
+          : vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable)}
       </p>
     {/if}
 
@@ -225,7 +226,7 @@
         <input
           type="password"
           class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder={vault.t('login.password_selected_placeholder')}
+          placeholder={vault.t(I18N_KEYS.LoginPasswordSelectedPlaceholder)}
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="login-password-input"
@@ -244,10 +245,10 @@
   >
     {#if isUnlocking}
       <RefreshCw class="size-4 animate-spin" />
-      {vault.t('login.unlocking')}
+      {vault.t(I18N_KEYS.LoginUnlocking)}
     {:else}
       <ShieldCheck class="size-4" />
-      {vault.t('login.unlock_vault_btn')}
+      {vault.t(I18N_KEYS.LoginUnlockVaultBtn)}
     {/if}
   </Button>
 </form>

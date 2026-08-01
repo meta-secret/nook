@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PASSWORD_IMPORT_MESSAGE_KEYS } from '../../../generated/i18n-keys'
   import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
   import type { ImportPanelProps } from '$lib/components/import-panel'
   import {
@@ -12,7 +13,7 @@
 <PasswordManagerImportPanel
   {...props}
   format={PasswordImportFormat.Text}
-  translationPrefix="chrome_passwords_import"
+  messages={PASSWORD_IMPORT_MESSAGE_KEYS.ChromePasswords}
   panelTestId="chrome-passwords-import-panel"
   fileTestId="chrome-passwords-csv-file"
   submitTestId="chrome-passwords-import-submit"

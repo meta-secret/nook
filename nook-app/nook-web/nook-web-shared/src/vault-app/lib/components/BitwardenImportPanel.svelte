@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, FileJson, Upload } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { NookImportResult } from '$lib/nook'
@@ -74,17 +75,17 @@
       onclick={onClose}
     >
       <ArrowLeft class="size-4" />
-      {vault.t('common.back')}
+      {vault.t(I18N_KEYS.CommonBack)}
     </button>
   {/if}
 
   {#if !embedded}
     <div>
       <h2 class="text-lg font-semibold text-foreground">
-        {vault.t('bitwarden_import.title')}
+        {vault.t(I18N_KEYS.BitwardenImportTitle)}
       </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        {vault.t('bitwarden_import.description')}
+        {vault.t(I18N_KEYS.BitwardenImportDescription)}
       </p>
     </div>
   {/if}
@@ -95,16 +96,16 @@
         <FileJson class="mt-0.5 size-5 shrink-0 text-primary" />
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">
-            {vault.t('bitwarden_import.export_hint_title')}
+            {vault.t(I18N_KEYS.BitwardenImportExportHintTitle)}
           </p>
           <p class="text-muted-foreground">
-            {vault.t('bitwarden_import.export_hint')}
+            {vault.t(I18N_KEYS.BitwardenImportExportHint)}
           </p>
         </div>
       </div>
 
       <label class="block space-y-2 text-sm font-medium text-foreground">
-        <span>{vault.t('bitwarden_import.file_label')}</span>
+        <span>{vault.t(I18N_KEYS.BitwardenImportFileLabel)}</span>
         <input
           type="file"
           accept="application/json,.json"
@@ -116,23 +117,23 @@
       </label>
 
       <label class="block space-y-2 text-sm font-medium text-foreground">
-        <span>{vault.t('bitwarden_import.password_label')}</span>
+        <span>{vault.t(I18N_KEYS.BitwardenImportPasswordLabel)}</span>
         <input
           type="password"
           autocomplete="off"
           data-testid="bitwarden-export-password"
           disabled={busy}
           bind:value={password}
-          placeholder={vault.t('bitwarden_import.password_placeholder')}
+          placeholder={vault.t(I18N_KEYS.BitwardenImportPasswordPlaceholder)}
           class="block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
         />
         <span class="block text-xs font-normal text-muted-foreground">
-          {vault.t('bitwarden_import.password_hint')}
+          {vault.t(I18N_KEYS.BitwardenImportPasswordHint)}
         </span>
       </label>
 
       <p class="text-xs text-muted-foreground">
-        {vault.t('bitwarden_import.supported_types')}
+        {vault.t(I18N_KEYS.BitwardenImportSupportedTypes)}
       </p>
 
       <Button
@@ -143,8 +144,8 @@
       >
         <Upload class="size-4" />
         {busy
-          ? vault.t('bitwarden_import.importing')
-          : vault.t('bitwarden_import.import')}
+          ? vault.t(I18N_KEYS.BitwardenImportImporting)
+          : vault.t(I18N_KEYS.BitwardenImportImport)}
       </Button>
 
       {#if isImporting}
@@ -166,12 +167,12 @@
           data-testid="bitwarden-import-result"
         >
           <p class="font-medium">
-            {vault.t('bitwarden_import.result_imported', {
+            {vault.t(I18N_KEYS.BitwardenImportResultImported, {
               count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {vault.t('bitwarden_import.result_skipped', {
+            {vault.t(I18N_KEYS.BitwardenImportResultSkipped, {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
             })}

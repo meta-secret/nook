@@ -31,9 +31,9 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 | Layer | File | Responsibility |
 |-------|------|----------------|
 | Logger core | [`nook-app/nook-wasm/src/logger.rs`](../../nook-app/nook-wasm/src/logger.rs) | `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear |
-| Web shim / console authority | [`nook-web-shared/.../log.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/log.ts) | `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog` |
+| Web shim / console authority | [`runtime/log.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/runtime/log.ts) | `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog` |
 | Viewer | [`LogsPage.svelte`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/LogsPage.svelte) | `/logs` page: filter, pagination, copy, clear |
-| JSON export | [`app-logs-api.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/app-logs-api.ts), [`AppLogsApiPage.svelte`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte) | `/app-logs` — machine-readable JSON export for agents and log pipelines |
+| JSON export | [`app/logs-api.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/app/logs-api.ts), [`AppLogsApiPage.svelte`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte) | `/app-logs` — machine-readable JSON export for agents and log pipelines |
 | e2e | [`nook-web-app/e2e/fixtures.ts`](../../nook-app/nook-web/nook-web-app/e2e/fixtures.ts), [`helpers.ts`](../../nook-app/nook-web/nook-web-app/e2e/helpers.ts) | Attach canonical `nook-app-logs.json` to every test result, print on failure; `fetchAppLogs()` via `/app-logs` |
 
 - **Built on `tracing`:** `nook-core` and `nook-wasm` emit structured events via

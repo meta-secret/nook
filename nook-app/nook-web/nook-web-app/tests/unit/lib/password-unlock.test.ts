@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test } from 'vitest'
 import {
   configuredOAuthFile,
@@ -9,7 +10,7 @@ import {
   storedGoogleDriveFolder,
   storedOAuthCredential,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
   SharedGrantProviderKind,
@@ -96,7 +97,7 @@ describe('shared enrollment provider selection', () => {
         {
           kind: 'manual-grant-required',
           instructionsKey:
-            'architecture_modes.shared_grant_manual_instructions',
+            I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
           joinerIdentity: 'joiner@example.com',
           target: {
             state: 'identified',
@@ -111,7 +112,7 @@ describe('shared enrollment provider selection', () => {
         {
           kind: 'manual-grant-required',
           instructionsKey:
-            'architecture_modes.shared_grant_manual_instructions',
+            I18N_KEYS.ArchitectureModesSharedGrantManualInstructions,
           joinerIdentity: 'joiner@example.com',
           target: {
             state: 'identified',

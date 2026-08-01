@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { KeyRound, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
@@ -66,10 +67,10 @@
       class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
     >
       <QrCode class="size-5 shrink-0 text-primary" />
-      {vault.t("login.finish_device_onboarding")}
+      {vault.t(I18N_KEYS.LoginFinishDeviceOnboarding)}
     </CardTitle>
     <CardDescription class="text-pretty">
-      {vault.t("login.onboarding_card_desc")}
+      {vault.t(I18N_KEYS.LoginOnboardingCardDesc)}
     </CardDescription>
   </CardHeader>
 
@@ -87,7 +88,7 @@
           class="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
           data-testid="enrollment-password-entry-hint"
         >
-          {vault.t("onboard_device.vault_password")}
+          {vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
           {#if passwordEntryLabel}
             <span class="font-medium text-foreground">{passwordEntryLabel}</span
             >
@@ -103,20 +104,20 @@
           class="text-sm font-medium text-muted-foreground inline-flex items-center gap-1.5"
         >
           <KeyRound class="size-3.5" />
-          {vault.t("onboard_device.vault_password")}
+          {vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
         </label>
         <input
           id="enrollment-scan-password"
           use:capturePasswordField
           type="password"
           class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder={vault.t("login.password_entry_placeholder")}
+          placeholder={vault.t(I18N_KEYS.LoginPasswordEntryPlaceholder)}
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="enrollment-password-input"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t("login.password_help_text")}
+          {vault.t(I18N_KEYS.LoginPasswordHelpText)}
         </p>
       </div>
 
@@ -131,10 +132,10 @@
         >
           {#if isVerifying}
             <RefreshCw class="size-4 animate-spin" />
-            {vault.t("login.onboarding_progress")}
+            {vault.t(I18N_KEYS.LoginOnboardingProgress)}
           {:else}
             <ShieldCheck class="size-4" />
-            {vault.t("login.finish_onboarding")}
+            {vault.t(I18N_KEYS.LoginFinishOnboarding)}
           {/if}
         </Button>
       </div>

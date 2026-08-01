@@ -145,7 +145,7 @@ impl NookVaultManager {
             )
         {
             return Err(NookError::Decryption(
-                "errors.device_protection.authorization_required".to_owned(),
+                nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
             )
             .into());
         }
@@ -317,7 +317,8 @@ impl NookVaultManager {
                         | nook_core::DeviceProtectionStatus::Pin
                 ) {
                     return Err(NookError::Decryption(
-                        "errors.device_protection.authorization_required".to_owned(),
+                        nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED
+                            .to_owned(),
                     ));
                 }
                 let identity = nook_core::DeviceIdentity::generate()?;

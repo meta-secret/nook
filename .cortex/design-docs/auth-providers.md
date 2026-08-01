@@ -88,7 +88,7 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 | Manager APIs (`loadAuthProviders`, `loadAuthProvidersWithLocalRow`, `saveAuthProviders`)                                                            | `NookVaultManager` methods in `nook-app/nook-wasm/src/lib.rs`                                      |
 | Free helpers (`deleteAuthProvidersDb`, `findDuplicateSyncProvider`, `ensureLocalProviderRow`, `sealAuthProvidersForDevicePublicKey`, mode binders)  | wasm bindings + thin TS wrappers                                                                   |
 | Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)                         |
-| Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth-providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth-providers.ts) |
+| Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
 | Vault wiring (`ensureProviderSaved`, active-provider mapping)                                                                                       | `vault.svelte.ts` + `vault/providers.ts` under `nook-web-shared`                                   |
 
 **Credentials are sealed at rest with the device key.** Secret fields —
@@ -259,7 +259,7 @@ without those provider steps; sealed-provider sync remains paused.
 WASM still receives `(storageMode, githubPat)` per call for the active connect
 path. Provider persistence and shaping live in `nook-wasm`/`nook-core`; the web
 layer maps snapshots onto `VaultState` via `manager.loadAuthProviders()` /
-`manager.saveAuthProviders()` (wrapped by `auth-providers.ts`).
+`manager.saveAuthProviders()` (wrapped by `auth/providers.ts`).
 
 ---
 
@@ -355,7 +355,7 @@ represented as `https://pr-*.nokey-simple.pages.dev`, and origin-sprawl should n
 treated as a durable preview strategy. Apple CloudKit API tokens have the same
 practical constraint when allowed origins are restricted to specific domains.
 
-Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/oauth-origin.ts)
+Current fallback: [`auth/oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/oauth-origin.ts)
 detects both the internal harness and isolated Nook PR aliases and disables
 Google Drive / iCloud sign-in with a clear message. Reviewers can still test
 local, local-folder, and GitHub providers on PR previews. Google Drive browser

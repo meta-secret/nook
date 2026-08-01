@@ -2,9 +2,10 @@ import type {
   NookPendingSyncConflict,
   NookProviderSyncRevision,
   NookRuntimeConfig,
+  NookSyncConflictReview,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
-import type { StorageProvider } from "$lib/auth-providers";
+import type { StorageProvider } from "$lib/auth/providers";
 import type {
   LocalProviderLookup,
   StagedRemoteStorage,
@@ -16,7 +17,7 @@ import type { VaultSentinelState } from "$lib/vault/state/sentinel.svelte";
 import type { VaultSessionState } from "$lib/vault/state/session.svelte";
 import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
-import type { VaultArchitecture } from "$lib/vault-architecture";
+import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,
@@ -170,7 +171,9 @@ type SyncStateFields = Pick<
   | "localFolderHealth"
   | "manualProviderSync"
   | "markSynced"
+  | "clearProjectionConflicts"
   | "replacementConflicts"
+  | "replaceProjectionConflicts"
   | "reportLocalFolderMultipleVaults"
   | "securityConflicts"
   | "syncConflictReview"
@@ -195,10 +198,10 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   beginProviderSetup(type: "local-folder"): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): Promise<string>;
   finishStagedProviderConnectAfterConflict(
-    conflict: NookPendingSyncConflict,
+    conflict: NookSyncConflictReview,
   ): void;
   hasRemoteCredentials(): boolean;
   hydrateMultiDeviceState(): Promise<void>;
@@ -316,7 +319,8 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "sentinelUnlockRequest"
     | "sentinelUnlockSession"
     | "sentinelUnlockStatus"
-  > & {
+  > &
+  Pick<VaultSyncState, "clearProjectionConflicts"> & {
     secretPageGeneration: number;
     secretPageRequestOffset: number;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;

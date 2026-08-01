@@ -162,11 +162,12 @@ pub fn prepare_shared_storage_grant(
     }
     if !capability.supports_shared {
         return Ok(SharedStorageGrantOutcome::Unsupported {
-            reason_key: "architecture_modes.shared_grant_unsupported".to_owned(),
+            reason_key: crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED.to_owned(),
         });
     }
     Ok(SharedStorageGrantOutcome::ManualGrantRequired {
-        instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+        instructions_key: crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS
+            .to_owned(),
         joiner_identity: identity.to_owned(),
         target: match &request.storage_target {
             SharedStorageTargetSelection::Create => SharedStorageGrantTarget::Unavailable,
@@ -199,7 +200,8 @@ mod tests {
         assert_eq!(
             outcome,
             SharedStorageGrantOutcome::ManualGrantRequired {
-                instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+                instructions_key:
+                    crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS.to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
                 target: SharedStorageGrantTarget::Unavailable,
             }
@@ -212,7 +214,8 @@ mod tests {
         assert_eq!(
             prepare_shared_storage_grant(&existing_target)?,
             SharedStorageGrantOutcome::ManualGrantRequired {
-                instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+                instructions_key:
+                    crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS.to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
                 target: SharedStorageGrantTarget::Identified {
                     storage_target_id: "folder-existing".to_owned(),
@@ -237,7 +240,8 @@ mod tests {
         assert_eq!(
             prepare_shared_storage_grant(&github)?,
             SharedStorageGrantOutcome::Unsupported {
-                reason_key: "architecture_modes.shared_grant_unsupported".to_owned(),
+                reason_key: crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED
+                    .to_owned(),
             }
         );
         Ok(())
@@ -261,7 +265,8 @@ mod tests {
     #[test]
     fn manual_grant_roundtrips_the_created_target() -> anyhow::Result<()> {
         let manual = SharedStorageGrantOutcome::ManualGrantRequired {
-            instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+            instructions_key: crate::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS
+                .to_owned(),
             joiner_identity: "joiner@example.com".to_owned(),
             target: SharedStorageGrantTarget::Named {
                 storage_target_id: "folder-created-before-permission-failed".to_owned(),

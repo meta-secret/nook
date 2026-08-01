@@ -2,9 +2,9 @@ import type { ArchitectureActionsContext } from "$lib/vault/action-contexts";
 import {
   canCreateSecret,
   type VaultArchitecture,
-} from "$lib/vault-architecture";
+} from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 
 const log = createLogger("vault-architecture");
 

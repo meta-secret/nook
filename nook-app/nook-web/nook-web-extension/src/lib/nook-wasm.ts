@@ -1,14 +1,10 @@
 import {
-  defaultPasswordGenerationOptions,
-  generatePasswordWithOptions,
-  type PasswordGenerationOptions,
-} from '../../../nook-web-shared/src/password/generator'
-import {
   default as initNookWasm,
   buildPasskeyCreationOptions,
   buildPasskeyPrfRequestOptions,
   buildPasskeyRecoveryRequestOptions,
   configureVaultApplication,
+  defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
   defaultTranslationCatalog as wasmDefaultTranslationCatalog,
   DeviceMode,
   DeviceProtectionStatus,
@@ -376,11 +372,9 @@ export async function unlockExtensionPin(
   ).device
 }
 
-export async function generateSuggestedPassword(
-  options: PasswordGenerationOptions = defaultPasswordGenerationOptions,
-): Promise<string> {
+export async function generateSuggestedPassword(): Promise<string> {
   await ensureNookWasm()
-  return generatePasswordWithOptions(wasmGeneratePassword, options)
+  return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
 }
 
 export async function parseStoredAppLocale(

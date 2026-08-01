@@ -301,6 +301,55 @@ pub fn configured_vault_application_name() -> String {
         .to_owned()
 }
 
+/// Return whether the configured application is the Simple Vault artifact.
+#[wasm_bindgen(js_name = configuredVaultApplicationIsSimple)]
+pub fn configured_vault_application_is_simple() -> bool {
+    application::configured_vault_application().is_simple()
+}
+
+/// Return whether the configured application is the Sentinel Vault artifact.
+#[wasm_bindgen(js_name = configuredVaultApplicationIsSentinel)]
+pub fn configured_vault_application_is_sentinel() -> bool {
+    application::configured_vault_application().is_sentinel()
+}
+
+/// Return whether the configured application may offer extension integration.
+#[wasm_bindgen(js_name = configuredVaultApplicationSupportsExtension)]
+pub fn configured_vault_application_supports_extension() -> bool {
+    application::configured_vault_application().supports_extension()
+}
+
+/// Return the configured deployment-channel Simple Vault root URL.
+#[wasm_bindgen(js_name = simpleVaultAppUrl)]
+pub fn simple_vault_app_url(configured_url: &str) -> String {
+    const DEFAULT_SIMPLE_VAULT_APP_URL: &str = "https://simple.nokey.sh";
+
+    let configured_url = configured_url.trim();
+    let root = if configured_url.is_empty() {
+        DEFAULT_SIMPLE_VAULT_APP_URL
+    } else {
+        configured_url
+    };
+    format!("{}/", root.trim_end_matches('/'))
+}
+
+#[cfg(test)]
+mod application_url_tests {
+    use super::simple_vault_app_url;
+
+    #[test]
+    fn simple_vault_application_url_is_defaulted_and_normalized() {
+        assert_eq!(
+            simple_vault_app_url(""),
+            "https://simple.nokey.sh/".to_owned()
+        );
+        assert_eq!(
+            simple_vault_app_url("  https://preview-simple.example///  "),
+            "https://preview-simple.example/".to_owned()
+        );
+    }
+}
+
 /// Return the Rust-owned empty-provider policy for a first-connect intent.
 #[wasm_bindgen(js_name = vaultConnectIntentPermitsEmptyRemoteGenesis)]
 pub fn vault_connect_intent_permits_empty_remote_genesis(

@@ -1,4 +1,5 @@
-import type { StorageProvider } from "$lib/auth-providers";
+import type { StorageProvider } from "$lib/auth/providers";
+import type { NookLocalFolderHealth } from "$app-wasm";
 
 export enum EventOutboxTargetKind {
   Unavailable = "unavailable",
@@ -26,13 +27,6 @@ export type ConflictProviderSave =
   | { kind: ConflictProviderSaveKind.NotSaved }
   | { kind: ConflictProviderSaveKind.Saved; providerId: string };
 
-export type LocalFolderMultipleVaultsIssue = {
-  providerId: string;
-  providerLabel: string;
-  storeIds: string[];
-  message: string;
-};
-
 export enum LocalFolderInspectionKind {
   SingleVault = "single-vault",
   MultipleVaults = "multiple-vaults",
@@ -42,5 +36,5 @@ export type LocalFolderInspection =
   | { kind: LocalFolderInspectionKind.SingleVault }
   | {
       kind: LocalFolderInspectionKind.MultipleVaults;
-      issue: LocalFolderMultipleVaultsIssue;
+      issue: NookLocalFolderHealth;
     };

@@ -3,10 +3,10 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
-    PasswordOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue, StoredRecordPayload,
-    SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState, deserialize_stored, filter_secrets,
-    generate_password, replace_secret, serialize_stored, validate_connect, validate_secret_data,
-    validate_secret_id,
+    PasswordGenerationOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue,
+    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
+    deserialize_stored, filter_secrets, generate_password, replace_secret, serialize_stored,
+    validate_connect, validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -352,7 +352,7 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
 #[test]
 fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
-    let password = generate_password(&PasswordOptions {
+    let password = generate_password(PasswordGenerationOptions {
         length: 20,
         lowercase: true,
         uppercase: true,

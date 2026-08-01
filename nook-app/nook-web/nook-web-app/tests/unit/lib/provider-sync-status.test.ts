@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatProviderSyncStatus } from '$lib/provider-sync-status'
+import { formatProviderSyncStatus } from '$lib/auth/provider-sync-status'
 
 const labels = {
   lastSynced: 'Last synced',

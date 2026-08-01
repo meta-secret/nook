@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { LoginCredentials } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   LoginCredentialsLookupKind,
@@ -287,7 +288,10 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   host.id = WIDGET_HOST_ID
   host.setAttribute('data-testid', 'nook-auth-widget')
   host.setAttribute('role', 'dialog')
-  host.setAttribute('aria-label', translatedMessage('widgetPilotLabel'))
+  host.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
+  )
   host.setAttribute('aria-expanded', 'true')
   const shadow = host.attachShadow({ mode: 'open' })
 
@@ -307,7 +311,10 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   dismissButton.type = 'button'
   dismissButton.className = 'icon-button dismiss-button'
   dismissButton.textContent = '×'
-  dismissButton.setAttribute('aria-label', translatedMessage('widgetDismiss'))
+  dismissButton.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
+  )
   dismissButton.addEventListener('click', () => {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
     void sendRuntimeMessage({
@@ -327,8 +334,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const title = document.createElement('h1')
   title.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLoginTitle'
-      : 'widgetSaveLoginTitle',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginTitle
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginTitle,
   )
 
   const site = document.createElement('p')
@@ -339,8 +346,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   description.className = 'description'
   description.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLoginDescription'
-      : 'widgetSaveLoginDescription',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginDescription
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginDescription,
   )
   description.setAttribute('data-testid', 'nook-auth-gate-save-description')
 
@@ -350,8 +357,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   saveButton.setAttribute('data-testid', 'nook-auth-gate-save')
   saveButton.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLogin'
-      : 'widgetSaveLogin',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLogin
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLogin,
   )
   saveButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return
@@ -387,14 +394,18 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
           delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
           !delivery.response?.ok
         ) {
-          description.textContent = translatedMessage('widgetSaveLoginFailed')
+          description.textContent = translatedMessage(
+            BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
+          )
           saveButton.disabled = false
           return
         }
-        title.textContent = translatedMessage('widgetSaveLoginSavedTitle')
+        title.textContent = translatedMessage(
+          BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedTitle,
+        )
         title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
         description.textContent = translatedMessage(
-          'widgetSaveLoginSavedDescription',
+          BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedDescription,
         )
         saveButton.hidden = true
         notNowButton.hidden = true
@@ -417,7 +428,9 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   notNowButton.type = 'button'
   notNowButton.className = 'text-button'
   notNowButton.setAttribute('data-testid', 'nook-auth-gate-save-dismiss')
-  notNowButton.textContent = translatedMessage('widgetSaveLoginNotNow')
+  notNowButton.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetSaveLoginNotNow,
+  )
   notNowButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
     saveOfferState.dismissedOfferIds.add(offer.offerId)

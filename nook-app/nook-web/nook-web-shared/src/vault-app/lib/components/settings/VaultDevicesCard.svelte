@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     Check,
     ChevronDown,
@@ -10,29 +11,33 @@
     TriangleAlert,
     X,
   } from '@lucide/svelte'
+  import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import { SUPPORTS_EXTENSION } from '$lib/app-kind'
-  import { openInstalledExtension } from '$lib/extension-connect'
+  import { openInstalledExtension } from '$lib/extension/connect'
   import {
     ExtensionSetupStatus,
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
     resolveExtensionSetupState,
     shouldOfferExtensionSetup,
-  } from '$lib/extension-install'
+  } from '$lib/extension/install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
-  import { VaultType } from '$lib/vault-architecture'
+  import { VaultType } from '$lib/vault/architecture-model'
   import {
     ExtensionSetupOfferKind,
+    type ExtensionSetupOffer,
+  } from '$lib/app/extension-setup'
+  import {
     MemberDetailsKind,
     MemberRenameKind,
     MemberRevocationKind,
-    type ExtensionSetupOffer,
     type MemberDetails,
     type MemberRename,
     type MemberRevocation,
   } from './vault-devices-card-state'
+
+  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
 
   let {
     vault,
@@ -117,15 +122,15 @@
 
   function extensionStatusLabel(status: ExtensionSetupStatus): string {
     if (status === ExtensionSetupStatus.NotInstalled) {
-      return vault.t('extension_setup.status_not_installed')
+      return vault.t(I18N_KEYS.ExtensionSetupStatusNotInstalled)
     }
     if (status === ExtensionSetupStatus.InstalledUnpaired) {
-      return vault.t('extension_setup.status_installed_unpaired')
+      return vault.t(I18N_KEYS.ExtensionSetupStatusInstalledUnpaired)
     }
     if (status === ExtensionSetupStatus.PairedElsewhere) {
-      return vault.t('extension_setup.status_paired_elsewhere')
+      return vault.t(I18N_KEYS.ExtensionSetupStatusPairedElsewhere)
     }
-    return vault.t('extension_setup.status_paired')
+    return vault.t(I18N_KEYS.ExtensionSetupStatusPaired)
   }
 
   $effect(() => {
@@ -163,9 +168,9 @@
 
   function currentDeviceName(): string {
     if (!('navigator' in globalThis))
-      return vault.t('devices_card.this_browser_os')
+      return vault.t(I18N_KEYS.DevicesCardThisBrowserOs)
     const ua = navigator.userAgent
-    let os = vault.t('devices_card.unknown_os')
+    let os = vault.t(I18N_KEYS.DevicesCardUnknownOs)
     if (ua.includes('Android')) os = 'Android'
     else if (ua.includes('like Mac')) os = 'iOS'
     else if (ua.includes('Win')) os = 'Windows'
@@ -177,7 +182,7 @@
     else if (ua.includes('Firefox')) browser = 'Firefox'
     else if (ua.includes('Chrome')) browser = 'Chrome'
     else if (ua.includes('Safari')) browser = 'Safari'
-    return `${browser} ${vault.t('devices_card.on')} ${os}`
+    return `${browser} ${vault.t(I18N_KEYS.DevicesCardOn)} ${os}`
   }
 
   function truncate(value: string, head = 8, tail = 6) {
@@ -187,15 +192,15 @@
 
   function formatDate(value: string): string {
     if (!value || value === 'genesis' || value === 'self-sync')
-      return vault.t('devices_card.enrolled')
+      return vault.t(I18N_KEYS.DevicesCardEnrolled)
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t('devices_card.enrolled')
-    return `${vault.t('devices_card.enrolled_date_prefix')}${date.toLocaleDateString()}`
+    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardEnrolled)
+    return `${vault.t(I18N_KEYS.DevicesCardEnrolledDatePrefix)}${date.toLocaleDateString()}`
   }
 
   function formatRequestDate(value: string): string {
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t('devices_card.recently')
+    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesCardRecently)
     return date.toLocaleDateString()
   }
 
@@ -203,7 +208,7 @@
     const label = member.label.trim()
     if (label) return label
     if (member.deviceId === deviceId) return currentDeviceName()
-    return `${vault.t('devices_card.device_prefix')}${truncate(member.deviceId, 6, 4)}`
+    return `${vault.t(I18N_KEYS.DevicesCardDevicePrefix)}${truncate(member.deviceId, 6, 4)}`
   }
 
   function beginRename(member: VaultMember) {
@@ -235,10 +240,10 @@
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <h3 class="text-sm font-semibold text-foreground">
-            {vault.t('extension_setup.settings_title')}
+            {vault.t(I18N_KEYS.ExtensionSetupSettingsTitle)}
           </h3>
           <p class="text-xs leading-relaxed text-muted-foreground">
-            {vault.t('extension_setup.settings_body')}
+            {vault.t(I18N_KEYS.ExtensionSetupSettingsBody)}
           </p>
         </div>
         {#if extensionSetup}
@@ -255,7 +260,7 @@
           class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
           data-testid="extension-setup-settings-connected-vault"
         >
-          {vault.t('extension_setup.connected_vault', {
+          {vault.t(I18N_KEYS.ExtensionSetupConnectedVault, {
             vault: extensionSetup.connectedVaultName ?? '',
             store: extensionSetup.connectedVaultStoreId ?? '',
           })}
@@ -263,11 +268,11 @@
       {/if}
       {#if extensionSetup.status === ExtensionSetupStatus.InstalledUnpaired || extensionSetup.status === ExtensionSetupStatus.PairedElsewhere}
         <p class="text-[11px] leading-relaxed text-muted-foreground/80">
-          {vault.t('extension_setup.pair_hint')}
+          {vault.t(I18N_KEYS.ExtensionSetupPairHint)}
         </p>
         {#if extensionConnectError}
           <p class="text-xs text-destructive" role="alert">
-            {vault.t('extension_setup.connect_failed')}
+            {vault.t(I18N_KEYS.ExtensionSetupConnectFailed)}
           </p>
         {/if}
       {/if}
@@ -288,16 +293,16 @@
           {#if extensionInstallBusy}
             {vault.t(
               extensionSetup.status === ExtensionSetupStatus.NotInstalled
-                ? 'extension_setup.loading_install'
-                : 'extension_setup.opening_extension',
+                ? I18N_KEYS.ExtensionSetupLoadingInstall
+                : I18N_KEYS.ExtensionSetupOpeningExtension,
             )}
           {:else if extensionSetup.status === ExtensionSetupStatus.NotInstalled}
-            {vault.t('extension_setup.install_cta')}
+            {vault.t(I18N_KEYS.ExtensionSetupInstallCta)}
           {:else}
             {vault.t(
               extensionSetup.status === ExtensionSetupStatus.PairedElsewhere
-                ? 'extension_setup.switch_cta'
-                : 'extension_setup.connect_cta',
+                ? I18N_KEYS.ExtensionSetupSwitchCta
+                : I18N_KEYS.ExtensionSetupConnectCta,
             )}
           {/if}
         </Button>
@@ -315,8 +320,8 @@
       <span>
         {vault.t(
           isSentinelVault
-            ? 'devices_card.sentinel_single_device_warning'
-            : 'devices_card.single_device_warning',
+            ? I18N_KEYS.DevicesCardSentinelSingleDeviceWarning
+            : I18N_KEYS.DevicesCardSingleDeviceWarning,
         )}
       </span>
     </div>
@@ -329,7 +334,7 @@
       data-testid="sentinel-device-change-guidance"
     >
       <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
-      <span>{vault.t('devices_card.sentinel_device_change_guidance')}</span>
+      <span>{vault.t(I18N_KEYS.DevicesCardSentinelDeviceChangeGuidance)}</span>
     </div>
   {/if}
 
@@ -337,12 +342,12 @@
     <section class="space-y-2" data-testid="pending-join-list">
       <div class="flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('devices_card.pending_requests')}
+          {vault.t(I18N_KEYS.DevicesCardPendingRequests)}
         </h3>
         <span class="text-xs text-muted-foreground">
           {pendingJoins.length === 1
-            ? vault.t('devices_card.requests_count_singular')
-            : vault.t('devices_card.requests_count_plural', {
+            ? vault.t(I18N_KEYS.DevicesCardRequestsCountSingular)
+            : vault.t(I18N_KEYS.DevicesCardRequestsCountPlural, {
                 count: String(pendingJoins.length),
               })}
         </span>
@@ -362,13 +367,13 @@
                 </div>
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium text-foreground">
-                    {vault.t('devices_card.device_prefix')}{truncate(
+                    {vault.t(I18N_KEYS.DevicesCardDevicePrefix)}{truncate(
                       join.deviceId,
                     )}
                   </p>
                   <p class="text-xs text-muted-foreground">
                     {vault.t(
-                      'devices_card.requested_prefix',
+                      I18N_KEYS.DevicesCardRequestedPrefix,
                     )}{formatRequestDate(join.requestedAt)}
                   </p>
                 </div>
@@ -381,7 +386,7 @@
                   class="border-border/50 px-2"
                   disabled={isBusy}
                   data-testid="deny-join-btn"
-                  aria-label={vault.t('settings.deny')}
+                  aria-label={vault.t(I18N_KEYS.SettingsDeny)}
                   onclick={() => void onDenyJoin(join.deviceId)}
                 >
                   <X class="size-3.5" />
@@ -394,7 +399,7 @@
                   onclick={() => void onApproveJoin(join.deviceId)}
                 >
                   <Check class="size-3.5" />
-                  {vault.t('devices_card.approve')}
+                  {vault.t(I18N_KEYS.DevicesCardApprove)}
                 </Button>
               </div>
             </div>
@@ -407,12 +412,12 @@
   <section class="space-y-2">
     <div class="flex items-center justify-between gap-3">
       <h3 class="text-sm font-semibold text-foreground">
-        {vault.t('devices_card.enrolled_devices')}
+        {vault.t(I18N_KEYS.DevicesCardEnrolledDevices)}
       </h3>
       <span class="text-xs text-muted-foreground">
         {vaultMembers.length === 1
-          ? vault.t('devices_card.device_count_singular')
-          : vault.t('devices_card.device_count_plural', {
+          ? vault.t(I18N_KEYS.DevicesCardDeviceCountSingular)
+          : vault.t(I18N_KEYS.DevicesCardDeviceCountPlural, {
               count: String(vaultMembers.length),
             })}
       </span>
@@ -423,7 +428,7 @@
         class="rounded-lg border border-border/40 bg-muted/15 px-3 py-4 text-center text-sm text-muted-foreground"
         data-testid="vault-devices-empty"
       >
-        {vault.t('devices_card.no_devices')}
+        {vault.t(I18N_KEYS.DevicesCardNoDevices)}
       </div>
     {:else}
       <ul class="space-y-2" data-testid="vault-members-list">
@@ -454,7 +459,7 @@
                 <div class="min-w-0 space-y-1">
                   {#if isRenaming}
                     <label class="sr-only" for={`rename-${member.authId}`}>
-                      {vault.t('devices_card.device_name_label')}
+                      {vault.t(I18N_KEYS.DevicesCardDeviceNameLabel)}
                     </label>
                     <input
                       id={`rename-${member.authId}`}
@@ -477,13 +482,13 @@
                         class="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
                         data-testid="current-device-badge"
                       >
-                        {vault.t('devices_card.current')}
+                        {vault.t(I18N_KEYS.DevicesCardCurrent)}
                       </span>
                     {:else}
                       <span
                         class="rounded-full border border-border/40 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
                       >
-                        {vault.t('devices_card.enrolled')}
+                        {vault.t(I18N_KEYS.DevicesCardEnrolled)}
                       </span>
                     {/if}
                     <span class="text-xs text-muted-foreground">
@@ -491,7 +496,7 @@
                     </span>
                     {#if isCurrent && hasPasswordEnvelope}
                       <span class="text-xs text-muted-foreground">
-                        {vault.t('devices_card.pw_recovery_available')}
+                        {vault.t(I18N_KEYS.DevicesCardPwRecoveryAvailable)}
                       </span>
                     {/if}
                   </div>
@@ -506,7 +511,7 @@
                     class="px-2"
                     disabled={isBusy}
                     data-testid="device-rename-save"
-                    aria-label={vault.t('devices_card.save_device_name')}
+                    aria-label={vault.t(I18N_KEYS.DevicesCardSaveDeviceName)}
                     onclick={() => void saveRename(member)}
                   >
                     <Check class="size-3.5" />
@@ -517,7 +522,7 @@
                     variant="outline"
                     class="border-border/50 px-2"
                     disabled={isBusy}
-                    aria-label={vault.t('devices_card.cancel_rename')}
+                    aria-label={vault.t(I18N_KEYS.DevicesCardCancelRename)}
                     onclick={() => {
                       renameAuthId = { kind: MemberRenameKind.Idle }
                       renameLabel = ''
@@ -533,7 +538,7 @@
                     class="px-2 text-muted-foreground"
                     disabled={isBusy}
                     data-testid="device-rename-btn"
-                    aria-label={vault.t('devices_card.rename_device')}
+                    aria-label={vault.t(I18N_KEYS.DevicesCardRenameDevice)}
                     onclick={() => beginRename(member)}
                   >
                     <Pencil class="size-3.5" />
@@ -545,7 +550,7 @@
                     class="px-2 text-muted-foreground hover:text-destructive"
                     disabled={isBusy || !canRevoke}
                     data-testid="device-revoke-btn"
-                    aria-label={vault.t('devices_card.revoke_device')}
+                    aria-label={vault.t(I18N_KEYS.DevicesCardRevokeDevice)}
                     onclick={() => {
                       revokeAuthId = {
                         kind: MemberRevocationKind.Confirming,
@@ -562,7 +567,7 @@
                   size="sm"
                   variant="ghost"
                   class="px-2 text-muted-foreground"
-                  aria-label={vault.t('devices_card.toggle_details')}
+                  aria-label={vault.t(I18N_KEYS.DevicesCardToggleDetails)}
                   aria-expanded={detailsAuthId.kind ===
                     MemberDetailsKind.Expanded &&
                     detailsAuthId.authId === member.authId}
@@ -598,8 +603,8 @@
                 >
                   <p>
                     {isCurrent
-                      ? vault.t('devices_card.confirm_revoke_current')
-                      : vault.t('devices_card.confirm_revoke_other')}
+                      ? vault.t(I18N_KEYS.DevicesCardConfirmRevokeCurrent)
+                      : vault.t(I18N_KEYS.DevicesCardConfirmRevokeOther)}
                   </p>
                   <div class="flex shrink-0 items-center gap-2">
                     <Button
@@ -614,7 +619,7 @@
                           kind: MemberRevocationKind.Idle,
                         })}
                     >
-                      {vault.t('devices_card.cancel')}
+                      {vault.t(I18N_KEYS.DevicesCardCancel)}
                     </Button>
                     <Button
                       type="button"
@@ -625,7 +630,7 @@
                       data-testid="device-revoke-confirm-btn"
                       onclick={() => void onRevokeDevice(member.authId)}
                     >
-                      {vault.t('devices_card.revoke')}
+                      {vault.t(I18N_KEYS.DevicesCardRevoke)}
                     </Button>
                   </div>
                 </div>
@@ -639,14 +644,14 @@
               >
                 <div class="flex items-center justify-between gap-3">
                   <dt class="text-muted-foreground">
-                    {vault.t('devices_card.device_id')}
+                    {vault.t(I18N_KEYS.DevicesCardDeviceId)}
                   </dt>
                   <dd class="flex min-w-0 items-center gap-1 font-mono">
                     <span class="truncate">{member.deviceId}</span>
                     <button
                       type="button"
                       class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                      aria-label={vault.t('devices_card.copy_device_id')}
+                      aria-label={vault.t(I18N_KEYS.DevicesCardCopyDeviceId)}
                       onclick={() => void copyText(member.deviceId)}
                     >
                       <Copy class="size-3" />
@@ -655,7 +660,7 @@
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <dt class="text-muted-foreground">
-                    {vault.t('devices_card.auth_id')}
+                    {vault.t(I18N_KEYS.DevicesCardAuthId)}
                   </dt>
                   <dd class="font-mono" title={member.authId}>
                     {truncate(member.authId, 10, 8)}
@@ -663,7 +668,7 @@
                 </div>
                 <div class="flex items-start justify-between gap-3">
                   <dt class="shrink-0 text-muted-foreground">
-                    {vault.t('devices_card.public_key')}
+                    {vault.t(I18N_KEYS.DevicesCardPublicKey)}
                   </dt>
                   <dd class="flex min-w-0 items-center gap-1 font-mono">
                     <span class="truncate" title={member.publicKey}>
@@ -672,7 +677,7 @@
                     <button
                       type="button"
                       class="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                      aria-label={vault.t('devices_card.copy_public_key')}
+                      aria-label={vault.t(I18N_KEYS.DevicesCardCopyPublicKey)}
                       onclick={() => void copyText(member.publicKey)}
                     >
                       <Copy class="size-3" />
@@ -690,8 +695,8 @@
   <div
     class="rounded-lg border border-border/35 bg-muted/15 px-3 py-2 text-xs text-muted-foreground"
   >
-    {vault.t('devices_card.this_browser_prefix')}<span class="font-mono"
-      >{deviceId || vault.t('devices_card.not_initialized')}</span
+    {vault.t(I18N_KEYS.DevicesCardThisBrowserPrefix)}<span class="font-mono"
+      >{deviceId || vault.t(I18N_KEYS.DevicesCardNotInitialized)}</span
     >
     {#if devicePublicKey}
       <span class="sr-only">{devicePublicKey}</span>

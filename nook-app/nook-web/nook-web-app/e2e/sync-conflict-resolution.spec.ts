@@ -30,24 +30,25 @@ async function setSecurityConflict(page: Page, present: boolean) {
     const vault = (
       window as Window & {
         __nookVault?: {
-          securityConflicts: Array<{
-            events: string[]
-            reasons: string[]
-          }>
+          clearProjectionConflicts(): void
+          stageSecurityConflictForTesting(
+            events: string[],
+            reasons: string[],
+          ): void
         }
       }
     ).__nookVault
     if (!vault) {
       throw new Error('__nookVault is not exposed (dev build required).')
     }
-    vault.securityConflicts = enabled
-      ? [
-          {
-            events: ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
-            reasons: ['key epoch rotation'],
-          },
-        ]
-      : []
+    if (enabled) {
+      vault.stageSecurityConflictForTesting(
+        ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+        ['key epoch rotation'],
+      )
+    } else {
+      vault.clearProjectionConflicts()
+    }
   }, present)
 }
 
@@ -56,23 +57,15 @@ async function setContentSyncConflict(page: Page) {
     const vault = (
       window as Window & {
         __nookVault: {
-          stageSyncConflict(conflict: {
-            kind: number
-            providerLabel: string
-            remoteYaml: string
-            contentLocalVersion(): number
-            contentRemoteVersion(): number
-          }): void
+          stageContentSyncConflictForTesting(
+            providerLabel: string,
+            localVersion: number,
+            remoteVersion: number,
+          ): void
         }
       }
     ).__nookVault
-    vault.stageSyncConflict({
-      kind: 0,
-      providerLabel: 'Remote provider',
-      remoteYaml: 'remote-vault',
-      contentLocalVersion: () => 1,
-      contentRemoteVersion: () => 2,
-    })
+    vault.stageContentSyncConflictForTesting('Remote provider', 1, 2)
   })
 }
 

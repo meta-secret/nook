@@ -227,6 +227,11 @@ key access   causal DAG, replica/outbox mechanics
 | `nook-web-extension` | Simple-only Manifest V3 companion (Nook Pilot: login HUD, credential fill, takeover) |
 | `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
 
+Inside `nook-web-shared/src/vault-app/lib`, browser-owned modules are grouped by
+capability (`app`, `auth`, `content`, `enrollment`, `extension`, `runtime`, and
+`vault`). Provider-specific authentication adapters live under `auth/google`
+and `auth/icloud`; portable provider policy remains in Rust.
+
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
 - [Architecture](.cortex/ARCHITECTURE.md)

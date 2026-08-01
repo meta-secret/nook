@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ChevronLeft } from '@lucide/svelte'
   import MarkdownContent from '$lib/components/MarkdownContent.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -13,7 +14,7 @@
     LegalPageId,
     appPath,
     legalPageForId,
-  } from '$lib/legal-content'
+  } from '$lib/content/legal'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -54,7 +55,7 @@
             {page.title}
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
-            {vault.t('legal.manager_description')}
+            {vault.t(I18N_KEYS.LegalManagerDescription)}
           </CardDescription>
         </div>
         <Button
@@ -66,7 +67,7 @@
           onclick={onClose}
         >
           <ChevronLeft class="size-3.5" />
-          {vault.t('common.back')}
+          {vault.t(I18N_KEYS.CommonBack)}
         </Button>
       </div>
     </CardHeader>
@@ -76,7 +77,7 @@
 
       <nav
         class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-4 text-xs text-muted-foreground"
-        aria-label={vault.t('legal.documents_label')}
+        aria-label={vault.t(I18N_KEYS.LegalDocumentsLabel)}
       >
         <a
           href={appPath(otherPage.path)}
@@ -92,7 +93,7 @@
           rel="noreferrer"
           class="underline-offset-4 hover:text-foreground hover:underline"
         >
-          {vault.t('legal.source')}
+          {vault.t(I18N_KEYS.LegalSource)}
         </a>
       </nav>
     </CardContent>

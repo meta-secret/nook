@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { HardDrive, Cloud, RefreshCw, TriangleAlert } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -8,7 +9,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { NookPendingSyncConflict } from '$app-wasm'
+  import type { NookSyncConflictReview } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
   import { VaultSyncConflictKind } from '$app-wasm'
 
@@ -22,7 +23,7 @@
     onCancel,
   }: {
     vault: VaultState
-    conflict: NookPendingSyncConflict
+    conflict: NookSyncConflictReview
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
@@ -44,7 +45,7 @@
       }
 
   const conflictView = $derived.by((): ConflictView => {
-    if (conflict.kind === VaultSyncConflictKind.StoreId) {
+    if (conflict.conflictKind === VaultSyncConflictKind.StoreId) {
       return {
         kind: VaultSyncConflictKind.StoreId,
         localStoreId: conflict.localStoreId(),
@@ -76,23 +77,23 @@
     conflictView.kind === VaultSyncConflictKind.StoreId
       ? vault.t(
           isEventLogStoreMismatch
-            ? 'auth_storage.sync_conflict_store_id_event_desc'
-            : 'auth_storage.sync_conflict_store_id_desc',
+            ? I18N_KEYS.AuthStorageSyncConflictStoreIdEventDesc
+            : I18N_KEYS.AuthStorageSyncConflictStoreIdDesc,
           {
             provider: conflict.providerLabel,
             localStore: conflictView.localStoreId,
             remoteStore: conflictView.remoteStoreId,
           },
         )
-      : vault.t('auth_storage.sync_conflict_desc', {
+      : vault.t(I18N_KEYS.AuthStorageSyncConflictDesc, {
           provider: conflict.providerLabel,
           version: versionLabel,
         }),
   )
   const conflictTitle = $derived(
     isStoreIdConflict
-      ? vault.t('auth_storage.sync_conflict_store_id_title')
-      : vault.t('auth_storage.sync_conflict_title'),
+      ? vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdTitle)
+      : vault.t(I18N_KEYS.AuthStorageSyncConflictTitle),
   )
 </script>
 
@@ -137,15 +138,15 @@
           <HardDrive class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
             <span class="block font-medium text-foreground">
-              {vault.t('auth_storage.sync_conflict_local_copy')}
+              {vault.t(I18N_KEYS.AuthStorageSyncConflictLocalCopy)}
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t('auth_storage.sync_conflict_store_id_local', {
+                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdLocal, {
                   store: conflictView.localStoreId,
                 })}
               {:else}
-                {vault.t('auth_storage.sync_conflict_version', {
+                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
                   version: String(conflictView.localVersion),
                 })}
               {/if}
@@ -159,17 +160,17 @@
           <Cloud class="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
             <span class="block font-medium text-foreground">
-              {vault.t('auth_storage.sync_conflict_remote_copy', {
+              {vault.t(I18N_KEYS.AuthStorageSyncConflictRemoteCopy, {
                 provider: conflict.providerLabel,
               })}
             </span>
             <span class="block text-xs text-muted-foreground">
               {#if conflictView.kind === VaultSyncConflictKind.StoreId}
-                {vault.t('auth_storage.sync_conflict_store_id_remote', {
+                {vault.t(I18N_KEYS.AuthStorageSyncConflictStoreIdRemote, {
                   store: conflictView.remoteStoreId,
                 })}
               {:else}
-                {vault.t('auth_storage.sync_conflict_version', {
+                {vault.t(I18N_KEYS.AuthStorageSyncConflictVersion, {
                   version: String(conflictView.remoteVersion),
                 })}
               {/if}
@@ -191,7 +192,7 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {vault.t('auth_storage.sync_conflict_import_new_vault')}
+            {vault.t(I18N_KEYS.AuthStorageSyncConflictImportNewVault)}
           </Button>
         {/if}
         {#if isEventLogStoreMismatch}
@@ -203,7 +204,7 @@
             disabled={isBusy}
             onclick={() => void onCancel()}
           >
-            {vault.t('auth_storage.sync_conflict_choose_different_provider')}
+            {vault.t(I18N_KEYS.AuthStorageSyncConflictChooseDifferentProvider)}
           </Button>
         {:else}
           <Button
@@ -217,7 +218,7 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {vault.t('auth_storage.sync_conflict_keep_remote', {
+            {vault.t(I18N_KEYS.AuthStorageSyncConflictKeepRemote, {
               provider: conflict.providerLabel,
             })}
           </Button>
@@ -231,7 +232,7 @@
             {#if isBusy}
               <RefreshCw class="size-4 animate-spin" />
             {/if}
-            {vault.t('auth_storage.sync_conflict_keep_local')}
+            {vault.t(I18N_KEYS.AuthStorageSyncConflictKeepLocal)}
           </Button>
         {/if}
       </div>

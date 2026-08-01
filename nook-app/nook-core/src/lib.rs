@@ -7,6 +7,7 @@
 mod auth;
 mod crypto;
 mod errors;
+mod generated;
 mod i18n;
 mod secrets;
 mod sync;
@@ -27,7 +28,7 @@ pub(crate) use secrets::{
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
-    vault_sync_session, vault_sync_store,
+    vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
@@ -104,6 +105,7 @@ pub use extension_identity_handoff::{
     choose_signing_seed_after_identity_handoff, open_extension_identity_handoff,
     seal_extension_identity_handoff,
 };
+pub use generated::i18n_keys;
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
 };
@@ -178,6 +180,10 @@ pub use vault_sentinel_onboarding::{
 pub use vault_sync_conflict::{
     ContentSyncConflict, StoreIdSyncConflict, VaultSyncConflict, VaultSyncConflictKind,
 };
+pub use vault_sync_state::{
+    LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
+    VaultLastSync,
+};
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
 };
@@ -235,7 +241,9 @@ pub use nook_event_log::{
     remote_event_belongs_to_store, remote_event_store_id, serialize_event_storage_yaml, sha256_hex,
     sign_body, union_remote_events, union_remote_events_and_heads, verify_body_signature,
 };
-pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
+pub use password::{
+    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
+};
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,

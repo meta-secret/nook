@@ -55,6 +55,12 @@ pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Ve
         &["ts", "svelte"],
         widened_domain_identifier_state_lines,
     )?);
+    violations.extend(source_violations(
+        root,
+        Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/state"),
+        &["ts"],
+        inline_object_collection_state_lines,
+    )?);
 
     let relative_path =
         Path::new("nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault.svelte.ts");
@@ -73,6 +79,36 @@ pub fn typescript_svelte_state_modeling_violations(root: &Path) -> io::Result<Ve
             .then_with(|| left.line.cmp(&right.line))
     });
     Ok(violations)
+}
+
+pub(super) fn inline_object_collection_state_lines(source: &str) -> Vec<usize> {
+    let mut compact = Vec::with_capacity(source.len());
+    let mut source_lines = Vec::with_capacity(source.len());
+    let mut line = 1;
+    for byte in source.bytes() {
+        if byte == b'\n' {
+            line += 1;
+        } else if !byte.is_ascii_whitespace() {
+            compact.push(byte);
+            source_lines.push(line);
+        }
+    }
+
+    let mut lines = Vec::new();
+    for pattern in [
+        b"$state<Array<{".as_slice(),
+        b"$state.raw<Array<{".as_slice(),
+        b"$state<{".as_slice(),
+    ] {
+        for (index, window) in compact.windows(pattern.len()).enumerate() {
+            if window == pattern {
+                lines.push(source_lines[index]);
+            }
+        }
+    }
+    lines.sort_unstable();
+    lines.dedup();
+    lines
 }
 
 pub(super) fn widened_domain_identifier_state_lines(source: &str) -> Vec<usize> {
@@ -334,6 +370,7 @@ pub(super) fn typescript_boundary_violation_lines(contents: &str) -> Vec<usize> 
             .iter()
             .any(|marker| line.contains(marker))
             || is_wasm_type_alias(line, &wasm_bindings)
+            || is_domain_mirror_interface(line)
             || is_domain_mirror_enum(line)
         {
             violations.push(index + 1);
@@ -396,18 +433,35 @@ pub(super) fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) ->
     let Some(alias) = line.strip_prefix("type ") else {
         return false;
     };
-    let Some((name, value)) = alias.split_once('=') else {
-        return false;
-    };
-    if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&name.trim()) {
+    let declaration_name = alias
+        .split(|character: char| character.is_whitespace() || character == '=')
+        .next()
+        .unwrap_or_default();
+    if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&declaration_name) {
         return true;
     }
+    let Some((_, value)) = alias.split_once('=') else {
+        return false;
+    };
     let value = value.trim_start();
     if value.starts_with("Nook") {
         return true;
     }
     let value = value.trim_end_matches(';').trim();
     is_typescript_identifier(value) && wasm_bindings.contains(value)
+}
+
+fn is_domain_mirror_interface(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix("export ").unwrap_or(line);
+    let Some(declaration) = line.strip_prefix("interface ") else {
+        return false;
+    };
+    let name = declaration
+        .split(|character: char| character.is_whitespace() || character == '{')
+        .next()
+        .unwrap_or_default();
+    TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&name)
 }
 
 pub(super) fn wasm_import_bindings(contents: &str) -> HashSet<String> {
@@ -571,4 +625,27 @@ pub(super) fn is_typescript_identifier(value: &str) -> bool {
     (first.is_ascii_alphabetic() || matches!(first, '_' | '$'))
         && characters
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '$'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inline_object_collection_state_lines;
+
+    #[test]
+    fn inline_object_collection_state_is_rejected() {
+        let source = r"
+            const conflicts = $state<Array<{
+                events: string[];
+            }>>([]);
+            const raw = $state.raw<Array<{ id: string }>>([]);
+        ";
+
+        assert_eq!(inline_object_collection_state_lines(source), [2, 5]);
+    }
+
+    #[test]
+    fn generated_domain_collection_state_is_accepted() {
+        let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
+        assert!(inline_object_collection_state_lines(source).is_empty());
+    }
 }

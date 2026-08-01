@@ -1,8 +1,13 @@
-import { authenticatorSetupKeyChanged, SecretType } from "$lib/nook";
+import {
+  authenticatorSetupKeyChanged,
+  defaultPasswordGenerationOptions,
+  SecretType,
+} from "$lib/nook";
 import type { NookSecretRecord } from "$lib/nook";
 import { NookSecretFormFields } from "$app-wasm";
-import { defaultPasswordGenerationOptions } from "$web-shared/password/generator";
 import { SecretEditorKind, type SecretEditor } from "../secret-vault-state";
+
+const passwordGenerationDefaults = defaultPasswordGenerationOptions();
 
 export class SecretFormState {
   showPasswordOptions = $state(false);
@@ -43,11 +48,11 @@ export class SecretFormState {
   showCvv = $state(false);
   submitError = $state("");
 
-  generationLength = $state(defaultPasswordGenerationOptions.length);
-  generationUppercase = $state(defaultPasswordGenerationOptions.uppercase);
-  generationLowercase = $state(defaultPasswordGenerationOptions.lowercase);
-  generationNumbers = $state(defaultPasswordGenerationOptions.numbers);
-  generationSymbols = $state(defaultPasswordGenerationOptions.symbols);
+  generationLength = $state(passwordGenerationDefaults.length);
+  generationUppercase = $state(passwordGenerationDefaults.uppercase);
+  generationLowercase = $state(passwordGenerationDefaults.lowercase);
+  generationNumbers = $state(passwordGenerationDefaults.numbers);
+  generationSymbols = $state(passwordGenerationDefaults.symbols);
 
   load(item: NookSecretRecord): void {
     if (item.type === SecretType.Login) {

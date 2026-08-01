@@ -1,8 +1,8 @@
 import {
   EnrollmentLocationKind,
   consumeEnrollmentFromLocation,
-} from "$lib/enrollment-code";
-import type { VaultIdleSessionTracker } from "$lib/vault-idle-session";
+} from "$lib/enrollment/code";
+import type { VaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
 
 enum SuccessDismissScheduleKind {

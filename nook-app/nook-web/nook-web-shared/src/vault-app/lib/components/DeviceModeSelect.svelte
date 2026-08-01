@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { DeviceMode } from '$app-wasm'
   import * as Select from '$lib/components/ui/select'
   import type { VaultState } from '$lib/vault.svelte'
@@ -20,8 +21,14 @@
     mode: DeviceMode,
     suffix: DeviceModeTranslationPart,
   ) {
-    const modeKey = mode === DeviceMode.AntiHacker ? 'anti_hacker' : 'standard'
-    return `device_protection.mode_${modeKey}_${suffix}`
+    if (mode === DeviceMode.AntiHacker) {
+      return suffix === DeviceModeTranslationPart.Title
+        ? I18N_KEYS.DeviceProtectionModeAntiHackerTitle
+        : I18N_KEYS.DeviceProtectionModeAntiHackerDescription
+    }
+    return suffix === DeviceModeTranslationPart.Title
+      ? I18N_KEYS.DeviceProtectionModeStandardTitle
+      : I18N_KEYS.DeviceProtectionModeStandardDescription
   }
 
   function selectMode(value: unknown) {
@@ -36,7 +43,7 @@
 
 <div class="space-y-2" data-testid="mode-group-device">
   <label class="block text-sm font-medium text-foreground" for={id}>
-    {vault.t('device_protection.mode_group_label')}
+    {vault.t(I18N_KEYS.DeviceProtectionModeGroupLabel)}
   </label>
   <Select.Root
     type="single"

@@ -10,13 +10,13 @@ import {
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
   type ICloudOAuthTokens,
-} from '$lib/icloud-oauth'
-import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
-import { CloudKitAuthErrorTranslationKey } from '$lib/icloud-auth-errors'
+} from '$lib/auth/icloud/oauth'
+import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
+import { CloudKitAuthErrorTranslationKey } from '$lib/auth/icloud/auth-errors'
 import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
-} from '$lib/icloud-oauth-config'
+} from '$lib/auth/icloud/config'
 
 function resolvedCloudKitEffect() {
   return vi.fn(async (): Promise<void> => {})

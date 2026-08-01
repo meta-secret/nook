@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ReplicationType } from '$app-wasm'
 
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
@@ -11,8 +12,8 @@
     type OAuthFilePreset,
     type StorageProvider,
     type StorageProviderType,
-  } from '$lib/auth-providers'
-  import { providerReplicationCapability } from '$lib/vault-architecture'
+  } from '$lib/auth/providers'
+  import { providerReplicationCapability } from '$lib/vault/architecture-model'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -81,14 +82,14 @@
     oauthPreset?: OAuthFilePreset,
   ): string {
     if (blocked(type, oauthPreset)) {
-      return vault.t('provider_picker.unsupported_replication_desc')
+      return vault.t(I18N_KEYS.ProviderPickerUnsupportedReplicationDesc)
     }
     return vault.t(key)
   }
 </script>
 
 <fieldset class="min-w-0 w-full max-w-full space-y-2">
-  <legend class="sr-only">{vault.t('provider_picker.choose_provider')}</legend>
+  <legend class="sr-only">{vault.t(I18N_KEYS.ProviderPickerChooseProvider)}</legend>
   <ul
     class="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden"
     data-testid="provider-picker-list"
@@ -105,10 +106,10 @@
           <HardDrive class="size-4 shrink-0 text-foreground" />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-semibold text-foreground"
-              >{vault.t('provider_picker.this_device')}</span
+              >{vault.t(I18N_KEYS.ProviderPickerThisDevice)}</span
             >
             <span class="block truncate text-xs text-muted-foreground">
-              {description('provider_picker.this_device_desc', 'local')}
+              {description(I18N_KEYS.ProviderPickerThisDeviceDesc, 'local')}
             </span>
           </span>
         </button>
@@ -129,13 +130,13 @@
           <FolderOpen class="size-4 shrink-0 text-foreground" />
           <span class="min-w-0 flex-1">
             <span class="block text-sm font-semibold text-foreground"
-              >{vault.t('provider_picker.local_folder')}</span
+              >{vault.t(I18N_KEYS.ProviderPickerLocalFolder)}</span
             >
             <span class="block truncate text-xs text-muted-foreground">
               {localFolderUnavailable
-                ? vault.t('provider_picker.local_folder_unavailable_desc')
+                ? vault.t(I18N_KEYS.ProviderPickerLocalFolderUnavailableDesc)
                 : description(
-                    'provider_picker.local_folder_desc',
+                    I18N_KEYS.ProviderPickerLocalFolderDesc,
                     'local-folder',
                   )}
             </span>
@@ -178,11 +179,11 @@
         </svg>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('provider_picker.google_drive')}</span
+            >{vault.t(I18N_KEYS.ProviderPickerGoogleDrive)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
             {description(
-              'provider_picker.google_drive_desc',
+              I18N_KEYS.ProviderPickerGoogleDriveDesc,
               'oauth-file',
               'google-drive',
             )}
@@ -212,10 +213,10 @@
         </svg>
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('provider_picker.icloud')}</span
+            >{vault.t(I18N_KEYS.ProviderPickerIcloud)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {description('provider_picker.icloud_desc', 'oauth-file', 'icloud')}
+            {description(I18N_KEYS.ProviderPickerIcloudDesc, 'oauth-file', 'icloud')}
           </span>
         </span>
       </button>
@@ -233,10 +234,10 @@
         <Cloud class="size-4 shrink-0 text-foreground" />
         <span class="min-w-0 flex-1">
           <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('provider_picker.github')}</span
+            >{vault.t(I18N_KEYS.ProviderPickerGithub)}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {description('provider_picker.github_desc', 'github')}
+            {description(I18N_KEYS.ProviderPickerGithubDesc, 'github')}
           </span>
         </span>
       </button>

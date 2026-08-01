@@ -5,8 +5,8 @@ import {
   SentinelVaultUnlockState,
   setVaultSessionLocked,
 } from "$app-wasm";
-import { VaultType } from "$lib/vault-architecture";
-import { createLogger } from "$lib/log";
+import { VaultType } from "$lib/vault/architecture-model";
+import { createLogger } from "$lib/runtime/log";
 import { inactiveSentinelUnlockSession } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 
@@ -76,6 +76,7 @@ export function clearUnlockedSession(
   state.clearSecretTypeFilter();
   state.pendingJoins = [];
   state.vaultMembers = [];
+  state.clearProjectionConflicts();
   state.joinEnrollmentPrompt = JoinEnrollmentState.None;
   state.enrollSecretsKey = "";
   state.enrollMembersKey = "";

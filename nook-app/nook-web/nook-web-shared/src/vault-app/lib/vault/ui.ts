@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type {
   OpenAdminAccordion,
   OpenSettingsArgs,
@@ -6,7 +7,7 @@ import type {
 import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData,
-} from "$lib/browser-data";
+} from "$lib/runtime/browser-data";
 import { setVaultSessionLocked } from "$app-wasm";
 import {
   AdminAccordionSection,
@@ -77,7 +78,7 @@ export async function deleteLocalData(state: UiActionsContext): Promise<void> {
     state.errorMsg =
       error instanceof Error
         ? error.message
-        : state.t("settings.delete_local_error");
+        : state.t(I18N_KEYS.SettingsDeleteLocalError);
     state.isSaving = false;
   }
 }

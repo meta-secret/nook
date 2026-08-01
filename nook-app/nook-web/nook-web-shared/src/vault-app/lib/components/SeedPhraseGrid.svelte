@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check } from "@lucide/svelte";
   import type { VaultState } from "$lib/vault.svelte";
   import {
@@ -242,7 +243,7 @@
         data-testid="seed-word-count-12"
         onclick={() => setWordCount(12)}
       >
-        {vault.t("add_secret.seed_word_count_12")}
+        {vault.t(I18N_KEYS.AddSecretSeedWordCount12)}
       </button>
       <button
         type="button"
@@ -253,7 +254,7 @@
         data-testid="seed-word-count-24"
         onclick={() => setWordCount(24)}
       >
-        {vault.t("add_secret.seed_word_count_24")}
+        {vault.t(I18N_KEYS.AddSecretSeedWordCount24)}
       </button>
       <button
         type="button"
@@ -262,7 +263,7 @@
         disabled={!hasPhraseContent}
         onclick={clearPhrase}
       >
-        {vault.t("add_secret.seed_phrase_clear")}
+        {vault.t(I18N_KEYS.AddSecretSeedPhraseClear)}
       </button>
     </div>
   {/if}
@@ -373,7 +374,7 @@
               id="seed-word-error-{index + 1}"
               class="mt-1 block text-[10px] text-destructive"
             >
-              {vault.t("add_secret.seed_word_invalid")}
+              {vault.t(I18N_KEYS.AddSecretSeedWordInvalid)}
             </span>
           {/if}
         {/if}
@@ -387,14 +388,14 @@
       data-testid="seed-phrase-valid"
     >
       <Check class="size-3.5 shrink-0" aria-hidden="true" />
-      {vault.t("add_secret.seed_phrase_valid")}
+      {vault.t(I18N_KEYS.AddSecretSeedPhraseValid)}
     </p>
   {:else if !readonly && perWordValid && allWordsFilled && checksumValid.kind === ChecksumStatusKind.Checked && !checksumValid.valid}
     <p
       class="text-xs text-destructive"
       data-testid="seed-phrase-checksum-error"
     >
-      {vault.t("add_secret.seed_phrase_invalid")}
+      {vault.t(I18N_KEYS.AddSecretSeedPhraseInvalid)}
     </p>
   {/if}
 </div>

@@ -1,122 +1,144 @@
-import { SvelteDate } from "svelte/reactivity";
-import type { NookPendingSyncConflict } from "$app-wasm";
-import type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync.svelte";
-export enum LastSyncKind {
-  NeverSynced = "never-synced",
-  Synced = "synced",
-}
+import {
+  NookLocalFolderHealth,
+  NookLocalFolderHealthState,
+  NookManualProviderSync,
+  NookManualProviderSyncState,
+  NookPendingSyncConflict,
+  type NookReplacementConflict,
+  NookSecurityConflict,
+  NookSyncConflictReview,
+  NookSyncConflictReviewState,
+  NookVaultLastSync,
+} from "$app-wasm";
 
-export type LastSync =
-  | { kind: LastSyncKind.NeverSynced }
-  | { kind: LastSyncKind.Synced; at: SvelteDate };
-export enum ManualProviderSyncKind {
-  Idle = "idle",
-  Running = "running",
-}
-
-export type ManualProviderSync =
-  | { kind: ManualProviderSyncKind.Idle }
-  | { kind: ManualProviderSyncKind.Running; providerId: string };
-export enum SyncConflictReviewKind {
-  Clear = "clear",
-  RequiresDecision = "requires-decision",
-}
-
-export type SyncConflictReview =
-  | { kind: SyncConflictReviewKind.Clear }
-  | {
-      kind: SyncConflictReviewKind.RequiresDecision;
-      conflict: NookPendingSyncConflict;
-    };
-export enum LocalFolderHealthKind {
-  Healthy = "healthy",
-  MultipleVaults = "multiple-vaults",
-}
-
-export type LocalFolderHealth =
-  | { kind: LocalFolderHealthKind.Healthy }
-  | {
-      kind: LocalFolderHealthKind.MultipleVaults;
-      issue: LocalFolderMultipleVaultsIssue;
-    };
 export class VaultSyncState {
-  private lastSyncedState = $state<LastSync>({
-    kind: LastSyncKind.NeverSynced,
-  });
-  get lastSync(): LastSync {
+  private lastSyncedState = $state(NookVaultLastSync.neverSynced());
+  get lastSync(): NookVaultLastSync {
     return this.lastSyncedState;
   }
-  markSynced(value: SvelteDate): void {
-    this.lastSyncedState = { kind: LastSyncKind.Synced, at: value };
+  markSynced(atUnixMilliseconds: number): void {
+    const previous = this.lastSyncedState;
+    this.lastSyncedState = NookVaultLastSync.synced(atUnixMilliseconds);
+    previous.free();
   }
   isSyncing = $state(false);
   /** Provider id currently running a manual sync (Settings UI). */
-  private syncingProviderState = $state<ManualProviderSync>({
-    kind: ManualProviderSyncKind.Idle,
-  });
-  get manualProviderSync(): ManualProviderSync {
+  private syncingProviderState = $state(NookManualProviderSync.idle());
+  get manualProviderSync(): NookManualProviderSync {
     return this.syncingProviderState;
   }
   get manualProviderSyncRunning(): boolean {
-    return this.syncingProviderState.kind === ManualProviderSyncKind.Running;
+    return (
+      this.syncingProviderState.state === NookManualProviderSyncState.Running
+    );
   }
   beginManualProviderSync(value: string): void {
-    this.syncingProviderState = {
-      kind: ManualProviderSyncKind.Running,
-      providerId: value,
-    };
+    const previous = this.syncingProviderState;
+    this.syncingProviderState = NookManualProviderSync.running(value);
+    previous.free();
   }
   clearSyncingProvider(): void {
-    this.syncingProviderState = { kind: ManualProviderSyncKind.Idle };
+    const previous = this.syncingProviderState;
+    this.syncingProviderState = NookManualProviderSync.idle();
+    previous.free();
   }
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false);
-  /** Concurrent secret replacement conflicts from the event log projection. */
-  replacementConflicts = $state<
-    Array<{
-      oldSecretId: string;
-      candidates: Array<{ eventId: string; secretId: string }>;
-    }>
-  >([]);
-  /** Concurrent key-epoch rotations; local writes fail closed while present. */
-  securityConflicts = $state<Array<{ events: string[]; reasons: string[] }>>(
-    [],
-  );
+  /** Rust-owned concurrent secret replacements from the event-log projection. */
+  private replacementConflictState = $state.raw<NookReplacementConflict[]>([]);
+  get replacementConflicts(): readonly NookReplacementConflict[] {
+    return this.replacementConflictState;
+  }
+  /** Rust-owned concurrent key-epoch rotations; local writes fail closed while present. */
+  private securityConflictState = $state.raw<NookSecurityConflict[]>([]);
+  get securityConflicts(): readonly NookSecurityConflict[] {
+    return this.securityConflictState;
+  }
+  replaceProjectionConflicts(
+    replacementConflicts: NookReplacementConflict[],
+    securityConflicts: NookSecurityConflict[],
+  ): void {
+    for (const conflict of this.replacementConflictState) conflict.free();
+    for (const conflict of this.securityConflictState) conflict.free();
+    this.replacementConflictState = replacementConflicts;
+    this.securityConflictState = securityConflicts;
+  }
+  clearProjectionConflicts(): void {
+    this.replaceProjectionConflicts([], []);
+  }
+  /** E2E/dev boundary: construct the injected domain record in Rust. */
+  stageSecurityConflictForTesting(events: string[], reasons: string[]): void {
+    for (const conflict of this.securityConflictState) conflict.free();
+    this.securityConflictState = [
+      NookSecurityConflict.fromDisplayParts(events, reasons),
+    ];
+  }
+  /** E2E/dev boundary: construct the injected content conflict in Rust. */
+  stageContentSyncConflictForTesting(
+    providerLabel: string,
+    localVersion: number,
+    remoteVersion: number,
+  ): void {
+    this.stageSyncConflict(
+      NookPendingSyncConflict.forTestingContent(
+        providerLabel,
+        localVersion,
+        remoteVersion,
+      ),
+    );
+  }
+  /** E2E/dev boundary: construct the injected store-id conflict in Rust. */
+  stageStoreIdSyncConflictForTesting(
+    providerLabel: string,
+    localStoreId: string,
+    remoteStoreId: string,
+  ): void {
+    this.stageSyncConflict(
+      NookPendingSyncConflict.forTestingStoreId(
+        providerLabel,
+        localStoreId,
+        remoteStoreId,
+      ),
+    );
+  }
   /** User must pick local vs remote before editing when versions match but content differs. */
-  private syncConflictState = $state<SyncConflictReview>({
-    kind: SyncConflictReviewKind.Clear,
-  });
-  get syncConflictReview(): SyncConflictReview {
+  private syncConflictState = $state(NookSyncConflictReview.clear());
+  get syncConflictReview(): NookSyncConflictReview {
     return this.syncConflictState;
   }
   get syncConflictRequiresDecision(): boolean {
     return (
-      this.syncConflictState.kind === SyncConflictReviewKind.RequiresDecision
+      this.syncConflictState.state ===
+      NookSyncConflictReviewState.RequiresDecision
     );
   }
   stageSyncConflict(value: NookPendingSyncConflict): void {
-    this.syncConflictState = {
-      kind: SyncConflictReviewKind.RequiresDecision,
-      conflict: value,
-    };
+    const previous = this.syncConflictState;
+    this.syncConflictState = NookSyncConflictReview.requiresDecision(value);
+    previous.free();
   }
   clearPendingSyncConflict(): void {
-    this.syncConflictState = { kind: SyncConflictReviewKind.Clear };
+    const previous = this.syncConflictState;
+    this.syncConflictState = NookSyncConflictReview.clear();
+    previous.free();
   }
   /** Local-folder provider points at a folder that contains several vault event logs. */
-  private localFolderIssueState = $state<LocalFolderHealth>({
-    kind: LocalFolderHealthKind.Healthy,
-  });
-  get localFolderHealth(): LocalFolderHealth {
+  private localFolderIssueState = $state(NookLocalFolderHealth.healthy());
+  get localFolderHealth(): NookLocalFolderHealth {
     return this.localFolderIssueState;
   }
-  reportLocalFolderMultipleVaults(value: LocalFolderMultipleVaultsIssue): void {
-    this.localFolderIssueState = {
-      kind: LocalFolderHealthKind.MultipleVaults,
-      issue: value,
-    };
+  reportLocalFolderMultipleVaults(value: NookLocalFolderHealth): void {
+    if (value.state !== NookLocalFolderHealthState.MultipleVaults) {
+      value.free();
+      return;
+    }
+    const previous = this.localFolderIssueState;
+    this.localFolderIssueState = value;
+    previous.free();
   }
   clearLocalFolderMultipleVaultsIssue(): void {
-    this.localFolderIssueState = { kind: LocalFolderHealthKind.Healthy };
+    const previous = this.localFolderIssueState;
+    this.localFolderIssueState = NookLocalFolderHealth.healthy();
+    previous.free();
   }
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PASSWORD_IMPORT_MESSAGE_KEYS } from '../../../generated/i18n-keys'
   import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
   import type { ImportPanelProps } from '$lib/components/import-panel'
   import {
@@ -12,7 +13,7 @@
 <PasswordManagerImportPanel
   {...props}
   format={PasswordImportFormat.Text}
-  translationPrefix="lastpass_import"
+  messages={PASSWORD_IMPORT_MESSAGE_KEYS.LastPass}
   panelTestId="lastpass-import-panel"
   fileTestId="lastpass-csv-file"
   submitTestId="lastpass-import-submit"

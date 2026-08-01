@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     KeyRound,
     Lock,
@@ -12,7 +13,7 @@
   } from '@lucide/svelte'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment-code'
+  import { buildEnrollmentLink } from '$lib/enrollment/code'
   import {
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,
@@ -104,14 +105,14 @@
     const ms = Date.parse(issuedAt)
     if (!Number.isFinite(ms)) return ''
     const delta = Date.now() - ms
-    if (delta < 60_000) return vault.t('vault_passwords.issued_just_now')
+    if (delta < 60_000) return vault.t(I18N_KEYS.VaultPasswordsIssuedJustNow)
     const minutes = Math.round(delta / 60_000)
     if (minutes < 60)
-      return vault.t('vault_passwords.issued_mins_ago', {
+      return vault.t(I18N_KEYS.VaultPasswordsIssuedMinsAgo, {
         mins: String(minutes),
       })
     const hours = Math.round(minutes / 60)
-    return vault.t('vault_passwords.issued_hours_ago', {
+    return vault.t(I18N_KEYS.VaultPasswordsIssuedHoursAgo, {
       hours: String(hours),
     })
   })
@@ -142,15 +143,15 @@
   async function submitAddPassword() {
     localError = ''
     if (!labelInput.trim()) {
-      localError = vault.t('vault_passwords.enter_label_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError)
       return
     }
     if (!isVaultPasswordLongEnough(passwordInput)) {
-      localError = vault.t('vault_passwords.min_length_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }
     if (passwordInput !== confirmInput) {
-      localError = vault.t('vault_passwords.mismatch_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError)
       return
     }
     try {
@@ -165,11 +166,11 @@
     localError = ''
     if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!isVaultPasswordLongEnough(passwordInput)) {
-      localError = vault.t('vault_passwords.min_length_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }
     if (passwordInput !== confirmInput) {
-      localError = vault.t('vault_passwords.mismatch_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsMismatchError)
       return
     }
     try {
@@ -195,7 +196,7 @@
     localError = ''
     if (activeEntryId.kind !== ActivePasswordEntryKind.Selected) return
     if (!passwordInput) {
-      localError = vault.t('vault_passwords.enter_pw_error')
+      localError = vault.t(I18N_KEYS.VaultPasswordsEnterPwError)
       return
     }
     try {
@@ -206,7 +207,7 @@
       localError =
         e instanceof Error
           ? e.message
-          : vault.t('vault_passwords.failed_issue_error')
+          : vault.t(I18N_KEYS.VaultPasswordsFailedIssueError)
     }
   }
 </script>
@@ -225,10 +226,10 @@
           class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
         >
           <KeyRound class="size-4 text-primary" />
-          {vault.t('vault_passwords.title')}
+          {vault.t(I18N_KEYS.VaultPasswordsTitle)}
         </h2>
         <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-          {vault.t('vault_passwords.desc')}
+          {vault.t(I18N_KEYS.VaultPasswordsDesc)}
         </p>
       </div>
       <span
@@ -241,10 +242,10 @@
           <ShieldCheck class="size-3" />
           {passwordEntries.length}
           {passwordEntries.length === 1
-            ? vault.t('common.item')
-            : vault.t('common.items')}
+            ? vault.t(I18N_KEYS.CommonItem)
+            : vault.t(I18N_KEYS.CommonItems)}
         {:else}
-          <Lock class="size-3" /> {vault.t('common.none')}
+          <Lock class="size-3" /> {vault.t(I18N_KEYS.CommonNone)}
         {/if}
       </span>
     </header>
@@ -256,12 +257,12 @@
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
-        {vault.t('vault_passwords.warning_banner')}
+        {vault.t(I18N_KEYS.VaultPasswordsWarningBanner)}
       </span>
     </div>
   {:else}
     <p class="mb-4 text-xs text-muted-foreground text-pretty">
-      {vault.t('vault_passwords.info_desc')}
+      {vault.t(I18N_KEYS.VaultPasswordsInfoDesc)}
     </p>
   {/if}
 
@@ -281,7 +282,7 @@
                 </p>
                 {#if entry.createdAt}
                   <p class="text-xs text-muted-foreground">
-                    {vault.t('vault_passwords.added_date', {
+                    {vault.t(I18N_KEYS.VaultPasswordsAddedDate, {
                       date: entry.createdAt.slice(0, 10),
                     })}
                   </p>
@@ -324,7 +325,7 @@
                 >
                   <QrCode class="size-4" />
                   <span class="hidden sm:inline"
-                    >{vault.t('vault_passwords.generate_qr')}</span
+                    >{vault.t(I18N_KEYS.VaultPasswordsGenerateQr)}</span
                   >
                 </Button>
               {/if}
@@ -363,8 +364,8 @@
     >
       <Plus class="size-4" />
       {hasPasswords
-        ? vault.t('vault_passwords.create_another')
-        : vault.t('vault_passwords.create_password')}
+        ? vault.t(I18N_KEYS.VaultPasswordsCreateAnother)
+        : vault.t(I18N_KEYS.VaultPasswordsCreatePassword)}
     </Button>
   {/if}
 
@@ -384,20 +385,20 @@
             for="vault-pw-label"
             class="text-sm font-medium text-muted-foreground"
           >
-            {vault.t('vault_passwords.label')}
+            {vault.t(I18N_KEYS.VaultPasswordsLabel)}
           </label>
           <input
             id="vault-pw-label"
             type="text"
             class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder={vault.t('vault_passwords.label_placeholder')}
+            placeholder={vault.t(I18N_KEYS.VaultPasswordsLabelPlaceholder)}
             bind:value={labelInput}
             data-testid="vault-password-label"
           />
         </div>
       {:else if activeEntry.kind === ResolvedPasswordEntryKind.Available}
         <p class="text-xs text-muted-foreground">
-          {vault.t('vault_passwords.rotating_for_prefix')}<span
+          {vault.t(I18N_KEYS.VaultPasswordsRotatingForPrefix)}<span
             class="font-medium text-foreground">{activeEntry.entry.label}</span
           >.
         </p>
@@ -405,8 +406,8 @@
       <div class="space-y-1.5">
         <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
           {panel === VaultPasswordPanel.Add
-            ? vault.t('vault.fields.password')
-            : vault.t('vault_passwords.new_password')}
+            ? vault.t(I18N_KEYS.VaultFieldsPassword)
+            : vault.t(I18N_KEYS.VaultPasswordsNewPassword)}
         </label>
         <input
           id="vault-pw"
@@ -422,7 +423,7 @@
           for="vault-pw-confirm"
           class="text-sm font-medium text-muted-foreground"
         >
-          {vault.t('vault_passwords.confirm_password')}
+          {vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
         </label>
         <input
           id="vault-pw-confirm"
@@ -436,10 +437,10 @@
       <div class="flex items-center justify-between text-xs">
         <label class="inline-flex items-center gap-2 text-muted-foreground">
           <input type="checkbox" bind:checked={showPassword} />
-          {vault.t('vault_passwords.show')}
+          {vault.t(I18N_KEYS.VaultPasswordsShow)}
         </label>
         <span class="text-muted-foreground"
-          >{vault.t('vault_passwords.min_chars')}</span
+          >{vault.t(I18N_KEYS.VaultPasswordsMinChars)}</span
         >
       </div>
       {#if localError || passwordError}
@@ -455,7 +456,7 @@
           onclick={closePanel}
           disabled={isBusy}
         >
-          {vault.t('common.cancel')}
+          {vault.t(I18N_KEYS.CommonCancel)}
         </Button>
         <Button
           type="submit"
@@ -465,12 +466,12 @@
         >
           {#if isBusy}
             <RefreshCw class="size-3.5 animate-spin" />
-            {vault.t('vault_passwords.working')}
+            {vault.t(I18N_KEYS.VaultPasswordsWorking)}
           {:else}
             <ShieldCheck class="size-3.5" />
             {panel === VaultPasswordPanel.Add
-              ? vault.t('vault_passwords.add_password')
-              : vault.t('vault_passwords.rotate')}
+              ? vault.t(I18N_KEYS.VaultPasswordsAddPassword)
+              : vault.t(I18N_KEYS.VaultPasswordsRotate)}
           {/if}
         </Button>
       </div>
@@ -480,9 +481,9 @@
   {#if panel === VaultPasswordPanel.Remove && activeEntry.kind === ResolvedPasswordEntryKind.Available}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
-        {vault.t('vault_passwords.remove_body_prefix')}<span
+        {vault.t(I18N_KEYS.VaultPasswordsRemoveBodyPrefix)}<span
           class="font-medium text-foreground">{activeEntry.entry.label}</span
-        >{vault.t('vault_passwords.remove_body_suffix')}
+        >{vault.t(I18N_KEYS.VaultPasswordsRemoveBodySuffix)}
       </p>
       <div class="flex items-center justify-end gap-2">
         <Button
@@ -492,7 +493,7 @@
           onclick={closePanel}
           disabled={isBusy}
         >
-          {vault.t('common.cancel')}
+          {vault.t(I18N_KEYS.CommonCancel)}
         </Button>
         <Button
           type="button"
@@ -504,9 +505,9 @@
         >
           {#if isBusy}
             <RefreshCw class="size-3.5 animate-spin" />
-            {vault.t('vault_passwords.working')}
+            {vault.t(I18N_KEYS.VaultPasswordsWorking)}
           {:else}
-            <Trash2 class="size-3.5" /> {vault.t('common.remove')}
+            <Trash2 class="size-3.5" /> {vault.t(I18N_KEYS.CommonRemove)}
           {/if}
         </Button>
       </div>
@@ -524,17 +525,17 @@
           }}
         >
           <p class="text-xs text-muted-foreground text-pretty">
-            {vault.t('vault_passwords.issue_desc_prefix')}<span
+            {vault.t(I18N_KEYS.VaultPasswordsIssueDescPrefix)}<span
               class="font-medium text-foreground"
               >{activeEntry.entry.label}</span
-            >{vault.t('vault_passwords.issue_desc_suffix')}
+            >{vault.t(I18N_KEYS.VaultPasswordsIssueDescSuffix)}
           </p>
           <div class="space-y-1.5">
             <label
               for="issue-pw"
               class="text-sm font-medium text-muted-foreground"
             >
-              {vault.t('vault_passwords.password_for', {
+              {vault.t(I18N_KEYS.VaultPasswordsPasswordFor, {
                 label: activeEntry.entry.label,
               })}
             </label>
@@ -559,7 +560,7 @@
               size="sm"
               onclick={closePanel}
             >
-              {vault.t('common.cancel')}
+              {vault.t(I18N_KEYS.CommonCancel)}
             </Button>
             <Button
               type="submit"
@@ -569,10 +570,10 @@
             >
               {#if isBusy}
                 <RefreshCw class="size-3.5 animate-spin" />
-                {vault.t('onboard_device.generating')}
+                {vault.t(I18N_KEYS.OnboardDeviceGenerating)}
               {:else}
                 <QrCode class="size-3.5" />
-                {vault.t('vault_passwords.generate_qr')}
+                {vault.t(I18N_KEYS.VaultPasswordsGenerateQr)}
               {/if}
             </Button>
           </div>
@@ -581,11 +582,11 @@
         <EnrollmentOnboardResult
           {vault}
           {enrollmentLink}
-          instruction={vault.t('vault_passwords.scan_qr_desc')}
+          instruction={vault.t(I18N_KEYS.VaultPasswordsScanQrDesc)}
           issuedSuffix={issuedAgo ? `(${issuedAgo})` : ''}
-          linkTitle={vault.t('vault_passwords.link_title')}
-          linkDescription={vault.t('vault_passwords.link_desc')}
-          passwordReminder={vault.t('vault_passwords.share_password')}
+          linkTitle={vault.t(I18N_KEYS.VaultPasswordsLinkTitle)}
+          linkDescription={vault.t(I18N_KEYS.VaultPasswordsLinkDesc)}
+          passwordReminder={vault.t(I18N_KEYS.VaultPasswordsSharePassword)}
           copyBtnTestId="copy-enrollment-code-btn"
           linkInputTestId="enrollment-link-url"
           linkSrOnlyTestId="enrollment-code-link"
@@ -602,7 +603,7 @@
               closePanel()
             }}
           >
-            {vault.t('common.done')}
+            {vault.t(I18N_KEYS.CommonDone)}
           </Button>
         </div>
       {/if}

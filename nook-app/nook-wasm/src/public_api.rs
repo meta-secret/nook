@@ -91,21 +91,18 @@ pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
 
 /// Cryptographically secure password generation — free function so the UI can
 /// call it while the vault manager is borrowed by an in-flight `&mut self` op.
+#[wasm_bindgen(js_name = defaultPasswordGenerationOptions)]
+#[must_use]
+pub fn default_password_generation_options() -> nook_core::PasswordGenerationOptions {
+    nook_core::PasswordGenerationOptions::default()
+}
+
 #[wasm_bindgen(js_name = generatePassword)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn generate_password(
-    length: u32,
-    lowercase: bool,
-    uppercase: bool,
-    numbers: bool,
-    symbols: bool,
+    options: nook_core::PasswordGenerationOptions,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_password(&nook_core::PasswordOptions {
-        length: length as usize,
-        lowercase,
-        uppercase,
-        numbers,
-        symbols,
-    })?)
+    Ok(nook_core::generate_password(options)?)
 }
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
@@ -705,7 +702,7 @@ async fn grant_existing_drive_folder(
         .await
     {
         Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-            note: "architecture_modes.shared_grant_success".to_owned(),
+            note: nook_core::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS.to_owned(),
             target,
         },
         Err(error) => {
@@ -752,7 +749,7 @@ async fn create_and_grant_drive_folder(
         .await
     {
         Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-            note: "architecture_modes.shared_grant_success".to_owned(),
+            note: nook_core::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS.to_owned(),
             target: nook_core::SharedStorageGrantTarget::Named {
                 storage_target_id: folder_id,
                 storage_target_name: created_name,

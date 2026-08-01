@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Laptop, Globe, Trash2, TriangleAlert } from '@lucide/svelte'
   import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
@@ -50,8 +51,8 @@
 
 <div class="space-y-2" data-testid="storage-settings-panel">
   <SettingsAccordionPanel
-    title={vault.t('settings.devices')}
-    subtitle={vault.t('settings.devices_desc')}
+    title={vault.t(I18N_KEYS.SettingsDevices)}
+    subtitle={vault.t(I18N_KEYS.SettingsDevicesDesc)}
     open={accordionSection === SettingsAccordionSection.Devices}
     onToggle={() => toggleSection(SettingsAccordionSection.Devices)}
     testId="vault-devices-section"
@@ -65,8 +66,8 @@
       >
         <Laptop class="size-3" />
         {vaultMembers.length === 1
-          ? vault.t('settings.device_count_singular')
-          : vault.t('settings.device_count_plural', {
+          ? vault.t(I18N_KEYS.SettingsDeviceCountSingular)
+          : vault.t(I18N_KEYS.SettingsDeviceCountPlural, {
               count: String(vaultMembers.length),
             })}
       </span>
@@ -87,8 +88,8 @@
   </SettingsAccordionPanel>
 
   <SettingsAccordionPanel
-    title={vault.t('settings.language')}
-    subtitle={vault.t('settings.select_language')}
+    title={vault.t(I18N_KEYS.SettingsLanguage)}
+    subtitle={vault.t(I18N_KEYS.SettingsSelectLanguage)}
     open={accordionSection === SettingsAccordionSection.Language}
     onToggle={() => toggleSection(SettingsAccordionSection.Language)}
     testId="vault-language-section"
@@ -106,7 +107,7 @@
         for="language-select"
         class="block text-sm font-medium text-muted-foreground"
       >
-        {vault.t('settings.select_language')}
+        {vault.t(I18N_KEYS.SettingsSelectLanguage)}
       </label>
       <select
         id="language-select"
@@ -122,8 +123,8 @@
   </SettingsAccordionPanel>
 
   <SettingsAccordionPanel
-    title={vault.t('settings.delete_local_title')}
-    subtitle={vault.t('settings.delete_local_desc')}
+    title={vault.t(I18N_KEYS.SettingsDeleteLocalTitle)}
+    subtitle={vault.t(I18N_KEYS.SettingsDeleteLocalDesc)}
     open={accordionSection === SettingsAccordionSection.Danger}
     onToggle={() => toggleSection(SettingsAccordionSection.Danger)}
     testId="vault-danger-section"
@@ -133,12 +134,12 @@
         class="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive"
       >
         <TriangleAlert class="size-3" />
-        {vault.t('settings.danger_zone')}
+        {vault.t(I18N_KEYS.SettingsDangerZone)}
       </span>
     {/snippet}
     <div class="space-y-3 p-4">
       <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t('settings.delete_local_details')}
+        {vault.t(I18N_KEYS.SettingsDeleteLocalDetails)}
       </p>
       {#if deleteConfirmationOpen}
         <div
@@ -146,7 +147,7 @@
           data-testid="delete-local-vault-confirmation"
         >
           <p class="text-sm font-medium text-foreground">
-            {vault.t('settings.delete_local_confirm')}
+            {vault.t(I18N_KEYS.SettingsDeleteLocalConfirm)}
           </p>
           <div class="flex flex-wrap justify-end gap-2">
             <Button
@@ -157,7 +158,7 @@
               data-testid="delete-local-vault-cancel"
               onclick={() => (deleteConfirmationOpen = false)}
             >
-              {vault.t('common.cancel')}
+              {vault.t(I18N_KEYS.CommonCancel)}
             </Button>
             <Button
               type="button"
@@ -169,8 +170,8 @@
             >
               <Trash2 class="size-3.5" />
               {vault.isSaving
-                ? vault.t('settings.deleting_local')
-                : vault.t('settings.delete_local_confirm_button')}
+                ? vault.t(I18N_KEYS.SettingsDeletingLocal)
+                : vault.t(I18N_KEYS.SettingsDeleteLocalConfirmButton)}
             </Button>
           </div>
         </div>
@@ -183,7 +184,7 @@
           onclick={() => (deleteConfirmationOpen = true)}
         >
           <Trash2 class="size-3.5" />
-          {vault.t('settings.delete_local_button')}
+          {vault.t(I18N_KEYS.SettingsDeleteLocalButton)}
         </Button>
       {/if}
     </div>

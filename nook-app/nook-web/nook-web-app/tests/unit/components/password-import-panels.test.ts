@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import type { NookImportResult } from '$lib/nook'
@@ -102,7 +103,7 @@ describe('LastPass import panel', () => {
     await waitFor(() => {
       expect(
         view.getByTestId('lastpass-import-panel-progress').textContent,
-      ).toContain('common.import_progress_title')
+      ).toContain(I18N_KEYS.CommonImportProgressTitle)
     })
     expect(input.disabled).toBe(true)
     expect(submit.disabled).toBe(true)
@@ -379,7 +380,7 @@ describe('Google Authenticator import panel', () => {
     await waitFor(() => {
       expect(
         view.getByTestId('google-authenticator-import-error').textContent,
-      ).toContain('google_authenticator_import.duplicate_qr')
+      ).toContain(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr)
     })
     await fireEvent.change(input, {
       target: { files: [new File(['other'], 'other.png')] },
@@ -387,7 +388,7 @@ describe('Google Authenticator import panel', () => {
     await waitFor(() => {
       expect(
         view.getByTestId('google-authenticator-import-error').textContent,
-      ).toContain('google_authenticator_import.invalid_qr')
+      ).toContain(I18N_KEYS.GoogleAuthenticatorImportInvalidQr)
     })
   })
 })

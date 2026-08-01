@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { prepareICloudSignInControl } from "$lib/icloud-oauth";
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { prepareICloudSignInControl } from "$lib/auth/icloud/oauth";
   import type { VaultState } from "$lib/vault.svelte";
 
   let { vault }: { vault: VaultState } = $props();
@@ -15,7 +16,7 @@
       prepareError =
         error instanceof Error
           ? vault.t(error.message)
-          : vault.t("provider_setup.icloud_shared_sign_in_first");
+          : vault.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst);
     });
   });
 </script>
@@ -33,11 +34,11 @@
       open = !open;
     }}
   >
-    {vault.t("login.icloud_shared_enrollment_toggle")}
+    {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentToggle)}
   </button>
   {#if open}
     <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t("login.icloud_shared_enrollment_hint")}
+      {vault.t(I18N_KEYS.LoginIcloudSharedEnrollmentHint)}
     </p>
     <div id="apple-sign-in-button"></div>
     <div id="apple-sign-out-button" class="hidden"></div>

@@ -25,6 +25,9 @@ Continues [mobile-core-reuse.md](mobile-core-reuse.md).
       policy (~300KB class, not full vault `nook-wasm`).
 - [x] Content adapters call companion WASM for backup-code candidates, field-role
       heuristics, and vault host matching; DOM query/fill stays in TypeScript.
+- [x] Shared vault sync state variants and their payloads live in `nook-core`
+      with typed `nook-wasm` wrappers; Svelte retains only reactive storage and
+      host orchestration.
 
 ## Remaining follow-ups
 

@@ -111,7 +111,7 @@ No user-visible UI changes yet.
 
 | # | Change |
 |---|--------|
-| 6.1 | Rewrite `help-content.ts` for local-first vault + sync providers |
+| 6.1 | Rewrite `content/help.ts` for local-first vault + sync providers |
 | 6.2 | Sync / conflict / onboard FAQ sections |
 | 6.3 | Architecture mermaid diagram in help page |
 

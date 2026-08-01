@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -11,14 +12,14 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
     localFolderHandle,
     LocalFolderHandleKind,
     oauthAccessToken,
     OAuthAccessTokenKind,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     Card,
     CardContent,
@@ -300,7 +301,7 @@
       data-testid="login-session-expired"
       role="status"
     >
-      {vault.t('session.expired_idle')}
+      {vault.t(I18N_KEYS.SessionExpiredIdle)}
     </p>
   {/if}
 
@@ -375,7 +376,7 @@
         class="text-xs text-muted-foreground"
         data-testid="login-local-vault-detected"
       >
-        {vault.t('login.vault_picker_hint')}
+        {vault.t(I18N_KEYS.LoginVaultPickerHint)}
       </p>
     {/if}
 
@@ -388,46 +389,46 @@
             class="text-lg font-semibold tracking-tight text-foreground"
           >
             {#if showVaultPicker}
-              {vault.t('login.vault_picker_title')}
+              {vault.t(I18N_KEYS.LoginVaultPickerTitle)}
             {:else if showLocalUnlock}
-              {vault.t('login.open_vault_title')}
+              {vault.t(I18N_KEYS.LoginOpenVaultTitle)}
             {:else if showSetup}
-              {vault.t('onboarding.connect_to', {
+              {vault.t(I18N_KEYS.OnboardingConnectTo, {
                 provider: setupIs('github')
                   ? 'GitHub'
                   : setupIs('local-folder')
-                    ? vault.t('provider_picker.local_folder')
-                    : vault.t('onboarding.local_storage'),
+                    ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                    : vault.t(I18N_KEYS.OnboardingLocalStorage),
               })}
             {:else if addProviderOpen}
-              {vault.t('onboarding.add_provider')}
+              {vault.t(I18N_KEYS.OnboardingAddProvider)}
             {:else}
-              {vault.t('onboarding.setup_storage')}
+              {vault.t(I18N_KEYS.OnboardingSetupStorage)}
             {/if}
           </CardTitle>
           {#if isUnlocking}
             <CardDescription class="text-pretty"
-              >{vault.t('login.unlocking')}</CardDescription
+              >{vault.t(I18N_KEYS.LoginUnlocking)}</CardDescription
             >
           {:else if showVaultPicker}
             <CardDescription class="text-pretty">
-              {vault.t('login.vault_picker_subtitle')}
+              {vault.t(I18N_KEYS.LoginVaultPickerSubtitle)}
             </CardDescription>
           {:else if showLocalUnlock}
             <CardDescription class="text-pretty">
-              {vault.t('login.open_vault_subtitle')}
+              {vault.t(I18N_KEYS.LoginOpenVaultSubtitle)}
             </CardDescription>
           {:else if showSetup && setupIs('github')}
             <CardDescription class="text-pretty">
-              {vault.t('onboarding.github_description')}
+              {vault.t(I18N_KEYS.OnboardingGithubDescription)}
             </CardDescription>
           {:else if showSetup}
             <CardDescription class="text-pretty">
-              {vault.t('onboarding.local_description')}
+              {vault.t(I18N_KEYS.OnboardingLocalDescription)}
             </CardDescription>
           {:else if addProviderOpen}
             <CardDescription class="text-pretty">
-              {vault.t('onboarding.another_provider')}
+              {vault.t(I18N_KEYS.OnboardingAnotherProvider)}
             </CardDescription>
           {/if}
         </div>
@@ -479,7 +480,7 @@
             }}
           />
           <p class="mt-4 text-center text-xs text-muted-foreground">
-            {vault.t('login.sync_after_unlock')}
+            {vault.t(I18N_KEYS.LoginSyncAfterUnlock)}
           </p>
         {:else if showSetup}
           {#if setupIs('oauth-file')}
@@ -545,13 +546,13 @@
                 >
                   {#if isInitializing}
                     <RefreshCw class="size-4 animate-spin" />
-                    {vault.t('onboarding.loading_engine')}
+                    {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
                   {:else if isVerifying}
                     <RefreshCw class="size-4 animate-spin" />
-                    {vault.t('common.connecting')}
+                    {vault.t(I18N_KEYS.CommonConnecting)}
                   {:else}
                     <ShieldCheck class="size-4" />
-                    {vault.t('common.connect')}
+                    {vault.t(I18N_KEYS.CommonConnect)}
                   {/if}
                 </Button>
               </div>
@@ -568,7 +569,7 @@
                 showProviderSetupLink = false
               }}
             >
-              {vault.t('login.back_to_get_started')}
+              {vault.t(I18N_KEYS.LoginBackToGetStarted)}
             </button>
           {/if}
           <LoginProviderManagement

@@ -33,3 +33,5 @@ fn section<'a>(content: &'a str, start: &str, end: &str) -> &'a str {
 mod build_contracts;
 #[path = "vault_app_isolation/hosted_delivery_contracts.rs"]
 mod hosted_delivery_contracts;
+#[path = "vault_app_isolation/runtime_boundary_contracts.rs"]
+mod runtime_boundary_contracts;

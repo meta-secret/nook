@@ -7,21 +7,18 @@ import {
 } from '../helpers'
 
 const DEMO_BEAT_MS = 700
-/** Mirrors `VaultSyncConflictKind.StoreId` from the wasm binding. */
-const STORE_ID_CONFLICT_KIND = 1
-
 type DemoVaultWindow = Window & {
   __nookVault?: {
     loginDeviceKeysCapable: boolean
     loginPasswordPrompt: boolean
     passwordEntries: Array<{ id: string; label: string; createdAt: string }>
-    stageSyncConflict(conflict: {
-      kind: number
-      providerLabel: string
-      remoteYaml: string
-      localStoreId(): string
-      remoteStoreId(): string
-    }): void
+    clearProjectionConflicts(): void
+    stageSecurityConflictForTesting(events: string[], reasons: string[]): void
+    stageStoreIdSyncConflictForTesting(
+      providerLabel: string,
+      localStoreId: string,
+      remoteStoreId: string,
+    ): void
   }
 }
 
@@ -38,19 +35,44 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await createLocalVaultOnLogin(page, 'demo-local')
   await demoBeat(page)
 
-  await page.evaluate((conflictKind) => {
+  await page.evaluate(() => {
     const vault = (window as DemoVaultWindow).__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
-    vault.stageSyncConflict({
-      kind: conflictKind,
-      providerLabel: 'Google Drive',
-      remoteYaml: '',
-      localStoreId: () => 'store_localDemo01',
-      remoteStoreId: () => 'store_remoteDemo1',
-    })
-  }, STORE_ID_CONFLICT_KIND)
+    vault.stageSecurityConflictForTesting(
+      ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+      ['key epoch rotation'],
+    )
+  })
+  await expect(
+    page.getByText('Security conflict detected', { exact: true }),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(page.getByTestId('add-secret-btn')).toBeDisabled()
+  await demoBeat(page)
+
+  await page.evaluate(() => {
+    const vault = (window as DemoVaultWindow).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    vault.clearProjectionConflicts()
+  })
+  await expect(
+    page.getByText('Security conflict detected', { exact: true }),
+  ).not.toBeVisible()
+
+  await page.evaluate(() => {
+    const vault = (window as DemoVaultWindow).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    vault.stageStoreIdSyncConflictForTesting(
+      'Google Drive',
+      'store_localDemo01',
+      'store_remoteDemo1',
+    )
+  })
 
   await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

@@ -1,5 +1,5 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import { isVaultSessionLocked } from "$app-wasm";
 
 const log = createLogger("vault-sync");

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     Cloud,
     HardDrive,
@@ -7,9 +8,9 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { StorageProviderType } from '$lib/auth-providers'
+  import { NookVaultLastSyncState, type NookVaultLastSync } from '$app-wasm'
+  import type { StorageProviderType } from '$lib/auth/providers'
   import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
-  import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
   import { VaultStatusBarVariant } from './vault-status-bar-state'
 
   let {
@@ -34,7 +35,7 @@
     vault?: VaultState
     storageMode?: StorageProviderType
     githubRepo?: string
-    lastSync: LastSync
+    lastSync: NookVaultLastSync
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
@@ -59,23 +60,26 @@
     return () => clearInterval(timer)
   })
 
-  function formatLastSync(sync: LastSync): string {
-    if (sync.kind === LastSyncKind.NeverSynced) {
-      return vault ? vault.t('status_bar.not_yet') : 'not yet'
+  function formatLastSync(sync: NookVaultLastSync): string {
+    if (sync.state === NookVaultLastSyncState.NeverSynced) {
+      return vault ? vault.t(I18N_KEYS.StatusBarNotYet) : 'not yet'
     }
-    const secs = Math.max(0, Math.floor((now - sync.at.getTime()) / 1000))
-    if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'
+    const secs = Math.max(
+      0,
+      Math.floor((now - sync.syncedAtUnixMilliseconds) / 1000),
+    )
+    if (secs < 5) return vault ? vault.t(I18N_KEYS.StatusBarJustNow) : 'just now'
     if (secs < 60)
       return vault
-        ? vault.t('status_bar.secs_ago', { secs: String(secs) })
+        ? vault.t(I18N_KEYS.StatusBarSecsAgo, { secs: String(secs) })
         : `${secs}s ago`
     const mins = Math.floor(secs / 60)
     if (mins < 60)
       return vault
-        ? vault.t('status_bar.mins_ago', { mins: String(mins) })
+        ? vault.t(I18N_KEYS.StatusBarMinsAgo, { mins: String(mins) })
         : `${mins}m ago`
     return vault
-      ? vault.t('status_bar.hours_ago', {
+      ? vault.t(I18N_KEYS.StatusBarHoursAgo, {
           hours: String(Math.floor(mins / 60)),
         })
       : `${Math.floor(mins / 60)}h ago`
@@ -87,40 +91,40 @@
   const statusLabel = $derived(
     label ??
       (isAuthenticatedVault
-        ? vault!.t('status_bar.local_vault')
+        ? vault!.t(I18N_KEYS.StatusBarLocalVault)
         : storageMode === 'github'
           ? githubRepo.trim() || 'GitHub'
           : storageMode === 'oauth-file'
             ? vault
-              ? vault.t('provider_picker.google_drive')
+              ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
               : 'Google Drive'
             : storageMode === 'local-folder'
               ? vault
-                ? vault.t('provider_picker.local_folder')
+                ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
                 : 'Local backup'
               : vault
-                ? vault.t('provider_picker.this_device')
+                ? vault.t(I18N_KEYS.ProviderPickerThisDevice)
                 : 'This device'),
   )
 
   const syncDetail = $derived.by(() => {
     if (!vault || !showSyncStatus) return ''
     if (vault.syncingProviderLabel.kind === SyncProviderLabelKind.Active) {
-      return vault.t('status_bar.syncing_to', {
+      return vault.t(I18N_KEYS.StatusBarSyncingTo, {
         provider: vault.syncingProviderLabel.label,
       })
     }
     if (vault.isFanOutSyncing) {
-      return vault.t('status_bar.syncing_providers')
+      return vault.t(I18N_KEYS.StatusBarSyncingProviders)
     }
     if (vault.syncProviderCount > 0) {
       return vault.syncProviderCount === 1
-        ? vault.t('status_bar.sync_providers_singular')
-        : vault.t('status_bar.sync_providers_plural', {
+        ? vault.t(I18N_KEYS.StatusBarSyncProvidersSingular)
+        : vault.t(I18N_KEYS.StatusBarSyncProvidersPlural, {
             count: String(vault.syncProviderCount),
           })
     }
-    return vault.t('status_bar.saved_local_only')
+    return vault.t(I18N_KEYS.StatusBarSavedLocalOnly)
   })
 
   const showRefresh = $derived(
@@ -194,7 +198,7 @@
             class="shrink-0 text-muted-foreground"
             data-testid="vault-last-sync"
           >
-            {vault!.t('status_bar.saved')}
+            {vault!.t(I18N_KEYS.StatusBarSaved)}
             {formatLastSync(lastSync)}
           </span>
           {#if syncDetail}
@@ -221,10 +225,10 @@
           >
             {storageMode === 'github'
               ? vault
-                ? vault.t('status_bar.synced')
+                ? vault.t(I18N_KEYS.StatusBarSynced)
                 : 'Synced'
               : vault
-                ? vault.t('status_bar.saved')
+                ? vault.t(I18N_KEYS.StatusBarSaved)
                 : 'Saved'}
             {formatLastSync(lastSync)}
           </span>
@@ -241,26 +245,26 @@
             disabled={isSyncing || vault?.syncBlocked}
             data-testid="vault-sync-refresh-btn"
             aria-label={isAuthenticatedVault
-              ? vault!.t('status_bar.sync_all_aria')
+              ? vault!.t(I18N_KEYS.StatusBarSyncAllAria)
               : storageMode === 'github'
                 ? vault
-                  ? vault.t('status_bar.sync_aria_github')
+                  ? vault.t(I18N_KEYS.StatusBarSyncAriaGithub)
                   : 'Sync vault with GitHub'
                 : vault
-                  ? vault.t('status_bar.refresh_aria_local')
+                  ? vault.t(I18N_KEYS.StatusBarRefreshAriaLocal)
                   : 'Refresh vault from browser storage'}
             onclick={() => void onRefresh?.()}
           >
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
             <span class="ml-1"
               >{isAuthenticatedVault
-                ? vault!.t('status_bar.sync_all')
+                ? vault!.t(I18N_KEYS.StatusBarSyncAll)
                 : storageMode === 'github'
                   ? vault
-                    ? vault.t('status_bar.sync')
+                    ? vault.t(I18N_KEYS.StatusBarSync)
                     : 'Sync'
                   : vault
-                    ? vault.t('status_bar.refresh')
+                    ? vault.t(I18N_KEYS.StatusBarRefresh)
                     : 'Refresh'}</span
             >
           </Button>
@@ -269,13 +273,13 @@
             role="tooltip"
           >
             {isAuthenticatedVault
-              ? vault!.t('status_bar.sync_all_tooltip')
+              ? vault!.t(I18N_KEYS.StatusBarSyncAllTooltip)
               : storageMode === 'github'
                 ? vault
-                  ? vault.t('status_bar.sync_tooltip_github')
+                  ? vault.t(I18N_KEYS.StatusBarSyncTooltipGithub)
                   : 'Synchronize latest changes with your storage provider'
                 : vault
-                  ? vault.t('status_bar.refresh_tooltip_local')
+                  ? vault.t(I18N_KEYS.StatusBarRefreshTooltipLocal)
                   : 'Reload latest changes from browser storage'}
           </div>
         </div>
@@ -297,7 +301,7 @@
             data-testid="vault-sync-conflict-open-btn"
             onclick={() => onOpenSyncConflict()}
           >
-            {vault ? vault.t('auth_storage.sync_conflict_resolve') : 'Resolve'}
+            {vault ? vault.t(I18N_KEYS.AuthStorageSyncConflictResolve) : 'Resolve'}
           </button>
         {/if}
       </div>
@@ -316,7 +320,7 @@
             type="button"
             class="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary"
             aria-label={vault
-              ? vault.t('common.dismiss_success')
+              ? vault.t(I18N_KEYS.CommonDismissSuccess)
               : 'Dismiss success message'}
             data-testid="dismiss-success-btn"
             onclick={onDismissSuccess}
@@ -340,7 +344,7 @@
             type="button"
             class="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive"
             aria-label={vault
-              ? vault.t('common.dismiss_error')
+              ? vault.t(I18N_KEYS.CommonDismissError)
               : 'Dismiss error message'}
             data-testid="dismiss-error-btn"
             onclick={onDismissError}

@@ -1,6 +1,7 @@
 import type {
   NookImportResult,
   NookJoinRequest,
+  PasswordGenerationOptions,
   NookSecretListItem,
   NookSecretRecord,
   NookVaultManager,
@@ -9,27 +10,27 @@ import type {
 } from "$app-wasm";
 import {
   authenticatorSetupKeyChanged,
+  defaultPasswordGenerationOptions,
   default as initNookWasm,
   generateId,
   NookVaultManager as NookVaultManagerClass,
   NookSecretFormFields,
   SecretType,
   buildSecretYaml as wasmBuildSecretYaml,
-  generatePassword as wasmGeneratePassword,
+  generatePassword,
   generateSecretId,
   VaultAccessStatus,
 } from "$app-wasm";
-import { createLogger, initWasmLogging } from "$lib/log";
-import { ensureAppWasm } from "$lib/wasm-bootstrap";
-import { generatePasswordWithOptions } from "$web-shared/password/generator";
+import { createLogger, initWasmLogging } from "$lib/runtime/log";
 
-await ensureAppWasm();
+await initNookWasm();
 initWasmLogging();
 
 export type {
   NookImportResult,
   NookJoinRequest,
   NookJoinRequest as JoinRequest,
+  PasswordGenerationOptions,
   NookSecretListItem,
   NookSecretRecord,
   NookVaultManager,
@@ -40,7 +41,9 @@ export type {
 };
 export {
   authenticatorSetupKeyChanged,
+  defaultPasswordGenerationOptions,
   generateId,
+  generatePassword,
   generateSecretId,
   SecretType,
   VaultAccessStatus,
@@ -52,23 +55,6 @@ export type AuthenticatorCodeView = {
   period: number;
   expiresAtUnixSeconds: number;
 };
-
-/** Cryptographically secure password — does not borrow the vault manager. */
-export function generatePassword(
-  length: number,
-  lowercase: boolean,
-  uppercase: boolean,
-  numbers: boolean,
-  symbols: boolean,
-): string {
-  return generatePasswordWithOptions(wasmGeneratePassword, {
-    length,
-    lowercase,
-    uppercase,
-    numbers,
-    symbols,
-  });
-}
 
 export function isoTimestamp(): string {
   return new Date().toISOString();

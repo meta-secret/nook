@@ -58,6 +58,8 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
     "type PendingSyncConflictDraft =",
     "type ProviderStoreMismatch = {",
     "type NookSecretFormFields = {",
+    "type PasswordGenerationOptions = {",
+    "interface PasswordGenerationOptions {",
 ];
 
 const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
@@ -81,6 +83,12 @@ const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
     "OAuthFilePreset",
     "GoogleDriveMode",
     "ICloudMode",
+    "PasswordGenerationOptions",
+    "LastSync",
+    "ManualProviderSync",
+    "SyncConflictReview",
+    "LocalFolderHealth",
+    "LocalFolderMultipleVaultsIssue",
 ];
 
 const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
@@ -100,7 +108,12 @@ const TYPESCRIPT_DOMAIN_MIRROR_ENUM_NAMES: &[&str] = &[
     "OnboardingType",
     "WebsiteLoginSaveDecision",
     "SecretFormInputType",
+    "LastSyncKind",
+    "ManualProviderSyncKind",
+    "SyncConflictReviewKind",
+    "LocalFolderHealthKind",
     "SecretType",
+    "ExistingVaultProviderSnapshotKind",
 ];
 
 const RUST_WASM_UNCHECKED_TYPE_MARKERS: &[&str] =
@@ -475,6 +488,55 @@ export type ExistingVaultRecoverySummary = {
 ";
 
         assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
+    }
+
+    #[test]
+    fn reports_password_generation_option_mirrors() {
+        let source = r"
+export type PasswordGenerationOptions = {
+  length: number
+}
+interface PasswordGenerationOptions {
+  symbols: boolean
+}
+type PasswordGenerationOptions = Readonly<{ numbers: boolean }>
+interface PasswordGenerationOptions
+{
+  uppercase: boolean
+}
+type PasswordGenerationOptions =
+{
+  lowercase: boolean
+}
+";
+
+        assert_eq!(
+            typescript_boundary_violation_lines(source),
+            vec![2, 5, 8, 9, 13]
+        );
+    }
+
+    #[test]
+    fn permits_browser_lifecycle_enums_but_reports_provider_mirror() {
+        let source = r#"
+export enum PendingVaultCreationKind {
+  Simple = "simple",
+}
+enum VaultCreationQueueKind {
+  Idle = "idle",
+}
+export enum ExistingVaultProviderSnapshotKind {
+  Local = "local",
+}
+enum ExistingVaultImportQueueKind {
+  Idle = "idle",
+}
+export enum EnrollmentSubmitQueueKind {
+  Idle = "idle",
+}
+"#;
+
+        assert_eq!(typescript_boundary_violation_lines(source), vec![8]);
     }
 
     #[test]

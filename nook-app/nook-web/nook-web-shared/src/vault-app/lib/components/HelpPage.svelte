@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { BookOpen, ChevronDown, ChevronLeft } from '@lucide/svelte'
-  import { HELP_SECTIONS } from '$lib/help-content'
+  import { HELP_SECTIONS } from '$lib/content/help'
   import HelpMermaidDiagram from '$lib/components/HelpMermaidDiagram.svelte'
-  import { appPath } from '$lib/legal-content'
+  import { appPath } from '$lib/content/legal'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -11,7 +12,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import { MermaidTheme } from '$lib/mermaid-diagram'
+  import { MermaidTheme } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -52,10 +53,10 @@
             class="text-base font-semibold tracking-tight text-foreground inline-flex items-center gap-1.5"
           >
             <BookOpen class="size-4 shrink-0" />
-            {vault.t('help.title')}
+            {vault.t(I18N_KEYS.HelpTitle)}
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
-            {vault.t('help.subtitle')}
+            {vault.t(I18N_KEYS.HelpSubtitle)}
           </CardDescription>
         </div>
         <Button
@@ -67,7 +68,7 @@
           onclick={onClose}
         >
           <ChevronLeft class="size-3.5" />
-          {vault.t('common.back')}
+          {vault.t(I18N_KEYS.CommonBack)}
         </Button>
       </div>
     </CardHeader>
@@ -78,7 +79,7 @@
           for="help-section-select"
           class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          {vault.t('help.in_this_guide')}
+          {vault.t(I18N_KEYS.HelpInThisGuide)}
         </label>
         <div class="relative">
           <select
@@ -88,11 +89,11 @@
             onchange={handleSectionJump}
           >
             <option value="" selected disabled>
-              {vault.t('help.jump_to_section')}
+              {vault.t(I18N_KEYS.HelpJumpToSection)}
             </option>
             {#each HELP_SECTIONS as section (section.id)}
               <option value={section.id}>
-                {vault.t(`help.sections.${section.id}.title`)}
+                {vault.t(section.titleKey)}
               </option>
             {/each}
           </select>
@@ -111,17 +112,17 @@
             data-testid="help-section-{section.id}"
           >
             <h2 class="text-sm font-semibold leading-tight text-foreground">
-              {vault.t(`help.sections.${section.id}.title`)}
+              {vault.t(section.titleKey)}
             </h2>
             <p class="text-sm leading-snug text-muted-foreground text-pretty">
-              {vault.t(`help.sections.${section.id}.summary`)}
+              {vault.t(section.summaryKey)}
             </p>
             <ul
               class="list-disc space-y-0.5 pl-4 text-sm leading-snug text-muted-foreground text-pretty"
             >
-              {#each Array.from({ length: section.bulletCount }, (_, index) => index + 1) as bulletNumber (section.id + bulletNumber)}
+              {#each section.bulletKeys as bulletKey, index (section.id + index)}
                 <li>
-                  {vault.t(`help.sections.${section.id}.bullet${bulletNumber}`)}
+                  {vault.t(bulletKey)}
                 </li>
               {/each}
             </ul>
@@ -139,20 +140,20 @@
 
       <nav
         class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground"
-        aria-label={vault.t('legal.documents_label')}
+        aria-label={vault.t(I18N_KEYS.LegalDocumentsLabel)}
       >
         <a
           href={appPath('/privacy.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
-          {vault.t('legal.privacy_policy')}
+          {vault.t(I18N_KEYS.LegalPrivacyPolicy)}
         </a>
         <span aria-hidden="true">·</span>
         <a
           href={appPath('/terms.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
-          {vault.t('legal.terms_of_service')}
+          {vault.t(I18N_KEYS.LegalTermsOfService)}
         </a>
       </nav>
     </CardContent>

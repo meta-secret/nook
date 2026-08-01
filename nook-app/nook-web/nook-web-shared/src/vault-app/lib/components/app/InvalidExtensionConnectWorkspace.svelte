@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -16,10 +17,10 @@
   data-testid="extension-connect-invalid"
 >
   <h1 class="text-lg font-semibold text-foreground">
-    {vault.t('extension.connect.invalid_title')}
+    {vault.t(I18N_KEYS.ExtensionConnectInvalidTitle)}
   </h1>
   <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-    {vault.t('extension.connect.invalid_description')}
+    {vault.t(I18N_KEYS.ExtensionConnectInvalidDescription)}
   </p>
   <Button
     type="button"
@@ -27,6 +28,6 @@
     class="mt-4"
     onclick={onClose}
   >
-    {vault.t('extension.connect.return_to_nook')}
+    {vault.t(I18N_KEYS.ExtensionConnectReturnToNook)}
   </Button>
 </section>

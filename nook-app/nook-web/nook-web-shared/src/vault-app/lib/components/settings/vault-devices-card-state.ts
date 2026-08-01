@@ -1,5 +1,3 @@
-import type { ExtensionSetupState } from "$lib/extension-install";
-
 export enum MemberDetailsKind {
   Collapsed = "collapsed",
   Expanded = "expanded",
@@ -26,12 +24,3 @@ export enum MemberRevocationKind {
 export type MemberRevocation =
   | { kind: MemberRevocationKind.Idle }
   | { kind: MemberRevocationKind.Confirming; authId: string };
-
-export enum ExtensionSetupOfferKind {
-  Hidden = "hidden",
-  Visible = "visible",
-}
-
-export type ExtensionSetupOffer =
-  | { kind: ExtensionSetupOfferKind.Hidden }
-  | { kind: ExtensionSetupOfferKind.Visible; setup: ExtensionSetupState };

@@ -164,7 +164,7 @@ pub(crate) async fn verify_shared_vault_folder(
     })?;
     if parsed.mime_type.as_deref() != Some("application/vnd.google-apps.folder") {
         return Err(NookError::Drive(
-            "provider_setup.google_shared_not_folder".to_owned(),
+            nook_core::i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
         ));
     }
     if parsed
@@ -173,7 +173,7 @@ pub(crate) async fn verify_shared_vault_folder(
         != Some(true)
     {
         return Err(NookError::Drive(
-            "provider_setup.google_shared_not_writable".to_owned(),
+            nook_core::i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
         ));
     }
     Ok((

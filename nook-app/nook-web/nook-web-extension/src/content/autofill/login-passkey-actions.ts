@@ -1,3 +1,7 @@
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   fillGeneratedPassword,
@@ -73,11 +77,11 @@ export async function fillAndSubmitAccount(
     },
   })
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
       true,
     )
     return false
@@ -88,11 +92,11 @@ export async function fillAndSubmitAccount(
     !response.username ||
     typeof response.password !== 'string'
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
       true,
     )
     return false
@@ -111,23 +115,39 @@ export async function fillAndSubmitAccount(
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
       true,
     )
     return false
   }
   if (!submitLoginForm(workflow.root, workflow.formScope)) {
-    setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
-    description.textContent = translatedMessage('widgetFilledManual')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+    )
+    description.textContent = translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetFilledManual,
+    )
     continueButton.hidden = true
     return true
   }
-  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
-  description.textContent = translatedMessage('widgetSubmitted')
+  setFlightProgress(
+    step,
+    title,
+    3,
+    3,
+    BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
+  )
+  description.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetSubmitted,
+  )
   continueButton.hidden = true
   return true
 }
@@ -148,32 +168,32 @@ async function openLoginPicker(
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
       true,
     )
     return
   }
   const { response } = delivery
   if (response.status === 'locked') {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetUnlockThenContinue'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
       true,
     )
     return
   }
   if (response.status === 'unavailable') {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetConnectVault'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
       true,
     )
     return
@@ -183,11 +203,11 @@ async function openLoginPicker(
     typeof response.expiresAt !== 'number' ||
     response.expiresAt <= Date.now()
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
       true,
     )
     return
@@ -210,7 +230,7 @@ async function openLoginPicker(
       setStatus(
         pending.description,
         pending.continueButton,
-        translatedMessage('widgetFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
         true,
       )
       if (
@@ -231,11 +251,11 @@ async function openLoginPicker(
     continueButton,
     timeoutId,
   })
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
-    translatedMessage('widgetLoginPickerOpened'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerOpened),
     true,
   )
 }
@@ -270,7 +290,7 @@ export async function generatePasswordWithNook(
   setStatus(
     description,
     continueButton,
-    translatedMessage('widgetGeneratePasswordWorking'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordWorking),
     false,
   )
   try {
@@ -286,7 +306,7 @@ export async function generatePasswordWithNook(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetGeneratePasswordFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
         true,
       )
       return
@@ -296,7 +316,7 @@ export async function generatePasswordWithNook(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetGeneratePasswordFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
         true,
       )
       return
@@ -311,7 +331,7 @@ export async function generatePasswordWithNook(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetGeneratePasswordFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratePasswordFailed),
         true,
       )
       return
@@ -319,7 +339,7 @@ export async function generatePasswordWithNook(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetGeneratedPasswordFilled'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetGeneratedPasswordFilled),
       false,
     )
     continueButton.hidden = true
@@ -342,8 +362,8 @@ export async function proposePasskeyWithNook(
     continueButton,
     translatedMessage(
       action === PasskeyWidgetAction.UsePasskey
-        ? 'widgetUsePasskeyWorking'
-        : 'widgetCreatePasskeyWorking',
+        ? BROWSER_MESSAGE_KEYS.WidgetUsePasskeyWorking
+        : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
     ),
     false,
   )
@@ -353,7 +373,7 @@ export async function proposePasskeyWithNook(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetPasskeyControlMissing'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPasskeyControlMissing),
         true,
       )
       return
@@ -362,7 +382,7 @@ export async function proposePasskeyWithNook(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetPasskeyCeremonyStarted'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPasskeyCeremonyStarted),
       false,
     )
     continueButton.hidden = true
@@ -372,17 +392,19 @@ export async function proposePasskeyWithNook(
   }
 }
 
-function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
+function copyTitleForWorkflow(
+  workflow: PasswordFormObservation,
+): BrowserMessageKey {
   if (
     workflow.summary.currentPasswordFieldCount > 0 &&
     workflow.summary.newPasswordFieldCount > 0
   ) {
-    return 'widgetPasswordChangeTitle'
+    return BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle
   }
   if (workflow.summary.newPasswordFieldCount > 0) {
-    return 'widgetSignupTitle'
+    return BROWSER_MESSAGE_KEYS.WidgetSignupTitle
   }
-  return 'widgetLoginTitle'
+  return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
 }
 
 export async function continueWithNook(
@@ -398,11 +420,11 @@ export async function continueWithNook(
     return
   widgetState.busy = true
   continueButton.disabled = true
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
-    translatedMessage('widgetWorking'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetWorking),
     false,
   )
 
@@ -416,11 +438,17 @@ export async function continueWithNook(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
         true,
       )
       return
@@ -428,22 +456,34 @@ export async function continueWithNook(
     const { response } = delivery
 
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetUnlockThenContinue'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetUnlockThenContinue),
         true,
       )
       return
     }
 
     if (response.status === 'unavailable') {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetConnectVault'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
         true,
       )
       return
@@ -451,11 +491,17 @@ export async function continueWithNook(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetNoMatch'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetNoMatch),
         true,
       )
       return

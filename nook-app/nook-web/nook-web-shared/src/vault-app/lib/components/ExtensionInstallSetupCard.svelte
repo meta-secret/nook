@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Puzzle } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     ExtensionSetupStatus,
     type ExtensionSetupState,
-  } from '$lib/extension-install'
+  } from '$lib/extension/install'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -47,19 +48,19 @@
         <p class="text-sm font-semibold text-foreground">
           {vault.t(
             isNotInstalled
-              ? 'extension_setup.title'
+              ? I18N_KEYS.ExtensionSetupTitle
               : isPairedElsewhere
-                ? 'extension_setup.switch_title'
-                : 'extension_setup.pair_title',
+                ? I18N_KEYS.ExtensionSetupSwitchTitle
+                : I18N_KEYS.ExtensionSetupPairTitle,
           )}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
           {vault.t(
             isNotInstalled
-              ? 'extension_setup.body'
+              ? I18N_KEYS.ExtensionSetupBody
               : isPairedElsewhere
-                ? 'extension_setup.switch_body'
-                : 'extension_setup.pair_body',
+                ? I18N_KEYS.ExtensionSetupSwitchBody
+                : I18N_KEYS.ExtensionSetupPairBody,
           )}
         </p>
         {#if state.status === ExtensionSetupStatus.PairedElsewhere}
@@ -67,7 +68,7 @@
             class="font-mono text-[11px] leading-relaxed text-amber-700 dark:text-amber-300"
             data-testid="extension-connected-vault"
           >
-            {vault.t('extension_setup.connected_vault', {
+            {vault.t(I18N_KEYS.ExtensionSetupConnectedVault, {
               vault: state.connectedVaultName ?? '',
               store: state.connectedVaultStoreId ?? '',
             })}
@@ -75,11 +76,11 @@
         {/if}
         {#if isInstalledUnpaired}
           <p class="text-[11px] leading-relaxed text-muted-foreground/80">
-            {vault.t('extension_setup.pair_hint')}
+            {vault.t(I18N_KEYS.ExtensionSetupPairHint)}
           </p>
           {#if connectError}
             <p class="text-xs text-destructive" role="alert">
-              {vault.t('extension_setup.connect_failed')}
+              {vault.t(I18N_KEYS.ExtensionSetupConnectFailed)}
             </p>
           {/if}
         {/if}
@@ -93,8 +94,8 @@
           onclick={onInstall}
         >
           {installBusy
-            ? vault.t('extension_setup.loading_install')
-            : vault.t('extension_setup.install_cta')}
+            ? vault.t(I18N_KEYS.ExtensionSetupLoadingInstall)
+            : vault.t(I18N_KEYS.ExtensionSetupInstallCta)}
         </Button>
       {:else if isInstalledUnpaired}
         <Button
@@ -107,11 +108,11 @@
           onclick={onConnect}
         >
           {installBusy
-            ? vault.t('extension_setup.opening_extension')
+            ? vault.t(I18N_KEYS.ExtensionSetupOpeningExtension)
             : vault.t(
                 isPairedElsewhere
-                  ? 'extension_setup.switch_cta'
-                  : 'extension_setup.connect_cta',
+                  ? I18N_KEYS.ExtensionSetupSwitchCta
+                  : I18N_KEYS.ExtensionSetupConnectCta,
               )}
         </Button>
       {/if}

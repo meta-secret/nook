@@ -15,7 +15,7 @@ import {
   storedOAuthRefreshCredential,
   unselectedVaultScope,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager

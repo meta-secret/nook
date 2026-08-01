@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { JoinEnrollmentState } from '$app-wasm'
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import {
+    JoinEnrollmentState,
+    NookLocalFolderHealthState,
+    NookSyncConflictReviewState,
+  } from '$app-wasm'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import { JoinEnrollmentDialogVariant } from '$lib/components/join-enrollment-dialog-state'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
@@ -7,10 +12,6 @@
   import { Button } from '$lib/components/ui/button'
   import * as multiDeviceActions from '$lib/vault/multi-device'
   import type { VaultState } from '$lib/vault.svelte'
-  import {
-    LocalFolderHealthKind,
-    SyncConflictReviewKind,
-  } from '$lib/vault/state/sync.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
@@ -39,10 +40,10 @@
   onCancel={() => multiDeviceActions.dismissJoinEnrollment(vault)}
 />
 
-{#if vault.syncConflictReview.kind === SyncConflictReviewKind.RequiresDecision}
+{#if vault.syncConflictReview.state === NookSyncConflictReviewState.RequiresDecision}
   <VaultSyncConflictDialog
     {vault}
-    conflict={vault.syncConflictReview.conflict}
+    conflict={vault.syncConflictReview}
     isBusy={vault.isVerifying}
     onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
     onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
@@ -51,10 +52,10 @@
   />
 {/if}
 
-{#if vault.localFolderHealth.kind === LocalFolderHealthKind.MultipleVaults}
+{#if vault.localFolderHealth.state === NookLocalFolderHealthState.MultipleVaults}
   <LocalFolderMultipleVaultsDialog
     {vault}
-    issue={vault.localFolderHealth.issue}
+    health={vault.localFolderHealth}
     onChooseFolder={() => vault.chooseReplacementLocalFolderForIssue()}
     onDisconnect={() => vault.disconnectLocalFolderMultipleVaultsProvider()}
     onDismiss={() => vault.dismissLocalFolderMultipleVaultsIssue()}
@@ -67,17 +68,17 @@
       vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
     }`}
   >
-    <p class="font-medium">{vault.t('app.secret_sync_conflicts')}</p>
+    <p class="font-medium">{vault.t(I18N_KEYS.AppSecretSyncConflicts)}</p>
     <div class="mt-3 space-y-3">
       {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
         <div class="rounded border border-amber-400/30 p-3">
           <p class="text-amber-100">
-            {vault.t('app.conflict_original', {
+            {vault.t(I18N_KEYS.AppConflictOriginal, {
               id: shortId(conflict.oldSecretId),
             })}
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
-            {#each conflict.candidates as candidate (candidate.secretId)}
+            {#each conflict.candidateSecretIds as candidateSecretId (candidateSecretId)}
               <Button
                 size="sm"
                 variant="secondary"
@@ -85,11 +86,11 @@
                 onclick={() =>
                   vault.resolveReplacementConflict(
                     conflict.oldSecretId,
-                    candidate.secretId,
+                    candidateSecretId,
                   )}
               >
-                {vault.t('app.conflict_keep', {
-                  id: shortId(candidate.secretId),
+                {vault.t(I18N_KEYS.AppConflictKeep, {
+                  id: shortId(candidateSecretId),
                 })}
               </Button>
             {/each}
@@ -104,7 +105,7 @@
   <div
     class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
   >
-    <p class="font-medium">{vault.t('app.security_conflict')}</p>
+    <p class="font-medium">{vault.t(I18N_KEYS.AppSecurityConflict)}</p>
     <div class="mt-2 space-y-2 text-red-100">
       {#each vault.securityConflicts as conflict (conflict.events.join(':'))}
         <p>{conflictReasons(conflict.reasons)}</p>

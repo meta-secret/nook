@@ -38,7 +38,7 @@ slice whenever possible.
       portable core policy object; keep environment-string parsing at the thin
       boundary.
 - [x] Move provider compatibility and preferred-provider selection from
-      `vault-architecture.ts` into core.
+      `vault/architecture-model.ts` into core.
 - [x] Move Google Drive and iCloud provider-config merge rules from their
       TypeScript SDK adapters into core.
 - [x] Move the remaining `VaultState` login/join/recovery/pagination predicates,

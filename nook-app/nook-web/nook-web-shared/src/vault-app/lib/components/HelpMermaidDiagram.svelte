@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { MermaidTheme, renderMermaidDiagram } from '$lib/mermaid-diagram'
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { MermaidTheme, renderMermaidDiagram } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -37,7 +38,7 @@
   class="help-mermaid mt-2 overflow-x-auto rounded-md border border-border/60 bg-background/80 p-2"
   data-testid="help-diagram-{sectionId}"
   role="img"
-  aria-label={vault.t('help.diagram.label')}
+  aria-label={vault.t(I18N_KEYS.HelpDiagramLabel)}
 >
   {#if svgHtml}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->

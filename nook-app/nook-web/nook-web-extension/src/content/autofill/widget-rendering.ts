@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
@@ -130,16 +131,16 @@ export function renderWidget(
     snapshot.action === PasskeyWidgetAction.CreatePasskey
   const continueMessageKey =
     snapshot.action === 'fill-totp'
-      ? 'widgetFillAuthenticator'
+      ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
       : snapshot.action === 'generate-password'
-        ? 'widgetGeneratePassword'
+        ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
         : snapshot.action === PasskeyWidgetAction.UsePasskey
-          ? 'widgetUsePasskey'
+          ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
           : snapshot.action === PasskeyWidgetAction.CreatePasskey
-            ? 'widgetCreatePasskey'
+            ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
             : canContinueWithNook
-              ? 'widgetContinue'
-              : 'widgetTakeOver'
+              ? BROWSER_MESSAGE_KEYS.WidgetContinue
+              : BROWSER_MESSAGE_KEYS.WidgetTakeOver
   continueButton.setAttribute(
     'aria-label',
     translatedMessage(continueMessageKey),
@@ -192,7 +193,9 @@ export function renderWidget(
   const takeOverButton = document.createElement('button')
   takeOverButton.type = 'button'
   takeOverButton.className = 'text-button'
-  takeOverButton.textContent = translatedMessage('widgetTakeOver')
+  takeOverButton.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetTakeOver,
+  )
   takeOverButton.hidden = !canContinueWithNook
   takeOverButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
@@ -43,10 +44,10 @@
         <h3
           class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
         >
-          {vault.t('login.vault_picker_on_device')}
+          {vault.t(I18N_KEYS.LoginVaultPickerOnDevice)}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.vault_picker_hint')}
+          {vault.t(I18N_KEYS.LoginVaultPickerHint)}
         </p>
       </div>
       <ul class="space-y-2">
@@ -70,10 +71,10 @@
     <section class="space-y-3" data-testid="login-vault-picker-start-fresh">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('login.vault_picker_create_new')}
+          {vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.vault_workflow_create_description')}
+          {vault.t(I18N_KEYS.LoginVaultWorkflowCreateDescription)}
         </p>
       </div>
       <LoginVaultNameForm
@@ -81,7 +82,7 @@
         {isVerifying}
         {isInitializing}
         testId="login-create-additional-vault-btn"
-        submitLabel={vault.t('login.vault_picker_create_new')}
+        submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
         onCreate={onCreateVault}
       />
     </section>
@@ -89,10 +90,10 @@
     <section class="space-y-3" data-testid="login-vault-picker-import">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('login.vault_picker_import')}
+          {vault.t(I18N_KEYS.LoginVaultPickerImport)}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.vault_workflow_import_description')}
+          {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
         </p>
       </div>
       <Button
@@ -103,7 +104,7 @@
         onclick={onConnectStorage}
       >
         <ShieldCheck class="size-4" />
-        {vault.t('login.vault_picker_import')}
+        {vault.t(I18N_KEYS.LoginVaultPickerImport)}
       </Button>
     </section>
   {/if}

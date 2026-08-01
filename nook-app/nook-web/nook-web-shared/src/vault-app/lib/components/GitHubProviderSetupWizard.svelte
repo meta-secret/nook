@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { Snippet } from 'svelte'
   import { Cloud, ExternalLink, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
+  import { DEFAULT_GITHUB_REPO } from '$lib/auth/providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -52,7 +53,7 @@
   <div class="flex items-center gap-2 text-sm">
     <Cloud class="size-4 shrink-0 text-muted-foreground" />
     <span class="font-medium text-foreground"
-      >{vault.t('provider_picker.github')}</span
+      >{vault.t(I18N_KEYS.ProviderPickerGithub)}</span
     >
     <button
       type="button"
@@ -60,20 +61,20 @@
       data-testid="cancel-provider-setup"
       onclick={onCancelSetup}
     >
-      {vault.t('provider_setup.change_provider')}
+      {vault.t(I18N_KEYS.ProviderSetupChangeProvider)}
     </button>
   </div>
 
   <div class="space-y-3">
     <SetupWizardStep
       stepNumber={1}
-      title={vault.t('login_wizard.connection_step')}
-      subtitle={vault.t('provider_setup.github_connection_subtitle')}
+      title={vault.t(I18N_KEYS.LoginWizardConnectionStep)}
+      subtitle={vault.t(I18N_KEYS.ProviderSetupGithubConnectionSubtitle)}
       bind:open={connectionStepOpen}
       testId="github-setup-connection-step"
     >
       <p class="text-sm text-foreground text-pretty">
-        {vault.t('provider_setup.github_pat_desc')}
+        {vault.t(I18N_KEYS.ProviderSetupGithubPatDesc)}
       </p>
 
       <a
@@ -86,7 +87,7 @@
           'w-full sm:w-auto',
         )}
       >
-        {vault.t('provider_setup.create_token_github')}
+        {vault.t(I18N_KEYS.ProviderSetupCreateTokenGithub)}
         <ExternalLink class="size-3.5" />
       </a>
 
@@ -96,7 +97,7 @@
             class="text-xs font-medium text-foreground"
             for="{idPrefix}-github-repo"
           >
-            {vault.t('provider_setup.repo_name')}
+            {vault.t(I18N_KEYS.ProviderSetupRepoName)}
           </label>
           <input
             id="{idPrefix}-github-repo"
@@ -109,7 +110,7 @@
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
           <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t('provider_setup.event_log_desc')}
+            {vault.t(I18N_KEYS.ProviderSetupEventLogDesc)}
           </p>
         </div>
 
@@ -118,7 +119,7 @@
             class="text-xs font-medium text-foreground"
             for="{idPrefix}-github-pat"
           >
-            {vault.t('provider_setup.pat_label')}
+            {vault.t(I18N_KEYS.ProviderSetupPatLabel)}
           </label>
           <input
             id="{idPrefix}-github-pat"
@@ -130,7 +131,7 @@
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
           <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t('provider_setup.stored_locally_desc', {
+            {vault.t(I18N_KEYS.ProviderSetupStoredLocallyDesc, {
               repo: githubRepo.trim() || DEFAULT_GITHUB_REPO,
             })}
           </p>
@@ -140,16 +141,16 @@
 
     <SetupWizardStep
       stepNumber={2}
-      title={vault.t('auth_storage.connect_and_sync')}
+      title={vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
       subtitle={githubCredentialsReady
-        ? vault.t('provider_setup.google_sync_subtitle')
-        : vault.t('login_wizard.available_after_connect')}
+        ? vault.t(I18N_KEYS.ProviderSetupGoogleSyncSubtitle)
+        : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
       disabled={!githubCredentialsReady}
       bind:open={syncStepOpen}
       testId="github-setup-sync-step"
     >
       <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t('auth_storage.sync_setup_desc')}
+        {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
       </p>
 
       {@render beforeConnect?.()}
@@ -167,13 +168,13 @@
         >
           {#if isInitializing}
             <RefreshCw class="size-4 animate-spin" />
-            {vault.t('onboarding.loading_engine')}
+            {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
           {:else if isVerifying}
             <RefreshCw class="size-4 animate-spin" />
-            {vault.t('auth_storage.sync_connecting')}
+            {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
           {:else}
             <ShieldCheck class="size-4" />
-            {vault.t('auth_storage.connect_and_sync')}
+            {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
           {/if}
         </Button>
       </div>

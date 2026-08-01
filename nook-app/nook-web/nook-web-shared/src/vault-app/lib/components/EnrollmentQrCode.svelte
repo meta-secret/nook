@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { RefreshCw } from "@lucide/svelte";
   import QRCodeStyling from "qr-code-styling";
-  import { createEnrollmentQrOptions } from "$lib/enrollment-qr";
+  import { createEnrollmentQrOptions } from "$lib/enrollment/qr";
   import {
     QrCodeContainerMountKind,
     QrCodeMountKind,

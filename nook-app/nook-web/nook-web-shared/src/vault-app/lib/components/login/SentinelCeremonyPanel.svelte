@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { SentinelVaultUnlockState } from '$app-wasm'
   import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
@@ -40,7 +41,7 @@
       vault.errorMsg =
         error instanceof Error
           ? vault.resolveErrorMessage(error.message)
-          : vault.t('architecture_modes.sentinel_unlock_failed')
+          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed)
     } finally {
       actionBusy = false
     }
@@ -79,7 +80,7 @@
       }, 1500)
     } catch {
       vault.errorMsg = vault.t(
-        'architecture_modes.sentinel_ceremony_copy_failed',
+        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
       )
     }
   }
@@ -93,18 +94,18 @@
     <div class="flex items-center gap-2">
       <ShieldCheck class="size-5 text-primary" />
       <h3 class="text-base font-semibold text-foreground">
-        {vault.t('architecture_modes.sentinel_unlock_title')}
+        {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockTitle)}
       </h3>
     </div>
     <p class="text-sm leading-snug text-pretty text-muted-foreground">
       {#if awaitingShares}
-        {vault.t('architecture_modes.sentinel_ceremony_awaiting_shares')}
+        {vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyAwaitingShares)}
       {:else}
-        {vault.t('architecture_modes.sentinel_unlock_description')}
+        {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockDescription)}
       {/if}
     </p>
     <p class="text-xs leading-snug text-pretty text-muted-foreground">
-      {vault.t('architecture_modes.sentinel_password_forbidden')}
+      {vault.t(I18N_KEYS.ArchitectureModesSentinelPasswordForbidden)}
     </p>
   </div>
 
@@ -121,7 +122,7 @@
       {:else}
         <KeyRound class="size-4" />
       {/if}
-      {vault.t('architecture_modes.sentinel_unlock_start')}
+      {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockStart)}
     </Button>
   {:else}
     <div class="space-y-4" data-testid="sentinel-unlock-initiator">
@@ -134,7 +135,7 @@
           class="flex items-center gap-2 text-sm font-medium text-foreground"
         >
           <Users class="size-4 text-primary" />
-          {vault.t('architecture_modes.sentinel_unlock_progress')}
+          {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockProgress)}
         </span>
         <span class="font-mono text-sm font-semibold text-foreground">
           {session.collected}/{session.threshold}
@@ -146,7 +147,7 @@
           <EnrollmentQrCode
             enrollmentLink={vault.sentinelUnlockRequest}
             loadingLabel={vault.t(
-              'architecture_modes.sentinel_unlock_qr_loading',
+              I18N_KEYS.ArchitectureModesSentinelUnlockQrLoading,
             )}
           />
         {/if}
@@ -155,7 +156,7 @@
             class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
             for="sentinel-unlock-request"
           >
-            {vault.t('architecture_modes.sentinel_unlock_request_label')}
+            {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockRequestLabel)}
           </label>
           <textarea
             id="sentinel-unlock-request"
@@ -173,8 +174,8 @@
           >
             <Copy class="size-4" />
             {copied
-              ? vault.t('architecture_modes.sentinel_ceremony_copied')
-              : vault.t('architecture_modes.sentinel_unlock_copy_request')}
+              ? vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopied)
+              : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockCopyRequest)}
           </Button>
         </div>
       </div>
@@ -184,14 +185,14 @@
           class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
           for="sentinel-unlock-response-input"
         >
-          {vault.t('architecture_modes.sentinel_unlock_response_label')}
+          {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockResponseLabel)}
         </label>
         <textarea
           id="sentinel-unlock-response-input"
           class="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-snug text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="sentinel-unlock-response-input"
           placeholder={vault.t(
-            'architecture_modes.sentinel_unlock_response_placeholder',
+            I18N_KEYS.ArchitectureModesSentinelUnlockResponsePlaceholder,
           )}
           disabled={isBusy || session.ready}
           bind:value={responseInput}></textarea>
@@ -204,7 +205,7 @@
           onclick={() => void addResponse()}
         >
           <Users class="size-4" />
-          {vault.t('architecture_modes.sentinel_unlock_add_response')}
+          {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockAddResponse)}
         </Button>
       </div>
 
@@ -217,10 +218,10 @@
       >
         {#if isBusy}
           <RefreshCw class="size-4 animate-spin" />
-          {vault.t('login.unlocking')}
+          {vault.t(I18N_KEYS.LoginUnlocking)}
         {:else}
           <ShieldCheck class="size-4" />
-          {vault.t('architecture_modes.sentinel_unlock_finalize')}
+          {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFinalize)}
         {/if}
       </Button>
     </div>

@@ -1,7 +1,13 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildSecretYaml, generateSecretId, SecretType } from '$lib/nook'
+  import {
+    buildSecretYaml,
+    generateSecretId,
+    SecretType,
+    type PasswordGenerationOptions,
+  } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SecretTypeSelectionKind,
@@ -33,13 +39,7 @@
       type: SecretType,
       data: string,
     ) => Promise<void>
-    onGeneratePassword: (
-      length: number,
-      lowercase: boolean,
-      uppercase: boolean,
-      numbers: boolean,
-      symbols: boolean,
-    ) => string
+    onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
     editor?: SecretEditor
     selectedTypeState?: SecretTypeSelection
@@ -50,40 +50,40 @@
 
   const typeTitle = $derived.by(() => {
     if (selectedTypeState.kind !== SecretTypeSelectionKind.EditingFields) {
-      return vault.t('add_secret.title_add_item')
+      return vault.t(I18N_KEYS.AddSecretTitleAddItem)
     }
     const selectedType = selectedTypeState.itemType
     return isEditMode
       ? selectedType === SecretType.Login
-        ? vault.t('add_secret.title_edit_login')
+        ? vault.t(I18N_KEYS.AddSecretTitleEditLogin)
         : selectedType === SecretType.ApiKey
-          ? vault.t('add_secret.title_edit_api_key')
+          ? vault.t(I18N_KEYS.AddSecretTitleEditApiKey)
           : selectedType === SecretType.SeedPhrase
-            ? vault.t('add_secret.title_edit_seed_phrase')
+            ? vault.t(I18N_KEYS.AddSecretTitleEditSeedPhrase)
             : selectedType === SecretType.SecureNote
-              ? vault.t('add_secret.title_edit_secure_note')
+              ? vault.t(I18N_KEYS.AddSecretTitleEditSecureNote)
               : selectedType === SecretType.Authenticator
-                ? vault.t('add_secret.title_edit_authenticator')
+                ? vault.t(I18N_KEYS.AddSecretTitleEditAuthenticator)
                 : selectedType === SecretType.CreditCard
-                  ? vault.t('add_secret.title_edit_credit_card')
+                  ? vault.t(I18N_KEYS.AddSecretTitleEditCreditCard)
                   : selectedType === SecretType.FileAttachment
-                    ? vault.t('add_secret.title_edit_file_attachment')
-                    : vault.t('add_secret.title_edit_item')
+                    ? vault.t(I18N_KEYS.AddSecretTitleEditFileAttachment)
+                    : vault.t(I18N_KEYS.AddSecretTitleEditItem)
       : selectedType === SecretType.Login
-        ? vault.t('add_secret.title_new_login')
+        ? vault.t(I18N_KEYS.AddSecretTitleNewLogin)
         : selectedType === SecretType.ApiKey
-          ? vault.t('add_secret.title_new_api_key')
+          ? vault.t(I18N_KEYS.AddSecretTitleNewApiKey)
           : selectedType === SecretType.SeedPhrase
-            ? vault.t('add_secret.title_new_seed_phrase')
+            ? vault.t(I18N_KEYS.AddSecretTitleNewSeedPhrase)
             : selectedType === SecretType.SecureNote
-              ? vault.t('add_secret.title_new_secure_note')
+              ? vault.t(I18N_KEYS.AddSecretTitleNewSecureNote)
               : selectedType === SecretType.Authenticator
-                ? vault.t('add_secret.title_new_authenticator')
+                ? vault.t(I18N_KEYS.AddSecretTitleNewAuthenticator)
                 : selectedType === SecretType.CreditCard
-                  ? vault.t('add_secret.title_new_credit_card')
+                  ? vault.t(I18N_KEYS.AddSecretTitleNewCreditCard)
                   : selectedType === SecretType.FileAttachment
-                    ? vault.t('add_secret.title_new_file_attachment')
-                    : vault.t('add_secret.title_add_item')
+                    ? vault.t(I18N_KEYS.AddSecretTitleNewFileAttachment)
+                    : vault.t(I18N_KEYS.AddSecretTitleAddItem)
   })
 
   $effect(() => {
@@ -150,10 +150,10 @@
   )
   const saveLabel = $derived(
     isSaving
-      ? vault.t('add_secret.working')
+      ? vault.t(I18N_KEYS.AddSecretWorking)
       : isEditMode
-        ? vault.t('add_secret.save_changes')
-        : vault.t('common.save'),
+        ? vault.t(I18N_KEYS.AddSecretSaveChanges)
+        : vault.t(I18N_KEYS.CommonSave),
   )
 </script>
 
@@ -196,7 +196,7 @@
               })}
           >
             <ArrowLeft class="size-3.5" />
-            {vault.t('add_secret.change_type')}
+            {vault.t(I18N_KEYS.AddSecretChangeType)}
           </button>
           <span class="text-muted-foreground/50" aria-hidden="true">·</span>
         {/if}
@@ -215,7 +215,7 @@
           data-testid="add-secret-cancel-btn"
           onclick={handleCancel}
         >
-          {vault.t('common.cancel')}
+          {vault.t(I18N_KEYS.CommonCancel)}
         </Button>
         <Button
           type="submit"

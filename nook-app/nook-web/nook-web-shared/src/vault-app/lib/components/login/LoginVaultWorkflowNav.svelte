@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { CloudDownload, FolderOpen, Plus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -18,17 +19,17 @@
     {
       id: LoginVaultWorkflow.Open,
       icon: FolderOpen,
-      label: 'login.vault_workflow_open',
+      label: I18N_KEYS.LoginVaultWorkflowOpen,
     },
     {
       id: LoginVaultWorkflow.Create,
       icon: Plus,
-      label: 'login.vault_workflow_create',
+      label: I18N_KEYS.LoginVaultWorkflowCreate,
     },
     {
       id: LoginVaultWorkflow.Import,
       icon: CloudDownload,
-      label: 'login.vault_workflow_import',
+      label: I18N_KEYS.LoginVaultWorkflowImport,
     },
   ] as const
 
@@ -50,7 +51,7 @@
 <div
   class="grid grid-cols-3 gap-1 rounded-md border border-border/60 bg-muted/20 p-1"
   role="tablist"
-  aria-label={vault.t('login.vault_workflow_label')}
+  aria-label={vault.t(I18N_KEYS.LoginVaultWorkflowLabel)}
   data-testid="login-vault-workflow-nav"
 >
   {#each workflows as workflow, index (workflow.id)}

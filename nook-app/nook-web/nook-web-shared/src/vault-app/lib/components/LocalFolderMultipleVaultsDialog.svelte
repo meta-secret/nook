@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     FolderOpen,
     HardDrive,
@@ -15,17 +16,17 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync.svelte'
+  import type { NookLocalFolderHealth } from '$app-wasm'
 
   let {
     vault,
-    issue,
+    health,
     onChooseFolder,
     onDisconnect,
     onDismiss,
   }: {
     vault: VaultState
-    issue: LocalFolderMultipleVaultsIssue
+    health: NookLocalFolderHealth
     onChooseFolder: () => void | Promise<void>
     onDisconnect: () => void | Promise<void>
     onDismiss: () => void
@@ -55,18 +56,18 @@
             class="inline-flex items-center gap-2 text-lg font-semibold tracking-tight text-foreground"
           >
             <TriangleAlert class="size-4 shrink-0 text-amber-500" />
-            {vault.t('auth_storage.local_folder_multiple_vaults_title')}
+            {vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsTitle)}
           </CardTitle>
           <CardDescription class="text-pretty">
-            {vault.t('auth_storage.local_folder_multiple_vaults_desc', {
-              provider: issue.providerLabel,
+            {vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsDesc, {
+              provider: health.providerLabel,
             })}
           </CardDescription>
         </div>
         <button
           type="button"
           class="rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-          aria-label={vault.t('common.cancel')}
+          aria-label={vault.t(I18N_KEYS.CommonCancel)}
           data-testid="local-folder-multiple-vaults-dismiss-btn"
           onclick={onDismiss}
         >
@@ -84,25 +85,25 @@
           class="flex items-center gap-2 text-sm font-medium text-foreground"
         >
           <HardDrive class="size-4 text-primary" />
-          {vault.t('auth_storage.local_folder_detected_vaults')}
+          {vault.t(I18N_KEYS.AuthStorageLocalFolderDetectedVaults)}
         </div>
         <ul class="mt-2 space-y-1 font-mono text-xs text-muted-foreground">
-          {#if issue.storeIds.length > 0}
-            {#each issue.storeIds as storeId (storeId)}
+          {#if health.storeIds.length > 0}
+            {#each health.storeIds as storeId (storeId)}
               <li data-testid="local-folder-multiple-vaults-store-id">
                 {storeId}
               </li>
             {/each}
           {:else}
             <li>
-              {vault.t('auth_storage.local_folder_detected_vaults_unknown')}
+              {vault.t(I18N_KEYS.AuthStorageLocalFolderDetectedVaultsUnknown)}
             </li>
           {/if}
         </ul>
       </div>
 
       <p class="text-sm text-muted-foreground text-pretty">
-        {vault.t('auth_storage.local_folder_multiple_vaults_resolution')}
+        {vault.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsResolution)}
       </p>
 
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
@@ -114,7 +115,7 @@
           onclick={() => void onDisconnect()}
         >
           <Trash2 class="size-4" />
-          {vault.t('auth_storage.local_folder_disconnect')}
+          {vault.t(I18N_KEYS.AuthStorageLocalFolderDisconnect)}
         </Button>
         <Button
           type="button"
@@ -123,7 +124,7 @@
           onclick={() => void onChooseFolder()}
         >
           <FolderOpen class="size-4" />
-          {vault.t('auth_storage.local_folder_choose_another')}
+          {vault.t(I18N_KEYS.AuthStorageLocalFolderChooseAnother)}
         </Button>
       </div>
     </CardContent>

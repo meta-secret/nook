@@ -1,7 +1,7 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
-import { SvelteDate } from "svelte/reactivity";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   isoTimestamp,
   VaultAccessStatus,
@@ -13,8 +13,12 @@ import {
   JoinEnrollmentState,
   NookManagerStoreScope,
   NookEventLogSyncIssueState,
+  NookLocalFolderHealth,
+  NookLocalFolderHealthState,
+  NookManualProviderSyncState,
   NookPendingSyncConflict,
   NookProviderSyncRevision,
+  NookSyncConflictReview,
   NookVaultSyncAccessState,
   readLocalVaultYaml,
   UnauthenticatedSyncDecision,
@@ -30,23 +34,18 @@ import {
   LocalFolderProviderConfigurationKind,
   unselectedVaultScope,
   type StorageProvider,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   EventOutboxTargetKind,
   LocalFolderInspectionKind,
   type EventOutboxTarget,
   type LocalFolderInspection,
-  type LocalFolderMultipleVaultsIssue,
 } from "$lib/vault/sync-operation-state";
 import {
   AdminAccordionSection,
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
-import {
-  LocalFolderHealthKind,
-  ManualProviderSyncKind,
-} from "$lib/vault/state/sync.svelte";
 import {
   scheduleAutoConnectAfterApproval,
   syncError,
@@ -58,8 +57,6 @@ export * from "$lib/vault/sync-resolution";
 export { syncConflictLabel } from "$lib/vault/sync-conflict-label";
 
 const log = createLogger("vault-sync");
-
-export type { LocalFolderMultipleVaultsIssue } from "$lib/vault/sync-operation-state";
 
 export function applyVaultSyncResult(
   state: SyncActionsContext,
@@ -100,7 +97,7 @@ export function applyVaultSyncResult(
   switch (decision) {
     case UnauthenticatedSyncDecision.Approved:
       state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      state.showSuccess(state.t("toasts.device_approved"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
       scheduleAutoConnectAfterApproval(state);
       break;
     case UnauthenticatedSyncDecision.AutoConnect:
@@ -197,7 +194,7 @@ export async function syncFromSyncProviders(
       await hydrateMultiDeviceState(state);
     }
     await publishExtensionEventLogUpdateForVault(state);
-    state.markSynced(new SvelteDate());
+    state.markSynced(Date.now());
   } catch {
     // Background sync should not interrupt the UI.
   } finally {
@@ -334,7 +331,7 @@ export async function updateProviderSyncMetadata(
       managerStoreScope.free();
     }
     await state.persistProviders();
-    state.markSynced(new SvelteDate());
+    state.markSynced(Date.now());
   } finally {
     revision.free();
   }
@@ -350,20 +347,21 @@ export async function disconnectLocalFolderMultipleVaultsProvider(
   state: SyncActionsContext,
 ): Promise<void> {
   const health = state.localFolderHealth;
-  if (health.kind !== LocalFolderHealthKind.MultipleVaults) return;
+  if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
+  const providerId = health.providerId;
   state.clearLocalFolderMultipleVaultsIssue();
-  await state.removeProvider(health.issue.providerId);
+  await state.removeProvider(providerId);
 }
 
 export async function chooseReplacementLocalFolderForIssue(
   state: SyncActionsContext,
 ): Promise<void> {
   const health = state.localFolderHealth;
-  if (health.kind !== LocalFolderHealthKind.MultipleVaults) return;
-  const issue = health.issue;
+  if (health.state !== NookLocalFolderHealthState.MultipleVaults) return;
+  const providerId = health.providerId;
   state.clearLocalFolderMultipleVaultsIssue();
-  if (state.providers.some((provider) => provider.id === issue.providerId)) {
-    await state.removeProvider(issue.providerId);
+  if (state.providers.some((provider) => provider.id === providerId)) {
+    await state.removeProvider(providerId);
   }
   state.errorMsg = "";
   state.settingsOpen = true;
@@ -375,7 +373,7 @@ export async function chooseReplacementLocalFolderForIssue(
 
 export function finishStagedProviderConnectAfterConflict(
   state: SyncActionsContext,
-  conflict: NookPendingSyncConflict,
+  conflict: NookSyncConflictReview,
 ): void {
   if (!conflict.isPendingProvider) return;
   state.clearLoginSetup();
@@ -384,7 +382,7 @@ export function finishStagedProviderConnectAfterConflict(
 
 export async function ensureProviderSavedAfterConflict(
   state: SyncActionsContext,
-  conflict: NookPendingSyncConflict,
+  conflict: NookSyncConflictReview,
 ): Promise<string> {
   if (
     !conflict.isPendingProvider &&
@@ -394,31 +392,31 @@ export async function ensureProviderSavedAfterConflict(
   }
   const saved = await state.ensureProviderSaved();
   if (!saved) {
-    throw new Error(state.t("auth_storage.duplicate_sync_provider"));
+    throw new Error(state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider));
   }
   const provider =
     state.syncProviders[state.syncProviders.length - 1] ??
     state.providers[state.providers.length - 1];
   if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
-    throw new Error(state.t("errors.cloud_sync_provider_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired));
   }
   return provider.id;
 }
 
-function localFolderMultipleVaultsIssueFromTypedIssue(
+function localFolderMultipleVaultsHealthFromTypedIssue(
   provider: StorageProvider,
   storeIds: string[],
   message: string,
-): LocalFolderMultipleVaultsIssue {
+): NookLocalFolderHealth {
   if (provider.type !== "local-folder") {
     throw new Error("Multiple-vault storage issue requires a local folder");
   }
-  return {
-    providerId: provider.id,
-    providerLabel: provider.label,
+  return NookLocalFolderHealth.multipleVaults(
+    provider.id,
+    provider.label,
     storeIds,
     message,
-  };
+  );
 }
 
 async function stageProviderStoreMismatchConflict(
@@ -516,16 +514,16 @@ export async function syncLocalFolderProvider(
   provider: StorageProvider,
 ): Promise<void> {
   if (!state.hasManager) {
-    throw new Error(state.t("errors.manager_uninitialized"));
+    throw new Error(state.t(I18N_KEYS.ErrorsManagerUninitialized));
   }
   const manager = state.requireManager();
   const configuration = localFolderProviderConfiguration(provider);
   if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
-    throw new Error(state.t("errors.local_backup_folder_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsLocalBackupFolderRequired));
   }
   const handle = localFolderHandle(configuration.config);
   if (handle.kind === LocalFolderHandleKind.Unselected) {
-    throw new Error(state.t("errors.local_backup_folder_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsLocalBackupFolderRequired));
   }
   const localYaml = (await state.enqueueStorage(() =>
     manager.syncLocalFolderProvider(handle.handleId),
@@ -627,7 +625,7 @@ export async function syncFromStorage(
         state.applyVaultSyncResult(raw);
       }
       await state.refreshSecretsFromSession();
-      state.markSynced(new SvelteDate());
+      state.markSynced(Date.now());
     } catch (error) {
       syncError("background sync (unauthenticated)", error);
     } finally {
@@ -658,7 +656,7 @@ export async function syncFromStorage(
     );
     state.applyVaultSyncResult(raw);
     await state.refreshSecretsFromSession();
-    state.markSynced(new SvelteDate());
+    state.markSynced(Date.now());
   } catch (error) {
     syncError("background sync", error);
   } finally {
@@ -737,23 +735,23 @@ export function stageSyncConflict(
   state: SyncActionsContext,
   conflict: NookPendingSyncConflict,
 ) {
-  state.stageSyncConflict(conflict);
-  state.errorMsg = "";
   log.warn("sync conflict staged", {
     provider: conflict.providerLabel,
     kind: conflict.kind,
   });
+  state.stageSyncConflict(conflict);
+  state.errorMsg = "";
 }
 
 function stageLocalFolderMultipleVaultsIssue(
   state: SyncActionsContext,
-  issue: LocalFolderMultipleVaultsIssue,
+  issue: NookLocalFolderHealth,
 ) {
-  state.reportLocalFolderMultipleVaults(issue);
   log.warn("local folder contains multiple vault logs", {
     provider: issue.providerLabel,
     storeIds: issue.storeIds,
   });
+  state.reportLocalFolderMultipleVaults(issue);
 }
 
 export async function syncProviderById(
@@ -774,7 +772,7 @@ export async function syncProviderById(
   const provider = state.providers.find((p) => p.id === providerId);
   if (!provider || provider.type === "local") return;
   if (
-    state.manualProviderSync.kind === ManualProviderSyncKind.Running &&
+    state.manualProviderSync.state === NookManualProviderSyncState.Running &&
     state.manualProviderSync.providerId !== providerId
   )
     return;
@@ -840,7 +838,7 @@ export async function syncProviderById(
         } else if (eventLogIssue.isMultipleStores) {
           localFolderInspection = {
             kind: LocalFolderInspectionKind.MultipleVaults,
-            issue: localFolderMultipleVaultsIssueFromTypedIssue(
+            issue: localFolderMultipleVaultsHealthFromTypedIssue(
               provider,
               eventLogIssue.storeIds,
               message,
@@ -859,12 +857,12 @@ export async function syncProviderById(
     }
     if (!options?.quiet) {
       state.errorMsg = stagedStoreMismatch
-        ? state.t("auth_storage.sync_conflict_store_id_banner", {
+        ? state.t(I18N_KEYS.AuthStorageSyncConflictStoreIdBanner, {
             provider: provider.label,
           })
         : localFolderInspection.kind ===
             LocalFolderInspectionKind.MultipleVaults
-          ? state.t("auth_storage.local_folder_multiple_vaults_short")
+          ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
           : e instanceof Error
             ? e.message
             : "Sync failed for state provider.";
@@ -877,7 +875,7 @@ export async function syncProviderById(
       await state.hydrateMultiDeviceState();
     }
     if (
-      state.manualProviderSync.kind === ManualProviderSyncKind.Running &&
+      state.manualProviderSync.state === NookManualProviderSyncState.Running &&
       state.manualProviderSync.providerId === providerId
     ) {
       state.clearSyncingProvider();

@@ -4,37 +4,83 @@ use thiserror::Error;
 
 pub type ValidationResult<T> = Result<T, ValidationError>;
 
+const ERRORS_VALIDATION_UNKNOWN_DEVICE_MODE: &str = "errors.validation.unknown_device_mode";
+const ERRORS_VALIDATION_UNKNOWN_VAULT_TYPE: &str = "errors.validation.unknown_vault_type";
+const ERRORS_VALIDATION_UNKNOWN_REPLICATION_TYPE: &str =
+    "errors.validation.unknown_replication_type";
+const ERRORS_VALIDATION_UNSUPPORTED_PROVIDER_REPLICATION: &str =
+    "errors.validation.unsupported_provider_replication";
+const ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_POLICY: &str =
+    "errors.validation.simple_vault_has_sentinel_policy";
+const ERRORS_VALIDATION_INVALID_SENTINEL_POLICY: &str = "errors.validation.invalid_sentinel_policy";
+const ERRORS_VALIDATION_SECRET_ID_INVALID: &str = "errors.validation.secret_id_invalid";
+const ERRORS_VALIDATION_STORE_ID_INVALID: &str = "errors.validation.store_id_invalid";
+const ERRORS_VALIDATION_STORE_ID_RESERVED: &str = "errors.validation.store_id_reserved";
+const ERRORS_VALIDATION_AUTH_KEY_ID_INVALID: &str = "errors.validation.auth_key_id_invalid";
+const ERRORS_VALIDATION_DEVICE_ID_INVALID: &str = "errors.validation.device_id_invalid";
+const ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID: &str = "errors.validation.symmetric_key_invalid";
+const ERRORS_VALIDATION_SECRET_FINGERPRINT_KEY_INVALID: &str =
+    "errors.validation.secret_fingerprint_key_invalid";
+const ERRORS_VALIDATION_AGE_ARMORED_INVALID: &str = "errors.validation.age_armored_invalid";
+const ERRORS_VALIDATION_DEVICE_PUBLIC_KEY_INVALID: &str =
+    "errors.validation.device_public_key_invalid";
+const ERRORS_VALIDATION_DEVICE_IDENTITY_SECRET_INVALID: &str =
+    "errors.validation.device_identity_secret_invalid";
+const ERRORS_VALIDATION_SHA256_HEX_INVALID: &str = "errors.validation.sha256_hex_invalid";
+const ERRORS_VALIDATION_DEVICE_SIGNING_PUBLIC_KEY_INVALID: &str =
+    "errors.validation.device_signing_public_key_invalid";
+const ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID: &str = "errors.validation.iso_timestamp_invalid";
+const ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID: &str =
+    "errors.validation.password_entry_id_invalid";
+const ERRORS_VALIDATION_SIGNING_SEED_INVALID: &str = "errors.validation.signing_seed_invalid";
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
-    #[error("errors.validation.unknown_storage_mode:{mode}")]
+    #[error(
+        "{}:{mode}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_UNKNOWN_STORAGE_MODE
+    )]
     UnknownStorageMode { mode: String },
 
-    #[error("errors.validation.unknown_device_mode:{mode}")]
+    #[error("{}:{mode}", ERRORS_VALIDATION_UNKNOWN_DEVICE_MODE)]
     UnknownDeviceMode { mode: String },
 
-    #[error("errors.validation.unknown_vault_type:{vault_type}")]
+    #[error("{}:{vault_type}", ERRORS_VALIDATION_UNKNOWN_VAULT_TYPE)]
     UnknownVaultType { vault_type: String },
 
-    #[error("errors.validation.unknown_vault_application:{application}")]
+    #[error(
+        "{}:{application}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_UNKNOWN_VAULT_APPLICATION
+    )]
     UnknownVaultApplication { application: String },
 
-    #[error("errors.validation.vault_application_type_mismatch:{application}:{vault_type}")]
+    #[error(
+        "{}:{application}:{vault_type}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_VAULT_APPLICATION_TYPE_MISMATCH
+    )]
     VaultApplicationTypeMismatch {
         application: String,
         vault_type: String,
     },
 
-    #[error("errors.validation.sentinel_extension_forbidden")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SENTINEL_EXTENSION_FORBIDDEN
+    )]
     SentinelExtensionForbidden,
 
-    #[error("errors.validation.extension_approval_application_forbidden:{application}")]
+    #[error(
+        "{}:{application}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_EXTENSION_APPROVAL_APPLICATION_FORBIDDEN
+    )]
     ExtensionApprovalApplicationForbidden { application: String },
 
-    #[error("errors.validation.unknown_replication_type:{replication_type}")]
+    #[error("{}:{replication_type}", ERRORS_VALIDATION_UNKNOWN_REPLICATION_TYPE)]
     UnknownReplicationType { replication_type: String },
 
     #[error(
-        "errors.validation.unsupported_provider_replication:{provider_type}:{oauth_preset}:{replication_type}"
+        "{}:{provider_type}:{oauth_preset}:{replication_type}",
+        ERRORS_VALIDATION_UNSUPPORTED_PROVIDER_REPLICATION
     )]
     UnsupportedProviderReplication {
         provider_type: String,
@@ -42,144 +88,222 @@ pub enum ValidationError {
         replication_type: String,
     },
 
-    #[error("errors.validation.simple_vault_has_sentinel_policy")]
+    #[error("{}", ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_POLICY)]
     SimpleVaultHasSentinelPolicy,
 
-    #[error("errors.validation.invalid_sentinel_policy")]
+    #[error("{}", ERRORS_VALIDATION_INVALID_SENTINEL_POLICY)]
     InvalidSentinelPolicy,
 
-    #[error("errors.validation.sentinel_vault_has_full_key_envelopes")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SENTINEL_VAULT_HAS_FULL_KEY_ENVELOPES
+    )]
     SentinelVaultHasFullKeyEnvelopes,
 
-    #[error("errors.validation.simple_vault_has_sentinel_shares")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SIMPLE_VAULT_HAS_SENTINEL_SHARES
+    )]
     SimpleVaultHasSentinelShares,
 
-    #[error("errors.validation.invalid_sentinel_share_set")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_INVALID_SENTINEL_SHARE_SET
+    )]
     InvalidSentinelShareSet,
 
-    #[error("errors.validation.github_pat_empty")]
+    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_PAT_EMPTY)]
     GithubPatEmpty,
 
-    #[error("errors.validation.github_repo_length")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_LENGTH
+    )]
     GithubRepoLength,
 
-    #[error("errors.validation.github_repo_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_INVALID
+    )]
     GithubRepoInvalid,
 
-    #[error("errors.validation.github_repo_chars")]
+    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_GITHUB_REPO_CHARS)]
     GithubRepoChars,
 
-    #[error("errors.validation.drive_file_name_length")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_LENGTH
+    )]
     DriveFileNameLength,
 
-    #[error("errors.validation.drive_file_name_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_INVALID
+    )]
     DriveFileNameInvalid,
 
-    #[error("errors.validation.drive_file_name_chars")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_DRIVE_FILE_NAME_CHARS
+    )]
     DriveFileNameChars,
 
-    #[error("errors.validation.oauth_access_token_empty")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_OAUTH_ACCESS_TOKEN_EMPTY
+    )]
     OauthAccessTokenEmpty,
 
-    #[error("errors.validation.shared_joiner_identity_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_REQUIRED
+    )]
     SharedJoinerIdentityRequired,
 
-    #[error("errors.validation.shared_joiner_identity_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_JOINER_IDENTITY_INVALID
+    )]
     SharedJoinerIdentityInvalid,
 
-    #[error("errors.validation.shared_storage_target_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_REQUIRED
+    )]
     SharedStorageTargetRequired,
 
-    #[error("errors.validation.shared_storage_target_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SHARED_STORAGE_TARGET_INVALID
+    )]
     SharedStorageTargetInvalid,
 
-    #[error("errors.validation.secret_data_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_DATA_REQUIRED
+    )]
     SecretDataRequired,
 
-    #[error("errors.validation.secret_id_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_ID_REQUIRED
+    )]
     SecretIdRequired,
 
-    #[error("errors.validation.secret_id_invalid")]
+    #[error("{}", ERRORS_VALIDATION_SECRET_ID_INVALID)]
     SecretIdInvalid,
 
-    #[error("errors.validation.secret_id_reserved")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_SECRET_ID_RESERVED
+    )]
     SecretIdReserved,
 
-    #[error("errors.validation.store_id_invalid")]
+    #[error("{}", ERRORS_VALIDATION_STORE_ID_INVALID)]
     StoreIdInvalid,
 
-    #[error("errors.validation.store_id_reserved")]
+    #[error("{}", ERRORS_VALIDATION_STORE_ID_RESERVED)]
     StoreIdReserved,
 
-    #[error("errors.validation.auth_key_id_invalid")]
+    #[error("{}", ERRORS_VALIDATION_AUTH_KEY_ID_INVALID)]
     AuthKeyIdInvalid,
 
-    #[error("errors.validation.device_id_invalid")]
+    #[error("{}", ERRORS_VALIDATION_DEVICE_ID_INVALID)]
     DeviceIdInvalid,
 
-    #[error("errors.validation.bip39_empty")]
+    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_BIP39_EMPTY)]
     Bip39Empty,
 
-    #[error("errors.validation.bip39_invalid")]
+    #[error("{}", crate::generated::i18n_keys::ERRORS_VALIDATION_BIP39_INVALID)]
     Bip39Invalid,
 
-    #[error("errors.validation.authenticator_issuer_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_ISSUER_REQUIRED
+    )]
     AuthenticatorIssuerRequired,
 
-    #[error("errors.validation.authenticator_secret_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID
+    )]
     AuthenticatorSecretInvalid,
 
-    #[error("errors.validation.authenticator_digits_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID
+    )]
     AuthenticatorDigitsInvalid,
 
-    #[error("errors.validation.authenticator_period_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_PERIOD_INVALID
+    )]
     AuthenticatorPeriodInvalid,
 
-    #[error("errors.validation.authenticator_uri_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_URI_INVALID
+    )]
     AuthenticatorUriInvalid,
 
-    #[error("errors.validation.authenticator_backup_codes_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_BACKUP_CODES_INVALID
+    )]
     AuthenticatorBackupCodesInvalid,
 
-    #[error("errors.validation.credit_card_title_required")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_TITLE_REQUIRED
+    )]
     CreditCardTitleRequired,
 
-    #[error("errors.validation.credit_card_number_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_NUMBER_INVALID
+    )]
     CreditCardNumberInvalid,
 
-    #[error("errors.validation.credit_card_expiration_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_EXPIRATION_INVALID
+    )]
     CreditCardExpirationInvalid,
 
-    #[error("errors.validation.credit_card_cvv_invalid")]
+    #[error(
+        "{}",
+        crate::generated::i18n_keys::ERRORS_VALIDATION_CREDIT_CARD_CVV_INVALID
+    )]
     CreditCardCvvInvalid,
 
-    #[error("errors.validation.symmetric_key_invalid")]
+    #[error("{}", ERRORS_VALIDATION_SYMMETRIC_KEY_INVALID)]
     SymmetricKeyInvalid,
 
-    #[error("errors.validation.secret_fingerprint_key_invalid")]
+    #[error("{}", ERRORS_VALIDATION_SECRET_FINGERPRINT_KEY_INVALID)]
     SecretFingerprintKeyInvalid,
 
-    #[error("errors.validation.age_armored_invalid")]
+    #[error("{}", ERRORS_VALIDATION_AGE_ARMORED_INVALID)]
     AgeArmoredInvalid,
 
-    #[error("errors.validation.device_public_key_invalid")]
+    #[error("{}", ERRORS_VALIDATION_DEVICE_PUBLIC_KEY_INVALID)]
     DevicePublicKeyInvalid,
 
-    #[error("errors.validation.device_identity_secret_invalid")]
+    #[error("{}", ERRORS_VALIDATION_DEVICE_IDENTITY_SECRET_INVALID)]
     DeviceIdentitySecretInvalid,
 
-    #[error("errors.validation.sha256_hex_invalid")]
+    #[error("{}", ERRORS_VALIDATION_SHA256_HEX_INVALID)]
     Sha256HexInvalid,
 
-    #[error("errors.validation.device_signing_public_key_invalid")]
+    #[error("{}", ERRORS_VALIDATION_DEVICE_SIGNING_PUBLIC_KEY_INVALID)]
     DeviceSigningPublicKeyInvalid,
 
-    #[error("errors.validation.iso_timestamp_invalid")]
+    #[error("{}", ERRORS_VALIDATION_ISO_TIMESTAMP_INVALID)]
     IsoTimestampInvalid,
 
-    #[error("errors.validation.password_entry_id_invalid")]
+    #[error("{}", ERRORS_VALIDATION_PASSWORD_ENTRY_ID_INVALID)]
     PasswordEntryIdInvalid,
 
-    #[error("errors.validation.signing_seed_invalid")]
+    #[error("{}", ERRORS_VALIDATION_SIGNING_SEED_INVALID)]
     SigningSeedInvalid,
 }

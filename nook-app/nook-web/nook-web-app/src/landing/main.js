@@ -1,3 +1,4 @@
+import { LANDING_MESSAGE_KEYS } from './generated-message-keys'
 import './shell-and-hero.css'
 import './vault-visual.css'
 import './product-sections.css'
@@ -102,22 +103,24 @@ function validateExtensionMetadata(metadata) {
 function updateExtensionInstallState(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
   if (extensionMetadataState.kind === ExtensionMetadataStateKind.Unavailable) {
-    extensionInstallStatus.textContent = messages['extension.unavailable']
+    extensionInstallStatus.textContent =
+      messages[LANDING_MESSAGE_KEYS.ExtensionUnavailable]
     extensionInstallAction.hidden = true
     extensionStoreNote.hidden = true
     extensionManual.hidden = true
     return
   }
   if (extensionMetadataState.kind === ExtensionMetadataStateKind.Loading) {
-    extensionInstallStatus.textContent = messages['extension.loading']
+    extensionInstallStatus.textContent =
+      messages[LANDING_MESSAGE_KEYS.ExtensionLoading]
     return
   }
 
   const extensionMetadata = extensionMetadataState.metadata
   const storeInstall = extensionMetadata.install_method === 'chrome_web_store'
   const actionKey = storeInstall
-    ? 'extension.add_store'
-    : 'extension.download_zip'
+    ? LANDING_MESSAGE_KEYS.ExtensionAddStore
+    : LANDING_MESSAGE_KEYS.ExtensionDownloadZip
   extensionInstallAction.dataset.i18n = actionKey
   extensionInstallAction.textContent = messages[actionKey]
   extensionInstallAction.href = extensionMetadata.install_url
@@ -126,7 +129,7 @@ function updateExtensionInstallState(locale = document.documentElement.lang) {
   extensionInstallAction.hidden = false
   extensionStoreNote.hidden = !storeInstall
   extensionManual.hidden = storeInstall
-  extensionInstallStatus.textContent = `${messages['extension.channel']}: ${extensionMetadata.channel} · ${messages['extension.version']}: ${extensionMetadata.version}`
+  extensionInstallStatus.textContent = `${messages[LANDING_MESSAGE_KEYS.ExtensionChannel]}: ${extensionMetadata.channel} · ${messages[LANDING_MESSAGE_KEYS.ExtensionVersion]}: ${extensionMetadata.version}`
 }
 
 async function loadExtensionMetadata() {
@@ -149,7 +152,10 @@ function updateGitHubStars(locale = document.documentElement.lang) {
   const messages = landingMessages[locale]
   if (githubStarsState.kind === GitHubStarsStateKind.NotLoaded) {
     githubStarsCount.textContent = '—'
-    githubStarsLink.setAttribute('aria-label', messages['github.link_label'])
+    githubStarsLink.setAttribute(
+      'aria-label',
+      messages[LANDING_MESSAGE_KEYS.GithubLinkLabel],
+    )
     return
   }
 
@@ -159,7 +165,7 @@ function updateGitHubStars(locale = document.documentElement.lang) {
   }).format(githubStarsState.count)
   githubStarsLink.setAttribute(
     'aria-label',
-    `${messages['github.link_label']} · ${messages['github.stars_label']}: ${new Intl.NumberFormat(locale).format(githubStarsState.count)}`,
+    `${messages[LANDING_MESSAGE_KEYS.GithubLinkLabel]} · ${messages[LANDING_MESSAGE_KEYS.GithubStarsLabel]}: ${new Intl.NumberFormat(locale).format(githubStarsState.count)}`,
   )
 }
 
@@ -209,10 +215,10 @@ async function loadGitHubStars() {
 function applyLandingLocale(locale, persist = false) {
   const messages = landingMessages[locale]
   document.documentElement.lang = locale
-  document.title = messages['meta.title']
+  document.title = messages[LANDING_MESSAGE_KEYS.MetaTitle]
   document
     .querySelector('meta[name="description"]')
-    .setAttribute('content', messages['meta.description'])
+    .setAttribute('content', messages[LANDING_MESSAGE_KEYS.MetaDescription])
 
   for (const element of document.querySelectorAll('[data-i18n]')) {
     element.textContent = messages[element.dataset.i18n]
@@ -253,7 +259,7 @@ function applyLandingLocale(locale, persist = false) {
 
   const structuredDataElement = document.querySelector('#structured-data')
   const structuredData = JSON.parse(structuredDataElement.textContent)
-  structuredData.description = messages['meta.description']
+  structuredData.description = messages[LANDING_MESSAGE_KEYS.MetaDescription]
   structuredData.inLanguage = locale
   structuredDataElement.textContent = JSON.stringify(structuredData)
 
@@ -267,9 +273,10 @@ function applyLandingLocale(locale, persist = false) {
 }
 
 function updateThemeToggleLabel(locale = document.documentElement.lang) {
-  const nextTheme =
-    document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
-  const messageKey = `theme.switch_${nextTheme}`
+  const messageKey =
+    document.documentElement.dataset.theme === 'dark'
+      ? LANDING_MESSAGE_KEYS.ThemeSwitchLight
+      : LANDING_MESSAGE_KEYS.ThemeSwitchDark
   themeToggle.dataset.i18nAriaLabel = messageKey
   themeToggle.setAttribute('aria-label', landingMessages[locale][messageKey])
 }

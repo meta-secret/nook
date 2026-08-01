@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../nook-web-shared/src/generated/i18n-keys";
 export const EXTENSION_CONNECT_PATH = "/extension-connect";
 
 import type { NookVaultManager } from "$app-wasm";
@@ -85,7 +86,7 @@ export async function requestPairedExtensionUnlock(
 }
 
 export function scopeLabel(): never {
-  throw new Error("errors.validation.sentinel_extension_forbidden");
+  throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
 }
 
 export async function adoptExtensionIdentity(
@@ -94,5 +95,5 @@ export async function adoptExtensionIdentity(
 ): Promise<void> {
   void _manager;
   void _request;
-  throw new Error("errors.validation.sentinel_extension_forbidden");
+  throw new Error(I18N_KEYS.ErrorsValidationSentinelExtensionForbidden);
 }

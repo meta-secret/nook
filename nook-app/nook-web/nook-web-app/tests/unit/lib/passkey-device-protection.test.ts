@@ -3,7 +3,7 @@ import {
   PasskeyCeremonyOutcome,
   passkeyCeremonyOutcome,
   sanitizedPasskeyCeremonyData,
-} from '$lib/passkey-device-protection'
+} from '$lib/auth/passkey-device-protection'
 
 describe('passkeyCeremonyOutcome', () => {
   it('classifies typed PASSKEY_* failures', () => {

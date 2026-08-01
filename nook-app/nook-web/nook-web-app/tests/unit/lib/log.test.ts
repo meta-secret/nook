@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isIgnoredErrorSource, sanitizeLogUrl } from '$lib/log'
+import { isIgnoredErrorSource, sanitizeLogUrl } from '$lib/runtime/log'
 
 describe('isIgnoredErrorSource', () => {
   it('ignores browser extension origins', () => {

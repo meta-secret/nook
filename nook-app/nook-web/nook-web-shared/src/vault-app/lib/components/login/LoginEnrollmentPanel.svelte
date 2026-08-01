@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ChevronDown, QrCode, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import ICloudEnrollmentAuth from "$lib/components/login/ICloudEnrollmentAuth.svelte";
@@ -63,11 +64,11 @@
     <QrCode class="size-5 shrink-0 text-muted-foreground" />
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-semibold text-foreground">
-        {vault.t("login.join_device")}
+        {vault.t(I18N_KEYS.LoginJoinDevice)}
       </span>
       {#if !open}
         <span class="block truncate text-xs text-muted-foreground">
-          {vault.t("login.qr_or_link")}
+          {vault.t(I18N_KEYS.LoginQrOrLink)}
         </span>
       {/if}
     </span>
@@ -84,7 +85,7 @@
       data-testid="login-enrollment-panel"
     >
       <p class="text-xs text-muted-foreground text-pretty">
-        {vault.t("login.join_instructions")}
+        {vault.t(I18N_KEYS.LoginJoinInstructions)}
       </p>
 
       {#if !enrollmentCodeFormOpen}
@@ -97,10 +98,10 @@
           }}
         >
           <QrCode class="size-4" />
-          {vault.t("login.enroll_qr_code")}
+          {vault.t(I18N_KEYS.LoginEnrollQrCode)}
         </button>
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t("login.enroll_qr_desc")}
+          {vault.t(I18N_KEYS.LoginEnrollQrDesc)}
         </p>
       {:else if onUseEnrollmentCode}
         <form
@@ -115,10 +116,10 @@
           <div class="flex items-start justify-between gap-3">
             <div class="space-y-1">
               <h3 class="text-sm font-semibold text-foreground">
-                {vault.t("login.paste_link")}
+                {vault.t(I18N_KEYS.LoginPasteLink)}
               </h3>
               <p class="text-xs text-muted-foreground text-pretty">
-                {vault.t("login.paste_desc")}
+                {vault.t(I18N_KEYS.LoginPasteDesc)}
               </p>
             </div>
             <button
@@ -130,13 +131,13 @@
                 enrollmentPasswordInput = "";
               }}
             >
-              {vault.t("common.back")}
+              {vault.t(I18N_KEYS.CommonBack)}
             </button>
           </div>
           <textarea
             rows="3"
             class="w-full font-mono text-xs leading-relaxed rounded-md border border-border bg-background p-3 focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder={vault.t("login.paste_placeholder")}
+            placeholder={vault.t(I18N_KEYS.LoginPastePlaceholder)}
             bind:value={enrollmentCodeInput}
             data-testid="enrollment-code-input"></textarea>
           <div class="space-y-1.5">
@@ -144,13 +145,13 @@
               for="enrollment-password-input"
               class="text-sm font-medium text-muted-foreground"
             >
-              {vault.t("onboard_device.vault_password")}
+              {vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
             </label>
             <input
               id="enrollment-password-input"
               type="password"
               class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder={vault.t("login.password_placeholder_qr")}
+              placeholder={vault.t(I18N_KEYS.LoginPasswordPlaceholderQr)}
               bind:value={enrollmentPasswordInput}
               autocomplete="current-password"
               data-testid="enrollment-password-input"
@@ -167,10 +168,10 @@
             >
               {#if isVerifying}
                 <RefreshCw class="size-4 animate-spin" />
-                {vault.t("login.enrolling")}
+                {vault.t(I18N_KEYS.LoginEnrolling)}
               {:else}
                 <ShieldCheck class="size-4" />
-                {vault.t("login.enroll_device_btn")}
+                {vault.t(I18N_KEYS.LoginEnrollDeviceBtn)}
               {/if}
             </Button>
           </div>

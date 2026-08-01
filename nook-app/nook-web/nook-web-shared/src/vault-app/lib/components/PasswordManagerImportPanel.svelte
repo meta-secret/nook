@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PasswordImportMessageKeys } from '../../../generated/i18n-keys'
   import { Archive, FileSpreadsheet, Upload } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
@@ -19,7 +20,7 @@
   } from './password-manager-import-state'
 
   type CommonProps = {
-    translationPrefix: string
+    messages: PasswordImportMessageKeys
     panelTestId: string
     fileTestId: string
     submitTestId: string
@@ -46,9 +47,6 @@
   let error = $state('')
   let isImporting = $state(false)
   const busy = $derived(isImporting || props.isSaving)
-
-  const messageKey = (suffix: string): string =>
-    `${props.translationPrefix}.${suffix}`
 
   function selectFile(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -98,10 +96,10 @@
   {#if !props.embedded}
     <div>
       <h2 class="text-lg font-semibold text-foreground">
-        {props.vault.t(messageKey('title'))}
+        {props.vault.t(props.messages.title)}
       </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        {props.vault.t(messageKey('description'))}
+        {props.vault.t(props.messages.description)}
       </p>
     </div>
   {/if}
@@ -116,16 +114,16 @@
         {/if}
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">
-            {props.vault.t(messageKey('export_hint_title'))}
+            {props.vault.t(props.messages.exportHintTitle)}
           </p>
           <p class="text-muted-foreground">
-            {props.vault.t(messageKey('export_hint'))}
+            {props.vault.t(props.messages.exportHint)}
           </p>
         </div>
       </div>
 
       <label class="block space-y-2 text-sm font-medium text-foreground">
-        <span>{props.vault.t(messageKey('file_label'))}</span>
+        <span>{props.vault.t(props.messages.fileLabel)}</span>
         <input
           type="file"
           accept={props.accept}
@@ -137,7 +135,7 @@
       </label>
 
       <p class="text-xs text-muted-foreground">
-        {props.vault.t(messageKey('supported_types'))}
+        {props.vault.t(props.messages.supportedTypes)}
       </p>
 
       <Button
@@ -148,8 +146,8 @@
       >
         <Upload class="size-4" />
         {busy
-          ? props.vault.t(messageKey('importing'))
-          : props.vault.t(messageKey('import'))}
+          ? props.vault.t(props.messages.importing)
+          : props.vault.t(props.messages.import)}
       </Button>
 
       {#if isImporting}
@@ -171,12 +169,12 @@
           data-testid={props.resultTestId}
         >
           <p class="font-medium">
-            {props.vault.t(messageKey('result_imported'), {
+            {props.vault.t(props.messages.resultImported, {
               count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {props.vault.t(messageKey('result_skipped'), {
+            {props.vault.t(props.messages.resultSkipped, {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
             })}

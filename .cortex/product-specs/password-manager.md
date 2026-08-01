@@ -104,9 +104,9 @@ keys.
 ### C. Cryptographically Secure Password Generator
 1. **Options Panel:** Located alongside the addition form.
 2. **Parameters:**
-   - **Length Slider:** Range 8–64 in UI (Rust accepts 8–128 via `PasswordOptions`).
+   - **Length Slider:** Range 8–64 in UI (Rust accepts 8–128 via `PasswordGenerationOptions`).
    - **Character Sets:** Lowercase, uppercase, numbers, symbols.
-3. **Generation:** Implemented in `nook-core` (`generate_password`) using `getrandom`. Exposed via `NookVaultManager.generate_password`. UI only calls WASM and populates the value field.
+3. **Generation:** Implemented in `nook-core` (`generate_password`) using `getrandom`. Rust owns the typed `PasswordGenerationOptions` contract and its secure defaults, and `nook-wasm` exposes both through typed free functions so generation never borrows the vault manager. UI only supplies control values, calls WASM, and populates the value field.
 
 ---
 

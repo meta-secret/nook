@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appPath } from '$lib/legal-content'
+  import { appPath } from '$lib/content/legal'
 </script>
 
 <footer

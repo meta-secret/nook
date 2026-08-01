@@ -1,6 +1,7 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   getActiveVaultSelection,
   hasActiveLocalVault,
@@ -13,7 +14,7 @@ import {
   NookActiveVaultSelectionState,
   type NookVaultManager,
 } from "$app-wasm";
-import { activeVaultScope, saveAuthProviders } from "$lib/auth-providers";
+import { activeVaultScope, saveAuthProviders } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,
@@ -157,7 +158,9 @@ export async function selectVaultForUnlock(
     state.localLoginPreparation = LocalLoginPreparationState.Ready;
   } catch (e: unknown) {
     state.errorMsg =
-      e instanceof Error ? e.message : state.t("errors.vault_selection_failed");
+      e instanceof Error
+        ? e.message
+        : state.t(I18N_KEYS.ErrorsVaultSelectionFailed);
   } finally {
     state.isVerifying = false;
   }
@@ -182,14 +185,14 @@ export async function createLocalVaultWithDeviceKeys(
   label?: string,
 ): Promise<void> {
   if (!state.hasManager) {
-    state.errorMsg = state.t("errors.engine_unavailable");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
   }
   if (state.isVerifying) return;
 
   const trimmedLabel = label?.trim() ?? "";
   if (!trimmedLabel) {
-    state.errorMsg = state.t("login.vault_name_required");
+    state.errorMsg = state.t(I18N_KEYS.LoginVaultNameRequired);
     return;
   }
 
@@ -236,13 +239,15 @@ export async function createLocalVaultWithDeviceKeys(
       deviceId: state.deviceId,
       storeId,
     });
-    state.showSuccess(state.t("toasts.local_loaded"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     state.startIdleSessionTracking();
     state.startVaultSync();
   } catch (e: unknown) {
     state.isAuthenticated = false;
     const message =
-      e instanceof Error ? e.message : state.t("errors.vault_creation_failed");
+      e instanceof Error
+        ? e.message
+        : state.t(I18N_KEYS.ErrorsVaultCreationFailed);
     log.warn("local vault create failed", { error: message });
     state.errorMsg = message;
   } finally {
@@ -268,7 +273,7 @@ export async function renameLocalVaultLabel(
   const trimmedLabel = label.trim();
   if (!trimmedStoreId) return;
   if (!trimmedLabel) {
-    state.errorMsg = state.t("login.vault_name_required");
+    state.errorMsg = state.t(I18N_KEYS.LoginVaultNameRequired);
     return;
   }
 
@@ -296,7 +301,7 @@ export async function renameLocalVaultLabel(
     }
     renameCommitted = true;
     await refreshLocalVaultCatalog(state);
-    state.showSuccess(state.t("toasts.vault_renamed"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsVaultRenamed));
   } catch (e: unknown) {
     if (
       !renameCommitted &&
@@ -315,7 +320,9 @@ export async function renameLocalVaultLabel(
       }
     }
     state.errorMsg =
-      e instanceof Error ? e.message : state.t("errors.vault_rename_failed");
+      e instanceof Error
+        ? e.message
+        : state.t(I18N_KEYS.ErrorsVaultRenameFailed);
   } finally {
     state.isVerifying = false;
   }
@@ -342,7 +349,7 @@ export async function activateConnectedExistingVault(
   if (!state.hasManager || !state.isAuthenticated) return;
   const connectedStoreId = requireManagerVaultStoreId(state.requireManager());
   if (connectedStoreId !== storeId) {
-    throw new Error(state.t("errors.vault_selection_failed"));
+    throw new Error(state.t(I18N_KEYS.ErrorsVaultSelectionFailed));
   }
   await setActiveVault(storeId);
   state.openActiveVault(storeId);

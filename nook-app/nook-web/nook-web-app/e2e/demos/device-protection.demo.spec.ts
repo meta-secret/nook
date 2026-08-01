@@ -177,7 +177,7 @@ test('reject an empty folder before existing-vault recovery', async ({
   await demoBeat(page)
 })
 
-test('shows matching passkeys and password recovery before opening a folder backup', async ({
+test('retains the folder import while showing matching passkeys and password recovery', async ({
   page,
 }) => {
   await page.addInitScript(() => {

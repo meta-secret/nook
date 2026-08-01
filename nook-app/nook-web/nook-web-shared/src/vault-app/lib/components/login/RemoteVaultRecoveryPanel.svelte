@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { AlertTriangle, RefreshCw } from '@lucide/svelte'
   import type { RemoteVaultRecoveryState } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
@@ -29,13 +30,13 @@
     <AlertTriangle class="mt-0.5 size-4 shrink-0 text-amber-500" />
     <div class="min-w-0 space-y-1">
       <p class="text-sm font-medium text-foreground">
-        {vault.t('login_wizard.remote_recovery.title')}
+        {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryTitle)}
       </p>
       <p class="text-xs leading-relaxed text-muted-foreground">
         {#if vault.clientPolicy.remoteRecoveryPromptHasCache(state)}
-          {vault.t('login_wizard.remote_recovery.desc_with_cache')}
+          {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryDescWithCache)}
         {:else}
-          {vault.t('login_wizard.remote_recovery.desc_missing_only')}
+          {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryDescMissingOnly)}
         {/if}
       </p>
     </div>
@@ -52,9 +53,9 @@
       >
         {#if isBusy}
           <RefreshCw class="size-4 animate-spin" />
-          {vault.t('login_wizard.remote_recovery.recovering')}
+          {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryRecovering)}
         {:else}
-          {vault.t('login_wizard.remote_recovery.recover_btn')}
+          {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryRecoverBtn)}
         {/if}
       </Button>
     {/if}
@@ -66,7 +67,7 @@
       disabled={isBusy}
       onclick={() => void onCreateFresh?.()}
     >
-      {vault.t('login_wizard.remote_recovery.create_fresh_btn')}
+      {vault.t(I18N_KEYS.LoginWizardRemoteRecoveryCreateFreshBtn)}
     </Button>
     {#if onDismiss}
       <Button
@@ -76,7 +77,7 @@
         disabled={isBusy}
         onclick={() => onDismiss?.()}
       >
-        {vault.t('common.cancel')}
+        {vault.t(I18N_KEYS.CommonCancel)}
       </Button>
     {/if}
   </div>

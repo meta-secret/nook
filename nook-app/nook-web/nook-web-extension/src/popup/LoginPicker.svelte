@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
@@ -57,7 +58,7 @@
     if (username.length > 0) return username
     const host = account.websiteHost.trim()
     if (host.length > 0) return host
-    return i18n.t('extension.login_picker.unnamed')
+    return i18n.t(I18N_KEYS.ExtensionLoginPickerUnnamed)
   }
 
   async function loadAccounts(searchQuery: string): Promise<void> {
@@ -73,7 +74,7 @@
     if (!isAccountQueryResponse(response)) {
       accounts = []
       destinationOrigin = ''
-      error = i18n.t('extension.login_picker.failed')
+      error = i18n.t(I18N_KEYS.ExtensionLoginPickerFailed)
       return
     }
     destinationOrigin = response.origin
@@ -98,7 +99,7 @@
       return
     }
     busy = false
-    error = i18n.t('extension.login_picker.failed')
+    error = i18n.t(I18N_KEYS.ExtensionLoginPickerFailed)
   }
 
   $effect(() => {
@@ -122,16 +123,16 @@
 
 <main class="authenticator-picker" data-testid="login-picker">
   <p class="step-label">
-    {i18n.t('extension.login_picker.step_label')}
+    {i18n.t(I18N_KEYS.ExtensionLoginPickerStepLabel)}
   </p>
   <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
-  <h1>{i18n.t('extension.login_picker.title')}</h1>
+  <h1>{i18n.t(I18N_KEYS.ExtensionLoginPickerTitle)}</h1>
   <p class="description">
-    {i18n.t('extension.login_picker.description')}
+    {i18n.t(I18N_KEYS.ExtensionLoginPickerDescription)}
   </p>
   {#if destinationOrigin}
     <p class="destination-origin" data-testid="login-destination">
-      {i18n.t('extension.login_picker.destination', {
+      {i18n.t(I18N_KEYS.ExtensionLoginPickerDestination, {
         origin: destinationOrigin,
       })}
     </p>
@@ -140,7 +141,7 @@
   <div class="picker-filter">
     <Search aria-hidden="true" size={18} />
     <label for="login-search">
-      {i18n.t('extension.login_picker.search_label')}
+      {i18n.t(I18N_KEYS.ExtensionLoginPickerSearchLabel)}
     </label>
     <input
       id="login-search"
@@ -150,22 +151,22 @@
       bind:value={query}
       maxlength="200"
       autocomplete="off"
-      placeholder={i18n.t('extension.login_picker.search_placeholder')}
+      placeholder={i18n.t(I18N_KEYS.ExtensionLoginPickerSearchPlaceholder)}
     />
   </div>
   <p class="filter-chip">
-    {i18n.t('extension.login_picker.filter_label')}
+    {i18n.t(I18N_KEYS.ExtensionLoginPickerFilterLabel)}
   </p>
 
   {#if error}
     <p class="error-message" role="alert">{error}</p>
   {:else if loading}
     <p class="picker-status">
-      {i18n.t('extension.login_picker.loading')}
+      {i18n.t(I18N_KEYS.ExtensionLoginPickerLoading)}
     </p>
   {:else if accounts.length === 0}
     <p class="picker-status">
-      {i18n.t('extension.login_picker.no_results')}
+      {i18n.t(I18N_KEYS.ExtensionLoginPickerNoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="login-results">

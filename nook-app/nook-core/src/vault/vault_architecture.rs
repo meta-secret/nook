@@ -153,6 +153,21 @@ impl VaultApplication {
         }
     }
 
+    #[must_use]
+    pub const fn is_simple(self) -> bool {
+        matches!(self, Self::Simple)
+    }
+
+    #[must_use]
+    pub const fn is_sentinel(self) -> bool {
+        matches!(self, Self::Sentinel)
+    }
+
+    #[must_use]
+    pub const fn supports_extension(self) -> bool {
+        !self.is_sentinel()
+    }
+
     pub fn validate_vault_type(self, vault_type: VaultType) -> ValidationResult<()> {
         if self.permits_vault_type(vault_type) {
             return Ok(());
@@ -829,6 +844,20 @@ mod tests {
                 vault_type: "sentinel".to_owned(),
             })
         );
+    }
+
+    #[test]
+    fn application_capabilities_are_owned_by_the_application_enum() {
+        assert!(VaultApplication::Simple.is_simple());
+        assert!(!VaultApplication::Simple.is_sentinel());
+        assert!(VaultApplication::Simple.supports_extension());
+
+        assert!(!VaultApplication::Sentinel.is_simple());
+        assert!(VaultApplication::Sentinel.is_sentinel());
+        assert!(!VaultApplication::Sentinel.supports_extension());
+
+        assert!(VaultApplication::UnifiedDevelopment.supports_extension());
+        assert!(VaultApplication::Extension.supports_extension());
     }
 
     #[test]

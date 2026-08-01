@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    I18N_KEYS,
+    type I18nKey,
+  } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { ExtensionI18n } from '../lib/i18n'
@@ -67,14 +71,14 @@
 
   const loginDetectionKey = $derived(
     loginDetectionView.kind === LoginDetectionViewKind.Loading
-      ? 'extension.companion.login_checking'
+      ? I18N_KEYS.ExtensionCompanionLoginChecking
       : loginDetectionView.status === LoginDetectionStatus.Detected
-        ? 'extension.companion.login_detected'
+        ? I18N_KEYS.ExtensionCompanionLoginDetected
         : loginDetectionView.status === LoginDetectionStatus.NotDetected
-          ? 'extension.companion.login_not_detected'
+          ? I18N_KEYS.ExtensionCompanionLoginNotDetected
           : loginDetectionView.status === LoginDetectionStatus.Unavailable
-            ? 'extension.companion.login_unavailable'
-            : 'extension.companion.login_checking',
+            ? I18N_KEYS.ExtensionCompanionLoginUnavailable
+            : I18N_KEYS.ExtensionCompanionLoginChecking,
   )
 
   function isOkResponse(response: unknown): boolean {
@@ -129,7 +133,7 @@
       caught.message.includes('EXTENSION_SESSION_REQUEST_EXPIRED') ||
       caught.message.includes('EXTENSION_SESSION_LOCKED')
     ) {
-      return i18n.t('extension.setup.session_busy_retry')
+      return i18n.t(I18N_KEYS.ExtensionSetupSessionBusyRetry)
     }
     return caught.message
   }
@@ -140,7 +144,7 @@
       { type: 'nook:open-simple-vault' },
       (response: unknown) => {
         if (chrome.runtime.lastError || !isOkResponse(response)) {
-          error = i18n.t('extension.connect.start_failed')
+          error = i18n.t(I18N_KEYS.ExtensionConnectStartFailed)
           return
         }
         window.close()
@@ -156,13 +160,13 @@
         type: 'nook:begin-extension-pairing',
         payload: {
           ...device,
-          deviceLabel: i18n.t('extension.setup.profile_title'),
+          deviceLabel: i18n.t(I18N_KEYS.ExtensionSetupProfileTitle),
         },
       },
       (response: unknown) => {
         busy = false
         if (chrome.runtime.lastError || !isOkResponse(response)) {
-          error = i18n.t('extension.connect.start_failed')
+          error = i18n.t(I18N_KEYS.ExtensionConnectStartFailed)
           return
         }
         window.close()
@@ -189,7 +193,7 @@
 
   async function runDeviceAction(
     action: () => Promise<ExtensionDeviceProtectionResult>,
-    fallbackKey = 'extension.setup.passkey_setup_failed',
+    fallbackKey: I18nKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
   ): Promise<void> {
     busy = true
     error = ''
@@ -205,8 +209,8 @@
         status = DeviceProtectionStatus.PinSetup
         error = i18n.t(
           caught.message.includes('PASSKEY_UNAVAILABLE')
-            ? 'device_protection.passkey_unavailable_pin_fallback_ready'
-            : 'device_protection.pin_fallback_ready',
+            ? I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady
+            : I18N_KEYS.DeviceProtectionPinFallbackReady,
         )
         return
       }
@@ -217,27 +221,27 @@
   function createPasskey(): void {
     void runDeviceAction(
       () => createExtensionPasskey(passkeyLabel, deviceMode),
-      'device_protection.passkey_create_not_allowed',
+      I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
     )
   }
 
   function useExistingPasskey(): void {
     void runDeviceAction(
       recoverExtensionPasskey,
-      'device_protection.passkey_recovery_not_allowed',
+      I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
     )
   }
 
   function unlockPasskey(): void {
     void runDeviceAction(
       unlockExtensionPasskey,
-      'device_protection.passkey_unlock_not_allowed',
+      I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
     )
   }
 
   function createPin(): void {
     if (pin !== pinConfirm) {
-      error = i18n.t('device_protection.pin_mismatch')
+      error = i18n.t(I18N_KEYS.DeviceProtectionPinMismatch)
       return
     }
     void runDeviceAction(() => createExtensionPin(pin))
@@ -250,7 +254,7 @@
 
 {#if showCompanionHome}
   <main class="companion-home" data-testid="extension-companion-home">
-    <p class="step-label">{i18n.t('extension.companion.step_label')}</p>
+    <p class="step-label">{i18n.t(I18N_KEYS.ExtensionCompanionStepLabel)}</p>
     <NookIcon
       src="../icons/nook.png"
       alt=""
@@ -259,15 +263,15 @@
     <h1>
       {i18n.t(
         showExistingConnection
-          ? 'extension.companion.ready_title'
-          : 'extension.companion.connect_title',
+          ? I18N_KEYS.ExtensionCompanionReadyTitle
+          : I18N_KEYS.ExtensionCompanionConnectTitle,
       )}
     </h1>
     <p class="description">
       {i18n.t(
         showExistingConnection
-          ? 'extension.companion.ready_description'
-          : 'extension.companion.connect_description',
+          ? I18N_KEYS.ExtensionCompanionReadyDescription
+          : I18N_KEYS.ExtensionCompanionConnectDescription,
       )}
     </p>
     <p
@@ -276,8 +280,8 @@
       data-connected={showExistingConnection ? 'true' : 'false'}
     >
       {showExistingConnection && vaultName
-        ? i18n.t('extension.companion.ready_vault', { vault: vaultName })
-        : i18n.t('extension.companion.not_connected')}
+        ? i18n.t(I18N_KEYS.ExtensionCompanionReadyVault, { vault: vaultName })
+        : i18n.t(I18N_KEYS.ExtensionCompanionNotConnected)}
     </p>
     <p
       class="login-detection"
@@ -295,7 +299,7 @@
         data-testid="stay-as-companion-btn"
         onclick={stayAsCompanion}
       >
-        {i18n.t('extension.companion.stay_ready')}
+        {i18n.t(I18N_KEYS.ExtensionCompanionStayReady)}
       </button>
     {:else if pairingCandidate.kind === PairingCandidateKind.Selected}
       <button
@@ -308,8 +312,8 @@
         }}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('extension.setup.connect_simple_vault')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.ExtensionSetupConnectSimpleVault)}
       </button>
     {/if}
 
@@ -319,7 +323,7 @@
       data-testid="open-simple-vault-btn"
       onclick={openSimpleVault}
     >
-      {i18n.t('extension.setup.open_simple_vault')}
+      {i18n.t(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
     </button>
 
     {#if !showExistingConnection}
@@ -329,7 +333,7 @@
         data-testid="stay-as-companion-btn"
         onclick={stayAsCompanion}
       >
-        {i18n.t('extension.companion.not_now')}
+        {i18n.t(I18N_KEYS.ExtensionCompanionNotNow)}
       </button>
     {/if}
 
@@ -339,7 +343,7 @@
   </main>
 {:else}
   <main class="device-setup" data-testid="extension-device-setup">
-    <p class="step-label">{i18n.t('device_protection.step_label')}</p>
+    <p class="step-label">{i18n.t(I18N_KEYS.DeviceProtectionStepLabel)}</p>
     <div class="shield-icon" aria-hidden="true">
       {#if needsSetup || status === DeviceProtectionStatus.PinSetup}
         <ShieldCheck size={26} />
@@ -347,24 +351,24 @@
         <KeyRound size={25} />
       {/if}
     </div>
-    <h1>{i18n.t('device_protection.title')}</h1>
+    <h1>{i18n.t(I18N_KEYS.DeviceProtectionTitle)}</h1>
     <p class="description">
       {i18n.t(
         status === DeviceProtectionStatus.Passkey ||
           status === DeviceProtectionStatus.Unlocked
-          ? 'device_protection.unlock_description'
+          ? I18N_KEYS.DeviceProtectionUnlockDescription
           : status === DeviceProtectionStatus.Pin
-            ? 'device_protection.pin_unlock_description'
+            ? I18N_KEYS.DeviceProtectionPinUnlockDescription
             : status === DeviceProtectionStatus.PinSetup
-              ? 'device_protection.pin_setup_description'
-              : 'device_protection.setup_description',
+              ? I18N_KEYS.DeviceProtectionPinSetupDescription
+              : I18N_KEYS.DeviceProtectionSetupDescription,
       )}
     </p>
 
     {#if status === DeviceProtectionStatus.PinSetup}
       <div class="field-group">
         <label for="device-protection-pin">
-          {i18n.t('device_protection.pin_label')}
+          {i18n.t(I18N_KEYS.DeviceProtectionPinLabel)}
         </label>
         <input
           id="device-protection-pin"
@@ -378,7 +382,7 @@
       </div>
       <div class="field-group">
         <label for="device-protection-pin-confirm">
-          {i18n.t('device_protection.pin_confirm_label')}
+          {i18n.t(I18N_KEYS.DeviceProtectionPinConfirmLabel)}
         </label>
         <input
           id="device-protection-pin-confirm"
@@ -391,7 +395,7 @@
         />
       </div>
       <p class="field-hint">
-        {i18n.t('device_protection.pin_security_note')}
+        {i18n.t(I18N_KEYS.DeviceProtectionPinSecurityNote)}
       </p>
       <button
         type="button"
@@ -400,12 +404,12 @@
         onclick={createPin}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('device_protection.pin_setup_action')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.DeviceProtectionPinSetupAction)}
       </button>
     {:else if needsSetup && setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
       <p class="field-hint">
-        {i18n.t('device_protection.existing_passkey_hint')}
+        {i18n.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
       </p>
       <button
         type="button"
@@ -414,13 +418,13 @@
         onclick={useExistingPasskey}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('device_protection.existing_passkey_action')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
       </button>
 
       <div class="divider">
         <span></span>
-        <small>{i18n.t('device_protection.new_passkey_alternative')}</small>
+        <small>{i18n.t(I18N_KEYS.DeviceProtectionNewPasskeyAlternative)}</small>
         <span></span>
       </div>
       <button
@@ -434,12 +438,12 @@
         }}
       >
         <KeyRound size={17} />
-        {i18n.t('device_protection.new_passkey_alternative_action')}
+        {i18n.t(I18N_KEYS.DeviceProtectionNewPasskeyAlternativeAction)}
       </button>
     {:else if needsSetup}
       <div class="field-group">
         <label for="device-protection-mode">
-          {i18n.t('device_protection.mode_group_label')}
+          {i18n.t(I18N_KEYS.DeviceProtectionModeGroupLabel)}
         </label>
         <select
           id="device-protection-mode"
@@ -448,30 +452,32 @@
           data-testid="device-mode-select"
         >
           <option value={DeviceMode.Standard}>
-            {i18n.t('device_protection.mode_standard_title')}
+            {i18n.t(I18N_KEYS.DeviceProtectionModeStandardTitle)}
           </option>
           <option value={DeviceMode.AntiHacker}>
-            {i18n.t('device_protection.mode_anti_hacker_title')}
+            {i18n.t(I18N_KEYS.DeviceProtectionModeAntiHackerTitle)}
           </option>
         </select>
         <p class="field-hint">
           {i18n.t(
             deviceMode === DeviceMode.Standard
-              ? 'device_protection.mode_standard_description'
-              : 'device_protection.mode_anti_hacker_description',
+              ? I18N_KEYS.DeviceProtectionModeStandardDescription
+              : I18N_KEYS.DeviceProtectionModeAntiHackerDescription,
           )}
         </p>
       </div>
 
       <div class="field-group">
         <label for="device-protection-label">
-          {i18n.t('device_protection.passkey_label')}
+          {i18n.t(I18N_KEYS.DeviceProtectionPasskeyLabel)}
         </label>
         <input
           id="device-protection-label"
           type="text"
           autocomplete="off"
-          placeholder={i18n.t('device_protection.passkey_label_placeholder')}
+          placeholder={i18n.t(
+            I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
+          )}
           bind:value={passkeyLabel}
           disabled={busy}
           data-testid="device-protection-label-input"
@@ -484,13 +490,14 @@
         onclick={createPasskey}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('device_protection.setup_action')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.DeviceProtectionSetupAction)}
       </button>
 
       <div class="divider">
         <span></span>
-        <small>{i18n.t('device_protection.existing_passkey_alternative')}</small
+        <small
+          >{i18n.t(I18N_KEYS.DeviceProtectionExistingPasskeyAlternative)}</small
         >
         <span></span>
       </div>
@@ -502,12 +509,12 @@
         onclick={useExistingPasskey}
       >
         <KeyRound size={17} />
-        {i18n.t('device_protection.existing_passkey_action')}
+        {i18n.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
       </button>
     {:else if status === DeviceProtectionStatus.Pin}
       <div class="field-group">
         <label for="device-protection-pin">
-          {i18n.t('device_protection.pin_label')}
+          {i18n.t(I18N_KEYS.DeviceProtectionPinLabel)}
         </label>
         <input
           id="device-protection-pin"
@@ -526,8 +533,8 @@
         onclick={unlockPin}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('device_protection.pin_unlock_action')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.DeviceProtectionPinUnlockAction)}
       </button>
     {:else}
       <button
@@ -537,8 +544,8 @@
         onclick={unlockPasskey}
       >
         {busy
-          ? i18n.t('device_protection.authorizing')
-          : i18n.t('device_protection.unlock_action')}
+          ? i18n.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : i18n.t(I18N_KEYS.DeviceProtectionUnlockAction)}
       </button>
     {/if}
 

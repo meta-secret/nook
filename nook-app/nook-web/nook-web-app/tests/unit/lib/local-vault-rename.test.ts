@@ -15,7 +15,7 @@ vi.mock('$app-wasm', () => ({
   NookVaultSwitchState: { Switch: 'Switch' },
 }))
 
-vi.mock('$lib/log', () => ({
+vi.mock('$lib/runtime/log', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('$lib/log', () => ({
   }),
 }))
 
-vi.mock('$lib/auth-providers', () => ({
+vi.mock('$lib/auth/providers', () => ({
   saveAuthProviders: vi.fn(),
 }))
 

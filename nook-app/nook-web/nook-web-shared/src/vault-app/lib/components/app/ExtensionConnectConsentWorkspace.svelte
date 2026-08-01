@@ -1,7 +1,7 @@
 <script lang="ts">
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import type { ExtensionConnectRequest } from '$lib/extension-connect'
+  import type { ExtensionConnectRequest } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

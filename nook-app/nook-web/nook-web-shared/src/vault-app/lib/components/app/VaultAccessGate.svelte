@@ -1,11 +1,15 @@
 <script lang="ts">
-  import type { StartSentinelGenesisArgs } from '$app-wasm'
-  import { APP_KIND } from '$lib/app-kind'
+  import {
+    configuredVaultApplication,
+    type StartSentinelGenesisArgs,
+  } from '$app-wasm'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
   import type { VaultState } from '$lib/vault.svelte'
+
+  const APP_KIND = configuredVaultApplication()
 
   let {
     vault,

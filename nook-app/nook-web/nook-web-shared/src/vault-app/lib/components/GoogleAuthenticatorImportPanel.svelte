@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { onDestroy } from "svelte";
   import { Camera, ImageUp, QrCode, Trash2, Upload, X } from "@lucide/svelte";
   import QrScanner from "qr-scanner";
@@ -40,11 +41,11 @@
   function addMigrationUri(value: string) {
     const uri = value.trim();
     if (!uri.startsWith("otpauth-migration://offline?")) {
-      error = vault.t("google_authenticator_import.invalid_qr");
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportInvalidQr);
       return;
     }
     if (migrationUris.includes(uri)) {
-      error = vault.t("google_authenticator_import.duplicate_qr");
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportDuplicateQr);
       stopCamera();
       return;
     }
@@ -81,7 +82,7 @@
       await scannerState.scanner.start();
     } catch {
       scanning = false;
-      error = vault.t("google_authenticator_import.camera_failed");
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportCameraFailed);
     }
   }
 
@@ -98,7 +99,7 @@
       });
       addMigrationUri(scanResult.data);
     } catch {
-      error = vault.t("google_authenticator_import.image_failed");
+      error = vault.t(I18N_KEYS.GoogleAuthenticatorImportImageFailed);
     }
   }
 
@@ -132,10 +133,10 @@
   {#if !embedded}
     <div>
       <h2 class="text-lg font-semibold text-foreground">
-        {vault.t("google_authenticator_import.title")}
+        {vault.t(I18N_KEYS.GoogleAuthenticatorImportTitle)}
       </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        {vault.t("google_authenticator_import.description")}
+        {vault.t(I18N_KEYS.GoogleAuthenticatorImportDescription)}
       </p>
     </div>
   {/if}
@@ -146,10 +147,10 @@
         <QrCode class="mt-0.5 size-5 shrink-0 text-primary" />
         <div class="space-y-1 text-sm">
           <p class="font-medium text-foreground">
-            {vault.t("google_authenticator_import.export_hint_title")}
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportExportHintTitle)}
           </p>
           <p class="text-muted-foreground">
-            {vault.t("google_authenticator_import.export_hint")}
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportExportHint)}
           </p>
         </div>
       </div>
@@ -164,10 +165,10 @@
         >
           {#if scanning}
             <X class="size-4" />
-            {vault.t("google_authenticator_import.stop_camera")}
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportStopCamera)}
           {:else}
             <Camera class="size-4" />
-            {vault.t("google_authenticator_import.scan_camera")}
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportScanCamera)}
           {/if}
         </Button>
 
@@ -175,7 +176,7 @@
           class="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-medium shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50"
         >
           <ImageUp class="size-4" />
-          {vault.t("google_authenticator_import.scan_image")}
+          {vault.t(I18N_KEYS.GoogleAuthenticatorImportScanImage)}
           <input
             type="file"
             accept="image/*"
@@ -203,7 +204,7 @@
           data-testid="google-authenticator-scanned-count"
         >
           <p class="text-sm font-medium text-foreground">
-            {vault.t("google_authenticator_import.scanned_count", {
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportScannedCount, {
               count: String(migrationUris.length),
             })}
           </p>
@@ -211,7 +212,7 @@
             type="button"
             variant="ghost"
             size="sm"
-            aria-label={vault.t("google_authenticator_import.clear_scans")}
+            aria-label={vault.t(I18N_KEYS.GoogleAuthenticatorImportClearScans)}
             data-testid="google-authenticator-clear-scans"
             onclick={clearScans}
           >
@@ -221,7 +222,7 @@
       {/if}
 
       <p class="text-xs text-muted-foreground">
-        {vault.t("google_authenticator_import.supported_types")}
+        {vault.t(I18N_KEYS.GoogleAuthenticatorImportSupportedTypes)}
       </p>
 
       <Button
@@ -231,8 +232,8 @@
       >
         <Upload class="size-4" />
         {isSaving
-          ? vault.t("google_authenticator_import.importing")
-          : vault.t("google_authenticator_import.import")}
+          ? vault.t(I18N_KEYS.GoogleAuthenticatorImportImporting)
+          : vault.t(I18N_KEYS.GoogleAuthenticatorImportImport)}
       </Button>
 
       {#if error}
@@ -250,12 +251,12 @@
           data-testid="google-authenticator-import-result"
         >
           <p class="font-medium">
-            {vault.t("google_authenticator_import.result_imported", {
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultImported, {
               count: String(result.result.imported),
             })}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">
-            {vault.t("google_authenticator_import.result_skipped", {
+            {vault.t(I18N_KEYS.GoogleAuthenticatorImportResultSkipped, {
               unsupported: String(result.result.skippedUnsupported),
               duplicates: String(result.result.skippedDuplicates),
             })}

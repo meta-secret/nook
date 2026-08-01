@@ -3,7 +3,7 @@ import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
 } from '$app-wasm'
-import { createVaultIdleSessionTracker } from '$lib/vault-idle-session'
+import { createVaultIdleSessionTracker } from '$lib/vault/idle-session-tracker'
 
 beforeAll(async () => {
   await initNookWasm()

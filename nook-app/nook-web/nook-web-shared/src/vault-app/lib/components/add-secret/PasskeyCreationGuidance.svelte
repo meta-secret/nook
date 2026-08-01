@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ArrowLeft, KeyRound } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import type { VaultState } from "$lib/vault.svelte";
@@ -26,11 +27,11 @@
         onclick={onBack}
       >
           <ArrowLeft class="size-3.5" />
-          {vault.t('add_secret.change_type')}
+          {vault.t(I18N_KEYS.AddSecretChangeType)}
         </button>
         <span class="text-muted-foreground/50" aria-hidden="true">·</span>
         <h3 class="truncate text-sm font-semibold text-foreground">
-          {vault.t('add_secret.title_new_passkey')}
+          {vault.t(I18N_KEYS.AddSecretTitleNewPasskey)}
         </h3>
       </div>
       <Button
@@ -41,7 +42,7 @@
         data-testid="add-secret-cancel-btn"
         onclick={onDone}
       >
-        {vault.t('common.done')}
+        {vault.t(I18N_KEYS.CommonDone)}
       </Button>
     </div>
 
@@ -54,13 +55,13 @@
         <KeyRound class="size-6" />
       </div>
       <h4 class="text-base font-semibold text-foreground">
-        {vault.t('add_secret.passkey_creation_title')}
+        {vault.t(I18N_KEYS.AddSecretPasskeyCreationTitle)}
       </h4>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">
-        {vault.t('add_secret.passkey_creation_description')}
+        {vault.t(I18N_KEYS.AddSecretPasskeyCreationDescription)}
       </p>
       <p class="mt-3 text-xs leading-relaxed text-muted-foreground text-pretty">
-        {vault.t('add_secret.passkey_creation_hint')}
+        {vault.t(I18N_KEYS.AddSecretPasskeyCreationHint)}
       </p>
     </div>
 </div>

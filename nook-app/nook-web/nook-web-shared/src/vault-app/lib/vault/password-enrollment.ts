@@ -23,8 +23,8 @@ import {
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
-} from "$lib/auth-providers";
-import type { SharedStorageGrantOutcome } from "$lib/vault-architecture";
+} from "$lib/auth/providers";
+import type { SharedStorageGrantOutcome } from "$lib/vault/architecture-model";
 
 export enum SharedStorageTargetKind {
   NotBound = "not-bound",

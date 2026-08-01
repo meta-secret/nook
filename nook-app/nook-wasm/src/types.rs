@@ -13,6 +13,7 @@ mod core;
 mod oauth;
 mod runtime;
 mod sync;
+mod sync_state;
 
 pub use authentication::*;
 pub use conflicts::*;
@@ -20,6 +21,7 @@ pub use core::*;
 pub use oauth::*;
 pub use runtime::*;
 pub use sync::*;
+pub use sync_state::*;
 
 pub(crate) use conflicts::{replacement_conflicts_to_vec, security_conflicts_to_vec};
 pub(crate) use runtime::password_entries_to_vec;

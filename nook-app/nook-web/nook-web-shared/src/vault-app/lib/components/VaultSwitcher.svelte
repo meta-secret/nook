@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     Check,
     ChevronDown,
@@ -46,8 +47,8 @@
   })
   const activeLabel = $derived(
     activeVault.kind === DisplayedVaultKind.Available
-      ? activeVault.entry.displayLabel(vault.t('login.vault_picker_unnamed'))
-      : vault.t('nav.vault'),
+      ? activeVault.entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      : vault.t(I18N_KEYS.NavVault),
   )
   const vaultCount = $derived(vaults.length)
   const isBusy = $derived(
@@ -146,22 +147,22 @@
       <div
         role="menu"
         tabindex="-1"
-        aria-label={vault.t('vault.switcher_choose')}
+        aria-label={vault.t(I18N_KEYS.VaultSwitcherChoose)}
         class="absolute left-0 top-full z-50 mt-1.5 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-lg border border-border/60 bg-popover p-2 shadow-lg"
         data-testid="vault-switcher-menu"
       >
         <p
           class="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
         >
-          {vault.t('vault.switcher_your_vaults')}
+          {vault.t(I18N_KEYS.VaultSwitcherYourVaults)}
         </p>
         <p
           class="px-2 pb-2 text-xs text-muted-foreground"
           data-testid="vault-switcher-count"
         >
           {vaultCount === 1
-            ? vault.t('vault.switcher_one_on_device')
-            : vault.t('vault.switcher_count_on_device', {
+            ? vault.t(I18N_KEYS.VaultSwitcherOneOnDevice)
+            : vault.t(I18N_KEYS.VaultSwitcherCountOnDevice, {
                 count: String(vaultCount),
               })}
         </p>
@@ -188,7 +189,7 @@
                 />
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-medium">
-                    {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
+                    {entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
                   </span>
                   <span class="block truncate font-mono text-[10px] opacity-70">
                     {entry.storeId}
@@ -214,7 +215,7 @@
             }}
           >
             <SlidersHorizontal class="size-4" />
-            {vault.t('vault.switcher_admin')}
+            {vault.t(I18N_KEYS.VaultSwitcherAdmin)}
           </button>
         </div>
       </div>

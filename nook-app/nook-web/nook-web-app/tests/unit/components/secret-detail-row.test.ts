@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { render } from '@testing-library/svelte'
 import {
@@ -14,7 +15,7 @@ import {
 
 const vault = {
   t(key: string): string {
-    return key === 'vault.fields.no_website' ? 'Localized no website' : key
+    return key === I18N_KEYS.VaultFieldsNoWebsite ? 'Localized no website' : key
   },
 } as unknown as VaultState
 

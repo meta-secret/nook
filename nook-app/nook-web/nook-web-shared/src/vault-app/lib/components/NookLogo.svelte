@@ -1,6 +1,6 @@
 <script lang="ts">
   import NookIcon from '$web-shared/components/NookIcon.svelte'
-  import { ColorMode } from '$lib/app-lifecycle-state'
+  import { ColorMode } from '$lib/app/theme'
   import { LogoSize } from './nook-logo-state'
 
   let {

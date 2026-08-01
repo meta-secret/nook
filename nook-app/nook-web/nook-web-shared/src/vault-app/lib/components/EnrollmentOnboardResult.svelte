@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check, Copy } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -61,7 +62,7 @@
   <div class="flex justify-center">
     <EnrollmentQrCode
       {enrollmentLink}
-      loadingLabel={vault.t('onboard_device.generating_qr')}
+      loadingLabel={vault.t(I18N_KEYS.OnboardDeviceGeneratingQr)}
     />
   </div>
 
@@ -81,10 +82,10 @@
       >
         {#if copied}
           <Check class="size-3" />
-          {vault.t('onboard_device.copied_link')}
+          {vault.t(I18N_KEYS.OnboardDeviceCopiedLink)}
         {:else}
           <Copy class="size-3" />
-          {vault.t('onboard_device.copy_link')}
+          {vault.t(I18N_KEYS.OnboardDeviceCopyLink)}
         {/if}
       </button>
     </div>
