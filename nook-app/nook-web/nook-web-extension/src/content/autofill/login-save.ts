@@ -334,8 +334,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   const title = document.createElement('h1')
   title.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLoginTitle'
-      : 'widgetSaveLoginTitle',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginTitle
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginTitle,
   )
 
   const site = document.createElement('p')
@@ -346,8 +346,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   description.className = 'description'
   description.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLoginDescription'
-      : 'widgetSaveLoginDescription',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginDescription
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginDescription,
   )
   description.setAttribute('data-testid', 'nook-auth-gate-save-description')
 
@@ -357,8 +357,8 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
   saveButton.setAttribute('data-testid', 'nook-auth-gate-save')
   saveButton.textContent = translatedMessage(
     offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? 'widgetUpdateLogin'
-      : 'widgetSaveLogin',
+      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLogin
+      : BROWSER_MESSAGE_KEYS.WidgetSaveLogin,
   )
   saveButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return

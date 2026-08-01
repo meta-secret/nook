@@ -64,28 +64,28 @@ export function workflowCopy(kind: string): WorkflowCopy {
   switch (kind) {
     case 'login':
       return {
-        titleKey: 'widgetLoginTitle',
-        descriptionKey: 'widgetLoginDescription',
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
       }
     case 'signup':
       return {
-        titleKey: 'widgetSignupTitle',
-        descriptionKey: 'widgetSignupDescription',
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
       }
     case 'password-change':
       return {
-        titleKey: 'widgetPasswordChangeTitle',
-        descriptionKey: 'widgetPasswordChangeDescription',
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
       }
     case 'totp-challenge':
       return {
-        titleKey: 'widgetAuthenticatorTitle',
-        descriptionKey: 'widgetAuthenticatorDescription',
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
       }
     default:
       return {
-        titleKey: 'widgetManualTitle',
-        descriptionKey: 'widgetManualDescription',
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,
       }
   }
 }

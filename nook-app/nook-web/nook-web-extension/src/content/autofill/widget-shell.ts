@@ -278,12 +278,12 @@ export function enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
   if (hints.qr) {
     return {
       titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
-      descriptionKey: 'widgetEnrollDescription',
+      descriptionKey: BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
     }
   }
   return {
     titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
-    descriptionKey: 'widgetBackupDescription',
+    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
   }
 }
 

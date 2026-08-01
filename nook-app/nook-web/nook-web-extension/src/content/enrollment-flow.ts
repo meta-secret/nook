@@ -29,11 +29,21 @@ import {
   RuntimeMessageDeliveryKind,
   type RuntimeMessageDelivery,
 } from './autofill/login-passkey-actions'
+import {
+  appendButtonRow,
+  clearEnrollmentSection,
+  createEnrollmentSection,
+  createPrimaryButton,
+  createSecondaryButton,
+  createTextButton,
+  renderPreviewDetails,
+  resetEnrollmentHeadline,
+  setHostDescription,
+  type EnrollmentFlowViewHost,
+  type EnrollmentPageHints,
+} from './enrollment-flow-view'
 
-export type EnrollmentPageHints = {
-  qr: boolean
-  backupCodes: boolean
-}
+export type { EnrollmentPageHints } from './enrollment-flow-view'
 
 export function detectEnrollmentHints(): EnrollmentPageHints {
   return {
@@ -42,11 +52,8 @@ export function detectEnrollmentHints(): EnrollmentPageHints {
   }
 }
 
-export type EnrollmentFlowHost = {
-  panel: HTMLElement
+export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   step: HTMLParagraphElement
-  title: HTMLHeadingElement
-  description: HTMLParagraphElement
   continueButton: HTMLButtonElement
   openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
@@ -60,8 +67,6 @@ export type EnrollmentFlowHost = {
     substitution: string,
   ) => string
 }
-
-const ENROLLMENT_SECTION_CLASS = 'enrollment-actions'
 
 enum AuthenticatorOptionsResponseStatus {
   Ready = 'ready',
@@ -258,57 +263,30 @@ async function beginEnrollmentCeremony(
     host,
     host.translatedMessage(
       filled
-        ? 'widgetEnrollVerifyFilled'
+        ? BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyFilled
         : BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
     ),
   )
   section.replaceChildren()
-  const cancelButton = createTextButton(host, 'widgetEnrollCancel', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-    stopPendingEnrollmentWatch()
-    void host.sendRuntimeMessage({
-      type: 'nook:website-authenticator-enroll-dismiss',
-      payload: {
-        origin: location.origin,
-        stageId: stageResponse.stageId,
-      },
-    })
-    resetEnrollmentHeadline(host, detectEnrollmentHints())
-    renderEnrollmentActions(host, detectEnrollmentHints())
-  })
+  const cancelButton = createTextButton(
+    host,
+    BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+    (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      stopPendingEnrollmentWatch()
+      void host.sendRuntimeMessage({
+        type: 'nook:website-authenticator-enroll-dismiss',
+        payload: {
+          origin: location.origin,
+          stageId: stageResponse.stageId,
+        },
+      })
+      resetEnrollmentHeadline(host, detectEnrollmentHints())
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+  )
   section.append(cancelButton)
   host.setBusy(false)
-}
-
-function resetEnrollmentHeadline(
-  host: EnrollmentFlowHost,
-  hints: EnrollmentPageHints,
-): void {
-  const titleKey = hints.qr
-    ? BROWSER_MESSAGE_KEYS.WidgetEnrollTitle
-    : BROWSER_MESSAGE_KEYS.WidgetBackupTitle
-  const descriptionKey = hints.qr
-    ? 'widgetEnrollDescription'
-    : 'widgetBackupDescription'
-  host.title.textContent = host.translatedMessage(titleKey)
-  host.description.textContent = host.translatedMessage(descriptionKey)
-}
-
-function clearEnrollmentSection(panel: HTMLElement): void {
-  panel.querySelector(`.${ENROLLMENT_SECTION_CLASS}`)?.remove()
-}
-
-function createEnrollmentSection(panel: HTMLElement): HTMLElement {
-  clearEnrollmentSection(panel)
-  const section = document.createElement('div')
-  section.className = ENROLLMENT_SECTION_CLASS
-  section.classList.add('account-list')
-  panel.append(section)
-  return section
-}
-
-function setHostDescription(host: EnrollmentFlowHost, text: string): void {
-  host.description.textContent = text
 }
 
 function clearOtpauthUri(uri: { value: string }): void {
@@ -329,82 +307,6 @@ function lockedEnrollMessage(host: EnrollmentFlowHost): string {
 
 function lockedBackupMessage(host: EnrollmentFlowHost): string {
   return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
-}
-
-function appendButtonRow(
-  container: HTMLElement,
-  buttons: HTMLButtonElement[],
-): void {
-  const row = document.createElement('div')
-  row.className = 'account-list'
-  buttons.forEach((button) => row.append(button))
-  container.append(row)
-}
-
-function createPrimaryButton(
-  host: EnrollmentFlowHost,
-  labelKey: string,
-  onClick: (event: MouseEvent) => void,
-): HTMLButtonElement {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = 'primary-button'
-  button.textContent = host.translatedMessage(labelKey)
-  button.setAttribute('aria-label', host.translatedMessage(labelKey))
-  button.addEventListener('click', onClick)
-  return button
-}
-
-function createSecondaryButton(
-  host: EnrollmentFlowHost,
-  labelKey: string,
-  onClick: (event: MouseEvent) => void,
-): HTMLButtonElement {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = 'secondary-button'
-  button.textContent = host.translatedMessage(labelKey)
-  button.setAttribute('aria-label', host.translatedMessage(labelKey))
-  button.addEventListener('click', onClick)
-  return button
-}
-
-function createTextButton(
-  host: EnrollmentFlowHost,
-  labelKey: string,
-  onClick: (event: MouseEvent) => void,
-): HTMLButtonElement {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className = 'text-button'
-  button.textContent = host.translatedMessage(labelKey)
-  button.setAttribute('aria-label', host.translatedMessage(labelKey))
-  button.addEventListener('click', onClick)
-  return button
-}
-
-function renderPreviewDetails(
-  container: HTMLElement,
-  host: EnrollmentFlowHost,
-  preview: OtpauthEnrollmentPreview,
-): void {
-  const details = document.createElement('div')
-  details.className = 'account-list'
-  const rows: Array<[string, string]> = [
-    ['widgetEnrollIssuer', preview.issuer],
-    ['widgetEnrollAccount', preview.account],
-    ['widgetEnrollOrigin', location.origin],
-    ['widgetEnrollAlgorithm', preview.algorithm],
-    ['widgetEnrollDigits', String(preview.digits)],
-    ['widgetEnrollPeriod', String(preview.period)],
-  ]
-  for (const [key, value] of rows) {
-    const line = document.createElement('p')
-    line.className = 'description'
-    line.textContent = `${host.translatedMessage(key)}: ${value}`
-    details.append(line)
-  }
-  container.append(details)
 }
 
 async function showQrPreview(
@@ -476,7 +378,7 @@ async function showQrPreview(
 
     const confirmButton = createPrimaryButton(
       host,
-      'widgetEnrollConfirm',
+      BROWSER_MESSAGE_KEYS.WidgetEnrollConfirm,
       (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
         host.setBusy(true)
@@ -494,7 +396,7 @@ async function showQrPreview(
 
     const cancelButton = createTextButton(
       host,
-      'widgetEnrollCancel',
+      BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
       (event) => {
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
         clearOtpauthUri(otpauthUri)
@@ -536,12 +438,16 @@ function showQrCandidatePicker(
     list.append(button)
   })
   section.append(list)
-  const cancelButton = createTextButton(host, 'widgetEnrollCancel', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-    candidates.forEach((candidate) => clearCandidate(candidate))
-    resetEnrollmentHeadline(host, detectEnrollmentHints())
-    renderEnrollmentActions(host, detectEnrollmentHints())
-  })
+  const cancelButton = createTextButton(
+    host,
+    BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
+    (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      candidates.forEach((candidate) => clearCandidate(candidate))
+      resetEnrollmentHeadline(host, detectEnrollmentHints())
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+  )
   section.append(cancelButton)
 }
 
@@ -671,7 +577,7 @@ function showBackupModeChooser(
 
   const replaceButton = createSecondaryButton(
     host,
-    'widgetBackupModeReplace',
+    BROWSER_MESSAGE_KEYS.WidgetBackupModeReplace,
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
       attach(BackupAttachMode.Replace)
@@ -679,7 +585,7 @@ function showBackupModeChooser(
   )
   const mergeButton = createSecondaryButton(
     host,
-    'widgetBackupModeMerge',
+    BROWSER_MESSAGE_KEYS.WidgetBackupModeMerge,
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted)) return
       attach(BackupAttachMode.Merge)
@@ -913,7 +819,7 @@ function showBackupReview(
 
   const confirmButton = createPrimaryButton(
     host,
-    'widgetBackupConfirm',
+    BROWSER_MESSAGE_KEYS.WidgetBackupConfirm,
     (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       const selected = collectSelectedBackupCodes(list)
@@ -995,21 +901,29 @@ export function renderEnrollmentActions(
 
   if (hints.qr) {
     buttons.push(
-      createSecondaryButton(host, 'widgetAddFromPage', (event) => {
-        if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
-        void startQrEnrollment(host, section)
-      }),
+      createSecondaryButton(
+        host,
+        BROWSER_MESSAGE_KEYS.WidgetAddFromPage,
+        (event) => {
+          if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+          releaseEnrollmentWidgetHold()
+          void startQrEnrollment(host, section)
+        },
+      ),
     )
   }
 
   if (hints.backupCodes) {
     buttons.push(
-      createSecondaryButton(host, 'widgetSaveBackupCodes', (event) => {
-        if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-        releaseEnrollmentWidgetHold()
-        void startBackupEnrollment(host, section)
-      }),
+      createSecondaryButton(
+        host,
+        BROWSER_MESSAGE_KEYS.WidgetSaveBackupCodes,
+        (event) => {
+          if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+          releaseEnrollmentWidgetHold()
+          void startBackupEnrollment(host, section)
+        },
+      ),
     )
   }
 

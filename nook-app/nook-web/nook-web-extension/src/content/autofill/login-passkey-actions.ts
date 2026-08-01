@@ -74,7 +74,7 @@ export async function fillAndSubmitAccount(
     },
   })
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -89,7 +89,7 @@ export async function fillAndSubmitAccount(
     !response.username ||
     typeof response.password !== 'string'
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -112,7 +112,7 @@ export async function fillAndSubmitAccount(
   credentials.password = ''
   credentials.username = ''
   if (!filled) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -122,14 +122,26 @@ export async function fillAndSubmitAccount(
     return false
   }
   if (!submitLoginForm(workflow.root, workflow.formScope)) {
-    setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+    )
     description.textContent = translatedMessage(
       BROWSER_MESSAGE_KEYS.WidgetFilledManual,
     )
     continueButton.hidden = true
     return true
   }
-  setFlightProgress(step, title, 3, 3, 'widgetVerifyingTitle')
+  setFlightProgress(
+    step,
+    title,
+    3,
+    3,
+    BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
+  )
   description.textContent = translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetSubmitted,
   )
@@ -153,7 +165,7 @@ async function openLoginPicker(
     delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
     !delivery.response?.ok
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -164,7 +176,7 @@ async function openLoginPicker(
   }
   const { response } = delivery
   if (response.status === 'locked') {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -174,7 +186,7 @@ async function openLoginPicker(
     return
   }
   if (response.status === 'unavailable') {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -188,7 +200,7 @@ async function openLoginPicker(
     typeof response.expiresAt !== 'number' ||
     response.expiresAt <= Date.now()
   ) {
-    setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+    setFlightProgress(step, title, 1, 3, BROWSER_MESSAGE_KEYS.WidgetLoginTitle)
     setStatus(
       description,
       continueButton,
@@ -236,7 +248,7 @@ async function openLoginPicker(
     continueButton,
     timeoutId,
   })
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
@@ -347,8 +359,8 @@ export async function proposePasskeyWithNook(
     continueButton,
     translatedMessage(
       action === PasskeyWidgetAction.UsePasskey
-        ? 'widgetUsePasskeyWorking'
-        : 'widgetCreatePasskeyWorking',
+        ? BROWSER_MESSAGE_KEYS.WidgetUsePasskeyWorking
+        : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
     ),
     false,
   )
@@ -382,12 +394,12 @@ function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
     workflow.summary.currentPasswordFieldCount > 0 &&
     workflow.summary.newPasswordFieldCount > 0
   ) {
-    return 'widgetPasswordChangeTitle'
+    return BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle
   }
   if (workflow.summary.newPasswordFieldCount > 0) {
-    return 'widgetSignupTitle'
+    return BROWSER_MESSAGE_KEYS.WidgetSignupTitle
   }
-  return 'widgetLoginTitle'
+  return BROWSER_MESSAGE_KEYS.WidgetLoginTitle
 }
 
 export async function continueWithNook(
@@ -403,7 +415,7 @@ export async function continueWithNook(
     return
   widgetState.busy = true
   continueButton.disabled = true
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
@@ -421,7 +433,13 @@ export async function continueWithNook(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -433,7 +451,13 @@ export async function continueWithNook(
     const { response } = delivery
 
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -444,7 +468,13 @@ export async function continueWithNook(
     }
 
     if (response.status === 'unavailable') {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -456,7 +486,13 @@ export async function continueWithNook(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setFlightProgress(step, title, 1, 3, 'widgetLoginTitle')
+      setFlightProgress(
+        step,
+        title,
+        1,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      )
       setStatus(
         description,
         continueButton,

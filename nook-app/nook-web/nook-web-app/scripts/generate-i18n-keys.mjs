@@ -31,6 +31,10 @@ const landingOutput = resolve(
   repositoryRoot,
   'nook-app/nook-web/nook-web-app/src/landing/generated-message-keys.ts',
 )
+const browserMessageKeysPath = resolve(
+  repositoryRoot,
+  'nook-app/nook-web/nook-web-extension/src/lib/browser-message-keys.ts',
+)
 const checkOnly = process.argv.includes('--check')
 
 function flattenCatalog(value, prefix = [], entries = []) {
@@ -287,6 +291,38 @@ async function verifyNoLiteralLookupArguments() {
   }
 }
 
+async function verifyNoRawBrowserMessageKeys() {
+  const registrySource = await readFile(browserMessageKeysPath, 'utf8')
+  const browserKeys = new Set(
+    literalValues(registrySource).filter(
+      (value) => value.startsWith('widget') || value.startsWith('passkey'),
+    ),
+  )
+  const violations = []
+  const extensionSource = resolve(
+    repositoryRoot,
+    'nook-app/nook-web/nook-web-extension/src',
+  )
+  for (const path of await sourceFiles(extensionSource)) {
+    if (path === browserMessageKeysPath) continue
+    const source = await readFile(path, 'utf8')
+    const rawKeys = [
+      ...new Set(
+        literalValues(source).filter((value) => browserKeys.has(value)),
+      ),
+    ]
+    if (rawKeys.length)
+      violations.push(
+        `${relative(repositoryRoot, path)}: ${rawKeys.join(', ')}`,
+      )
+  }
+  if (violations.length) {
+    throw new Error(
+      `raw browser translation keys found:\n${violations.join('\n')}`,
+    )
+  }
+}
+
 async function landingKeys() {
   const source = await readFile(landingMessagesPath, 'utf8')
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
@@ -319,6 +355,7 @@ if (checkOnly) {
   await verifyOutput(authRustOutput, generatedAuthRust)
   await verifyOutput(landingOutput, generatedLandingTypescript)
   await verifyNoRawCanonicalKeys(englishKeys)
+  await verifyNoRawBrowserMessageKeys()
   await verifyNoLiteralLookupArguments()
 } else {
   await mkdir(dirname(typescriptOutput), { recursive: true })

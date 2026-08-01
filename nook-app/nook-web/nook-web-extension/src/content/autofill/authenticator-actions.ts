@@ -31,7 +31,13 @@ export async function fillAuthenticatorCode(
     },
   })
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
@@ -47,7 +53,13 @@ export async function fillAuthenticatorCode(
     typeof codeValue !== 'string' ||
     codeValue.length === 0
   ) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
@@ -61,7 +73,13 @@ export async function fillAuthenticatorCode(
   const filled = fillOneTimeCode(code.value, workflow.root, workflow.formScope)
   code.value = ''
   if (!filled) {
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
@@ -70,7 +88,13 @@ export async function fillAuthenticatorCode(
     )
     return false
   }
-  setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+  setFlightProgress(
+    step,
+    title,
+    2,
+    3,
+    BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+  )
   description.textContent = translatedMessage(
     BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFilled,
   )
@@ -93,7 +117,7 @@ export async function continueWithAuthenticator(
   }
   widgetState.busy = true
   continueButton.disabled = true
-  setFlightProgress(step, title, 2, 3, 'widgetFillingTitle')
+  setFlightProgress(step, title, 2, 3, BROWSER_MESSAGE_KEYS.WidgetFillingTitle)
   setStatus(
     description,
     continueButton,
@@ -110,7 +134,13 @@ export async function continueWithAuthenticator(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -121,7 +151,13 @@ export async function continueWithAuthenticator(
     }
     const { response } = delivery
     if (response.status === 'locked') {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -132,7 +168,13 @@ export async function continueWithAuthenticator(
     }
 
     if (response.status === 'unavailable') {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -147,7 +189,13 @@ export async function continueWithAuthenticator(
       typeof response.expiresAt !== 'number' ||
       response.expiresAt <= Date.now()
     ) {
-      setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+      setFlightProgress(
+        step,
+        title,
+        2,
+        3,
+        BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+      )
       setStatus(
         description,
         continueButton,
@@ -195,7 +243,13 @@ export async function continueWithAuthenticator(
       continueButton,
       timeoutId,
     })
-    setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
+    setFlightProgress(
+      step,
+      title,
+      2,
+      3,
+      BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
+    )
     setStatus(
       description,
       continueButton,
