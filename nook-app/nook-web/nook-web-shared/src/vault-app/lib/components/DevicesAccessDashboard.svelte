@@ -176,7 +176,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     focusPendingDashboardTarget()
   }
 
-  async function loadDashboard(): Promise<void> {
+  async function loadDashboard(): Promise<DashboardLoadKind> {
     const generation = ++loadGeneration
     loadState = { kind: DashboardLoadKind.Loading }
     try {
@@ -209,7 +209,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
             entry.free()
           }
         })
-        if (generation !== loadGeneration) return
+        if (generation !== loadGeneration) return DashboardLoadKind.Loading
         const view: DashboardView = {
           protection: snapshot.protection,
           identityState: snapshot.identityState,
@@ -232,15 +232,20 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
         loadState = { kind: DashboardLoadKind.Ready, view }
         await tick()
         focusPendingDashboardTarget()
+        return DashboardLoadKind.Ready
       } finally {
         snapshot.free()
       }
     } catch {
-      if (generation === loadGeneration) {
+      const isCurrentGeneration = generation === loadGeneration
+      if (isCurrentGeneration) {
         loadState = { kind: DashboardLoadKind.Failed }
         await tick()
         focusPendingDashboardTarget()
       }
+      return isCurrentGeneration
+        ? DashboardLoadKind.Failed
+        : DashboardLoadKind.Loading
     }
   }
 
@@ -264,9 +269,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
         credentialFingerprint,
         providerDraft,
       )
-      await loadDashboard()
+      const reloadedKind = await loadDashboard()
       providerSaveState = ProviderSaveKind.Idle
-      if (loadState.kind === DashboardLoadKind.Failed) {
+      if (reloadedKind === DashboardLoadKind.Failed) {
         pendingFocusTarget = DashboardFocusTargetKind.RetryResult
         await tick()
         focusPendingDashboardTarget()
