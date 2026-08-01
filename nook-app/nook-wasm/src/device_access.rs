@@ -6,9 +6,57 @@ use crate::storage::{device_access, indexed_db};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NookDeviceAccessValueState {
+pub enum NookDeviceAccessTextKind {
     Unknown,
     Known,
+}
+
+#[derive(Clone)]
+enum NookDeviceAccessTextValue {
+    Unknown,
+    Known(String),
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookDeviceAccessText(NookDeviceAccessTextValue);
+
+impl NookDeviceAccessText {
+    fn from_string(value: String) -> Self {
+        if value.is_empty() {
+            Self(NookDeviceAccessTextValue::Unknown)
+        } else {
+            Self(NookDeviceAccessTextValue::Known(value))
+        }
+    }
+
+    fn from_option(value: Option<String>) -> Self {
+        value.map_or_else(
+            || Self(NookDeviceAccessTextValue::Unknown),
+            Self::from_string,
+        )
+    }
+}
+
+#[wasm_bindgen]
+impl NookDeviceAccessText {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(&self) -> NookDeviceAccessTextKind {
+        match self.0 {
+            NookDeviceAccessTextValue::Unknown => NookDeviceAccessTextKind::Unknown,
+            NookDeviceAccessTextValue::Known(_) => NookDeviceAccessTextKind::Known,
+        }
+    }
+
+    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            NookDeviceAccessTextValue::Unknown => {
+                Err(wasm_bindgen::JsError::new("Device access value is unknown"))
+            }
+            NookDeviceAccessTextValue::Known(value) => Ok(value.clone()),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -40,8 +88,8 @@ pub enum NookPasskeyBackupState {
 pub struct NookDeviceVaultAccess {
     store_id: String,
     label: String,
-    last_unlocked_at: String,
-    verified_at: String,
+    last_unlocked_at: NookDeviceAccessText,
+    verified_at: NookDeviceAccessText,
 }
 
 #[wasm_bindgen]
@@ -59,26 +107,19 @@ impl NookDeviceVaultAccess {
     #[wasm_bindgen(getter, js_name = accessState)]
     #[must_use]
     pub fn access_state(&self) -> NookDeviceVaultAccessState {
-        if self.verified_at.is_empty() {
-            NookDeviceVaultAccessState::Unknown
-        } else {
-            NookDeviceVaultAccessState::Verified
+        match self.verified_at.kind() {
+            NookDeviceAccessTextKind::Unknown => NookDeviceVaultAccessState::Unknown,
+            NookDeviceAccessTextKind::Known => NookDeviceVaultAccessState::Verified,
         }
     }
 
     #[wasm_bindgen(getter, js_name = verifiedAt)]
-    pub fn verified_at(&self) -> String {
+    pub fn verified_at(&self) -> NookDeviceAccessText {
         self.verified_at.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = lastUnlockedState)]
-    #[must_use]
-    pub fn last_unlocked_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.last_unlocked_at)
-    }
-
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
-    pub fn last_unlocked_at(&self) -> String {
+    pub fn last_unlocked_at(&self) -> NookDeviceAccessText {
         self.last_unlocked_at.clone()
     }
 }
@@ -86,18 +127,20 @@ impl NookDeviceVaultAccess {
 #[wasm_bindgen]
 pub struct NookDeviceAccessSnapshot {
     protection: nook_core::DeviceAccessProtectionKind,
-    device_id: String,
-    credential_id: String,
-    user_handle_id: String,
-    passkey_name: String,
-    provider_label: String,
-    created_at: String,
-    last_used_at: String,
+    identity_state: nook_core::DeviceAccessIdentityState,
+    device_id: NookDeviceAccessText,
+    credential_id: NookDeviceAccessText,
+    user_handle_id: NookDeviceAccessText,
+    passkey_name: NookDeviceAccessText,
+    provider_label: NookDeviceAccessText,
+    created_at: NookDeviceAccessText,
+    last_used_at: NookDeviceAccessText,
     attachment: NookPasskeyAttachmentState,
-    transports: String,
+    transports: NookDeviceAccessText,
     backup_state: NookPasskeyBackupState,
-    aaguid: String,
-    client_environment: String,
+    aaguid: NookDeviceAccessText,
+    observed_browser: nook_core::PasskeyObservedBrowser,
+    observed_platform: nook_core::PasskeyObservedPlatform,
     vaults: Vec<NookDeviceVaultAccess>,
 }
 
@@ -109,38 +152,44 @@ impl NookDeviceAccessSnapshot {
         self.protection
     }
 
+    #[wasm_bindgen(getter, js_name = identityState)]
+    #[must_use]
+    pub fn identity_state(&self) -> nook_core::DeviceAccessIdentityState {
+        self.identity_state
+    }
+
     #[wasm_bindgen(getter, js_name = deviceId)]
-    pub fn device_id(&self) -> String {
+    pub fn device_id(&self) -> NookDeviceAccessText {
         self.device_id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = credentialId)]
-    pub fn credential_id(&self) -> String {
+    pub fn credential_id(&self) -> NookDeviceAccessText {
         self.credential_id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = userHandleId)]
-    pub fn user_handle_id(&self) -> String {
+    pub fn user_handle_id(&self) -> NookDeviceAccessText {
         self.user_handle_id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = passkeyName)]
-    pub fn passkey_name(&self) -> String {
+    pub fn passkey_name(&self) -> NookDeviceAccessText {
         self.passkey_name.clone()
     }
 
     #[wasm_bindgen(getter, js_name = providerLabel)]
-    pub fn provider_label(&self) -> String {
+    pub fn provider_label(&self) -> NookDeviceAccessText {
         self.provider_label.clone()
     }
 
     #[wasm_bindgen(getter, js_name = createdAt)]
-    pub fn created_at(&self) -> String {
+    pub fn created_at(&self) -> NookDeviceAccessText {
         self.created_at.clone()
     }
 
     #[wasm_bindgen(getter, js_name = lastUsedAt)]
-    pub fn last_used_at(&self) -> String {
+    pub fn last_used_at(&self) -> NookDeviceAccessText {
         self.last_used_at.clone()
     }
 
@@ -151,7 +200,7 @@ impl NookDeviceAccessSnapshot {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn transports(&self) -> String {
+    pub fn transports(&self) -> NookDeviceAccessText {
         self.transports.clone()
     }
 
@@ -162,54 +211,25 @@ impl NookDeviceAccessSnapshot {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn aaguid(&self) -> String {
+    pub fn aaguid(&self) -> NookDeviceAccessText {
         self.aaguid.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = clientEnvironment)]
-    pub fn client_environment(&self) -> String {
-        self.client_environment.clone()
+    #[wasm_bindgen(getter, js_name = observedBrowser)]
+    #[must_use]
+    pub fn observed_browser(&self) -> nook_core::PasskeyObservedBrowser {
+        self.observed_browser
+    }
+
+    #[wasm_bindgen(getter, js_name = observedPlatform)]
+    #[must_use]
+    pub fn observed_platform(&self) -> nook_core::PasskeyObservedPlatform {
+        self.observed_platform
     }
 
     #[wasm_bindgen(js_name = vaults)]
     pub fn vaults(&self) -> Vec<NookDeviceVaultAccess> {
         self.vaults.clone()
-    }
-
-    #[wasm_bindgen(js_name = passkeyNameState)]
-    #[must_use]
-    pub fn passkey_name_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.passkey_name)
-    }
-
-    #[wasm_bindgen(js_name = providerLabelState)]
-    #[must_use]
-    pub fn provider_label_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.provider_label)
-    }
-
-    #[wasm_bindgen(js_name = createdAtState)]
-    #[must_use]
-    pub fn created_at_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.created_at)
-    }
-
-    #[wasm_bindgen(js_name = lastUsedAtState)]
-    #[must_use]
-    pub fn last_used_at_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.last_used_at)
-    }
-
-    #[wasm_bindgen(js_name = aaguidState)]
-    #[must_use]
-    pub fn aaguid_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.aaguid)
-    }
-
-    #[wasm_bindgen(js_name = clientEnvironmentState)]
-    #[must_use]
-    pub fn client_environment_state(&self) -> NookDeviceAccessValueState {
-        value_state(&self.client_environment)
     }
 }
 
@@ -219,6 +239,10 @@ pub async fn device_access_snapshot(
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let protected = indexed_db::load_wrapped_device_identity().await?;
     let session_device_id = session_device_id.trim();
+    let identity_state = nook_core::classify_device_access_identity_state(
+        session_device_id,
+        protected.as_ref().map(|(device_id, _)| device_id.as_str()),
+    );
     let session_uses_companion = !session_device_id.is_empty()
         && protected
             .as_ref()
@@ -260,36 +284,40 @@ pub async fn device_access_snapshot(
             .verified_vaults
             .iter()
             .find(|access| access.device_id == device_id && access.store_id == entry.store_id)
-            .map_or_else(String::new, |access| access.verified_at.to_string());
+            .map(|access| access.verified_at.to_string());
         vaults.push(NookDeviceVaultAccess {
             store_id: entry.store_id,
             label: entry.label,
-            last_unlocked_at: entry
-                .last_unlocked_at
-                .map_or_else(String::new, |timestamp| timestamp.to_string()),
-            verified_at,
+            last_unlocked_at: NookDeviceAccessText::from_option(
+                entry
+                    .last_unlocked_at
+                    .map(|timestamp| timestamp.to_string()),
+            ),
+            verified_at: NookDeviceAccessText::from_option(verified_at),
         });
     }
     vaults.sort_by(|left, right| left.label.cmp(&right.label));
 
     Ok(NookDeviceAccessSnapshot {
         protection,
-        device_id,
-        credential_id,
-        user_handle_id,
-        passkey_name: passkey.nook_name,
-        provider_label: passkey.provider_label,
-        created_at: passkey
-            .created_at
-            .map_or_else(String::new, |value| value.to_string()),
-        last_used_at: passkey
-            .last_used_at
-            .map_or_else(String::new, |value| value.to_string()),
+        identity_state,
+        device_id: NookDeviceAccessText::from_string(device_id),
+        credential_id: NookDeviceAccessText::from_string(credential_id),
+        user_handle_id: NookDeviceAccessText::from_string(user_handle_id),
+        passkey_name: NookDeviceAccessText::from_string(passkey.nook_name),
+        provider_label: NookDeviceAccessText::from_string(passkey.provider_label),
+        created_at: NookDeviceAccessText::from_option(
+            passkey.created_at.map(|value| value.to_string()),
+        ),
+        last_used_at: NookDeviceAccessText::from_option(
+            passkey.last_used_at.map(|value| value.to_string()),
+        ),
         attachment: attachment_state(passkey.observation.attachment),
-        transports: passkey.observation.transports.join(", "),
+        transports: NookDeviceAccessText::from_string(passkey.observation.transports.join(", ")),
         backup_state: backup_state(passkey.observation.backup_state),
-        aaguid: passkey.observation.aaguid.unwrap_or_default(),
-        client_environment: passkey.observation.client_environment.unwrap_or_default(),
+        aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid),
+        observed_browser: passkey.observation.browser,
+        observed_platform: passkey.observation.platform,
         vaults,
     })
 }
@@ -301,14 +329,6 @@ pub async fn set_device_access_passkey_provider_label(
     device_access::set_passkey_provider_label(&label)
         .await
         .map_err(Into::into)
-}
-
-fn value_state(value: &str) -> NookDeviceAccessValueState {
-    if value.is_empty() {
-        NookDeviceAccessValueState::Unknown
-    } else {
-        NookDeviceAccessValueState::Known
-    }
 }
 
 fn attachment_state(

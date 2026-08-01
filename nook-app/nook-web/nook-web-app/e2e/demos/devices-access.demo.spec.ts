@@ -21,6 +21,9 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   await page.getByTestId('vault-devices-access-tab').click()
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await expect(page.getByTestId('devices-access-identity-state')).toContainText(
+    'Identity unlocked',
+  )
   await expect(dashboard).toContainText('Browser access chain')
   await page.waitForTimeout(BEAT_MS)
 
@@ -50,6 +53,9 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
 
   await page.getByTestId('header-lock-vault-btn').click()
   await page.getByTestId('login-devices-access').click()
+  await expect(page.getByTestId('devices-access-identity-state')).toContainText(
+    'Identity locked',
+  )
   await expect(page.getByTestId('devices-access-dashboard')).toContainText(
     'Access verified',
   )

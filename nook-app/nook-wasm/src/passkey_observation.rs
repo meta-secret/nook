@@ -30,7 +30,7 @@ pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyB
             .as_deref()
             .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
         aaguid: authenticator_data.as_deref().and_then(aaguid),
-        client_environment: client_environment(),
+        ..client_environment()
     }
 }
 
@@ -44,7 +44,7 @@ pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrow
             .as_deref()
             .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
         aaguid: None,
-        client_environment: client_environment(),
+        ..client_environment()
     }
 }
 
@@ -119,33 +119,39 @@ fn aaguid(data: &[u8]) -> Option<String> {
     ))
 }
 
-fn client_environment() -> Option<String> {
-    let user_agent = gloo_utils::window().navigator().user_agent().ok()?;
+fn client_environment() -> PasskeyBrowserObservation {
+    let Ok(user_agent) = gloo_utils::window().navigator().user_agent() else {
+        return PasskeyBrowserObservation::default();
+    };
     let browser = if user_agent.contains("Edg/") {
-        "Edge"
+        nook_core::PasskeyObservedBrowser::Edge
     } else if user_agent.contains("Firefox/") {
-        "Firefox"
+        nook_core::PasskeyObservedBrowser::Firefox
     } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
-        "Chrome"
+        nook_core::PasskeyObservedBrowser::Chrome
     } else if user_agent.contains("Safari/") {
-        "Safari"
+        nook_core::PasskeyObservedBrowser::Safari
     } else {
-        "Browser"
+        nook_core::PasskeyObservedBrowser::Other
     };
     let platform = if user_agent.contains("Android") {
-        "Android"
+        nook_core::PasskeyObservedPlatform::Android
     } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
-        "iOS or iPadOS"
+        nook_core::PasskeyObservedPlatform::AppleMobile
     } else if user_agent.contains("Mac OS X") {
-        "macOS"
+        nook_core::PasskeyObservedPlatform::MacOs
     } else if user_agent.contains("Windows") {
-        "Windows"
+        nook_core::PasskeyObservedPlatform::Windows
     } else if user_agent.contains("Linux") {
-        "Linux"
+        nook_core::PasskeyObservedPlatform::Linux
     } else {
-        "this platform"
+        nook_core::PasskeyObservedPlatform::Other
     };
-    Some(format!("{browser} on {platform}"))
+    PasskeyBrowserObservation {
+        browser,
+        platform,
+        ..PasskeyBrowserObservation::default()
+    }
 }
 
 #[cfg(test)]

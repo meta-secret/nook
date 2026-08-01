@@ -52,6 +52,9 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity unlocked')
     await expect(dashboard).toContainText('Passkey · recoverable identity')
     await expect(dashboard).toContainText('Access verified')
     await expect(
@@ -78,6 +81,9 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('header-lock-vault-btn').click()
     await page.getByTestId('login-devices-access').click()
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity locked')
     await expect(page.getByTestId('devices-access-dashboard')).toContainText(
       'Access verified',
     )

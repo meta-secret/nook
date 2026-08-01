@@ -20,20 +20,26 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     Users,
   } from '@lucide/svelte'
   import {
+    DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
-    NookDeviceAccessValueState,
+    NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
     NookPasskeyAttachmentState,
     NookPasskeyBackupState,
+    PasskeyObservedBrowser,
+    PasskeyObservedPlatform,
     deviceAccessSnapshot,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
+  import type { NookDeviceAccessText } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     DashboardLoadKind,
     type DashboardLoadState,
+    type DashboardText,
+    DashboardTextKind,
   } from './devices-access-dashboard-state'
 
   let {
@@ -52,31 +58,26 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     storeId: string
     label: string
     verified: boolean
-    verifiedAt: string
-    lastUnlockedKnown: boolean
-    lastUnlockedAt: string
+    verifiedAt: DashboardText
+    lastUnlockedAt: DashboardText
   }
 
   type DashboardView = {
     protection: DeviceAccessProtectionKind
-    deviceId: string
-    credentialId: string
-    userHandleId: string
-    passkeyNameKnown: boolean
-    passkeyName: string
-    providerLabelKnown: boolean
-    providerLabel: string
-    createdAtKnown: boolean
-    createdAt: string
-    lastUsedAtKnown: boolean
-    lastUsedAt: string
+    identityState: DeviceAccessIdentityState
+    deviceId: DashboardText
+    credentialId: DashboardText
+    userHandleId: DashboardText
+    passkeyName: DashboardText
+    providerLabel: DashboardText
+    createdAt: DashboardText
+    lastUsedAt: DashboardText
     attachment: NookPasskeyAttachmentState
-    transports: string
+    transports: DashboardText
     backupState: NookPasskeyBackupState
-    aaguidKnown: boolean
-    aaguid: string
-    clientEnvironmentKnown: boolean
-    clientEnvironment: string
+    aaguid: DashboardText
+    observedBrowser: PasskeyObservedBrowser
+    observedPlatform: PasskeyObservedPlatform
     vaults: VaultAccessView[]
   }
 
@@ -101,8 +102,22 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       : 0,
   )
 
-  function known(state: NookDeviceAccessValueState): boolean {
-    return state === NookDeviceAccessValueState.Known
+  function readText(value: NookDeviceAccessText): DashboardText {
+    try {
+      return value.kind === NookDeviceAccessTextKind.Known
+        ? { kind: DashboardTextKind.Known, value: value.value() }
+        : { kind: DashboardTextKind.Unknown }
+    } finally {
+      value.free()
+    }
+  }
+
+  function knownText(value: DashboardText): boolean {
+    return value.kind === DashboardTextKind.Known
+  }
+
+  function textValue(value: DashboardText): string {
+    return value.kind === DashboardTextKind.Known ? value.value : ''
   }
 
   async function loadDashboard(): Promise<void> {
@@ -113,14 +128,14 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       try {
         const vaults = snapshot.vaults().map((entry): VaultAccessView => {
           try {
+            const verifiedAt = readText(entry.verifiedAt)
             return {
               storeId: entry.storeId,
               label: entry.label,
               verified:
                 entry.accessState === NookDeviceVaultAccessState.Verified,
-              verifiedAt: entry.verifiedAt,
-              lastUnlockedKnown: known(entry.lastUnlockedState),
-              lastUnlockedAt: entry.lastUnlockedAt,
+              verifiedAt,
+              lastUnlockedAt: readText(entry.lastUnlockedAt),
             }
           } finally {
             entry.free()
@@ -129,27 +144,23 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
         if (generation !== loadGeneration) return
         const view: DashboardView = {
           protection: snapshot.protection,
-          deviceId: snapshot.deviceId,
-          credentialId: snapshot.credentialId,
-          userHandleId: snapshot.userHandleId,
-          passkeyNameKnown: known(snapshot.passkeyNameState()),
-          passkeyName: snapshot.passkeyName,
-          providerLabelKnown: known(snapshot.providerLabelState()),
-          providerLabel: snapshot.providerLabel,
-          createdAtKnown: known(snapshot.createdAtState()),
-          createdAt: snapshot.createdAt,
-          lastUsedAtKnown: known(snapshot.lastUsedAtState()),
-          lastUsedAt: snapshot.lastUsedAt,
+          identityState: snapshot.identityState,
+          deviceId: readText(snapshot.deviceId),
+          credentialId: readText(snapshot.credentialId),
+          userHandleId: readText(snapshot.userHandleId),
+          passkeyName: readText(snapshot.passkeyName),
+          providerLabel: readText(snapshot.providerLabel),
+          createdAt: readText(snapshot.createdAt),
+          lastUsedAt: readText(snapshot.lastUsedAt),
           attachment: snapshot.attachment,
-          transports: snapshot.transports,
+          transports: readText(snapshot.transports),
           backupState: snapshot.backupState,
-          aaguidKnown: known(snapshot.aaguidState()),
-          aaguid: snapshot.aaguid,
-          clientEnvironmentKnown: known(snapshot.clientEnvironmentState()),
-          clientEnvironment: snapshot.clientEnvironment,
+          aaguid: readText(snapshot.aaguid),
+          observedBrowser: snapshot.observedBrowser,
+          observedPlatform: snapshot.observedPlatform,
           vaults,
         }
-        providerDraft = view.providerLabel
+        providerDraft = textValue(view.providerLabel)
         loadState = { kind: DashboardLoadKind.Ready, view }
       } finally {
         snapshot.free()
@@ -198,6 +209,51 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       return vault.t('devices_access.pin_or_passphrase')
     }
     return vault.t('devices_access.not_prepared')
+  }
+
+  function identityStateLabel(value: DeviceAccessIdentityState): string {
+    if (value === DeviceAccessIdentityState.Unlocked) {
+      return vault.t('devices_access.identity_unlocked')
+    }
+    if (value === DeviceAccessIdentityState.Locked) {
+      return vault.t('devices_access.identity_locked')
+    }
+    return vault.t('devices_access.identity_missing')
+  }
+
+  function browserLabel(value: PasskeyObservedBrowser): string {
+    if (value === PasskeyObservedBrowser.Edge) return vault.t('devices_access.browser_edge')
+    if (value === PasskeyObservedBrowser.Firefox) return vault.t('devices_access.browser_firefox')
+    if (value === PasskeyObservedBrowser.Chrome) return vault.t('devices_access.browser_chrome')
+    if (value === PasskeyObservedBrowser.Safari) return vault.t('devices_access.browser_safari')
+    if (value === PasskeyObservedBrowser.Other) return vault.t('devices_access.browser_other')
+    return vault.t('devices_access.unknown')
+  }
+
+  function platformLabel(value: PasskeyObservedPlatform): string {
+    if (value === PasskeyObservedPlatform.Android) return vault.t('devices_access.platform_android')
+    if (value === PasskeyObservedPlatform.AppleMobile) return vault.t('devices_access.platform_apple_mobile')
+    if (value === PasskeyObservedPlatform.MacOs) return vault.t('devices_access.platform_macos')
+    if (value === PasskeyObservedPlatform.Windows) return vault.t('devices_access.platform_windows')
+    if (value === PasskeyObservedPlatform.Linux) return vault.t('devices_access.platform_linux')
+    if (value === PasskeyObservedPlatform.Other) return vault.t('devices_access.platform_other')
+    return vault.t('devices_access.unknown')
+  }
+
+  function clientEnvironmentLabel(
+    browser: PasskeyObservedBrowser,
+    platform: PasskeyObservedPlatform,
+  ): string {
+    if (
+      browser === PasskeyObservedBrowser.Unknown &&
+      platform === PasskeyObservedPlatform.Unknown
+    ) {
+      return vault.t('devices_access.unknown')
+    }
+    return vault.t('devices_access.client_description', {
+      browser: browserLabel(browser),
+      platform: platformLabel(platform),
+    })
   }
 
   function attachmentLabel(value: NookPasskeyAttachmentState): string {
@@ -319,14 +375,24 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
               <h2 class="text-lg font-semibold text-foreground">{vault.t('devices_access.this_browser')}</h2>
               <p class="text-sm text-muted-foreground">{vault.t('devices_access.this_browser_desc')}</p>
             </div>
-            <span class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-xs font-medium text-foreground">
-              {#if loadState.view.protection === DeviceAccessProtectionKind.Missing}
-                <CircleHelp class="size-3.5 text-muted-foreground" />
-              {:else}
-                <ShieldCheck class="size-3.5 text-emerald-600 dark:text-emerald-400" />
-              {/if}
-              {protectionLabel(loadState.view.protection)}
-            </span>
+            <div class="flex flex-wrap justify-end gap-2">
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-xs font-medium text-foreground"
+                data-testid="devices-access-identity-state"
+              >
+                {#if loadState.view.identityState === DeviceAccessIdentityState.Unlocked}
+                  <ShieldCheck class="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                {:else if loadState.view.identityState === DeviceAccessIdentityState.Locked}
+                  <LockKeyhole class="size-3.5 text-amber-600 dark:text-amber-400" />
+                {:else}
+                  <CircleHelp class="size-3.5 text-muted-foreground" />
+                {/if}
+                {identityStateLabel(loadState.view.identityState)}
+              </span>
+              <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+                {protectionLabel(loadState.view.protection)}
+              </span>
+            </div>
           </div>
 
           <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch" aria-label={vault.t('devices_access.access_chain')}>
@@ -362,16 +428,16 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
               <div>
                 <p class="text-xs text-muted-foreground">{vault.t('devices_access.nook_passkey_name')}</p>
                 <p class="mt-1 text-sm font-medium text-foreground">
-                  {loadState.view.passkeyNameKnown
-                    ? loadState.view.passkeyName
+                  {knownText(loadState.view.passkeyName)
+                    ? textValue(loadState.view.passkeyName)
                     : vault.t('devices_access.unknown_legacy')}
                 </p>
               </div>
               <div>
                 <p class="text-xs text-muted-foreground">{vault.t('devices_access.last_successful_use')}</p>
                 <p class="mt-1 text-sm font-medium text-foreground">
-                  {loadState.view.lastUsedAtKnown
-                    ? formatDate(loadState.view.lastUsedAt)
+                  {knownText(loadState.view.lastUsedAt)
+                    ? formatDate(textValue(loadState.view.lastUsedAt))
                     : vault.t('devices_access.unknown_legacy')}
                 </p>
               </div>
@@ -393,7 +459,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                     type="button"
                     variant="outline"
                     class="min-h-11"
-                    disabled={providerSaving || providerDraft.trim() === loadState.view.providerLabel}
+                    disabled={providerSaving || providerDraft.trim() === textValue(loadState.view.providerLabel)}
                     data-testid="devices-access-provider-save"
                     onclick={() => void saveProviderLabel()}
                   >
@@ -414,15 +480,15 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                   {vault.t('devices_access.technical_details')}
                 </summary>
                 <dl class="grid gap-x-5 gap-y-3 border-t border-border/50 px-3 py-4 text-sm sm:grid-cols-2">
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{loadState.view.deviceId}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.credential_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{loadState.view.credentialId}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.user_handle_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{loadState.view.userHandleId}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{loadState.view.createdAtKnown ? formatDate(loadState.view.createdAt) : vault.t('devices_access.unknown_legacy')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.deviceId) ? textValue(loadState.view.deviceId) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.credential_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.credentialId) ? textValue(loadState.view.credentialId) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.user_handle_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.userHandleId) ? textValue(loadState.view.userHandleId) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.createdAt) ? formatDate(textValue(loadState.view.createdAt)) : vault.t('devices_access.unknown_legacy')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.attachment')}</dt><dd class="mt-1 text-foreground">{attachmentLabel(loadState.view.attachment)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.backup_status')}</dt><dd class="mt-1 text-foreground">{backupLabel(loadState.view.backupState)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{loadState.view.transports || vault.t('devices_access.unknown')}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">AAGUID</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{loadState.view.aaguidKnown ? loadState.view.aaguid : vault.t('devices_access.unknown')}</dd></div>
-                  <div class="sm:col-span-2"><dt class="text-xs text-muted-foreground">{vault.t('devices_access.last_client')}</dt><dd class="mt-1 text-foreground">{loadState.view.clientEnvironmentKnown ? loadState.view.clientEnvironment : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.transports) ? textValue(loadState.view.transports) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.aaguid')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.aaguid) ? textValue(loadState.view.aaguid) : vault.t('devices_access.unknown')}</dd></div>
+                  <div class="sm:col-span-2"><dt class="text-xs text-muted-foreground">{vault.t('devices_access.last_client')}</dt><dd class="mt-1 text-foreground">{clientEnvironmentLabel(loadState.view.observedBrowser, loadState.view.observedPlatform)}</dd></div>
                 </dl>
               </details>
             </div>
@@ -452,15 +518,15 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                         <ShieldCheck class="size-3.5" />
                         {vault.t('devices_access.access_verified')}
                       </p>
-                      <p class="text-xs text-muted-foreground">{formatDate(entry.verifiedAt)}</p>
+                      <p class="text-xs text-muted-foreground">{knownText(entry.verifiedAt) ? formatDate(textValue(entry.verifiedAt)) : vault.t('devices_access.unknown')}</p>
                     {:else}
                       <p class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
                         <CircleHelp class="size-3.5" />
                         {vault.t('devices_access.access_unknown')}
                       </p>
                       <p class="text-xs text-muted-foreground">
-                        {entry.lastUnlockedKnown
-                          ? vault.t('devices_access.last_opened', { date: formatDate(entry.lastUnlockedAt) })
+                        {knownText(entry.lastUnlockedAt)
+                          ? vault.t('devices_access.last_opened', { date: formatDate(textValue(entry.lastUnlockedAt)) })
                           : vault.t('devices_access.never_opened')}
                       </p>
                     {/if}

@@ -39,6 +39,41 @@ pub enum DeviceAccessProtectionKind {
     PinOrPassphrase,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceAccessIdentityState {
+    Missing,
+    Locked,
+    Unlocked,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasskeyObservedBrowser {
+    #[default]
+    Unknown,
+    Edge,
+    Firefox,
+    Chrome,
+    Safari,
+    Other,
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasskeyObservedPlatform {
+    #[default]
+    Unknown,
+    Android,
+    AppleMobile,
+    MacOs,
+    Windows,
+    Linux,
+    Other,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PasskeyAuthenticatorAttachment {
@@ -71,6 +106,20 @@ pub fn classify_device_access_protection(
             DeviceAccessProtectionKind::PasskeyAntiHacker
         }
         Some(WrappedDeviceIdentity::Pin(_)) => DeviceAccessProtectionKind::PinOrPassphrase,
+    }
+}
+
+#[must_use]
+pub fn classify_device_access_identity_state(
+    session_device_id: &str,
+    persisted_device_id: Option<&str>,
+) -> DeviceAccessIdentityState {
+    if !session_device_id.trim().is_empty() {
+        DeviceAccessIdentityState::Unlocked
+    } else if persisted_device_id.is_some() {
+        DeviceAccessIdentityState::Locked
+    } else {
+        DeviceAccessIdentityState::Missing
     }
 }
 
@@ -167,6 +216,26 @@ mod tests {
         assert!(user.starts_with("user_"));
         assert!(!credential.contains("credential"));
         assert_eq!(credential.len(), "passkey_".len() + 16);
+    }
+
+    #[test]
+    fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
+        assert_eq!(
+            classify_device_access_identity_state("", None),
+            DeviceAccessIdentityState::Missing
+        );
+        assert_eq!(
+            classify_device_access_identity_state("", Some("device-persisted")),
+            DeviceAccessIdentityState::Locked
+        );
+        assert_eq!(
+            classify_device_access_identity_state("device-session", Some("device-persisted")),
+            DeviceAccessIdentityState::Unlocked
+        );
+        assert_eq!(
+            classify_device_access_identity_state("device-companion", None),
+            DeviceAccessIdentityState::Unlocked
+        );
     }
 
     #[test]

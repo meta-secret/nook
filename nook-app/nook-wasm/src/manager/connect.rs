@@ -118,7 +118,6 @@ impl NookVaultManager {
                     &self.stored_records_snapshot(),
                     &identity,
                 ));
-                self.remember_verified_device_access(status).await;
                 let _ = self
                     .status
                     .tx
@@ -169,7 +168,6 @@ impl NookVaultManager {
             storage = %storage_mode,
             "assess_vault_connect"
         );
-        self.remember_verified_device_access(status).await;
         Ok(status)
     }
 
@@ -269,13 +267,13 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
+        let records = self.get_records()?;
         let _ = crate::storage::device_access::record_verified_vault_access(
             &self.device.id,
             &self.vault.store_id,
         )
         .await;
         let _ = self.status.tx.send("READY".to_owned());
-        let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-connect",
             storage = %storage_mode,
@@ -284,16 +282,6 @@ impl NookVaultManager {
             "connect complete"
         );
         Ok(records)
-    }
-
-    async fn remember_verified_device_access(&self, status: nook_core::VaultAccessStatus) {
-        if status == nook_core::VaultAccessStatus::Ready {
-            let _ = crate::storage::device_access::record_verified_vault_access(
-                &self.device.id,
-                &self.vault.store_id,
-            )
-            .await;
-        }
     }
 
     async fn connect_existing_content(

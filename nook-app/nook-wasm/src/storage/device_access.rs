@@ -20,8 +20,15 @@ pub(crate) struct PasskeyBrowserObservation {
     pub backup_state: nook_core::PasskeyBackupState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aaguid: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_environment: Option<String>,
+    #[serde(default)]
+    pub browser: nook_core::PasskeyObservedBrowser,
+    #[serde(default)]
+    pub platform: nook_core::PasskeyObservedPlatform,
+    // Version 1 persisted an English `clientEnvironment` sentence. Accept and
+    // discard it so existing metadata remains readable without leaking English
+    // presentation text back into localized UI.
+    #[serde(default, alias = "clientEnvironment", skip_serializing)]
+    pub(crate) legacy_client_environment: Option<String>,
 }
 
 impl PasskeyBrowserObservation {
@@ -38,8 +45,11 @@ impl PasskeyBrowserObservation {
         if self.aaguid.is_none() {
             self.aaguid = usage.aaguid;
         }
-        if usage.client_environment.is_some() {
-            self.client_environment = usage.client_environment;
+        if usage.browser != nook_core::PasskeyObservedBrowser::Unknown {
+            self.browser = usage.browser;
+        }
+        if usage.platform != nook_core::PasskeyObservedPlatform::Unknown {
+            self.platform = usage.platform;
         }
     }
 }
@@ -88,20 +98,66 @@ impl Default for DeviceAccessProfile {
     }
 }
 
+impl DeviceAccessProfile {
+    fn record_passkey_created(
+        &mut self,
+        nook_name: &str,
+        observation: PasskeyBrowserObservation,
+        now: nook_core::IsoTimestamp,
+    ) {
+        let provider_label = self
+            .passkey
+            .as_ref()
+            .map_or_else(String::new, |passkey| passkey.provider_label.clone());
+        self.passkey = Some(PasskeyAccessProfile {
+            nook_name: nook_name.trim().to_owned(),
+            provider_label,
+            created_at: Some(now.clone()),
+            last_used_at: Some(now),
+            observation,
+        });
+    }
+
+    fn record_passkey_used(
+        &mut self,
+        observation: PasskeyBrowserObservation,
+        now: nook_core::IsoTimestamp,
+    ) {
+        let passkey = self
+            .passkey
+            .get_or_insert_with(PasskeyAccessProfile::default);
+        passkey.last_used_at = Some(now);
+        passkey.observation.merge_usage(observation);
+    }
+
+    fn record_verified_vault_access(
+        &mut self,
+        device_id: &str,
+        store_id: &str,
+        now: nook_core::IsoTimestamp,
+    ) {
+        self.verified_vaults
+            .retain(|entry| entry.device_id != device_id || entry.store_id != store_id);
+        self.verified_vaults.push(VerifiedVaultAccess {
+            device_id: device_id.to_owned(),
+            store_id: store_id.to_owned(),
+            verified_at: now,
+        });
+    }
+}
+
+fn decode_device_access_profile(raw: &str) -> DeviceAccessProfile {
+    serde_json::from_str(raw)
+        .ok()
+        .filter(|profile: &DeviceAccessProfile| profile.version == DEVICE_ACCESS_PROFILE_VERSION)
+        .unwrap_or_default()
+}
+
 pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, NookError> {
     let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
         return Ok(DeviceAccessProfile::default());
     };
-    let profile: DeviceAccessProfile = serde_json::from_str(&raw).map_err(|error| {
-        NookError::IndexedDb(format!("Device access profile parse error: {error}"))
-    })?;
-    if profile.version != DEVICE_ACCESS_PROFILE_VERSION {
-        return Err(NookError::IndexedDb(format!(
-            "Unsupported device access profile version: {}",
-            profile.version
-        )));
-    }
-    Ok(profile)
+    Ok(decode_device_access_profile(&raw))
 }
 
 async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(), NookError> {
@@ -117,17 +173,7 @@ pub(crate) async fn record_passkey_created(
 ) -> Result<(), NookError> {
     let now = browser_timestamp();
     let mut profile = load_device_access_profile().await.unwrap_or_default();
-    let provider_label = profile
-        .passkey
-        .as_ref()
-        .map_or_else(String::new, |passkey| passkey.provider_label.clone());
-    profile.passkey = Some(PasskeyAccessProfile {
-        nook_name: nook_name.trim().to_owned(),
-        provider_label,
-        created_at: Some(now.clone()),
-        last_used_at: Some(now),
-        observation,
-    });
+    profile.record_passkey_created(nook_name, observation, now);
     save_device_access_profile(&profile).await
 }
 
@@ -135,11 +181,7 @@ pub(crate) async fn record_passkey_used(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
     let mut profile = load_device_access_profile().await.unwrap_or_default();
-    let passkey = profile
-        .passkey
-        .get_or_insert_with(PasskeyAccessProfile::default);
-    passkey.last_used_at = Some(browser_timestamp());
-    passkey.observation.merge_usage(observation);
+    profile.record_passkey_used(observation, browser_timestamp());
     save_device_access_profile(&profile).await
 }
 
@@ -162,14 +204,7 @@ pub(crate) async fn record_verified_vault_access(
         return Ok(());
     }
     let mut profile = load_device_access_profile().await.unwrap_or_default();
-    profile
-        .verified_vaults
-        .retain(|entry| entry.device_id != device_id || entry.store_id != store_id);
-    profile.verified_vaults.push(VerifiedVaultAccess {
-        device_id: device_id.to_owned(),
-        store_id: store_id.to_owned(),
-        verified_at: browser_timestamp(),
-    });
+    profile.record_verified_vault_access(device_id, store_id, browser_timestamp());
     save_device_access_profile(&profile).await
 }
 
@@ -179,4 +214,138 @@ pub(crate) async fn delete_device_access_profile() -> Result<(), NookError> {
 
 fn browser_timestamp() -> nook_core::IsoTimestamp {
     nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn timestamp(value: &str) -> nook_core::IsoTimestamp {
+        nook_core::IsoTimestamp::from_trusted(value.to_owned())
+    }
+
+    fn observation() -> PasskeyBrowserObservation {
+        PasskeyBrowserObservation {
+            attachment: nook_core::PasskeyAuthenticatorAttachment::Platform,
+            transports: vec!["internal".to_owned()],
+            backup_state: nook_core::PasskeyBackupState::Eligible,
+            aaguid: Some("aaguid-one".to_owned()),
+            browser: nook_core::PasskeyObservedBrowser::Safari,
+            platform: nook_core::PasskeyObservedPlatform::MacOs,
+            legacy_client_environment: None,
+        }
+    }
+
+    #[test]
+    fn corrupt_and_future_profiles_degrade_to_empty_metadata() {
+        assert_eq!(
+            decode_device_access_profile("not-json"),
+            DeviceAccessProfile::default()
+        );
+        assert_eq!(
+            decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
+            DeviceAccessProfile::default()
+        );
+    }
+
+    #[test]
+    fn passkey_creation_replaces_credential_metadata_and_usage_merges_observations() {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "First credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+        );
+        profile.passkey.as_mut().unwrap().provider_label = "Bitwarden".to_owned();
+
+        let mut replacement = observation();
+        replacement.aaguid = Some("aaguid-two".to_owned());
+        replacement.transports = vec!["hybrid".to_owned()];
+        profile.record_passkey_created(
+            "Replacement credential",
+            replacement,
+            timestamp("2026-02-01T00:00:00.000Z"),
+        );
+        let passkey = profile.passkey.as_ref().unwrap();
+        assert_eq!(passkey.nook_name, "Replacement credential");
+        assert_eq!(passkey.provider_label, "Bitwarden");
+        assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
+
+        let usage = PasskeyBrowserObservation {
+            attachment: nook_core::PasskeyAuthenticatorAttachment::Unknown,
+            transports: Vec::new(),
+            backup_state: nook_core::PasskeyBackupState::BackedUp,
+            aaguid: None,
+            browser: nook_core::PasskeyObservedBrowser::Firefox,
+            platform: nook_core::PasskeyObservedPlatform::Linux,
+            legacy_client_environment: None,
+        };
+        profile.record_passkey_used(usage, timestamp("2026-03-01T00:00:00.000Z"));
+        let passkey = profile.passkey.as_ref().unwrap();
+        assert_eq!(passkey.observation.transports, ["hybrid"]);
+        assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
+        assert_eq!(
+            passkey.observation.backup_state,
+            nook_core::PasskeyBackupState::BackedUp
+        );
+        assert_eq!(
+            passkey.observation.browser,
+            nook_core::PasskeyObservedBrowser::Firefox
+        );
+        assert_eq!(
+            passkey.observation.platform,
+            nook_core::PasskeyObservedPlatform::Linux
+        );
+    }
+
+    #[test]
+    fn verified_access_is_scoped_by_identity_and_store_and_refreshes_one_pair() {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_verified_vault_access(
+            "device-a",
+            "store-one",
+            timestamp("2026-01-01T00:00:00.000Z"),
+        );
+        profile.record_verified_vault_access(
+            "device-b",
+            "store-one",
+            timestamp("2026-02-01T00:00:00.000Z"),
+        );
+        profile.record_verified_vault_access(
+            "device-a",
+            "store-one",
+            timestamp("2026-03-01T00:00:00.000Z"),
+        );
+
+        assert_eq!(profile.verified_vaults.len(), 2);
+        let refreshed = profile
+            .verified_vaults
+            .iter()
+            .find(|entry| entry.device_id == "device-a")
+            .unwrap();
+        assert_eq!(refreshed.verified_at, timestamp("2026-03-01T00:00:00.000Z"));
+    }
+
+    #[wasm_bindgen_test]
+    async fn profile_persistence_can_be_replaced_and_deleted() -> Result<(), NookError> {
+        delete_device_access_profile().await?;
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "Persisted credential",
+            observation(),
+            timestamp("2026-04-01T00:00:00.000Z"),
+        );
+        save_device_access_profile(&profile).await?;
+        assert_eq!(load_device_access_profile().await?, profile);
+
+        delete_device_access_profile().await?;
+        assert_eq!(
+            load_device_access_profile().await?,
+            DeviceAccessProfile::default()
+        );
+        Ok(())
+    }
 }
