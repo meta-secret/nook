@@ -711,6 +711,7 @@
     "backup_password_boundary": "A backup password is different: it opens one owning vault directly. It does not unlock this browser device key.",
     "nook_passkey_name": "Nook passkey name",
     "last_successful_use": "Last successful use",
+    "not_used_yet": "Not used yet",
     "where_saved": "Where did you save this passkey?",
     "where_saved_placeholder": "Apple Passwords, Bitwarden, Proton Pass…",
     "where_saved_help": "Only you can name the provider. Browsers do not reliably reveal which passkey manager answered.",

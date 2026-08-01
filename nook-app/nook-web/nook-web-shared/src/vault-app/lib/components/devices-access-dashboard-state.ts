@@ -18,6 +18,17 @@ export type DashboardText =
   | { kind: typeof DashboardTextKind.Unknown }
   | { kind: typeof DashboardTextKind.Known; value: string };
 
+export enum DashboardTimestampKind {
+  Unavailable = "unavailable",
+  NotYetObserved = "not-yet-observed",
+  Known = "known",
+}
+
+export type DashboardTimestamp =
+  | { kind: typeof DashboardTimestampKind.Unavailable }
+  | { kind: typeof DashboardTimestampKind.NotYetObserved }
+  | { kind: typeof DashboardTimestampKind.Known; value: string };
+
 export enum DevicesAccessNudgePreference {
   Visible = "visible",
   Dismissed = "dismissed",

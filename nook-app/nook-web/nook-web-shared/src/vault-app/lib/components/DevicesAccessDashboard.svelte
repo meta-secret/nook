@@ -6,6 +6,7 @@ DIRECTION: An evidence ledger—identity first, protection chain second, vault r
 DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, responsive shell, and light/dark themes.
 -->
 <script lang="ts">
+  import { tick } from 'svelte'
   import {
     ArrowLeft,
     Check,
@@ -26,13 +27,17 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     NookDeviceVaultAccessState,
     NookPasskeyAttachmentState,
     NookPasskeyBackupState,
+    NookPasskeyTimestampEvidenceKind,
     PasskeyObservedBrowser,
     PasskeyObservedPlatform,
     PasskeyTransport,
     deviceAccessSnapshot,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
-  import type { NookDeviceAccessText } from '$app-wasm'
+  import type {
+    NookDeviceAccessText,
+    NookPasskeyTimestampEvidence,
+  } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -41,6 +46,8 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     type DashboardLoadState,
     type DashboardText,
     DashboardTextKind,
+    type DashboardTimestamp,
+    DashboardTimestampKind,
   } from './devices-access-dashboard-state'
 
   let {
@@ -71,8 +78,8 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     userHandleId: DashboardText
     passkeyName: DashboardText
     providerLabel: DashboardText
-    createdAt: DashboardText
-    lastUsedAt: DashboardText
+    createdAt: DashboardTimestamp
+    lastUsedAt: DashboardTimestamp
     attachment: NookPasskeyAttachmentState
     transports: PasskeyTransport[]
     backupState: NookPasskeyBackupState
@@ -108,6 +115,21 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       return value.kind === NookDeviceAccessTextKind.Known
         ? { kind: DashboardTextKind.Known, value: value.value() }
         : { kind: DashboardTextKind.Unknown }
+    } finally {
+      value.free()
+    }
+  }
+
+  function readTimestamp(
+    value: NookPasskeyTimestampEvidence,
+  ): DashboardTimestamp {
+    try {
+      if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
+        return { kind: DashboardTimestampKind.Known, value: value.value() }
+      }
+      return value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
+        ? { kind: DashboardTimestampKind.NotYetObserved }
+        : { kind: DashboardTimestampKind.Unavailable }
     } finally {
       value.free()
     }
@@ -158,8 +180,8 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           userHandleId: readText(snapshot.userHandleId),
           passkeyName: readText(snapshot.passkeyName),
           providerLabel: readText(snapshot.providerLabel),
-          createdAt: readText(snapshot.createdAt),
-          lastUsedAt: readText(snapshot.lastUsedAt),
+          createdAt: readTimestamp(snapshot.createdAt),
+          lastUsedAt: readTimestamp(snapshot.lastUsedAt),
           attachment: snapshot.attachment,
           transports,
           backupState: snapshot.backupState,
@@ -191,7 +213,24 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       providerSaveFailed = true
     } finally {
       providerSaving = false
+      if (loadState.kind === DashboardLoadKind.Ready) {
+        await tick()
+        document
+          .querySelector<HTMLInputElement>(
+            '[data-testid="devices-access-provider-label"]',
+          )
+          ?.focus()
+      }
     }
+  }
+
+  function lastUsedLabel(value: DashboardTimestamp): string {
+    if (value.kind === DashboardTimestampKind.Known) {
+      return formatDate(value.value)
+    }
+    return value.kind === DashboardTimestampKind.NotYetObserved
+      ? vault.t('devices_access.not_used_yet')
+      : vault.t('devices_access.unknown_legacy')
   }
 
   function formatDate(value: string): string {
@@ -485,9 +524,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
               <div>
                 <p class="text-xs text-muted-foreground">{vault.t('devices_access.last_successful_use')}</p>
                 <p class="mt-1 text-sm font-medium text-foreground">
-                  {knownText(loadState.view.lastUsedAt)
-                    ? formatDate(textValue(loadState.view.lastUsedAt))
-                    : vault.t('devices_access.unknown_legacy')}
+                  {lastUsedLabel(loadState.view.lastUsedAt)}
                 </p>
               </div>
               <div class="sm:col-span-2">
@@ -531,7 +568,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                 <dl class="grid gap-x-5 gap-y-3 border-t border-border/50 px-3 py-4 text-sm sm:grid-cols-2">
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.credential_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.credentialId) ? textValue(loadState.view.credentialId) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.user_handle_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.userHandleId) ? textValue(loadState.view.userHandleId) : vault.t('devices_access.unknown')}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.createdAt) ? formatDate(textValue(loadState.view.createdAt)) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{loadState.view.createdAt.kind === DashboardTimestampKind.Known ? formatDate(loadState.view.createdAt.value) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.attachment')}</dt><dd class="mt-1 text-foreground">{attachmentLabel(loadState.view.attachment)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.backup_status')}</dt><dd class="mt-1 text-foreground">{backupLabel(loadState.view.backupState)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{transportsLabel(loadState.view.transports)}</dd></div>

@@ -61,6 +61,67 @@ pub(crate) enum PasskeyCreationCeremony {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum PasskeyCreatedAtEvidence {
+    #[default]
+    Unavailable,
+    Known {
+        timestamp: nook_core::IsoTimestamp,
+    },
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum PasskeyLastUsedAtEvidence {
+    NotYetObserved,
+    #[default]
+    Unavailable,
+    Known {
+        timestamp: nook_core::IsoTimestamp,
+    },
+}
+
+fn deserialize_created_at_evidence<'de, D>(
+    deserializer: D,
+) -> Result<PasskeyCreatedAtEvidence, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WireEvidence {
+        Explicit(PasskeyCreatedAtEvidence),
+        Legacy(Option<nook_core::IsoTimestamp>),
+    }
+
+    Ok(match WireEvidence::deserialize(deserializer)? {
+        WireEvidence::Explicit(evidence) => evidence,
+        WireEvidence::Legacy(Some(timestamp)) => PasskeyCreatedAtEvidence::Known { timestamp },
+        WireEvidence::Legacy(None) => PasskeyCreatedAtEvidence::Unavailable,
+    })
+}
+
+fn deserialize_last_used_at_evidence<'de, D>(
+    deserializer: D,
+) -> Result<PasskeyLastUsedAtEvidence, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WireEvidence {
+        Explicit(PasskeyLastUsedAtEvidence),
+        Legacy(Option<nook_core::IsoTimestamp>),
+    }
+
+    Ok(match WireEvidence::deserialize(deserializer)? {
+        WireEvidence::Explicit(evidence) => evidence,
+        WireEvidence::Legacy(Some(timestamp)) => PasskeyLastUsedAtEvidence::Known { timestamp },
+        WireEvidence::Legacy(None) => PasskeyLastUsedAtEvidence::Unavailable,
+    })
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasskeyAccessProfile {
     #[serde(default)]
@@ -69,10 +130,10 @@ pub(crate) struct PasskeyAccessProfile {
     pub nook_name: String,
     #[serde(default)]
     pub provider_label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<nook_core::IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_used_at: Option<nook_core::IsoTimestamp>,
+    #[serde(default, deserialize_with = "deserialize_created_at_evidence")]
+    pub created_at: PasskeyCreatedAtEvidence,
+    #[serde(default, deserialize_with = "deserialize_last_used_at_evidence")]
+    pub last_used_at: PasskeyLastUsedAtEvidence,
     #[serde(default)]
     pub observation: PasskeyBrowserObservation,
 }
@@ -121,10 +182,16 @@ impl DeviceAccessProfile {
             // This reminder belongs to one credential. A replacement may be
             // stored by a different provider, so require fresh user evidence.
             provider_label: String::new(),
-            created_at: Some(now.clone()),
+            created_at: PasskeyCreatedAtEvidence::Known {
+                timestamp: now.clone(),
+            },
             last_used_at: match ceremony {
-                PasskeyCreationCeremony::RegistrationOnly => None,
-                PasskeyCreationCeremony::RegistrationAndAssertion => Some(now),
+                PasskeyCreationCeremony::RegistrationOnly => {
+                    PasskeyLastUsedAtEvidence::NotYetObserved
+                }
+                PasskeyCreationCeremony::RegistrationAndAssertion => {
+                    PasskeyLastUsedAtEvidence::Known { timestamp: now }
+                }
             },
             observation,
         });
@@ -141,13 +208,13 @@ impl DeviceAccessProfile {
             .as_mut()
             .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
         {
-            passkey.last_used_at = Some(now);
+            passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
             passkey.observation.merge_usage(observation);
             return;
         }
         self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
-            last_used_at: Some(now),
+            last_used_at: PasskeyLastUsedAtEvidence::Known { timestamp: now },
             observation,
             ..PasskeyAccessProfile::default()
         });
@@ -384,7 +451,7 @@ mod tests {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
                 .last_used_at,
-            None
+            PasskeyLastUsedAtEvidence::NotYetObserved
         );
         profile
             .passkey
@@ -411,7 +478,9 @@ mod tests {
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
         assert_eq!(
             passkey.last_used_at,
-            Some(timestamp("2026-02-01T00:00:00.000Z"))
+            PasskeyLastUsedAtEvidence::Known {
+                timestamp: timestamp("2026-02-01T00:00:00.000Z")
+            }
         );
 
         let usage = PasskeyBrowserObservation {
@@ -491,8 +560,38 @@ mod tests {
         assert_eq!(passkey.credential_fingerprint, "passkey:recovered");
         assert!(passkey.nook_name.is_empty());
         assert!(passkey.provider_label.is_empty());
-        assert_eq!(passkey.created_at, None);
+        assert_eq!(passkey.created_at, PasskeyCreatedAtEvidence::Unavailable);
         assert_eq!(passkey.observation, recovered_observation);
+        Ok(())
+    }
+
+    #[test]
+    fn timestamp_evidence_deserializes_legacy_values_without_conflating_new_states()
+    -> anyhow::Result<()> {
+        let legacy_known = r#"{
+            "credentialFingerprint":"passkey:legacy",
+            "createdAt":"2026-01-01T00:00:00.000Z",
+            "lastUsedAt":null
+        }"#;
+        let profile: PasskeyAccessProfile = serde_json::from_str(legacy_known)?;
+        assert_eq!(
+            profile.created_at,
+            PasskeyCreatedAtEvidence::Known {
+                timestamp: timestamp("2026-01-01T00:00:00.000Z")
+            }
+        );
+        assert_eq!(profile.last_used_at, PasskeyLastUsedAtEvidence::Unavailable);
+
+        let explicit = PasskeyAccessProfile {
+            last_used_at: PasskeyLastUsedAtEvidence::NotYetObserved,
+            ..PasskeyAccessProfile::default()
+        };
+        let serialized = serde_json::to_string(&explicit)?;
+        let round_trip: PasskeyAccessProfile = serde_json::from_str(&serialized)?;
+        assert_eq!(
+            round_trip.last_used_at,
+            PasskeyLastUsedAtEvidence::NotYetObserved
+        );
         Ok(())
     }
 

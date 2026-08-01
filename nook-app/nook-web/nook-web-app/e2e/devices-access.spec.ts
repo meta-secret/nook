@@ -27,6 +27,7 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('devices-access-dont-show-again').check()
     await expect(page.getByTestId('devices-access-nudge')).toBeHidden()
+    await expect(page.getByTestId('login-devices-access')).toBeFocused()
 
     await page.getByTestId('login-devices-access').click()
     await expect(page.getByTestId('devices-access-back')).toBeFocused()
@@ -88,6 +89,9 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
       'Bitwarden family vault',
     )
+    await expect(
+      page.getByTestId('devices-access-provider-label'),
+    ).toBeFocused()
 
     await dashboard
       .getByText('Technical details and browser observations')

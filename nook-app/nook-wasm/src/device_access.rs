@@ -39,6 +39,79 @@ impl NookDeviceAccessText {
 }
 
 #[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookPasskeyTimestampEvidenceKind {
+    Unavailable,
+    NotYetObserved,
+    Known,
+}
+
+#[derive(Clone)]
+enum NookPasskeyTimestampEvidenceValue {
+    Unavailable,
+    NotYetObserved,
+    Known(String),
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookPasskeyTimestampEvidence(NookPasskeyTimestampEvidenceValue);
+
+impl NookPasskeyTimestampEvidence {
+    fn from_created(value: device_access::PasskeyCreatedAtEvidence) -> Self {
+        match value {
+            device_access::PasskeyCreatedAtEvidence::Unavailable => {
+                Self(NookPasskeyTimestampEvidenceValue::Unavailable)
+            }
+            device_access::PasskeyCreatedAtEvidence::Known { timestamp } => Self(
+                NookPasskeyTimestampEvidenceValue::Known(timestamp.to_string()),
+            ),
+        }
+    }
+
+    fn from_last_used(value: device_access::PasskeyLastUsedAtEvidence) -> Self {
+        match value {
+            device_access::PasskeyLastUsedAtEvidence::NotYetObserved => {
+                Self(NookPasskeyTimestampEvidenceValue::NotYetObserved)
+            }
+            device_access::PasskeyLastUsedAtEvidence::Unavailable => {
+                Self(NookPasskeyTimestampEvidenceValue::Unavailable)
+            }
+            device_access::PasskeyLastUsedAtEvidence::Known { timestamp } => Self(
+                NookPasskeyTimestampEvidenceValue::Known(timestamp.to_string()),
+            ),
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookPasskeyTimestampEvidence {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(&self) -> NookPasskeyTimestampEvidenceKind {
+        match self.0 {
+            NookPasskeyTimestampEvidenceValue::Unavailable => {
+                NookPasskeyTimestampEvidenceKind::Unavailable
+            }
+            NookPasskeyTimestampEvidenceValue::NotYetObserved => {
+                NookPasskeyTimestampEvidenceKind::NotYetObserved
+            }
+            NookPasskeyTimestampEvidenceValue::Known(_) => NookPasskeyTimestampEvidenceKind::Known,
+        }
+    }
+
+    pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
+        match &self.0 {
+            NookPasskeyTimestampEvidenceValue::Known(value) => Ok(value.clone()),
+            NookPasskeyTimestampEvidenceValue::Unavailable
+            | NookPasskeyTimestampEvidenceValue::NotYetObserved => Err(wasm_bindgen::JsError::new(
+                "Passkey timestamp evidence is unavailable",
+            )),
+        }
+    }
+}
+
+#[wasm_bindgen]
 impl NookDeviceAccessText {
     #[wasm_bindgen(getter)]
     #[must_use]
@@ -148,8 +221,8 @@ pub struct NookDeviceAccessSnapshot {
     user_handle_id: NookDeviceAccessText,
     passkey_name: NookDeviceAccessText,
     provider_label: NookDeviceAccessText,
-    created_at: NookDeviceAccessText,
-    last_used_at: NookDeviceAccessText,
+    created_at: NookPasskeyTimestampEvidence,
+    last_used_at: NookPasskeyTimestampEvidence,
     attachment: NookPasskeyAttachmentState,
     transports: Vec<NookPasskeyTransport>,
     backup_state: NookPasskeyBackupState,
@@ -199,12 +272,12 @@ impl NookDeviceAccessSnapshot {
     }
 
     #[wasm_bindgen(getter, js_name = createdAt)]
-    pub fn created_at(&self) -> NookDeviceAccessText {
+    pub fn created_at(&self) -> NookPasskeyTimestampEvidence {
         self.created_at.clone()
     }
 
     #[wasm_bindgen(getter, js_name = lastUsedAt)]
-    pub fn last_used_at(&self) -> NookDeviceAccessText {
+    pub fn last_used_at(&self) -> NookPasskeyTimestampEvidence {
         self.last_used_at.clone()
     }
 
@@ -327,12 +400,8 @@ pub async fn device_access_snapshot(
         user_handle_id: NookDeviceAccessText::from_string(user_handle_id),
         passkey_name: NookDeviceAccessText::from_string(passkey.nook_name),
         provider_label: NookDeviceAccessText::from_string(passkey.provider_label),
-        created_at: NookDeviceAccessText::from_option(
-            passkey.created_at.map(|value| value.to_string()),
-        ),
-        last_used_at: NookDeviceAccessText::from_option(
-            passkey.last_used_at.map(|value| value.to_string()),
-        ),
+        created_at: NookPasskeyTimestampEvidence::from_created(passkey.created_at),
+        last_used_at: NookPasskeyTimestampEvidence::from_last_used(passkey.last_used_at),
         attachment: attachment_state(passkey.observation.attachment),
         transports: passkey
             .observation

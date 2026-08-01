@@ -169,6 +169,7 @@
   const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
 
   function dismissDevicesAccessNudge(): void {
+    focusHostButton('login-devices-access')
     devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed
     try {
       localStorage.setItem(
