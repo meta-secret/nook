@@ -146,18 +146,54 @@ impl DeviceAccessProfile {
     }
 }
 
-fn decode_device_access_profile(raw: &str) -> DeviceAccessProfile {
-    serde_json::from_str(raw)
-        .ok()
-        .filter(|profile: &DeviceAccessProfile| profile.version == DEVICE_ACCESS_PROFILE_VERSION)
-        .unwrap_or_default()
+#[derive(Debug, PartialEq, Eq)]
+enum DecodedDeviceAccessProfile {
+    Current(DeviceAccessProfile),
+    RecoverableDefault,
+    FutureVersion,
+}
+
+#[derive(Deserialize)]
+struct DeviceAccessProfileVersion {
+    version: u32,
+}
+
+fn decode_device_access_profile(raw: &str) -> DecodedDeviceAccessProfile {
+    let Ok(version) = serde_json::from_str::<DeviceAccessProfileVersion>(raw) else {
+        return DecodedDeviceAccessProfile::RecoverableDefault;
+    };
+    if version.version > DEVICE_ACCESS_PROFILE_VERSION {
+        return DecodedDeviceAccessProfile::FutureVersion;
+    }
+    if version.version != DEVICE_ACCESS_PROFILE_VERSION {
+        return DecodedDeviceAccessProfile::RecoverableDefault;
+    }
+    serde_json::from_str(raw).map_or(
+        DecodedDeviceAccessProfile::RecoverableDefault,
+        DecodedDeviceAccessProfile::Current,
+    )
 }
 
 pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, NookError> {
     let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
         return Ok(DeviceAccessProfile::default());
     };
-    Ok(decode_device_access_profile(&raw))
+    Ok(match decode_device_access_profile(&raw) {
+        DecodedDeviceAccessProfile::Current(profile) => profile,
+        DecodedDeviceAccessProfile::RecoverableDefault
+        | DecodedDeviceAccessProfile::FutureVersion => DeviceAccessProfile::default(),
+    })
+}
+
+async fn load_device_access_profile_for_update() -> Result<Option<DeviceAccessProfile>, NookError> {
+    let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
+        return Ok(Some(DeviceAccessProfile::default()));
+    };
+    Ok(match decode_device_access_profile(&raw) {
+        DecodedDeviceAccessProfile::Current(profile) => Some(profile),
+        DecodedDeviceAccessProfile::RecoverableDefault => Some(DeviceAccessProfile::default()),
+        DecodedDeviceAccessProfile::FutureVersion => None,
+    })
 }
 
 async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(), NookError> {
@@ -172,7 +208,9 @@ pub(crate) async fn record_passkey_created(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
     let now = browser_timestamp();
-    let mut profile = load_device_access_profile().await.unwrap_or_default();
+    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+        return Ok(());
+    };
     profile.record_passkey_created(nook_name, observation, now);
     save_device_access_profile(&profile).await
 }
@@ -180,7 +218,9 @@ pub(crate) async fn record_passkey_created(
 pub(crate) async fn record_passkey_used(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
-    let mut profile = load_device_access_profile().await.unwrap_or_default();
+    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+        return Ok(());
+    };
     profile.record_passkey_used(observation, browser_timestamp());
     save_device_access_profile(&profile).await
 }
@@ -188,7 +228,9 @@ pub(crate) async fn record_passkey_used(
 pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookError> {
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let mut profile = load_device_access_profile().await.unwrap_or_default();
+    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+        return Ok(());
+    };
     let passkey = profile
         .passkey
         .get_or_insert_with(PasskeyAccessProfile::default);
@@ -203,7 +245,9 @@ pub(crate) async fn record_verified_vault_access(
     if device_id.trim().is_empty() || store_id.trim().is_empty() {
         return Ok(());
     }
-    let mut profile = load_device_access_profile().await.unwrap_or_default();
+    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+        return Ok(());
+    };
     profile.record_verified_vault_access(device_id, store_id, browser_timestamp());
     save_device_access_profile(&profile).await
 }
@@ -243,11 +287,11 @@ mod tests {
     fn corrupt_and_future_profiles_degrade_to_empty_metadata() {
         assert_eq!(
             decode_device_access_profile("not-json"),
-            DeviceAccessProfile::default()
+            DecodedDeviceAccessProfile::RecoverableDefault
         );
         assert_eq!(
             decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
-            DeviceAccessProfile::default()
+            DecodedDeviceAccessProfile::FutureVersion
         );
     }
 
@@ -346,6 +390,21 @@ mod tests {
             load_device_access_profile().await?,
             DeviceAccessProfile::default()
         );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn future_profile_is_preserved_during_best_effort_updates() -> Result<(), NookError> {
+        const FUTURE_PROFILE: &str = r#"{"version":999,"futureField":"keep-me"}"#;
+        idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
+
+        record_verified_vault_access("device-a", "store-one").await?;
+        assert_eq!(
+            idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?.as_deref(),
+            Some(FUTURE_PROFILE)
+        );
+
+        delete_device_access_profile().await?;
         Ok(())
     }
 }

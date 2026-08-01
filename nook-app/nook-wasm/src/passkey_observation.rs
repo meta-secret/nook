@@ -1,7 +1,7 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
 use js_sys::{Array, ArrayBuffer, Uint8Array};
-use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
+use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 use web_sys::{
     AuthenticatorAssertionResponse, AuthenticatorAttestationResponse, PublicKeyCredential,
 };
@@ -15,6 +15,17 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = authenticatorAttachment)]
     fn authenticator_attachment(credential: &ObservedPublicKeyCredential) -> Option<String>;
+
+    #[wasm_bindgen(
+        extends = AuthenticatorAttestationResponse,
+        typescript_type = "AuthenticatorAttestationResponse"
+    )]
+    type ObservedAuthenticatorAttestationResponse;
+
+    #[wasm_bindgen(method, catch, structural, js_name = getTransports)]
+    fn observed_transports(
+        response: &ObservedAuthenticatorAttestationResponse,
+    ) -> Result<Array, JsValue>;
 }
 
 pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
@@ -23,9 +34,12 @@ pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyB
         .get_authenticator_data()
         .ok()
         .and_then(|buffer| authenticator_data(&buffer));
+    let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
     PasskeyBrowserObservation {
         attachment: attachment(credential),
-        transports: transports(&response.get_transports()),
+        transports: observed_response
+            .observed_transports()
+            .map_or_else(|_| Vec::new(), |values| transports(&values)),
         backup_state: authenticator_data
             .as_deref()
             .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),

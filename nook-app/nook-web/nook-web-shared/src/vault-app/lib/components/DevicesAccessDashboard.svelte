@@ -419,6 +419,17 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
             {vault.t('devices_access.backup_password_boundary')}
           </p>
 
+          {#if loadState.view.protection !== DeviceAccessProtectionKind.Missing}
+            <div class="rounded-lg border border-border/60 bg-background px-3 py-2.5" data-testid="devices-access-device-identity">
+              <p class="text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</p>
+              <p class="mt-1 break-all font-mono text-xs text-foreground">
+                {knownText(loadState.view.deviceId)
+                  ? textValue(loadState.view.deviceId)
+                  : vault.t('devices_access.unknown')}
+              </p>
+            </div>
+          {/if}
+
           {#if loadState.view.protection === DeviceAccessProtectionKind.Missing}
             <div class="border-t border-border/60 pt-5" data-testid="devices-access-prepare-browser">
               <DeviceProtectionGate {vault} embedded />
@@ -430,7 +441,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                 <p class="mt-1 text-sm font-medium text-foreground">
                   {knownText(loadState.view.passkeyName)
                     ? textValue(loadState.view.passkeyName)
-                    : vault.t('devices_access.unknown_legacy')}
+                    : vault.t('devices_access.unknown')}
                 </p>
               </div>
               <div>
@@ -480,10 +491,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                   {vault.t('devices_access.technical_details')}
                 </summary>
                 <dl class="grid gap-x-5 gap-y-3 border-t border-border/50 px-3 py-4 text-sm sm:grid-cols-2">
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.deviceId) ? textValue(loadState.view.deviceId) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.credential_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.credentialId) ? textValue(loadState.view.credentialId) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.user_handle_id')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.userHandleId) ? textValue(loadState.view.userHandleId) : vault.t('devices_access.unknown')}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.createdAt) ? formatDate(textValue(loadState.view.createdAt)) : vault.t('devices_access.unknown_legacy')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.createdAt) ? formatDate(textValue(loadState.view.createdAt)) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.attachment')}</dt><dd class="mt-1 text-foreground">{attachmentLabel(loadState.view.attachment)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.backup_status')}</dt><dd class="mt-1 text-foreground">{backupLabel(loadState.view.backupState)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.transports) ? textValue(loadState.view.transports) : vault.t('devices_access.unknown')}</dd></div>

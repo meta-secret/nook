@@ -361,6 +361,15 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).not.toContain('"ciphertext"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
+    const pinDeviceId = await readDeviceId(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    await expect(
+      page.getByTestId('devices-access-device-identity'),
+    ).toContainText(pinDeviceId)
+    await expect(page.getByTestId('devices-access-dashboard')).toContainText(
+      'PIN or passphrase',
+    )
+
     await page.getByTestId('header-lock-vault-btn').click()
     await unlockExistingVaultWithPasskey(page)
 
