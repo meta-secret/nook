@@ -61,8 +61,7 @@ export async function refreshReplacementConflicts(
   state: SyncActionsContext,
 ): Promise<void> {
   if (!state.hasManager) {
-    state.replacementConflicts = [];
-    state.securityConflicts = [];
+    state.clearProjectionConflicts();
     return;
   }
   // These borrow the wasm manager (`&mut self`); route them through the storage
@@ -86,24 +85,7 @@ export async function refreshReplacementConflicts(
       return [conflicts, securityConflicts] as const;
     },
   );
-  state.replacementConflicts = conflicts.map((conflict) => {
-    const candidates = conflict.candidates.map((candidate) => {
-      const value = {
-        eventId: candidate.eventId,
-        secretId: candidate.secretId,
-      };
-      candidate.free();
-      return value;
-    });
-    const value = { oldSecretId: conflict.oldSecretId, candidates };
-    conflict.free();
-    return value;
-  });
-  state.securityConflicts = securityConflicts.map((conflict) => {
-    const value = { events: conflict.events, reasons: conflict.reasons };
-    conflict.free();
-    return value;
-  });
+  state.replaceProjectionConflicts(conflicts, securityConflicts);
 }
 
 export async function resolveSyncConflictKeepLocal(

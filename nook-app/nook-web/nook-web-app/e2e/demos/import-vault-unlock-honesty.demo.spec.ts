@@ -15,6 +15,11 @@ type DemoVaultWindow = Window & {
     loginDeviceKeysCapable: boolean
     loginPasswordPrompt: boolean
     passwordEntries: Array<{ id: string; label: string; createdAt: string }>
+    clearProjectionConflicts(): void
+    stageSecurityConflictForTesting(
+      events: string[],
+      reasons: string[],
+    ): void
     stageSyncConflict(conflict: {
       kind: number
       providerLabel: string
@@ -37,6 +42,33 @@ test('import-as-new-vault conflict and unlock honesty surface', async ({
   await page.reload()
   await createLocalVaultOnLogin(page, 'demo-local')
   await demoBeat(page)
+
+  await page.evaluate(() => {
+    const vault = (window as DemoVaultWindow).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    vault.stageSecurityConflictForTesting(
+      ['sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo'],
+      ['key epoch rotation'],
+    )
+  })
+  await expect(
+    page.getByText('Security conflict detected', { exact: true }),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(page.getByTestId('add-secret-btn')).toBeDisabled()
+  await demoBeat(page)
+
+  await page.evaluate(() => {
+    const vault = (window as DemoVaultWindow).__nookVault
+    if (!vault) {
+      throw new Error('__nookVault is unavailable')
+    }
+    vault.clearProjectionConflicts()
+  })
+  await expect(
+    page.getByText('Security conflict detected', { exact: true }),
+  ).not.toBeVisible()
 
   await page.evaluate((conflictKind) => {
     const vault = (window as DemoVaultWindow).__nookVault

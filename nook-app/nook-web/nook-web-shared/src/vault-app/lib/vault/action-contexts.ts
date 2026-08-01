@@ -171,7 +171,9 @@ type SyncStateFields = Pick<
   | "localFolderHealth"
   | "manualProviderSync"
   | "markSynced"
+  | "clearProjectionConflicts"
   | "replacementConflicts"
+  | "replaceProjectionConflicts"
   | "reportLocalFolderMultipleVaults"
   | "securityConflicts"
   | "syncConflictReview"
@@ -317,7 +319,8 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "sentinelUnlockRequest"
     | "sentinelUnlockSession"
     | "sentinelUnlockStatus"
-  > & {
+  > &
+  Pick<VaultSyncState, "clearProjectionConflicts"> & {
     secretPageGeneration: number;
     secretPageRequestOffset: number;
     enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T>;

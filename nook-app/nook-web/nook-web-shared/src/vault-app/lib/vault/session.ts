@@ -76,6 +76,7 @@ export function clearUnlockedSession(
   state.clearSecretTypeFilter();
   state.pendingJoins = [];
   state.vaultMembers = [];
+  state.clearProjectionConflicts();
   state.joinEnrollmentPrompt = JoinEnrollmentState.None;
   state.enrollSecretsKey = "";
   state.enrollMembersKey = "";

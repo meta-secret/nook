@@ -4,6 +4,8 @@ import {
   NookManualProviderSync,
   NookManualProviderSyncState,
   type NookPendingSyncConflict,
+  type NookReplacementConflict,
+  NookSecurityConflict,
   NookSyncConflictReview,
   NookSyncConflictReviewState,
   NookVaultLastSync,
@@ -42,17 +44,35 @@ export class VaultSyncState {
   }
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false);
-  /** Concurrent secret replacement conflicts from the event log projection. */
-  replacementConflicts = $state<
-    Array<{
-      oldSecretId: string;
-      candidates: Array<{ eventId: string; secretId: string }>;
-    }>
-  >([]);
-  /** Concurrent key-epoch rotations; local writes fail closed while present. */
-  securityConflicts = $state<Array<{ events: string[]; reasons: string[] }>>(
-    [],
-  );
+  /** Rust-owned concurrent secret replacements from the event-log projection. */
+  private replacementConflictState = $state.raw<NookReplacementConflict[]>([]);
+  get replacementConflicts(): readonly NookReplacementConflict[] {
+    return this.replacementConflictState;
+  }
+  /** Rust-owned concurrent key-epoch rotations; local writes fail closed while present. */
+  private securityConflictState = $state.raw<NookSecurityConflict[]>([]);
+  get securityConflicts(): readonly NookSecurityConflict[] {
+    return this.securityConflictState;
+  }
+  replaceProjectionConflicts(
+    replacementConflicts: NookReplacementConflict[],
+    securityConflicts: NookSecurityConflict[],
+  ): void {
+    for (const conflict of this.replacementConflictState) conflict.free();
+    for (const conflict of this.securityConflictState) conflict.free();
+    this.replacementConflictState = replacementConflicts;
+    this.securityConflictState = securityConflicts;
+  }
+  clearProjectionConflicts(): void {
+    this.replaceProjectionConflicts([], []);
+  }
+  /** E2E/dev boundary: construct the injected domain record in Rust. */
+  stageSecurityConflictForTesting(events: string[], reasons: string[]): void {
+    for (const conflict of this.securityConflictState) conflict.free();
+    this.securityConflictState = [
+      NookSecurityConflict.fromDisplayParts(events, reasons),
+    ];
+  }
   /** User must pick local vs remote before editing when versions match but content differs. */
   private syncConflictState = $state(NookSyncConflictReview.clear());
   get syncConflictReview(): NookSyncConflictReview {

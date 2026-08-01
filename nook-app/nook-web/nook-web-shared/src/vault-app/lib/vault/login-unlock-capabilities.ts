@@ -1,11 +1,14 @@
-import { VaultAccessStatus } from "$app-wasm";
+import {
+  VaultAccessStatus,
+  type NookPasswordEntrySummary,
+} from "$app-wasm";
 
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
   localVaultPresent: boolean;
   loginDeviceKeysCapable: boolean;
   loginPasswordPrompt: boolean;
-  passwordEntries: { id: string }[];
+  passwordEntries: readonly NookPasswordEntrySummary[];
   assessVaultConnectStatus(
     args?: [string, string, string],
   ): Promise<VaultAccessStatus>;

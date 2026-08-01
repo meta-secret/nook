@@ -77,7 +77,7 @@
             })}
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
-            {#each conflict.candidates as candidate (candidate.secretId)}
+            {#each conflict.candidateSecretIds as candidateSecretId (candidateSecretId)}
               <Button
                 size="sm"
                 variant="secondary"
@@ -85,11 +85,11 @@
                 onclick={() =>
                   vault.resolveReplacementConflict(
                     conflict.oldSecretId,
-                    candidate.secretId,
+                    candidateSecretId,
                   )}
               >
                 {vault.t('app.conflict_keep', {
-                  id: shortId(candidate.secretId),
+                  id: shortId(candidateSecretId),
                 })}
               </Button>
             {/each}
