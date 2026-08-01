@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn svelte_build_surfaces_support_runtime_typescript_enums() -> anyhow::Result<()> {
+fn svelte_build_surfaces_support_runtime_typescript_enums() {
     let root = repository_root();
     for path in [
         "nook-app/nook-web/nook-web-app/svelte.config.js",
@@ -32,5 +32,4 @@ fn svelte_build_surfaces_support_runtime_typescript_enums() -> anyhow::Result<()
     );
     assert!(dashboard.contains("enum DashboardLoadKind"));
     assert!(dashboard.contains("kind: typeof DashboardLoadKind.Ready; view: DashboardView"));
-    Ok(())
 }
