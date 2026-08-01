@@ -257,10 +257,12 @@ fn assert_rust_build_cache_boundary() {
     assert!(!app_tasks.contains("--build-arg SCCACHE_S3_ACCESS_KEY"));
     assert!(!app_tasks.contains("--build-arg SCCACHE_S3_SECRET_KEY"));
     assert!(
-        app_tasks.contains("s3 ls \"s3://{{.SCCACHE_BUCKET}}\" --recursive --summarize")
-            && app_tasks.contains("tail -n 2")
-            && !app_tasks.contains("--max-items 1"),
-        "sccache stats must report the full bucket object count and byte size"
+        app_tasks.contains("s3api list-objects-v2 --bucket \"{{.SCCACHE_BUCKET}}\"")
+            && app_tasks.contains("--continuation-token \"$continuation_token\"")
+            && app_tasks.contains("Scanned $total_objects compiler-cache objects")
+            && app_tasks.contains("Total Objects: $total_objects")
+            && !app_tasks.contains("tail -n 2"),
+        "sccache stats must paginate the full bucket and stream per-page progress"
     );
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");

@@ -14,7 +14,8 @@
 # provider tests remain available through the manually dispatched e2e-pr.yml.
 #
 # Playwright browsers are pre-installed in the web e2e base image.
-# Hosted delivery stays secret-free (no Redis sccache); GHA BuildKit scopes are the remote cache.
+# Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts and publish
+# verified BuildKit layers to private Zot. PR, release, and browser-only jobs remain secret-free.
 
 name: Main
 
