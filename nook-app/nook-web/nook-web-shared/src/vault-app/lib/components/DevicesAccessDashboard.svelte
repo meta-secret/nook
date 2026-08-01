@@ -526,7 +526,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                 <li class="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                   <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-foreground">{entry.label}</p>
-                    <p class="mt-0.5 font-mono text-[0.7rem] text-muted-foreground">{entry.storeId}</p>
+                    <details class="mt-1 text-xs text-muted-foreground">
+                      <summary class="cursor-pointer select-none hover:text-foreground">
+                        {vault.t('devices_access.vault_technical_details')}
+                      </summary>
+                      <p class="mt-1 break-all font-mono text-[0.7rem]">{entry.storeId}</p>
+                    </details>
                   </div>
                   <div class="text-left sm:text-right">
                     {#if entry.verified}

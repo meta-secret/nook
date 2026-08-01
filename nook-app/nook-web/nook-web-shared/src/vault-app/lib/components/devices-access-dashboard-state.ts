@@ -23,6 +23,11 @@ export enum DevicesAccessNudgePreference {
   Dismissed = "dismissed",
 }
 
+export enum DevicesAccessTriggerKind {
+  Header = "header",
+  Nudge = "nudge",
+}
+
 export enum DevicesAccessNudgeStorageKind {
   Missing = "missing",
   Stored = "stored",

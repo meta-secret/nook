@@ -744,6 +744,7 @@
     "platform_other": "another platform",
     "vault_relationships": "Vault relationships",
     "vault_relationships_desc": "A relationship is marked verified only after this device identity successfully opens that vault. Older rows remain honest last-known records.",
+    "vault_technical_details": "Vault identifier",
     "no_vaults": "No local vaults yet. You can prepare this browser identity first, then create or connect a vault.",
     "access_verified": "Access verified",
     "access_unknown": "Access not yet verified",

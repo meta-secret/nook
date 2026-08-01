@@ -112,13 +112,11 @@ impl DeviceAccessProfile {
         now: nook_core::IsoTimestamp,
         ceremony: PasskeyCreationCeremony,
     ) {
-        let provider_label = self
-            .passkey
-            .as_ref()
-            .map_or_else(String::new, |passkey| passkey.provider_label.clone());
         self.passkey = Some(PasskeyAccessProfile {
             nook_name: nook_name.trim().to_owned(),
-            provider_label,
+            // This reminder belongs to one credential. A replacement may be
+            // stored by a different provider, so require fresh user evidence.
+            provider_label: String::new(),
             created_at: Some(now.clone()),
             last_used_at: match ceremony {
                 PasskeyCreationCeremony::RegistrationOnly => None,
@@ -347,7 +345,8 @@ mod tests {
     }
 
     #[test]
-    fn passkey_creation_replaces_credential_metadata_and_usage_merges_observations() {
+    fn passkey_creation_replaces_credential_metadata_and_usage_merges_observations()
+    -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
         profile.record_passkey_created(
             "First credential",
@@ -355,8 +354,19 @@ mod tests {
             timestamp("2026-01-01T00:00:00.000Z"),
             PasskeyCreationCeremony::RegistrationOnly,
         );
-        assert_eq!(profile.passkey.as_ref().unwrap().last_used_at, None);
-        profile.passkey.as_mut().unwrap().provider_label = "Bitwarden".to_owned();
+        assert_eq!(
+            profile
+                .passkey
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
+                .last_used_at,
+            None
+        );
+        profile
+            .passkey
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
+            .provider_label = "Bitwarden".to_owned();
 
         let mut replacement = observation();
         replacement.aaguid = Some("aaguid-two".to_owned());
@@ -367,9 +377,12 @@ mod tests {
             timestamp("2026-02-01T00:00:00.000Z"),
             PasskeyCreationCeremony::RegistrationAndAssertion,
         );
-        let passkey = profile.passkey.as_ref().unwrap();
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("replacement passkey profile is missing"))?;
         assert_eq!(passkey.nook_name, "Replacement credential");
-        assert_eq!(passkey.provider_label, "Bitwarden");
+        assert!(passkey.provider_label.is_empty());
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
         assert_eq!(
             passkey.last_used_at,
@@ -386,7 +399,10 @@ mod tests {
             legacy_client_environment: None,
         };
         profile.record_passkey_used(usage, timestamp("2026-03-01T00:00:00.000Z"));
-        let passkey = profile.passkey.as_ref().unwrap();
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("used passkey profile is missing"))?;
         assert_eq!(passkey.observation.transports, ["hybrid"]);
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
         assert_eq!(
@@ -401,10 +417,12 @@ mod tests {
             passkey.observation.platform,
             nook_core::PasskeyObservedPlatform::Linux
         );
+        Ok(())
     }
 
     #[test]
-    fn verified_access_is_scoped_by_identity_and_store_and_refreshes_one_pair() {
+    fn verified_access_is_scoped_by_identity_and_store_and_refreshes_one_pair() -> anyhow::Result<()>
+    {
         let mut profile = DeviceAccessProfile::default();
         profile.record_verified_vault_access(
             "device-a",
@@ -427,8 +445,9 @@ mod tests {
             .verified_vaults
             .iter()
             .find(|entry| entry.device_id == "device-a")
-            .unwrap();
+            .ok_or_else(|| anyhow::anyhow!("verified device and vault pair is missing"))?;
         assert_eq!(refreshed.verified_at, timestamp("2026-03-01T00:00:00.000Z"));
+        Ok(())
     }
 
     #[wasm_bindgen_test]

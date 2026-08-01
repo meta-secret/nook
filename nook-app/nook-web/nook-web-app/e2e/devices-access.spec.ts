@@ -20,10 +20,16 @@ test.describe('devices and access dashboard', () => {
     await page.goto('/app/')
 
     await expect(page.getByTestId('devices-access-nudge')).toBeVisible()
+    await page.getByTestId('devices-access-nudge-review').click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('devices-access-nudge-review')).toBeFocused()
+
     await page.getByTestId('devices-access-dont-show-again').check()
     await expect(page.getByTestId('devices-access-nudge')).toBeHidden()
 
     await page.getByTestId('login-devices-access').click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
     const dashboard = page.getByTestId('devices-access-dashboard')
     await expect(dashboard).toBeVisible()
     await expect(dashboard).toContainText('Not prepared')
@@ -31,6 +37,8 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-prepare-browser'),
     ).toBeVisible()
     await expect(dashboard).toContainText('No local vaults yet')
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('login-devices-access')).toBeFocused()
 
     await page.reload()
     await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
@@ -57,6 +65,12 @@ test.describe('devices and access dashboard', () => {
     ).toContainText('Identity unlocked')
     await expect(dashboard).toContainText('Passkey · recoverable identity')
     await expect(dashboard).toContainText('Access verified')
+    const vaultIdentifier = dashboard
+      .locator('details')
+      .filter({ hasText: 'Vault identifier' })
+    await expect(vaultIdentifier.locator('p')).toBeHidden()
+    await vaultIdentifier.getByText('Vault identifier', { exact: true }).click()
+    await expect(vaultIdentifier.locator('p')).toBeVisible()
     await expect(
       page.getByTestId('devices-access-current-vault'),
     ).toContainText('Emergency recovery')

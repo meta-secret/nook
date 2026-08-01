@@ -1,10 +1,11 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { onMount, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     DevicesAccessNudgePreference,
+    DevicesAccessTriggerKind,
     parseDevicesAccessNudgePreference,
     readDevicesAccessNudgeStorage,
   } from './devices-access-dashboard-state'
@@ -156,6 +157,8 @@
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
   let devicesAccessOpen = $state(false)
+  let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
+  let loginGateElement = $state<HTMLDivElement>()
   let devicesAccessNudgePreference = $state(
     DevicesAccessNudgePreference.Visible,
   )
@@ -171,6 +174,29 @@
     } catch {
       // Browser preference only. Private browsing may reject local storage.
     }
+  }
+
+  async function openDevicesAccess(
+    trigger: DevicesAccessTriggerKind,
+  ): Promise<void> {
+    devicesAccessTrigger = trigger
+    devicesAccessOpen = true
+    await tick()
+    loginGateElement
+      ?.querySelector<HTMLButtonElement>('[data-testid="devices-access-back"]')
+      ?.focus()
+  }
+
+  async function closeDevicesAccess(): Promise<void> {
+    devicesAccessOpen = false
+    await tick()
+    const testId =
+      devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
+        ? 'devices-access-nudge-review'
+        : 'login-devices-access'
+    loginGateElement
+      ?.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+      ?.focus()
   }
 
   onMount(() => {
@@ -327,6 +353,7 @@
 </script>
 
 <div
+  bind:this={loginGateElement}
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
@@ -334,7 +361,7 @@
   {#if devicesAccessOpen}
     <DevicesAccessDashboard
       {vault}
-      onBack={() => (devicesAccessOpen = false)}
+      onBack={() => void closeDevicesAccess()}
       onManageVaultDevices={() => {}}
       onManageVaultPasswords={() => {}}
     />
@@ -345,7 +372,7 @@
         variant="ghost"
         class="min-h-11 gap-2 text-muted-foreground hover:text-foreground"
         data-testid="login-devices-access"
-        onclick={() => (devicesAccessOpen = true)}
+        onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Header)}
       >
         <KeyRound class="size-4" />
         {vault.t('devices_access.title')}
@@ -370,7 +397,8 @@
             type="button"
             variant="outline"
             class="min-h-11"
-            onclick={() => (devicesAccessOpen = true)}
+            data-testid="devices-access-nudge-review"
+            onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
           >
             {vault.t('devices_access.review_action')}
           </Button>
