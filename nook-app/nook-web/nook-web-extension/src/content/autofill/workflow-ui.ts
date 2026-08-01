@@ -56,8 +56,8 @@ export type WorkflowSnapshotResponse = {
 }
 
 export type WorkflowCopy = {
-  titleKey: string
-  descriptionKey: string
+  titleKey: BrowserMessageKey
+  descriptionKey: BrowserMessageKey
 }
 
 export function workflowCopy(kind: string): WorkflowCopy {
@@ -99,7 +99,7 @@ export function setFlightProgress(
   title: HTMLHeadingElement,
   currentStep: number,
   totalSteps: number,
-  titleKey: string,
+  titleKey: BrowserMessageKey,
 ): void {
   step.textContent = progressLabel(currentStep, totalSteps)
   title.textContent = translatedMessage(titleKey)

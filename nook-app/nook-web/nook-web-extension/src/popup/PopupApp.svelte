@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
+  import {
+    I18N_KEYS,
+    type I18nKey,
+  } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { KeyRound, ShieldCheck } from '@lucide/svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import type { ExtensionI18n } from '../lib/i18n'
@@ -190,7 +193,7 @@
 
   async function runDeviceAction(
     action: () => Promise<ExtensionDeviceProtectionResult>,
-    fallbackKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
+    fallbackKey: I18nKey = I18N_KEYS.ExtensionSetupPasskeySetupFailed,
   ): Promise<void> {
     busy = true
     error = ''
