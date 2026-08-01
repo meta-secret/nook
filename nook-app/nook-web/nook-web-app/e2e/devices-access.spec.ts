@@ -66,6 +66,14 @@ test.describe('devices and access dashboard', () => {
     ).toContainText('Identity unlocked')
     await expect(dashboard).toContainText('Passkey · recoverable identity')
     await expect(dashboard).toContainText('Access verified')
+    const browserDeviceIdentifier = page.getByTestId(
+      'devices-access-device-identity',
+    )
+    await expect(browserDeviceIdentifier.locator('p').last()).toBeHidden()
+    await browserDeviceIdentifier
+      .getByText('Device identifier', { exact: true })
+      .click()
+    await expect(browserDeviceIdentifier.locator('p').last()).toBeVisible()
     const vaultIdentifier = dashboard
       .locator('details')
       .filter({ hasText: 'Vault identifier' })
@@ -104,6 +112,19 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toContainText(
       '01010101-0101-0101-0101-010101010101',
     )
+
+    await dashboard.getByRole('button', { name: 'Manage devices' }).click()
+    await expect(
+      page.getByTestId('vault-devices-section').locator('button').first(),
+    ).toBeFocused()
+    await page.getByTestId('vault-devices-access-tab').click()
+    await dashboard
+      .getByRole('button', { name: 'Manage backup passwords' })
+      .click()
+    await expect(
+      page.getByTestId('vault-unlock-section').locator('button').first(),
+    ).toBeFocused()
+    await page.getByTestId('vault-devices-access-tab').click()
 
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()

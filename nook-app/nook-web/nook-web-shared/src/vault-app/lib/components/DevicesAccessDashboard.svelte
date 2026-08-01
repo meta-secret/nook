@@ -48,6 +48,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     DashboardTextKind,
     type DashboardTimestamp,
     DashboardTimestampKind,
+    ProviderSaveKind,
   } from './devices-access-dashboard-state'
 
   let {
@@ -93,8 +94,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     kind: DashboardLoadKind.Loading,
   })
   let providerDraft = $state('')
-  let providerSaving = $state(false)
-  let providerSaveFailed = $state(false)
+  let providerSaveState = $state<ProviderSaveKind>(ProviderSaveKind.Idle)
   let loadGeneration = 0
 
   const isPasskeyProtection = $derived(
@@ -203,16 +203,25 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   }
 
   async function saveProviderLabel(): Promise<void> {
-    if (providerSaving) return
-    providerSaving = true
-    providerSaveFailed = false
+    if (
+      providerSaveState === ProviderSaveKind.Saving ||
+      loadState.kind !== DashboardLoadKind.Ready ||
+      loadState.view.credentialId.kind !== DashboardTextKind.Known
+    ) {
+      return
+    }
+    const credentialFingerprint = loadState.view.credentialId.value
+    providerSaveState = ProviderSaveKind.Saving
     try {
-      await setDeviceAccessPasskeyProviderLabel(providerDraft)
+      await setDeviceAccessPasskeyProviderLabel(
+        credentialFingerprint,
+        providerDraft,
+      )
       await loadDashboard()
+      providerSaveState = ProviderSaveKind.Idle
     } catch {
-      providerSaveFailed = true
+      providerSaveState = ProviderSaveKind.Failed
     } finally {
-      providerSaving = false
       if (loadState.kind === DashboardLoadKind.Ready) {
         await tick()
         document
@@ -497,14 +506,17 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           </p>
 
           {#if loadState.view.protection !== DeviceAccessProtectionKind.Missing}
-            <div class="rounded-lg border border-border/60 bg-background px-3 py-2.5" data-testid="devices-access-device-identity">
-              <p class="text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</p>
-              <p class="mt-1 break-all font-mono text-xs text-foreground">
+            <details class="rounded-lg border border-border/60 bg-background" data-testid="devices-access-device-identity">
+              <summary class="min-h-11 cursor-pointer list-none px-3 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                {vault.t('devices_access.device_technical_details')}
+              </summary>
+              <p class="border-t border-border/50 px-3 pt-3 text-xs text-muted-foreground">{vault.t('devices_access.device_id')}</p>
+              <p class="break-all px-3 pb-3 pt-1 font-mono text-xs text-foreground">
                 {knownText(loadState.view.deviceId)
                   ? textValue(loadState.view.deviceId)
                   : vault.t('devices_access.unknown')}
               </p>
-            </div>
+            </details>
           {/if}
 
           {#if loadState.view.protection === DeviceAccessProtectionKind.Missing}
@@ -538,25 +550,30 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                     maxlength="80"
                     placeholder={vault.t('devices_access.where_saved_placeholder')}
                     bind:value={providerDraft}
-                    disabled={providerSaving}
+                    disabled={providerSaveState === ProviderSaveKind.Saving}
+                    oninput={() => {
+                      if (providerSaveState === ProviderSaveKind.Failed) {
+                        providerSaveState = ProviderSaveKind.Idle
+                      }
+                    }}
                     data-testid="devices-access-provider-label"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     class="min-h-11"
-                    disabled={providerSaving || providerDraft.trim() === textValue(loadState.view.providerLabel)}
+                    disabled={providerSaveState === ProviderSaveKind.Saving || loadState.view.credentialId.kind !== DashboardTextKind.Known || providerDraft.trim() === textValue(loadState.view.providerLabel)}
                     data-testid="devices-access-provider-save"
                     onclick={() => void saveProviderLabel()}
                   >
-                    {#if providerSaving}<RefreshCw class="size-4 animate-spin" />{:else}<Check class="size-4" />{/if}
+                    {#if providerSaveState === ProviderSaveKind.Saving}<RefreshCw class="size-4 animate-spin" />{:else}<Check class="size-4" />{/if}
                     {vault.t('common.save')}
                   </Button>
                 </div>
                 <p class="mt-1.5 text-xs text-muted-foreground">
                   {vault.t('devices_access.where_saved_help')}
                 </p>
-                {#if providerSaveFailed}
+                {#if providerSaveState === ProviderSaveKind.Failed}
                   <p class="mt-1 text-xs text-destructive" role="alert">{vault.t('devices_access.provider_save_failed')}</p>
                 {/if}
               </div>

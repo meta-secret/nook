@@ -189,7 +189,7 @@ fn observed_platform(
 }
 
 fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
-    if user_agent.contains("OPR/") {
+    if user_agent.contains("OPR/") || user_agent.contains("SamsungBrowser/") {
         nook_core::PasskeyObservedBrowser::Other
     } else if user_agent.contains("Edg/")
         || user_agent.contains("EdgA/")
@@ -277,6 +277,16 @@ mod tests {
     fn recognizes_opera_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
+            nook_core::PasskeyObservedBrowser::Other
+        );
+    }
+
+    #[test]
+    fn recognizes_samsung_internet_before_the_generic_chrome_token() {
+        assert_eq!(
+            observed_browser(
+                "Mozilla/5.0 (Linux; Android 15) Chrome/151.0 Mobile Safari/537.36 SamsungBrowser/29.0"
+            ),
             nook_core::PasskeyObservedBrowser::Other
         );
     }

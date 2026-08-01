@@ -121,6 +121,31 @@
       ?.focus()
   }
 
+  async function openVaultDevices(): Promise<void> {
+    vault.openSettings(
+      SettingsSection.Storage,
+      SettingsAccordionSection.Devices,
+    )
+    await tick()
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="vault-devices-section"] > button',
+      )
+      ?.focus()
+  }
+
+  async function openVaultPasswords(): Promise<void> {
+    vault.openAdmin(AdminAccordionSection.Passwords)
+    await tick()
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="vault-unlock-section"] > button',
+      )
+      ?.focus()
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false)
   })
@@ -166,13 +191,8 @@
         <DevicesAccessDashboard
           {vault}
           onBack={() => void closeDevicesAccess()}
-          onManageVaultDevices={() =>
-            vault.openSettings(
-              SettingsSection.Storage,
-              SettingsAccordionSection.Devices,
-            )}
-          onManageVaultPasswords={() =>
-            vault.openAdmin(AdminAccordionSection.Passwords)}
+          onManageVaultDevices={() => void openVaultDevices()}
+          onManageVaultPasswords={() => void openVaultPasswords()}
         />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin

@@ -419,9 +419,10 @@ pub async fn device_access_snapshot(
 
 #[wasm_bindgen(js_name = setDeviceAccessPasskeyProviderLabel)]
 pub async fn set_device_access_passkey_provider_label(
+    credential_fingerprint: String,
     label: String,
 ) -> Result<(), wasm_bindgen::JsError> {
-    device_access::set_passkey_provider_label(&label)
+    device_access::set_passkey_provider_label(&credential_fingerprint, &label)
         .await
         .map_err(Into::into)
 }

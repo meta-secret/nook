@@ -29,6 +29,12 @@ export type DashboardTimestamp =
   | { kind: typeof DashboardTimestampKind.NotYetObserved }
   | { kind: typeof DashboardTimestampKind.Known; value: string };
 
+export enum ProviderSaveKind {
+  Idle = "idle",
+  Saving = "saving",
+  Failed = "failed",
+}
+
 export enum DevicesAccessNudgePreference {
   Visible = "visible",
   Dismissed = "dismissed",

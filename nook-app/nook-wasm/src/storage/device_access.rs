@@ -172,6 +172,24 @@ impl Default for DeviceAccessProfile {
 }
 
 impl DeviceAccessProfile {
+    fn set_passkey_provider_label(
+        &mut self,
+        credential_fingerprint: &str,
+        provider_label: String,
+    ) -> Result<(), NookError> {
+        let passkey = self
+            .passkey
+            .as_mut()
+            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
+            .ok_or_else(|| {
+                NookError::Database(
+                    "Passkey changed before its provider label was saved".to_owned(),
+                )
+            })?;
+        passkey.provider_label = provider_label;
+        Ok(())
+    }
+
     fn record_passkey_created(
         &mut self,
         credential_fingerprint: &str,
@@ -397,18 +415,15 @@ pub(crate) async fn record_passkey_used(
     .await
 }
 
-pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookError> {
+pub(crate) async fn set_passkey_provider_label(
+    credential_fingerprint: &str,
+    label: &str,
+) -> Result<(), NookError> {
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::Interactive,
-        move |profile| {
-            let passkey = profile
-                .passkey
-                .get_or_insert_with(PasskeyAccessProfile::default);
-            passkey.provider_label = normalized;
-            Ok(())
-        },
+        move |profile| profile.set_passkey_provider_label(credential_fingerprint, normalized),
     )
     .await
 }
@@ -615,6 +630,43 @@ mod tests {
     }
 
     #[test]
+    fn provider_label_update_rejects_a_replaced_credential() -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:current",
+            "Current credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+
+        assert!(
+            profile
+                .set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
+                .is_err()
+        );
+        assert!(
+            profile
+                .passkey
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("current passkey profile is missing"))?
+                .provider_label
+                .is_empty()
+        );
+
+        profile.set_passkey_provider_label("passkey:current", "Bitwarden".to_owned())?;
+        assert_eq!(
+            profile
+                .passkey
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("current passkey profile is missing"))?
+                .provider_label,
+            "Bitwarden"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn timestamp_evidence_deserializes_legacy_values_without_conflating_new_states()
     -> anyhow::Result<()> {
         let legacy_known = r#"{
@@ -702,7 +754,11 @@ mod tests {
         idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
 
         record_verified_vault_access("device-a", "store-one").await?;
-        assert!(set_passkey_provider_label("1Password").await.is_err());
+        assert!(
+            set_passkey_provider_label("passkey:future", "1Password")
+                .await
+                .is_err()
+        );
         assert_eq!(
             idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?.as_deref(),
             Some(FUTURE_PROFILE)

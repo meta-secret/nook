@@ -173,10 +173,12 @@ passwords stay as separate items instead of being overwritten.
 Open **Devices & access** from the login screen or the authenticated **Access**
 tab. The page distinguishes the current locked/unlocked browser identity from
 its passkey or PIN/passphrase protection, shows privacy-safe passkey evidence,
-and lists only vault relationships that Nook verified after successful
-decryption. It remains useful before a vault exists and while every vault is
-locked. See the [product specification](PRODUCT.md) for the access model and
-honest limits on passkey-provider visibility.
+and lists every local vault with the available evidence. Nook marks a
+relationship verified only after successful decryption; other rows remain
+unknown or last-known rather than being presented as authorized. It remains
+useful before a vault exists and while every vault is locked. See the [product
+specification](PRODUCT.md) for the access model and honest limits on
+passkey-provider visibility.
 
 ### When you add another device
 
