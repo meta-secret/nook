@@ -1,4 +1,7 @@
-import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   fillGeneratedPassword,
@@ -389,7 +392,9 @@ export async function proposePasskeyWithNook(
   }
 }
 
-function copyTitleForWorkflow(workflow: PasswordFormObservation): string {
+function copyTitleForWorkflow(
+  workflow: PasswordFormObservation,
+): BrowserMessageKey {
   if (
     workflow.summary.currentPasswordFieldCount > 0 &&
     workflow.summary.newPasswordFieldCount > 0
