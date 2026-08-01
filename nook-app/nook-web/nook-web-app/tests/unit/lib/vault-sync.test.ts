@@ -5,7 +5,6 @@ import {
   NookProviderSyncRevision,
   NookRuntimeConfig,
   NookSyncConflictReview,
-  type NookPendingSyncConflict,
   VaultSyncConflictKind,
 } from '$app-wasm'
 import { syncConflictLabel } from '$lib/vault/sync.svelte'
