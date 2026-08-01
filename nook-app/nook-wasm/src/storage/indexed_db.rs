@@ -127,7 +127,7 @@ async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(),
     Ok(())
 }
 
-async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
+pub(super) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
@@ -156,7 +156,7 @@ async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     }
 }
 
-async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
+pub(super) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -179,7 +179,7 @@ async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     Ok(())
 }
 
-async fn idb_delete_key(key: &str) -> Result<(), NookError> {
+pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -504,6 +504,7 @@ pub(crate) async fn save_wrapped_device_identity(
 }
 
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
+    super::device_access::delete_device_access_profile().await?;
     idb_delete_key(WRAPPED_DEVICE_IDENTITY_KEY).await?;
     idb_delete_key(DEVICE_ID_KEY).await
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import { untrack } from 'svelte'
+  import { KeyRound, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { onMount, untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SentinelVaultUnlockState,
@@ -28,6 +28,7 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
+  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -149,6 +150,27 @@
 
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
+  let devicesAccessOpen = $state(false)
+  let devicesAccessNudgeVisible = $state(false)
+  const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
+
+  function dismissDevicesAccessNudge(): void {
+    devicesAccessNudgeVisible = false
+    try {
+      localStorage.setItem(devicesAccessNudgeStorageKey, '1')
+    } catch {
+      // Browser preference only. Private browsing may reject local storage.
+    }
+  }
+
+  onMount(() => {
+    try {
+      devicesAccessNudgeVisible =
+        localStorage.getItem(devicesAccessNudgeStorageKey) !== '1'
+    } catch {
+      devicesAccessNudgeVisible = true
+    }
+  })
 
   const prefillEnrollmentEntryLabel = $derived.by(() => {
     if (!prefillEnrollmentCode) return ''
@@ -295,6 +317,64 @@
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
+  {#if devicesAccessOpen}
+    <DevicesAccessDashboard
+      {vault}
+      onBack={() => (devicesAccessOpen = false)}
+      onManageVaultDevices={() => {}}
+      onManageVaultPasswords={() => {}}
+    />
+  {:else}
+    <div class="flex justify-end">
+      <Button
+        type="button"
+        variant="ghost"
+        class="min-h-11 gap-2 text-muted-foreground hover:text-foreground"
+        data-testid="login-devices-access"
+        onclick={() => (devicesAccessOpen = true)}
+      >
+        <KeyRound class="size-4" />
+        {vault.t('devices_access.title')}
+      </Button>
+    </div>
+
+    {#if devicesAccessNudgeVisible}
+      <aside
+        class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="devices-access-nudge"
+      >
+        <div class="max-w-[65ch]">
+          <p class="text-sm font-medium text-foreground">
+            {vault.t('devices_access.nudge_title')}
+          </p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {vault.t('devices_access.nudge_description')}
+          </p>
+        </div>
+        <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+          <Button
+            type="button"
+            variant="outline"
+            class="min-h-11"
+            onclick={() => (devicesAccessOpen = true)}
+          >
+            {vault.t('devices_access.review_action')}
+          </Button>
+          <label class="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              class="size-4 rounded border-input accent-primary"
+              data-testid="devices-access-dont-show-again"
+              onchange={(event) => {
+                if (event.currentTarget.checked) dismissDevicesAccessNudge()
+              }}
+            />
+            {vault.t('devices_access.dont_show_again')}
+          </label>
+        </div>
+      </aside>
+    {/if}
+
   {#if vault.sessionExpiredByIdle}
     <p
       class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
@@ -598,5 +678,6 @@
         {onUseEnrollmentCode}
       />
     {/if}
+  {/if}
   {/if}
 </div>

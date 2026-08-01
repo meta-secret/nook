@@ -5,6 +5,7 @@ pub(crate) mod vault_access_diagnostics;
 pub(crate) mod vault_architecture;
 pub(crate) mod vault_client_policy;
 pub(crate) mod vault_connect;
+pub(crate) mod device_access;
 pub(crate) mod vault_event_session;
 pub(crate) mod vault_format;
 pub(crate) mod vault_ids;

@@ -16,10 +16,12 @@
 
 mod application;
 mod conversion;
+mod device_access;
 mod error_mapping;
 mod logger;
 mod manager;
 mod passkey_browser;
+mod passkey_observation;
 mod storage;
 mod sync_io;
 mod types;
@@ -28,6 +30,7 @@ mod types;
 pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use logger::NookLogEntries;
+pub use device_access::*;
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,

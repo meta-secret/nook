@@ -12,6 +12,7 @@ pub(crate) mod auth_providers;
 pub(crate) mod drive;
 pub(crate) mod drive_events;
 pub(crate) mod drive_shared;
+pub(crate) mod device_access;
 pub(crate) mod event_db;
 pub(crate) mod extension_state;
 pub(crate) mod github;

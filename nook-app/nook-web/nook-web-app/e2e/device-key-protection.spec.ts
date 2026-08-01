@@ -519,7 +519,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-use-existing-choice').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'Set a local PIN to protect a new device identity instead',
+      'Set a local PIN or passphrase to protect a new device identity instead',
     )
     await expect(
       page.getByTestId('device-protection-pin-setup-btn'),

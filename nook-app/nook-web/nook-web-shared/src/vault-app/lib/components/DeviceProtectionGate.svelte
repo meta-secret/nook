@@ -91,7 +91,6 @@
           id="device-protection-pin"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="new-password"
           bind:value={pin}
           disabled={vault.isVerifying}
@@ -109,7 +108,6 @@
           id="device-protection-pin-confirm"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="new-password"
           bind:value={pinConfirm}
           disabled={vault.isVerifying}
@@ -252,7 +250,6 @@
           id="device-protection-pin"
           class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           type="password"
-          inputmode="numeric"
           autocomplete="current-password"
           bind:value={pin}
           disabled={vault.isVerifying}

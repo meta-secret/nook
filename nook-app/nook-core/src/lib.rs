@@ -29,10 +29,16 @@ pub(crate) use sync::{
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
 pub(crate) use vault::{
-    database, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
+    database, device_access, vault_access_diagnostics, vault_architecture, vault_client_policy, vault_connect,
     vault_event_session, vault_format, vault_ids, vault_runtime_policy, vault_search_catalog,
     vault_security, vault_sentinel_genesis, vault_sentinel_onboarding, vault_sentinel_unlock,
     vault_session, vault_session_cache, vault_wire,
+};
+pub use device_access::{
+    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessProtectionKind,
+    DeviceAccessProviderLabelError, PasskeyAuthenticatorAttachment, PasskeyBackupState,
+    classify_device_access_protection, normalize_device_access_provider_label,
+    passkey_credential_identifier, passkey_user_handle_identifier,
 };
 
 pub use apple_passwords_import::{

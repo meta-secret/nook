@@ -1,4 +1,5 @@
 export enum SettingsSection {
+  DevicesAccess = "devices-access",
   Storage = "storage",
   Onboard = "onboard",
   Admin = "admin",

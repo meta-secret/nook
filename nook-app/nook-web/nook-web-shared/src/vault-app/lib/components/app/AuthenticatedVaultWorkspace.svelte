@@ -11,6 +11,7 @@
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultAdmin from '$lib/components/VaultAdmin.svelte'
+  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -130,7 +131,19 @@
           onAddDevice={() => vault.openSettings(SettingsSection.Onboard)}
         />
       {/if}
-      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
+      {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
+        <DevicesAccessDashboard
+          {vault}
+          onBack={() => vault.closeSettings()}
+          onManageVaultDevices={() =>
+            vault.openSettings(
+              SettingsSection.Storage,
+              SettingsAccordionSection.Devices,
+            )}
+          onManageVaultPasswords={() =>
+            vault.openAdmin(AdminAccordionSection.Passwords)}
+        />
+      {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
           bind:activeSection={vault.adminAccordionSection}
@@ -277,6 +290,10 @@
       onSelectSecrets={() => {
         leaveSecretsEditor()
         vault.closeSettings()
+      }}
+      onSelectDevicesAccess={() => {
+        leaveSecretsEditor()
+        vault.openSettings(SettingsSection.DevicesAccess)
       }}
       onSelectOnboard={() => {
         leaveSecretsEditor()
