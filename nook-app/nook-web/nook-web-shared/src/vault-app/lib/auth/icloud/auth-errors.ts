@@ -188,11 +188,14 @@ export function isExpectedCloudKitSignInSetupFailure(
   return isOpaqueUnknown && hasSignInControl;
 }
 
-export enum CloudKitAuthErrorTranslationKey {
-  SignInRequired = I18N_KEYS.ProviderSetupIcloudSignInRequired,
-  UnknownError = I18N_KEYS.ProviderSetupIcloudUnknownError,
-  SignInFailed = I18N_KEYS.ProviderSetupIcloudSignInFailed,
-}
+export const CloudKitAuthErrorTranslationKey = {
+  SignInRequired: I18N_KEYS.ProviderSetupIcloudSignInRequired,
+  UnknownError: I18N_KEYS.ProviderSetupIcloudUnknownError,
+  SignInFailed: I18N_KEYS.ProviderSetupIcloudSignInFailed,
+} as const;
+
+export type CloudKitAuthErrorTranslationKey =
+  (typeof CloudKitAuthErrorTranslationKey)[keyof typeof CloudKitAuthErrorTranslationKey];
 
 export function cloudKitAuthErrorTranslationKey(
   error: unknown,

@@ -112,10 +112,13 @@ export function validateVaultArchitecture(
   }
 }
 
-export enum ProviderCapabilityLabelKey {
-  PersonalOnly = I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
-  PersonalShared = I18N_KEYS.ProviderPickerCapabilityPersonalShared,
-}
+export const ProviderCapabilityLabelKey = {
+  PersonalOnly: I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
+  PersonalShared: I18N_KEYS.ProviderPickerCapabilityPersonalShared,
+} as const;
+
+export type ProviderCapabilityLabelKey =
+  (typeof ProviderCapabilityLabelKey)[keyof typeof ProviderCapabilityLabelKey];
 
 /** Presentation label derived from the Rust-owned provider capability. */
 export function providerCapabilityLabelKey(
