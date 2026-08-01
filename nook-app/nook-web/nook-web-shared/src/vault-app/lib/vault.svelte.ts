@@ -32,8 +32,8 @@ import {
   type StorageProvider,
   type StorageProviderType,
   unselectedVaultScope,
-} from "$lib/auth-providers";
-import type { VaultArchitecture } from "$lib/vault-architecture";
+} from "$lib/auth/providers";
+import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import * as localeActions from "$lib/vault/locale";
 import * as oauthActions from "$lib/vault/oauth";
 import * as providersActions from "$lib/vault/providers.svelte";
@@ -50,7 +50,7 @@ import * as idleSessionActions from "$lib/vault/idle-session";
 import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
 import * as lifecycleActions from "$lib/vault/lifecycle";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
-import { SerialOperationQueue } from "$lib/serial-operation-queue";
+import { SerialOperationQueue } from "$lib/runtime/serial-operation-queue";
 import { ManualProviderSyncKind } from "$lib/vault/state/sync.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { VaultLifecycleState } from "$lib/vault/state/lifecycle.svelte";

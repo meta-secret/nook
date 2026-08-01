@@ -3,13 +3,13 @@ import {
   ExtensionConnectRequestStateKind,
   type ExtensionConnectRequest,
   type ExtensionConnectRequestState,
-} from "$lib/extension-connect";
+} from "$lib/extension/connect";
 import {
   getLegalPageFromPath,
   LegalPageLookupKind,
   type LegalPageId,
   type LegalPageLookup,
-} from "$lib/legal-content";
+} from "$lib/content/legal";
 
 export enum LegalRouteKind {
   Application = "application",

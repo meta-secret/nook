@@ -4,7 +4,7 @@
   import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
   import {
     buildSentinelGenesisParticipantResponseLink,
-  } from "$lib/sentinel-genesis-link";
+  } from "$lib/enrollment/sentinel-genesis-link";
   import type { VaultState } from "$lib/vault.svelte";
   import { sentinelGenesisParticipantFingerprint } from "$app-wasm";
 

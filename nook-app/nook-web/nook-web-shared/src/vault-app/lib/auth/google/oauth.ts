@@ -14,10 +14,10 @@
 import type {
   OAuthFileConfig,
   StoredOAuthFileConfiguration,
-} from "$lib/auth-providers";
-import { configuredOAuthFile } from "$lib/auth-providers";
+} from "$lib/auth/providers";
+import { configuredOAuthFile } from "$lib/auth/providers";
 import { googleOAuthTokensToConfig as googleOAuthTokensToConfigCore } from "$app-wasm";
-import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/google-oauth-config";
+import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 export const DRIVE_APPDATA_SCOPE =

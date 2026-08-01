@@ -2,15 +2,15 @@ import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
-} from "$lib/icloud-oauth-config";
-import { createLogger } from "$lib/log";
+} from "$lib/auth/icloud/config";
+import { createLogger } from "$lib/runtime/log";
 import {
   CloudKitButtonTheme,
   CloudKitEnvironment,
   CloudKitParticipantStatus,
   CloudKitShareAccess,
   CloudKitSharePermission,
-} from "$lib/icloud-cloudkit-state";
+} from "$lib/auth/icloud/cloudkit-state";
 
 const CLOUDKIT_SCRIPT_URL = "https://cdn.apple-cloudkit.com/ck/2/cloudkit.js";
 export const CLOUDKIT_SIGN_IN_BUTTON_ID = "apple-sign-in-button";

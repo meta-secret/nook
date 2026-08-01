@@ -1,4 +1,4 @@
-import { getEnrollmentLinkBase } from "$lib/enrollment-code";
+import { getEnrollmentLinkBase } from "$lib/enrollment/code";
 import {
   buildSentinelGenesisParticipantResponseLink as buildParticipantResponseLinkCore,
   buildSentinelGenesisRequestLink as buildRequestLinkCore,

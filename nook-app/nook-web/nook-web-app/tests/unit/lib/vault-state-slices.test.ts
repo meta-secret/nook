@@ -7,7 +7,7 @@ import {
   LoginSetupKind,
   type LoginSetup,
 } from '$lib/vault/state/provider.svelte'
-import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth-providers'
+import { LOCAL_FOLDER_PROVIDER_TYPE } from '$lib/auth/providers'
 import {
   LastSyncKind,
   LocalFolderHealthKind,

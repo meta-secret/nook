@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { prepareICloudSignInControl } from "$lib/icloud-oauth";
+  import { prepareICloudSignInControl } from "$lib/auth/icloud/oauth";
   import type { VaultState } from "$lib/vault.svelte";
 
   let { vault }: { vault: VaultState } = $props();

@@ -1,6 +1,6 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   getActiveVaultSelection,
   hasActiveLocalVault,
@@ -13,7 +13,7 @@ import {
   NookActiveVaultSelectionState,
   type NookVaultManager,
 } from "$app-wasm";
-import { activeVaultScope, saveAuthProviders } from "$lib/auth-providers";
+import { activeVaultScope, saveAuthProviders } from "$lib/auth/providers";
 import {
   ActiveVaultKind,
   LocalLoginPreparationState,

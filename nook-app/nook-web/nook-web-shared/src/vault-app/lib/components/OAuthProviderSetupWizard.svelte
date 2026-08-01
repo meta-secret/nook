@@ -14,7 +14,7 @@
     GoogleDriveMode,
     ICloudMode,
     OAuthFilePreset,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     DEFAULT_DRIVE_BACKUP_NAME,
     hasGoogleDriveFolder,
@@ -22,13 +22,13 @@
     oauthAccessToken,
     oauthAccountLabel,
     OAuthAccessTokenKind,
-  } from '$lib/auth-providers'
-  import { createLogger } from '$lib/log'
+  } from '$lib/auth/providers'
+  import { createLogger } from '$lib/runtime/log'
   import {
     BrowserOAuthProvider,
     OAuthOriginUnsupportedReason,
     resolveCurrentOAuthOriginSupport,
-  } from '$lib/oauth-origin'
+  } from '$lib/auth/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
   import * as oauthActions from '$lib/vault/oauth'

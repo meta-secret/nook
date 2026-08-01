@@ -1,14 +1,14 @@
-import { ColorMode } from "$lib/app-theme";
-import { LegalRouteKind, type LegalRoute } from "$lib/app-route-state";
+import { ColorMode } from "$lib/app/theme";
+import { LegalRouteKind, type LegalRoute } from "$lib/app/route-state";
 import {
   activeVaultScope,
   saveAuthProviders,
   unselectedVaultScope,
   type AuthProvidersSnapshot,
-} from "$lib/auth-providers";
-import { subscribeToLocalBrowserDataDeletion } from "$lib/browser-data";
+} from "$lib/auth/providers";
+import { subscribeToLocalBrowserDataDeletion } from "$lib/runtime/browser-data";
 import { configuredVaultApplicationName } from "$app-wasm";
-import { legalPageForId } from "$lib/legal-content";
+import { legalPageForId } from "$lib/content/legal";
 import type { VaultState } from "$lib/vault.svelte";
 
 export const THEME_STORAGE_KEY = "nook_color_mode";

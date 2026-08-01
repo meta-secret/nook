@@ -9,7 +9,7 @@ import {
   openExtensionInstallTarget,
   resolveExtensionSetupState,
   shouldOfferExtensionSetup,
-} from '$lib/extension-install'
+} from '$lib/extension/install'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 

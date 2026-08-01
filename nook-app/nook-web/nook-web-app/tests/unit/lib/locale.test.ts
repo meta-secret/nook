@@ -11,7 +11,7 @@ import initNookWasm, {
   supportedAppLocaleCode,
   translateFromCatalog,
 } from '$app-wasm'
-import { HELP_SECTIONS } from '$lib/help-content'
+import { HELP_SECTIONS } from '$lib/content/help'
 
 beforeAll(async () => {
   await initNookWasm()

@@ -12,21 +12,21 @@
   } from '@lucide/svelte'
   import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
-  import { openInstalledExtension } from '$lib/extension-connect'
+  import { openInstalledExtension } from '$lib/extension/connect'
   import {
     ExtensionSetupStatus,
     loadExtensionInstallTarget,
     openExtensionInstallTarget,
     resolveExtensionSetupState,
     shouldOfferExtensionSetup,
-  } from '$lib/extension-install'
+  } from '$lib/extension/install'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
-  import { VaultType } from '$lib/vault-architecture'
+  import { VaultType } from '$lib/vault/architecture-model'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app-extension-setup'
+  } from '$lib/app/extension-setup'
   import {
     MemberDetailsKind,
     MemberRenameKind,

@@ -1330,7 +1330,7 @@
     "google_shared_folder_connected": "Общая папка Drive «{folder}» готова для этого аккаунта.",
     "google_shared_not_folder": "Выбранный объект Google Drive не является папкой.",
     "google_shared_not_writable": "У подключённого Google-аккаунта нет права записи в эту общую папку.",
-    "google_oauth_unconfigured": "Вход через Google не настроен. Укажите GOOGLE_OAUTH_CLIENT_ID в google-oauth-config.ts.",
+    "google_oauth_unconfigured": "Вход через Google не настроен. Укажите GOOGLE_OAUTH_CLIENT_ID в auth/google/config.ts.",
     "oauth_preview_origin_unsupported": "OAuth-вход отключён на PR preview origin {origin}. Google и Apple требуют точно зарегистрированные origin; для проверки этого провайдера используйте production или local dev.",
     "oauth_origin_unsupported": "OAuth-вход не включён для {origin}. Добавьте этот точный origin в консоли провайдера перед проверкой этого провайдера здесь.",
     "icloud_desc": "Nook хранит зашифрованный сейф как приватную запись CloudKit в вашем аккаунте iCloud. Нажмите «Войти через Apple» — API-ключи не нужны.",
@@ -1372,7 +1372,7 @@
     "icloud_sign_in_failed": "Не удалось войти через iCloud.",
     "icloud_tokens_local_desc": "Токены CloudKit web auth остаются только в этом браузере, как сохранённый токен GitHub.",
     "icloud_event_log_desc": "Записи журнала событий сохраняются как зашифрованные YAML-копии в выбранном приватном или общем расположении CloudKit.",
-    "icloud_oauth_unconfigured": "Вход через iCloud не настроен. Укажите ICLOUD_CONTAINER_ID и ICLOUD_API_TOKEN в icloud-oauth-config.ts."
+    "icloud_oauth_unconfigured": "Вход через iCloud не настроен. Укажите ICLOUD_CONTAINER_ID и ICLOUD_API_TOKEN в auth/icloud/config.ts."
   },
   "devices_card": {
     "single_device_warning": "Добавьте другое устройство перед удалением текущего. Резервный пароль помогает восстановить доступ, но как минимум один ключ устройства должен оставаться зарегистрированным.",

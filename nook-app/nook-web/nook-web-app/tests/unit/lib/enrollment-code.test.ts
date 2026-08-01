@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment-code'
+import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment/code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentEntryLabelState,

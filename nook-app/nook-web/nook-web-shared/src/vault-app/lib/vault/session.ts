@@ -5,8 +5,8 @@ import {
   SentinelVaultUnlockState,
   setVaultSessionLocked,
 } from "$app-wasm";
-import { VaultType } from "$lib/vault-architecture";
-import { createLogger } from "$lib/log";
+import { VaultType } from "$lib/vault/architecture-model";
+import { createLogger } from "$lib/runtime/log";
 import { inactiveSentinelUnlockSession } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 

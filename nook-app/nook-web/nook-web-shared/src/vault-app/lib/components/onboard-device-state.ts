@@ -3,7 +3,7 @@ import type { NookPasswordEntrySummary, StorageProvider } from "$app-wasm";
 import {
   CompatibleProviderPreferenceKind,
   type CompatibleProviderPreference,
-} from "$lib/vault-architecture";
+} from "$lib/vault/architecture-model";
 
 export {
   CompatibleProviderPreferenceKind as ProviderSelectionKind,

@@ -56,7 +56,9 @@ test('choose private or shared iCloud vault storage', async ({ page }) => {
   await page.reload()
 
   await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-icloud').click()
+  const iCloudProvider = page.getByTestId('provider-option-icloud')
+  await expect(iCloudProvider).toBeVisible()
+  await iCloudProvider.click()
   await expect(page.getByTestId('icloud-oauth-setup')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })

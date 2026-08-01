@@ -1,4 +1,4 @@
-import type { StorageProvider } from "$lib/auth-providers";
+import type { StorageProvider } from "$lib/auth/providers";
 
 export enum EventOutboxTargetKind {
   Unavailable = "unavailable",

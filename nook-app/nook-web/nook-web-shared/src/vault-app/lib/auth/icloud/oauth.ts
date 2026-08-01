@@ -13,7 +13,7 @@ import {
   unknownOAuthAccountIdentity,
   type OAuthFileConfig,
   type StoredOAuthFileConfiguration,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import { iCloudOAuthTokensToConfig as iCloudOAuthTokensToConfigCore } from "$app-wasm";
 import {
   default as initNookWasm,
@@ -25,14 +25,14 @@ import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
-} from "$lib/icloud-oauth-config";
-import { createLogger } from "$lib/log";
+} from "$lib/auth/icloud/config";
+import { createLogger } from "$lib/runtime/log";
 import {
   CloudKitButtonTheme,
   CloudKitParticipantStatus,
   CloudKitShareAccess,
   CloudKitSharePermission,
-} from "$lib/icloud-cloudkit-state";
+} from "$lib/auth/icloud/cloudkit-state";
 import {
   CLOUDKIT_SIGN_IN_BUTTON_ID,
   CLOUDKIT_SIGN_OUT_BUTTON_ID,
@@ -50,12 +50,12 @@ import {
   type CloudKitRecordInfo,
   type CloudKitRecordInfosResponse,
   type CloudKitUserIdentity,
-} from "$lib/icloud-cloudkit-runtime";
+} from "$lib/auth/icloud/cloudkit-runtime";
 import {
   cloudKitAuthErrorDetails,
   cloudKitAuthErrorTranslationKey,
   isExpectedCloudKitSignInSetupFailure,
-} from "$lib/icloud-auth-errors";
+} from "$lib/auth/icloud/auth-errors";
 import {
   CloudKitAuthSetupKind,
   CloudKitIdentityKind,
@@ -66,19 +66,19 @@ import {
   type CloudKitIdentity,
   type CloudKitInitialization,
   type ICloudAccountName,
-} from "$lib/icloud-auth-state";
+} from "$lib/auth/icloud/auth-state";
 import {
   ICLOUD_SIGN_IN_TIMEOUT_MS,
   readStoredWebAuthToken,
   requestDirectCloudKitWebAuthToken,
   waitForNativeCloudKitWebAuthToken,
   waitForStoredWebAuthToken,
-} from "$lib/icloud-web-auth-wait";
+} from "$lib/auth/icloud/web-auth-wait";
 export {
   ICloudAccountNameKind,
   type ICloudAccountName,
-} from "$lib/icloud-auth-state";
-export { ICLOUD_SIGN_IN_TIMEOUT_MS } from "$lib/icloud-web-auth-wait";
+} from "$lib/auth/icloud/auth-state";
+export { ICLOUD_SIGN_IN_TIMEOUT_MS } from "$lib/auth/icloud/web-auth-wait";
 
 const log = createLogger("icloud-oauth");
 

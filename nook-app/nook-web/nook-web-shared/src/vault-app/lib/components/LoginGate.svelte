@@ -11,14 +11,14 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
     localFolderHandle,
     LocalFolderHandleKind,
     oauthAccessToken,
     OAuthAccessTokenKind,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     Card,
     CardContent,

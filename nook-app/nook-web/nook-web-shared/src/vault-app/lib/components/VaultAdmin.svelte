@@ -35,7 +35,7 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     ActiveVaultKind,
     type LoginSetup,

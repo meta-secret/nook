@@ -1,4 +1,4 @@
-import type { CloudKitUserIdentity } from "$lib/icloud-cloudkit-runtime";
+import type { CloudKitUserIdentity } from "$lib/auth/icloud/cloudkit-runtime";
 
 export enum CloudKitInitializationKind {
   NotStarted = "not-started",

@@ -1,7 +1,7 @@
-import { VaultType } from "$lib/vault-architecture";
+import { VaultType } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   classifyVaultRecoveryError,
   JoinEnrollmentState,

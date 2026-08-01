@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createEnrollmentQrOptions, enrollmentQrSize } from '$lib/enrollment-qr'
+import { createEnrollmentQrOptions, enrollmentQrSize } from '$lib/enrollment/qr'
 
 describe('createEnrollmentQrOptions', () => {
   test('configures a styled enrollment QR with quartile correction', () => {

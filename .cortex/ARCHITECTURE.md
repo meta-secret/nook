@@ -221,8 +221,8 @@ this crate.
   the Svelte shell applies their outcomes to browser/UI state. Cohesive browser
   workflows live in focused `lib/vault/*` action modules; `vault.svelte.ts`
   remains the reactive facade and must not grow duplicate implementations.
-- **`auth-providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).
-- **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. Rust/WASM builds the PRF option payloads; TypeScript invokes `navigator.credentials`, extracts the returned PRF output, and performs no encryption. `nook-wasm/src/passkey_browser.rs` classifies WebAuthn `NotAllowedError` as the stable `PASSKEY_CEREMONY_NOT_ALLOWED` result because the browser intentionally uses it for cancellation, timeout, policy refusal, and unavailable credentials. UI callers localize that ambiguity for create, recovery, and unlock flows; they must not infer PRF absence or offer the PIN fallback unless the browser returns the distinct PRF-unavailable result.
+- **`auth/providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).
+- **`auth/passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. Rust/WASM builds the PRF option payloads; TypeScript invokes `navigator.credentials`, extracts the returned PRF output, and performs no encryption. `nook-wasm/src/passkey_browser.rs` classifies WebAuthn `NotAllowedError` as the stable `PASSKEY_CEREMONY_NOT_ALLOWED` result because the browser intentionally uses it for cancellation, timeout, policy refusal, and unavailable credentials. UI callers localize that ambiguity for create, recovery, and unlock flows; they must not infer PRF absence or offer the PIN fallback unless the browser returns the distinct PRF-unavailable result.
 - **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
 - **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
 - **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
@@ -238,6 +238,13 @@ this crate.
 - **Canonical source:** `nook-web-shared/src/vault-app` is imported directly by
   the Unified, Simple, and Sentinel projects. Do not recreate an app-local
   `src/lib` symlink or copy shared entrypoints/components into those projects.
+- **Package-oriented modules:** `vault-app/lib` keeps only the `nook.ts`,
+  `utils.ts`, and `vault.svelte.ts` facades at its root. Browser-owned modules
+  are grouped by capability under `app`, `auth`, `content`, `enrollment`,
+  `extension`, `runtime`, and `vault`; provider-specific authentication adapters
+  live under `auth/google` and `auth/icloud`. Presentation remains under
+  `components`, with its own feature-oriented subpackages, rather than being
+  mixed into browser adapters.
 - **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
   browser-page scanning, message DTOs, or adapters around WASM exports, but it
   must not own vault format logic, crypto, validation, password generation, or

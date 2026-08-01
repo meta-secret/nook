@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { loadAppLogsResponse, parseAppLogsQuery } from '$lib/app-logs-api'
+  import { loadAppLogsResponse, parseAppLogsQuery } from '$lib/app/logs-api'
   import {
     LogsPageStateKind,
     type LogsPageState,

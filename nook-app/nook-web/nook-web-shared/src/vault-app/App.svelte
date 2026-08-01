@@ -11,17 +11,17 @@
     extensionConnectIntent,
     legalRoute,
     type ExtensionConnectIntent,
-  } from '$lib/app-route-state'
-  import { ColorMode, manualColorMode, systemColorMode } from '$lib/app-theme'
+  } from '$lib/app/route-state'
+  import { ColorMode, manualColorMode, systemColorMode } from '$lib/app/theme'
   import type {
     EnrollmentSubmitQueue,
     VaultCreationQueue,
-  } from '$lib/device-protected-operations'
+  } from '$lib/vault/creation-queue'
   import {
     EnrollmentSubmitQueueKind,
     PendingVaultCreationKind,
     VaultCreationQueueKind,
-  } from '$lib/device-protected-operations'
+  } from '$lib/vault/creation-queue'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
@@ -32,8 +32,8 @@
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
-  import { appPath, getLegalPageFromPath, isLogsPath } from '$lib/legal-content'
-  import { isAppLogsPath } from '$lib/app-logs-api'
+  import { appPath, getLegalPageFromPath, isLogsPath } from '$lib/content/legal'
+  import { isAppLogsPath } from '$lib/app/logs-api'
   import {
     adoptExtensionIdentity,
     discoverPairedExtensionIdentity,
@@ -43,7 +43,7 @@
     isExtensionConnectPath,
     requestPairedExtensionUnlock,
     type ExtensionConnectRequestState,
-  } from '$lib/extension-connect'
+  } from '$lib/extension/connect'
   import {
     connectInstalledExtension,
     ExtensionSetupOfferKind,
@@ -51,27 +51,27 @@
     observeExtensionSetupChanges,
     openExtensionInstaller,
     type ExtensionSetupOffer,
-  } from '$lib/app-extension-setup'
+  } from '$lib/app/extension-setup'
   import {
     APP_SHELL_WIDTH,
     APP_VERSION,
     appShellSpacing,
-  } from '$lib/app-shell-layout'
+  } from '$lib/app/shell-layout'
   import {
     assessVaultSecurity,
     configuredVaultApplicationIsSimple,
     configuredVaultApplicationIsSentinel,
     configuredVaultApplicationSupportsExtension,
   } from '$app-wasm'
-  import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
+  import { consumeSentinelOnboardingFromLocation } from '$lib/enrollment/sentinel-onboarding-link'
   import {
     initialExtensionConnectIntent,
     initialLegalRoute,
-  } from '$lib/app-route-state'
+  } from '$lib/app/route-state'
   import {
     consumeSentinelGenesisParticipantResponseFromLocation,
     consumeSentinelGenesisRequestFromLocation,
-  } from '$lib/sentinel-genesis-link'
+  } from '$lib/enrollment/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
@@ -79,7 +79,7 @@
     mountBrowserLifecycle,
     THEME_STORAGE_KEY,
     updateApplicationDocument,
-  } from '$lib/app-browser-lifecycle'
+  } from '$lib/app/browser-lifecycle'
   import {
     ActiveVaultKind,
     LoginSetupKind,

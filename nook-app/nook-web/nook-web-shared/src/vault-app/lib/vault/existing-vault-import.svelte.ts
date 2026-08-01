@@ -6,11 +6,11 @@ import {
   GITHUB_PROVIDER_TYPE,
   LOCAL_FOLDER_PROVIDER_TYPE,
   OAUTH_FILE_PROVIDER_TYPE,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   ExistingVaultImportQueueKind,
   type ExistingVaultImportQueue,
-} from "$lib/device-protected-operations";
+} from "$lib/vault/creation-queue";
 import type { VaultState } from "$lib/vault.svelte";
 import { prepareExistingVaultProvider } from "$lib/vault/existing-vault-provider.svelte";
 import {

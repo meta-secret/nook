@@ -11,12 +11,12 @@
     providerBelongsToVault,
     sealAuthProvidersForDevicePublicKey,
     type StorageProvider,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
   import {
     ExtensionConnectScope,
     type ExtensionConnectRequest,
-  } from '$lib/extension-connect'
+  } from '$lib/extension/connect'
   import type { VaultState } from '$lib/vault.svelte'
   import { approveExtensionDevice } from '$app-wasm'
   import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'

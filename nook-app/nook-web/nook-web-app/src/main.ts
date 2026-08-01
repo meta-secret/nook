@@ -1,7 +1,7 @@
 import { mount } from 'svelte'
 import '$vault-shared/app.css'
 import { VaultApplication } from '$app-wasm'
-import { ensureAppWasm } from '$lib/wasm-bootstrap'
+import { ensureAppWasm } from '$lib/runtime/wasm-bootstrap'
 
 // Keep the initial root identity: a replacement page can supply a new #app
 // while the asynchronous WASM bootstrap is pending.

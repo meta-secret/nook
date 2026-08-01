@@ -4,7 +4,7 @@ import {
   isCloudflarePrPreviewHost,
   OAuthOriginUnsupportedReason,
   resolveOAuthOriginSupport,
-} from '$lib/oauth-origin'
+} from '$lib/auth/oauth-origin'
 
 function loc(origin: string, hostname: string) {
   return { origin, hostname } as Location

@@ -1,7 +1,7 @@
 import type {
   CloudKitAuthError,
   CloudKitAuthErrorDetails,
-} from "$lib/icloud-cloudkit-runtime";
+} from "$lib/auth/icloud/cloudkit-runtime";
 
 enum CloudKitDiagnosticValueKind {
   Unavailable = "unavailable",

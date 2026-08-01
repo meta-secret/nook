@@ -1,7 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { getVaultManager } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   DeviceMode,
   DeviceProtectionDeviceModeState,
@@ -16,11 +16,11 @@ import {
   type NookAppLocale,
   type NookVaultManager,
 } from "$app-wasm";
-import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
+import { LOCAL_PROVIDER_TYPE } from "$lib/auth/providers";
 import {
   setupDeviceProtection,
   unlockDeviceProtection,
-} from "$lib/passkey-device-protection";
+} from "$lib/auth/passkey-device-protection";
 import { JoinEnrollmentState } from "$app-wasm";
 import * as localLoginActions from "$lib/vault/local-login";
 import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";

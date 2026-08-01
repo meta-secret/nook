@@ -6,7 +6,7 @@ import type {
   SecretType,
 } from "$lib/nook";
 import { generateSecretId, VaultAccessStatus } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
   RemoteVaultRecoveryState,

@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest'
-import { LegalRouteKind, legalRoute } from '$lib/app-route-state'
+import { LegalRouteKind, legalRoute } from '$lib/app/route-state'
 import {
   LEGAL_PAGES,
   LegalPageLookupKind,
   LegalPageId,
   getLegalPageFromPath,
-} from '$lib/legal-content'
+} from '$lib/content/legal'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {

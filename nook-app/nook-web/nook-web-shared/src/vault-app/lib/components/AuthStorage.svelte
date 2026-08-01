@@ -18,7 +18,7 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     DEFAULT_GITHUB_REPO,
     GITHUB_PROVIDER_TYPE,
@@ -29,13 +29,13 @@
     OAuthAccessTokenKind,
     OAUTH_FILE_PROVIDER_TYPE,
     providerStorageDetail,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     providerCapabilityLabelKey,
     providerSupportsReplication,
-  } from '$lib/vault-architecture'
-  import { formatProviderSyncStatus } from '$lib/provider-sync-status'
+  } from '$lib/vault/architecture-model'
+  import { formatProviderSyncStatus } from '$lib/auth/provider-sync-status'
   import {
     LocalFolderDraftKind,
     LoginSetupKind,

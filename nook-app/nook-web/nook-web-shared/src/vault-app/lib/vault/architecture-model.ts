@@ -25,7 +25,7 @@ import {
 import {
   unselectedVaultScope,
   type StorageProvider,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 
 export type {
   NookProviderReplicationCapability as ProviderReplicationCapability,

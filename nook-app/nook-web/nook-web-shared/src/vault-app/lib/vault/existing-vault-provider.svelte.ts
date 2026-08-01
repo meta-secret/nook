@@ -10,7 +10,7 @@ import {
   type StorageProviderType,
   type LocalFolderConfig,
   type OAuthFileConfig,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import {
   LocalFolderDraftKind,

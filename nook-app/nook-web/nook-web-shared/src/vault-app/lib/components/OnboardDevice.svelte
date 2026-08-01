@@ -17,7 +17,7 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment-code'
+  import { buildEnrollmentLink } from '$lib/enrollment/code'
   import {
     GITHUB_PROVIDER_TYPE,
     isICloudProvider,
@@ -26,7 +26,7 @@
     type OAuthFilePreset,
     type StorageProvider,
     type StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,
@@ -45,7 +45,7 @@
     OAuthSetupPresetKind,
     type LoginSetup,
   } from '$lib/vault/state/provider.svelte'
-  import { OnboardingType, VaultType } from '$lib/vault-architecture'
+  import { OnboardingType, VaultType } from '$lib/vault/architecture-model'
   import {
     CompatibleProviderSelectionKind,
     firstCompatibleProvider,
@@ -53,7 +53,7 @@
     providerCapabilityLabelKey,
     providerOnboardingType,
     providerSupportsReplication,
-  } from '$lib/vault-architecture'
+  } from '$lib/vault/architecture-model'
   import {
     PasswordEntrySelectionKind,
     ProviderSelectionKind,

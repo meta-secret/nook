@@ -7,7 +7,7 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { StorageProviderType } from '$lib/auth-providers'
+  import type { StorageProviderType } from '$lib/auth/providers'
   import { SyncProviderLabelKind, type VaultState } from '$lib/vault.svelte'
   import { LastSyncKind, type LastSync } from '$lib/vault/state/sync.svelte'
   import { VaultStatusBarVariant } from './vault-status-bar-state'

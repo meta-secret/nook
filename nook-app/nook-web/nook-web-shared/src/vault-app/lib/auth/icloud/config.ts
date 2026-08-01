@@ -8,7 +8,7 @@
  * - Schema: NookVault record type with content (String), deployed to Production
  * - Sign in with Apple via CloudKit JS setUpAuth (Post Message callback)
  */
-import { CloudKitEnvironment } from "$lib/icloud-cloudkit-state";
+import { CloudKitEnvironment } from "$lib/auth/icloud/cloudkit-state";
 
 export const ICLOUD_CONTAINER_ID = "iCloud.metasecret.project.com";
 export const ICLOUD_API_TOKEN =

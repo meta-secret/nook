@@ -22,7 +22,7 @@ import {
   storedOAuthCredential,
   storedOAuthRemoteFileName,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 import {
   canCreateSecret,
   CompatibleProviderPreferenceKind,
@@ -38,7 +38,7 @@ import {
   validateProviderReplication,
   validateVaultArchitecture,
   type VaultArchitectureDraft,
-} from '$lib/vault-architecture'
+} from '$lib/vault/architecture-model'
 
 beforeAll(async () => {
   await initNookWasm()

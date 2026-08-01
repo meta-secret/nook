@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   ExtensionConnectIntentKind,
   extensionConnectIntent,
-} from '$lib/app-route-state'
+} from '$lib/app/route-state'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
@@ -11,7 +11,7 @@ import {
   isExtensionConnectPath,
   openInstalledExtension,
   requestPairedExtensionUnlock,
-} from '$lib/extension-connect'
+} from '$lib/extension/connect'
 import {
   isBeginExtensionPairingMessage,
   isExtensionIdentityHandoffRequestMessage,

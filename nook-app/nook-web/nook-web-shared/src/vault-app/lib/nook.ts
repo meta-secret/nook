@@ -21,7 +21,7 @@ import {
   generateSecretId,
   VaultAccessStatus,
 } from "$app-wasm";
-import { createLogger, initWasmLogging } from "$lib/log";
+import { createLogger, initWasmLogging } from "$lib/runtime/log";
 
 await initNookWasm();
 initWasmLogging();

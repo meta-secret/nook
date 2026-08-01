@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MermaidTheme, renderMermaidDiagram } from '$lib/mermaid-diagram'
+  import { MermaidTheme, renderMermaidDiagram } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

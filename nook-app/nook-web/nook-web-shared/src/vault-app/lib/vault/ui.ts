@@ -6,7 +6,7 @@ import type {
 import {
   clearTabScopedBrowserData,
   deleteLocalBrowserData,
-} from "$lib/browser-data";
+} from "$lib/runtime/browser-data";
 import { setVaultSessionLocked } from "$app-wasm";
 import {
   AdminAccordionSection,

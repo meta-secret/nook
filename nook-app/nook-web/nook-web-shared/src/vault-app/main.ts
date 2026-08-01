@@ -1,7 +1,7 @@
 import { mount } from "svelte";
 import "./app.css";
 import { configuredVaultApplication, type VaultApplication } from "$app-wasm";
-import { ensureAppWasm } from "$lib/wasm-bootstrap";
+import { ensureAppWasm } from "$lib/runtime/wasm-bootstrap";
 
 export async function mountVaultApp(
   expectedKind: VaultApplication,

@@ -12,14 +12,14 @@ import {
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   defaultVaultArchitecture,
   DeviceMode,
   ReplicationType,
   VaultType,
   type VaultArchitecture,
-} from "$lib/vault-architecture";
+} from "$lib/vault/architecture-model";
 export enum ActiveVaultKind {
   Closed = "closed",
   Open = "open",

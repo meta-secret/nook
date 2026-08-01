@@ -11,7 +11,7 @@
     "noUnusedParameters": true,
     "resolveJsonModule": true,
     "paths": {
-      "$lib/extension-connect": ["./src/extension-connect-disabled.ts"],
+      "$lib/extension/connect": ["./src/extension-connect-disabled.ts"],
       "$lib/components/ExtensionConnectConsent.svelte": [
         "./src/ExtensionConnectDisabled.svelte"
       ],
@@ -30,7 +30,7 @@
   ],
   "exclude": [
     "../nook-web-shared/src/vault-app/lib/nook-wasm*",
-    "../nook-web-shared/src/vault-app/lib/extension-connect.ts",
+    "../nook-web-shared/src/vault-app/lib/extension/connect.ts",
     "../nook-web-shared/src/vault-app/lib/components/ExtensionConnectConsent.svelte"
   ]
 }

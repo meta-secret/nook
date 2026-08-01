@@ -3,9 +3,9 @@
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app-extension-setup'
+  } from '$lib/app/extension-setup'
   import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
-  import { ExtensionSetupStatus } from '$lib/extension-install'
+  import { ExtensionSetupStatus } from '$lib/extension/install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'

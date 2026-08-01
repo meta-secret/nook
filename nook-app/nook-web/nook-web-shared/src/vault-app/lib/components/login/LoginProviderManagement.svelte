@@ -12,12 +12,12 @@
     OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import {
     GITHUB_PROVIDER_TYPE,
     localizeProviderLabel,
     providerStorageDetail,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import { SentinelGenesisPhase } from '$app-wasm'
 
   import type { VaultState } from '$lib/vault.svelte'

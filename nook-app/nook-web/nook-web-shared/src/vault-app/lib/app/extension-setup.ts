@@ -1,11 +1,11 @@
-import { openInstalledExtension } from "$lib/extension-connect";
+import { openInstalledExtension } from "$lib/extension/connect";
 import {
   type ExtensionSetupState,
   loadExtensionInstallTarget,
   openExtensionInstallTarget,
   resolveExtensionSetupState,
   shouldOfferExtensionSetup,
-} from "$lib/extension-install";
+} from "$lib/extension/install";
 import type { ActiveVault } from "$lib/vault/state/provider.svelte";
 
 export enum ExtensionSetupOfferKind {

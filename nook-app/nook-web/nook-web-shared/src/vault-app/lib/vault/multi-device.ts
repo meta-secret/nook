@@ -1,6 +1,6 @@
 import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import { JoinEnrollmentState } from "$app-wasm";
 import { EventOutboxTargetKind } from "$lib/vault/sync-operation-state";
 

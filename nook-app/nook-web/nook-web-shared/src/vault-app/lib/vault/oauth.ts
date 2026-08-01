@@ -21,7 +21,7 @@ import {
   type GoogleDriveMode,
   type ICloudMode,
   type OAuthFileConfig,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   NookDuplicateSyncProviderState,
   verifySharedGoogleDriveFolder,
@@ -37,7 +37,7 @@ import {
   requestGoogleAccessToken,
   requestGoogleDriveSharedAccess,
   type GoogleOAuthTokens,
-} from "$lib/google-oauth";
+} from "$lib/auth/google/oauth";
 import {
   acceptICloudSharedVault,
   createICloudSharedVault,
@@ -48,20 +48,20 @@ import {
   prepareICloudSignInControl,
   requestPreparedICloudWebAuthToken,
   type ICloudOAuthTokens,
-} from "$lib/icloud-oauth";
+} from "$lib/auth/icloud/oauth";
 import {
   BrowserOAuthProvider,
   OAuthOriginUnsupportedReason,
   resolveCurrentOAuthOriginSupport,
-} from "$lib/oauth-origin";
-import { createLogger } from "$lib/log";
+} from "$lib/auth/oauth-origin";
+import { createLogger } from "$lib/runtime/log";
 import {
   prepareSharedStorageGrant,
   createSharedStorageTarget,
   providerOauthPresetForConfig,
   sharedStorageGrantAccessToken,
   suggestedSharedStorageTarget,
-} from "$lib/vault-architecture";
+} from "$lib/vault/architecture-model";
 import {
   LoginSetupKind,
   OAuthFileDraftKind,

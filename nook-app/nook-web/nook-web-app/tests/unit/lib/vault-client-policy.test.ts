@@ -21,7 +21,7 @@ import {
   storedGithubPat,
   storedGithubRepository,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 
 const providers: StorageProvider[] = [
   {

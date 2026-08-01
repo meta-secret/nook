@@ -4,7 +4,7 @@ import type {
   NookRuntimeConfig,
 } from "$app-wasm";
 import type { NookVaultSyncResult, VaultAccessStatus } from "$lib/nook";
-import type { StorageProvider } from "$lib/auth-providers";
+import type { StorageProvider } from "$lib/auth/providers";
 import type {
   LocalProviderLookup,
   StagedRemoteStorage,
@@ -16,7 +16,7 @@ import type { VaultSentinelState } from "$lib/vault/state/sentinel.svelte";
 import type { VaultSessionState } from "$lib/vault/state/session.svelte";
 import type { VaultSyncState } from "$lib/vault/state/sync.svelte";
 import type { VaultUiState } from "$lib/vault/state/ui.svelte";
-import type { VaultArchitecture } from "$lib/vault-architecture";
+import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import type {
   AdminAccordionSection,
   SettingsAccordionSection,

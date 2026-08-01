@@ -4,7 +4,7 @@
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
+  import { DEFAULT_GITHUB_REPO } from '$lib/auth/providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 

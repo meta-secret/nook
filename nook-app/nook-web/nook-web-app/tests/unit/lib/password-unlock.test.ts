@@ -9,7 +9,7 @@ import {
   storedGoogleDriveFolder,
   storedOAuthCredential,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 import {
   findSharedGrantProvider,
   SharedGrantProviderKind,

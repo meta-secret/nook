@@ -5,7 +5,7 @@ import {
   type StartSentinelGenesisArgs,
 } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
-import type { VaultArchitecture } from "$lib/vault-architecture";
+import type { VaultArchitecture } from "$lib/vault/architecture-model";
 import { listSentinelStoredDeliveries } from "$lib/vault/sentinel-unlock";
 import { LocalLoginPreparationState } from "$lib/vault/state/provider.svelte";
 import { SentinelGenesisTargetKind } from "$lib/vault/state/sentinel.svelte";

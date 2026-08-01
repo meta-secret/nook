@@ -53,7 +53,7 @@ import {
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import { NookDuplicateSyncProviderState } from "$app-wasm";
 import {
   activeVaultProviders,
@@ -90,7 +90,7 @@ import {
   localVaultStorageArgs,
   type NookStorageConnectArgs,
 } from "$app-wasm";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   ActiveVaultKind,
   LocalFolderDraftKind,

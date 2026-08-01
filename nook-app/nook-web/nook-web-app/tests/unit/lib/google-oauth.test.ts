@@ -8,8 +8,8 @@ import {
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
   requestGoogleAccessToken,
-} from '$lib/google-oauth'
-import { oauthConfigurationNotApplicable } from '$lib/auth-providers'
+} from '$lib/auth/google/oauth'
+import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 
 describe('google-oauth', () => {
   it('is configured with the committed client id', () => {

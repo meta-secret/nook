@@ -4,8 +4,8 @@ import {
   LogLevel,
   logCount,
   type LogEntry,
-} from "$lib/log";
-import { stripBasePath } from "$lib/routes";
+} from "$lib/runtime/log";
+import { stripBasePath } from "$lib/runtime/routes";
 
 /** Machine-readable log export route (JSON body, not the human `/logs` viewer). */
 export const APP_LOGS_PATH = "/app-logs";

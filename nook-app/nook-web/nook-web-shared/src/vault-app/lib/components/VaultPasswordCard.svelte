@@ -12,7 +12,7 @@
   } from '@lucide/svelte'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildEnrollmentLink } from '$lib/enrollment-code'
+  import { buildEnrollmentLink } from '$lib/enrollment/code'
   import {
     isVaultPasswordLongEnough,
     peekEnrollmentIssuedAt,

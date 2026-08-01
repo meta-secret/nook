@@ -2,7 +2,7 @@ import { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
 import { isoTimestamp } from "$lib/nook";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   enrollmentOauthState,
   findSharedGrantProvider,
@@ -67,19 +67,19 @@ import {
   type OAuthFilePreset,
   type OAuthFileConfig,
   type StorageProvider,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   GoogleOAuthPrompt,
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
   requestGoogleDriveSharedAccess,
-} from "$lib/google-oauth";
+} from "$lib/auth/google/oauth";
 import {
   acceptICloudSharedVault,
   ICloudAccountNameKind,
   oauthTokensToICloudConfig,
   requestICloudWebAuthToken,
-} from "$lib/icloud-oauth";
+} from "$lib/auth/icloud/oauth";
 import {
   prepareSharedStorageGrant,
   createSharedStorageTarget,
@@ -89,7 +89,7 @@ import {
   sharedStorageGrantAccessToken,
   suggestedSharedStorageTarget,
   unavailableSharedStorageGrantCredential,
-} from "$lib/vault-architecture";
+} from "$lib/vault/architecture-model";
 import {
   isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,

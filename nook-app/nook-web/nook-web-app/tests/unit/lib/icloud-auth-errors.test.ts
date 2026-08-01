@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CloudKitAuthErrorTranslationKey,
   cloudKitAuthErrorTranslationKey,
-} from '$lib/icloud-auth-errors'
+} from '$lib/auth/icloud/auth-errors'
 
 describe('cloudKitAuthErrorTranslationKey', () => {
   it('maps AUTHENTICATION_FAILED to origin/token guidance', () => {

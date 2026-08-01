@@ -4,7 +4,7 @@
   import {
     ExtensionSetupStatus,
     type ExtensionSetupState,
-  } from '$lib/extension-install'
+  } from '$lib/extension/install'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

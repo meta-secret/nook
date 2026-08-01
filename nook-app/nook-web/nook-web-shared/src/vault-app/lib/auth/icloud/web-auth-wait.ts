@@ -9,8 +9,8 @@ import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
-} from "$lib/icloud-oauth-config";
-import { createLogger } from "$lib/log";
+} from "$lib/auth/icloud/config";
+import { createLogger } from "$lib/runtime/log";
 import {
   cloudKitAuthTokenStore,
   cloudKitSignInControlDiagnostics,
@@ -24,8 +24,8 @@ import {
   webAuthTokenStorageDiagnostics,
   type CloudKitAuthChallenge,
   type WebAuthTokenLookup,
-} from "$lib/icloud-cloudkit-runtime";
-import { CloudKitAuthErrorTranslationKey } from "$lib/icloud-auth-errors";
+} from "$lib/auth/icloud/cloudkit-runtime";
+import { CloudKitAuthErrorTranslationKey } from "$lib/auth/icloud/auth-errors";
 
 export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000;
 const log = createLogger("icloud-oauth");

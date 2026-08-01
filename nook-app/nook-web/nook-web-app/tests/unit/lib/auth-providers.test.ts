@@ -18,7 +18,7 @@ import {
   storedOAuthCredential,
   storedOAuthRemoteFileName,
   type StorageProvider,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 import { NookDuplicateSyncProviderState } from '$app-wasm'
 
 function githubProvider(

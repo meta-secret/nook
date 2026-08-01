@@ -4,7 +4,7 @@
     localFolderDirectoryValue,
     localFolderHandle,
     LocalFolderHandleKind,
-  } from '$lib/auth-providers'
+  } from '$lib/auth/providers'
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { VaultState } from '$lib/vault.svelte'

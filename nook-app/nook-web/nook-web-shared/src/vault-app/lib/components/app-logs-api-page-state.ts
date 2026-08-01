@@ -1,4 +1,4 @@
-import type { AppLogsResponse } from "$lib/app-logs-api";
+import type { AppLogsResponse } from "$lib/app/logs-api";
 
 export enum LogsPageStateKind {
   Loading = "loading",

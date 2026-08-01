@@ -28,7 +28,7 @@ export default defineConfig({
   plugins: [tailwindcss(), svelte(), sentinelSpa],
   resolve: {
     alias: {
-      "$lib/extension-connect": new URL(
+      "$lib/extension/connect": new URL(
         "./src/extension-connect-disabled.ts",
         import.meta.url,
       ).pathname,

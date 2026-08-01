@@ -1,8 +1,8 @@
 <script lang="ts">
   import { BookOpen, ChevronDown, ChevronLeft } from '@lucide/svelte'
-  import { HELP_SECTIONS } from '$lib/help-content'
+  import { HELP_SECTIONS } from '$lib/content/help'
   import HelpMermaidDiagram from '$lib/components/HelpMermaidDiagram.svelte'
-  import { appPath } from '$lib/legal-content'
+  import { appPath } from '$lib/content/legal'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -11,7 +11,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import { MermaidTheme } from '$lib/mermaid-diagram'
+  import { MermaidTheme } from '$lib/content/mermaid-diagram'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

@@ -1,6 +1,6 @@
-import privacyPolicyMd from "../../../../../../docs/privacy-policy.md?raw";
-import termsOfServiceMd from "../../../../../../docs/terms-of-service.md?raw";
-import { stripBasePath } from "$lib/routes";
+import privacyPolicyMd from "../../../../../../../docs/privacy-policy.md?raw";
+import termsOfServiceMd from "../../../../../../../docs/terms-of-service.md?raw";
+import { stripBasePath } from "$lib/runtime/routes";
 
 export enum LegalPageId {
   Privacy = "privacy",
@@ -52,7 +52,7 @@ export function appPath(path: string): string {
 /** Diagnostic application-log viewer route (`/logs`). */
 export const LOGS_PATH = "/logs";
 
-export { stripBasePath } from "$lib/routes";
+export { stripBasePath } from "$lib/runtime/routes";
 
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
 export function getLegalPageFromPath(pathname: string): LegalPageLookup {

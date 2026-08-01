@@ -9,7 +9,7 @@
 //! - **Rust `tracing` events** flow through a reloadable global level filter
 //!   into [`IndexedDbLayer`], which appends a [`LogEntry`] and echoes to the
 //!   console via the JS `window.__nookConsole` bridge.
-//! - **The web layer** (`$lib/log`) forwards `createLogger(scope).info(…)`
+//! - **The web layer** (`$lib/runtime/log`) forwards `createLogger(scope).info(…)`
 //!   calls to [`log_record`] (persist-only; the web layer owns console echo).
 //!
 //! Persistence is **level-gated**: only entries at or above the active level

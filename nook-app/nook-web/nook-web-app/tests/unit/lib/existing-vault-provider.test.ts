@@ -8,7 +8,7 @@ import {
   defaultOAuthFileConfig,
   storedLocalFolderDirectory,
   storedLocalFolderHandle,
-} from '$lib/auth-providers'
+} from '$lib/auth/providers'
 import type { ProviderActionsContext } from '$lib/vault/action-contexts'
 import { prepareExistingVaultProvider } from '$lib/vault/existing-vault-provider.svelte'
 import {

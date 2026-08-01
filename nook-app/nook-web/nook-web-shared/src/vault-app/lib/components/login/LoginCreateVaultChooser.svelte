@@ -28,8 +28,8 @@
     ChosenVaultPath,
     VaultCreationWizardStep,
   } from './login-create-vault-chooser-state'
-  import { VaultType } from '$lib/vault-architecture'
-  import { buildSentinelGenesisRequestLink } from '$lib/sentinel-genesis-link'
+  import { VaultType } from '$lib/vault/architecture-model'
+  import { buildSentinelGenesisRequestLink } from '$lib/enrollment/sentinel-genesis-link'
   import {
     SentinelGenesisPhase,
     VaultApplication,

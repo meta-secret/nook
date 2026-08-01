@@ -1,5 +1,5 @@
-import { appPath } from "$lib/legal-content";
-import { suspendWasmLogging } from "$lib/log";
+import { appPath } from "$lib/content/legal";
+import { suspendWasmLogging } from "$lib/runtime/log";
 
 const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
 const TAB_ID = crypto.randomUUID();

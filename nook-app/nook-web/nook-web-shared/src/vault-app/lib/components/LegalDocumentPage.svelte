@@ -13,7 +13,7 @@
     LegalPageId,
     appPath,
     legalPageForId,
-  } from '$lib/legal-content'
+  } from '$lib/content/legal'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

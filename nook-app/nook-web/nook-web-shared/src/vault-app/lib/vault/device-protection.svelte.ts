@@ -7,14 +7,14 @@ import {
   sanitizedPasskeyCeremonyData,
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
-} from "$lib/passkey-device-protection";
+} from "$lib/auth/passkey-device-protection";
 import {
   activeVaultScope,
   LOCAL_PROVIDER_TYPE,
   unselectedVaultScope,
-} from "$lib/auth-providers";
-import { createLogger } from "$lib/log";
-import type { DeviceMode } from "$lib/vault-architecture";
+} from "$lib/auth/providers";
+import { createLogger } from "$lib/runtime/log";
+import type { DeviceMode } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {

@@ -9,7 +9,7 @@ import {
   buildRobotsTxt,
   buildSitemapXml,
   siteUrlFromEnv,
-} from '../nook-web-shared/src/vault-app/lib/sitemap'
+} from '../nook-web-shared/src/vault-app/lib/content/sitemap'
 
 const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =

@@ -1,4 +1,4 @@
-import { stripBasePath } from "$lib/routes";
+import { stripBasePath } from "$lib/runtime/routes";
 import type { NookVaultManager } from "$app-wasm";
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,

@@ -11,8 +11,8 @@
     type OAuthFilePreset,
     type StorageProvider,
     type StorageProviderType,
-  } from '$lib/auth-providers'
-  import { providerReplicationCapability } from '$lib/vault-architecture'
+  } from '$lib/auth/providers'
+  import { providerReplicationCapability } from '$lib/vault/architecture-model'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

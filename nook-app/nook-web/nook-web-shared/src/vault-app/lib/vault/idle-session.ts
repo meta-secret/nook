@@ -1,7 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
 import { setVaultSessionLocked } from "$app-wasm";
-import { createLogger } from "$lib/log";
-import { createVaultIdleSessionTracker } from "$lib/vault-idle-session";
+import { createLogger } from "$lib/runtime/log";
+import { createVaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
 
 const log = createLogger("vault-session");
 

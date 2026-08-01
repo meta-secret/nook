@@ -1,7 +1,7 @@
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { SvelteDate } from "svelte/reactivity";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import {
   isoTimestamp,
   VaultAccessStatus,
@@ -30,7 +30,7 @@ import {
   LocalFolderProviderConfigurationKind,
   unselectedVaultScope,
   type StorageProvider,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import {
   EventOutboxTargetKind,
   LocalFolderInspectionKind,

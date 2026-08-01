@@ -1,9 +1,9 @@
-import { DEFAULT_SITE_URL } from "$lib/sitemap";
+import { DEFAULT_SITE_URL } from "$lib/content/sitemap";
 import {
   discoverPairedExtensionIdentity,
   InstalledExtensionRuntimeKind,
   readInstalledExtensionRuntimeId,
-} from "$lib/extension-connect";
+} from "$lib/extension/connect";
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
 import {
   ActiveVaultKind,

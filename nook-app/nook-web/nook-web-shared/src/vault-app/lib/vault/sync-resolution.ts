@@ -8,7 +8,7 @@ import {
   type NookSecurityConflict,
   VaultSyncConflictKind,
 } from "$app-wasm";
-import { createLogger } from "$lib/log";
+import { createLogger } from "$lib/runtime/log";
 import type { NookSecretRecord } from "$lib/nook";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import { SyncConflictReviewKind } from "$lib/vault/state/sync.svelte";
@@ -23,7 +23,7 @@ import {
   localFolderProviderConfiguration,
   LocalFolderProviderConfigurationKind,
   scopedProviderVault,
-} from "$lib/auth-providers";
+} from "$lib/auth/providers";
 import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabilities";
 
 const log = createLogger("vault-sync-resolution");
