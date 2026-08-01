@@ -202,9 +202,18 @@ fn assert_workflows_scope_cache_credentials() {
 
     let remote = read(".github/workflows/remote.yml");
     let selected_jobs = remote.matches("if: inputs.task == '").count();
-    assert_eq!(remote.matches("NOOK_SCCACHE_ACCESS_KEY").count(), selected_jobs);
-    assert_eq!(remote.matches("NOOK_SCCACHE_SECRET_KEY").count(), selected_jobs);
-    assert_eq!(remote.matches("isolated-cache-write: \"true\"").count(), selected_jobs);
+    assert_eq!(
+        remote.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
+        selected_jobs
+    );
+    assert_eq!(
+        remote.matches("NOOK_SCCACHE_SECRET_KEY").count(),
+        selected_jobs
+    );
+    assert_eq!(
+        remote.matches("isolated-cache-write: \"true\"").count(),
+        selected_jobs
+    );
 
     let hive = read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
@@ -307,7 +316,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("main-cache-only"));
     assert!(setup.contains("main-cache-only requires cache-write=false"));
     assert!(setup.contains("isolated-cache-write requires workflow_dispatch"));
-    assert!(setup.contains("branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""));
+    assert!(
+        setup.contains(
+            "branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""
+        )
+    );
     assert!(setup.contains("scope_suffix=\"-remote-$branch_hash\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
@@ -323,9 +336,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
     assert!(bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
     assert!(bake.contains("rust_wasm_deps_write_scope"));
-    assert!(bake.contains(
-        "nook/buildcache/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
-    ));
+    assert!(
+        bake.contains(
+            "nook/buildcache/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
+        )
+    );
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
         .context("bake file must define the WASM source cache inputs")?
@@ -352,7 +367,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook/buildcache/nook-rust-wasm-source-v2:buildcache",
         "nook/buildcache/nook-web-v1:buildcache",
     ] {
-        assert!(bake.contains(fallback), "Main fallback cache ref is missing: {fallback}");
+        assert!(
+            bake.contains(fallback),
+            "Main fallback cache ref is missing: {fallback}"
+        );
     }
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
