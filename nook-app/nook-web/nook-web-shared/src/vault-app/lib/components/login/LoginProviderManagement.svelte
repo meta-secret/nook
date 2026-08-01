@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ChevronDown,
     ChevronLeft,
@@ -57,7 +58,7 @@
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
     const ok = confirm(
-      vault.t('auth_storage.confirm_remove', {
+      vault.t(I18N_KEYS.AuthStorageConfirmRemove, {
         label: provider.label,
         signedOutNote: '',
       }),
@@ -78,23 +79,23 @@
         onclick={() => onCancelAddProvider()}
       >
         <ChevronLeft class="size-3.5" />
-        {vault.t('login_wizard.back_to_unlock')}
+        {vault.t(I18N_KEYS.LoginWizardBackToUnlock)}
       </button>
     {/if}
 
     <div class="space-y-1">
       <h2 class="text-sm font-semibold text-foreground">
         {#if addingProvider}
-          {vault.t('onboarding.add_provider')}
+          {vault.t(I18N_KEYS.OnboardingAddProvider)}
         {:else}
-          {vault.t('login_wizard.choose_store_vault')}
+          {vault.t(I18N_KEYS.LoginWizardChooseStoreVault)}
         {/if}
       </h2>
       <p class="text-xs text-muted-foreground text-pretty">
         {#if addingProvider}
-          {vault.t('login_wizard.add_provider_desc')}
+          {vault.t(I18N_KEYS.LoginWizardAddProviderDesc)}
         {:else}
-          {vault.t('login_wizard.before_connect_desc')}
+          {vault.t(I18N_KEYS.LoginWizardBeforeConnectDesc)}
         {/if}
       </p>
     </div>
@@ -129,12 +130,12 @@
       <Settings2 class="size-5 shrink-0 text-muted-foreground" />
       <span class="min-w-0 flex-1 text-base">
         <span class="font-semibold text-foreground"
-          >{vault.t('login_wizard.manage_providers')}</span
+          >{vault.t(I18N_KEYS.LoginWizardManageProviders)}</span
         >
         {#if providers.length > 0}
           <span class="text-sm text-muted-foreground">
             · {providers.length}
-            {vault.t('login_wizard.saved_count')}
+            {vault.t(I18N_KEYS.LoginWizardSavedCount)}
           </span>
         {/if}
       </span>
@@ -151,7 +152,7 @@
         data-testid="login-manage-providers-panel"
       >
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('login_wizard.manage_providers_desc')}
+          {vault.t(I18N_KEYS.LoginWizardManageProvidersDesc)}
         </p>
 
         <ul
@@ -186,7 +187,7 @@
                   disabled={isVerifying || isInitializing}
                   onclick={() => confirmRemoveProvider(provider)}
                 >
-                  {vault.t('common.remove')}
+                  {vault.t(I18N_KEYS.CommonRemove)}
                 </button>
               {/if}
             </li>
@@ -202,7 +203,7 @@
             onclick={() => onBeginAddProvider()}
           >
             <Plus class="size-4" />
-            {vault.t('onboarding.add_provider_btn')}
+            {vault.t(I18N_KEYS.OnboardingAddProviderBtn)}
           </button>
         {/if}
       </div>

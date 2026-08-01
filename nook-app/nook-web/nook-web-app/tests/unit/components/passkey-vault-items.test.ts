@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/svelte'
 import { SecretType, type NookSecretListItem } from '$lib/nook'
@@ -28,7 +29,7 @@ describe('passkey item discovery', () => {
     await fireEvent.click(view.getByTestId('item-type-passkey'))
 
     expect(view.getByTestId('passkey-creation-guidance')).toBeTruthy()
-    expect(view.getByText('add_secret.passkey_creation_title')).toBeTruthy()
+    expect(view.getByText(I18N_KEYS.AddSecretPasskeyCreationTitle)).toBeTruthy()
     expect(view.queryAllByTestId('save-secret-btn')).toHaveLength(0)
     expect(onAddSecret).not.toHaveBeenCalled()
   })
@@ -54,7 +55,7 @@ describe('passkey item discovery', () => {
       vault,
     })
 
-    expect(view.getByText('vault.types.passkey')).toBeTruthy()
+    expect(view.getByText(I18N_KEYS.VaultTypesPasskey)).toBeTruthy()
     expect(view.getByText('login.example.com')).toBeTruthy()
     expect(view.getByText('Alice')).toBeTruthy()
     expect(view.getByText('alice@example.com')).toBeTruthy()

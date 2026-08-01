@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PASSWORD_IMPORT_MESSAGE_KEYS } from '../../../generated/i18n-keys'
   import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
   import type { ImportPanelProps } from '$lib/components/import-panel'
   import {
@@ -12,7 +13,7 @@
 <PasswordManagerImportPanel
   {...props}
   format={PasswordImportFormat.Binary}
-  translationPrefix="apple_passwords_import"
+  messages={PASSWORD_IMPORT_MESSAGE_KEYS.ApplePasswords}
   panelTestId="apple-passwords-import-panel"
   fileTestId="apple-passwords-csv-file"
   submitTestId="apple-passwords-import-submit"

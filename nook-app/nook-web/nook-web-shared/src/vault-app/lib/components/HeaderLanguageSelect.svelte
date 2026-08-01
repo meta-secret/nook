@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import type { NookAppLocale } from '$app-wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -40,7 +41,7 @@
 <div bind:this={root} class="relative" id="header-language-container">
   <button
     type="button"
-    aria-label={vault.t('settings.select_language')}
+    aria-label={vault.t(I18N_KEYS.SettingsSelectLanguage)}
     aria-haspopup="listbox"
     aria-expanded={open}
     data-testid="header-language-select"
@@ -55,7 +56,7 @@
   {#if open}
     <ul
       role="listbox"
-      aria-label={vault.t('settings.select_language')}
+      aria-label={vault.t(I18N_KEYS.SettingsSelectLanguage)}
       class="absolute right-0 top-full z-50 mt-1.5 min-w-[6.75rem] overflow-hidden rounded-lg border border-border/60 bg-popover p-1 shadow-md"
     >
       {#each LOCALES as locale (locale.value)}

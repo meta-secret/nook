@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import { EnrollmentEntryKind } from "$lib/vault/state/session.svelte";
@@ -138,8 +139,8 @@ export async function addVaultPassword(
     log.info("vault password added", { hadPasswords, label: label.trim() });
     state.showSuccess(
       hadPasswords
-        ? state.t("toasts.password_added_rotate")
-        : state.t("toasts.password_set"),
+        ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
+        : state.t(I18N_KEYS.ToastsPasswordSet),
     );
     await state.hydrateMultiDeviceState();
     await state.runFanOutSyncAfterLocalSave();
@@ -176,7 +177,7 @@ export async function updateVaultPasswordEntry(
       return manager.updateVaultPasswordEntry(entryId, password);
     });
     await state.refreshPasswordEntriesList();
-    state.showSuccess(state.t("toasts.password_updated"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated));
     await state.runFanOutSyncAfterLocalSave();
   } catch (e: unknown) {
     state.passwordError =
@@ -206,7 +207,7 @@ export async function removeVaultPasswordEntry(
       state.enrollmentCode = "";
       state.clearActiveEnrollmentEntry();
     }
-    state.showSuccess(state.t("toasts.password_removed"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved));
     await state.runFanOutSyncAfterLocalSave();
   } catch (e: unknown) {
     state.passwordError =
@@ -223,25 +224,27 @@ export async function unlockWithPassword(
   password: string,
 ): Promise<void> {
   if (!state.hasManager) {
-    state.errorMsg = state.t("errors.engine_unavailable");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
   }
   if (state.isVerifying) return;
   if (isSentinelVault(state)) {
-    state.errorMsg = state.t("architecture_modes.sentinel_password_forbidden");
+    state.errorMsg = state.t(
+      I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
+    );
     state.sentinelCeremonyPrompt = true;
     return;
   }
   if (!state.hasRemoteCredentials()) {
     state.errorMsg =
       state.storageMode === "oauth-file"
-        ? state.t("errors.google_sign_in_required")
-        : state.t("errors.github_credentials_required");
+        ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
+        : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
     return;
   }
   await state.ensureOAuthTokensFresh();
   if (!entryId.trim()) {
-    state.errorMsg = state.t("errors.vault_password_required");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
     return;
   }
   state.errorMsg = "";
@@ -275,7 +278,7 @@ export async function unlockWithPassword(
     });
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
-    state.showSuccess(state.t("toasts.vault_unlocked"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
     state.startIdleSessionTracking();
     if (state.deviceProtectionReady) {
       state.startVaultSync();
@@ -287,7 +290,7 @@ export async function unlockWithPassword(
     log.warn("vault password unlock failed", { error: message });
     if (isSentinelPasswordUnlockForbiddenError(e)) {
       state.errorMsg = state.t(
-        "architecture_modes.sentinel_password_forbidden",
+        I18N_KEYS.ArchitectureModesSentinelPasswordForbidden,
       );
       state.sentinelCeremonyPrompt = true;
       return;
@@ -384,7 +387,7 @@ export async function connectWithEnrollmentCode(
   password = "",
 ): Promise<void> {
   if (!state.hasManager) {
-    state.errorMsg = state.t("errors.engine_unavailable");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
   }
   state.errorMsg = "";
@@ -431,7 +434,9 @@ export async function connectWithEnrollmentCode(
         preset === "google-drive"
       ) {
         if (!isGoogleOAuthConfigured()) {
-          throw new Error(state.t("provider_setup.google_oauth_unconfigured"));
+          throw new Error(
+            state.t(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured),
+          );
         }
         const tokens = await requestGoogleDriveSharedAccess({
           prompt: GoogleOAuthPrompt.Consent,
@@ -503,7 +508,7 @@ export async function connectWithEnrollmentCode(
           label:
             existingProvider.kind === SharedGrantProviderKind.Existing
               ? existingProvider.provider.label
-              : state.t("provider_picker.icloud"),
+              : state.t(I18N_KEYS.ProviderPickerIcloud),
           oauthFile: configuredOAuthFile(
             oauthTokensToICloudConfig(
               tokens,
@@ -524,7 +529,7 @@ export async function connectWithEnrollmentCode(
       if (
         sharedProvider.kind === SharedGrantProviderKind.AuthorizationRequired
       ) {
-        throw new Error(state.t("errors.shared_provider_access_required"));
+        throw new Error(state.t(I18N_KEYS.ErrorsSharedProviderAccessRequired));
       }
       let provider = sharedProvider.provider;
       const providerConfiguration = provider.oauthFile;
@@ -638,7 +643,7 @@ export async function connectWithEnrollmentCode(
     state.loginEnrollmentCode = "";
     state.prefillEnrollmentCode = "";
     state.enrollmentFromUrlPending = false;
-    state.showSuccess(state.t("toasts.device_enrolled"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsDeviceEnrolled));
     state.startIdleSessionTracking();
     state.startVaultSync();
   } catch (e: unknown) {
@@ -749,7 +754,7 @@ export async function issueEnrollmentCode(
     });
     if (usesSharedProviderGrant && !usesSharedICloud && !sharedJoinerIdentity) {
       throw new Error(
-        state.t("errors.validation.shared_joiner_identity_required"),
+        state.t(I18N_KEYS.ErrorsValidationSharedJoinerIdentityRequired),
       );
     }
     if (
@@ -757,7 +762,9 @@ export async function issueEnrollmentCode(
       !usesSharedProviderGrant &&
       (!githubPat || !githubRepo)
     ) {
-      throw new Error(state.t("errors.github_enrollment_credentials_required"));
+      throw new Error(
+        state.t(I18N_KEYS.ErrorsGithubEnrollmentCredentialsRequired),
+      );
     }
     state.sharedGrantInstructions = "";
     let sharedStorageTarget: SharedStorageTarget = {
@@ -768,7 +775,7 @@ export async function issueEnrollmentCode(
       if (usesSharedICloud) {
         if (selectedOauth.config.iCloudShareTarget.state === "personal") {
           throw new Error(
-            state.t("provider_setup.icloud_shared_target_required"),
+            state.t(I18N_KEYS.ProviderSetupIcloudSharedTargetRequired),
           );
         }
         const targetId = selectedOauth.config.iCloudShareTarget.value;
@@ -778,7 +785,7 @@ export async function issueEnrollmentCode(
         };
       } else {
         if (!isConfiguredOAuthFile(selectedOauth)) {
-          throw new Error(state.t("errors.shared_provider_oauth_required"));
+          throw new Error(state.t(I18N_KEYS.ErrorsSharedProviderOauthRequired));
         }
         const accessCredential = oauthAccessToken(selectedOauth.config);
         log.info("shared enrollment grant started", { providerId });
@@ -816,7 +823,7 @@ export async function issueEnrollmentCode(
         if (grant.kind === "granted") {
           if (grantTarget.state === "unavailable") {
             throw new Error(
-              state.t("provider_setup.google_shared_create_failed"),
+              state.t(I18N_KEYS.ProviderSetupGoogleSharedCreateFailed),
             );
           }
           sharedStorageTarget = {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -38,13 +39,13 @@
 <div class="space-y-3" data-testid="login-vault-name-form">
   <div class="space-y-1.5">
     <label class="text-xs font-medium text-foreground" for="login-vault-name">
-      {vault.t('login.vault_name_label')}
+      {vault.t(I18N_KEYS.LoginVaultNameLabel)}
     </label>
     <input
       id="login-vault-name"
       type="text"
       class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
-      placeholder={vault.t('login.vault_name_placeholder')}
+      placeholder={vault.t(I18N_KEYS.LoginVaultNamePlaceholder)}
       maxlength={VAULT_NAME_MAX_LENGTH}
       autocomplete="off"
       data-testid="login-vault-name-input"
@@ -58,7 +59,7 @@
       }}
     />
     <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t('login.vault_name_hint')}
+      {vault.t(I18N_KEYS.LoginVaultNameHint)}
     </p>
   </div>
 
@@ -71,10 +72,10 @@
   >
     {#if isVerifying}
       <RefreshCw class="size-4 animate-spin" />
-      {vault.t('login.creating_vault')}
+      {vault.t(I18N_KEYS.LoginCreatingVault)}
     {:else if isInitializing}
       <RefreshCw class="size-4 animate-spin" />
-      {vault.t('onboarding.loading_engine')}
+      {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
     {:else}
       <ShieldCheck class="size-4" />
       {submitLabel}

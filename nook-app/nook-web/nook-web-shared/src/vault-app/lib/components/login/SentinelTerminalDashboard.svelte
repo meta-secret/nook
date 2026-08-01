@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ArrowLeft,
     Check,
@@ -101,22 +102,22 @@
       tone: SentinelTerminalLineTone.Accent,
     },
     {
-      text: vault.t('login.sentinel_terminal_guided'),
+      text: vault.t(I18N_KEYS.LoginSentinelTerminalGuided),
       tone: SentinelTerminalLineTone.Muted,
     },
     {
-      text: vault.t('login.sentinel_terminal_device_included'),
+      text: vault.t(I18N_KEYS.LoginSentinelTerminalDeviceIncluded),
       tone: SentinelTerminalLineTone.Success,
     },
     {
-      text: `◆ ${vault.t('login.vault_name_label')}  ${name}`,
+      text: `◆ ${vault.t(I18N_KEYS.LoginVaultNameLabel)}  ${name}`,
       tone: SentinelTerminalLineTone.Answer,
     },
     {
       text:
         status === SentinelGenesisPhase.Inactive
-          ? vault.t('login.sentinel_terminal_draft_notice')
-          : `${vault.t('login.sentinel_terminal_status')}  ${vault.t(sentinelGenesisPhaseTranslationKey(status)).toUpperCase()}`,
+          ? vault.t(I18N_KEYS.LoginSentinelTerminalDraftNotice)
+          : `${vault.t(I18N_KEYS.LoginSentinelTerminalStatus)}  ${vault.t(sentinelGenesisPhaseTranslationKey(status)).toUpperCase()}`,
       tone: SentinelTerminalLineTone.Muted,
     },
   ])
@@ -178,7 +179,7 @@
       onclick={onBack}
     >
       <ArrowLeft class="size-4" aria-hidden="true" />
-      {vault.t('login.sentinel_dashboard_change')}
+      {vault.t(I18N_KEYS.LoginSentinelDashboardChange)}
     </button>
   {/if}
 
@@ -235,7 +236,7 @@
               <p class="text-[#d9c365]">REVIEW GENESIS</p>
               <p class="mt-3">{name} · {threshold}-of-{participantCount}</p>
               <p class="text-[#6f9f65]">
-                {vault.t('login.sentinel_terminal_participant_one')}
+                {vault.t(I18N_KEYS.LoginSentinelTerminalParticipantOne)}
               </p>
             </div>
           {:else if status !== SentinelGenesisPhase.Inactive}
@@ -245,7 +246,7 @@
             >
               <div class="flex items-center justify-between gap-4">
                 <p class="text-[#d9c365]">
-                  {vault.t('login.sentinel_genesis_request_title')}
+                  {vault.t(I18N_KEYS.LoginSentinelGenesisRequestTitle)}
                 </p>
                 <span data-testid="sentinel-genesis-progress">
                   {rosterCount}/{participantCount}
@@ -268,22 +269,22 @@
                     },
                     () =>
                       (vault.errorMsg = vault.t(
-                        'login.sentinel_genesis_copy_failed',
+                        I18N_KEYS.LoginSentinelGenesisCopyFailed,
                       )),
                   )}
               >
                 <Copy class="size-4" />
-                {copied ? vault.t('common.copied') : vault.t('common.copy')}
+                {copied ? vault.t(I18N_KEYS.CommonCopied) : vault.t(I18N_KEYS.CommonCopy)}
               </button>
               {#if status === SentinelGenesisPhase.CollectingParticipants}
                 <label class="block text-[#83e273]">
-                  ? {vault.t('login.sentinel_genesis_response_label')} ›
+                  ? {vault.t(I18N_KEYS.LoginSentinelGenesisResponseLabel)} ›
                   <textarea
                     class="mt-2 min-h-24 w-full border border-[#22321f] bg-[#030503] p-3 text-xs text-[#d4ffc7] outline-none focus:border-[#83e273]"
                     data-testid="sentinel-genesis-response-input"
                     bind:value={response}
                     placeholder={vault.t(
-                      'login.sentinel_genesis_response_placeholder',
+                      I18N_KEYS.LoginSentinelGenesisResponsePlaceholder,
                     )}></textarea>
                 </label>
                 <button
@@ -295,7 +296,7 @@
                   {#if actionBusy}<RefreshCw
                       class="size-4 animate-spin"
                     />{:else}<KeyRound class="size-4" />{/if}
-                  {vault.t('login.sentinel_genesis_add_participant')}
+                  {vault.t(I18N_KEYS.LoginSentinelGenesisAddParticipant)}
                 </button>
               {/if}
             </div>
@@ -305,7 +306,7 @@
             {#if status === SentinelGenesisPhase.Inactive && policyStep === SentinelTerminalPolicyStep.Total}
               <p>
                 <span class="text-[#83e273]">?</span>
-                {vault.t('login.sentinel_terminal_total_question')}
+                {vault.t(I18N_KEYS.LoginSentinelTerminalTotalQuestion)}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each participantChoices as choice (choice)}
@@ -319,14 +320,14 @@
                     data-participant-count={choice}
                     onclick={() => chooseTotal(choice)}
                     >❯ {choice}
-                    {vault.t('login.sentinel_terminal_devices')}</button
+                    {vault.t(I18N_KEYS.LoginSentinelTerminalDevices)}</button
                   >
                 {/each}
               </div>
             {:else if status === SentinelGenesisPhase.Inactive && policyStep === SentinelTerminalPolicyStep.Threshold}
               <p>
                 <span class="text-[#83e273]">?</span>
-                {vault.t('login.sentinel_terminal_threshold_question')}
+                {vault.t(I18N_KEYS.LoginSentinelTerminalThresholdQuestion)}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as choice (choice)}
@@ -344,7 +345,7 @@
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <p>
                   <span class="text-[#83e273]">?</span>
-                  {vault.t('login.sentinel_terminal_start_question')}
+                  {vault.t(I18N_KEYS.LoginSentinelTerminalStartQuestion)}
                 </p>
                 <button
                   class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
@@ -353,7 +354,7 @@
                   onclick={() => void start()}
                 >
                   <KeyRound class="size-4" />
-                  {vault.t('login.sentinel_genesis_start')}
+                  {vault.t(I18N_KEYS.LoginSentinelGenesisStart)}
                 </button>
               </div>
             {:else if status === SentinelGenesisPhase.ReadyToFinalize}
@@ -373,7 +374,7 @@
                   )}
               >
                 <KeyRound class="size-4" />
-                {vault.t('login.sentinel_genesis_finalize')}
+                {vault.t(I18N_KEYS.LoginSentinelGenesisFinalize)}
               </button>
             {/if}
           </div>
@@ -385,21 +386,21 @@
             >
               <p class="flex items-center gap-2 font-bold">
                 <Check class="size-4" />
-                {vault.t('login.sentinel_genesis_delivery_title')}
+                {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryTitle)}
               </p>
               <p class="mt-2 text-xs text-[#6ca85e]">
-                {vault.t('login.sentinel_genesis_delivery_description')}
+                {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryDescription)}
               </p>
               {#each memberDeliveries as delivery, index (delivery.deviceId)}
                 <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
                   <EnrollmentQrCode
                     enrollmentLink={delivery.payload}
-                    loadingLabel={vault.t('login.sentinel_genesis_qr_loading')}
+                    loadingLabel={vault.t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
                     dense
                   />
                   <div>
                     <p class="text-xs">
-                      {vault.t('login.sentinel_genesis_delivery_participant')}
+                      {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryParticipant)}
                       {index + 2}
                     </p>
                     <textarea
@@ -411,10 +412,10 @@
                 </div>
               {/each}
               <p class="mt-5 font-bold">
-                {vault.t('login.sentinel_onboarding_vault_ready_title')}
+                {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyTitle)}
               </p>
               <p class="mt-2 text-xs text-[#6ca85e]">
-                {vault.t('login.sentinel_onboarding_vault_ready_description')}
+                {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription)}
               </p>
               <button
                 class="mt-5 border border-[#83e273] px-5 py-3 text-xs disabled:opacity-30"
@@ -422,7 +423,7 @@
                 disabled={memberDeliveries.length === 0}
                 onclick={() => void onCompleteDelivery()}
               >
-                {vault.t('login.sentinel_onboarding_finish_action')}
+                {vault.t(I18N_KEYS.LoginSentinelOnboardingFinishAction)}
               </button>
             </div>
           {/if}
@@ -463,7 +464,7 @@
         <div class="mt-8 border-t border-[#22321f] pt-5">
           <p class="text-[#456440]">WORKFLOW</p>
           <ol class="mt-4 space-y-4">
-            {#each ['Name draft', 'Set N / K', vault.t('login.sentinel_genesis_collect_title'), 'Seal vault'] as item, index (item)}
+            {#each ['Name draft', 'Set N / K', vault.t(I18N_KEYS.LoginSentinelGenesisCollectTitle), 'Seal vault'] as item, index (item)}
               <li
                 class={`flex items-center gap-3 ${index + 1 < workflowStage ? 'text-[#83e273]' : index + 1 === workflowStage ? 'text-[#d9c365]' : 'text-[#385334]'}`}
               >
@@ -477,7 +478,7 @@
           </ol>
         </div>
         <p class="mt-auto pt-8 text-[9px] leading-4 text-[#385334]">
-          {vault.t('login.sentinel_terminal_footer')}
+          {vault.t(I18N_KEYS.LoginSentinelTerminalFooter)}
         </p>
       </aside>
     </div>

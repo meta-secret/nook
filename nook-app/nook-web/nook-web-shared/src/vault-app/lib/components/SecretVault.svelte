@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookSecretTypeFilter,
     secretTypeName,
@@ -107,49 +108,49 @@
       value: SecretType.Login,
       filter: NookSecretTypeFilter.Login,
       testId: secretTypeName(SecretType.Login),
-      labelKey: 'vault.types.login',
+      labelKey: I18N_KEYS.VaultTypesLogin,
     },
     {
       value: SecretType.Authenticator,
       filter: NookSecretTypeFilter.Authenticator,
       testId: secretTypeName(SecretType.Authenticator),
-      labelKey: 'vault.types.authenticator',
+      labelKey: I18N_KEYS.VaultTypesAuthenticator,
     },
     {
       value: SecretType.ApiKey,
       filter: NookSecretTypeFilter.ApiKey,
       testId: secretTypeName(SecretType.ApiKey),
-      labelKey: 'vault.types.api_key',
+      labelKey: I18N_KEYS.VaultTypesApiKey,
     },
     {
       value: SecretType.SeedPhrase,
       filter: NookSecretTypeFilter.SeedPhrase,
       testId: secretTypeName(SecretType.SeedPhrase),
-      labelKey: 'vault.types.seed_phrase',
+      labelKey: I18N_KEYS.VaultTypesSeedPhrase,
     },
     {
       value: SecretType.SecureNote,
       filter: NookSecretTypeFilter.SecureNote,
       testId: secretTypeName(SecretType.SecureNote),
-      labelKey: 'vault.types.secure_note',
+      labelKey: I18N_KEYS.VaultTypesSecureNote,
     },
     {
       value: SecretType.CreditCard,
       filter: NookSecretTypeFilter.CreditCard,
       testId: secretTypeName(SecretType.CreditCard),
-      labelKey: 'vault.types.credit_card',
+      labelKey: I18N_KEYS.VaultTypesCreditCard,
     },
     {
       value: SecretType.FileAttachment,
       filter: NookSecretTypeFilter.FileAttachment,
       testId: secretTypeName(SecretType.FileAttachment),
-      labelKey: 'vault.types.file_attachment',
+      labelKey: I18N_KEYS.VaultTypesFileAttachment,
     },
     {
       value: SecretType.Passkey,
       filter: NookSecretTypeFilter.Passkey,
       testId: secretTypeName(SecretType.Passkey),
-      labelKey: 'vault.types.passkey',
+      labelKey: I18N_KEYS.VaultTypesPasskey,
     },
   ]
 
@@ -158,12 +159,12 @@
   const visibleItemCount = $derived(secrets.length)
   const activeTypeFilterLabel = $derived.by(() => {
     if (vault.secretTypeFilter === NookSecretTypeFilter.All) {
-      return vault.t('vault.filter_all_types')
+      return vault.t(I18N_KEYS.VaultFilterAllTypes)
     }
     const active = typeFilters.find(
       ({ filter }) => filter === vault.secretTypeFilter,
     )
-    return active ? vault.t(active.labelKey) : vault.t('vault.filter_all_types')
+    return active ? vault.t(active.labelKey) : vault.t(I18N_KEYS.VaultFilterAllTypes)
   })
   const currentPage = $derived(
     Math.floor(vault.secretPageOffset / vault.secretPageSize) + 1,
@@ -422,7 +423,7 @@
             onclick={closeAddSecret}
           >
             <ArrowLeft class="size-4" />
-            {vault.t('common.back')}
+            {vault.t(I18N_KEYS.CommonBack)}
           </button>
         </div>
       {/if}
@@ -446,11 +447,11 @@
         <div>
           <p class="text-sm font-semibold text-foreground">
             {vault.secretTotal !== visibleItemCount
-              ? vault.t('vault.secret_count_page', {
+              ? vault.t(I18N_KEYS.VaultSecretCountPage, {
                   count: String(visibleItemCount),
                   total: String(vault.secretTotal),
                 })
-              : vault.t('vault.secret_count', {
+              : vault.t(I18N_KEYS.VaultSecretCount, {
                   count: String(visibleItemCount),
                 })}
           </p>
@@ -468,7 +469,7 @@
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
-            {vault.t('vault.add_secret')}
+            {vault.t(I18N_KEYS.VaultAddSecret)}
           </Button>
         </div>
       </div>
@@ -491,7 +492,7 @@
           type="search"
           bind:value={searchPattern}
           data-testid="search-secrets"
-          placeholder={vault.t('vault.search_placeholder')}
+          placeholder={vault.t(I18N_KEYS.VaultSearchPlaceholder)}
           class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-36 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <div class="absolute right-1 top-1/2 -translate-y-1/2">
@@ -508,15 +509,15 @@
                 ? 'border-primary/40 bg-primary/10 text-foreground'
                 : 'text-muted-foreground'}"
               data-testid="secret-type-filter"
-              aria-label={vault.t('vault.filter_by_type')}
-              title={vault.t('vault.filter_by_type')}
+              aria-label={vault.t(I18N_KEYS.VaultFilterByType)}
+              title={vault.t(I18N_KEYS.VaultFilterByType)}
             >
               <ListFilter class="size-3.5" />
               <span class="truncate">{activeTypeFilterLabel}</span>
             </Select.Trigger>
             <Select.Content>
               <Select.Item value="all" data-testid="secret-type-filter-all">
-                {vault.t('vault.filter_all_types')}
+                {vault.t(I18N_KEYS.VaultFilterAllTypes)}
               </Select.Item>
               {#each typeFilters as filter (filter.filter)}
                 <Select.Item
@@ -541,8 +542,8 @@
           >
             <p>
               {secrets.length === 0
-                ? vault.t('vault.no_secrets')
-                : vault.t('vault.no_secrets')}
+                ? vault.t(I18N_KEYS.VaultNoSecrets)
+                : vault.t(I18N_KEYS.VaultNoSecrets)}
             </p>
           </CardContent>
         </Card>
@@ -578,7 +579,7 @@
                     <span
                       class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                     >
-                      {vault.t('vault.secret_count', {
+                      {vault.t(I18N_KEYS.VaultSecretCount, {
                         count: String(group.items.length),
                       })}
                     </span>
@@ -630,10 +631,10 @@
                   )}
               >
                 <ChevronLeft class="size-3.5" />
-                {vault.t('vault.previous_page')}
+                {vault.t(I18N_KEYS.VaultPreviousPage)}
               </Button>
               <span class="text-xs text-muted-foreground">
-                {vault.t('vault.page_status', {
+                {vault.t(I18N_KEYS.VaultPageStatus, {
                   page: String(currentPage),
                   total: String(pageCount),
                 })}
@@ -650,7 +651,7 @@
                     vault.secretPageOffset + vault.secretPageSize,
                   )}
               >
-                {vault.t('vault.next_page')}
+                {vault.t(I18N_KEYS.VaultNextPage)}
                 <ChevronRight class="size-3.5" />
               </Button>
             </div>

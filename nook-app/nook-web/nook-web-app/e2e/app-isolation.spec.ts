@@ -1,3 +1,4 @@
+import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
@@ -114,7 +115,9 @@ test('exposes only the project capability and rejects the opposite vault type', 
       current.free()
     }
   }, isSimple)
-  expect(error).toContain('errors.validation.vault_application_type_mismatch')
+  expect(error).toContain(
+    I18N_KEYS.ErrorsValidationVaultApplicationTypeMismatch,
+  )
 })
 
 test('keeps extension routing and local session behavior app-specific', async ({

@@ -1,3 +1,7 @@
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
 import type { WebsiteLoginAccountOption } from '../../lib/login-fill-messages'
@@ -87,7 +91,7 @@ export function workflowCopy(kind: string): WorkflowCopy {
 }
 
 export function progressLabel(currentStep: number, totalSteps: number): string {
-  return `${translatedMessage('widgetPilotLabel')} · ${currentStep}/${totalSteps}`
+  return `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel)} · ${currentStep}/${totalSteps}`
 }
 
 export function setFlightProgress(
@@ -102,7 +106,7 @@ export function setFlightProgress(
   const root = step.getRootNode()
   if (root instanceof ShadowRoot) {
     const compact = compactProgressState(
-      translatedMessage('widgetPilotLabel'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
       currentStep,
       totalSteps,
     )
@@ -115,7 +119,7 @@ export function setFlightProgress(
     if (collapsedLaunch) {
       collapsedLaunch.setAttribute(
         'aria-label',
-        `${translatedMessage('widgetExpand')}: ${compact.accessibleLabel}`,
+        `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${compact.accessibleLabel}`,
       )
     }
   }
@@ -158,12 +162,12 @@ export type LoginPickerOpenResponse = {
   expiresAt?: number
 }
 
-export function translatedMessage(key: string): string {
+export function translatedMessage(key: BrowserMessageKey): string {
   return chrome.i18n.getMessage(key) || 'Nook'
 }
 
 export function translatedMessageWithSubstitution(
-  key: string,
+  key: BrowserMessageKey,
   substitution: string,
 ): string {
   return chrome.i18n.getMessage(key, substitution) || 'Nook'
@@ -179,11 +183,11 @@ export async function loadPilotVaultConnection(): Promise<PilotVaultConnection> 
 export function vaultConnectionLabel(connection: PilotVaultConnection): string {
   if (connection.connected && connection.vaultName) {
     return translatedMessageWithSubstitution(
-      'widgetVaultConnected',
+      BROWSER_MESSAGE_KEYS.WidgetVaultConnected,
       connection.vaultName,
     )
   }
-  return translatedMessage('widgetVaultNotConnected')
+  return translatedMessage(BROWSER_MESSAGE_KEYS.WidgetVaultNotConnected)
 }
 
 export function removeWidget(): void {

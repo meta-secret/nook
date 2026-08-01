@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultType } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
@@ -233,7 +234,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     });
     state.joinEnrollmentPrompt = JoinEnrollmentState.None;
     state.loginPasswordPrompt = false;
-    state.showSuccess(state.t("toasts.vault_unlocked"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsVaultUnlocked));
     state.startIdleSessionTracking();
     state.startVaultSync();
   } catch (e: unknown) {
@@ -247,7 +248,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     state.errorMsg =
       e instanceof Error
         ? state.resolveErrorMessage(e.message)
-        : state.t("architecture_modes.sentinel_unlock_failed");
+        : state.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed);
   } finally {
     state.isVerifying = false;
   }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     ChevronLeft,
     Cloud,
@@ -211,10 +212,15 @@
   const usesSharedProviderGrant = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant,
   )
-  const onboardingTypeTranslationSegment = $derived(
+  const onboardingTypeTitleKey = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant
-      ? 'shared-provider-grant'
-      : 'personal-credential-transfer',
+      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantTitle
+      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferTitle,
+  )
+  const onboardingTypeDescriptionKey = $derived(
+    derivedOnboardingType === OnboardingType.SharedProviderGrant
+      ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription
+      : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
   )
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
@@ -248,41 +254,41 @@
 
   const passwordStepSubtitle = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
-      ? vault.t('onboard_device.wizard_password_selected', {
+      ? vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSelected, {
           label: selectedPassword.entry.label,
         })
       : hasPasswords
         ? passwordEntries.length === 1
-          ? vault.t('onboard_device.wizard_password_choose_singular')
-          : vault.t('onboard_device.wizard_password_choose_plural', {
+          ? vault.t(I18N_KEYS.OnboardDeviceWizardPasswordChooseSingular)
+          : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordChoosePlural, {
               count: String(passwordEntries.length),
             })
-        : vault.t('onboard_device.wizard_password_subtitle'),
+        : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSubtitle),
   )
 
   const syncStepSubtitle = $derived(
     hasCompatibleSyncProviders
       ? compatibleSyncProviders.length === 1
-        ? vault.t('onboard_device.wizard_sync_ready_singular', {
+        ? vault.t(I18N_KEYS.OnboardDeviceWizardSyncReadySingular, {
             label: localizeProviderLabel(
               compatibleSyncProviders[0]?.label ?? '',
               vault.t,
             ),
           })
-        : vault.t('onboard_device.wizard_sync_ready_plural', {
+        : vault.t(I18N_KEYS.OnboardDeviceWizardSyncReadyPlural, {
             count: String(compatibleSyncProviders.length),
           })
       : hasSyncProviders
-        ? vault.t('onboard_device.no_compatible_sync_providers')
+        ? vault.t(I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders)
         : hasPasswords
-          ? vault.t('onboard_device.wizard_sync_subtitle')
-          : vault.t('login_wizard.available_after_connect'),
+          ? vault.t(I18N_KEYS.OnboardDeviceWizardSyncSubtitle)
+          : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect),
   )
 
   const generateStepSubtitle = $derived(
     wizardReady
-      ? vault.t('onboard_device.wizard_generate_subtitle_ready')
-      : vault.t('onboard_device.wizard_generate_subtitle_locked'),
+      ? vault.t(I18N_KEYS.OnboardDeviceWizardGenerateSubtitleReady)
+      : vault.t(I18N_KEYS.OnboardDeviceWizardGenerateSubtitleLocked),
   )
 
   $effect(() => {
@@ -318,15 +324,15 @@
   async function submitAddPassword() {
     passwordFormError = ''
     if (!passwordLabelInput.trim()) {
-      passwordFormError = vault.t('vault_passwords.enter_label_error')
+      passwordFormError = vault.t(I18N_KEYS.VaultPasswordsEnterLabelError)
       return
     }
     if (!isVaultPasswordLongEnough(newPasswordInput)) {
-      passwordFormError = vault.t('vault_passwords.min_length_error')
+      passwordFormError = vault.t(I18N_KEYS.VaultPasswordsMinLengthError)
       return
     }
     if (newPasswordInput !== newPasswordConfirm) {
-      passwordFormError = vault.t('vault_passwords.mismatch_error')
+      passwordFormError = vault.t(I18N_KEYS.VaultPasswordsMismatchError)
       return
     }
     try {
@@ -343,19 +349,19 @@
     localError = ''
     onClearCode()
     if (selectedProvider.kind === ResolvedOnboardingProviderKind.Unavailable) {
-      localError = vault.t('onboard_device.choose_sync_provider_err')
+      localError = vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr)
       return
     }
     if (selectedPassword.kind === ResolvedOnboardingPasswordKind.Unavailable) {
-      localError = vault.t('onboard_device.choose_pw_err')
+      localError = vault.t(I18N_KEYS.OnboardDeviceChoosePwErr)
       return
     }
     if (!passwordInput) {
-      localError = vault.t('onboard_device.enter_pw_err')
+      localError = vault.t(I18N_KEYS.OnboardDeviceEnterPwErr)
       return
     }
     if (requiresSharedJoinerIdentity && !vault.sharedJoinerIdentity.trim()) {
-      localError = vault.t('onboard_device.shared_identity_required')
+      localError = vault.t(I18N_KEYS.OnboardDeviceSharedIdentityRequired)
       return
     }
     isGenerating = true
@@ -368,7 +374,7 @@
       passwordInput = ''
     } catch (e: unknown) {
       localError =
-        e instanceof Error ? e.message : vault.t('onboard_device.failed_qr_err')
+        e instanceof Error ? e.message : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
     } finally {
       isGenerating = false
     }
@@ -381,13 +387,13 @@
 >
   <div class="space-y-1">
     <h2 class="text-base font-semibold text-foreground">
-      {vault.t('onboard_device.title')}
+      {vault.t(I18N_KEYS.OnboardDeviceTitle)}
     </h2>
     <p class="text-xs text-muted-foreground text-pretty">
       {vault.t(
         isSentinelVault
-          ? 'onboard_device.sentinel_desc'
-          : 'onboard_device.desc',
+          ? I18N_KEYS.OnboardDeviceSentinelDesc
+          : I18N_KEYS.OnboardDeviceDesc,
       )}
     </p>
   </div>
@@ -406,10 +412,10 @@
         </div>
         <div class="min-w-0 space-y-1">
           <h3 class="text-sm font-semibold text-foreground">
-            {vault.t('onboard_device.sentinel_title')}
+            {vault.t(I18N_KEYS.OnboardDeviceSentinelTitle)}
           </h3>
           <p class="text-sm text-muted-foreground text-pretty">
-            {vault.t('onboard_device.sentinel_no_password_desc')}
+            {vault.t(I18N_KEYS.OnboardDeviceSentinelNoPasswordDesc)}
           </p>
         </div>
       </div>
@@ -419,10 +425,10 @@
         data-testid="sentinel-participant-readiness"
       >
         <p class="text-xs font-medium text-muted-foreground">
-          {vault.t('onboard_device.sentinel_readiness_label')}
+          {vault.t(I18N_KEYS.OnboardDeviceSentinelReadinessLabel)}
         </p>
         <p class="mt-0.5 text-sm font-semibold text-foreground">
-          {vault.t('onboard_device.sentinel_readiness_count', {
+          {vault.t(I18N_KEYS.OnboardDeviceSentinelReadinessCount, {
             ready: String(sentinelReadyParticipants),
             required: String(sentinelRequiredParticipants),
           })}
@@ -435,14 +441,14 @@
             class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
             >1</span
           >
-          <span>{vault.t('onboard_device.sentinel_step_connect')}</span>
+          <span>{vault.t(I18N_KEYS.OnboardDeviceSentinelStepConnect)}</span>
         </li>
         <li class="flex gap-3">
           <span
             class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
             >2</span
           >
-          <span>{vault.t('onboard_device.sentinel_step_approve')}</span>
+          <span>{vault.t(I18N_KEYS.OnboardDeviceSentinelStepApprove)}</span>
         </li>
       </ol>
 
@@ -453,10 +459,10 @@
         data-testid="sentinel-compatible-provider-status"
       >
         {hasCompatibleSyncProviders
-          ? vault.t('onboard_device.sentinel_provider_ready', {
+          ? vault.t(I18N_KEYS.OnboardDeviceSentinelProviderReady, {
               count: String(compatibleSyncProviders.length),
             })
-          : vault.t('onboard_device.sentinel_provider_missing')}
+          : vault.t(I18N_KEYS.OnboardDeviceSentinelProviderMissing)}
       </p>
 
       <div class="flex flex-wrap gap-2">
@@ -468,7 +474,7 @@
           onclick={() => vault.openAdmin(AdminAccordionSection.Storage)}
         >
           <Cloud class="size-4" />
-          {vault.t('onboard_device.sentinel_manage_providers')}
+          {vault.t(I18N_KEYS.OnboardDeviceSentinelManageProviders)}
         </Button>
         <Button
           type="button"
@@ -481,7 +487,7 @@
             )}
         >
           <ShieldCheck class="size-4" />
-          {vault.t('onboard_device.sentinel_review_joins')}
+          {vault.t(I18N_KEYS.OnboardDeviceSentinelReviewJoins)}
         </Button>
       </div>
     </div>
@@ -489,7 +495,7 @@
     <div class="space-y-3">
       <SetupWizardStep
         stepNumber={1}
-        title={vault.t('onboard_device.wizard_password_step')}
+        title={vault.t(I18N_KEYS.OnboardDeviceWizardPasswordStep)}
         subtitle={passwordStepSubtitle}
         bind:open={passwordStepOpen}
         testId="onboard-wizard-password-step"
@@ -497,13 +503,13 @@
         {#if hasPasswords}
           <div class="space-y-3">
             <p class="text-sm text-muted-foreground text-pretty">
-              {vault.t('onboard_device.wizard_password_existing_desc')}
+              {vault.t(I18N_KEYS.OnboardDeviceWizardPasswordExistingDesc)}
             </p>
 
             <div
               class="space-y-1.5"
               role="radiogroup"
-              aria-label={vault.t('onboard_device.vault_password')}
+              aria-label={vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
               data-testid="onboard-password-entry-list"
             >
               {#each passwordEntries as entry (entry.id)}
@@ -545,7 +551,7 @@
                           ? 'text-muted-foreground'
                           : 'text-muted-foreground/80'}"
                       >
-                        {vault.t('vault_passwords.added_date', {
+                        {vault.t(I18N_KEYS.VaultPasswordsAddedDate, {
                           date: entry.createdAt.slice(0, 10),
                         })}
                       </span>
@@ -565,7 +571,7 @@
             }}
           >
             <p class="text-sm text-foreground text-pretty">
-              {vault.t('onboard_device.password_required_desc')}
+              {vault.t(I18N_KEYS.OnboardDevicePasswordRequiredDesc)}
             </p>
 
             <div class="space-y-1.5">
@@ -573,13 +579,13 @@
                 for="onboard-vault-pw-label"
                 class="text-xs font-medium text-foreground"
               >
-                {vault.t('vault_passwords.label')}
+                {vault.t(I18N_KEYS.VaultPasswordsLabel)}
               </label>
               <input
                 id="onboard-vault-pw-label"
                 type="text"
                 class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
-                placeholder={vault.t('vault_passwords.label_placeholder')}
+                placeholder={vault.t(I18N_KEYS.VaultPasswordsLabelPlaceholder)}
                 bind:value={passwordLabelInput}
                 data-testid="vault-password-label"
               />
@@ -590,7 +596,7 @@
                 for="onboard-vault-pw"
                 class="text-xs font-medium text-foreground"
               >
-                {vault.t('vault.fields.password')}
+                {vault.t(I18N_KEYS.VaultFieldsPassword)}
               </label>
               <input
                 id="onboard-vault-pw"
@@ -607,7 +613,7 @@
                 for="onboard-vault-pw-confirm"
                 class="text-xs font-medium text-foreground"
               >
-                {vault.t('vault_passwords.confirm_password')}
+                {vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
               </label>
               <input
                 id="onboard-vault-pw-confirm"
@@ -637,10 +643,10 @@
               >
                 {#if isBusy}
                   <RefreshCw class="size-3.5 animate-spin" />
-                  {vault.t('vault_passwords.working')}
+                  {vault.t(I18N_KEYS.VaultPasswordsWorking)}
                 {:else}
                   <ShieldCheck class="size-3.5" />
-                  {vault.t('vault_passwords.add_password')}
+                  {vault.t(I18N_KEYS.VaultPasswordsAddPassword)}
                 {/if}
               </Button>
             </div>
@@ -650,7 +656,7 @@
 
       <SetupWizardStep
         stepNumber={2}
-        title={vault.t('onboard_device.wizard_sync_step')}
+        title={vault.t(I18N_KEYS.OnboardDeviceWizardSyncStep)}
         subtitle={syncStepSubtitle}
         disabled={!hasPasswordSelection}
         bind:open={syncStepOpen}
@@ -666,7 +672,7 @@
                 showSetup ? onCancelSetup() : onCancelAddProvider?.()}
             >
               <ChevronLeft class="size-3.5" />
-              {vault.t('onboarding.back_to_saved')}
+              {vault.t(I18N_KEYS.OnboardingBackToSaved)}
             </button>
 
             {#if showSetup}
@@ -710,7 +716,7 @@
           </div>
         {:else if !hasSyncProviders}
           <p class="text-sm text-muted-foreground text-pretty">
-            {vault.t('onboard_device.wizard_sync_empty_desc')}
+            {vault.t(I18N_KEYS.OnboardDeviceWizardSyncEmptyDesc)}
           </p>
           <Button
             type="button"
@@ -720,13 +726,13 @@
             onclick={() => onBeginAddProvider?.()}
           >
             <Plus class="size-4" />
-            {vault.t('settings.add_sync_provider')}
+            {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
           </Button>
         {:else}
           <div
             class="space-y-1.5"
             role="radiogroup"
-            aria-label={vault.t('onboard_device.sync_provider')}
+            aria-label={vault.t(I18N_KEYS.OnboardDeviceSyncProvider)}
             data-testid="onboard-provider-list"
           >
             {#each syncProviders as provider (provider.id)}
@@ -790,7 +796,7 @@
                   >
                     {vault.t(providerCapabilityLabelKey(provider))}
                     {#if !compatible}
-                      · {vault.t('provider_picker.unsupported_current_vault')}
+                      · {vault.t(I18N_KEYS.ProviderPickerUnsupportedCurrentVault)}
                     {/if}
                   </div>
                 </div>
@@ -803,7 +809,7 @@
               class="text-xs text-amber-700 dark:text-amber-300"
               data-testid="onboard-no-compatible-provider"
             >
-              {vault.t('onboard_device.no_compatible_sync_providers')}
+              {vault.t(I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders)}
             </p>
           {/if}
 
@@ -816,7 +822,7 @@
               onclick={() => onBeginAddProvider?.()}
             >
               <Plus class="size-4" />
-              {vault.t('settings.add_sync_provider')}
+              {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
             </Button>
           </div>
         {/if}
@@ -824,7 +830,7 @@
 
       <SetupWizardStep
         stepNumber={3}
-        title={vault.t('onboard_device.wizard_generate_step')}
+        title={vault.t(I18N_KEYS.OnboardDeviceWizardGenerateStep)}
         subtitle={generateStepSubtitle}
         disabled={!wizardReady}
         bind:open={generateStepOpen}
@@ -843,7 +849,7 @@
               data-testid="onboard-password-selected-summary"
             >
               <p class="text-xs font-medium text-muted-foreground">
-                {vault.t('onboard_device.vault_password')}
+                {vault.t(I18N_KEYS.OnboardDeviceVaultPassword)}
               </p>
               <p class="truncate text-sm font-medium text-foreground">
                 {selectedPassword.entry.label}
@@ -858,10 +864,10 @@
             >
               {selectedPassword.kind ===
               ResolvedOnboardingPasswordKind.Available
-                ? vault.t('vault_passwords.password_for', {
+                ? vault.t(I18N_KEYS.VaultPasswordsPasswordFor, {
                     label: selectedPassword.entry.label,
                   })
-                : vault.t('vault_passwords.confirm_password')}
+                : vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
             </label>
             <input
               id="onboard-password"
@@ -882,17 +888,13 @@
               class="text-xs font-medium text-foreground"
               data-testid="onboarding-type-label"
             >
-              {vault.t(
-                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_title`,
-              )}
+              {vault.t(onboardingTypeTitleKey)}
             </p>
             <p
               class="mt-1 text-xs text-muted-foreground text-pretty"
               data-testid="onboarding-type-description"
             >
-              {vault.t(
-                `architecture_modes.onboarding_type_${onboardingTypeTranslationSegment}_description`,
-              )}
+              {vault.t(onboardingTypeDescriptionKey)}
             </p>
           </div>
 
@@ -902,7 +904,7 @@
                 for="shared-joiner-identity"
                 class="text-xs font-medium text-foreground"
               >
-                {vault.t('onboard_device.shared_identity_label')}
+                {vault.t(I18N_KEYS.OnboardDeviceSharedIdentityLabel)}
               </label>
               <input
                 id="shared-joiner-identity"
@@ -912,12 +914,12 @@
                 autocomplete="email"
                 disabled={isBusy || isGenerating}
                 placeholder={vault.t(
-                  'onboard_device.shared_identity_placeholder',
+                  I18N_KEYS.OnboardDeviceSharedIdentityPlaceholder,
                 )}
                 data-testid="shared-joiner-identity-input"
               />
               <p class="text-xs text-muted-foreground">
-                {vault.t('onboard_device.shared_identity_hint')}
+                {vault.t(I18N_KEYS.OnboardDeviceSharedIdentityHint)}
               </p>
             </div>
           {/if}
@@ -936,10 +938,10 @@
             >
               {#if isBusy || isGenerating}
                 <RefreshCw class="size-4 animate-spin" />
-                {vault.t('onboard_device.generating')}
+                {vault.t(I18N_KEYS.OnboardDeviceGenerating)}
               {:else}
                 <QrCode class="size-4" />
-                {vault.t('onboard_device.title')}
+                {vault.t(I18N_KEYS.OnboardDeviceTitle)}
               {/if}
             </Button>
           </div>
@@ -956,7 +958,7 @@
       >
         <RefreshCw class="size-5 shrink-0 animate-spin text-primary" />
         <p class="text-sm text-muted-foreground">
-          {vault.t('onboard_device.generating_qr')}
+          {vault.t(I18N_KEYS.OnboardDeviceGeneratingQr)}
         </p>
       </div>
     {/if}
@@ -965,15 +967,15 @@
       <EnrollmentOnboardResult
         {vault}
         {enrollmentLink}
-        instruction={vault.t('onboard_device.ready_desc')}
+        instruction={vault.t(I18N_KEYS.OnboardDeviceReadyDesc)}
         issuedSuffix={issuedAt
-          ? vault.t('onboard_device.issued_time', {
+          ? vault.t(I18N_KEYS.OnboardDeviceIssuedTime, {
               time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
             })
           : ''}
-        linkTitle={vault.t('onboard_device.link_title')}
-        linkDescription={vault.t('onboard_device.link_desc')}
-        passwordReminder={vault.t('onboard_device.share_password')}
+        linkTitle={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
+        linkDescription={vault.t(I18N_KEYS.OnboardDeviceLinkDesc)}
+        passwordReminder={vault.t(I18N_KEYS.OnboardDeviceSharePassword)}
       />
       {#if vault.sharedGrantInstructions}
         <div

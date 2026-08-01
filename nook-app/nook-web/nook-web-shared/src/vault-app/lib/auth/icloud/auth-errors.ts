@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import type {
   CloudKitAuthError,
   CloudKitAuthErrorDetails,
@@ -188,9 +189,9 @@ export function isExpectedCloudKitSignInSetupFailure(
 }
 
 export enum CloudKitAuthErrorTranslationKey {
-  SignInRequired = "provider_setup.icloud_sign_in_required",
-  UnknownError = "provider_setup.icloud_unknown_error",
-  SignInFailed = "provider_setup.icloud_sign_in_failed",
+  SignInRequired = I18N_KEYS.ProviderSetupIcloudSignInRequired,
+  UnknownError = I18N_KEYS.ProviderSetupIcloudUnknownError,
+  SignInFailed = I18N_KEYS.ProviderSetupIcloudSignInFailed,
 }
 
 export function cloudKitAuthErrorTranslationKey(

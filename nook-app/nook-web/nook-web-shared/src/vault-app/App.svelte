@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
   import {
@@ -252,7 +253,7 @@
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
         if (!activeStoreId) {
-          vault.errorMsg = vault.t('auth_storage.existing_vault_not_found')
+          vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
           return
         }
         existingVaultImportLifecycle.remember(activeStoreId)
@@ -260,7 +261,7 @@
         vault.errorMsg =
           error instanceof Error
             ? error.message
-            : vault.t('auth_storage.sync_failed')
+            : vault.t(I18N_KEYS.AuthStorageSyncFailed)
         return
       }
     }

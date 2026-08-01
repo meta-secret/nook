@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     SentinelVaultUnlockState,
     type NookPasswordEntrySummary,
@@ -88,7 +89,7 @@
       ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
       : {
           kind: DeviceKeysUnlockCapabilityKind.Unavailable,
-          reason: vault.t('login.unlock_device_keys_unavailable'),
+          reason: vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
         },
   )
 </script>
@@ -106,7 +107,7 @@
         <h3
           class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
         >
-          {vault.t('login.vault_on_device')}
+          {vault.t(I18N_KEYS.LoginVaultOnDevice)}
         </h3>
         <LoginVaultCard {vault} entry={vaultEntry.entry} active />
         {#if hasMultipleVaults}
@@ -117,7 +118,7 @@
             disabled={isBusy}
             onclick={() => onSwitchVault()}
           >
-            {vault.t('login.switch_vault')}
+            {vault.t(I18N_KEYS.LoginSwitchVault)}
           </button>
         {/if}
       </section>
@@ -132,10 +133,10 @@
       >
         <div class="space-y-1">
           <h3 class="text-sm font-semibold text-foreground">
-            {vault.t('login.unlock_section_title')}
+            {vault.t(I18N_KEYS.LoginUnlockSectionTitle)}
           </h3>
           <p class="text-sm text-pretty text-muted-foreground">
-            {vault.t('login.unlock_section_description')}
+            {vault.t(I18N_KEYS.LoginUnlockSectionDescription)}
           </p>
         </div>
 
@@ -161,10 +162,10 @@
     <section class="space-y-3" data-testid="login-vault-create-workflow">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('login.vault_picker_create_new')}
+          {vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.vault_workflow_create_description')}
+          {vault.t(I18N_KEYS.LoginVaultWorkflowCreateDescription)}
         </p>
       </div>
       <LoginVaultNameForm
@@ -172,7 +173,7 @@
         {isVerifying}
         {isInitializing}
         testId="login-create-additional-vault-btn"
-        submitLabel={vault.t('login.vault_picker_create_new')}
+        submitLabel={vault.t(I18N_KEYS.LoginVaultPickerCreateNew)}
         onCreate={onCreateAnotherVault}
       />
     </section>
@@ -180,10 +181,10 @@
     <section class="space-y-3" data-testid="login-vault-import-workflow">
       <div class="space-y-1">
         <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('login.vault_picker_import')}
+          {vault.t(I18N_KEYS.LoginVaultPickerImport)}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.vault_workflow_import_description')}
+          {vault.t(I18N_KEYS.LoginVaultWorkflowImportDescription)}
         </p>
       </div>
       <Button
@@ -194,7 +195,7 @@
         onclick={onImportFromSync}
       >
         <ShieldCheck class="size-4" />
-        {vault.t('login.vault_picker_import')}
+        {vault.t(I18N_KEYS.LoginVaultPickerImport)}
       </Button>
     </section>
   {/if}

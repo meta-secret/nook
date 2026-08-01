@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import {
     configuredVaultApplicationIsSentinel,
@@ -69,12 +70,12 @@
           size="sm"
           class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
           data-testid="header-lock-vault-btn"
-          title={vault.t('session.lock_desc')}
+          title={vault.t(I18N_KEYS.SessionLockDesc)}
           disabled={vault.isVerifying || vault.isInitializing}
           onclick={() => vault.lockVault()}
         >
           <Lock class="size-4" />
-          <span class="hidden sm:inline">{vault.t('common.lock_vault')}</span>
+          <span class="hidden sm:inline">{vault.t(I18N_KEYS.CommonLockVault)}</span>
         </Button>
         <div
           class="mx-0.5 h-6 w-px shrink-0 bg-border/60"
@@ -91,7 +92,7 @@
           data-testid="sibling-vault-app-link"
           onclick={navigateToSiblingApp}
         >
-          {vault.t('app.open_simple_app')}
+          {vault.t(I18N_KEYS.AppOpenSimpleApp)}
         </a>
       {/if}
 
@@ -99,11 +100,11 @@
         type="button"
         class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
         aria-label={colorMode === ColorMode.Dark
-          ? vault.t('app.switch_light')
-          : vault.t('app.switch_dark')}
+          ? vault.t(I18N_KEYS.AppSwitchLight)
+          : vault.t(I18N_KEYS.AppSwitchDark)}
         title={colorMode === ColorMode.Dark
-          ? vault.t('app.switch_light')
-          : vault.t('app.switch_dark')}
+          ? vault.t(I18N_KEYS.AppSwitchLight)
+          : vault.t(I18N_KEYS.AppSwitchDark)}
         data-testid="theme-toggle-btn"
         onclick={onToggleColorMode}
       >
@@ -121,8 +122,8 @@
         class="h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
           ? 'hidden w-10 sm:inline-flex'
           : 'inline-flex px-3.5'}"
-        aria-label={vault.t('app.github_aria')}
-        title={vault.t('app.github_title')}
+        aria-label={vault.t(I18N_KEYS.AppGithubAria)}
+        title={vault.t(I18N_KEYS.AppGithubTitle)}
         data-testid="github-source-link"
       >
         <svg
@@ -150,7 +151,7 @@
           onclick={onNavigateHome}
         >
           <ArrowLeft class="size-4" />
-          <span class="hidden sm:inline">{vault.t('app.back')}</span>
+          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AppBack)}</span>
         </Button>
       {:else if vault.helpOpen}
         <Button
@@ -162,7 +163,7 @@
           onclick={() => vault.closeHelp()}
         >
           <ArrowLeft class="size-4" />
-          <span class="hidden sm:inline">{vault.t('app.back')}</span>
+          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AppBack)}</span>
         </Button>
       {:else}
         <Button
@@ -174,7 +175,7 @@
           onclick={() => vault.openHelp()}
         >
           <BookOpen class="size-4" />
-          <span class="hidden sm:inline">{vault.t('app.help')}</span>
+          <span class="hidden sm:inline">{vault.t(I18N_KEYS.AppHelp)}</span>
         </Button>
       {/if}
     </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     ChevronDown,
     Eye,
@@ -49,12 +50,12 @@
     state.fileInputError = "";
     if (!file) return;
     if (file.size === 0) {
-      state.fileInputError = vault.t("add_secret.file_empty");
+      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileEmpty);
       input.value = "";
       return;
     }
     if (file.size > FILE_ATTACHMENT_MAX_BYTES) {
-      state.fileInputError = vault.t("add_secret.file_too_large", {
+      state.fileInputError = vault.t(I18N_KEYS.AddSecretFileTooLarge, {
         max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
       });
       input.value = "";
@@ -84,14 +85,14 @@
     {#if selectedType === SecretType.Login}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('add_secret.website_label')}</label
+          >{vault.t(I18N_KEYS.AddSecretWebsiteLabel)}</label
         >
         <input
           id="secret-label"
           type="text"
           data-testid="secret-label"
           bind:value={state.websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_website')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderWebsite)}
           required
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
@@ -99,18 +100,18 @@
     {:else if selectedType === SecretType.ApiKey}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('add_secret.website_label')}</label
+          >{vault.t(I18N_KEYS.AddSecretWebsiteLabel)}</label
         >
         <input
           id="secret-label"
           type="text"
           data-testid="secret-label"
           bind:value={state.websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_website')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderWebsite)}
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.api_key_website_hint')}
+          {vault.t(I18N_KEYS.AddSecretApiKeyWebsiteHint)}
         </p>
       </div>
     {/if}
@@ -119,7 +120,7 @@
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="login-username"
-            >{vault.t('vault.fields.username')}</label
+            >{vault.t(I18N_KEYS.VaultFieldsUsername)}</label
           >
           <input
             id="login-username"
@@ -132,7 +133,7 @@
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="secret-value"
-            >{vault.t('vault.fields.password')}</label
+            >{vault.t(I18N_KEYS.VaultFieldsPassword)}</label
           >
           <div class="relative">
             <input
@@ -148,8 +149,8 @@
               type="button"
               class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label={state.showPasswordValue
-                ? vault.t('vault.hide_value')
-                : vault.t('vault.show_value')}
+                ? vault.t(I18N_KEYS.VaultHideValue)
+                : vault.t(I18N_KEYS.VaultShowValue)}
               data-testid="toggle-password-visibility"
               onclick={() => (state.showPasswordValue = !state.showPasswordValue)}
             >
@@ -164,7 +165,7 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="login-notes"
-          >{vault.t('add_secret.notes_label')}</label
+          >{vault.t(I18N_KEYS.AddSecretNotesLabel)}</label
         >
         <textarea
           id="login-notes"
@@ -187,7 +188,7 @@
         >
           <span class="inline-flex items-center gap-2">
             <KeyRound class="size-4" />
-            {vault.t('add_secret.generate_password')}
+            {vault.t(I18N_KEYS.AddSecretGeneratePassword)}
           </span>
           <ChevronDown
             class="size-4 transition-transform {state.showPasswordOptions
@@ -201,7 +202,7 @@
           >
             <div class="flex items-center gap-3">
               <label class="text-xs text-muted-foreground" for="password-length"
-                >{vault.t('add_secret.length')}</label
+                >{vault.t(I18N_KEYS.AddSecretLength)}</label
               >
               <input
                 id="password-length"
@@ -225,7 +226,7 @@
               >
               <label
                 ><input type="checkbox" bind:checked={state.generationSymbols} />
-                {vault.t('add_secret.symbols')}</label
+                {vault.t(I18N_KEYS.AddSecretSymbols)}</label
               >
             </div>
             <Button
@@ -237,7 +238,7 @@
               onclick={generatePassword}
             >
               <RefreshCw class="size-3.5" />
-              {vault.t('add_secret.generate_btn')}
+              {vault.t(I18N_KEYS.AddSecretGenerateBtn)}
             </Button>
           </div>
         {/if}
@@ -245,14 +246,14 @@
     {:else if selectedType === SecretType.ApiKey}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-value"
-          >{vault.t('vault.fields.key')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsKey)}</label
         >
         <textarea
           id="secret-value"
           data-testid="secret-value"
           bind:value={state.apiKey}
           rows="4"
-          placeholder={vault.t('add_secret.placeholder_key')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderKey)}
           required
           spellcheck="false"
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
@@ -260,7 +261,7 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="api-key-expiration"
-          >{vault.t('vault.fields.expires')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsExpiresAt)}</label
         >
         <input
           id="api-key-expiration"
@@ -273,7 +274,7 @@
     {:else if selectedType === SecretType.SeedPhrase}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.account')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsAccount)}</label
         >
         <input
           id="secret-label"
@@ -286,7 +287,7 @@
       </div>
       <div class="space-y-1.5">
         <span class="text-xs font-medium"
-          >{vault.t('vault.types.seed_phrase')}</span
+          >{vault.t(I18N_KEYS.VaultTypesSeedPhrase)}</span
         >
         <SeedPhraseGrid
           {vault}
@@ -298,48 +299,48 @@
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="authenticator-issuer"
-            >{vault.t('vault.fields.issuer')}</label
+            >{vault.t(I18N_KEYS.VaultFieldsIssuer)}</label
           >
           <input
             id="authenticator-issuer"
             data-testid="authenticator-issuer"
             bind:value={state.authenticatorIssuer}
-            placeholder={vault.t('add_secret.placeholder_issuer')}
+            placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderIssuer)}
             class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
           />
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="authenticator-account"
-            >{vault.t('vault.fields.account')}</label
+            >{vault.t(I18N_KEYS.VaultFieldsAccount)}</label
           >
           <input
             id="authenticator-account"
             data-testid="authenticator-account"
             bind:value={state.authenticatorAccount}
-            placeholder={vault.t('add_secret.placeholder_authenticator_account')}
+            placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderAuthenticatorAccount)}
             class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
           />
         </div>
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="authenticator-website"
-          >{vault.t('vault.fields.website')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsWebsite)}</label
         >
         <input
           id="authenticator-website"
           type="text"
           data-testid="authenticator-website"
           bind:value={state.websiteUrl}
-          placeholder={vault.t('add_secret.placeholder_authenticator_website')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderAuthenticatorWebsite)}
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.authenticator_website_hint')}
+          {vault.t(I18N_KEYS.AddSecretAuthenticatorWebsiteHint)}
         </p>
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="authenticator-secret"
-          >{vault.t('vault.fields.authenticator_secret')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsAuthenticatorSecret)}</label
         >
         <textarea
           id="authenticator-secret"
@@ -348,45 +349,45 @@
           rows="3"
           required
           spellcheck="false"
-          placeholder={vault.t('add_secret.placeholder_authenticator_secret')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderAuthenticatorSecret)}
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.authenticator_secret_hint')}
+          {vault.t(I18N_KEYS.AddSecretAuthenticatorSecretHint)}
         </p>
       </div>
     {:else if selectedType === SecretType.CreditCard}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.title')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
         >
         <input
           id="secret-label"
           type="text"
           data-testid="secret-label"
           bind:value={state.cardTitle}
-          placeholder={vault.t('add_secret.placeholder_title')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderTitle)}
           required
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="credit-card-cardholder"
-          >{vault.t('vault.fields.cardholder_name')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsCardholderName)}</label
         >
         <input
           id="credit-card-cardholder"
           type="text"
           data-testid="credit-card-cardholder"
           bind:value={state.cardholderName}
-          placeholder={vault.t('add_secret.placeholder_cardholder')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCardholder)}
           autocomplete="cc-name"
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="credit-card-number"
-          >{vault.t('vault.fields.card_number')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsCardNumber)}</label
         >
         <div class="relative">
           <input
@@ -394,7 +395,7 @@
             type={state.showCardNumber ? 'text' : 'password'}
             data-testid="credit-card-number"
             bind:value={state.cardNumber}
-            placeholder={vault.t('add_secret.placeholder_card_number')}
+            placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCardNumber)}
             autocomplete="cc-number"
             inputmode="numeric"
             required
@@ -405,8 +406,8 @@
             type="button"
             class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label={state.showCardNumber
-              ? vault.t('vault.hide_value')
-              : vault.t('vault.show_value')}
+              ? vault.t(I18N_KEYS.VaultHideValue)
+              : vault.t(I18N_KEYS.VaultShowValue)}
             data-testid="toggle-card-number-visibility"
             onclick={() => (state.showCardNumber = !state.showCardNumber)}
           >
@@ -421,7 +422,7 @@
       <div class="grid gap-4 sm:grid-cols-3">
         <div class="space-y-1.5 sm:col-span-2">
           <span class="text-xs font-medium"
-            >{vault.t('vault.fields.expiration')}</span
+            >{vault.t(I18N_KEYS.VaultFieldsExpiration)}</span
           >
           <div class="grid grid-cols-2 gap-3">
             <input
@@ -429,8 +430,8 @@
               type="text"
               data-testid="credit-card-exp-month"
               bind:value={state.expirationMonth}
-              placeholder={vault.t('add_secret.placeholder_expiration_month')}
-              aria-label={vault.t('add_secret.placeholder_expiration_month')}
+              placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderExpirationMonth)}
+              aria-label={vault.t(I18N_KEYS.AddSecretPlaceholderExpirationMonth)}
               autocomplete="cc-exp-month"
               inputmode="numeric"
               maxlength="2"
@@ -441,8 +442,8 @@
               type="text"
               data-testid="credit-card-exp-year"
               bind:value={state.expirationYear}
-              placeholder={vault.t('add_secret.placeholder_expiration_year')}
-              aria-label={vault.t('add_secret.placeholder_expiration_year')}
+              placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderExpirationYear)}
+              aria-label={vault.t(I18N_KEYS.AddSecretPlaceholderExpirationYear)}
               autocomplete="cc-exp-year"
               inputmode="numeric"
               maxlength="4"
@@ -452,7 +453,7 @@
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="credit-card-cvv"
-            >{vault.t('vault.fields.cvv')}</label
+            >{vault.t(I18N_KEYS.VaultFieldsCvv)}</label
           >
           <div class="relative">
             <input
@@ -460,7 +461,7 @@
               type={state.showCvv ? 'text' : 'password'}
               data-testid="credit-card-cvv"
               bind:value={state.cardCvv}
-              placeholder={vault.t('add_secret.placeholder_cvv')}
+              placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderCvv)}
               autocomplete="cc-csc"
               inputmode="numeric"
               spellcheck="false"
@@ -470,8 +471,8 @@
               type="button"
               class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label={state.showCvv
-                ? vault.t('vault.hide_value')
-                : vault.t('vault.show_value')}
+                ? vault.t(I18N_KEYS.VaultHideValue)
+                : vault.t(I18N_KEYS.VaultShowValue)}
               data-testid="toggle-cvv-visibility"
               onclick={() => (state.showCvv = !state.showCvv)}
             >
@@ -486,33 +487,33 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="credit-card-notes"
-          >{vault.t('add_secret.notes_label')}</label
+          >{vault.t(I18N_KEYS.AddSecretNotesLabel)}</label
         >
         <textarea
           id="credit-card-notes"
           data-testid="credit-card-notes"
           bind:value={state.cardNotes}
           rows="3"
-          placeholder={vault.t('add_secret.placeholder_notes')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderNotes)}
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
     {:else if selectedType === SecretType.FileAttachment}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="file-attachment-title"
-          >{vault.t('vault.fields.title')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
         >
         <input
           id="file-attachment-title"
           data-testid="file-attachment-title"
           bind:value={state.fileTitle}
-          placeholder={vault.t('add_secret.placeholder_file_title')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderFileTitle)}
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="file-attachment-input"
-          >{vault.t('vault.fields.file')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsFile)}</label
         >
         <input
           id="file-attachment-input"
@@ -522,7 +523,7 @@
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('add_secret.file_attachment_hint', {
+          {vault.t(I18N_KEYS.AddSecretFileAttachmentHint, {
             max: formatFileSize(FILE_ATTACHMENT_MAX_BYTES),
           })}
         </p>
@@ -553,7 +554,7 @@
     {:else}
       <div class="shrink-0 space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >{vault.t('vault.fields.title')}</label
+          >{vault.t(I18N_KEYS.VaultFieldsTitle)}</label
         >
         <input
           id="secret-label"
@@ -566,12 +567,12 @@
       </div>
       <div class="flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-1.5">
         <span class="shrink-0 text-xs font-medium"
-          >{vault.t('vault.fields.note')}
+          >{vault.t(I18N_KEYS.VaultFieldsNote)}
           <span class="text-muted-foreground">(Markdown)</span></span
         >
         <MarkdownEditor
           bind:value={state.noteBody}
-          placeholder={vault.t('add_secret.placeholder_note')}
+          placeholder={vault.t(I18N_KEYS.AddSecretPlaceholderNote)}
           fill
         />
       </div>

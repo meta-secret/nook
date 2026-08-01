@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { setVaultSessionLocked } from "$app-wasm";
 import { createLogger } from "$lib/runtime/log";
@@ -27,7 +28,7 @@ export function ensureIdleSessionTracker(state: VaultState): void {
 
 export function showIdleLockWarning(state: VaultState): void {
   if (!state.isAuthenticated) return;
-  state.showSuccess(state.t("session.idle_warning"));
+  state.showSuccess(state.t(I18N_KEYS.SessionIdleWarning));
 }
 
 export function lockVaultDueToIdle(state: VaultState): void {

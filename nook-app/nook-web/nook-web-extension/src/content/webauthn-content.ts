@@ -1,3 +1,7 @@
+import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../lib/browser-message-keys'
 export {}
 
 import {
@@ -56,7 +60,7 @@ enum PasskeyOptionsStatus {
   Ready = 'ready',
 }
 
-function t(key: string, fallback: string): string {
+function t(key: BrowserMessageKey, fallback: string): string {
   return chrome.i18n.getMessage(key) || fallback
 }
 
@@ -117,8 +121,8 @@ function chooseOption(
     const heading = document.createElement('h2')
     heading.textContent = t(
       request.ceremony === WebsitePasskeyCeremony.Create
-        ? 'passkeySaveTitle'
-        : 'passkeyUseTitle',
+        ? BROWSER_MESSAGE_KEYS.PasskeySaveTitle
+        : BROWSER_MESSAGE_KEYS.PasskeyUseTitle,
       request.ceremony === WebsitePasskeyCeremony.Create
         ? 'Save a passkey with Nook?'
         : 'Use a Nook passkey?',
@@ -150,7 +154,10 @@ function chooseOption(
     const fallback = document.createElement('button')
     fallback.type = 'button'
     fallback.className = 'fallback'
-    fallback.textContent = t('passkeyUseBrowser', 'Use browser or security key')
+    fallback.textContent = t(
+      BROWSER_MESSAGE_KEYS.PasskeyUseBrowser,
+      'Use browser or security key',
+    )
     fallback.addEventListener('click', () => {
       removePrompt(request.requestId)
       resolve({ kind: PasskeyOptionChoiceKind.BrowserFallback })

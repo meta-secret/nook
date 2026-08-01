@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   NookSyncConflictReviewState,
   type NookSyncConflictReview,
@@ -15,7 +16,7 @@ export function syncConflictLabel(state: SyncConflictLabelState): string {
   if (conflict.state === NookSyncConflictReviewState.Clear) return "";
   const key =
     conflict.conflictKind === VaultSyncConflictKind.StoreId
-      ? "auth_storage.sync_conflict_store_id_banner"
-      : "auth_storage.sync_conflict_banner";
+      ? I18N_KEYS.AuthStorageSyncConflictStoreIdBanner
+      : I18N_KEYS.AuthStorageSyncConflictBanner;
   return state.t(key, { provider: conflict.providerLabel });
 }

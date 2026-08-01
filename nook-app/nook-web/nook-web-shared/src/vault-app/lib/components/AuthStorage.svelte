@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     NookManualProviderSyncState,
     type NookManualProviderSync,
@@ -92,7 +93,7 @@
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
     const ok = confirm(
-      vault.t('auth_storage.confirm_remove', {
+      vault.t(I18N_KEYS.AuthStorageConfirmRemove, {
         label: provider.label,
         signedOutNote: '',
       }),
@@ -104,8 +105,8 @@
 
   function formatSyncStatus(provider: StorageProvider): string {
     return formatProviderSyncStatus(provider, vault.locale, {
-      lastSynced: vault.t('auth_storage.last_synced'),
-      notSyncedYet: vault.t('auth_storage.not_synced_yet'),
+      lastSynced: vault.t(I18N_KEYS.AuthStorageLastSynced),
+      notSyncedYet: vault.t(I18N_KEYS.AuthStorageNotSyncedYet),
     })
   }
 
@@ -152,35 +153,35 @@
             showSetup ? onCancelSetup() : onCancelAddProvider?.()}
         >
           <ChevronLeft class="size-3.5" />
-          {vault.t('onboarding.back_to_saved')}
+          {vault.t(I18N_KEYS.OnboardingBackToSaved)}
         </button>
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
-            {vault.t('auth_storage.connect_to_type', {
+            {vault.t(I18N_KEYS.AuthStorageConnectToType, {
               type: setupIs('github')
-                ? vault.t('auth_storage.github')
+                ? vault.t(I18N_KEYS.AuthStorageGithub)
                 : setupIs('oauth-file')
-                  ? vault.t('provider_picker.google_drive')
+                  ? vault.t(I18N_KEYS.ProviderPickerGoogleDrive)
                   : setupIs('local-folder')
-                    ? vault.t('provider_picker.local_folder')
-                    : vault.t('auth_storage.this_device'),
+                    ? vault.t(I18N_KEYS.ProviderPickerLocalFolder)
+                    : vault.t(I18N_KEYS.AuthStorageThisDevice),
             })}
           {:else}
-            {vault.t('settings.add_sync_provider')}
+            {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
           {/if}
         </h2>
         <p class="text-xs text-muted-foreground text-pretty">
           {#if showSetup}
-            {vault.t('auth_storage.sync_setup_desc')}
+            {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}
           {:else}
-            {vault.t('auth_storage.sync_choose_desc')}
+            {vault.t(I18N_KEYS.AuthStorageSyncChooseDesc)}
           {/if}
         </p>
       </div>
     </div>
   {:else if !embedded}
     <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t('auth_storage.sync_providers_desc')}
+      {vault.t(I18N_KEYS.AuthStorageSyncProvidersDesc)}
     </p>
   {/if}
 
@@ -245,10 +246,10 @@
                 </div>
                 <div class="min-w-0 space-y-1">
                   <p class="text-sm font-medium text-foreground">
-                    {vault.t('auth_storage.no_sync_providers')}
+                    {vault.t(I18N_KEYS.AuthStorageNoSyncProviders)}
                   </p>
                   <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t('auth_storage.sync_providers_desc')}
+                    {vault.t(I18N_KEYS.AuthStorageSyncProvidersDesc)}
                   </p>
                 </div>
               </div>
@@ -261,7 +262,7 @@
                   onclick={() => onBeginAddProvider?.()}
                 >
                   <Plus class="size-4" />
-                  {vault.t('settings.add_sync_provider')}
+                  {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
                 </Button>
               </div>
             </div>
@@ -309,7 +310,7 @@
                         {vault.t(providerCapabilityLabelKey(provider))}
                         {#if !supportsVaultReplication}
                           · {vault.t(
-                            'provider_picker.unsupported_current_vault',
+                            I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
                           )}
                         {/if}
                       </span>
@@ -324,7 +325,7 @@
                       {...!supportsVaultReplication
                         ? {
                             title: vault.t(
-                              'provider_picker.unsupported_current_vault',
+                              I18N_KEYS.ProviderPickerUnsupportedCurrentVault,
                             ),
                           }
                         : {}}
@@ -344,7 +345,7 @@
                       {:else}
                         <RefreshCw class="size-3.5" />
                       {/if}
-                      {vault.t('auth_storage.sync_now')}
+                      {vault.t(I18N_KEYS.AuthStorageSyncNow)}
                     </button>
                   {/if}
                   {#if onRemoveProvider}
@@ -352,7 +353,7 @@
                       type="button"
                       class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                       aria-label="{vault.t(
-                        'common.remove',
+                        I18N_KEYS.CommonRemove,
                       )} {localizeProviderLabel(provider.label, vault.t)}"
                       data-testid="remove-provider-{provider.id}"
                       disabled={isVerifying || isInitializing}
@@ -372,7 +373,7 @@
               onclick={() => onBeginAddProvider?.()}
             >
               <Plus class="size-4" />
-              {vault.t('settings.add_sync_provider')}
+              {vault.t(I18N_KEYS.SettingsAddSyncProvider)}
             </button>
           {/if}
         </fieldset>
@@ -390,13 +391,13 @@
           >
             {#if isInitializing}
               <RefreshCw class="size-4 animate-spin" />
-              {vault.t('onboarding.loading_engine')}
+              {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
             {:else if isVerifying}
               <RefreshCw class="size-4 animate-spin" />
-              {vault.t('auth_storage.sync_connecting')}
+              {vault.t(I18N_KEYS.AuthStorageSyncConnecting)}
             {:else}
               <ShieldCheck class="size-4" />
-              {vault.t('auth_storage.connect_and_sync')}
+              {vault.t(I18N_KEYS.AuthStorageConnectAndSync)}
             {/if}
           </Button>
         </div>

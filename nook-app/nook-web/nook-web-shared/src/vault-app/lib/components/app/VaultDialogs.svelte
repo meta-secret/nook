@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     JoinEnrollmentState,
     NookLocalFolderHealthState,
@@ -67,12 +68,12 @@
       vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
     }`}
   >
-    <p class="font-medium">{vault.t('app.secret_sync_conflicts')}</p>
+    <p class="font-medium">{vault.t(I18N_KEYS.AppSecretSyncConflicts)}</p>
     <div class="mt-3 space-y-3">
       {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
         <div class="rounded border border-amber-400/30 p-3">
           <p class="text-amber-100">
-            {vault.t('app.conflict_original', {
+            {vault.t(I18N_KEYS.AppConflictOriginal, {
               id: shortId(conflict.oldSecretId),
             })}
           </p>
@@ -88,7 +89,7 @@
                     candidateSecretId,
                   )}
               >
-                {vault.t('app.conflict_keep', {
+                {vault.t(I18N_KEYS.AppConflictKeep, {
                   id: shortId(candidateSecretId),
                 })}
               </Button>
@@ -104,7 +105,7 @@
   <div
     class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
   >
-    <p class="font-medium">{vault.t('app.security_conflict')}</p>
+    <p class="font-medium">{vault.t(I18N_KEYS.AppSecurityConflict)}</p>
     <div class="mt-2 space-y-2 text-red-100">
       {#each vault.securityConflicts as conflict (conflict.events.join(':'))}
         <p>{conflictReasons(conflict.reasons)}</p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
@@ -29,7 +30,7 @@
   )
 
   function recover() {
-    if (!confirm(vault.t('device_protection.recovery_confirm'))) {
+    if (!confirm(vault.t(I18N_KEYS.DeviceProtectionRecoveryConfirm))) {
       return
     }
     void deviceProtectionActions.resetDeviceProtectionForRecovery(vault)
@@ -47,7 +48,7 @@
       class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
       data-testid="device-protection-step"
     >
-      {vault.t('device_protection.step_label')}
+      {vault.t(I18N_KEYS.DeviceProtectionStepLabel)}
     </p>
     <div
       class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
@@ -59,21 +60,21 @@
       {/if}
     </div>
     <CardTitle data-testid="device-protection-title">
-      {vault.t('device_protection.title')}
+      {vault.t(I18N_KEYS.DeviceProtectionTitle)}
     </CardTitle>
     <CardDescription class="leading-snug">
       {#if vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext}
-        {vault.t('device_protection.migration_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionMigrationDescription)}
       {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
-        {vault.t('device_protection.pin_setup_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionPinSetupDescription)}
       {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Pin}
-        {vault.t('device_protection.pin_unlock_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionPinUnlockDescription)}
       {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey}
-        {vault.t('device_protection.unlock_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionUnlockDescription)}
       {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Error}
-        {vault.t('device_protection.unavailable_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionUnavailableDescription)}
       {:else}
-        {vault.t('device_protection.setup_description')}
+        {vault.t(I18N_KEYS.DeviceProtectionSetupDescription)}
       {/if}
     </CardDescription>
   </CardHeader>
@@ -84,7 +85,7 @@
     {#if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">
-          {vault.t('device_protection.pin_label')}
+          {vault.t(I18N_KEYS.DeviceProtectionPinLabel)}
         </label>
         <input
           id="device-protection-pin"
@@ -102,7 +103,7 @@
           class="block text-sm font-medium"
           for="device-protection-pin-confirm"
         >
-          {vault.t('device_protection.pin_confirm_label')}
+          {vault.t(I18N_KEYS.DeviceProtectionPinConfirmLabel)}
         </label>
         <input
           id="device-protection-pin-confirm"
@@ -116,7 +117,7 @@
         />
       </div>
       <p class="text-xs text-muted-foreground">
-        {vault.t('device_protection.pin_security_note')}
+        {vault.t(I18N_KEYS.DeviceProtectionPinSecurityNote)}
       </p>
       <Button
         class="w-full"
@@ -130,8 +131,8 @@
           )}
       >
         {vault.isVerifying
-          ? vault.t('device_protection.authorizing')
-          : vault.t('device_protection.pin_setup_action')}
+          ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : vault.t(I18N_KEYS.DeviceProtectionPinSetupAction)}
       </Button>
     {:else if needsSetup}
       {#if setupWorkflow === DeviceProtectionSetupWorkflow.Authenticate}
@@ -140,7 +141,7 @@
           data-testid="device-protection-authenticate-workflow"
         >
           <p class="text-center text-sm text-muted-foreground">
-            {vault.t('device_protection.existing_passkey_hint')}
+            {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyHint)}
           </p>
           <Button
             class="w-full"
@@ -151,13 +152,13 @@
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
-              ? vault.t('device_protection.authorizing')
-              : vault.t('device_protection.existing_passkey_action')}
+              ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+              : vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
           </Button>
           <div class="flex items-center gap-3 pt-1">
             <div class="h-px flex-1 bg-border"></div>
             <span class="text-xs text-muted-foreground">
-              {vault.t('device_protection.new_passkey_alternative')}
+              {vault.t(I18N_KEYS.DeviceProtectionNewPasskeyAlternative)}
             </span>
             <div class="h-px flex-1 bg-border"></div>
           </div>
@@ -173,7 +174,7 @@
             }}
           >
             <KeyRound class="size-4" />
-            {vault.t('device_protection.new_passkey_alternative_action')}
+            {vault.t(I18N_KEYS.DeviceProtectionNewPasskeyAlternativeAction)}
           </Button>
         </div>
       {:else}
@@ -189,7 +190,7 @@
               class="block text-sm font-medium"
               for="device-protection-label"
             >
-              {vault.t('device_protection.passkey_label')}
+              {vault.t(I18N_KEYS.DeviceProtectionPasskeyLabel)}
             </label>
             <input
               id="device-protection-label"
@@ -197,7 +198,7 @@
               type="text"
               autocomplete="off"
               placeholder={vault.t(
-                'device_protection.passkey_label_placeholder',
+                I18N_KEYS.DeviceProtectionPasskeyLabelPlaceholder,
               )}
               bind:value={passkeyLabel}
               disabled={vault.isVerifying}
@@ -216,13 +217,13 @@
               )}
           >
             {vault.isVerifying
-              ? vault.t('device_protection.authorizing')
-              : vault.t('device_protection.setup_action')}
+              ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+              : vault.t(I18N_KEYS.DeviceProtectionSetupAction)}
           </Button>
           <div class="flex items-center gap-3 pt-1">
             <div class="h-px flex-1 bg-border"></div>
             <span class="text-xs text-muted-foreground">
-              {vault.t('device_protection.existing_passkey_alternative')}
+              {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAlternative)}
             </span>
             <div class="h-px flex-1 bg-border"></div>
           </div>
@@ -237,15 +238,15 @@
           >
             <KeyRound class="size-4" />
             {vault.isVerifying
-              ? vault.t('device_protection.authorizing')
-              : vault.t('device_protection.existing_passkey_action')}
+              ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+              : vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
           </Button>
         </div>
       {/if}
     {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Pin}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">
-          {vault.t('device_protection.pin_label')}
+          {vault.t(I18N_KEYS.DeviceProtectionPinLabel)}
         </label>
         <input
           id="device-protection-pin"
@@ -266,14 +267,14 @@
           deviceProtectionActions.unlockPinDeviceProtection(vault, pin)}
       >
         {vault.isVerifying
-          ? vault.t('device_protection.authorizing')
-          : vault.t('device_protection.pin_unlock_action')}
+          ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : vault.t(I18N_KEYS.DeviceProtectionPinUnlockAction)}
       </Button>
 
       <div class="rounded-md border border-border/60 bg-muted/20 p-3">
         <div class="flex gap-2 text-xs text-muted-foreground">
           <CircleHelp class="mt-0.5 size-4 shrink-0" />
-          <p>{vault.t('device_protection.pin_recovery_warning')}</p>
+          <p>{vault.t(I18N_KEYS.DeviceProtectionPinRecoveryWarning)}</p>
         </div>
         <Button
           class="mt-2 h-auto px-0 text-xs"
@@ -282,7 +283,7 @@
           data-testid="device-protection-recovery-btn"
           onclick={recover}
         >
-          {vault.t('device_protection.pin_recovery_action')}
+          {vault.t(I18N_KEYS.DeviceProtectionPinRecoveryAction)}
         </Button>
       </div>
     {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey}
@@ -293,14 +294,14 @@
         onclick={() => deviceProtectionActions.unlockDeviceProtection(vault)}
       >
         {vault.isVerifying
-          ? vault.t('device_protection.authorizing')
-          : vault.t('device_protection.unlock_action')}
+          ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+          : vault.t(I18N_KEYS.DeviceProtectionUnlockAction)}
       </Button>
 
       <div class="rounded-md border border-border/60 bg-muted/20 p-3">
         <div class="flex gap-2 text-xs text-muted-foreground">
           <CircleHelp class="mt-0.5 size-4 shrink-0" />
-          <p>{vault.t('device_protection.recovery_warning')}</p>
+          <p>{vault.t(I18N_KEYS.DeviceProtectionRecoveryWarning)}</p>
         </div>
         <Button
           class="mt-2 h-auto px-0 text-xs"
@@ -309,7 +310,7 @@
           data-testid="device-protection-recovery-btn"
           onclick={recover}
         >
-          {vault.t('device_protection.recovery_action')}
+          {vault.t(I18N_KEYS.DeviceProtectionRecoveryAction)}
         </Button>
       </div>
     {/if}

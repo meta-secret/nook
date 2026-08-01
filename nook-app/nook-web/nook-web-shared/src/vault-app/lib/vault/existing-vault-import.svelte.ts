@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   JoinEnrollmentState,
   NookExistingVaultProviderReadiness,
@@ -41,14 +42,16 @@ export class ExistingVaultImportLifecycle {
     if (
       preparation.kind === NookExistingVaultProviderReadiness.MissingOauthFile
     ) {
-      this.vault.errorMsg = this.vault.t("errors.cloud_sync_provider_required");
+      this.vault.errorMsg = this.vault.t(
+        I18N_KEYS.ErrorsCloudSyncProviderRequired,
+      );
       return;
     }
     if (
       preparation.kind === NookExistingVaultProviderReadiness.MissingLocalFolder
     ) {
       this.vault.errorMsg = this.vault.t(
-        "auth_storage.local_folder_choose_err",
+        I18N_KEYS.AuthStorageLocalFolderChooseErr,
       );
       return;
     }
@@ -79,7 +82,7 @@ export class ExistingVaultImportLifecycle {
         this.vault.activeVault.kind !== ActiveVaultKind.Open ||
         this.vault.activeVault.storeId !== pending.storeId
       ) {
-        throw new Error(this.vault.t("errors.vault_selection_failed"));
+        throw new Error(this.vault.t(I18N_KEYS.ErrorsVaultSelectionFailed));
       }
     } else {
       await this.vault.prepareExistingVaultImportSlot();

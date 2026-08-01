@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Copy, RefreshCw, ShieldCheck } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
@@ -100,7 +101,7 @@
       vault.errorMsg =
         error instanceof Error
           ? error.message
-          : vault.t("login.sentinel_genesis_response_failed");
+          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed);
     } finally {
       joinPublicKeysLoading = false;
     }
@@ -115,7 +116,7 @@
         copyingJoinResponse = false;
       }, 1500);
     } catch {
-      vault.errorMsg = vault.t("login.sentinel_genesis_copy_failed");
+      vault.errorMsg = vault.t(I18N_KEYS.LoginSentinelGenesisCopyFailed);
     }
   }
 
@@ -135,7 +136,7 @@
       vault.errorMsg =
         error instanceof Error
           ? error.message
-          : vault.t("login.sentinel_genesis_response_failed");
+          : vault.t(I18N_KEYS.LoginSentinelGenesisResponseFailed);
     } finally {
       actionBusy = false;
     }
@@ -171,13 +172,13 @@
               <div class="space-y-1">
                 <h3 class="text-lg font-semibold text-foreground">
                   {sentinelOnboardingPackage.trim()
-                    ? vault.t('login.sentinel_onboarding_member_title')
-                    : vault.t('login.sentinel_genesis_join_title')}
+                    ? vault.t(I18N_KEYS.LoginSentinelOnboardingMemberTitle)
+                    : vault.t(I18N_KEYS.LoginSentinelGenesisJoinTitle)}
                 </h3>
                 <p class="text-sm text-pretty text-muted-foreground">
                   {sentinelOnboardingPackage.trim()
-                    ? vault.t('login.sentinel_onboarding_member_description')
-                    : vault.t('login.sentinel_genesis_join_description')}
+                    ? vault.t(I18N_KEYS.LoginSentinelOnboardingMemberDescription)
+                    : vault.t(I18N_KEYS.LoginSentinelGenesisJoinDescription)}
                 </p>
               </div>
 
@@ -186,7 +187,7 @@
                   class="rounded-lg border border-primary/25 bg-primary/5 p-4"
                 >
                   <p class="text-xs leading-relaxed text-muted-foreground">
-                    {vault.t('login.sentinel_onboarding_member_security')}
+                    {vault.t(I18N_KEYS.LoginSentinelOnboardingMemberSecurity)}
                   </p>
                   <Button
                     type="button"
@@ -199,7 +200,7 @@
                       )}
                   >
                     <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_onboarding_member_action')}
+                    {vault.t(I18N_KEYS.LoginSentinelOnboardingMemberAction)}
                   </Button>
                 </div>
               {:else if generatedParticipantResponse}
@@ -209,17 +210,17 @@
                 >
                   <div class="space-y-1">
                     <p class="text-sm font-semibold text-foreground">
-                      {vault.t('login.sentinel_genesis_generated_response')}
+                      {vault.t(I18N_KEYS.LoginSentinelGenesisGeneratedResponse)}
                     </p>
                     <p class="text-xs text-pretty text-muted-foreground">
-                      {vault.t('login.sentinel_genesis_join_qr_hint')}
+                      {vault.t(I18N_KEYS.LoginSentinelGenesisJoinQrHint)}
                     </p>
                   </div>
                   <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
                     <EnrollmentQrCode
                       enrollmentLink={generatedParticipantResponseLink}
                       loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
+                        I18N_KEYS.LoginSentinelGenesisQrLoading,
                       )}
                     />
                     <div class="space-y-2">
@@ -234,7 +235,7 @@
                           class="text-xs text-muted-foreground"
                           data-testid="sentinel-genesis-generated-fingerprint"
                         >
-                          {vault.t('login.sentinel_genesis_fingerprint')}:
+                          {vault.t(I18N_KEYS.LoginSentinelGenesisFingerprint)}:
                           <code class="text-foreground"
                             >{generatedParticipantFingerprint}</code
                           >
@@ -249,8 +250,8 @@
                       >
                         <Copy class="size-4" />
                         {copyingJoinResponse
-                          ? vault.t('common.copied')
-                          : vault.t('login.sentinel_genesis_copy_response_url')}
+                          ? vault.t(I18N_KEYS.CommonCopied)
+                          : vault.t(I18N_KEYS.LoginSentinelGenesisCopyResponseUrl)}
                       </Button>
                     </div>
                   </div>
@@ -260,7 +261,7 @@
                   class="text-sm text-muted-foreground"
                   data-testid="sentinel-genesis-join-loading"
                 >
-                  {vault.t('login.sentinel_genesis_join_loading')}
+                  {vault.t(I18N_KEYS.LoginSentinelGenesisJoinLoading)}
                 </p>
               {:else if sentinelInvitationRequest.trim()}
                 <div
@@ -268,10 +269,10 @@
                   data-testid="sentinel-genesis-connect-card"
                 >
                   <p class="text-sm font-semibold text-foreground">
-                    {vault.t('login.sentinel_genesis_connect_title')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisConnectTitle)}
                   </p>
                   <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_connect_description')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisConnectDescription)}
                   </p>
                   <Button
                     type="button"
@@ -281,7 +282,7 @@
                     onclick={() => refreshJoinPublicKeys()}
                   >
                     <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_genesis_connect_action')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisConnectAction)}
                   </Button>
                 </div>
               {:else if !sentinelOnboardingPackage.trim()}
@@ -290,25 +291,25 @@
                   data-testid="sentinel-genesis-invitation-required"
                 >
                   <p class="text-sm font-semibold text-foreground">
-                    {vault.t('login.sentinel_genesis_invitation_required_title')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisInvitationRequiredTitle)}
                   </p>
                   <p class="text-xs text-pretty text-muted-foreground">
                     {vault.t(
-                      'login.sentinel_genesis_invitation_required_description',
+                      I18N_KEYS.LoginSentinelGenesisInvitationRequiredDescription,
                     )}
                   </p>
                   <label
                     class="text-xs font-medium text-foreground"
                     for="sentinel-participant-request"
                   >
-                    {vault.t('login.sentinel_genesis_join_request_label')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisJoinRequestLabel)}
                   </label>
                   <textarea
                     id="sentinel-participant-request"
                     class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                     data-testid="sentinel-genesis-join-request-input"
                     placeholder={vault.t(
-                      'login.sentinel_genesis_join_request_placeholder',
+                      I18N_KEYS.LoginSentinelGenesisJoinRequestPlaceholder,
                     )}
                     bind:value={sessionParticipantRequest}
                     disabled={isBusy || actionBusy}></textarea>
@@ -327,7 +328,7 @@
                     {:else}
                       <ShieldCheck class="size-4" />
                     {/if}
-                    {vault.t('login.sentinel_genesis_create_session_response')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisCreateSessionResponse)}
                   </Button>
                 </div>
               {/if}
@@ -335,23 +336,23 @@
               {#if !sentinelOnboardingPackage.trim()}
                 <div class="space-y-2 border-t border-border pt-4">
                   <p class="text-xs font-medium text-foreground">
-                    {vault.t('login.sentinel_genesis_join_share_title')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisJoinShareTitle)}
                   </p>
                   <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_join_share_description')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisJoinShareDescription)}
                   </p>
                   <label
                     class="text-xs font-medium text-foreground"
                     for="sentinel-share-request"
                   >
-                    {vault.t('login.sentinel_genesis_join_share_request_label')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisJoinShareRequestLabel)}
                   </label>
                   <textarea
                     id="sentinel-share-request"
                     class="min-h-16 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                     data-testid="sentinel-genesis-share-request-input"
                     placeholder={vault.t(
-                      'login.sentinel_genesis_join_share_request_placeholder',
+                      I18N_KEYS.LoginSentinelGenesisJoinShareRequestPlaceholder,
                     )}
                     bind:value={participantRequest}
                     disabled={isBusy || actionBusy}></textarea>
@@ -359,14 +360,14 @@
                     class="text-xs font-medium text-foreground"
                     for="sentinel-received-share"
                   >
-                    {vault.t('login.sentinel_genesis_receive_share_label')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisReceiveShareLabel)}
                   </label>
                   <textarea
                     id="sentinel-received-share"
                     class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                     data-testid="sentinel-genesis-receive-share-input"
                     placeholder={vault.t(
-                      'login.sentinel_genesis_receive_share_placeholder',
+                      I18N_KEYS.LoginSentinelGenesisReceiveSharePlaceholder,
                     )}
                     bind:value={participantShare}
                     disabled={isBusy || actionBusy}></textarea>
@@ -382,7 +383,7 @@
                     onclick={() => void receiveParticipantShare()}
                   >
                     <ShieldCheck class="size-4" />
-                    {vault.t('login.sentinel_genesis_receive_share')}
+                    {vault.t(I18N_KEYS.LoginSentinelGenesisReceiveShare)}
                   </Button>
                 </div>
               {/if}

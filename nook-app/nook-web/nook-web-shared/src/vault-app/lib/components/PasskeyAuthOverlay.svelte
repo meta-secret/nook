@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { ArrowLeft } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
@@ -28,7 +29,7 @@
   class="fixed top-16 right-4 z-50 w-[min(100vw-2rem,22rem)] animate-in fade-in slide-in-from-top-2 duration-200"
   data-testid="passkey-auth-overlay"
   role="dialog"
-  aria-label={vault.t('device_protection.title')}
+  aria-label={vault.t(I18N_KEYS.DeviceProtectionTitle)}
   use:portal
 >
   <div
@@ -39,7 +40,7 @@
         type="button"
         class="absolute top-3 left-3 z-10 grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         data-testid="passkey-auth-overlay-dismiss"
-        aria-label={vault.t('common.back')}
+        aria-label={vault.t(I18N_KEYS.CommonBack)}
         onclick={onDismiss}
       >
         <ArrowLeft class="size-4" aria-hidden="true" />

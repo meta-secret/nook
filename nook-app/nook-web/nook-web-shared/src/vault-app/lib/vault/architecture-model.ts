@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   DeviceMode,
   NookVaultArchitecture,
@@ -112,8 +113,8 @@ export function validateVaultArchitecture(
 }
 
 export enum ProviderCapabilityLabelKey {
-  PersonalOnly = "provider_picker.capability_personal_only",
-  PersonalShared = "provider_picker.capability_personal_shared",
+  PersonalOnly = I18N_KEYS.ProviderPickerCapabilityPersonalOnly,
+  PersonalShared = I18N_KEYS.ProviderPickerCapabilityPersonalShared,
 }
 
 /** Presentation label derived from the Rust-owned provider capability. */

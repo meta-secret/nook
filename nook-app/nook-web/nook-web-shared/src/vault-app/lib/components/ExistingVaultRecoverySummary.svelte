@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { KeyRound, LockKeyhole, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { RecoveryDiscoveryKind } from '$lib/vault/state/provider.svelte'
@@ -28,7 +29,7 @@
     {#if summary.requiresSentinelQuorum}
       <div class="flex items-start gap-2 text-xs text-muted-foreground">
         <LockKeyhole class="mt-0.5 size-3.5 shrink-0" />
-        <p>{vault.t('vault_recovery.sentinel_required')}</p>
+        <p>{vault.t(I18N_KEYS.VaultRecoverySentinelRequired)}</p>
       </div>
     {/if}
 
@@ -37,10 +38,10 @@
         <KeyRound class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div>
           <h4 class="text-xs font-medium text-foreground">
-            {vault.t('vault_recovery.passkey_title')}
+            {vault.t(I18N_KEYS.VaultRecoveryPasskeyTitle)}
           </h4>
           <p class="text-[11px] leading-relaxed text-muted-foreground">
-            {vault.t('vault_recovery.passkey_description')}
+            {vault.t(I18N_KEYS.VaultRecoveryPasskeyDescription)}
           </p>
         </div>
       </div>
@@ -52,12 +53,12 @@
               data-testid="existing-vault-device-hint"
             >
               <span class="truncate text-muted-foreground">
-                {device.label || vault.t('vault_recovery.unnamed_device')}
+                {device.label || vault.t(I18N_KEYS.VaultRecoveryUnnamedDevice)}
               </span>
               <code
                 class="shrink-0 rounded bg-background px-1.5 py-0.5 text-[11px] text-foreground"
               >
-                {vault.t('vault_recovery.device_hint', {
+                {vault.t(I18N_KEYS.VaultRecoveryDeviceHint, {
                   hint: device.passkeyHint,
                 })}
               </code>
@@ -66,7 +67,7 @@
         </ul>
       {:else}
         <p class="pl-5 text-[11px] text-muted-foreground">
-          {vault.t('vault_recovery.no_device_hints')}
+          {vault.t(I18N_KEYS.VaultRecoveryNoDeviceHints)}
         </p>
       {/if}
     </div>
@@ -78,10 +79,10 @@
       >
         {#if summary.passwordEntries.length > 0}
           <p class="font-medium text-foreground">
-            {vault.t('vault_recovery.password_available')}
+            {vault.t(I18N_KEYS.VaultRecoveryPasswordAvailable)}
           </p>
           <p class="text-[11px] leading-relaxed text-muted-foreground">
-            {vault.t('vault_recovery.password_description')}
+            {vault.t(I18N_KEYS.VaultRecoveryPasswordDescription)}
           </p>
           <ul class="mt-1 flex flex-wrap gap-1">
             {#each summary.passwordEntries as entry (entry.id)}
@@ -92,7 +93,7 @@
           </ul>
         {:else}
           <p class="text-muted-foreground">
-            {vault.t('vault_recovery.password_unavailable')}
+            {vault.t(I18N_KEYS.VaultRecoveryPasswordUnavailable)}
           </p>
         {/if}
       </div>

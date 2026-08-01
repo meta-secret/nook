@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import {
   bindGoogleDriveSharedFolder,
   deleteAuthProvidersDb,
@@ -528,11 +529,11 @@ export function localizeProviderLabel(
 ): string {
   return localizeProviderLabelCore(
     label,
-    t("provider_picker.this_device"),
-    t("provider_picker.github"),
-    t("provider_picker.local_folder"),
-    t("provider_picker.google_drive"),
-    t("provider_picker.icloud"),
+    t(I18N_KEYS.ProviderPickerThisDevice),
+    t(I18N_KEYS.ProviderPickerGithub),
+    t(I18N_KEYS.ProviderPickerLocalFolder),
+    t(I18N_KEYS.ProviderPickerGoogleDrive),
+    t(I18N_KEYS.ProviderPickerIcloud),
   );
 }
 
@@ -557,7 +558,7 @@ export function maskGithubPat(
   );
   try {
     if (hint.state === NookGithubPatHintState.Missing) {
-      return t ? t("auth_storage.no_token_saved") : "No token saved";
+      return t ? t(I18N_KEYS.AuthStorageNoTokenSaved) : "No token saved";
     }
     return hint.value;
   } finally {
@@ -573,13 +574,13 @@ export function providerStorageDetail(
   return providerStorageDetailCore(
     provider,
     t
-      ? t("provider_picker.this_device_desc")
+      ? t(I18N_KEYS.ProviderPickerThisDeviceDesc)
       : "Vault in browser storage on this device",
-    t ? t("auth_storage.no_token_saved") : "No token saved",
-    t ? t("auth_storage.google_signed_in") : "Signed in with Google",
-    t ? t("auth_storage.icloud_signed_in") : "Signed in with iCloud",
-    t ? t("auth_storage.google_not_signed_in") : "Not signed in",
-    t ? t("auth_storage.icloud_not_signed_in") : "Not signed in with iCloud",
-    t ? t("auth_storage.local_folder_needs_reconnect") : "Choose folder",
+    t ? t(I18N_KEYS.AuthStorageNoTokenSaved) : "No token saved",
+    t ? t(I18N_KEYS.AuthStorageGoogleSignedIn) : "Signed in with Google",
+    t ? t(I18N_KEYS.AuthStorageIcloudSignedIn) : "Signed in with iCloud",
+    t ? t(I18N_KEYS.AuthStorageGoogleNotSignedIn) : "Not signed in",
+    t ? t(I18N_KEYS.AuthStorageIcloudNotSignedIn) : "Not signed in with iCloud",
+    t ? t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect) : "Choose folder",
   );
 }

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Provider actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { generateId, isoTimestamp, type VaultAccessStatus } from "$lib/nook";
@@ -320,7 +321,9 @@ export async function chooseLocalFolder(
 ): Promise<void> {
   refreshLocalFolderBackupSupport(state);
   if (!state.localFolderBackupSupported) {
-    throw new Error(state.t("provider_setup.local_folder_unsupported_browser"));
+    throw new Error(
+      state.t(I18N_KEYS.ProviderSetupLocalFolderUnsupportedBrowser),
+    );
   }
   const folder = await chooseLocalFolderBackupDirectory();
   try {
@@ -404,12 +407,13 @@ export async function assessVaultConnectStatus(
   state: ProviderActionsContext,
   args: [string, string, string],
 ): Promise<VaultAccessStatus> {
-  if (!state.hasManager) throw new Error(state.t("errors.engine_unavailable"));
+  if (!state.hasManager)
+    throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
   return (await state.enqueueStorage(async () => {
     const assessPromise = manager.assess_vault_connect(...args);
     const timeout = startVaultDiscoveryTimeout(
-      state.t("toasts.error_timeout"),
+      state.t(I18N_KEYS.ToastsErrorTimeout),
       30_000,
     );
     try {
@@ -436,7 +440,7 @@ export async function handleRemoteVaultAssessStatus(
       return true;
     case RemoteVaultAssessDecision.RejectMissingExistingVault:
       state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
-      state.errorMsg = state.t("auth_storage.existing_vault_not_found");
+      state.errorMsg = state.t(I18N_KEYS.AuthStorageExistingVaultNotFound);
       return true;
     case RemoteVaultAssessDecision.PromptMissingRemote:
       state.remoteVaultRecoveryState =
@@ -735,7 +739,9 @@ export async function removeProvider(
   await state.persistProviders({ replace: true });
 
   log.info("sync provider removed", { id, label: target.label });
-  state.showSuccess(state.t("toasts.removed_device", { label: target.label }));
+  state.showSuccess(
+    state.t(I18N_KEYS.ToastsRemovedDevice, { label: target.label }),
+  );
 }
 
 export async function ensureProviderSaved(
@@ -818,7 +824,7 @@ export async function ensureProviderSaved(
       };
     } else {
       if (state.localFolderDraft.kind !== LocalFolderDraftKind.Configured) {
-        state.errorMsg = state.t("auth_storage.local_folder_choose_err");
+        state.errorMsg = state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr);
         return false;
       }
       const localFolder: LocalFolderConfig = state.localFolderDraft.config;
@@ -841,7 +847,7 @@ export async function ensureProviderSaved(
     );
     if (duplicateProvider.state === NookDuplicateSyncProviderState.Duplicate) {
       if (isExplicitAdd) {
-        state.errorMsg = state.t("auth_storage.duplicate_sync_provider");
+        state.errorMsg = state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider);
         return false;
       }
     } else {

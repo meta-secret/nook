@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { createLogger } from "$lib/runtime/log";
@@ -96,7 +97,7 @@ export function applyVaultSyncResult(
   switch (decision) {
     case UnauthenticatedSyncDecision.Approved:
       state.joinEnrollmentPrompt = JoinEnrollmentState.None;
-      state.showSuccess(state.t("toasts.device_approved"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
       scheduleAutoConnectAfterApproval(state);
       break;
     case UnauthenticatedSyncDecision.AutoConnect:
@@ -391,13 +392,13 @@ export async function ensureProviderSavedAfterConflict(
   }
   const saved = await state.ensureProviderSaved();
   if (!saved) {
-    throw new Error(state.t("auth_storage.duplicate_sync_provider"));
+    throw new Error(state.t(I18N_KEYS.AuthStorageDuplicateSyncProvider));
   }
   const provider =
     state.syncProviders[state.syncProviders.length - 1] ??
     state.providers[state.providers.length - 1];
   if (!provider || provider.type === LOCAL_PROVIDER_TYPE) {
-    throw new Error(state.t("errors.cloud_sync_provider_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired));
   }
   return provider.id;
 }
@@ -513,16 +514,16 @@ export async function syncLocalFolderProvider(
   provider: StorageProvider,
 ): Promise<void> {
   if (!state.hasManager) {
-    throw new Error(state.t("errors.manager_uninitialized"));
+    throw new Error(state.t(I18N_KEYS.ErrorsManagerUninitialized));
   }
   const manager = state.requireManager();
   const configuration = localFolderProviderConfiguration(provider);
   if (configuration.kind === LocalFolderProviderConfigurationKind.Missing) {
-    throw new Error(state.t("errors.local_backup_folder_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsLocalBackupFolderRequired));
   }
   const handle = localFolderHandle(configuration.config);
   if (handle.kind === LocalFolderHandleKind.Unselected) {
-    throw new Error(state.t("errors.local_backup_folder_required"));
+    throw new Error(state.t(I18N_KEYS.ErrorsLocalBackupFolderRequired));
   }
   const localYaml = (await state.enqueueStorage(() =>
     manager.syncLocalFolderProvider(handle.handleId),
@@ -856,12 +857,12 @@ export async function syncProviderById(
     }
     if (!options?.quiet) {
       state.errorMsg = stagedStoreMismatch
-        ? state.t("auth_storage.sync_conflict_store_id_banner", {
+        ? state.t(I18N_KEYS.AuthStorageSyncConflictStoreIdBanner, {
             provider: provider.label,
           })
         : localFolderInspection.kind ===
             LocalFolderInspectionKind.MultipleVaults
-          ? state.t("auth_storage.local_folder_multiple_vaults_short")
+          ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
           : e instanceof Error
             ? e.message
             : "Sync failed for state provider.";

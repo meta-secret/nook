@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import { fillOneTimeCode } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteAuthenticatorOption } from '../../lib/login-fill-messages'
@@ -34,7 +35,7 @@ export async function fillAuthenticatorCode(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
@@ -50,7 +51,7 @@ export async function fillAuthenticatorCode(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
@@ -64,13 +65,15 @@ export async function fillAuthenticatorCode(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorFillFailed'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
       true,
     )
     return false
   }
   setFlightProgress(step, title, 2, 3, 'widgetAuthenticatorTitle')
-  description.textContent = translatedMessage('widgetAuthenticatorFilled')
+  description.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFilled,
+  )
   continueButton.hidden = true
   return true
 }
@@ -94,7 +97,7 @@ export async function continueWithAuthenticator(
   setStatus(
     description,
     continueButton,
-    translatedMessage('widgetAuthenticatorWorking'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorWorking),
     false,
   )
 
@@ -111,7 +114,7 @@ export async function continueWithAuthenticator(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
         true,
       )
       return
@@ -122,7 +125,7 @@ export async function continueWithAuthenticator(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorUnlock'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorUnlock),
         true,
       )
       return
@@ -133,7 +136,7 @@ export async function continueWithAuthenticator(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetConnectVault'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault),
         true,
       )
       return
@@ -148,7 +151,7 @@ export async function continueWithAuthenticator(
       setStatus(
         description,
         continueButton,
-        translatedMessage('widgetAuthenticatorFillFailed'),
+        translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
         true,
       )
       return
@@ -171,7 +174,7 @@ export async function continueWithAuthenticator(
         setStatus(
           pending.description,
           pending.continueButton,
-          translatedMessage('widgetAuthenticatorFillFailed'),
+          translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorFillFailed),
           true,
         )
         if (
@@ -196,7 +199,7 @@ export async function continueWithAuthenticator(
     setStatus(
       description,
       continueButton,
-      translatedMessage('widgetAuthenticatorPickerOpened'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorPickerOpened),
       true,
     )
   } finally {

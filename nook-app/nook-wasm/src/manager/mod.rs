@@ -929,7 +929,7 @@ impl NookVaultManager {
     ) -> Result<nook_core::DeviceIdentity, NookError> {
         if self.device.identity_private_key.is_empty() {
             return Err(NookError::Decryption(
-                "errors.device_protection.authorization_required".to_owned(),
+                nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
             ));
         }
         self.device_identity()

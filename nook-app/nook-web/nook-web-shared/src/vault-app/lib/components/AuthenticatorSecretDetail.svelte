@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { Check, Copy } from '@lucide/svelte'
   import type { NookSecretListItem } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
@@ -34,7 +35,7 @@
 
 <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
   <span class="text-muted-foreground/70 font-medium"
-    >{vault.t('vault.fields.current_code')}</span
+    >{vault.t(I18N_KEYS.VaultFieldsCurrentCode)}</span
   >
   <div
     class="flex items-center justify-between gap-2 min-w-0 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2"
@@ -53,7 +54,7 @@
       >
       {#if authenticatorCode.kind === AuthenticatorCodePresentationKind.Visible}
         <p class="mt-0.5 text-[10px] text-muted-foreground">
-          {vault.t('vault.fields.code_expires_in', {
+          {vault.t(I18N_KEYS.VaultFieldsCodeExpiresIn, {
             count: String(authenticatorCode.code.secondsRemaining),
           })}
         </p>
@@ -68,7 +69,7 @@
             item.id,
             'current-code',
           )}
-        aria-label={vault.t('vault.copy_current_code')}
+        aria-label={vault.t(I18N_KEYS.VaultCopyCurrentCode)}
         class="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
       >
         {#if isCopied(`${item.id}-current-code`)}<Check
@@ -81,11 +82,11 @@
 
 <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
   <span class="text-muted-foreground/70 font-medium"
-    >{vault.t('vault.fields.account')}</span
+    >{vault.t(I18N_KEYS.VaultFieldsAccount)}</span
   >
   <div class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1">
     <span class="truncate text-foreground"
-      >{item.account || vault.t('common.none')}</span
+      >{item.account || vault.t(I18N_KEYS.CommonNone)}</span
     >
   </div>
 </div>
@@ -95,20 +96,20 @@
   data-testid="authenticator-website"
 >
   <span class="text-muted-foreground/70 font-medium"
-    >{vault.t('vault.fields.website_label')}</span
+    >{vault.t(I18N_KEYS.VaultFieldsWebsiteLabel)}</span
   >
   <div
     class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
   >
     <span class="truncate text-foreground"
-      >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
+      >{item.websiteUrl || vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
     >
     {#if item.websiteUrl}
       <button
         type="button"
         onclick={() =>
           void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-        aria-label={vault.t('vault.copy_website_url')}
+        aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
         class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
       >
         {#if isCopied(`${item.id}-website`)}<Check
@@ -121,7 +122,7 @@
 
 <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
   <span class="text-muted-foreground/70 font-medium"
-    >{vault.t('vault.fields.authenticator_secret')}</span
+    >{vault.t(I18N_KEYS.VaultFieldsAuthenticatorSecret)}</span
   >
   <div
     class="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -136,7 +137,7 @@
     <button
       type="button"
       onclick={() => void onCopySecret(item.id)}
-      aria-label={vault.t('vault.copy_authenticator_secret')}
+      aria-label={vault.t(I18N_KEYS.VaultCopyAuthenticatorSecret)}
       class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
     >
       {#if isCopied(`${item.id}-secret`)}<Check
@@ -149,7 +150,7 @@
 {#if item.backupCodeCount > 0}
   <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
     <span class="pt-1 text-muted-foreground/70 font-medium"
-      >{vault.t('vault.fields.backup_codes')}</span
+      >{vault.t(I18N_KEYS.VaultFieldsBackupCodes)}</span
     >
     <div
       class="space-y-1 rounded-md border border-border/20 bg-muted/20 px-2 py-1.5"
@@ -170,7 +171,7 @@
                     item.id,
                     `backup-${backupIndex}`,
                   )}
-                aria-label={vault.t('vault.copy_backup_code')}
+                aria-label={vault.t(I18N_KEYS.VaultCopyBackupCode)}
                 class="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >
                 {#if isCopied(`${item.id}-backup-${backupIndex}`)}<Check
@@ -180,7 +181,7 @@
             </div>
           {/each}
         {:else}
-          <span class="text-muted-foreground">{vault.t('common.none')}</span>
+          <span class="text-muted-foreground">{vault.t(I18N_KEYS.CommonNone)}</span>
         {/if}
       {:else}
         <span class="font-mono text-foreground">••••••••</span>

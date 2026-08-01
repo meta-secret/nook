@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type {
   AuthenticatorCodeView,
@@ -43,17 +44,17 @@ function freeSecretRecords(records: ReadonlyArray<{ free(): void }>) {
 
 export async function loadDb(state: VaultState) {
   if (state.isInitializing) {
-    state.errorMsg = state.t("errors.engine_loading");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineLoading);
     return;
   }
 
   if (!state.hasManager) {
-    state.errorMsg = state.t("errors.engine_unavailable");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsEngineUnavailable);
     return;
   }
 
   if (state.isVerifying) {
-    state.errorMsg = state.t("errors.connection_in_progress");
+    state.errorMsg = state.t(I18N_KEYS.ErrorsConnectionInProgress);
     return;
   }
 
@@ -171,7 +172,7 @@ export async function loadDb(state: VaultState) {
           : state.requireManager().connect(...connectArgs);
       state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
       const timeout = startVaultDiscoveryTimeout(
-        state.t("toasts.error_timeout"),
+        state.t(I18N_KEYS.ToastsErrorTimeout),
         30_000,
       );
       try {
@@ -201,13 +202,13 @@ export async function loadDb(state: VaultState) {
       accessStatus,
     });
     if (state.storageMode === "local") {
-      state.showSuccess(state.t("toasts.local_loaded"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsLocalLoaded));
     } else if (state.storageMode === "local-folder") {
-      state.showSuccess(state.t("toasts.local_folder_connected"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsLocalFolderConnected));
     } else if (state.storageMode === "oauth-file") {
-      state.showSuccess(state.t("toasts.google_drive_connected"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsGoogleDriveConnected));
     } else {
-      state.showSuccess(state.t("toasts.github_connected"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsGithubConnected));
     }
   } catch (e: unknown) {
     state.isAuthenticated = false;
@@ -245,7 +246,8 @@ async function runPasswordManagerImport(
   successKey: string,
   failureKey: string,
 ): Promise<NookImportResult> {
-  if (!state.hasManager) throw new Error(state.t("errors.engine_unavailable"));
+  if (!state.hasManager)
+    throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
   const manager = state.requireManager();
   const editRestriction = state.editRestriction;
   if (editRestriction.decision !== VaultEditDecision.Allowed) {
@@ -311,7 +313,7 @@ export async function handleAddSecret(
     });
     await state.refreshSecretsFromSession();
     log.info("secret added", { id, type });
-    state.showSuccess(state.t("toasts.secret_saved"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved));
     await state.runFanOutSyncAfterLocalSave();
     await state.refreshSecretsFromSession();
   } catch (e: unknown) {
@@ -331,8 +333,8 @@ export async function handleBitwardenImport(
     state,
     (manager) => manager.importBitwardenJson(json, password),
     "Bitwarden",
-    "toasts.bitwarden_imported",
-    "bitwarden_import.failed",
+    I18N_KEYS.ToastsBitwardenImported,
+    I18N_KEYS.BitwardenImportFailed,
   );
 }
 
@@ -344,8 +346,8 @@ export async function handleKeePassXcImport(
     state,
     (manager) => manager.importKeePassXcCsv(csv),
     "KeePassXC",
-    "toasts.keepassxc_imported",
-    "keepassxc_import.failed",
+    I18N_KEYS.ToastsKeepassxcImported,
+    I18N_KEYS.KeepassxcImportFailed,
   );
 }
 
@@ -357,8 +359,8 @@ export async function handleLastPassImport(
     state,
     (manager) => manager.importLastPassCsv(csv),
     "LastPass",
-    "toasts.lastpass_imported",
-    "lastpass_import.failed",
+    I18N_KEYS.ToastsLastpassImported,
+    I18N_KEYS.LastpassImportFailed,
   );
 }
 
@@ -370,8 +372,8 @@ export async function handleKeeperImport(
     state,
     (manager) => manager.importKeeperCsv(csv),
     "Keeper",
-    "toasts.keeper_imported",
-    "keeper_import.failed",
+    I18N_KEYS.ToastsKeeperImported,
+    I18N_KEYS.KeeperImportFailed,
   );
 }
 
@@ -383,8 +385,8 @@ export async function handleOnePasswordImport(
     state,
     (manager) => manager.importOnePasswordPux(archive),
     "1Password",
-    "toasts.onepassword_imported",
-    "onepassword_import.failed",
+    I18N_KEYS.ToastsOnepasswordImported,
+    I18N_KEYS.OnepasswordImportFailed,
   );
 }
 
@@ -396,8 +398,8 @@ export async function handleApplePasswordsImport(
     state,
     (manager) => manager.importApplePasswordsExport(exportBytes),
     "Safari / Apple Passwords",
-    "toasts.apple_passwords_imported",
-    "apple_passwords_import.failed",
+    I18N_KEYS.ToastsApplePasswordsImported,
+    I18N_KEYS.ApplePasswordsImportFailed,
   );
 }
 
@@ -409,8 +411,8 @@ export async function handleChromePasswordsImport(
     state,
     (manager) => manager.importChromePasswordsCsv(csv),
     "Chrome passwords",
-    "toasts.chrome_passwords_imported",
-    "chrome_passwords_import.failed",
+    I18N_KEYS.ToastsChromePasswordsImported,
+    I18N_KEYS.ChromePasswordsImportFailed,
   );
 }
 
@@ -422,8 +424,8 @@ export async function handleDashlaneImport(
     state,
     (manager) => manager.importDashlaneExport(exportBytes),
     "Dashlane",
-    "toasts.dashlane_imported",
-    "dashlane_import.failed",
+    I18N_KEYS.ToastsDashlaneImported,
+    I18N_KEYS.DashlaneImportFailed,
   );
 }
 
@@ -435,8 +437,8 @@ export async function handleGoogleAuthenticatorImport(
     state,
     (manager) => manager.importGoogleAuthenticatorMigration(migrationUris),
     "Google Authenticator",
-    "toasts.google_authenticator_imported",
-    "google_authenticator_import.failed",
+    I18N_KEYS.ToastsGoogleAuthenticatorImported,
+    I18N_KEYS.GoogleAuthenticatorImportFailed,
   );
 }
 
@@ -448,8 +450,8 @@ export async function handleProtonPassImport(
     state,
     (manager) => manager.importProtonPass(exportBytes),
     "Proton Pass",
-    "toasts.proton_pass_imported",
-    "proton_pass_import.failed",
+    I18N_KEYS.ToastsProtonPassImported,
+    I18N_KEYS.ProtonPassImportFailed,
   );
 }
 
@@ -484,7 +486,7 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
     deletedRecord?.free();
     await state.refreshSecretsFromSession();
     log.info("secret deleted", { id });
-    state.showSuccess(state.t("toasts.secret_deleted"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted));
     // Match add/replace: await fan-out so the delete event is pushed before
     // callers observe remote state (and so an empty provider list is not a
     // silent no-op race right after unlock).
@@ -519,7 +521,7 @@ export async function handleReplaceSecret(
     await state.refreshSecretsFromSession();
     log.info("secret replaced", { oldId, newId, type });
     await state.runFanOutSyncAfterLocalSave();
-    state.showSuccess(state.t("toasts.item_updated"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated));
   } catch (e: unknown) {
     state.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`;
     throw e;

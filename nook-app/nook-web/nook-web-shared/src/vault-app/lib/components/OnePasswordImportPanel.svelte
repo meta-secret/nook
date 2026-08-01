@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PASSWORD_IMPORT_MESSAGE_KEYS } from '../../../generated/i18n-keys'
   import PasswordManagerImportPanel from '$lib/components/PasswordManagerImportPanel.svelte'
   import type { ImportPanelProps } from '$lib/components/import-panel'
   import {
@@ -12,7 +13,7 @@
 <PasswordManagerImportPanel
   {...props}
   format={PasswordImportFormat.Binary}
-  translationPrefix="onepassword_import"
+  messages={PASSWORD_IMPORT_MESSAGE_KEYS.OnePassword}
   panelTestId="onepassword-import-panel"
   fileTestId="onepassword-pux-file"
   submitTestId="onepassword-import-submit"

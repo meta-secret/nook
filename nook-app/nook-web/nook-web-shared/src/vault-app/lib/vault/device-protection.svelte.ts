@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 /** Device-protection actions that snapshot reactive state for persistence. */
 import {
   isPasskeyCeremonyNotAllowedError,
@@ -97,7 +98,9 @@ export async function setupDeviceProtection(
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey creation did not finish", error);
-      state.errorMsg = state.t("device_protection.passkey_create_not_allowed");
+      state.errorMsg = state.t(
+        I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
+      );
       return;
     }
     if (isPasskeyUnavailableError(error)) {
@@ -107,7 +110,7 @@ export async function setupDeviceProtection(
       );
       state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t(
-        "device_protection.passkey_unavailable_pin_fallback_ready",
+        I18N_KEYS.DeviceProtectionPasskeyUnavailablePinFallbackReady,
       );
       return;
     }
@@ -117,7 +120,7 @@ export async function setupDeviceProtection(
         error,
       );
       state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
-      state.errorMsg = state.t("device_protection.pin_fallback_ready");
+      state.errorMsg = state.t(I18N_KEYS.DeviceProtectionPinFallbackReady);
       return;
     }
     logPasskeyCeremony("passkey device protection setup failed", error);
@@ -148,7 +151,7 @@ export async function recoverDeviceProtectionWithPasskey(
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey recovery did not finish", error);
       state.errorMsg = state.t(
-        "device_protection.passkey_recovery_not_allowed",
+        I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
       );
       return;
     }
@@ -159,7 +162,7 @@ export async function recoverDeviceProtectionWithPasskey(
       );
       state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
       state.errorMsg = state.t(
-        "device_protection.recovery_passkey_unavailable_pin_fallback_ready",
+        I18N_KEYS.DeviceProtectionRecoveryPasskeyUnavailablePinFallbackReady,
       );
       return;
     }
@@ -169,7 +172,9 @@ export async function recoverDeviceProtectionWithPasskey(
         error,
       );
       state.deviceProtectionStatus = DeviceProtectionStatus.PinSetup;
-      state.errorMsg = state.t("device_protection.recovery_pin_fallback_ready");
+      state.errorMsg = state.t(
+        I18N_KEYS.DeviceProtectionRecoveryPinFallbackReady,
+      );
       return;
     }
     logPasskeyCeremony("passkey device protection recovery failed", error);
@@ -196,7 +201,7 @@ export async function setupPinDeviceProtection(
   let deviceIdentityUnlocked = false;
   try {
     if (pin !== confirmPin) {
-      throw new Error(state.t("device_protection.pin_mismatch"));
+      throw new Error(state.t(I18N_KEYS.DeviceProtectionPinMismatch));
     }
     await state.enqueueStorage(() =>
       state.requireManager().finishPinDeviceProtection(pin),
@@ -231,7 +236,9 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
       logPasskeyCeremony("passkey authorization did not finish", error);
-      state.errorMsg = state.t("device_protection.passkey_unlock_not_allowed");
+      state.errorMsg = state.t(
+        I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
+      );
       return;
     }
     logPasskeyCeremony("passkey device protection unlock failed", error);
@@ -291,7 +298,7 @@ export async function resetDeviceProtectionForRecovery(
     state.clearOauthFile();
     state.clearLocalFolder();
     state.storageMode = LOCAL_PROVIDER_TYPE;
-    state.showSuccess(state.t("device_protection.recovery_complete"));
+    state.showSuccess(state.t(I18N_KEYS.DeviceProtectionRecoveryComplete));
   } catch (error) {
     log.warn("device protection recovery reset failed", {
       outcome: "recovery_reset_failed",

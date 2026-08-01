@@ -110,10 +110,12 @@ impl VaultEditDecision {
     pub const fn translation_key(self) -> Option<&'static str> {
         match self {
             Self::Allowed => None,
-            Self::BlockedSecurityConflict => Some("auth_storage.security_conflict_edits"),
-            Self::BlockedSyncConflict => Some("auth_storage.sync_blocked_edits"),
+            Self::BlockedSecurityConflict => {
+                Some(crate::i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
+            }
+            Self::BlockedSyncConflict => Some(crate::i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS),
             Self::BlockedByArchitecture => {
-                Some("architecture_modes.sentinel_secret_creation_blocked")
+                Some(crate::i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
             }
         }
     }
@@ -453,15 +455,15 @@ mod tests {
         );
         assert_eq!(
             VaultEditDecision::BlockedSecurityConflict.translation_key(),
-            Some("auth_storage.security_conflict_edits")
+            Some(crate::i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedSyncConflict.translation_key(),
-            Some("auth_storage.sync_blocked_edits")
+            Some(crate::i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedByArchitecture.translation_key(),
-            Some("architecture_modes.sentinel_secret_creation_blocked")
+            Some(crate::i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
         );
         assert_eq!(VaultEditDecision::Allowed.translation_key(), None);
         assert!(VaultClientPolicy::edits_blocked(1, false, true));

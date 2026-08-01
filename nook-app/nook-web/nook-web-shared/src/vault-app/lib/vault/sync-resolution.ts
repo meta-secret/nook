@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   importNamedLocalVaultBlob,
@@ -46,12 +47,12 @@ export async function resolveReplacementConflict(
     await state.refreshSecretsFromSession();
     await state.refreshReplacementConflicts();
     void state.runFanOutSyncAfterLocalSave();
-    state.showSuccess(state.t("toasts.secret_conflict_resolved"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsSecretConflictResolved));
   } catch (error: unknown) {
     state.errorMsg =
       error instanceof Error
         ? error.message
-        : state.t("errors.conflict_resolution_failed");
+        : state.t(I18N_KEYS.ErrorsConflictResolutionFailed);
   } finally {
     state.isSaving = false;
   }
@@ -105,7 +106,7 @@ export async function resolveSyncConflictKeepLocal(
     provider: conflict.providerLabel,
     kind: conflict.conflictKind,
   });
-  state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
+  state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }
 
@@ -124,7 +125,7 @@ export async function resolveSyncConflictKeepRemote(
     provider: conflict.providerLabel,
     kind: conflict.conflictKind,
   });
-  state.errorMsg = state.t("errors.whole_vault_conflict_resolution_retired");
+  state.errorMsg = state.t(I18N_KEYS.ErrorsWholeVaultConflictResolutionRetired);
   state.isVerifying = false;
 }
 
@@ -238,7 +239,7 @@ export async function resolveSyncConflictImportRemote(
       );
     } else {
       if (!state.hasManager) {
-        throw new Error(state.t("errors.manager_uninitialized"));
+        throw new Error(state.t(I18N_KEYS.ErrorsManagerUninitialized));
       }
       const provider = state.providers.find(
         (p) => p.id === conflict.providerId,
@@ -248,11 +249,11 @@ export async function resolveSyncConflictImportRemote(
         if (
           configuration.kind === LocalFolderProviderConfigurationKind.Missing
         ) {
-          throw new Error(state.t("auth_storage.local_folder_choose_err"));
+          throw new Error(state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr));
         }
         const handle = localFolderHandle(configuration.config);
         if (handle.kind === LocalFolderHandleKind.Unselected) {
-          throw new Error(state.t("auth_storage.local_folder_choose_err"));
+          throw new Error(state.t(I18N_KEYS.AuthStorageLocalFolderChooseErr));
         }
         importedStoreId = (await state.enqueueStorage(() =>
           state
@@ -314,7 +315,7 @@ export async function resolveSyncConflictImportRemote(
       await refreshLoginUnlockCapabilities(state);
     }
     state.showSuccess(
-      state.t("auth_storage.sync_conflict_imported_vault", {
+      state.t(I18N_KEYS.AuthStorageSyncConflictImportedVault, {
         provider: providerLabel,
       }),
     );
@@ -322,7 +323,7 @@ export async function resolveSyncConflictImportRemote(
     state.errorMsg =
       error instanceof Error
         ? error.message
-        : state.t("auth_storage.sync_failed");
+        : state.t(I18N_KEYS.AuthStorageSyncFailed);
     providerSave = { kind: ConflictProviderSaveKind.NotSaved };
   } finally {
     state.isVerifying = false;

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   bindGoogleDriveSharedFolder,
@@ -143,7 +144,7 @@ function bindSharedICloudTarget(
 
 export async function signInWithGoogle(state: VaultState): Promise<void> {
   if (!isGoogleOAuthConfigured()) {
-    state.errorMsg = state.t("provider_setup.google_oauth_unconfigured");
+    state.errorMsg = state.t(I18N_KEYS.ProviderSetupGoogleOauthUnconfigured);
     return;
   }
   if (!ensureSupportedOAuthOrigin(state, BrowserOAuthProvider.GoogleDrive)) {
@@ -208,7 +209,7 @@ export async function createICloudSharedProvider(
     oauthAccessToken(state.oauthFileDraft.config).kind ===
       OAuthAccessTokenKind.Missing
   ) {
-    throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst));
   }
   let target;
   try {
@@ -220,7 +221,7 @@ export async function createICloudSharedProvider(
     throw new Error(
       message.startsWith("provider_setup.")
         ? state.t(message)
-        : state.t("provider_setup.icloud_shared_create_failed"),
+        : state.t(I18N_KEYS.ProviderSetupIcloudSharedCreateFailed),
       { cause: error },
     );
   }
@@ -231,7 +232,7 @@ export async function createICloudSharedProvider(
     ),
   );
   state.sharedGrantInstructions = state.t(
-    "provider_setup.icloud_shared_created",
+    I18N_KEYS.ProviderSetupIcloudSharedCreated,
   );
 }
 
@@ -244,7 +245,7 @@ export async function useICloudSharedProvider(
     oauthAccessToken(state.oauthFileDraft.config).kind ===
       OAuthAccessTokenKind.Missing
   ) {
-    throw new Error(state.t("provider_setup.icloud_shared_sign_in_first"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst));
   }
   let target;
   try {
@@ -254,7 +255,7 @@ export async function useICloudSharedProvider(
     throw new Error(
       message.startsWith("provider_setup.")
         ? state.t(message)
-        : state.t("provider_setup.icloud_shared_connect_failed"),
+        : state.t(I18N_KEYS.ProviderSetupIcloudSharedConnectFailed),
       { cause: error },
     );
   }
@@ -265,7 +266,7 @@ export async function useICloudSharedProvider(
     ),
   );
   state.sharedGrantInstructions = state.t(
-    "provider_setup.icloud_shared_connected",
+    I18N_KEYS.ProviderSetupIcloudSharedConnected,
   );
 }
 
@@ -274,12 +275,12 @@ export async function createGoogleSharedFolder(
   collaboratorEmail: string,
 ): Promise<string> {
   if (state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured) {
-    throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
   }
   const oauthFile = state.oauthFileDraft.config;
   const accessCredential = oauthAccessToken(oauthFile);
   if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
-    throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
   }
   const remoteFileName = oauthFileName(oauthFile);
   const folderName = state.githubRepo.trim()
@@ -301,7 +302,7 @@ export async function createGoogleSharedFolder(
   }
   const target = grant.target;
   if (target.state === "unavailable") {
-    throw new Error(state.t("provider_setup.google_shared_create_failed"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedCreateFailed));
   }
   state.configureOauthFile(
     bindGoogleDriveSharedFolder(
@@ -311,7 +312,7 @@ export async function createGoogleSharedFolder(
   );
   state.sharedGrantInstructions =
     grant.kind === "granted"
-      ? state.t("provider_setup.google_shared_folder_created", {
+      ? state.t(I18N_KEYS.ProviderSetupGoogleSharedFolderCreated, {
           email: collaboratorEmail.trim(),
           folder:
             target.state === "named"
@@ -337,7 +338,7 @@ export async function useGoogleSharedFolder(
       ? oauthAccessToken(state.oauthFileDraft.config)
       : missingOAuthAccessToken();
   if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
-    throw new Error(state.t("provider_setup.google_shared_sign_in_first"));
+    throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
   }
   let folder;
   try {
@@ -347,13 +348,13 @@ export async function useGoogleSharedFolder(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("provider_setup.google_shared_not_folder")) {
-      throw new Error(state.t("provider_setup.google_shared_not_folder"), {
+    if (message.includes(I18N_KEYS.ProviderSetupGoogleSharedNotFolder)) {
+      throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedNotFolder), {
         cause: error,
       });
     }
-    if (message.includes("provider_setup.google_shared_not_writable")) {
-      throw new Error(state.t("provider_setup.google_shared_not_writable"), {
+    if (message.includes(I18N_KEYS.ProviderSetupGoogleSharedNotWritable)) {
+      throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedNotWritable), {
         cause: error,
       });
     }
@@ -363,7 +364,7 @@ export async function useGoogleSharedFolder(
     bindGoogleDriveSharedFolder(state.requireOauthFileConfig(), folder.id),
   );
   state.sharedGrantInstructions = state.t(
-    "provider_setup.google_shared_folder_connected",
+    I18N_KEYS.ProviderSetupGoogleSharedFolderConnected,
     { folder: folder.name },
   );
   return folder.name;
@@ -381,7 +382,7 @@ export async function signInWithICloud(
     clickPreparedControl: options.clickPreparedControl === true,
   });
   if (!isICloudOAuthConfigured()) {
-    state.errorMsg = state.t("provider_setup.icloud_oauth_unconfigured");
+    state.errorMsg = state.t(I18N_KEYS.ProviderSetupIcloudOauthUnconfigured);
     log.warn("iCloud sign-in blocked: not configured");
     return;
   }
@@ -402,11 +403,11 @@ export async function signInWithICloud(
         ready: state.icloudOAuthReady,
         preparing: state.icloudOAuthPreparing,
       });
-      throw new Error("provider_setup.icloud_sign_in_loading");
+      throw new Error(I18N_KEYS.ProviderSetupIcloudSignInLoading);
     }
     if (!wasReady) {
       log.info("iCloud sign-in control became ready; waiting for second click");
-      throw new Error("provider_setup.icloud_sign_in_ready");
+      throw new Error(I18N_KEYS.ProviderSetupIcloudSignInReady);
     }
     const tokenRequest = requestPreparedICloudWebAuthToken({
       clickSignInControl: options.clickPreparedControl,
@@ -424,7 +425,7 @@ export async function signInWithICloud(
       error instanceof Error &&
         error.message.startsWith("provider_setup.icloud_")
         ? error.message
-        : "provider_setup.icloud_sign_in_failed",
+        : I18N_KEYS.ProviderSetupIcloudSignInFailed,
     );
     log.warn("iCloud sign-in failed", { error: state.errorMsg });
   } finally {
@@ -480,7 +481,7 @@ export async function prepareICloudSignIn(state: VaultState): Promise<void> {
       error instanceof Error &&
         error.message.startsWith("provider_setup.icloud_")
         ? error.message
-        : "provider_setup.icloud_sign_in_failed",
+        : I18N_KEYS.ProviderSetupIcloudSignInFailed,
     );
     log.warn("iCloud sign-in prepare failed", { error: state.errorMsg });
   } finally {
@@ -549,8 +550,8 @@ function ensureSupportedOAuthOrigin(
   });
   state.errorMsg = state.t(
     support.reason === OAuthOriginUnsupportedReason.CloudflarePrPreview
-      ? "provider_setup.oauth_preview_origin_unsupported"
-      : "provider_setup.oauth_origin_unsupported",
+      ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
+      : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
     { origin: support.origin },
   );
   return false;

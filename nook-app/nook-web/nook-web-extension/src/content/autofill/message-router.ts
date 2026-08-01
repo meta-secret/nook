@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   isWebsiteAuthenticatorCanceledMessage,
@@ -61,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setStatus(
       pending.description,
       pending.continueButton,
-      translatedMessage('widgetLoginPickerCanceled'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetLoginPickerCanceled),
       true,
     )
     if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
@@ -114,7 +115,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setStatus(
       pending.description,
       pending.continueButton,
-      translatedMessage('widgetAuthenticatorPickerCanceled'),
+      translatedMessage(BROWSER_MESSAGE_KEYS.WidgetAuthenticatorPickerCanceled),
       true,
     )
     if (pending.continueButton.isConnected && !pending.continueButton.hidden) {

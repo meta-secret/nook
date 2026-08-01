@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onMount } from 'svelte'
   import { Copy, KeyRound, RefreshCw, Users } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
@@ -102,7 +103,7 @@
       vault.errorMsg =
         error instanceof Error
           ? vault.resolveErrorMessage(error.message)
-          : vault.t('architecture_modes.sentinel_unlock_failed')
+          : vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockFailed)
     } finally {
       actionBusy = false
     }
@@ -116,7 +117,7 @@
       setTimeout(() => (copied = false), 1500)
     } catch {
       vault.errorMsg = vault.t(
-        'architecture_modes.sentinel_ceremony_copy_failed',
+        I18N_KEYS.ArchitectureModesSentinelCeremonyCopyFailed,
       )
     }
   }
@@ -137,7 +138,7 @@
     >
       <span class="flex items-center gap-2">
         <Users class="size-4 text-primary" />
-        {vault.t('architecture_modes.sentinel_unlock_help_title')}
+        {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockHelpTitle)}
       </span>
       <span class="text-xs text-muted-foreground">{open ? '−' : '+'}</span>
     </button>
@@ -147,7 +148,7 @@
         class="space-y-4 rounded-md border border-border/60 bg-background/40 p-3"
       >
         <p class="text-sm leading-snug text-pretty text-muted-foreground">
-          {vault.t('architecture_modes.sentinel_unlock_help_description')}
+          {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockHelpDescription)}
         </p>
 
         {#if !loaded}
@@ -156,14 +157,14 @@
             role="status"
           >
             <RefreshCw class="size-4 animate-spin" />
-            {vault.t('common.loading')}
+            {vault.t(I18N_KEYS.CommonLoading)}
           </div>
         {:else if vault.sentinelStoredDeliveries.length === 0}
           <p
             class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
             data-testid="sentinel-unlock-no-deliveries"
           >
-            {vault.t('architecture_modes.sentinel_unlock_no_deliveries')}
+            {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockNoDeliveries)}
           </p>
         {:else}
           <div class="space-y-2">
@@ -171,7 +172,7 @@
               class="text-xs font-medium text-foreground"
               for="sentinel-delivery-select"
             >
-              {vault.t('architecture_modes.sentinel_unlock_delivery_label')}
+              {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockDeliveryLabel)}
             </label>
             <Select.Root
               type="single"
@@ -196,7 +197,7 @@
               >
                 {selectedSummary?.storeId ??
                   vault.t(
-                    'architecture_modes.sentinel_unlock_delivery_placeholder',
+                    I18N_KEYS.ArchitectureModesSentinelUnlockDeliveryPlaceholder,
                   )}
               </Select.Trigger>
               <Select.Content portalProps={{ disabled: true }}>
@@ -217,14 +218,14 @@
               class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
               for="sentinel-participant-request"
             >
-              {vault.t('architecture_modes.sentinel_unlock_paste_request')}
+              {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockPasteRequest)}
             </label>
             <textarea
               id="sentinel-participant-request"
               class="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-snug text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
               data-testid="sentinel-unlock-participant-request-input"
               placeholder={vault.t(
-                'architecture_modes.sentinel_unlock_paste_request_placeholder',
+                I18N_KEYS.ArchitectureModesSentinelUnlockPasteRequestPlaceholder,
               )}
               disabled={disabled || actionBusy}
               bind:value={request}></textarea>
@@ -244,7 +245,7 @@
               {:else}
                 <KeyRound class="size-4" />
               {/if}
-              {vault.t('architecture_modes.sentinel_unlock_create_response')}
+              {vault.t(I18N_KEYS.ArchitectureModesSentinelUnlockCreateResponse)}
             </Button>
           </div>
 
@@ -256,7 +257,7 @@
               <EnrollmentQrCode
                 enrollmentLink={response}
                 loadingLabel={vault.t(
-                  'architecture_modes.sentinel_unlock_qr_loading',
+                  I18N_KEYS.ArchitectureModesSentinelUnlockQrLoading,
                 )}
               />
               <div class="min-w-0 space-y-2">
@@ -265,7 +266,7 @@
                   for="sentinel-participant-response"
                 >
                   {vault.t(
-                    'architecture_modes.sentinel_unlock_generated_response',
+                    I18N_KEYS.ArchitectureModesSentinelUnlockGeneratedResponse,
                   )}
                 </label>
                 <textarea
@@ -283,9 +284,9 @@
                 >
                   <Copy class="size-4" />
                   {copied
-                    ? vault.t('architecture_modes.sentinel_ceremony_copied')
+                    ? vault.t(I18N_KEYS.ArchitectureModesSentinelCeremonyCopied)
                     : vault.t(
-                        'architecture_modes.sentinel_unlock_copy_response',
+                        I18N_KEYS.ArchitectureModesSentinelUnlockCopyResponse,
                       )}
                 </Button>
               </div>

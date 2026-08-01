@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { ProviderActionsContext } from "$lib/vault/action-contexts";
 import { createLogger } from "$lib/runtime/log";
 import {
@@ -43,7 +44,7 @@ export async function discoverStagedVaultStoreId(
   }
   const setupType = state.loginSetup.providerType;
   if (state.isVerifying) {
-    throw new Error(state.t("auth_storage.sync_failed"));
+    throw new Error(state.t(I18N_KEYS.AuthStorageSyncFailed));
   }
   state.isVerifying = true;
   try {
@@ -74,7 +75,7 @@ export async function discoverStagedVaultStoreId(
       ).trim();
     })();
     const timeout = startVaultDiscoveryTimeout(
-      state.t("auth_storage.sync_failed"),
+      state.t(I18N_KEYS.AuthStorageSyncFailed),
       30_000,
     );
     try {
@@ -125,7 +126,7 @@ export async function connectAndSyncStagedProvider(
       state.syncProviders[state.syncProviders.length - 1] ??
       state.providers[state.providers.length - 1];
     if (!provider || provider.type === "local") {
-      state.errorMsg = state.t("errors.cloud_sync_provider_required");
+      state.errorMsg = state.t(I18N_KEYS.ErrorsCloudSyncProviderRequired);
       return;
     }
     await state.flushRemoteEventOutboxNow(provider);
@@ -147,10 +148,10 @@ export async function connectAndSyncStagedProvider(
       state.errorMsg =
         state.localFolderHealth.state ===
         NookLocalFolderHealthState.MultipleVaults
-          ? state.t("auth_storage.local_folder_multiple_vaults_short")
+          ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)
           : error instanceof Error
             ? error.message
-            : state.t("auth_storage.sync_failed");
+            : state.t(I18N_KEYS.AuthStorageSyncFailed);
     }
   } finally {
     state.isVerifying = false;

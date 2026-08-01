@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../nook-web-shared/src/generated/i18n-keys'
   import { Search } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
@@ -65,7 +66,7 @@
     if (!isAccountQueryResponse(response)) {
       accounts = []
       destinationOrigin = ''
-      error = i18n.t('extension.authenticator_picker.failed')
+      error = i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
       return
     }
     destinationOrigin = response.origin
@@ -90,7 +91,7 @@
       return
     }
     busy = false
-    error = i18n.t('extension.authenticator_picker.failed')
+    error = i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFailed)
   }
 
   $effect(() => {
@@ -114,16 +115,16 @@
 
 <main class="authenticator-picker" data-testid="authenticator-picker">
   <p class="step-label">
-    {i18n.t('extension.authenticator_picker.step_label')}
+    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerStepLabel)}
   </p>
   <NookIcon src="../icons/nook.png" alt="" class="popup-logo companion-logo" />
-  <h1>{i18n.t('extension.authenticator_picker.title')}</h1>
+  <h1>{i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerTitle)}</h1>
   <p class="description">
-    {i18n.t('extension.authenticator_picker.description')}
+    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerDescription)}
   </p>
   {#if destinationOrigin}
     <p class="destination-origin" data-testid="authenticator-destination">
-      {i18n.t('extension.authenticator_picker.destination', {
+      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerDestination, {
         origin: destinationOrigin,
       })}
     </p>
@@ -132,7 +133,7 @@
   <div class="picker-filter">
     <Search aria-hidden="true" size={18} />
     <label for="authenticator-search">
-      {i18n.t('extension.authenticator_picker.search_label')}
+      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerSearchLabel)}
     </label>
     <input
       id="authenticator-search"
@@ -142,22 +143,24 @@
       bind:value={query}
       maxlength="200"
       autocomplete="off"
-      placeholder={i18n.t('extension.authenticator_picker.search_placeholder')}
+      placeholder={i18n.t(
+        I18N_KEYS.ExtensionAuthenticatorPickerSearchPlaceholder,
+      )}
     />
   </div>
   <p class="filter-chip">
-    {i18n.t('extension.authenticator_picker.filter_label')}
+    {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerFilterLabel)}
   </p>
 
   {#if error}
     <p class="error-message" role="alert">{error}</p>
   {:else if loading}
     <p class="picker-status">
-      {i18n.t('extension.authenticator_picker.loading')}
+      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerLoading)}
     </p>
   {:else if accounts.length === 0}
     <p class="picker-status">
-      {i18n.t('extension.authenticator_picker.no_results')}
+      {i18n.t(I18N_KEYS.ExtensionAuthenticatorPickerNoResults)}
     </p>
   {:else}
     <div class="authenticator-results" data-testid="authenticator-results">

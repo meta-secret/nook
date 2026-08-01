@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { BookOpen, ChevronDown, Info } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -32,11 +33,11 @@
     <Info class="size-5 shrink-0 text-muted-foreground" />
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-medium text-foreground">
-        {vault.t('product_intro.why_nook')}
+        {vault.t(I18N_KEYS.ProductIntroWhyNook)}
       </span>
       {#if !open}
         <span class="block truncate text-xs leading-5 text-muted-foreground">
-          {vault.t('product_intro.device_is_key')}
+          {vault.t(I18N_KEYS.ProductIntroDeviceIsKey)}
         </span>
       {/if}
     </span>
@@ -53,17 +54,17 @@
       data-testid="product-intro-panel"
     >
       <p class="text-sm font-medium text-foreground">
-        {vault.t('product_intro.device_is_key')}
+        {vault.t(I18N_KEYS.ProductIntroDeviceIsKey)}
       </p>
       <p class="text-pretty text-sm leading-normal">
-        {vault.t('product_intro.no_master_pw')}
+        {vault.t(I18N_KEYS.ProductIntroNoMasterPw)}
       </p>
       <ul
         class="list-disc space-y-0.5 pl-5 text-pretty text-sm leading-normal marker:text-muted-foreground/60"
       >
-        <li>{vault.t('product_intro.bullet1')}</li>
-        <li>{vault.t('product_intro.bullet2')}</li>
-        <li>{vault.t('product_intro.bullet3')}</li>
+        <li>{vault.t(I18N_KEYS.ProductIntroBullet1)}</li>
+        <li>{vault.t(I18N_KEYS.ProductIntroBullet2)}</li>
+        <li>{vault.t(I18N_KEYS.ProductIntroBullet3)}</li>
       </ul>
       <Button
         type="button"
@@ -74,7 +75,7 @@
         onclick={onOpenHelp}
       >
         <BookOpen class="size-4" />
-        {vault.t('product_intro.how_works')}
+        {vault.t(I18N_KEYS.ProductIntroHowWorks)}
       </Button>
     </div>
   {/if}

@@ -46,11 +46,17 @@ impl SentinelGenesisPhase {
     #[must_use]
     pub const fn translation_key(self) -> &'static str {
         match self {
-            Self::Inactive => "login.sentinel_genesis_phase_inactive",
-            Self::CollectingParticipants => "login.sentinel_genesis_phase_collecting_participants",
-            Self::ReadyToFinalize => "login.sentinel_genesis_phase_ready_to_finalize",
-            Self::DeliveringShares => "login.sentinel_genesis_phase_delivering_shares",
-            Self::Complete => "login.sentinel_genesis_phase_complete",
+            Self::Inactive => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_INACTIVE,
+            Self::CollectingParticipants => {
+                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
+            }
+            Self::ReadyToFinalize => {
+                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE
+            }
+            Self::DeliveringShares => {
+                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES
+            }
+            Self::Complete => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
         }
     }
 
@@ -192,7 +198,7 @@ mod tests {
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
         assert_eq!(
             SentinelGenesisPhase::CollectingParticipants.translation_key(),
-            "login.sentinel_genesis_phase_collecting_participants"
+            crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
         );
         assert_eq!(
             SentinelGenesisPhase::DeliveringShares.complete_delivery(),

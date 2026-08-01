@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { RefreshCw, UserPlus } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { JoinRequest } from '$lib/nook'
@@ -39,13 +40,13 @@
         >
           <UserPlus class="size-4 shrink-0 text-primary" />
           {pendingJoins.length === 1
-            ? vault.t('pending_joins.one_wants_join')
-            : vault.t('pending_joins.count_wants_join', {
+            ? vault.t(I18N_KEYS.PendingJoinsOneWantsJoin)
+            : vault.t(I18N_KEYS.PendingJoinsCountWantsJoin, {
                 count: String(pendingJoins.length),
               })}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
-          {vault.t('pending_joins.instructions')}
+          {vault.t(I18N_KEYS.PendingJoinsInstructions)}
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
@@ -58,7 +59,7 @@
             data-testid="open-devices-settings-btn"
             onclick={onOpenDevicesSettings}
           >
-            {vault.t('pending_joins.devices')}
+            {vault.t(I18N_KEYS.PendingJoinsDevices)}
           </Button>
         {/if}
         {#if onRefresh}
@@ -69,7 +70,7 @@
             class="border-border"
             disabled={isBusy}
             data-testid="refresh-joins-banner-btn"
-            aria-label={vault.t('pending_joins.refresh_aria')}
+            aria-label={vault.t(I18N_KEYS.PendingJoinsRefreshAria)}
             onclick={() => void onRefresh()}
           >
             <RefreshCw class="size-3.5 {isBusy ? 'animate-spin' : ''}" />
@@ -100,7 +101,7 @@
             data-testid="approve-join-btn"
             onclick={() => void onApproveJoin(join.deviceId)}
           >
-            {vault.t('settings.approve')}
+            {vault.t(I18N_KEYS.SettingsApprove)}
           </Button>
         </li>
       {/each}

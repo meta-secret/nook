@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    I18N_KEYS,
+    type I18nKey,
+  } from '../../../generated/i18n-keys'
   import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
   import {
     ExtensionPairingApprovedMessageType,
@@ -36,6 +40,17 @@
   let error = $state('')
   let handoffError = $state('')
 
+  const scopeTranslationKeys: Record<ExtensionConnectScope, I18nKey> = {
+    [ExtensionConnectScope.VaultAccess]:
+      I18N_KEYS.ExtensionConsentScopeVaultAccess,
+    [ExtensionConnectScope.PasswordFilling]:
+      I18N_KEYS.ExtensionConsentScopePasswordFilling,
+    [ExtensionConnectScope.PasskeyManagement]:
+      I18N_KEYS.ExtensionConsentScopePasskeyManagement,
+    [ExtensionConnectScope.SyncProviderCredentials]:
+      I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials,
+  }
+
   const canApprove = $derived(
     vault.isAuthenticated &&
       !vault.isVerifying &&
@@ -53,11 +68,11 @@
     if (vault.activeVault.kind === ActiveVaultKind.Open) {
       for (const entry of vault.localVaults) {
         if (entry.storeId === vault.activeVault.storeId) {
-          return entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+          return entry.displayLabel(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
         }
       }
     }
-    return vault.t('login.vault_picker_unnamed')
+    return vault.t(I18N_KEYS.LoginVaultPickerUnnamed)
   }
 
   function sendGrantToExtension(
@@ -83,7 +98,7 @@
 
     if (!runtime?.sendMessage) {
       return Promise.reject(
-        new Error(vault.t('extension.consent.messaging_unavailable')),
+        new Error(vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable)),
       )
     }
 
@@ -136,10 +151,10 @@
             reject(
               new Error(
                 migrationRequired
-                  ? `${vault.t('extension.consent.grant_rejected')} (${vault.t(
-                      'extension.consent.plaintext_provider_migration_required',
+                  ? `${vault.t(I18N_KEYS.ExtensionConsentGrantRejected)} (${vault.t(
+                      I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
                     )})`
-                  : vault.t('extension.consent.grant_rejected'),
+                  : vault.t(I18N_KEYS.ExtensionConsentGrantRejected),
               ),
             )
           },
@@ -147,7 +162,7 @@
       })
 
     return (async () => {
-      let lastError = new Error(vault.t('extension.consent.grant_rejected'))
+      let lastError = new Error(vault.t(I18N_KEYS.ExtensionConsentGrantRejected))
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           await sendOnce()
@@ -156,7 +171,7 @@
           lastError =
             caught instanceof Error
               ? caught
-              : new Error(vault.t('extension.consent.grant_rejected'))
+              : new Error(vault.t(I18N_KEYS.ExtensionConsentGrantRejected))
           if (attempt < 2) {
             await new Promise<void>((resolve) =>
               window.setTimeout(resolve, 150),
@@ -223,25 +238,25 @@
       } catch (caught) {
         handoffError =
           caught instanceof Error
-            ? vault.t('extension.consent.handoff_failed_detail', {
+            ? vault.t(I18N_KEYS.ExtensionConsentHandoffFailedDetail, {
                 error: caught.message,
               })
-            : vault.t('extension.consent.handoff_failed')
+            : vault.t(I18N_KEYS.ExtensionConsentHandoffFailed)
       } finally {
         eventLogRecordValues.free()
       }
       await vault.refreshDeviceState()
       vault.showSuccess(
         handoffError
-          ? vault.t('extension.consent.approved_reopen')
-          : vault.t('extension.consent.approved'),
+          ? vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)
+          : vault.t(I18N_KEYS.ExtensionConsentApproved),
       )
       approved = true
     } catch (caught) {
       error =
         caught instanceof Error
           ? vault.resolveErrorMessage(caught.message)
-          : vault.t('extension.consent.approval_failed')
+          : vault.t(I18N_KEYS.ExtensionConsentApprovalFailed)
       vault.errorMsg = error
     } finally {
       vault.isSaving = false
@@ -262,10 +277,10 @@
     </div>
     <div class="min-w-0 space-y-1">
       <h2 class="text-lg font-semibold text-foreground">
-        {vault.t('extension.consent.title')}
+        {vault.t(I18N_KEYS.ExtensionConsentTitle)}
       </h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
-        {vault.t('extension.consent.description')}
+        {vault.t(I18N_KEYS.ExtensionConsentDescription)}
       </p>
     </div>
   </div>
@@ -277,7 +292,7 @@
       <p
         class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
       >
-        {vault.t('extension.consent.device')}
+        {vault.t(I18N_KEYS.ExtensionConsentDevice)}
       </p>
       <p class="mt-1 text-sm font-semibold text-foreground">
         {request.deviceLabel}
@@ -289,7 +304,7 @@
     <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
       <p class="flex items-center gap-2 text-xs font-medium text-foreground">
         <KeyRound class="size-3.5 text-muted-foreground" />
-        {vault.t('extension.consent.encryption_key')}
+        {vault.t(I18N_KEYS.ExtensionConsentEncryptionKey)}
       </p>
       <p
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
@@ -301,7 +316,7 @@
     <div class="rounded-md border border-border/40 bg-muted/20 px-3 py-2">
       <p class="flex items-center gap-2 text-xs font-medium text-foreground">
         <KeyRound class="size-3.5 text-muted-foreground" />
-        {vault.t('extension.consent.signing_key')}
+        {vault.t(I18N_KEYS.ExtensionConsentSigningKey)}
       </p>
       <p
         class="mt-1 truncate font-mono text-[11px] text-muted-foreground"
@@ -314,7 +329,7 @@
 
   <div class="mt-4 space-y-2">
     <p class="text-sm font-medium text-foreground">
-      {vault.t('extension.consent.requested_access')}
+      {vault.t(I18N_KEYS.ExtensionConsentRequestedAccess)}
     </p>
     <ul class="grid gap-2" data-testid="extension-connect-scopes">
       {#each request.scopes as scope (scope)}
@@ -322,7 +337,7 @@
           class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
         >
           <Check class="size-3.5 text-primary" />
-          {vault.t(`extension.consent.scope_${scope.replaceAll('-', '_')}`)}
+          {vault.t(scopeTranslationKeys[scope])}
         </li>
       {/each}
     </ul>
@@ -333,7 +348,7 @@
       class="mt-4 rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300"
       data-testid="extension-connect-locked"
     >
-      {vault.t('extension.consent.unlock_first')}
+      {vault.t(I18N_KEYS.ExtensionConsentUnlockFirst)}
     </p>
   {/if}
 
@@ -360,13 +375,13 @@
       class="mt-4 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm text-primary"
       data-testid="extension-connect-approved"
     >
-      {vault.t('extension.consent.approved_return')}
+      {vault.t(I18N_KEYS.ExtensionConsentApprovedReturn)}
     </p>
   {/if}
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     <Button type="button" variant="outline" onclick={() => onClose(approved)}>
-      {approved ? vault.t('common.done') : vault.t('common.cancel')}
+      {approved ? vault.t(I18N_KEYS.CommonDone) : vault.t(I18N_KEYS.CommonCancel)}
     </Button>
     <Button
       type="button"
@@ -375,8 +390,8 @@
       onclick={() => void approveExtension()}
     >
       {isApproving
-        ? vault.t('extension.consent.approving')
-        : vault.t('extension.consent.approve')}
+        ? vault.t(I18N_KEYS.ExtensionConsentApproving)
+        : vault.t(I18N_KEYS.ExtensionConsentApprove)}
     </Button>
   </div>
 </section>

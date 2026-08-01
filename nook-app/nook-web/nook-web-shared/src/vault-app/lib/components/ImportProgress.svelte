@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { LoaderCircle } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -22,16 +23,16 @@
     <div class="min-w-0 flex-1 space-y-2">
       <div>
         <p class="text-sm font-medium text-foreground">
-          {vault.t('common.import_progress_title')}
+          {vault.t(I18N_KEYS.CommonImportProgressTitle)}
         </p>
         <p class="mt-0.5 text-xs text-muted-foreground">
-          {vault.t('common.import_progress_description')}
+          {vault.t(I18N_KEYS.CommonImportProgressDescription)}
         </p>
       </div>
       <div
         class="h-1.5 overflow-hidden rounded-full bg-primary/20"
         role="progressbar"
-        aria-label={vault.t('common.import_progress_title')}
+        aria-label={vault.t(I18N_KEYS.CommonImportProgressTitle)}
       >
         <div class="h-full w-2/3 animate-pulse rounded-full bg-primary"></div>
       </div>

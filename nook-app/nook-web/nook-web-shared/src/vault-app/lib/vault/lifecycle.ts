@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import type { NookSecretRecord } from "$lib/nook";
 import { getVaultManager } from "$lib/nook";
@@ -78,7 +79,7 @@ export async function initOnce(state: VaultState): Promise<void> {
     const configuredApplication = configuredVaultApplication();
     if (state.requireManager().vaultApplication !== configuredApplication) {
       throw new Error(
-        state.t("app.capability_mismatch", {
+        state.t(I18N_KEYS.AppCapabilityMismatch, {
           app: String(configuredApplication),
           wasm: String(state.requireManager().vaultApplication),
         }),
@@ -255,7 +256,9 @@ export async function initDeviceIdentity(
       !state.deviceAuthorizationInProgress &&
       !options?.allowPendingAuthorization)
   ) {
-    throw new Error(state.t("errors.device_protection.authorization_required"));
+    throw new Error(
+      state.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired),
+    );
   }
   const identity = await state.enqueueStorage(() => ({
     deviceId: state.requireManager().device_id,
@@ -293,7 +296,7 @@ export async function authorizeWithExternalDeviceIdentity(
       priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
         ? state.deviceProtectionLockedStatus
         : priorDeviceProtectionStatus;
-    state.errorMsg = state.t("extension.connect.identity_handoff_failed");
+    state.errorMsg = state.t(I18N_KEYS.ExtensionConnectIdentityHandoffFailed);
     log.warn("extension identity handoff failed", {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -334,7 +337,7 @@ export async function createFreshVault(state: VaultState) {
         .requireManager()
         .connect_fresh(...state.wasmStorageArgs());
       const timeout = startVaultDiscoveryTimeout(
-        state.t("toasts.error_timeout"),
+        state.t(I18N_KEYS.ToastsErrorTimeout),
         30_000,
       );
       try {
@@ -361,7 +364,7 @@ export async function createFreshVault(state: VaultState) {
       mode: state.storageMode,
       secrets: rawRecords.length,
     });
-    state.showSuccess(state.t("toasts.vault_created"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsVaultCreated));
     state.startIdleSessionTracking();
   } catch (e: unknown) {
     state.isAuthenticated = false;

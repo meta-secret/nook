@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { tick } from 'svelte'
   import {
     ArrowRight,
@@ -198,17 +199,17 @@
   )
   const landingSupporting = $derived(
     appKind === VaultApplication.Simple
-      ? vault.t('login.landing_supporting_simple')
+      ? vault.t(I18N_KEYS.LoginLandingSupportingSimple)
       : appKind === VaultApplication.Sentinel
-        ? vault.t('login.landing_supporting_sentinel')
-        : vault.t('login.landing_supporting'),
+        ? vault.t(I18N_KEYS.LoginLandingSupportingSentinel)
+        : vault.t(I18N_KEYS.LoginLandingSupporting),
   )
   const existingVaultDescription = $derived(
     appKind === VaultApplication.Simple
-      ? vault.t('login.path_cloud_description_simple')
+      ? vault.t(I18N_KEYS.LoginPathCloudDescriptionSimple)
       : appKind === VaultApplication.Sentinel
-        ? vault.t('login.path_cloud_description_sentinel')
-        : vault.t('login.path_cloud_description'),
+        ? vault.t(I18N_KEYS.LoginPathCloudDescriptionSentinel)
+        : vault.t(I18N_KEYS.LoginPathCloudDescription),
   )
 
   $effect(() => {
@@ -247,15 +248,15 @@
   })
 
   const progressSteps = $derived.by(() => {
-    const choose = vault.t('login.landing_step_choose')
+    const choose = vault.t(I18N_KEYS.LoginLandingStepChoose)
     if (chosenPath === ChosenVaultPath.Simple) {
-      return [choose, vault.t('login.landing_step_simple')]
+      return [choose, vault.t(I18N_KEYS.LoginLandingStepSimple)]
     }
     if (chosenPath === ChosenVaultPath.Sentinel) {
-      return [choose, vault.t('login.landing_step_sentinel')]
+      return [choose, vault.t(I18N_KEYS.LoginLandingStepSentinel)]
     }
     if (chosenPath === ChosenVaultPath.Join) {
-      return [choose, vault.t('login.landing_step_join')]
+      return [choose, vault.t(I18N_KEYS.LoginLandingStepJoin)]
     }
     return [choose]
   })
@@ -452,12 +453,12 @@
         <p
           class="font-mono text-[11px] tracking-[0.2em] text-muted-foreground uppercase"
         >
-          {vault.t('login.landing_eyebrow')}
+          {vault.t(I18N_KEYS.LoginLandingEyebrow)}
         </p>
         <h1
           class="text-4xl leading-[0.95] font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl"
         >
-          {vault.t('login.landing_headline')}
+          {vault.t(I18N_KEYS.LoginLandingHeadline)}
         </h1>
         <p
           class="max-w-md text-base leading-7 text-muted-foreground text-pretty"
@@ -500,17 +501,17 @@
                 <p
                   class="text-[10px] tracking-[0.22em] text-current/60 uppercase"
                 >
-                  {vault.t('login.sentinel_dashboard_workspace_eyebrow')}
+                  {vault.t(I18N_KEYS.LoginSentinelDashboardWorkspaceEyebrow)}
                 </p>
                 <h2
                   class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl"
                 >
                   {dashboardIs(SentinelDashboard.Terminal)
-                    ? vault.t('login.sentinel_dashboard_terminal_title')
-                    : vault.t('login.sentinel_dashboard_card_stack_title')}
+                    ? vault.t(I18N_KEYS.LoginSentinelDashboardTerminalTitle)
+                    : vault.t(I18N_KEYS.LoginSentinelDashboardCardStackTitle)}
                 </h2>
                 <p class="mt-2 max-w-2xl text-sm leading-6 text-current/65">
-                  {vault.t('login.sentinel_dashboard_workspace_description', {
+                  {vault.t(I18N_KEYS.LoginSentinelDashboardWorkspaceDescription, {
                     name: sentinelName,
                   })}
                 </p>
@@ -524,7 +525,7 @@
                   disabled={isBusy || sentinelActionBusy}
                   onclick={goBack}
                 >
-                  {vault.t('login.sentinel_dashboard_change')}
+                  {vault.t(I18N_KEYS.LoginSentinelDashboardChange)}
                 </Button>
               {/if}
             </header>
@@ -589,14 +590,14 @@
                                 <span class="min-w-0">
                                   <span class="block text-sm font-semibold">
                                     {vault.t(
-                                      'login.get_started_path_simple_title',
+                                      I18N_KEYS.LoginGetStartedPathSimpleTitle,
                                     )}
                                   </span>
                                   <span
                                     class="mt-1 block text-xs leading-snug text-muted-foreground"
                                   >
                                     {vault.t(
-                                      'login.get_started_path_simple_description',
+                                      I18N_KEYS.LoginGetStartedPathSimpleDescription,
                                     )}
                                   </span>
                                 </span>
@@ -621,14 +622,14 @@
                                 <span class="min-w-0">
                                   <span class="block text-sm font-semibold">
                                     {vault.t(
-                                      'login.get_started_path_sentinel_title',
+                                      I18N_KEYS.LoginGetStartedPathSentinelTitle,
                                     )}
                                   </span>
                                   <span
                                     class="mt-1 block text-xs leading-snug text-muted-foreground"
                                   >
                                     {vault.t(
-                                      'login.get_started_path_sentinel_description',
+                                      I18N_KEYS.LoginGetStartedPathSentinelDescription,
                                     )}
                                   </span>
                                 </span>
@@ -644,7 +645,7 @@
                               class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
                             >
                               <span class="text-center text-xs">
-                                {vault.t('login.existing_vault_alternative')}
+                                {vault.t(I18N_KEYS.LoginExistingVaultAlternative)}
                               </span>
                             </div>
                             <button
@@ -661,7 +662,7 @@
                               </span>
                               <span class="min-w-0">
                                 <span class="block text-sm font-semibold">
-                                  {vault.t('login.path_cloud_title')}
+                                  {vault.t(I18N_KEYS.LoginPathCloudTitle)}
                                 </span>
                                 <span
                                   class="mt-1 block text-xs leading-snug text-muted-foreground"
@@ -690,7 +691,7 @@
                             type="text"
                             class="w-full border-b border-border bg-transparent py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50"
                             placeholder={vault.t(
-                              'login.vault_name_placeholder',
+                              I18N_KEYS.LoginVaultNamePlaceholder,
                             )}
                             maxlength="64"
                             autocomplete="off"
@@ -710,8 +711,8 @@
                             >
                               {vault.t(
                                 usesExtensionDeviceIdentity
-                                  ? 'login.landing_create_simple_with_extension'
-                                  : 'login.landing_create_simple_locally',
+                                  ? I18N_KEYS.LoginLandingCreateSimpleWithExtension
+                                  : I18N_KEYS.LoginLandingCreateSimpleLocally,
                                 { name: trimmedVaultName },
                               )}
                             </p>
@@ -724,13 +725,13 @@
                           >
                             {#if isVerifying}
                               <RefreshCw class="size-4 animate-spin" />
-                              {vault.t('login.creating_vault')}
+                              {vault.t(I18N_KEYS.LoginCreatingVault)}
                             {:else if isInitializing}
                               <RefreshCw class="size-4 animate-spin" />
-                              {vault.t('onboarding.loading_engine')}
+                              {vault.t(I18N_KEYS.OnboardingLoadingEngine)}
                             {:else}
                               <ShieldCheck class="size-4" />
-                              {vault.t('login.landing_create_simple_btn')}
+                              {vault.t(I18N_KEYS.LoginLandingCreateSimpleBtn)}
                             {/if}
                           </Button>
                         </div>
@@ -744,7 +745,7 @@
                           class="text-sm leading-6 text-pretty text-muted-foreground"
                         >
                           {vault.t(
-                            'login.sentinel_dashboard_choice_description',
+                            I18N_KEYS.LoginSentinelDashboardChoiceDescription,
                             {
                               name: trimmedVaultName,
                             },
@@ -770,14 +771,14 @@
                               class="block text-sm font-semibold text-foreground"
                             >
                               {vault.t(
-                                'login.sentinel_dashboard_card_stack_title',
+                                I18N_KEYS.LoginSentinelDashboardCardStackTitle,
                               )}
                             </span>
                             <span
                               class="mt-1 block text-xs leading-5 text-muted-foreground"
                             >
                               {vault.t(
-                                'login.sentinel_dashboard_card_stack_description',
+                                I18N_KEYS.LoginSentinelDashboardCardStackDescription,
                               )}
                             </span>
                           </button>
@@ -798,14 +799,14 @@
                             </span>
                             <span class="block font-mono text-sm font-semibold">
                               {vault.t(
-                                'login.sentinel_dashboard_terminal_title',
+                                I18N_KEYS.LoginSentinelDashboardTerminalTitle,
                               )}
                             </span>
                             <span
                               class="mt-1 block font-mono text-xs leading-5 text-[#b7ff95]/60"
                             >
                               {vault.t(
-                                'login.sentinel_dashboard_terminal_description',
+                                I18N_KEYS.LoginSentinelDashboardTerminalDescription,
                               )}
                             </span>
                           </button>
@@ -840,7 +841,7 @@
                 disabled={isBusy || sentinelActionBusy}
                 onclick={goBack}
               >
-                {vault.t('common.back')}
+                {vault.t(I18N_KEYS.CommonBack)}
               </Button>
             </div>
           {/if}

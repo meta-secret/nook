@@ -702,7 +702,7 @@ async fn grant_existing_drive_folder(
         .await
     {
         Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-            note: "architecture_modes.shared_grant_success".to_owned(),
+            note: nook_core::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS.to_owned(),
             target,
         },
         Err(error) => {
@@ -749,7 +749,7 @@ async fn create_and_grant_drive_folder(
         .await
     {
         Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
-            note: "architecture_modes.shared_grant_success".to_owned(),
+            note: nook_core::i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_SUCCESS.to_owned(),
             target: nook_core::SharedStorageGrantTarget::Named {
                 storage_target_id: folder_id,
                 storage_target_name: created_name,

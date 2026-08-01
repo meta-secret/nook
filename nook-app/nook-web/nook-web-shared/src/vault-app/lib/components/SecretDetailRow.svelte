@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     Globe,
     Braces,
@@ -84,18 +85,18 @@
       return (
         item.username.trim() ||
         item.websiteUrl.trim() ||
-        vault.t('vault.types.login')
+        vault.t(I18N_KEYS.VaultTypesLogin)
       )
     }
     if (item.type === SecretType.ApiKey) {
-      return item.websiteUrl.trim() || vault.t('vault.types.api_key')
+      return item.websiteUrl.trim() || vault.t(I18N_KEYS.VaultTypesApiKey)
     }
     if (item.type === SecretType.SeedPhrase) {
       const name = item.name.trim()
       const words = item.seedWordCount
-      const label = name || vault.t('vault.fields.unnamed_seed_phrase')
+      const label = name || vault.t(I18N_KEYS.VaultFieldsUnnamedSeedPhrase)
       if (words === 12 || words === 24) {
-        return `${label} · ${vault.t('vault.fields.words_count', { count: String(words) })}`
+        return `${label} · ${vault.t(I18N_KEYS.VaultFieldsWordsCount, { count: String(words) })}`
       }
       return label
     }
@@ -107,38 +108,38 @@
         item.passkeyUserDisplayName.trim() ||
         item.passkeyUserName.trim() ||
         item.rpId.trim() ||
-        vault.t('vault.types.passkey')
+        vault.t(I18N_KEYS.VaultTypesPasskey)
       )
     }
     if (item.type === SecretType.CreditCard) {
       const last4 = item.last4.trim()
       if (last4) return `•••• ${last4}`
-      return item.title.trim() || vault.t('vault.fields.unnamed_card')
+      return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
     }
     if (item.type === SecretType.FileAttachment) {
       return (
         item.fileName.trim() ||
         item.title.trim() ||
-        vault.t('vault.fields.no_title')
+        vault.t(I18N_KEYS.VaultFieldsNoTitle)
       )
     }
-    return item.title.trim() || vault.t('vault.fields.no_title')
+    return item.title.trim() || vault.t(I18N_KEYS.VaultFieldsNoTitle)
   })
 
   const headerTitle = $derived.by(() => {
     if (item.type === SecretType.Login) {
-      return item.websiteHost || vault.t('vault.fields.no_website')
+      return item.websiteHost || vault.t(I18N_KEYS.VaultFieldsNoWebsite)
     }
     if (item.type === SecretType.CreditCard) {
       return (
-        item.title.trim() || summary || vault.t('vault.fields.unnamed_card')
+        item.title.trim() || summary || vault.t(I18N_KEYS.VaultFieldsUnnamedCard)
       )
     }
     if (item.type === SecretType.FileAttachment) {
       return (
         item.title.trim() ||
         item.fileName.trim() ||
-        vault.t('vault.fields.no_title')
+        vault.t(I18N_KEYS.VaultFieldsNoTitle)
       )
     }
     return summary
@@ -218,8 +219,8 @@
           : 'py-1 hover:bg-accent/40'}"
         aria-expanded={expanded}
         aria-label={expanded
-          ? vault.t('vault.collapse_secret')
-          : vault.t('vault.expand_secret')}
+          ? vault.t(I18N_KEYS.VaultCollapseSecret)
+          : vault.t(I18N_KEYS.VaultExpandSecret)}
         data-testid="secret-row-toggle"
         onclick={() => onToggleExpand(item.id)}
       >
@@ -267,28 +268,28 @@
           >
             {#if item.type === SecretType.Login}
               <Globe class="size-3 text-primary/70" />
-              {vault.t('vault.types.login')}
+              {vault.t(I18N_KEYS.VaultTypesLogin)}
             {:else if item.type === SecretType.ApiKey}
               <Braces class="size-3 text-primary/70" />
-              {vault.t('vault.types.api_key')}
+              {vault.t(I18N_KEYS.VaultTypesApiKey)}
             {:else if item.type === SecretType.SeedPhrase}
               <Sprout class="size-3 text-primary/70" />
-              {vault.t('vault.types.seed_phrase')}
+              {vault.t(I18N_KEYS.VaultTypesSeedPhrase)}
             {:else if item.type === SecretType.Authenticator}
               <ShieldCheck class="size-3 text-primary/70" />
-              {vault.t('vault.types.authenticator')}
+              {vault.t(I18N_KEYS.VaultTypesAuthenticator)}
             {:else if item.type === SecretType.Passkey}
               <KeyRound class="size-3 text-primary/70" />
-              {vault.t('vault.types.passkey')}
+              {vault.t(I18N_KEYS.VaultTypesPasskey)}
             {:else if item.type === SecretType.CreditCard}
               <CreditCard class="size-3 text-primary/70" />
-              {vault.t('vault.types.credit_card')}
+              {vault.t(I18N_KEYS.VaultTypesCreditCard)}
             {:else if item.type === SecretType.FileAttachment}
               <Paperclip class="size-3 text-primary/70" />
-              {vault.t('vault.types.file_attachment')}
+              {vault.t(I18N_KEYS.VaultTypesFileAttachment)}
             {:else}
               <StickyNote class="size-3 text-primary/70" />
-              {vault.t('vault.types.secure_note')}
+              {vault.t(I18N_KEYS.VaultTypesSecureNote)}
             {/if}
           </span>
           {#if !expanded}
@@ -305,8 +306,8 @@
             type="button"
             onclick={() => void onToggleReveal(item.id)}
             aria-label={reveal.kind === SecretRevealKind.Revealed
-              ? vault.t('vault.hide_value')
-              : vault.t('vault.show_value')}
+              ? vault.t(I18N_KEYS.VaultHideValue)
+              : vault.t(I18N_KEYS.VaultShowValue)}
             aria-pressed={reveal.kind === SecretRevealKind.Revealed}
             data-testid="reveal-secret-btn"
             class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
@@ -318,7 +319,7 @@
           <button
             type="button"
             onclick={() => void onEditItem(item)}
-            aria-label={vault.t('common.edit')}
+            aria-label={vault.t(I18N_KEYS.CommonEdit)}
             data-testid="edit-secret-btn"
             disabled={editRestriction.decision !== VaultEditDecision.Allowed}
             {...editRestriction.decision !== VaultEditDecision.Allowed
@@ -332,7 +333,7 @@
         <button
           type="button"
           onclick={() => void onDeleteSecret(item.id)}
-          aria-label={vault.t('common.delete')}
+          aria-label={vault.t(I18N_KEYS.CommonDelete)}
           data-testid="delete-secret-btn"
           class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
@@ -347,20 +348,20 @@
         {#if item.type === SecretType.Login}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.website_label')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsWebsiteLabel)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
+                >{item.websiteUrl || vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
               >
               {#if item.websiteUrl}
                 <button
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label={vault.t('vault.copy_website_url')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-website`)}<Check
@@ -373,20 +374,20 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.username')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsUsername)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.username || vault.t('vault.fields.no_username')}</span
+                >{item.username || vault.t(I18N_KEYS.VaultFieldsNoUsername)}</span
               >
               {#if item.username}
                 <button
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.username, item.id, 'username')}
-                  aria-label={vault.t('vault.copy_username')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyUsername)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-username`)}<Check
@@ -399,7 +400,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.password')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsPassword)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -415,7 +416,7 @@
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t('vault.copy_secret')}
+                aria-label={vault.t(I18N_KEYS.VaultCopySecret)}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if isCopied(`${item.id}-secret`)}<Check
@@ -428,7 +429,7 @@
           {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
-                >{vault.t('vault.fields.notes')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsNotes)}</span
               >
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
@@ -440,20 +441,20 @@
         {:else if item.type === SecretType.ApiKey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.website_label')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsWebsiteLabel)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
+                >{item.websiteUrl || vault.t(I18N_KEYS.VaultFieldsNoWebsite)}</span
               >
               {#if item.websiteUrl}
                 <button
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.websiteUrl, item.id, 'website')}
-                  aria-label={vault.t('vault.copy_website_url')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyWebsiteUrl)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-website`)}<Check
@@ -466,7 +467,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.key')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsKey)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -482,7 +483,7 @@
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t('vault.copy_secret')}
+                aria-label={vault.t(I18N_KEYS.VaultCopySecret)}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if isCopied(`${item.id}-secret`)}<Check
@@ -495,7 +496,7 @@
           {#if item.expiresAt}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t('vault.fields.expires')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsExpiresAt)}</span
               >
               <div
                 class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -507,7 +508,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.expiresAt, item.id, 'expires')}
-                  aria-label={vault.t('vault.copy_expiration_date')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyExpirationDate)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-expires`)}<Check
@@ -520,20 +521,20 @@
         {:else if item.type === SecretType.SeedPhrase}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.account')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsAccount)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.name || vault.t('vault.fields.no_account_name')}</span
+                >{item.name || vault.t(I18N_KEYS.VaultFieldsNoAccountName)}</span
               >
               {#if item.name}
                 <button
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(item.name, item.id, 'name')}
-                  aria-label={vault.t('vault.copy_account_name')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyAccountName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-name`)}<Check
@@ -547,12 +548,12 @@
           <div class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-2">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t('vault.types.seed_phrase')}</span
+                >{vault.t(I18N_KEYS.VaultTypesSeedPhrase)}</span
               >
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t('vault.copy_secret')}
+                aria-label={vault.t(I18N_KEYS.VaultCopySecret)}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if isCopied(`${item.id}-secret`)}<Check
@@ -582,7 +583,7 @@
         {:else if item.type === SecretType.Passkey}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.relying_party')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsRelyingParty)}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -592,7 +593,7 @@
           </div>
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.account')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsAccount)}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -600,14 +601,14 @@
               <span class="truncate text-foreground"
                 >{item.passkeyUserDisplayName ||
                   item.passkeyUserName ||
-                  vault.t('common.none')}</span
+                  vault.t(I18N_KEYS.CommonNone)}</span
               >
             </div>
           </div>
           {#if item.passkeyUserDisplayName && item.passkeyUserName}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t('vault.fields.username')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsUsername)}</span
               >
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -619,32 +620,32 @@
             </div>
           {/if}
           <p class="text-[11px] leading-relaxed text-muted-foreground">
-            {vault.t('vault.fields.passkey_managed_hint')}
+            {vault.t(I18N_KEYS.VaultFieldsPasskeyManagedHint)}
           </p>
         {:else if item.type === SecretType.CreditCard}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.title')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsTitle)}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
             >
               <span class="truncate text-foreground"
                 >{item.title.trim() ||
-                  vault.t('vault.fields.unnamed_card')}</span
+                  vault.t(I18N_KEYS.VaultFieldsUnnamedCard)}</span
               >
             </div>
           </div>
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.cardholder_name')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsCardholderName)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
               <span class="truncate text-foreground"
-                >{item.cardholderName.trim() || vault.t('common.none')}</span
+                >{item.cardholderName.trim() || vault.t(I18N_KEYS.CommonNone)}</span
               >
               {#if item.cardholderName.trim()}
                 <button
@@ -655,7 +656,7 @@
                       item.id,
                       'cardholder',
                     )}
-                  aria-label={vault.t('vault.copy_cardholder_name')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyCardholderName)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-cardholder`)}<Check
@@ -668,7 +669,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.card_number')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsCardNumber)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -692,7 +693,7 @@
                       item.id,
                       'card-number',
                     )}
-                  aria-label={vault.t('vault.copy_card_number')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyCardNumber)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
                   {#if isCopied(`${item.id}-card-number`)}<Check
@@ -706,7 +707,7 @@
           {#if cardExpiration}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t('vault.fields.expiration')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsExpiration)}</span
               >
               <div
                 class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -722,7 +723,7 @@
                       item.id,
                       'expiration',
                     )}
-                  aria-label={vault.t('vault.copy_expiration')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyExpiration)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
                 >
                   {#if isCopied(`${item.id}-expiration`)}<Check
@@ -735,7 +736,7 @@
 
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.cvv')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsCvv)}</span
             >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
@@ -745,7 +746,7 @@
                 data-testid="credit-card-cvv-value"
               >
                 {reveal.kind === SecretRevealKind.Revealed
-                  ? reveal.record.cvv || vault.t('common.none')
+                  ? reveal.record.cvv || vault.t(I18N_KEYS.CommonNone)
                   : '•••'}
               </code>
               {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.cvv}
@@ -753,7 +754,7 @@
                   type="button"
                   onclick={() =>
                     void onCopyToClipboard(reveal.record.cvv, item.id, 'cvv')}
-                  aria-label={vault.t('vault.copy_cvv')}
+                  aria-label={vault.t(I18N_KEYS.VaultCopyCvv)}
                   class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
                 >
                   {#if isCopied(`${item.id}-cvv`)}<Check
@@ -767,7 +768,7 @@
           {#if reveal.kind === SecretRevealKind.Revealed && reveal.record.notes}
             <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium pt-1"
-                >{vault.t('vault.fields.notes')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsNotes)}</span
               >
               <div
                 class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
@@ -779,7 +780,7 @@
         {:else if item.type === SecretType.FileAttachment}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.file_name')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsFileName)}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -787,13 +788,13 @@
               <span
                 class="truncate text-foreground"
                 data-testid="file-attachment-name"
-                >{item.fileName || vault.t('vault.fields.no_title')}</span
+                >{item.fileName || vault.t(I18N_KEYS.VaultFieldsNoTitle)}</span
               >
             </div>
           </div>
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.file_size')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsFileSize)}</span
             >
             <div
               class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -808,7 +809,7 @@
           {#if item.mimeType}
             <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
               <span class="text-muted-foreground/70 font-medium"
-                >{vault.t('vault.fields.mime_type')}</span
+                >{vault.t(I18N_KEYS.VaultFieldsMimeType)}</span
               >
               <div
                 class="min-w-0 rounded-md border border-border/20 bg-muted/20 px-2 py-1"
@@ -826,18 +827,18 @@
               class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download class="size-3.5" />
-              {vault.t('vault.download_file')}
+              {vault.t(I18N_KEYS.VaultDownloadFile)}
             </button>
             {#if reveal.kind !== SecretRevealKind.Revealed}
               <p class="mt-1 text-[11px] text-muted-foreground">
-                {vault.t('vault.reveal_to_download')}
+                {vault.t(I18N_KEYS.VaultRevealToDownload)}
               </p>
             {/if}
           </div>
         {:else}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"
-              >{vault.t('vault.fields.note')}</span
+              >{vault.t(I18N_KEYS.VaultFieldsNote)}</span
             >
             <div
               class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
@@ -858,7 +859,7 @@
               <button
                 type="button"
                 onclick={() => void onCopySecret(item.id)}
-                aria-label={vault.t('vault.copy_note')}
+                aria-label={vault.t(I18N_KEYS.VaultCopyNote)}
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >
                 {#if isCopied(`${item.id}-secret`)}<Check

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
 import { createLogger } from "$lib/runtime/log";
@@ -34,7 +35,7 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
     state.pendingJoins = state.pendingJoins.filter(
       (entry) => entry.deviceId !== joinDeviceId,
     );
-    state.showSuccess(state.t("toasts.device_approved_success"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsDeviceApproved));
     log.info("join request approved", { joinDeviceId });
   } catch (e: unknown) {
     state.errorMsg =
@@ -57,7 +58,7 @@ export async function denyJoin(state: VaultState, joinDeviceId: string) {
     await state.refreshSecretsFromSession();
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
-    state.showSuccess(state.t("toasts.join_denied"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsJoinDenied));
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to deny join request.";
@@ -83,8 +84,8 @@ export async function renameDevice(
     state.scheduleFanOutSyncAfterLocalSave();
     state.showSuccess(
       label.trim()
-        ? state.t("toasts.device_renamed")
-        : state.t("toasts.device_name_reset"),
+        ? state.t(I18N_KEYS.ToastsDeviceRenamed)
+        : state.t(I18N_KEYS.ToastsDeviceNameReset),
     );
   } catch (e: unknown) {
     state.errorMsg =
@@ -109,14 +110,14 @@ export async function revokeDevice(state: VaultState, authId: string) {
     )) as NookSecretRecord[];
     if (isSelf) {
       state.clearUnlockedSession();
-      state.showSuccess(state.t("toasts.device_removed"));
+      state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRemoved));
       return;
     }
     for (const record of rawRecords) record.free();
     await state.refreshSecretsFromSession();
     await state.hydrateMultiDeviceState();
     state.scheduleFanOutSyncAfterLocalSave();
-    state.showSuccess(state.t("toasts.device_revoked"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRevoked));
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : "Failed to revoke device access.";
@@ -180,7 +181,7 @@ export async function enrollAndConnect(state: VaultState) {
     await state.ensureProviderSaved();
     void state.hydrateMultiDeviceState();
     await state.syncFromStorage();
-    state.showSuccess(state.t("toasts.enrolled_connected"));
+    state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected));
     log.info("enrolled and connected", {
       secrets: rawRecords.length,
       mode: state.storageMode,

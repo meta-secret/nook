@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { HardDrive } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -15,7 +16,7 @@
   <div class="flex items-center gap-2 text-sm">
     <HardDrive class="size-4 shrink-0 text-muted-foreground" />
     <span class="font-medium text-foreground"
-      >{vault.t('provider_picker.this_device')}</span
+      >{vault.t(I18N_KEYS.ProviderPickerThisDevice)}</span
     >
     <button
       type="button"
@@ -23,11 +24,11 @@
       data-testid="cancel-provider-setup"
       onclick={onCancelSetup}
     >
-      {vault.t('provider_setup.change_provider')}
+      {vault.t(I18N_KEYS.ProviderSetupChangeProvider)}
     </button>
   </div>
 
   <p class="text-xs text-muted-foreground text-pretty">
-    {vault.t('provider_setup.local_storage_desc')}
+    {vault.t(I18N_KEYS.ProviderSetupLocalStorageDesc)}
   </p>
 </div>

@@ -1,3 +1,4 @@
+import { I18N_KEYS } from "../../../../generated/i18n-keys";
 /**
  * CloudKit JS web auth for iCloud private-database vault storage.
  *
@@ -360,7 +361,7 @@ type EncodedICloudSharedTarget =
 function normalizedICloudShortGuid(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new Error("provider_setup.icloud_shared_link_required");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedLinkRequired);
   }
   if (trimmed.startsWith("icloud-share-v1:")) {
     const target = parseICloudSharedStorageTarget(trimmed);
@@ -388,7 +389,7 @@ function requireCloudKitRecordInfo(
     !zoneID.ownerRecordName?.trim() ||
     !rootRecordName
   ) {
-    throw new Error("provider_setup.icloud_shared_location_missing");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedLocationMissing);
   }
   return { zoneID, rootRecordName };
 }
@@ -445,14 +446,14 @@ export async function createICloudSharedVault(
       ? identity.identity.userRecordName?.trim()
       : "";
   if (!ownerRecordName) {
-    throw new Error("provider_setup.icloud_shared_sign_in_first");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst);
   }
   const suffix = crypto.randomUUID();
   const zoneName = `nook-shared-${suffix}`;
   const rootRecordName = `nook-root-${suffix}`;
   const database = container.privateCloudDatabase;
   if (!database) {
-    throw new Error("provider_setup.icloud_shared_create_failed");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedCreateFailed);
   }
   await database.saveRecordZones([{ zoneName }]);
   const saved = await database.saveRecords(
@@ -469,7 +470,7 @@ export async function createICloudSharedVault(
   const root = saved.records[0];
   const shortGuid = root?.shortGUID?.trim();
   if (!root || !shortGuid) {
-    throw new Error("provider_setup.icloud_shared_identifier_missing");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedIdentifierMissing);
   }
   await database.shareWithUI({
     record: root,
@@ -534,7 +535,7 @@ export async function acceptICloudSharedVault(
     return { ...encodedTarget.target, role: "owner", storageTargetId };
   }
   if (!container.acceptShares || !container.fetchRecordInfos) {
-    throw new Error("provider_setup.icloud_shared_connect_failed");
+    throw new Error(I18N_KEYS.ProviderSetupIcloudSharedConnectFailed);
   }
   const current = await previewCloudKitRecord(container, shortGuid);
   const response =

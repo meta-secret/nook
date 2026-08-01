@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { I18N_KEYS } from '../../../generated/i18n-keys'
   import {
     ChevronDown,
     Cloud,
@@ -75,7 +76,7 @@
       : 'bg-amber-500/10'}"
     aria-expanded={!folded}
     aria-label={vault.t(
-      folded ? "security_guide.expand" : "security_guide.collapse",
+      folded ? I18N_KEYS.SecurityGuideExpand : I18N_KEYS.SecurityGuideCollapse,
     )}
     data-testid="security-guide-toggle"
     onclick={toggleFold}
@@ -85,7 +86,7 @@
       <span
         class="block text-sm font-medium text-amber-950 dark:text-amber-100"
       >
-        {vault.t("security_guide.title")}
+        {vault.t(I18N_KEYS.SecurityGuideTitle)}
       </span>
       {#if folded}
         <span
@@ -93,8 +94,8 @@
         >
           {vault.t(
             recommendationCount === 1
-              ? "security_guide.recommendation_count_singular"
-              : "security_guide.recommendation_count_plural",
+              ? I18N_KEYS.SecurityGuideRecommendationCountSingular
+              : I18N_KEYS.SecurityGuideRecommendationCountPlural,
             { count: String(recommendationCount) },
           )}
         </span>
@@ -115,7 +116,7 @@
       <p
         class="text-sm leading-relaxed text-amber-900/90 dark:text-amber-100/90"
       >
-        {vault.t("security_guide.intro")}
+        {vault.t(I18N_KEYS.SecurityGuideIntro)}
       </p>
 
       {#if needsSyncProvider}
@@ -132,12 +133,12 @@
                 <h3
                   class="text-sm font-semibold text-amber-950 dark:text-amber-100"
                 >
-                  {vault.t("security_guide.sync_title")}
+                  {vault.t(I18N_KEYS.SecurityGuideSyncTitle)}
                 </h3>
                 <p
                   class="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80"
                 >
-                  {vault.t("security_guide.sync_body")}
+                  {vault.t(I18N_KEYS.SecurityGuideSyncBody)}
                 </p>
               </div>
               <Button
@@ -148,7 +149,7 @@
                 data-testid="security-guide-add-sync-provider"
                 onclick={onAddSyncProvider}
               >
-                {vault.t("security_guide.add_sync_provider")}
+                {vault.t(I18N_KEYS.SecurityGuideAddSyncProvider)}
               </Button>
             </div>
           </div>
@@ -169,19 +170,19 @@
                 <h3
                   class="text-sm font-semibold text-amber-950 dark:text-amber-100"
                 >
-                  {vault.t("security_guide.device_title")}
+                  {vault.t(I18N_KEYS.SecurityGuideDeviceTitle)}
                 </h3>
                 <p
                   class="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80"
                 >
-                  {vault.t("security_guide.device_body")}
+                  {vault.t(I18N_KEYS.SecurityGuideDeviceBody)}
                 </p>
               </div>
               <div
                 class="flex items-start gap-2 text-xs leading-relaxed text-amber-900/75 dark:text-amber-100/75"
               >
                 <ShieldCheck class="mt-0.5 size-3.5 shrink-0" />
-                <span>{vault.t("security_guide.distinct_safeguards")}</span>
+                <span>{vault.t(I18N_KEYS.SecurityGuideDistinctSafeguards)}</span>
               </div>
               <Button
                 type="button"
@@ -191,7 +192,7 @@
                 data-testid="security-guide-add-device"
                 onclick={onAddDevice}
               >
-                {vault.t("security_guide.add_device")}
+                {vault.t(I18N_KEYS.SecurityGuideAddDevice)}
               </Button>
             </div>
           </div>

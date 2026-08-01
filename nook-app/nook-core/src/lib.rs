@@ -7,6 +7,7 @@
 mod auth;
 mod crypto;
 mod errors;
+mod generated;
 mod i18n;
 mod secrets;
 mod sync;
@@ -104,6 +105,7 @@ pub use extension_identity_handoff::{
     choose_signing_seed_after_identity_handoff, open_extension_identity_handoff,
     seal_extension_identity_handoff,
 };
+pub use generated::i18n_keys;
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
 };

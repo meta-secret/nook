@@ -1,4 +1,8 @@
 import {
+  BROWSER_MESSAGE_KEYS,
+  type BrowserMessageKey,
+} from '../lib/browser-message-keys'
+import {
   clearBackupCodeCandidates,
   extractBackupCodeCandidates,
   pageHasBackupCodeHint,
@@ -50,9 +54,9 @@ export type EnrollmentFlowHost = {
   sendRuntimeMessage: <T>(
     message: unknown,
   ) => Promise<RuntimeMessageDelivery<T>>
-  translatedMessage: (key: string) => string
+  translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (
-    key: string,
+    key: BrowserMessageKey,
     substitution: string,
   ) => string
 }
@@ -120,7 +124,10 @@ async function commitStagedEnrollment(
   stageId: string,
   vaultStoreId: string,
 ): Promise<void> {
-  setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
+  )
   const confirmDelivery = await host.sendRuntimeMessage<EnrollConfirmResponse>({
     type: 'nook:website-authenticator-enroll-confirm',
     payload: {
@@ -133,7 +140,10 @@ async function commitStagedEnrollment(
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.ok
   ) {
-    setHostDescription(host, host.translatedMessage('widgetEnrollSaved'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollSaved),
+    )
     if (detectEnrollmentHints().backupCodes) {
       renderEnrollmentActions(host, detectEnrollmentHints())
     }
@@ -147,7 +157,10 @@ async function commitStagedEnrollment(
   ) {
     setHostDescription(host, lockedEnrollMessage(host))
   } else {
-    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+    )
   }
   host.setBusy(false)
   section.replaceChildren()
@@ -166,7 +179,10 @@ function enrollmentEvidenceCallbacks(
         type: 'nook:website-authenticator-enroll-dismiss',
         payload: { origin: location.origin, stageId },
       })
-      setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+      )
       host.setBusy(false)
       renderEnrollmentActions(host, detectEnrollmentHints())
     },
@@ -174,7 +190,7 @@ function enrollmentEvidenceCallbacks(
       // Keep the staged secret; ask the user to finish verification or cancel.
       setHostDescription(
         host,
-        host.translatedMessage('widgetEnrollVerifyPending'),
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending),
       )
     },
   }
@@ -188,7 +204,10 @@ async function beginEnrollmentCeremony(
   candidate: DecodedOtpauthCandidate,
 ): Promise<void> {
   holdEnrollmentWidgetAfterSave = false
-  setHostDescription(host, host.translatedMessage('widgetEnrollStaging'))
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollStaging),
+  )
   // Arm the watch early so fill-driven mutations cannot re-scan and wipe the UI.
   beginEnrollmentEvidenceWatch(
     host,
@@ -207,7 +226,10 @@ async function beginEnrollmentCeremony(
   clearCandidate(candidate)
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     stopPendingEnrollmentWatch()
-    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+    )
     host.setBusy(false)
     renderEnrollmentActions(host, detectEnrollmentHints())
     return
@@ -216,7 +238,10 @@ async function beginEnrollmentCeremony(
   const stageId = stageResponse.stageId
   if (stageResponse.ok !== true || typeof stageId !== 'string') {
     stopPendingEnrollmentWatch()
-    setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+    )
     host.setBusy(false)
     renderEnrollmentActions(host, detectEnrollmentHints())
     return
@@ -232,7 +257,9 @@ async function beginEnrollmentCeremony(
   setHostDescription(
     host,
     host.translatedMessage(
-      filled ? 'widgetEnrollVerifyFilled' : 'widgetEnrollVerifyPending',
+      filled
+        ? 'widgetEnrollVerifyFilled'
+        : BROWSER_MESSAGE_KEYS.WidgetEnrollVerifyPending,
     ),
   )
   section.replaceChildren()
@@ -257,7 +284,9 @@ function resetEnrollmentHeadline(
   host: EnrollmentFlowHost,
   hints: EnrollmentPageHints,
 ): void {
-  const titleKey = hints.qr ? 'widgetEnrollTitle' : 'widgetBackupTitle'
+  const titleKey = hints.qr
+    ? BROWSER_MESSAGE_KEYS.WidgetEnrollTitle
+    : BROWSER_MESSAGE_KEYS.WidgetBackupTitle
   const descriptionKey = hints.qr
     ? 'widgetEnrollDescription'
     : 'widgetBackupDescription'
@@ -291,15 +320,15 @@ function clearCandidate(candidate: DecodedOtpauthCandidate): void {
 }
 
 function unavailableMessage(host: EnrollmentFlowHost): string {
-  return host.translatedMessage('widgetConnectVault')
+  return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetConnectVault)
 }
 
 function lockedEnrollMessage(host: EnrollmentFlowHost): string {
-  return host.translatedMessage('widgetEnrollUnlock')
+  return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
 }
 
 function lockedBackupMessage(host: EnrollmentFlowHost): string {
-  return host.translatedMessage('widgetEnrollUnlock')
+  return host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnlock)
 }
 
 function appendButtonRow(
@@ -385,8 +414,13 @@ async function showQrPreview(
   candidate: DecodedOtpauthCandidate,
 ): Promise<void> {
   section.replaceChildren()
-  host.title.textContent = host.translatedMessage('widgetEnrollPreview')
-  setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
+  host.title.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollPreview,
+  )
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
+  )
   host.setBusy(true)
 
   try {
@@ -402,7 +436,10 @@ async function showQrPreview(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
@@ -421,14 +458,20 @@ async function showQrPreview(
     const preview = response.preview
     const vaultStoreId = response.vaultStoreId
     if (!preview || !vaultStoreId) {
-      setHostDescription(host, host.translatedMessage('widgetEnrollFailed'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
     }
 
-    setHostDescription(host, host.translatedMessage('widgetEnrollPreview'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollPreview),
+    )
     renderPreviewDetails(section, host, preview)
 
     const confirmButton = createPrimaryButton(
@@ -473,7 +516,10 @@ function showQrCandidatePicker(
   candidates: DecodedOtpauthCandidate[],
 ): void {
   section.replaceChildren()
-  setHostDescription(host, host.translatedMessage('widgetEnrollAmbiguous'))
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollAmbiguous),
+  )
   const list = document.createElement('div')
   list.className = 'account-list'
   candidates.forEach((candidate) => {
@@ -503,8 +549,13 @@ async function startQrEnrollment(
   host: EnrollmentFlowHost,
   section: HTMLElement,
 ): Promise<void> {
-  host.title.textContent = host.translatedMessage('widgetEnrollTitle')
-  setHostDescription(host, host.translatedMessage('widgetEnrollWorking'))
+  host.title.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
+  )
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
+  )
   host.setBusy(true)
   section.replaceChildren()
 
@@ -513,13 +564,16 @@ async function startQrEnrollment(
     if (result.status === 'unsupported') {
       setHostDescription(
         host,
-        host.translatedMessage('widgetEnrollUnsupported'),
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollUnsupported),
       )
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }
     if (result.status === 'empty') {
-      setHostDescription(host, host.translatedMessage('widgetEnrollNoQr'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }
@@ -529,7 +583,10 @@ async function startQrEnrollment(
     }
     const candidate = result.candidates[0]
     if (!candidate || !candidate.otpauthUri) {
-      setHostDescription(host, host.translatedMessage('widgetEnrollNoQr'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }
@@ -561,12 +618,18 @@ function showBackupModeChooser(
   codes: string[],
 ): void {
   section.replaceChildren()
-  setHostDescription(host, host.translatedMessage('widgetBackupReview'))
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupReview),
+  )
 
   const attach = (mode: BackupAttachMode) => {
     if (host.isBusy()) return
     host.setBusy(true)
-    setHostDescription(host, host.translatedMessage('widgetBackupWorking'))
+    setHostDescription(
+      host,
+      host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
+    )
     void host
       .sendRuntimeMessage<BackupAttachResponse>({
         type: 'nook:website-authenticator-backup-attach',
@@ -583,14 +646,20 @@ function showBackupModeChooser(
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
           delivery.response?.ok
         ) {
-          setHostDescription(host, host.translatedMessage('widgetBackupSaved'))
+          setHostDescription(
+            host,
+            host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupSaved),
+          )
         } else if (
           delivery.kind === RuntimeMessageDeliveryKind.Delivered &&
           delivery.response?.reason === 'authenticator-locked'
         ) {
           setHostDescription(host, lockedBackupMessage(host))
         } else {
-          setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
+          setHostDescription(
+            host,
+            host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
+          )
         }
       })
       .finally(() => {
@@ -618,12 +687,16 @@ function showBackupModeChooser(
   )
   appendButtonRow(section, [replaceButton, mergeButton])
 
-  const cancelButton = createTextButton(host, 'widgetBackupCancel', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-    clearBackupCodeCandidates(codes)
-    resetEnrollmentHeadline(host, detectEnrollmentHints())
-    renderEnrollmentActions(host, detectEnrollmentHints())
-  })
+  const cancelButton = createTextButton(
+    host,
+    BROWSER_MESSAGE_KEYS.WidgetBackupCancel,
+    (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      clearBackupCodeCandidates(codes)
+      resetEnrollmentHeadline(host, detectEnrollmentHints())
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+  )
   section.append(cancelButton)
 }
 
@@ -636,7 +709,9 @@ function showBackupAuthenticatorChooser(
   section.replaceChildren()
   setHostDescription(
     host,
-    host.translatedMessage('widgetBackupChooseAuthenticator'),
+    host.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetBackupChooseAuthenticator,
+    ),
   )
   const list = document.createElement('div')
   list.className = 'account-list'
@@ -645,7 +720,7 @@ function showBackupAuthenticatorChooser(
     button.type = 'button'
     button.className = 'secondary-button account-button'
     button.textContent = host.translatedMessageWithSubstitution(
-      'widgetSavedAuthenticator',
+      BROWSER_MESSAGE_KEYS.WidgetSavedAuthenticator,
       safeSavedOptionNumber(index),
     )
     button.addEventListener('click', (event) => {
@@ -656,12 +731,16 @@ function showBackupAuthenticatorChooser(
   })
   section.append(list)
 
-  const cancelButton = createTextButton(host, 'widgetBackupCancel', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-    clearBackupCodeCandidates(codes)
-    resetEnrollmentHeadline(host, detectEnrollmentHints())
-    renderEnrollmentActions(host, detectEnrollmentHints())
-  })
+  const cancelButton = createTextButton(
+    host,
+    BROWSER_MESSAGE_KEYS.WidgetBackupCancel,
+    (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      clearBackupCodeCandidates(codes)
+      resetEnrollmentHeadline(host, detectEnrollmentHints())
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+  )
   section.append(cancelButton)
 }
 
@@ -670,7 +749,10 @@ async function continueBackupWithAuthenticatorOptions(
   section: HTMLElement,
   codes: string[],
 ): Promise<void> {
-  setHostDescription(host, host.translatedMessage('widgetBackupWorking'))
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
+  )
   host.setBusy(true)
 
   try {
@@ -684,7 +766,10 @@ async function continueBackupWithAuthenticatorOptions(
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       !delivery.response?.ok
     ) {
-      setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)
       return
@@ -707,7 +792,10 @@ async function continueBackupWithAuthenticatorOptions(
 
     const accounts = response.accounts ?? []
     if (accounts.length === 0) {
-      setHostDescription(host, host.translatedMessage('widgetBackupFailed'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupFailed),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       clearBackupCodeCandidates(codes)
       return
@@ -748,8 +836,13 @@ function showBackupReview(
   codes: string[],
 ): void {
   section.replaceChildren()
-  host.title.textContent = host.translatedMessage('widgetBackupTitle')
-  setHostDescription(host, host.translatedMessage('widgetBackupReview'))
+  host.title.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
+  )
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupReview),
+  )
 
   const list = document.createElement('div')
   list.className = 'account-list'
@@ -777,7 +870,7 @@ function showBackupReview(
       removeButton.textContent = '×'
       removeButton.setAttribute(
         'aria-label',
-        host.translatedMessage('widgetBackupCancel'),
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupCancel),
       )
       removeButton.addEventListener('click', (event) => {
         if (!isTrustedAuthAction(event.isTrusted)) return
@@ -795,14 +888,16 @@ function showBackupReview(
 
   const pasteLabel = document.createElement('p')
   pasteLabel.className = 'description'
-  pasteLabel.textContent = host.translatedMessage('widgetBackupPaste')
+  pasteLabel.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetBackupPaste,
+  )
 
   const pasteArea = document.createElement('textarea')
   pasteArea.className = 'description'
   pasteArea.rows = 4
   pasteArea.setAttribute(
     'aria-label',
-    host.translatedMessage('widgetBackupPaste'),
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupPaste),
   )
   pasteArea.addEventListener('input', () => {
     const pasted = extractBackupCodeCandidates(pasteArea.value)
@@ -823,19 +918,26 @@ function showBackupReview(
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       const selected = collectSelectedBackupCodes(list)
       if (selected.length === 0) {
-        setHostDescription(host, host.translatedMessage('widgetBackupEmpty'))
+        setHostDescription(
+          host,
+          host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupEmpty),
+        )
         return
       }
       void continueBackupWithAuthenticatorOptions(host, section, selected)
     },
   )
 
-  const cancelButton = createTextButton(host, 'widgetBackupCancel', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-    clearBackupCodeCandidates(codes)
-    resetEnrollmentHeadline(host, detectEnrollmentHints())
-    renderEnrollmentActions(host, detectEnrollmentHints())
-  })
+  const cancelButton = createTextButton(
+    host,
+    BROWSER_MESSAGE_KEYS.WidgetBackupCancel,
+    (event) => {
+      if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
+      clearBackupCodeCandidates(codes)
+      resetEnrollmentHeadline(host, detectEnrollmentHints())
+      renderEnrollmentActions(host, detectEnrollmentHints())
+    },
+  )
 
   appendButtonRow(section, [confirmButton, cancelButton])
 }
@@ -844,15 +946,23 @@ async function startBackupEnrollment(
   host: EnrollmentFlowHost,
   section: HTMLElement,
 ): Promise<void> {
-  host.title.textContent = host.translatedMessage('widgetBackupTitle')
-  setHostDescription(host, host.translatedMessage('widgetBackupWorking'))
+  host.title.textContent = host.translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
+  )
+  setHostDescription(
+    host,
+    host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupWorking),
+  )
   host.setBusy(true)
   section.replaceChildren()
 
   try {
     const codes = extractBackupCodeCandidates()
     if (codes.length === 0) {
-      setHostDescription(host, host.translatedMessage('widgetBackupEmpty'))
+      setHostDescription(
+        host,
+        host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetBackupEmpty),
+      )
       renderEnrollmentActions(host, detectEnrollmentHints())
       return
     }

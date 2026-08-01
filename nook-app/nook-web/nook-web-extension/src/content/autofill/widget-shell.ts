@@ -1,3 +1,4 @@
+import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {
   type EnrollmentFlowHost,
   type EnrollmentPageHints,
@@ -276,12 +277,12 @@ export function buildEnrollmentFlowHost(
 export function enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
   if (hints.qr) {
     return {
-      titleKey: 'widgetEnrollTitle',
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
       descriptionKey: 'widgetEnrollDescription',
     }
   }
   return {
-    titleKey: 'widgetBackupTitle',
+    titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
     descriptionKey: 'widgetBackupDescription',
   }
 }
@@ -322,7 +323,10 @@ export function createWidgetShell(
 ): WidgetShell {
   const host = document.createElement('aside')
   host.id = WIDGET_HOST_ID
-  host.setAttribute('aria-label', translatedMessage('widgetPilotLabel'))
+  host.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
+  )
 
   const panel = document.createElement('div')
   panel.className = 'panel'
@@ -340,13 +344,19 @@ export function createWidgetShell(
   collapseButton.type = 'button'
   collapseButton.className = 'icon-button collapse-button'
   collapseButton.textContent = '▾'
-  collapseButton.setAttribute('aria-label', translatedMessage('widgetCollapse'))
+  collapseButton.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetCollapse),
+  )
 
   const dismissButton = document.createElement('button')
   dismissButton.type = 'button'
   dismissButton.className = 'icon-button dismiss-button'
   dismissButton.textContent = '×'
-  dismissButton.setAttribute('aria-label', translatedMessage('widgetDismiss'))
+  dismissButton.setAttribute(
+    'aria-label',
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
+  )
   dismissButton.addEventListener('click', () => {
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
@@ -386,9 +396,11 @@ export function createWidgetShell(
   openVaultButton.className = 'secondary-button'
   openVaultButton.setAttribute(
     'aria-label',
-    translatedMessage('widgetOpenVault'),
+    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
   )
-  openVaultButton.textContent = translatedMessage('widgetOpenVault')
+  openVaultButton.textContent = translatedMessage(
+    BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+  )
   openVaultButton.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
   })
@@ -408,7 +420,7 @@ export function createWidgetShell(
   collapsedLaunch.className = 'collapsed-launch'
   collapsedLaunch.setAttribute(
     'aria-label',
-    `${translatedMessage('widgetExpand')}: ${progressLabel(currentStep, totalSteps)}`,
+    `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${progressLabel(currentStep, totalSteps)}`,
   )
   collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
 
