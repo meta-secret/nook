@@ -67,6 +67,7 @@ target "focused-web-artifacts" {
     builder-wasm-deps = "target:builder-wasm-deps"
   }
   cache-from = rust_wasm_source_cache_from
+  cache-to   = rust_wasm_source_cache_to
 }
 
 // Small scratch output exported to the host between the parallel prepare phase and slim web build.

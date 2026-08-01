@@ -172,8 +172,8 @@ source target as explicit cache-only outputs; consuming them as named build
 contexts is not sufficient to run their dedicated exporters. Only a `push`
 event on `refs/heads/main` may write the shared scopes. Release, agent,
 manual, and PR workflows are read-only. Remote workflow dispatches are the one
-branch exception: they write deterministic branch-isolated refs, fall back to
-Main on restore, and cannot replace shared Main manifests. The self-hosted
+branch exception: they write deterministic branch dependency refs plus task-graph
+source refs, fall back to Main on restore, and cannot replace shared Main manifests. The self-hosted
 `nook` label is reserved for runner cleanup while that machine remains registered.
 
 Focused `remote.yml` jobs retain the same hosted placement. The common Rust test
@@ -575,7 +575,8 @@ cache storage. Local builds use only their local BuildKit content store unless
 registry credentials are configured. Cache restoration is an optimization: an
 unavailable cache falls back to a correct cold build. Main publishes shared
 cache manifests after lane verification. Explicit Remote tasks restore their
-deterministic branch ref first and Main second, then export only the branch ref;
+deterministic branch dependency and task-graph source refs first and Main second,
+then export only those Remote refs;
 the Remote credential can update only `nook/remote-buildcache/**` and has read-only
 access to Main's `nook/buildcache/**` repository path. Other
 pull-request, release, and e2e jobs remain read-only. Fork pull requests do not

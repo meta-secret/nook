@@ -37,8 +37,8 @@ permissions:
   contents: read
 
 concurrency:
-  # Every task on a branch publishes the same bounded cache refs. Serialize
-  # writers so two different Bake graphs cannot replace each other's manifest.
+  # Dependency refs are shared by a branch while source-sensitive refs are additionally
+  # task-scoped. Serialize writers so compatible dependency exports cannot race.
   group: remote-${{ github.ref }}
   cancel-in-progress: false
 

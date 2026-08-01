@@ -342,7 +342,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         )
     );
     assert!(setup.contains("scope_suffix=\"-remote-$branch_hash\""));
+    assert!(setup.contains("task_hash=\"$(printf '%s' \"$task_name\" | sha256sum | cut -c1-12)\""));
+    assert!(setup.contains("graph_suffix=\"-graph-$task_hash\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
+    assert!(setup.contains("GHA_CACHE_GRAPH_SUFFIX=$graph_suffix"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(!setup.contains("cache_total_count()"));
 
@@ -350,6 +353,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
+    assert!(bake.contains("variable \"GHA_CACHE_GRAPH_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
@@ -396,9 +400,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
+        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
+        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
     ] {
         assert!(
             bake.contains(scope),
@@ -408,11 +412,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     for write_scope in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
     ] {
         assert!(
             bake.contains(write_scope),
@@ -426,6 +430,25 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && bake.contains("registry.dev.nokey.sh"),
         "WASM/native dependency restores must import registry.dev.nokey.sh cache refs including rust-base"
     );
+
+    let wasm_bake = read("nook-app/nook-wasm/docker-bake.hcl");
+    let focused_artifacts = wasm_bake
+        .split_once("target \"focused-web-artifacts\"")
+        .context("focused WASM artifact target must exist")?
+        .1
+        .split_once("\n}")
+        .context("focused WASM artifact target must terminate")?
+        .0;
+    assert!(focused_artifacts.contains("cache-to   = rust_wasm_source_cache_to"));
+
+    let focused_web = bake
+        .split_once("target \"nook-web-focused\"")
+        .context("focused web target must exist")?
+        .1
+        .split_once("\n}")
+        .context("focused web target must terminate")?
+        .0;
+    assert!(focused_web.contains("cache-to   = web_cache_to"));
 
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dependencies = core_bake
