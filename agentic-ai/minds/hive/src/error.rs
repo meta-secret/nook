@@ -283,26 +283,3 @@ impl<T> HiveContext<T> for Option<T> {
         self.ok_or_else(|| HiveError::message(context()))
     }
 }
-
-#[macro_export]
-macro_rules! hive_error {
-    ($($argument:tt)*) => {
-        $crate::error::HiveError::message(format!($($argument)*))
-    };
-}
-
-#[macro_export]
-macro_rules! hive_bail {
-    ($($argument:tt)*) => {
-        return Err($crate::hive_error!($($argument)*))
-    };
-}
-
-#[macro_export]
-macro_rules! hive_ensure {
-    ($condition:expr, $($argument:tt)*) => {
-        if !$condition {
-            $crate::hive_bail!($($argument)*);
-        }
-    };
-}

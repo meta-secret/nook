@@ -64,8 +64,8 @@ impl<S: TaskStore> Worker<S> {
         let external_auth = BrokerExternalAuth::connect(&self.config.auth_socket).await?;
         let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
         if lifecycle_marker.exists() {
-            return Err(crate::hive_error!(
-                "refusing to reuse a Pod that already finished a Hive task"
+            return Err(crate::error::HiveError::message(
+                "refusing to reuse a Pod that already finished a Hive task",
             ));
         }
         self.store.migrate().await?;
@@ -92,10 +92,10 @@ impl<S: TaskStore> Worker<S> {
                 tokio::fs::write(&lifecycle_marker, b"auth-channel-unavailable")
                     .await
                     .hive_context("mark failed auth channel for Pod replacement")?;
-                return Err(crate::hive_error!(
+                return Err(crate::error::HiveError::message(format!(
                     "Hive auth channel failed before a task claim; replacing the Pod without \
                      consuming an attempt: {error}"
-                ));
+                )));
             }
             match claim_once(
                 &self.store,
@@ -147,8 +147,8 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .hive_context("failed to acknowledge task cancellation")?;
                 if !acknowledged {
-                    return Err(crate::hive_error!(
-                        "task cancellation acknowledgement was rejected because the lease is stale"
+                    return Err(crate::error::HiveError::message(
+                        "task cancellation acknowledgement was rejected because the lease is stale",
                     ));
                 }
                 tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -164,8 +164,8 @@ impl<S: TaskStore> Worker<S> {
             tokio::fs::write(&lifecycle_marker, task.id.as_str())
                 .await
                 .hive_context("failed to mark the Pod for replacement")?;
-            return Err(crate::hive_error!(
-                "Hive task failed; bounded details were persisted in Neo4j"
+            return Err(crate::error::HiveError::message(
+                "Hive task failed; bounded details were persisted in Neo4j",
             ));
         }
         tokio::fs::write(&lifecycle_marker, task.id.as_str())
@@ -239,8 +239,8 @@ impl<S: TaskStore> Worker<S> {
                                 "Codex returned an invalid dependency resolution result",
                             )?;
                         if !matches!(result, TerminalResult::Completed { .. }) {
-                            return Err(crate::hive_error!(
-                                "Codex could not integrate dependency artifacts"
+                            return Err(crate::error::HiveError::message(
+                                "Codex could not integrate dependency artifacts",
                             ));
                         }
                         ensure_dependencies_resolved(&repository).await?;
@@ -273,14 +273,14 @@ impl<S: TaskStore> Worker<S> {
                     let obsolete = completion_is_obsolete(task, &result);
                     if obsolete {
                         if task.owning_repairs.is_empty() {
-                            crate::hive_bail!(
-                                "obsolete blocker retirement requires active owning Main repairs"
-                            );
+                            return Err(crate::error::HiveError::message(
+                                "obsolete blocker retirement requires active owning Main repairs",
+                            ));
                         }
                         if !result.changed_files().is_empty() {
-                            crate::hive_bail!(
-                                "obsolete blocker retirement cannot report changed files"
-                            );
+                            return Err(crate::error::HiveError::message(
+                                "obsolete blocker retirement cannot report changed files",
+                            ));
                         }
                         verify_obsolete_owner_deliveries(&repository, &task.owning_repairs).await?;
                     }
@@ -308,9 +308,9 @@ impl<S: TaskStore> Worker<S> {
                     )
                     .await?;
                     if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
-                        crate::hive_bail!(
-                            "obsolete blocker retirement cannot persist a patch artifact"
-                        );
+                        return Err(crate::error::HiveError::message(
+                            "obsolete blocker retirement cannot persist a patch artifact",
+                        ));
                     }
                     Ok::<TaskDisposition, crate::HiveError>(TaskDisposition::Completed {
                         summary,
@@ -381,7 +381,7 @@ impl<S: TaskStore> Worker<S> {
                 if !completion_committed {
                     heartbeat_result.hive_context("lease heartbeat failed")?;
                 }
-                execution.map_err(|_| crate::hive_error!("task timed out"))??
+                execution.map_err(|_| crate::error::HiveError::message("task timed out"))??
             }
             heartbeat_result = &mut heartbeat => {
                 let heartbeat_result = heartbeat_result
@@ -396,7 +396,7 @@ impl<S: TaskStore> Worker<S> {
                     return Err(WorkerCancellationRequested.into());
                 }
                 heartbeat_result?;
-                return Err(crate::hive_error!("lease heartbeat stopped before task execution"));
+                return Err(crate::error::HiveError::message("lease heartbeat stopped before task execution"));
             }
             shutdown = shutdown_requested(shutdown) => {
                 shutdown?;
@@ -411,7 +411,7 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .hive_context("failed to release the task during termination")?;
                 if !released {
-                    return Err(crate::hive_error!("task release was rejected because the lease is stale"));
+                    return Err(crate::error::HiveError::message("task release was rejected because the lease is stale"));
                 }
                 return Err(WorkerInterrupted.into());
             }
@@ -699,8 +699,8 @@ mod tests {
         let error = validate_dependency_artifacts(&artifacts)
             .err()
             .ok_or_else(|| {
-                crate::hive_error!(
-                    "a corrupt later patch must fail before the first patch is applied"
+                crate::error::HiveError::message(
+                    "a corrupt later patch must fail before the first patch is applied",
                 )
             })?;
         assert!(error.to_string().contains("later-corrupt"));
@@ -778,7 +778,9 @@ mod tests {
         let artifact =
             persistable_patch(repository.path(), baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            return Err(crate::hive_error!("patch artifact must be produced"));
+            return Err(crate::error::HiveError::message(
+                "patch artifact must be produced",
+            ));
         };
 
         assert_eq!(artifact.kind, "git-patch");
@@ -970,7 +972,9 @@ mod tests {
         };
         let artifact = persistable_patch(&repository, &baseline, &task, &result, false).await?;
         let CompletionArtifact::Produced(artifact) = artifact else {
-            return Err(crate::hive_error!("task patch must be produced"));
+            return Err(crate::error::HiveError::message(
+                "task patch must be produced",
+            ));
         };
         assert!(artifact.content.contains("diff --git a/task.txt"));
         assert!(!artifact.content.contains("dependency.txt"));

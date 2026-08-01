@@ -56,21 +56,15 @@ impl DeviceMode {
     }
 }
 
-macro_rules! deserialize_with_parse {
-    ($type:ty) => {
-        impl<'de> Deserialize<'de> for $type {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                let value = String::deserialize(deserializer)?;
-                Self::parse(&value).map_err(D::Error::custom)
-            }
-        }
-    };
+impl<'de> Deserialize<'de> for DeviceMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
 }
-
-deserialize_with_parse!(DeviceMode);
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
@@ -206,7 +200,15 @@ impl VaultType {
     }
 }
 
-deserialize_with_parse!(VaultType);
+impl<'de> Deserialize<'de> for VaultType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
@@ -219,7 +221,15 @@ pub enum ReplicationType {
     Shared,
 }
 
-deserialize_with_parse!(ReplicationType);
+impl<'de> Deserialize<'de> for ReplicationType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
 
 impl ReplicationType {
     #[must_use]

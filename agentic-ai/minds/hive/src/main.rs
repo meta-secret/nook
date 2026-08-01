@@ -223,9 +223,9 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
                 } => {
                     let task_id = TaskId::new(task_id)?;
                     if !store.retry_failed_main_task(&task_id, &release_id).await? {
-                        hive::hive_bail!(
+                        return Err(hive::HiveError::message(format!(
                             "task {task_id} is not a retryable failed Main-repair task"
-                        );
+                        )));
                     }
                     println!(
                         "requeued failed chain for {task_id} with at least 3 remaining attempts per runnable member on {release_id}"
@@ -294,10 +294,14 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
         } => {
             let store = CoordinatorTaskStore::connect(&coordinator_socket).await?;
             if heartbeat_seconds == 0 || i64::try_from(heartbeat_seconds)? >= lease_seconds {
-                hive::hive_bail!("heartbeat interval must be positive and shorter than the lease");
+                return Err(hive::HiveError::message(
+                    "heartbeat interval must be positive and shorter than the lease",
+                ));
             }
             if poll_min_seconds == 0 || poll_min_seconds > poll_max_seconds {
-                hive::hive_bail!("poll interval must be positive and ordered");
+                return Err(hive::HiveError::message(
+                    "poll interval must be positive and ordered",
+                ));
             }
             let arg0_paths = with_linux_sandbox_override(arg0_paths, codex_linux_sandbox_exe);
             Worker::new(

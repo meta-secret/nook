@@ -8,8 +8,81 @@ pub use nook_auth2::{
     Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };
 
-nook_auth2::transparent_str_newtype!(StoredVaultYaml);
-nook_auth2::transparent_str_newtype!(SecretPayloadYaml);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StoredVaultYaml(String);
+
+impl StoredVaultYaml {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for StoredVaultYaml {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for StoredVaultYaml {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for StoredVaultYaml {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SecretPayloadYaml(String);
+
+impl SecretPayloadYaml {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for SecretPayloadYaml {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for SecretPayloadYaml {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for SecretPayloadYaml {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
 
 impl SecretPayloadYaml {
     pub fn zeroize_plaintext(&mut self) {

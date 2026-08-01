@@ -125,7 +125,9 @@ impl CoordinatorTaskStore {
             .await
             .hive_context("read coordinator response")?;
         if bytes == 0 {
-            crate::hive_bail!("Hive coordinator closed its private channel");
+            return Err(crate::error::HiveError::message(
+                "Hive coordinator closed its private channel",
+            ));
         }
         match serde_json::from_str(&response).hive_context("decode coordinator response")? {
             Response::Error(error) => Err(crate::HiveError::message(error)),
@@ -136,14 +138,22 @@ impl CoordinatorTaskStore {
     async fn unit(&self, request: Request) -> crate::HiveResult<()> {
         match self.request(request).await? {
             Response::Unit => Ok(()),
-            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
+            response => {
+                return Err(crate::error::HiveError::message(format!(
+                    "unexpected coordinator response: {response:?}"
+                )));
+            }
         }
     }
 
     async fn accepted(&self, request: Request) -> crate::HiveResult<bool> {
         match self.request(request).await? {
             Response::Accepted(accepted) => Ok(accepted),
-            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
+            response => {
+                return Err(crate::error::HiveError::message(format!(
+                    "unexpected coordinator response: {response:?}"
+                )));
+            }
         }
     }
 }
@@ -163,7 +173,9 @@ impl TaskStore for CoordinatorTaskStore {
     }
 
     async fn enqueue(&self, _task: &EnqueueTask) -> crate::HiveResult<()> {
-        crate::hive_bail!("workers are not authorized to enqueue tasks")
+        return Err(crate::error::HiveError::message(
+            "workers are not authorized to enqueue tasks",
+        ));
     }
 
     async fn active_delivery(
@@ -171,22 +183,30 @@ impl TaskStore for CoordinatorTaskStore {
         _source_commit: &str,
         _kind: &str,
     ) -> crate::HiveResult<Option<TaskId>> {
-        crate::hive_bail!("workers are not authorized to inspect delivery tasks")
+        return Err(crate::error::HiveError::message(
+            "workers are not authorized to inspect delivery tasks",
+        ));
     }
 
     async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
-        crate::hive_bail!("workers are not authorized to cancel tasks")
+        return Err(crate::error::HiveError::message(
+            "workers are not authorized to cancel tasks",
+        ));
     }
 
     async fn cancellation_targets(
         &self,
         _task_id: &TaskId,
     ) -> crate::HiveResult<Vec<CancellationTarget>> {
-        crate::hive_bail!("workers are not authorized to inspect cancellation targets")
+        return Err(crate::error::HiveError::message(
+            "workers are not authorized to inspect cancellation targets",
+        ));
     }
 
     async fn finalize_cancellation(&self, _task_id: &TaskId) -> crate::HiveResult<bool> {
-        crate::hive_bail!("workers are not authorized to finalize cancellation")
+        return Err(crate::error::HiveError::message(
+            "workers are not authorized to finalize cancellation",
+        ));
     }
 
     async fn acknowledge_cancellation(
@@ -214,7 +234,11 @@ impl TaskStore for CoordinatorTaskStore {
             .await?
         {
             Response::Claim(task) => Ok(task),
-            response => crate::hive_bail!("unexpected coordinator response: {response:?}"),
+            response => {
+                return Err(crate::error::HiveError::message(format!(
+                    "unexpected coordinator response: {response:?}"
+                )));
+            }
         }
     }
 

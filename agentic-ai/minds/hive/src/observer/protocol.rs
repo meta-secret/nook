@@ -226,7 +226,9 @@ impl ObserverCoordinatorStore {
         channel.get_mut().flush().await?;
         let mut response = String::new();
         if channel.read_line(&mut response).await? == 0 {
-            crate::hive_bail!("Hive observer coordinator closed its private channel");
+            return Err(crate::error::HiveError::message(
+                "Hive observer coordinator closed its private channel",
+            ));
         }
         match serde_json::from_str(&response)? {
             ObserverResponse::Error(error) => Err(crate::HiveError::message(error)),
@@ -245,7 +247,11 @@ impl ObserverStore for ObserverCoordinatorStore {
             .await?
         {
             ObserverResponse::Snapshot(snapshot) => Ok(snapshot),
-            response => crate::hive_bail!("unexpected observer coordinator response: {response:?}"),
+            response => {
+                return Err(crate::error::HiveError::message(format!(
+                    "unexpected observer coordinator response: {response:?}"
+                )));
+            }
         }
     }
 
@@ -262,7 +268,11 @@ impl ObserverStore for ObserverCoordinatorStore {
             .await?
         {
             ObserverResponse::Task(task) => Ok(task),
-            response => crate::hive_bail!("unexpected observer coordinator response: {response:?}"),
+            response => {
+                return Err(crate::error::HiveError::message(format!(
+                    "unexpected observer coordinator response: {response:?}"
+                )));
+            }
         }
     }
 }

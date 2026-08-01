@@ -124,8 +124,8 @@ pub async fn run_auth_broker(
     )
     .await;
     if auth_manager.auth_cached().is_none() {
-        return Err(crate::hive_error!(
-            "Codex authentication is unavailable to the broker"
+        return Err(crate::error::HiveError::message(
+            "Codex authentication is unavailable to the broker",
         ));
     }
 
@@ -188,9 +188,9 @@ pub async fn run_auth_broker(
                             }
                         }
                         let replacement = replacement.ok_or_else(|| {
-                            crate::hive_error!(
+                            crate::error::HiveError::message(format!(
                                 "Codex authentication refresh failed: {refresh_error}"
-                            )
+                            ))
                         })?;
                         tokio::fs::write(&private_auth, replacement).await?;
                         auth_manager = AuthManager::shared(
@@ -208,13 +208,13 @@ pub async fn run_auth_broker(
             }
         }
         let auth = auth_manager.auth_cached().ok_or_else(|| {
-            crate::hive_error!("Codex authentication disappeared from the broker")
+            crate::error::HiveError::message("Codex authentication disappeared from the broker")
         })?;
         let response = BrokerResponse {
             access_token: auth.get_token()?,
-            account_id: auth
-                .get_account_id()
-                .ok_or_else(|| crate::hive_error!("Codex authentication has no account id"))?,
+            account_id: auth.get_account_id().ok_or_else(|| {
+                crate::error::HiveError::message("Codex authentication has no account id")
+            })?,
         };
         let response = serde_json::to_vec(&response)?;
         channel.get_mut().write_all(&response).await?;
@@ -295,9 +295,9 @@ async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> cra
     let status =
         status.hive_context("failed to start the Kubernetes credential persistence request")?;
     if !status.success() {
-        return Err(crate::hive_error!(
+        return Err(crate::error::HiveError::message(format!(
             "Kubernetes rejected rotated credential persistence with status {status}"
-        ));
+        )));
     }
     Ok(())
 }
