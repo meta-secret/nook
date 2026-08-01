@@ -110,6 +110,35 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-provider-label'),
     ).toBeFocused()
 
+    await page
+      .getByTestId('devices-access-provider-label')
+      .fill('Proton Pass family vault')
+    await page.evaluate(() => {
+      const originalTransaction = IDBDatabase.prototype.transaction
+      let transactionCount = 0
+      IDBDatabase.prototype.transaction = function (
+        storeNames: string | string[],
+        mode: IDBTransactionMode = 'readonly',
+        options?: IDBTransactionOptions,
+      ): IDBTransaction {
+        transactionCount += 1
+        if (transactionCount === 2) {
+          IDBDatabase.prototype.transaction = originalTransaction
+          throw new DOMException(
+            'Forced dashboard reload failure',
+            'InvalidStateError',
+          )
+        }
+        return originalTransaction.call(this, storeNames, mode, options)
+      }
+    })
+    await page.getByTestId('devices-access-provider-save').click()
+    await expect(page.getByTestId('devices-access-retry')).toBeFocused()
+    await page.getByTestId('devices-access-retry').click()
+    await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
+      'Proton Pass family vault',
+    )
+
     await dashboard
       .getByText('Technical details and browser observations')
       .click()

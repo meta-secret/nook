@@ -179,11 +179,8 @@ pub(crate) async fn set_passkey_provider_label(
 
 pub(crate) async fn record_verified_vault_access(
     device_id: &nook_core::DeviceId,
-    store_id: &str,
+    store_id: &nook_core::StoreId,
 ) -> Result<(), NookError> {
-    if store_id.trim().is_empty() {
-        return Ok(());
-    }
     let now = browser_timestamp();
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::BestEffort,
@@ -219,6 +216,10 @@ mod tests {
 
     fn device_id(value: &str) -> Result<nook_core::DeviceId, NookError> {
         nook_core::DeviceId::parse(value).map_err(|error| NookError::Database(error.to_string()))
+    }
+
+    fn store_id(value: &str) -> Result<nook_core::StoreId, NookError> {
+        nook_core::StoreId::parse(value).map_err(|error| NookError::Database(error.to_string()))
     }
 
     fn observation() -> PasskeyBrowserObservation {
@@ -474,19 +475,20 @@ mod tests {
         let mut profile = DeviceAccessProfile::default();
         let device_a = device_id("0123456789abcdef")?;
         let device_b = device_id("fedcba9876543210")?;
+        let store_id = store_id("store_testtoken11")?;
         profile.record_verified_vault_access(
             &device_a,
-            "store-one",
+            &store_id,
             timestamp("2026-01-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
             &device_b,
-            "store-one",
+            &store_id,
             timestamp("2026-02-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
             &device_a,
-            "store-one",
+            &store_id,
             timestamp("2026-03-01T00:00:00.000Z"),
         );
 
@@ -603,7 +605,8 @@ mod tests {
         idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
 
         let device_id = device_id("0123456789abcdef")?;
-        record_verified_vault_access(&device_id, "store-one").await?;
+        let store_id = store_id("store_testtoken11")?;
+        record_verified_vault_access(&device_id, &store_id).await?;
         assert!(
             set_passkey_provider_label("passkey:future", "1Password")
                 .await
@@ -624,9 +627,11 @@ mod tests {
         delete_device_access_profile().await?;
         let device_a = device_id("0123456789abcdef")?;
         let device_b = device_id("fedcba9876543210")?;
+        let store_a = store_id("store_testtoken11")?;
+        let store_b = store_id("store_testtoken12")?;
         let (first, second) = futures_util::future::join(
-            record_verified_vault_access(&device_a, "store-one"),
-            record_verified_vault_access(&device_b, "store-two"),
+            record_verified_vault_access(&device_a, &store_a),
+            record_verified_vault_access(&device_b, &store_b),
         )
         .await;
         first?;
@@ -637,13 +642,13 @@ mod tests {
             profile
                 .verified_vaults
                 .iter()
-                .any(|entry| { entry.device_id == device_a && entry.store_id == "store-one" })
+                .any(|entry| { entry.device_id == device_a && entry.store_id == store_a })
         );
         assert!(
             profile
                 .verified_vaults
                 .iter()
-                .any(|entry| { entry.device_id == device_b && entry.store_id == "store-two" })
+                .any(|entry| { entry.device_id == device_b && entry.store_id == store_b })
         );
 
         delete_device_access_profile().await?;

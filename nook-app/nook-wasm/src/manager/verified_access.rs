@@ -19,10 +19,13 @@ impl VerifiedVaultAccessFlow {
     ) -> Result<T, NookError> {
         let value = result?;
         tracing::debug!(flow = ?self, "verified vault access completed");
+        let Ok(store_id) = nook_core::StoreId::parse(store_id) else {
+            return Ok(value);
+        };
         // Dashboard metadata is descriptive and must not turn a successful,
         // cryptographically verified unlock or enrollment into a failure.
         let _ =
-            crate::storage::device_access::record_verified_vault_access(device_id, store_id).await;
+            crate::storage::device_access::record_verified_vault_access(device_id, &store_id).await;
         Ok(value)
     }
 }
@@ -50,7 +53,7 @@ mod tests {
                         "failure immediately before access recording".to_owned(),
                     )),
                     &device_id,
-                    "store-under-test",
+                    "store_testtoken11",
                 )
                 .await;
             assert!(failure.is_err());
@@ -61,12 +64,15 @@ mod tests {
                     .is_empty()
             );
 
-            flow.complete(Ok(()), &device_id, "store-under-test")
+            flow.complete(Ok(()), &device_id, "store_testtoken11")
                 .await?;
             let profile = crate::storage::device_access::load_device_access_profile().await?;
             assert_eq!(profile.verified_vaults.len(), 1);
             assert_eq!(profile.verified_vaults[0].device_id, device_id);
-            assert_eq!(profile.verified_vaults[0].store_id, "store-under-test");
+            assert_eq!(
+                profile.verified_vaults[0].store_id.as_str(),
+                "store_testtoken11"
+            );
         }
 
         crate::storage::device_access::delete_device_access_profile().await?;

@@ -266,6 +266,11 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       )
       await loadDashboard()
       providerSaveState = ProviderSaveKind.Idle
+      if (loadState.kind === DashboardLoadKind.Failed) {
+        pendingFocusTarget = DashboardFocusTargetKind.RetryResult
+        await tick()
+        focusPendingDashboardTarget()
+      }
     } catch {
       providerSaveState = ProviderSaveKind.Failed
     } finally {

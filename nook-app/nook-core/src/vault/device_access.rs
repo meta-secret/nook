@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{DeviceId, IsoTimestamp, WrappedDeviceIdentity};
+use crate::{DeviceId, IsoTimestamp, StoreId, WrappedDeviceIdentity};
 
 pub const DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS: usize = 80;
 
@@ -254,7 +254,8 @@ pub struct PasskeyAccessProfile {
 pub struct VerifiedVaultAccess {
     #[serde(deserialize_with = "deserialize_verified_device_id")]
     pub device_id: DeviceId,
-    pub store_id: String,
+    #[serde(deserialize_with = "deserialize_verified_store_id")]
+    pub store_id: StoreId,
     pub verified_at: IsoTimestamp,
 }
 
@@ -264,6 +265,14 @@ where
 {
     let raw = String::deserialize(deserializer)?;
     DeviceId::parse(&raw).map_err(serde::de::Error::custom)
+}
+
+fn deserialize_verified_store_id<'de, D>(deserializer: D) -> Result<StoreId, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = String::deserialize(deserializer)?;
+    StoreId::parse(&raw).map_err(serde::de::Error::custom)
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -299,10 +308,17 @@ pub fn decode_device_access_profile(raw: &str) -> DeviceAccessProfileDecodeResul
     if !envelope.version.is_current() {
         return DeviceAccessProfileDecodeResult::RecoverableDefault;
     }
-    serde_json::from_str(raw).map_or(
-        DeviceAccessProfileDecodeResult::RecoverableDefault,
-        |profile| DeviceAccessProfileDecodeResult::Current(Box::new(profile)),
-    )
+    match serde_json::from_str::<DeviceAccessProfile>(raw) {
+        Ok(profile)
+            if profile
+                .passkey
+                .as_ref()
+                .is_none_or(|passkey| !passkey.credential_fingerprint.trim().is_empty()) =>
+        {
+            DeviceAccessProfileDecodeResult::Current(Box::new(profile))
+        }
+        Ok(_) | Err(_) => DeviceAccessProfileDecodeResult::RecoverableDefault,
+    }
 }
 
 impl Default for DeviceAccessProfile {
@@ -410,14 +426,14 @@ impl DeviceAccessProfile {
     pub fn record_verified_vault_access(
         &mut self,
         device_id: &DeviceId,
-        store_id: &str,
+        store_id: &StoreId,
         now: IsoTimestamp,
     ) {
         self.verified_vaults
-            .retain(|entry| &entry.device_id != device_id || entry.store_id != store_id);
+            .retain(|entry| &entry.device_id != device_id || &entry.store_id != store_id);
         self.verified_vaults.push(VerifiedVaultAccess {
             device_id: device_id.clone(),
-            store_id: store_id.to_owned(),
+            store_id: store_id.clone(),
             verified_at: now,
         });
     }
@@ -597,10 +613,22 @@ mod tests {
         );
         assert!(matches!(
             decode_device_access_profile(
-                r#"{"version":1,"verifiedVaults":[{"deviceId":"0123456789abcdef","storeId":"store-one","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
+                r#"{"version":1,"verifiedVaults":[{"deviceId":"0123456789abcdef","storeId":"store_testtoken11","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
             ),
             DeviceAccessProfileDecodeResult::Current(_)
         ));
+        assert_eq!(
+            decode_device_access_profile(
+                r#"{"version":1,"verifiedVaults":[{"deviceId":"0123456789abcdef","storeId":"store-one","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
+            ),
+            DeviceAccessProfileDecodeResult::RecoverableDefault
+        );
+        assert_eq!(
+            decode_device_access_profile(
+                r#"{"version":1,"passkey":{"providerLabel":"stale provider"},"verifiedVaults":[]}"#,
+            ),
+            DeviceAccessProfileDecodeResult::RecoverableDefault
+        );
         Ok(())
     }
 
@@ -768,19 +796,20 @@ mod tests {
         let mut profile = DeviceAccessProfile::default();
         let device_a = DeviceId::parse("0123456789abcdef")?;
         let device_b = DeviceId::parse("fedcba9876543210")?;
+        let store_id = StoreId::parse("store_testtoken11")?;
         profile.record_verified_vault_access(
             &device_a,
-            "store-one",
+            &store_id,
             timestamp("2026-01-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
             &device_b,
-            "store-one",
+            &store_id,
             timestamp("2026-02-01T00:00:00.000Z"),
         );
         profile.record_verified_vault_access(
             &device_a,
-            "store-one",
+            &store_id,
             timestamp("2026-03-01T00:00:00.000Z"),
         );
 

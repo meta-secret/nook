@@ -384,10 +384,7 @@ pub(crate) async fn device_access_snapshot_for_session(
     } else {
         profile
             .passkey
-            .filter(|passkey| {
-                passkey.credential_fingerprint.is_empty()
-                    || passkey.credential_fingerprint == credential_id
-            })
+            .filter(|passkey| passkey.credential_fingerprint == credential_id)
             .unwrap_or_default()
     };
     let mut vaults = Vec::new();
@@ -399,7 +396,7 @@ pub(crate) async fn device_access_snapshot_for_session(
                 validated_device_id
                     .as_ref()
                     .is_some_and(|current| &access.device_id == current)
-                    && access.store_id == entry.store_id
+                    && access.store_id.as_str() == entry.store_id
             })
             .map(|access| access.verified_at.to_string());
         vaults.push(NookDeviceVaultAccess {
