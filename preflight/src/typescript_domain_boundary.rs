@@ -633,12 +633,12 @@ mod tests {
 
     #[test]
     fn inline_object_collection_state_is_rejected() {
-        let source = r#"
+        let source = r"
             const conflicts = $state<Array<{
                 events: string[];
             }>>([]);
             const raw = $state.raw<Array<{ id: string }>>([]);
-        "#;
+        ";
 
         assert_eq!(inline_object_collection_state_lines(source), [2, 5]);
     }
