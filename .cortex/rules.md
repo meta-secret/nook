@@ -7,10 +7,16 @@ This document defines the strict development standards, architectural boundaries
 ## 1. Monorepo Architecture & Package Boundaries
 
 - **README stays in sync:** When this section's boundaries, package layout, sync model, or public Task surface change, update the root [`README.md`](../README.md) in the same PR. See [AGENTS.md — Keep the root README current](AGENTS.md#keep-the-root-readme-current).
-- **Strict Uni-directional Flow:** `nook-auth2` and `nook-replication` are
-  portable foundations consumed by `nook-event-log`; `nook-core` consumes that
-  signed-history domain, followed by `nook-wasm` and `nook-web`. Circular
-  dependencies or reverse imports are strictly forbidden.
+- **Strict Uni-directional Flow:** `nook-app-common` is a dependency-light
+  portable leaf consumed by `nook-auth2` and `nook-core`. `nook-auth2` and
+  `nook-replication` are portable foundations consumed by `nook-event-log`;
+  `nook-core` consumes that signed-history domain, followed by `nook-wasm` and
+  `nook-web`. Circular dependencies or reverse imports are strictly forbidden.
+- **`nook-app-common` Isolation:** Own only dependency-light primitives and
+  assets genuinely shared across portable application crates, including locale
+  catalogs, translation behavior, and the generated i18n key registry. It must
+  not depend on `nook-auth2`, `nook-replication`, `nook-event-log`, `nook-core`,
+  `nook-wasm`, browser APIs, or web code.
 - **`nook-replication` Isolation:** Own only provider-neutral causal DAG,
   immutable replica-set, outbox, and repair mechanics. Vault operations,
   authorization, projection, key epochs, provider credentials, and provider
@@ -26,7 +32,11 @@ This document defines the strict development standards, architectural boundaries
   - May use `wasm-bindgen` annotations on simple domain DTOs/enums when that exposes the real core type through WASM and avoids a TypeScript/string mirror.
   - Must not depend on `js-sys`, `web-sys`, or any browser Web APIs.
   - Must be fully compilable and testable on native desktop/server targets.
-  - **Rust-First for Reuse (including i18n):** Keep as much domain logic, validation rules, and resources (like localization catalogs) in Rust (`nook-core`). This guarantees that future platforms—like a CLI tool or mobile apps—can easily reuse this code, which would not be possible if implemented in TypeScript.
+  - **Rust-First for Reuse (including i18n):** Keep domain logic and validation
+    rules in the owning portable Rust crate. Shared resources and behavior such
+    as localization catalogs and translation live in `nook-app-common`; vault
+    application behavior stays in `nook-core`. This guarantees that future
+    platforms—like a CLI tool or mobile apps—can reuse them without TypeScript.
 - **`nook-wasm` Bridge Responsibilities:**
   - Exposes Rust structs to JS via `#[wasm_bindgen]`.
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
@@ -105,7 +115,7 @@ Finding a root cause is not completion. Every AI-authored bug fix must add
 behavior-focused regression coverage that would fail on the broken behavior and
 pass with the fix:
 
-- **`nook-core` / `nook-auth2` / `nook-replication` / `nook-event-log`:** add one or more Rust unit, property, or
+- **`nook-app-common` / `nook-core` / `nook-auth2` / `nook-replication` / `nook-event-log`:** add one or more Rust unit, property, or
   integration tests at the owning domain boundary.
 - **Typed Rust/WASM boundary:** when the failure is reproducible without a
   browser, add the narrow Rust/WASM test first. This supplements the owning
@@ -124,8 +134,8 @@ test. Cost or inconvenience is not an exception.
 
 ### Line coverage threshold (90%)
 
-The portable Rust crates (`nook-core`, `nook-auth2`, `nook-replication`, and
-`nook-event-log`)
+The portable Rust crates (`nook-app-common`, `nook-core`, `nook-auth2`,
+`nook-replication`, and `nook-event-log`)
 are measured together with **`cargo llvm-cov nextest`** and checked against a
 committed **90%** line floor:
 
@@ -145,8 +155,8 @@ committed **90%** line floor:
 
 Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
 
-- **Portable replication and vault domain logic:** Add or update tests in
-  `nook-replication`, `nook-event-log`, `nook-core`, or `nook-auth2`, depending
+- **Portable application and vault domain logic:** Add or update tests in
+  `nook-app-common`, `nook-replication`, `nook-event-log`, `nook-core`, or `nook-auth2`, depending
   on the owning boundary (`task rust:test`). Prefer colocated module unit tests
   for pure mechanics; use `tests/event_log_workflow.rs` and siblings for
   multi-device/provider scenarios.

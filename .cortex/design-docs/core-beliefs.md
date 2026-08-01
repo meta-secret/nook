@@ -15,7 +15,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 ## 3. Strict boundaries & Parse at the Boundary
 * **No YOLO Data Probing**: We avoid guessing data shapes or traversing weakly-typed objects. Data must be parsed and validated at the system boundary (e.g., when passing data between Rust and JS/Svelte).
-* **Predictable Structure**: Each package has a strict layer of responsibility. We enforce a one-way dependency flow: `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
+* **Predictable Structure**: Each package has a strict layer of responsibility. Shared dependency-light application primitives flow from `nook-app-common` into portable auth/domain crates, then through `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
 
 ## 4. Centralize Tooling behind a Single Command Surface
 * **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml`, cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/.task/`. Agents do not run raw compiler, bundler, or environment commands. They use `task format` locally, `task remote TASK_NAME=<name>` for focused hosted execution, `task pr:validate` for the complete gate, and local `task web:dev` only for interactive development state. Human local mirrors remain available.
@@ -25,7 +25,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Technical Debt is High-Interest**: Stale dependencies, unpinned versions, and deprecated configurations are treated as bugs. We pay down minor technical debt continuously in small increments rather than letting it compound into large, disruptive refactoring jobs.
 
 ## 6. Maximize Reuse via Rust
-* **Rust-First Domain Assets**: Any assets or domain rules (including validation error messages and i18n localization dictionaries) must live in Rust (`nook-core`). Because we plan to build CLI tools and mobile clients in the future, implementing these features in Rust ensures that they can be easily shared across all platforms. Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
+* **Rust-First Domain Assets**: Domain rules live in their portable Rust owner (`nook-auth2` or `nook-core`), while cross-cutting assets such as i18n localization dictionaries and translation utilities live in the dependency-light `nook-app-common` crate. Because we plan to build CLI tools and mobile clients in the future, implementing these features in Rust ensures that they can be shared across platforms. Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
 
 ## 7. Close Every Task with a Duration Report
 * **Measure wall-clock time** from the start of the user's assignment until the final handoff message.

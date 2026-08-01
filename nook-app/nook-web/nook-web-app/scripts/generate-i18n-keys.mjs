@@ -6,23 +6,22 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../..',
 )
-const localeDirectory = resolve(repositoryRoot, 'nook-app/nook-core/locales')
+const localeDirectory = resolve(
+  repositoryRoot,
+  'nook-app/nook-app-common/locales',
+)
 const typescriptOutput = resolve(
   repositoryRoot,
   'nook-app/nook-web/nook-web-shared/src/generated/i18n-keys.ts',
 )
 const rustOutput = resolve(
   repositoryRoot,
-  'nook-app/nook-core/src/generated/i18n_keys.rs',
+  'nook-app/nook-app-common/src/generated/i18n_keys.rs',
 )
-const authRustOutput = resolve(
-  repositoryRoot,
-  'nook-app/nook-auth2/src/generated/i18n_keys.rs',
-)
-const authValidationSource = resolve(
-  repositoryRoot,
-  'nook-app/nook-auth2/src/errors/validation.rs',
-)
+const obsoleteRustOutputs = [
+  resolve(repositoryRoot, 'nook-app/nook-core/src/generated/i18n_keys.rs'),
+  resolve(repositoryRoot, 'nook-app/nook-auth2/src/generated/i18n_keys.rs'),
+]
 const landingMessagesPath = resolve(
   repositoryRoot,
   'nook-app/nook-web/nook-web-app/src/landing/messages.js',
@@ -252,7 +251,7 @@ function literalValues(source) {
 
 async function verifyNoRawCanonicalKeys(keys) {
   const canonical = new Set(keys)
-  const allowed = new Set([typescriptOutput, rustOutput, authRustOutput])
+  const allowed = new Set([typescriptOutput, rustOutput])
   const violations = []
   for (const path of await sourceFiles(resolve(repositoryRoot, 'nook-app'))) {
     if (allowed.has(path)) continue
@@ -268,6 +267,23 @@ async function verifyNoRawCanonicalKeys(keys) {
   if (violations.length) {
     throw new Error(
       `raw canonical translation keys found:\n${violations.join('\n')}`,
+    )
+  }
+}
+
+async function verifyNoObsoleteRustKeyRegistries() {
+  const violations = []
+  for (const path of obsoleteRustOutputs) {
+    try {
+      await readFile(path, 'utf8')
+      violations.push(relative(repositoryRoot, path))
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
+  if (violations.length) {
+    throw new Error(
+      `obsolete per-crate Rust translation-key registries found:\n${violations.join('\n')}`,
     )
   }
 }
@@ -342,28 +358,20 @@ validateNames(englishKeys, rustName, 'Rust')
 
 const generatedTypescript = typescriptSource(englishKeys)
 const generatedRust = rustSource(englishKeys)
-const authValidation = await readFile(authValidationSource, 'utf8')
-const generatedAuthRust = rustSource(
-  englishKeys.filter((key) =>
-    authValidation.includes(`i18n_keys::${rustName(key)}`),
-  ),
-)
 const generatedLandingTypescript = landingTypescriptSource(await landingKeys())
 if (checkOnly) {
   await verifyOutput(typescriptOutput, generatedTypescript)
   await verifyOutput(rustOutput, generatedRust)
-  await verifyOutput(authRustOutput, generatedAuthRust)
   await verifyOutput(landingOutput, generatedLandingTypescript)
+  await verifyNoObsoleteRustKeyRegistries()
   await verifyNoRawCanonicalKeys(englishKeys)
   await verifyNoRawBrowserMessageKeys()
   await verifyNoLiteralLookupArguments()
 } else {
   await mkdir(dirname(typescriptOutput), { recursive: true })
   await mkdir(dirname(rustOutput), { recursive: true })
-  await mkdir(dirname(authRustOutput), { recursive: true })
   await mkdir(dirname(landingOutput), { recursive: true })
   await writeFile(typescriptOutput, generatedTypescript)
   await writeFile(rustOutput, generatedRust)
-  await writeFile(authRustOutput, generatedAuthRust)
   await writeFile(landingOutput, generatedLandingTypescript)
 }

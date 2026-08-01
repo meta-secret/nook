@@ -86,7 +86,7 @@ boundaries the runners use.
 
 | `by_type` key | What to count |
 |---|---|
-| `rust` | Nextest cases in `nook-core`, `nook-auth2`, `nook-replication`, and `nook-event-log` (unit + integration). |
+| `rust` | Nextest cases in `nook-app-common`, `nook-core`, `nook-auth2`, `nook-replication`, and `nook-event-log` (unit + integration). |
 | `preflight` | Nextest/cargo cases in the `preflight` crate. |
 | `web_unit` | Vitest cases under `nook-app/nook-web` (app + extension scripts; exclude `node_modules`). |
 | `e2e` | Playwright cases under `nook-app/nook-web` (web app, extension, demos, and live projects). |
@@ -99,7 +99,7 @@ present):
 
 ```bash
 # rust + preflight
-cargo nextest list -E 'package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)' --lib --tests
+cargo nextest list -E 'package(nook-app-common) + package(nook-core) + package(nook-auth2) + package(nook-replication) + package(nook-event-log)' --lib --tests
 cargo nextest list -E 'package(preflight)' --lib --tests
 
 # web unit + e2e (from the owning package roots; exclude node_modules)

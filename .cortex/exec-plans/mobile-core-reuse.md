@@ -9,7 +9,10 @@ presentation and browser lifecycle.
 The dependency direction remains:
 
 ```text
-nook-auth2 + nook-replication -> nook-event-log -> nook-core -> nook-wasm -> nook-web
+nook-app-common -> nook-auth2 ─┐
+                               ├-> nook-event-log -> nook-core -> nook-wasm -> nook-web
+nook-replication ──────────────┘          ↑
+nook-app-common ──────────────────────────┘
 ```
 
 ## Placement test

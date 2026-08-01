@@ -72,6 +72,52 @@ fn event_log_crate_keeps_the_portable_dependency_direction() -> anyhow::Result<(
 }
 
 #[test]
+fn shared_application_primitives_have_one_leaf_crate() -> anyhow::Result<()> {
+    let root = repository_root();
+    let common = fs::read_to_string(root.join("nook-app/nook-app-common/Cargo.toml"))?;
+    for forbidden in [
+        "nook-auth2 =",
+        "nook-replication =",
+        "nook-event-log =",
+        "nook-core =",
+        "nook-wasm =",
+        "web-sys =",
+        "js-sys =",
+    ] {
+        assert!(
+            !common.contains(forbidden),
+            "nook-app-common must remain a dependency-light leaf and not depend on {forbidden}"
+        );
+    }
+
+    for consumer in ["nook-auth2", "nook-core"] {
+        let manifest = fs::read_to_string(root.join(format!("nook-app/{consumer}/Cargo.toml")))?;
+        assert!(
+            manifest.contains("nook-app-common ="),
+            "{consumer} must consume shared application primitives from nook-app-common"
+        );
+    }
+
+    assert!(
+        root.join("nook-app/nook-app-common/src/generated/i18n_keys.rs")
+            .is_file(),
+        "nook-app-common must own the single generated Rust translation-key registry"
+    );
+    for obsolete in [
+        "nook-app/nook-core/src/generated/i18n_keys.rs",
+        "nook-app/nook-auth2/src/generated/i18n_keys.rs",
+        "nook-app/nook-core/locales/en.json",
+        "nook-app/nook-core/locales/ru.json",
+    ] {
+        assert!(
+            !root.join(obsolete).exists(),
+            "obsolete per-crate translation-key registry must stay deleted: {obsolete}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn portable_core_does_not_import_browser_runtime_crates() -> anyhow::Result<()> {
     let violations = portable_core_browser_dependencies(&repository_root())?;
     assert!(

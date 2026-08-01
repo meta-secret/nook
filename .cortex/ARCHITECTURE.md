@@ -39,6 +39,7 @@ root/
     ├── .cargo/
     ├── .config/
     ├── docker/              (shared app/toolchain image definitions)
+    ├── nook-app-common/     (shared leaf primitives and localization)
     ├── nook-auth2/
     ├── nook-replication/
     ├── nook-event-log/
@@ -66,42 +67,34 @@ root/
 +-------------------------------------------------------------+
                                |
                                v (consumes generated bindings)
-+-------------------------------------------------------------+
-|                         nook-wasm                           |
-|       (Rust-Wasm Bridge: I/O, session, wasm-bindgen)        |
-+-------------------------------------------------------------+
-                               |
-                               v (core domain dependencies)
-+-------------------------------------------------------------+
-|                         nook-core                           |
-| (Rust app domain: secrets, sessions, sync policy, crypto)   |
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                       nook-event-log                        |
-| (signed vault events, authorization, projection, epochs)   |
-+-------------------------------------------------------------+
-                      /                   \
-                     v                     v
-+-------------------------------------------------------------+
-|                         nook-auth2                           |
-|     (Rust auth: device identity, envelopes, vault keys)      |
-+-------------------------------------------------------------+
- +-------------------------------------------------------------+
- |                    nook-replication                         |
- |   (Rust replication: causal DAG, replica sets, outboxes)    |
- +-------------------------------------------------------------+
+nook-wasm                     browser I/O, session, wasm-bindgen
+  └─> nook-core               secrets, sessions, sync policy, crypto
+       ├─> nook-event-log     signed events, authorization, projection
+       │    ├─> nook-auth2 ──> nook-app-common
+       │    └─> nook-replication
+       └─> nook-app-common    shared leaf primitives and localization
 ```
 
 ### Dependency Enforcements
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-auth2`, `nook-replication`, `nook-event-log`, and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in these crates; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
+2. **Platform Portability:** `nook-app-common`, `nook-auth2`, `nook-replication`, `nook-event-log`, and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in these crates; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
 ---
 
 ## 2. Package Responsibilities & Layers
+
+### Shared leaf: `nook-app-common`
+
+- **Cross-cutting application primitives:** Owns dependency-light facilities
+  needed by sibling portable crates without depending on their auth, event, or
+  vault domains.
+- **Localization source of truth:** Owns locale catalogs, translation behavior,
+  and the single generated Rust translation-key registry. `nook-auth2` and
+  `nook-core` consume it; `nook-core` may compatibility-re-export the API.
+- **Not a dumping ground:** Authentication policy stays in `nook-auth2`, vault
+  semantics stay in `nook-core`, and browser/platform behavior stays in
+  `nook-wasm` or the web packages.
 
 ### A. `nook-auth2` (Portable Vault Security / Key Access)
 

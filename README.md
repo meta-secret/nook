@@ -203,19 +203,22 @@ App code lives under `nook-app/`. Dependencies flow one way:
 
 ```text
 nook-vault-simple / nook-vault-sentinel / nook-web-extension
-        ↓
-   nook-wasm          browser I/O + session bridge
-        ↓
-   nook-core          vault application services, secrets, sync policy
-      ↘          ↙
-   nook-event-log     signed operations, authorization, projection
-      ↙       ↘
-nook-auth2   nook-replication
-key access   causal DAG, replica/outbox mechanics
+  └─> nook-wasm              browser I/O + session bridge
+       └─> nook-core         vault application services, secrets, sync policy
+            ├─> nook-event-log
+            │    ├─> nook-auth2
+            │    └─> nook-replication
+            └─> nook-app-common
+
+nook-auth2 ──> nook-app-common
 ```
+
+`nook-app-common` is a leaf dependency used directly by both `nook-auth2` and
+`nook-core`; it does not sit between the event-log and replication layers.
 
 | Package | Role |
 | ------- | ---- |
+| `nook-app-common` | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry |
 | `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
 | `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
 | `nook-event-log` | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs |
@@ -430,7 +433,8 @@ Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or
 `nook-app/nook-web/nook-web-app/.env.test.local`; see
 `.env.test.example` next to that file.
 
-Architecture changes belong in the lowest appropriate layer: key access in
+Architecture changes belong in the lowest appropriate layer: shared
+dependency-light application primitives in `nook-app-common`, key access in
 `nook-auth2`, provider-neutral causal replication mechanics in
 `nook-replication`, signed vault history and projection in `nook-event-log`,
 vault application services in `nook-core`, browser I/O in `nook-wasm`, and UI

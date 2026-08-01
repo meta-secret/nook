@@ -1,0 +1,13 @@
+[package]
+name = "nook-app-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = "1.0.150"
+
+[lints]
+workspace = true

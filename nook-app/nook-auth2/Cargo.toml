@@ -10,6 +10,7 @@ repository.workspace = true
 mock-passkey = []
 
 [dependencies]
+nook-app-common = { path = "../nook-app-common" }
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 age = { version = "0.11.3", features = ["armor"] }
 base64 = "0.22"

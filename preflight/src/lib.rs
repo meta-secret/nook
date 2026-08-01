@@ -135,10 +135,16 @@ const RUST_WASM_TYPED_DOMAIN_FUNCTION_MARKERS: &[&str] = &[
 pub fn portable_core_browser_dependencies(root: &Path) -> io::Result<Vec<Violation>> {
     let mut violations = violations_in_tree(
         root,
-        Path::new("nook-app/nook-core/src"),
+        Path::new("nook-app/nook-app-common/src"),
         "rs",
         BROWSER_RUST_MARKERS,
     )?;
+    violations.extend(violations_in_tree(
+        root,
+        Path::new("nook-app/nook-core/src"),
+        "rs",
+        BROWSER_RUST_MARKERS,
+    )?);
     violations.extend(violations_in_tree(
         root,
         Path::new("nook-app/nook-replication/src"),

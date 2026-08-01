@@ -9,7 +9,14 @@ COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/.config .config
 
 # Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
-# can reuse the nook-auth2 clippy and coverage-test layers; a nook-wasm-only change can reuse both.
+# can reuse the common/auth clippy and coverage-test layers; a nook-wasm-only change can reuse both.
+COPY nook-app/nook-app-common nook-app-common
+RUN touch nook-app-common/src/i18n.rs \
+    && cargo clippy -p nook-app-common --all-targets -- -D warnings \
+    && nook-sccache-report native-app-common-clippy
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common \
+    && nook-sccache-report native-app-common-coverage
+
 COPY nook-app/nook-auth2 nook-auth2
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy
@@ -38,24 +45,20 @@ RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
     && nook-sccache-report native-companion-core-coverage
 
 COPY nook-app/nook-core nook-core
-# Docker COPY preserves source mtimes, while the inherited target directory can
-# contain newer artifacts. Touch the module that embeds locale JSON so changes
-# to those non-Rust inputs always reach both the native and downstream WASM
-# builds instead of reusing a stale include_str! result.
-RUN touch nook-core/src/i18n.rs \
-    && cargo clippy -p nook-core --all-targets -- -D warnings \
+RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy
-# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2,
-# nook-replication, nook-event-log, and nook-companion-core above, then runs nook-core with --no-clean
+# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs
+# nook-app-common, nook-auth2, nook-replication, nook-event-log, and nook-companion-core above,
+# then runs nook-core with --no-clean
 # so the final report combines all portable crates while preserving cacheable dependency coverage.
 # The same run also bakes the coverage artifacts that PR CI copies out later;
 # export must not rerun the Rust tests.
 RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
     && nook-sccache-report native-core-coverage
 
@@ -78,6 +81,7 @@ WORKDIR /meta-secret/nook
 COPY . .
 
 RUN find \
+      nook-app/nook-app-common/src \
       nook-app/nook-auth2/src \
       nook-app/nook-replication/src \
       nook-app/nook-event-log/src \

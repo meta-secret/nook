@@ -10,11 +10,11 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cd nook-app && cargo fmt --all -- --check`
    - `clippy::all` and `clippy::pedantic` are enabled in every Rust project's
-     manifest; `cd nook-app && cargo clippy -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
+     manifest; `cd nook-app && cargo clippy -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets`,
      `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm`,
      and the standalone `preflight` Clippy pass enforce them with `-D warnings`
-   - `task rust:coverage:check` — combined `nook-core`, `nook-auth2`, and
-     `nook-replication` coverage vs the **90%** line floor
+   - `task rust:coverage:check` — combined `nook-app-common`, `nook-core`,
+     `nook-auth2`, `nook-replication`, and `nook-event-log` coverage vs the **90%** line floor
      (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`

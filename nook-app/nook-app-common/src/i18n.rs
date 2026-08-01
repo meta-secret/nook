@@ -125,6 +125,11 @@ pub fn resolve_error_message(catalog_json: &str, locale: &str, message: &str) ->
 ///
 /// This keeps newer bundled keys available when an older wasm/catalog copy is
 /// passed in, while preserving keys that only exist in the base catalog.
+///
+/// # Errors
+///
+/// Returns an error when either input is not valid JSON or when the merged
+/// catalog cannot be serialized.
 pub fn merge_translation_catalogs(
     base_json: &str,
     overlay_json: &str,
@@ -308,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_translation_catalogs_overlay_wins_recursively() -> anyhow::Result<()> {
+    fn test_merge_translation_catalogs_overlay_wins_recursively() -> Result<(), serde_json::Error> {
         let base = r#"{"provider_picker":{"this_device":"Это устройство","github":"GitHub"}}"#;
         let overlay =
             r#"{"provider_picker":{"github":"GitHub updated","google_drive":"Google Drive"}}"#;

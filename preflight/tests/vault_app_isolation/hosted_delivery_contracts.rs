@@ -282,7 +282,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("wasm-pack test --node --release nook-wasm")
             && wasm_dockerfile.contains("wasm-pack build nook-companion-wasm")
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
-            && wasm_dockerfile.contains("touch nook-core/src/i18n.rs")
+            && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
@@ -381,6 +381,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "steps.trusted-wasm.outputs.found != 'true'",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
+        "'nook-app/nook-app-common/**'",
         "'nook-app/nook-companion-core/**'",
         "'nook-app/nook-companion-wasm/**'",
         "'nook-app/nook-wasm/**'",
@@ -464,6 +465,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "nook-trusted-wasm-validation-v2-",
         "'.github/actions/nook-cache-connect/**'",
         "'preflight/**'",
+        "'nook-app/nook-app-common/**'",
         "chmod +x \"$native/tools/nook-preflight\"",
         "test -x \"$native/tools/nook-preflight\"",
     ] {
