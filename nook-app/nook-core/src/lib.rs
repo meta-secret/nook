@@ -235,7 +235,9 @@ pub use nook_event_log::{
     remote_event_belongs_to_store, remote_event_store_id, serialize_event_storage_yaml, sha256_hex,
     sign_body, union_remote_events, union_remote_events_and_heads, verify_body_signature,
 };
-pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
+pub use password::{
+    MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
+};
 pub use password_envelope::{
     PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
     attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,

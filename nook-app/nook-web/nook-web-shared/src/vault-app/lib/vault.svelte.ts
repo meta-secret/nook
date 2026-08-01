@@ -803,23 +803,6 @@ export class VaultState extends VaultLifecycleState {
     return multiDeviceActions.enrollAndConnect(this);
   }
 
-  generatePassword(
-    length: number,
-    lowercase: boolean,
-    uppercase: boolean,
-    numbers: boolean,
-    symbols: boolean,
-  ): string {
-    return secretsActions.generatePassword(
-      this,
-      length,
-      lowercase,
-      uppercase,
-      numbers,
-      symbols,
-    );
-  }
-
   async connectStagedProvider(): Promise<void> {
     return providersActions.connectStagedProvider(this);
   }

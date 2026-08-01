@@ -15,7 +15,7 @@
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { SecretType } from '$lib/nook'
+  import { generatePassword, SecretType } from '$lib/nook'
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
@@ -246,20 +246,7 @@
               onReplaceSecret={(oldId, type, data) =>
                 vault.handleReplaceSecret(oldId, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-              onGeneratePassword={(
-                length,
-                lowercase,
-                uppercase,
-                numbers,
-                symbols,
-              ) =>
-                vault.generatePassword(
-                  length,
-                  lowercase,
-                  uppercase,
-                  numbers,
-                  symbols,
-                )}
+              onGeneratePassword={generatePassword}
             />
           {/key}
         </div>

@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
-import { SecretType, type NookSecretRecord } from '$lib/nook'
+import {
+  SecretType,
+  type NookSecretRecord,
+  type PasswordGenerationOptions,
+} from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import AddSecretForm from '$lib/components/AddSecretForm.svelte'
 import { SecretTypeSelectionKind } from '$lib/components/secret-form-state'
@@ -65,6 +69,36 @@ describe('AddSecretForm file attachment picker', () => {
     await fireEvent.click(view.getByTestId('item-type-file-attachment'))
     expect(await view.findByTestId('file-attachment-input')).toBeTruthy()
     expect(view.getByTestId('file-attachment-title')).toBeTruthy()
+  })
+})
+
+describe('AddSecretForm password generation', () => {
+  test('passes the Rust-owned default option contract to password generation', async () => {
+    const onGeneratePassword = vi
+      .fn<(options: PasswordGenerationOptions) => string>()
+      .mockReturnValue('rust-generated-password')
+    const view = render(AddSecretForm, {
+      vault,
+      isSaving: false,
+      onAddSecret: vi.fn(async () => {}),
+      onGeneratePassword,
+      onCancel: vi.fn(),
+    })
+
+    await fireEvent.click(view.getByTestId('item-type-login'))
+    await fireEvent.click(view.getByTestId('password-generator-toggle'))
+    await fireEvent.click(view.getByTestId('generate-password-btn'))
+
+    expect(onGeneratePassword).toHaveBeenCalledWith({
+      length: 20,
+      lowercase: true,
+      uppercase: true,
+      numbers: true,
+      symbols: true,
+    })
+    expect((view.getByTestId('secret-value') as HTMLInputElement).value).toBe(
+      'rust-generated-password',
+    )
   })
 })
 

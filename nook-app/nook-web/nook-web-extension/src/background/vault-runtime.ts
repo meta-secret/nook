@@ -1,13 +1,10 @@
 import type { ExtensionEventLogRecord } from '../../../nook-web-shared/src/extension/runtime-messages'
-import {
-  defaultPasswordGenerationOptions,
-  generatePasswordWithOptions,
-} from '../../../nook-web-shared/src/password/generator'
 import initNookWasm, {
   authenticationWorkflowSnapshot as wasmAuthenticationWorkflowSnapshot,
   classifyAuthenticationOutcome as wasmClassifyAuthenticationOutcome,
   classifyAuthenticationOutcomeWithDefaultTimeout as wasmClassifyAuthenticationOutcomeWithDefaultTimeout,
   configureVaultApplication,
+  defaultPasswordGenerationOptions as wasmDefaultPasswordGenerationOptions,
   generatePassword as wasmGeneratePassword,
   readExtensionPairingState as wasmReadExtensionPairingState,
   reconcileExtensionPairingState as wasmReconcileExtensionPairingState,
@@ -180,10 +177,7 @@ export async function authenticationWorkflowSnapshot(
 
 export async function generateSuggestedPassword(): Promise<string> {
   await ensureExtensionWasm()
-  return generatePasswordWithOptions(
-    wasmGeneratePassword,
-    defaultPasswordGenerationOptions,
-  )
+  return wasmGeneratePassword(wasmDefaultPasswordGenerationOptions())
 }
 
 export async function classifyAuthenticationOutcome(

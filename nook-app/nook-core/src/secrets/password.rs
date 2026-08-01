@@ -1,4 +1,6 @@
 use getrandom::getrandom;
+use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 
 use crate::errors::{PasswordError, PasswordResult};
 
@@ -7,22 +9,36 @@ const UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
 const SYMBOLS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 
-pub const MIN_PASSWORD_LENGTH: usize = 8;
-pub const MAX_PASSWORD_LENGTH: usize = 128;
+pub const MIN_PASSWORD_LENGTH: u32 = 8;
+pub const MAX_PASSWORD_LENGTH: u32 = 128;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct PasswordOptions {
-    pub length: usize,
+pub struct PasswordGenerationOptions {
+    pub length: u32,
     pub lowercase: bool,
     pub uppercase: bool,
     pub numbers: bool,
     pub symbols: bool,
 }
 
-impl PasswordOptions {
-    pub fn validate(&self) -> PasswordResult<()> {
-        if self.length < MIN_PASSWORD_LENGTH || self.length > MAX_PASSWORD_LENGTH {
+impl Default for PasswordGenerationOptions {
+    fn default() -> Self {
+        Self {
+            length: 20,
+            lowercase: true,
+            uppercase: true,
+            numbers: true,
+            symbols: true,
+        }
+    }
+}
+
+impl PasswordGenerationOptions {
+    pub fn validate(self) -> PasswordResult<()> {
+        if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&self.length) {
             return Err(PasswordError::LengthOutOfRange {
                 min: MIN_PASSWORD_LENGTH,
                 max: MAX_PASSWORD_LENGTH,
@@ -34,7 +50,7 @@ impl PasswordOptions {
         Ok(())
     }
 
-    fn charset(&self) -> String {
+    fn charset(self) -> String {
         let mut chars = String::new();
         if self.lowercase {
             chars.push_str(LOWERCASE);
@@ -52,16 +68,17 @@ impl PasswordOptions {
     }
 }
 
-pub fn generate_password(options: &PasswordOptions) -> PasswordResult<String> {
+pub fn generate_password(options: PasswordGenerationOptions) -> PasswordResult<String> {
     options.validate()?;
     let charset = options.charset();
     let charset_bytes = charset.as_bytes();
-    let mut random = vec![0u8; options.length * 4];
+    let password_length = options.length as usize;
+    let mut random = vec![0u8; password_length * 4];
     getrandom(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
-    let mut password = String::with_capacity(options.length);
+    let mut password = String::with_capacity(password_length);
     for chunk in random.chunks(4) {
-        if password.len() >= options.length {
+        if password.len() >= password_length {
             break;
         }
         let n = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize;
@@ -69,7 +86,7 @@ pub fn generate_password(options: &PasswordOptions) -> PasswordResult<String> {
         password.push(charset_bytes[idx] as char);
     }
 
-    password.truncate(options.length);
+    password.truncate(password_length);
     Ok(password)
 }
 
@@ -78,8 +95,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn secure_defaults_are_owned_by_the_domain() {
+        assert_eq!(
+            PasswordGenerationOptions::default(),
+            PasswordGenerationOptions {
+                length: 20,
+                lowercase: true,
+                uppercase: true,
+                numbers: true,
+                symbols: true,
+            }
+        );
+    }
+
+    #[test]
     fn generates_password_with_requested_length() -> anyhow::Result<()> {
-        let password = generate_password(&PasswordOptions {
+        let password = generate_password(PasswordGenerationOptions {
             length: 24,
             lowercase: true,
             uppercase: true,
@@ -92,7 +123,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_charset() -> anyhow::Result<()> {
-        let err = generate_password(&PasswordOptions {
+        let err = generate_password(PasswordGenerationOptions {
             length: 16,
             lowercase: false,
             uppercase: false,
@@ -107,7 +138,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_length() -> anyhow::Result<()> {
-        let err = generate_password(&PasswordOptions {
+        let err = generate_password(PasswordGenerationOptions {
             length: 4,
             lowercase: true,
             uppercase: false,
@@ -122,7 +153,7 @@ mod tests {
 
     #[test]
     fn uses_only_selected_charsets() -> anyhow::Result<()> {
-        let password = generate_password(&PasswordOptions {
+        let password = generate_password(PasswordGenerationOptions {
             length: 32,
             lowercase: true,
             uppercase: false,
@@ -139,29 +170,29 @@ mod tests {
 
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
-        let min = generate_password(&PasswordOptions {
+        let min = generate_password(PasswordGenerationOptions {
             length: MIN_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(min.len(), MIN_PASSWORD_LENGTH);
+        assert_eq!(min.len(), MIN_PASSWORD_LENGTH as usize);
 
-        let max = generate_password(&PasswordOptions {
+        let max = generate_password(PasswordGenerationOptions {
             length: MAX_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(max.len(), MAX_PASSWORD_LENGTH);
+        assert_eq!(max.len(), MAX_PASSWORD_LENGTH as usize);
         Ok(())
     }
 
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
-        let err = generate_password(&PasswordOptions {
+        let err = generate_password(PasswordGenerationOptions {
             length: MAX_PASSWORD_LENGTH + 1,
             lowercase: true,
             uppercase: false,
@@ -176,7 +207,7 @@ mod tests {
 
     #[test]
     fn symbols_only_charset() -> anyhow::Result<()> {
-        let password = generate_password(&PasswordOptions {
+        let password = generate_password(PasswordGenerationOptions {
             length: 16,
             lowercase: false,
             uppercase: false,

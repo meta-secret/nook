@@ -28,7 +28,11 @@
   import * as Select from '$lib/components/ui/select'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import type { AuthenticatorCodeView, NookSecretListItem } from '$lib/nook'
+  import type {
+    AuthenticatorCodeView,
+    NookSecretListItem,
+    PasswordGenerationOptions,
+  } from '$lib/nook'
   import { SecretType } from '$lib/nook'
   import {
     freeDecryptedSecrets,
@@ -74,13 +78,7 @@
       data: string,
     ) => Promise<void>
     onDeleteSecret: (id: string) => Promise<void>
-    onGeneratePassword: (
-      length: number,
-      lowercase: boolean,
-      uppercase: boolean,
-      numbers: boolean,
-      symbols: boolean,
-    ) => string
+    onGeneratePassword: (options: PasswordGenerationOptions) => string
     onAddModeChange?: (open: boolean, selection: SecretTypeSelection) => void
   } = $props()
 

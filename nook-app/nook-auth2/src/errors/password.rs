@@ -9,7 +9,7 @@ pub type PasswordResult<T> = Result<T, PasswordError>;
 #[derive(Debug, Error)]
 pub enum PasswordError {
     #[error("Password length must be between {min} and {max}.")]
-    LengthOutOfRange { min: usize, max: usize },
+    LengthOutOfRange { min: u32, max: u32 },
 
     #[error("Select at least one character set.")]
     NoCharacterSet,

@@ -1,7 +1,12 @@
 <script lang="ts">
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import { buildSecretYaml, generateSecretId, SecretType } from '$lib/nook'
+  import {
+    buildSecretYaml,
+    generateSecretId,
+    SecretType,
+    type PasswordGenerationOptions,
+  } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     SecretTypeSelectionKind,
@@ -33,13 +38,7 @@
       type: SecretType,
       data: string,
     ) => Promise<void>
-    onGeneratePassword: (
-      length: number,
-      lowercase: boolean,
-      uppercase: boolean,
-      numbers: boolean,
-      symbols: boolean,
-    ) => string
+    onGeneratePassword: (options: PasswordGenerationOptions) => string
     onCancel: () => void
     editor?: SecretEditor
     selectedTypeState?: SecretTypeSelection

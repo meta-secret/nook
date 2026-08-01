@@ -7,7 +7,7 @@
     RefreshCw,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
-  import { SecretType } from "$lib/nook";
+  import { SecretType, type PasswordGenerationOptions } from "$lib/nook";
   import type { VaultState } from "$lib/vault.svelte";
   import MarkdownEditor from "../MarkdownEditor.svelte";
   import SeedPhraseGrid from "../SeedPhraseGrid.svelte";
@@ -22,13 +22,7 @@
     vault: VaultState;
     state: SecretFormState;
     selectedType: SecretType;
-    onGeneratePassword: (
-      length: number,
-      lowercase: boolean,
-      uppercase: boolean,
-      numbers: boolean,
-      symbols: boolean,
-    ) => string;
+    onGeneratePassword: (options: PasswordGenerationOptions) => string;
   } = $props();
 
   /** Must match `FILE_ATTACHMENT_MAX_BYTES` in nook-core. */
@@ -77,13 +71,13 @@
   }
 
   function generatePassword() {
-    state.password = onGeneratePassword(
-      state.generationLength,
-      state.generationLowercase,
-      state.generationUppercase,
-      state.generationNumbers,
-      state.generationSymbols,
-    );
+    state.password = onGeneratePassword({
+      length: state.generationLength,
+      lowercase: state.generationLowercase,
+      uppercase: state.generationUppercase,
+      numbers: state.generationNumbers,
+      symbols: state.generationSymbols,
+    });
   }
 </script>
 

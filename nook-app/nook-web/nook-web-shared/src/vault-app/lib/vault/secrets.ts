@@ -5,11 +5,7 @@ import type {
   NookSecretRecord,
   SecretType,
 } from "$lib/nook";
-import {
-  generatePassword as coreGeneratePassword,
-  generateSecretId,
-  VaultAccessStatus,
-} from "$lib/nook";
+import { generateSecretId, VaultAccessStatus } from "$lib/nook";
 import { createLogger } from "$lib/log";
 import {
   JoinEnrollmentState,
@@ -562,17 +558,6 @@ export async function refreshPasswordEntriesList(
     state.passwordEntries = [];
     return false;
   }
-}
-
-export function generatePassword(
-  _state: VaultState,
-  length: number,
-  lowercase: boolean,
-  uppercase: boolean,
-  numbers: boolean,
-  symbols: boolean,
-): string {
-  return coreGeneratePassword(length, lowercase, uppercase, numbers, symbols);
 }
 
 export async function refreshSecretsFromSession(

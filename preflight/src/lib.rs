@@ -58,6 +58,8 @@ const TYPESCRIPT_DOMAIN_MIRRORS: &[&str] = &[
     "type PendingSyncConflictDraft =",
     "type ProviderStoreMismatch = {",
     "type NookSecretFormFields = {",
+    "type PasswordGenerationOptions = {",
+    "interface PasswordGenerationOptions {",
 ];
 
 const TYPESCRIPT_DOMAIN_ALIAS_NAMES: &[&str] = &[
@@ -471,6 +473,20 @@ export type StartSentinelGenesisArgs = {
 }
 export type ExistingVaultRecoverySummary = {
   storeId: string
+}
+";
+
+        assert_eq!(typescript_boundary_violation_lines(source), vec![2, 5]);
+    }
+
+    #[test]
+    fn reports_password_generation_option_mirrors() {
+        let source = r"
+export type PasswordGenerationOptions = {
+  length: number
+}
+interface PasswordGenerationOptions {
+  symbols: boolean
 }
 ";
 
