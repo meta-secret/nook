@@ -26,7 +26,8 @@ test('choose from the compact secret type picker', async ({ page }) => {
   await page.getByTestId('login-username').fill('ada@example.com')
   await page.getByTestId('password-generator-toggle').click()
   await page.getByTestId('generate-password-btn').click()
-  await expect(page.getByTestId('secret-value')).not.toHaveValue('')
+  const generatedPassword = await page.getByTestId('secret-value').inputValue()
+  expect(generatedPassword).toHaveLength(20)
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.getByTestId('save-secret-btn').click()
