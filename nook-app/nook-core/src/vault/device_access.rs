@@ -564,11 +564,9 @@ mod tests {
     fn device_access_profile_version_is_typed_and_validated_during_decode() -> anyhow::Result<()> {
         let profile = DeviceAccessProfile::default();
         let serialized = serde_json::to_string(&profile)?;
+        let decoded: DeviceAccessProfile = serde_json::from_str(&serialized)?;
 
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&serialized)?["version"],
-            1
-        );
+        assert!(decoded.version.is_current());
         assert_eq!(
             decode_device_access_profile(&serialized),
             DeviceAccessProfileDecodeResult::Current(Box::new(profile))
