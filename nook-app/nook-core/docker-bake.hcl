@@ -73,4 +73,8 @@ target "_nook-rust-test-common" {
   contexts = {
     builder-deps = "target:builder-deps"
   }
+  // Focused Remote rust:test runs own a branch-scoped Zot export. Trusted Main remains the
+  // fallback restore source, while untrusted pull-request workflows never receive write access.
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
 }

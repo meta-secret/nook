@@ -545,7 +545,13 @@ fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> 
     for (path, targets) in [
         (
             "nook-app/nook-core/docker-bake.hcl",
-            ["builder-deps", "builder-debug", "coverage-export"].as_slice(),
+            [
+                "builder-deps",
+                "builder-debug",
+                "coverage-export",
+                "_nook-rust-test-common",
+            ]
+            .as_slice(),
         ),
         (
             "nook-app/nook-wasm/docker-bake.hcl",

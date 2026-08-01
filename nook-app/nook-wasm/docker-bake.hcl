@@ -101,6 +101,10 @@ target "_nook-rust-common" {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
   cache-from = rust_wasm_source_cache_from
+  // Remote task builds must publish the source-sealed graph as well as the manifest-only
+  // dependency graph. Without this export, an identical clean worker restores cargo-chef but
+  // recompiles every source-sensitive WASM, clippy, and test layer.
+  cache-to = rust_wasm_source_cache_to
 }
 
 // Manual browser-wasm test image; Playwright is deliberately absent from the common Rust branch.
@@ -117,4 +121,5 @@ target "_nook-rust-browser-common" {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
   cache-from = rust_wasm_source_cache_from
+  cache-to   = rust_wasm_source_cache_to
 }

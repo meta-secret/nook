@@ -81,8 +81,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && rust_bake
                 .matches("cache-to   = rust_wasm_source_cache_to")
                 .count()
-                == 2,
-        "WASM export and joined web artifacts must persist the source-sensitive hosted lineage"
+                == 4,
+        "WASM exports, task images, and browser task images must persist the source-sensitive hosted lineage"
     );
     let core_bake = read(root, "nook-app/nook-core/docker-bake.hcl");
     assert!(
