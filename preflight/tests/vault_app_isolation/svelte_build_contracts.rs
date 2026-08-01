@@ -31,6 +31,6 @@ fn svelte_build_surfaces_support_runtime_typescript_enums() -> anyhow::Result<()
         "nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte",
     );
     assert!(dashboard.contains("enum DashboardLoadKind"));
-    assert!(dashboard.contains("kind: DashboardLoadKind.Ready; view: DashboardView"));
+    assert!(dashboard.contains("kind: typeof DashboardLoadKind.Ready; view: DashboardView"));
     Ok(())
 }

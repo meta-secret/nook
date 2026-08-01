@@ -5,6 +5,14 @@ MOMENT: They may have no vault, a locked vault, or an unlocked vault and need on
 DIRECTION: An evidence ledger—identity first, protection chain second, vault relationships third—with explicit provenance and unknown states.
 DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, responsive shell, and light/dark themes.
 -->
+<script module lang="ts">
+  enum DashboardLoadKind {
+    Loading = 'loading',
+    Ready = 'ready',
+    Failed = 'failed',
+  }
+</script>
+
 <script lang="ts">
   import {
     ArrowLeft,
@@ -44,12 +52,6 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     onManageVaultPasswords: () => void
   } = $props()
 
-  enum DashboardLoadKind {
-    Loading = 'loading',
-    Ready = 'ready',
-    Failed = 'failed',
-  }
-
   type VaultAccessView = {
     storeId: string
     label: string
@@ -83,9 +85,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   }
 
   type DashboardLoadState =
-    | { kind: DashboardLoadKind.Loading }
-    | { kind: DashboardLoadKind.Ready; view: DashboardView }
-    | { kind: DashboardLoadKind.Failed }
+    | { kind: typeof DashboardLoadKind.Loading }
+    | { kind: typeof DashboardLoadKind.Ready; view: DashboardView }
+    | { kind: typeof DashboardLoadKind.Failed }
 
   let loadState = $state<DashboardLoadState>({
     kind: DashboardLoadKind.Loading,
