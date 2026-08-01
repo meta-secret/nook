@@ -35,3 +35,5 @@ mod build_contracts;
 mod hosted_delivery_contracts;
 #[path = "vault_app_isolation/runtime_boundary_contracts.rs"]
 mod runtime_boundary_contracts;
+#[path = "vault_app_isolation/svelte_build_contracts.rs"]
+mod svelte_build_contracts;
