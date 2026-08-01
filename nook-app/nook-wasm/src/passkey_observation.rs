@@ -145,13 +145,31 @@ fn aaguid(data: &[u8]) -> Option<String> {
 }
 
 fn client_environment() -> PasskeyBrowserObservation {
-    let Ok(user_agent) = gloo_utils::window().navigator().user_agent() else {
+    let navigator = gloo_utils::window().navigator();
+    let Ok(user_agent) = navigator.user_agent() else {
         return PasskeyBrowserObservation::default();
     };
     let browser = observed_browser(&user_agent);
-    let platform = if user_agent.contains("Android") {
+    let platform = observed_platform(&user_agent, navigator.max_touch_points());
+    PasskeyBrowserObservation {
+        browser,
+        platform,
+        ..PasskeyBrowserObservation::default()
+    }
+}
+
+fn observed_platform(
+    user_agent: &str,
+    max_touch_points: i32,
+) -> nook_core::PasskeyObservedPlatform {
+    if user_agent.contains("Android") {
         nook_core::PasskeyObservedPlatform::Android
     } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
+        nook_core::PasskeyObservedPlatform::AppleMobile
+    } else if user_agent.contains("Macintosh") && max_touch_points > 1 {
+        // iPadOS desktop mode deliberately uses a Macintosh user agent. Touch
+        // capability is the browser-supported discriminator recommended for
+        // this otherwise indistinguishable case.
         nook_core::PasskeyObservedPlatform::AppleMobile
     } else if user_agent.contains("Mac OS X") {
         nook_core::PasskeyObservedPlatform::MacOs
@@ -161,18 +179,16 @@ fn client_environment() -> PasskeyBrowserObservation {
         nook_core::PasskeyObservedPlatform::Linux
     } else {
         nook_core::PasskeyObservedPlatform::Other
-    };
-    PasskeyBrowserObservation {
-        browser,
-        platform,
-        ..PasskeyBrowserObservation::default()
     }
 }
 
 fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
     if user_agent.contains("OPR/") {
         nook_core::PasskeyObservedBrowser::Other
-    } else if user_agent.contains("Edg/") || user_agent.contains("EdgiOS/") {
+    } else if user_agent.contains("Edg/")
+        || user_agent.contains("EdgA/")
+        || user_agent.contains("EdgiOS/")
+    {
         nook_core::PasskeyObservedBrowser::Edge
     } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
         nook_core::PasskeyObservedBrowser::Firefox
@@ -224,6 +240,30 @@ mod tests {
         assert_eq!(
             observed_browser("Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"),
             nook_core::PasskeyObservedBrowser::Edge
+        );
+    }
+
+    #[test]
+    fn recognizes_edge_on_android_before_the_generic_chrome_token() {
+        assert_eq!(
+            observed_browser(
+                "Mozilla/5.0 (Linux; Android 15) Chrome/151.0.0.0 Mobile Safari/537.36 EdgA/151.0"
+            ),
+            nook_core::PasskeyObservedBrowser::Edge
+        );
+    }
+
+    #[test]
+    fn distinguishes_touch_capable_ipad_desktop_mode_from_macos() {
+        let desktop_safari =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15";
+        assert_eq!(
+            observed_platform(desktop_safari, 5),
+            nook_core::PasskeyObservedPlatform::AppleMobile
+        );
+        assert_eq!(
+            observed_platform(desktop_safari, 0),
+            nook_core::PasskeyObservedPlatform::MacOs
         );
     }
 

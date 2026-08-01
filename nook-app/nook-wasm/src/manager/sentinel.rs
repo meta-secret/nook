@@ -448,6 +448,11 @@ impl NookVaultManager {
         self.purge_legacy_plaintext_search_catalog().await?;
         let records = self.get_records()?;
         self.sentinel_unlock = CeremonyState::Inactive;
+        let _ = crate::storage::device_access::record_verified_vault_access(
+            identity.device_id().as_str(),
+            &self.vault.store_id,
+        )
+        .await;
         Ok(records)
     }
 

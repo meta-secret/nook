@@ -88,7 +88,7 @@ pub enum NookPasskeyBackupState {
 pub struct NookDeviceVaultAccess {
     store_id: String,
     label: String,
-    last_unlocked_at: NookDeviceAccessText,
+    last_local_update_at: NookDeviceAccessText,
     verified_at: NookDeviceAccessText,
 }
 
@@ -118,9 +118,9 @@ impl NookDeviceVaultAccess {
         self.verified_at.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
-    pub fn last_unlocked_at(&self) -> NookDeviceAccessText {
-        self.last_unlocked_at.clone()
+    #[wasm_bindgen(getter, js_name = lastLocalUpdateAt)]
+    pub fn last_local_update_at(&self) -> NookDeviceAccessText {
+        self.last_local_update_at.clone()
     }
 }
 
@@ -288,7 +288,7 @@ pub async fn device_access_snapshot(
         vaults.push(NookDeviceVaultAccess {
             store_id: entry.store_id,
             label: entry.label,
-            last_unlocked_at: NookDeviceAccessText::from_option(
+            last_local_update_at: NookDeviceAccessText::from_option(
                 entry
                     .last_unlocked_at
                     .map(|timestamp| timestamp.to_string()),

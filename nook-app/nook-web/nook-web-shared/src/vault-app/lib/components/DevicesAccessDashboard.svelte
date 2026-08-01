@@ -59,7 +59,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     label: string
     verified: boolean
     verifiedAt: DashboardText
-    lastUnlockedAt: DashboardText
+    lastLocalUpdateAt: DashboardText
   }
 
   type DashboardView = {
@@ -135,7 +135,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
               verified:
                 entry.accessState === NookDeviceVaultAccessState.Verified,
               verifiedAt,
-              lastUnlockedAt: readText(entry.lastUnlockedAt),
+              lastLocalUpdateAt: readText(entry.lastLocalUpdateAt),
             }
           } finally {
             entry.free()
@@ -541,9 +541,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                         {vault.t('devices_access.access_unknown')}
                       </p>
                       <p class="text-xs text-muted-foreground">
-                        {knownText(entry.lastUnlockedAt)
-                          ? vault.t('devices_access.last_opened', { date: formatDate(textValue(entry.lastUnlockedAt)) })
-                          : vault.t('devices_access.never_opened')}
+                        {knownText(entry.lastLocalUpdateAt)
+                          ? vault.t('devices_access.last_local_update', { date: formatDate(textValue(entry.lastLocalUpdateAt)) })
+                          : vault.t('devices_access.no_local_update')}
                       </p>
                     {/if}
                   </div>
