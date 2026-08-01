@@ -301,6 +301,30 @@ pub fn configured_vault_application_name() -> String {
         .to_owned()
 }
 
+/// Return whether the configured application is the Simple Vault artifact.
+#[wasm_bindgen(js_name = configuredVaultApplicationIsSimple)]
+pub fn configured_vault_application_is_simple() -> bool {
+    application::configured_vault_application().is_simple()
+}
+
+/// Return whether the configured application is the Sentinel Vault artifact.
+#[wasm_bindgen(js_name = configuredVaultApplicationIsSentinel)]
+pub fn configured_vault_application_is_sentinel() -> bool {
+    application::configured_vault_application().is_sentinel()
+}
+
+/// Return whether the configured application may offer extension integration.
+#[wasm_bindgen(js_name = configuredVaultApplicationSupportsExtension)]
+pub fn configured_vault_application_supports_extension() -> bool {
+    application::configured_vault_application().supports_extension()
+}
+
+/// Return the configured deployment-channel Simple Vault root URL.
+#[wasm_bindgen(js_name = simpleVaultAppUrl)]
+pub fn simple_vault_app_url(configured_url: &str) -> String {
+    nook_core::simple_vault_app_url(configured_url)
+}
+
 /// Return the Rust-owned empty-provider policy for a first-connect intent.
 #[wasm_bindgen(js_name = vaultConnectIntentPermitsEmptyRemoteGenesis)]
 pub fn vault_connect_intent_permits_empty_remote_genesis(

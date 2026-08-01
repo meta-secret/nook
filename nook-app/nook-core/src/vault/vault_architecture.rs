@@ -121,6 +121,8 @@ pub enum VaultApplication {
     Extension,
 }
 
+const DEFAULT_SIMPLE_VAULT_APP_URL: &str = "https://simple.nokey.sh";
+
 impl VaultApplication {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -153,6 +155,21 @@ impl VaultApplication {
         }
     }
 
+    #[must_use]
+    pub const fn is_simple(self) -> bool {
+        matches!(self, Self::Simple)
+    }
+
+    #[must_use]
+    pub const fn is_sentinel(self) -> bool {
+        matches!(self, Self::Sentinel)
+    }
+
+    #[must_use]
+    pub const fn supports_extension(self) -> bool {
+        !self.is_sentinel()
+    }
+
     pub fn validate_vault_type(self, vault_type: VaultType) -> ValidationResult<()> {
         if self.permits_vault_type(vault_type) {
             return Ok(());
@@ -178,6 +195,17 @@ impl VaultApplication {
         }
         self.validate_session_access(vault_type)
     }
+}
+
+#[must_use]
+pub fn simple_vault_app_url(configured_url: &str) -> String {
+    let configured_url = configured_url.trim();
+    let root = if configured_url.is_empty() {
+        DEFAULT_SIMPLE_VAULT_APP_URL
+    } else {
+        configured_url
+    };
+    format!("{}/", root.trim_end_matches('/'))
 }
 
 impl VaultType {
@@ -828,6 +856,32 @@ mod tests {
                 application: "extension".to_owned(),
                 vault_type: "sentinel".to_owned(),
             })
+        );
+    }
+
+    #[test]
+    fn application_capabilities_are_owned_by_the_application_enum() {
+        assert!(VaultApplication::Simple.is_simple());
+        assert!(!VaultApplication::Simple.is_sentinel());
+        assert!(VaultApplication::Simple.supports_extension());
+
+        assert!(!VaultApplication::Sentinel.is_simple());
+        assert!(VaultApplication::Sentinel.is_sentinel());
+        assert!(!VaultApplication::Sentinel.supports_extension());
+
+        assert!(VaultApplication::UnifiedDevelopment.supports_extension());
+        assert!(VaultApplication::Extension.supports_extension());
+    }
+
+    #[test]
+    fn simple_vault_application_url_is_defaulted_and_normalized() {
+        assert_eq!(
+            simple_vault_app_url(""),
+            "https://simple.nokey.sh/".to_owned()
+        );
+        assert_eq!(
+            simple_vault_app_url("  https://preview-simple.example///  "),
+            "https://preview-simple.example/".to_owned()
         );
     }
 

@@ -1,5 +1,6 @@
 import { mount } from 'svelte'
 import '$vault-shared/app.css'
+import { VaultApplication } from '$app-wasm'
 import { ensureAppWasm } from '$lib/wasm-bootstrap'
 
 // Keep the initial root identity: a replacement page can supply a new #app
@@ -7,7 +8,7 @@ import { ensureAppWasm } from '$lib/wasm-bootstrap'
 const target = document.getElementById('app')
 if (!target) throw new Error('Vault app mount target is missing')
 
-await ensureAppWasm()
+await ensureAppWasm(VaultApplication.UnifiedDevelopment)
 const { default: App } = await import('$vault-shared/App.svelte')
 
 // Content-script and UI-demo pages can replace the initial Vite document while

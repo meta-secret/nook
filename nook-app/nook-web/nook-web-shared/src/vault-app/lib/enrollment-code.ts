@@ -1,9 +1,9 @@
 import {
   buildEnrollmentLink as buildEnrollmentLinkCore,
+  configuredVaultApplication,
   normalizeEnrollmentCode,
   VaultApplication,
 } from "$app-wasm";
-import { APP_KIND } from "$lib/app-kind";
 
 const ENROLLMENT_HASH_PREFIX = "#enroll=";
 
@@ -31,7 +31,7 @@ type EnrollmentUrlCode =
 
 export function enrollmentAppRootUrl(
   siteRoot: string,
-  appKind: VaultApplication = APP_KIND,
+  appKind: VaultApplication = configuredVaultApplication(),
 ): string {
   const normalized = siteRoot.replace(/\/$/, "");
   if (

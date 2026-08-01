@@ -4,7 +4,7 @@
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
   } from '$lib/app-lifecycle-state'
-  import { SUPPORTS_EXTENSION } from '$lib/app-kind'
+  import { configuredVaultApplicationSupportsExtension } from '$app-wasm'
   import { ExtensionSetupStatus } from '$lib/extension-install'
   import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
@@ -30,6 +30,8 @@
     SecretEditorModeKind,
     type SecretEditorMode,
   } from './authenticated-vault-workspace-state'
+
+  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
 
   let {
     vault,

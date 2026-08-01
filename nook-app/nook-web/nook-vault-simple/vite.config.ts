@@ -5,7 +5,6 @@ import {
   vaultAppAliases,
   vaultSpaPlugin,
 } from "../nook-web-shared/vite-config";
-import { VaultApplication } from "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm";
 
 const simpleAppUrl =
   process.env.VITE_SIMPLE_APP_URL?.trim() || "https://simple.nokey.sh";
@@ -20,7 +19,6 @@ const simpleSpa = vaultSpaPlugin({
 export default defineConfig({
   base: "./",
   define: {
-    __NOOK_APP_KIND__: JSON.stringify(VaultApplication.Simple),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
     "import.meta.env.VITE_SITE_URL": JSON.stringify(siteUrl.replace(/\/$/, "")),

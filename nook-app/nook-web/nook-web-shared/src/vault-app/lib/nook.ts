@@ -22,9 +22,8 @@ import {
   VaultAccessStatus,
 } from "$app-wasm";
 import { createLogger, initWasmLogging } from "$lib/log";
-import { ensureAppWasm } from "$lib/wasm-bootstrap";
 
-await ensureAppWasm();
+await initNookWasm();
 initWasmLogging();
 
 export type {

@@ -5,7 +5,6 @@ import {
   vaultAppAliases,
   vaultSpaPlugin,
 } from "../nook-web-shared/vite-config";
-import { VaultApplication } from "../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm";
 
 const sentinelAppUrl =
   process.env.VITE_SENTINEL_APP_URL?.trim() || "https://sentinel.nokey.sh";
@@ -22,7 +21,6 @@ const sentinelSpa = vaultSpaPlugin({
 export default defineConfig({
   base: "./",
   define: {
-    __NOOK_APP_KIND__: JSON.stringify(VaultApplication.Sentinel),
     "import.meta.env.VITE_PUBLIC_APP_URL": JSON.stringify(sentinelAppUrl),
     "import.meta.env.VITE_SIMPLE_APP_URL": JSON.stringify(simpleAppUrl),
   },

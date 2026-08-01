@@ -60,9 +60,13 @@
     APP_VERSION,
     appShellSpacing,
   } from '$lib/app-shell-layout'
-  import { assessVaultSecurity, VaultApplication } from '$app-wasm'
+  import {
+    assessVaultSecurity,
+    configuredVaultApplicationIsSimple,
+    configuredVaultApplicationIsSentinel,
+    configuredVaultApplicationSupportsExtension,
+  } from '$app-wasm'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
-  import { APP_KIND, IS_SENTINEL_APP, SUPPORTS_EXTENSION } from '$lib/app-kind'
   import {
     initialExtensionConnectIntent,
     initialLegalRoute,
@@ -86,6 +90,9 @@
     type ActiveVault,
   } from '$lib/vault/state/provider.svelte'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
+  const IS_SIMPLE_APP = configuredVaultApplicationIsSimple()
+  const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
+  const SUPPORTS_EXTENSION = configuredVaultApplicationSupportsExtension()
   const vault = new VaultState()
   const vaultSecurityRecommendations = $derived(
     assessVaultSecurity(vault.syncProviders.length, vault.vaultMembers.length),
@@ -125,17 +132,17 @@
   let extensionConnectError = $state(false)
   const EXTENSION_LOCKED_RETRY_MS = 3_000
   let sentinelInvitationRequest = $state(
-    'window' in globalThis && APP_KIND !== VaultApplication.Simple
+    'window' in globalThis && !IS_SIMPLE_APP
       ? consumeSentinelGenesisRequestFromLocation()
       : '',
   )
   let sentinelParticipantResponse = $state(
-    'window' in globalThis && APP_KIND !== VaultApplication.Simple
+    'window' in globalThis && !IS_SIMPLE_APP
       ? consumeSentinelGenesisParticipantResponseFromLocation()
       : '',
   )
   let sentinelOnboardingPackage = $state(
-    'window' in globalThis && APP_KIND !== VaultApplication.Simple
+    'window' in globalThis && !IS_SIMPLE_APP
       ? consumeSentinelOnboardingFromLocation()
       : '',
   )
@@ -159,7 +166,7 @@
         request: routeConnectRequest.request,
       }
     }
-    if (APP_KIND !== VaultApplication.Simple) {
+    if (!IS_SIMPLE_APP) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
       if (invitationRequest) sentinelInvitationRequest = invitationRequest
       const participantResponse =

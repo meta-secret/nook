@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
-  import { IS_SENTINEL_APP, simpleVaultAppUrl } from '$lib/app-kind'
+  import {
+    configuredVaultApplicationIsSentinel,
+    simpleVaultAppUrl,
+  } from '$app-wasm'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import { LogoSize } from '$lib/components/nook-logo-state'
@@ -8,6 +11,11 @@
   import { Button } from '$lib/components/ui/button'
   import { ColorMode } from '$lib/app-lifecycle-state'
   import type { VaultState } from '$lib/vault.svelte'
+
+  const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
+  const SIMPLE_VAULT_APP_URL = simpleVaultAppUrl(
+    import.meta.env.VITE_SIMPLE_APP_URL || '',
+  )
 
   let {
     vault,
@@ -32,7 +40,7 @@
   function navigateToSiblingApp(event: MouseEvent) {
     event.preventDefault()
     vault.lockVault()
-    window.location.assign(simpleVaultAppUrl())
+    window.location.assign(SIMPLE_VAULT_APP_URL)
   }
 </script>
 
@@ -78,7 +86,7 @@
 
       {#if IS_SENTINEL_APP}
         <a
-          href={simpleVaultAppUrl()}
+          href={SIMPLE_VAULT_APP_URL}
           class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
           data-testid="sibling-vault-app-link"
           onclick={navigateToSiblingApp}

@@ -6,6 +6,7 @@ import {
   DeviceMode,
   DeviceProtectionDeviceModeState,
   DeviceProtectionStatus,
+  configuredVaultApplication,
   hasActiveLocalVault,
   NookAppLocaleParse,
   parseAppLocale,
@@ -15,7 +16,6 @@ import {
   type NookAppLocale,
   type NookVaultManager,
 } from "$app-wasm";
-import { APP_KIND } from "$lib/app-kind";
 import { LOCAL_PROVIDER_TYPE } from "$lib/auth-providers";
 import {
   setupDeviceProtection,
@@ -75,10 +75,11 @@ export async function initOnce(state: VaultState): Promise<void> {
     await state.updateLocale(locale);
     await state.refreshLocalVaultCatalog();
     state.openManager(await getVaultManager());
-    if (state.requireManager().vaultApplication !== APP_KIND) {
+    const configuredApplication = configuredVaultApplication();
+    if (state.requireManager().vaultApplication !== configuredApplication) {
       throw new Error(
         state.t("app.capability_mismatch", {
-          app: String(APP_KIND),
+          app: String(configuredApplication),
           wasm: String(state.requireManager().vaultApplication),
         }),
       );
