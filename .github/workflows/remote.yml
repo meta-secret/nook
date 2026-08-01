@@ -37,9 +37,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Dependency refs are shared by a branch while source-sensitive refs are additionally
-  # task-scoped. Serialize writers so compatible dependency exports cannot race.
-  group: remote-${{ github.ref }}
+  # Every writable ref is branch-and-task scoped, so independent catalog tasks retain the
+  # documented parallel execution model without competing to replace a cache manifest.
+  group: remote-${{ github.ref }}-${{ inputs.task }}
   cancel-in-progress: false
 
 env:

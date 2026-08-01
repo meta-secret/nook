@@ -40,7 +40,7 @@ containing `secrets/` directory is mode `0700`; credential files are mode
 Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
 `NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`. That identity has only
 read, write, list, and tagging actions for `nook-sccache`; explicit Remote tasks
-use a second identity limited to `nook-sccache-remote`. A separate
+use a second identity limited to read/list actions on `nook-sccache`. A separate
 administrative identity creates the bucket and remains server-side; its keys are
 never copied to a checkout or GitHub.
 
@@ -61,11 +61,11 @@ after k0s firewall updates. Public Redis `:6380` is retired.
 Hosted Docker builds use BuildKit `type=registry` cache refs on
 `registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
 restore them read-only after `docker login`. Explicit Remote tasks use
-branch-isolated Zot refs with Main fallback and write only those branch refs in
+branch-and-task Zot refs with Main fallback and write only those Remote refs in
 the separately authorized `nook/remote-buildcache/**` repository path. Zot
-deduplicates identical layer blobs shared with Main. Rust compiler vertices use
-authenticated, trust-domain-specific SeaweedFS S3 buckets through stable
-BuildKit secret IDs; secret contents
+deduplicates identical layer blobs shared with Main. Remote Rust compiler vertices
+read trusted Main SeaweedFS objects through a separate read-only identity and
+stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used

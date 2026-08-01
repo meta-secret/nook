@@ -137,7 +137,6 @@ runs:
         fi
 
         scope_suffix=""
-        graph_suffix=""
         fallback_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           branch_hash="$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-20)"
@@ -147,13 +146,11 @@ runs:
             exit 1
           fi
           task_hash="$(printf '%s' "$task_name" | sha256sum | cut -c1-12)"
-          scope_suffix="-remote-$branch_hash"
-          graph_suffix="-graph-$task_hash"
+          scope_suffix="-remote-$branch_hash-task-$task_hash"
           fallback_enabled=1
-          echo "Remote cache writes are isolated to $scope_suffix$graph_suffix with trusted Main fallback"
+          echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_GRAPH_SUFFIX=$graph_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/docker/*.docker-bake.hcl', 'nook-app/docker/base.Dockerfile', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-core/Dockerfile') }}"

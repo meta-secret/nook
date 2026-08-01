@@ -463,9 +463,7 @@ fn assert_sccache_credential_contract() {
         r#"\"Write:nook-sccache\""#,
         r#"\"List:nook-sccache\""#,
         r#"\"Tagging:nook-sccache\""#,
-        r#"\"name\": \"nook-sccache-remote\""#,
-        r#"\"Read:nook-sccache-remote\""#,
-        r#"\"Write:nook-sccache-remote\""#,
+        r#"\"name\": \"nook-sccache-remote-reader\""#,
         r#"\"name\": \"nook-sccache-admin\""#,
         "gh secret set NOOK_SCCACHE_ACCESS_KEY",
         "gh secret set NOOK_SCCACHE_SECRET_KEY",
@@ -480,8 +478,8 @@ fn assert_sccache_credential_contract() {
         "s3api put-object",
         "s3api head-object",
         "s3api delete-object",
-        "Main and Remote isolated read/write S3 checks passed",
-        "Remote compiler identity must not read Main's bucket",
+        "Main read/write and Remote read-only S3 checks passed",
+        "Remote compiler identity must not write Main's bucket",
     ] {
         assert!(
             sccache.contains(required),
@@ -493,6 +491,14 @@ fn assert_sccache_credential_contract() {
             && !sccache.contains("$home_cache/sccache-admin")
             && !sccache.contains("$repo_cache/sccache-admin"),
         "SeaweedFS administrative credentials must remain server-side"
+    );
+    assert!(
+        sccache.contains(
+            "\\\"name\\\": \\\"nook-sccache-remote-reader\\\",\n              \\\"credentials\\\""
+        ) && sccache.contains(
+            "\\\"actions\\\": [\n                \\\"Read:nook-sccache\\\",\n                \\\"List:nook-sccache\\\"\n              ]"
+        ),
+        "Remote compiler identity must be read/list-only on Main's bucket"
     );
 }
 

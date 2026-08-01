@@ -347,11 +347,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             "branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""
         )
     );
-    assert!(setup.contains("scope_suffix=\"-remote-$branch_hash\""));
     assert!(setup.contains("task_hash=\"$(printf '%s' \"$task_name\" | sha256sum | cut -c1-12)\""));
-    assert!(setup.contains("graph_suffix=\"-graph-$task_hash\""));
+    assert!(setup.contains("scope_suffix=\"-remote-$branch_hash-task-$task_hash\""));
     assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
-    assert!(setup.contains("GHA_CACHE_GRAPH_SUFFIX=$graph_suffix"));
     assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(!setup.contains("cache_total_count()"));
 
@@ -359,7 +357,6 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
 
     let bake = read("nook-app/docker-bake.hcl");
     assert!(bake.contains("variable \"GHA_CACHE_SCOPE_SUFFIX\""));
-    assert!(bake.contains("variable \"GHA_CACHE_GRAPH_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_CACHE_FALLBACK_ENABLED\""));
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
@@ -406,9 +403,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
-        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
-        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}",
+        "nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
     ] {
         assert!(
             bake.contains(scope),
@@ -418,11 +415,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     for write_scope in [
         "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}${GHA_CACHE_GRAPH_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
     ] {
         assert!(
             bake.contains(write_scope),

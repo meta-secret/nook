@@ -114,14 +114,13 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
         "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
-    assert!(workflow.contains("group: remote-${{ github.ref }}\n"));
-    assert!(!workflow.contains("group: remote-${{ github.ref }}-${{ inputs.task }}"));
+    assert!(workflow.contains("group: remote-${{ github.ref }}-${{ inputs.task }}"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
     assert_eq!(
         workflow.matches("isolated-cache-write: \"true\"").count(),
         task_catalog.len(),
-        "every Remote task must write only its branch-isolated Zot namespace"
+        "every Remote task must write only its branch-and-task Zot namespace"
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
