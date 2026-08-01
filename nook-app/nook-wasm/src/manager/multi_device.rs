@@ -5,6 +5,7 @@
 //! methods are reachable when the vault is in password mode — the
 //! password-mode counterpart is `connectWithPassword` (`manager::password`).
 
+use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
@@ -146,12 +147,13 @@ impl NookVaultManager {
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
         self.vault.meta = meta;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = self.get_records()?;
-        let _ = crate::storage::device_access::record_verified_vault_access(
-            identity.device_id().as_str(),
-            &self.vault.store_id,
-        )
-        .await;
+        let records = VerifiedVaultAccessFlow::EnrollAndConnect
+            .complete(
+                self.get_records(),
+                identity.device_id().as_str(),
+                &self.vault.store_id,
+            )
+            .await?;
         Ok(records)
     }
 
@@ -476,12 +478,13 @@ impl NookVaultManager {
         }
         self.persist_vault_change(Vec::new()).await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = self.get_records()?;
-        let _ = crate::storage::device_access::record_verified_vault_access(
-            identity.device_id().as_str(),
-            &self.vault.store_id,
-        )
-        .await;
+        let records = VerifiedVaultAccessFlow::EnrollWithKeys
+            .complete(
+                self.get_records(),
+                identity.device_id().as_str(),
+                &self.vault.store_id,
+            )
+            .await?;
         Ok(records)
     }
 

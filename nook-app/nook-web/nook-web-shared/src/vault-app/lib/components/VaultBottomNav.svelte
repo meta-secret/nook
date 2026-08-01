@@ -24,7 +24,7 @@
     settingsOpen?: boolean
     settingsSection?: SettingsSection
     onSelectSecrets?: () => void
-    onSelectDevicesAccess?: () => void
+    onSelectDevicesAccess: () => void
     onSelectOnboard?: () => void
     onSelectAdmin?: () => void
     onSelectSettings?: () => void
@@ -75,7 +75,7 @@
         ? 'bg-background text-primary shadow-xs sm:shadow-none'
         : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
       data-testid="vault-devices-access-tab"
-      onclick={() => onSelectDevicesAccess?.()}
+      onclick={onSelectDevicesAccess}
     >
       <ShieldCheck class="size-5 shrink-0" />
       <span class="text-[0.68rem] font-medium leading-none sm:text-xs"

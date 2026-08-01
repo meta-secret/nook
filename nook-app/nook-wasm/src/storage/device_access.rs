@@ -7,10 +7,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::NookError;
 
-use super::indexed_db::{idb_delete_key, idb_get_string, idb_put_string};
+#[cfg(test)]
+use super::indexed_db::idb_put_string;
+use super::indexed_db::{idb_delete_key, idb_get_string, idb_update_string};
 
 const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
 const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
+const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
+    "errors.device_access.profile_version_incompatible";
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -249,12 +253,18 @@ enum DeviceAccessProfileUpdate {
     PreserveFutureVersion,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeviceAccessProfileUpdateIntent {
+    BestEffort,
+    Interactive,
+}
+
 impl DeviceAccessProfileUpdate {
     fn into_interactive_profile(self) -> Result<DeviceAccessProfile, NookError> {
         match self {
             Self::Writable(profile) => Ok(profile),
             Self::PreserveFutureVersion => Err(NookError::Database(
-                "errors.device_access.profile_version_incompatible".to_owned(),
+                DEVICE_ACCESS_PROFILE_VERSION_ERROR.to_owned(),
             )),
         }
     }
@@ -292,13 +302,11 @@ pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, 
     })
 }
 
-async fn load_device_access_profile_for_update() -> Result<DeviceAccessProfileUpdate, NookError> {
-    let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
-        return Ok(DeviceAccessProfileUpdate::Writable(
-            DeviceAccessProfile::default(),
-        ));
+fn device_access_profile_for_update(raw: Option<&str>) -> DeviceAccessProfileUpdate {
+    let Some(raw) = raw else {
+        return DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default());
     };
-    Ok(match decode_device_access_profile(&raw) {
+    match decode_device_access_profile(raw) {
         DecodedDeviceAccessProfile::Current(profile) => {
             DeviceAccessProfileUpdate::Writable(profile)
         }
@@ -308,14 +316,47 @@ async fn load_device_access_profile_for_update() -> Result<DeviceAccessProfileUp
         DecodedDeviceAccessProfile::FutureVersion => {
             DeviceAccessProfileUpdate::PreserveFutureVersion
         }
-    })
+    }
 }
 
+#[cfg(test)]
 async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(), NookError> {
     let json = serde_json::to_string(profile).map_err(|error| {
         NookError::IndexedDb(format!("Device access profile serialize error: {error}"))
     })?;
     idb_put_string(DEVICE_ACCESS_PROFILE_KEY, &json).await
+}
+
+async fn update_device_access_profile<F>(
+    intent: DeviceAccessProfileUpdateIntent,
+    update: F,
+) -> Result<(), NookError>
+where
+    F: FnOnce(&mut DeviceAccessProfile) -> Result<(), NookError>,
+{
+    idb_update_string(DEVICE_ACCESS_PROFILE_KEY, move |raw| {
+        let disposition = device_access_profile_for_update(raw.as_deref());
+        let mut profile = match intent {
+            DeviceAccessProfileUpdateIntent::Interactive => {
+                disposition.into_interactive_profile()?
+            }
+            DeviceAccessProfileUpdateIntent::BestEffort => match disposition {
+                DeviceAccessProfileUpdate::Writable(profile) => profile,
+                DeviceAccessProfileUpdate::PreserveFutureVersion => {
+                    return raw.ok_or_else(|| {
+                        NookError::Database(
+                            "Future device access profile disappeared during update.".to_owned(),
+                        )
+                    });
+                }
+            },
+        };
+        update(&mut profile)?;
+        serde_json::to_string(&profile).map_err(|error| {
+            NookError::IndexedDb(format!("Device access profile serialize error: {error}"))
+        })
+    })
+    .await
 }
 
 pub(crate) async fn record_passkey_created(
@@ -325,45 +366,51 @@ pub(crate) async fn record_passkey_created(
     ceremony: PasskeyCreationCeremony,
 ) -> Result<(), NookError> {
     let now = browser_timestamp();
-    let DeviceAccessProfileUpdate::Writable(mut profile) =
-        load_device_access_profile_for_update().await?
-    else {
-        return Ok(());
-    };
-    profile.record_passkey_created(
-        credential_fingerprint,
-        nook_name,
-        observation,
-        now,
-        ceremony,
-    );
-    save_device_access_profile(&profile).await
+    update_device_access_profile(
+        DeviceAccessProfileUpdateIntent::BestEffort,
+        move |profile| {
+            profile.record_passkey_created(
+                credential_fingerprint,
+                nook_name,
+                observation,
+                now,
+                ceremony,
+            );
+            Ok(())
+        },
+    )
+    .await
 }
 
 pub(crate) async fn record_passkey_used(
     credential_fingerprint: &str,
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
-    let DeviceAccessProfileUpdate::Writable(mut profile) =
-        load_device_access_profile_for_update().await?
-    else {
-        return Ok(());
-    };
-    profile.record_passkey_used(credential_fingerprint, observation, browser_timestamp());
-    save_device_access_profile(&profile).await
+    let now = browser_timestamp();
+    update_device_access_profile(
+        DeviceAccessProfileUpdateIntent::BestEffort,
+        move |profile| {
+            profile.record_passkey_used(credential_fingerprint, observation, now);
+            Ok(())
+        },
+    )
+    .await
 }
 
 pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookError> {
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let mut profile = load_device_access_profile_for_update()
-        .await?
-        .into_interactive_profile()?;
-    let passkey = profile
-        .passkey
-        .get_or_insert_with(PasskeyAccessProfile::default);
-    passkey.provider_label = normalized;
-    save_device_access_profile(&profile).await
+    update_device_access_profile(
+        DeviceAccessProfileUpdateIntent::Interactive,
+        move |profile| {
+            let passkey = profile
+                .passkey
+                .get_or_insert_with(PasskeyAccessProfile::default);
+            passkey.provider_label = normalized;
+            Ok(())
+        },
+    )
+    .await
 }
 
 pub(crate) async fn record_verified_vault_access(
@@ -373,13 +420,15 @@ pub(crate) async fn record_verified_vault_access(
     if device_id.trim().is_empty() || store_id.trim().is_empty() {
         return Ok(());
     }
-    let DeviceAccessProfileUpdate::Writable(mut profile) =
-        load_device_access_profile_for_update().await?
-    else {
-        return Ok(());
-    };
-    profile.record_verified_vault_access(device_id, store_id, browser_timestamp());
-    save_device_access_profile(&profile).await
+    let now = browser_timestamp();
+    update_device_access_profile(
+        DeviceAccessProfileUpdateIntent::BestEffort,
+        move |profile| {
+            profile.record_verified_vault_access(device_id, store_id, now);
+            Ok(())
+        },
+    )
+    .await
 }
 
 pub(crate) async fn delete_device_access_profile() -> Result<(), NookError> {
@@ -657,6 +706,49 @@ mod tests {
         assert_eq!(
             idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?.as_deref(),
             Some(FUTURE_PROFILE)
+        );
+
+        delete_device_access_profile().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn concurrent_verified_access_updates_preserve_both_relationships()
+    -> Result<(), NookError> {
+        delete_device_access_profile().await?;
+        let first = wasm_bindgen_futures::future_to_promise(async {
+            record_verified_vault_access("device-a", "store-one")
+                .await
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
+            Ok(wasm_bindgen::JsValue::UNDEFINED)
+        });
+        let second = wasm_bindgen_futures::future_to_promise(async {
+            record_verified_vault_access("device-b", "store-two")
+                .await
+                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
+            Ok(wasm_bindgen::JsValue::UNDEFINED)
+        });
+        let pending = js_sys::Array::new();
+        pending.push(&first);
+        pending.push(&second);
+        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::all(&pending))
+            .await
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Concurrent device access update failed: {error:?}"))
+            })?;
+
+        let profile = load_device_access_profile().await?;
+        assert!(
+            profile
+                .verified_vaults
+                .iter()
+                .any(|entry| { entry.device_id == "device-a" && entry.store_id == "store-one" })
+        );
+        assert!(
+            profile
+                .verified_vaults
+                .iter()
+                .any(|entry| { entry.device_id == "device-b" && entry.store_id == "store-two" })
         );
 
         delete_device_access_profile().await?;

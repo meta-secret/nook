@@ -4,6 +4,7 @@
 //! their local encrypted share inside Rust and return a signed response that is
 //! session-bound and encrypted to the requester.
 
+use super::verified_access::VerifiedVaultAccessFlow;
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
@@ -446,13 +447,14 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = self.get_records()?;
+        let records = VerifiedVaultAccessFlow::SentinelUnlock
+            .complete(
+                self.get_records(),
+                identity.device_id().as_str(),
+                &self.vault.store_id,
+            )
+            .await?;
         self.sentinel_unlock = CeremonyState::Inactive;
-        let _ = crate::storage::device_access::record_verified_vault_access(
-            identity.device_id().as_str(),
-            &self.vault.store_id,
-        )
-        .await;
         Ok(records)
     }
 

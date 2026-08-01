@@ -179,6 +179,51 @@ pub(super) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookErr
     Ok(())
 }
 
+pub(super) async fn idb_update_string<F>(key: &str, update: F) -> Result<(), NookError>
+where
+    F: FnOnce(Option<String>) -> Result<String, NookError>,
+{
+    let rexie = open_nook_database().await?;
+    // IndexedDB serializes read-write transactions that overlap one object
+    // store. Keeping both operations in this transaction prevents two tabs
+    // from reading the same profile and later overwriting each other's update.
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update transaction error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
+    })?;
+    let id_key = serde_wasm_bindgen::to_value(key).map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update key error: {error:?}"))
+    })?;
+    let current = store.get(id_key.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update read error: {error:?}"))
+    })?;
+    let current = match current {
+        None => None,
+        Some(value) if value.is_undefined() || value.is_null() => None,
+        Some(value) => Some(serde_wasm_bindgen::from_value(value).map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update decode error: {error:?}"))
+        })?),
+    };
+    let updated = update(current)?;
+    let updated_value = serde_wasm_bindgen::to_value(&updated).map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update encode error: {error:?}"))
+    })?;
+    store
+        .put(&updated_value, Some(&id_key))
+        .await
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string update write error: {error:?}"))
+        })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string update completion error: {error:?}"))
+    })?;
+    Ok(())
+}
+
 pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie

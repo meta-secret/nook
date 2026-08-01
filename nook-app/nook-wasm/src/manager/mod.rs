@@ -32,6 +32,7 @@ mod search_catalog;
 mod secrets;
 mod sentinel;
 mod sync;
+mod verified_access;
 
 pub use secrets::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,

@@ -8,6 +8,7 @@
 //!   vault file with this device as the genesis member.
 
 use super::NookVaultManager;
+use super::verified_access::VerifiedVaultAccessFlow;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
@@ -267,12 +268,13 @@ impl NookVaultManager {
         }
 
         self.purge_legacy_plaintext_search_catalog().await?;
-        let records = self.get_records()?;
-        let _ = crate::storage::device_access::record_verified_vault_access(
-            &self.device.id,
-            &self.vault.store_id,
-        )
-        .await;
+        let records = VerifiedVaultAccessFlow::Connect
+            .complete(
+                self.get_records(),
+                identity.device_id().as_str(),
+                &self.vault.store_id,
+            )
+            .await?;
         let _ = self.status.tx.send("READY".to_owned());
         tracing::info!(
             scope = "wasm-connect",
