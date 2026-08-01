@@ -190,7 +190,7 @@ impl NookVaultManager {
             &prf_input,
         )?;
         let credential = passkey_browser::create_credential(&creation_options).await?;
-        let mut observation = passkey_observation::observe(&credential);
+        let mut observation = passkey_observation::observe_registration(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
         let create_prf_output = passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
         let resolution = nook_core::resolve_passkey_registration_for_mode(
@@ -212,7 +212,7 @@ impl NookVaultManager {
                     request.prf_input(),
                 )?;
                 let credential = passkey_browser::get_credential(&request_options).await?;
-                observation.merge_usage(passkey_observation::observe(&credential));
+                observation.merge_usage(passkey_observation::observe_assertion(&credential));
                 let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
                 nook_core::finish_passkey_device_identity_for_mode(
                     request.credential_id(),
@@ -282,7 +282,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let request_options = passkey_browser::recovery_options(rp_id)?;
         let credential = passkey_browser::get_credential(&request_options).await?;
-        let observation = passkey_observation::observe(&credential);
+        let observation = passkey_observation::observe_assertion(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
         let user_handle = passkey_browser::assertion_user_handle(&credential)?;
         let prf_output = passkey_browser::require_prf_output(&credential)?;
@@ -362,7 +362,7 @@ impl NookVaultManager {
         let options = self.passkey_unlock_options().await?;
         let request_options = options.request_options(rp_id)?;
         let credential = passkey_browser::get_credential(&request_options).await?;
-        let observation = passkey_observation::observe(&credential);
+        let observation = passkey_observation::observe_assertion(&credential);
         let prf_output = passkey_browser::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let _ = device_access::record_passkey_used(observation).await;

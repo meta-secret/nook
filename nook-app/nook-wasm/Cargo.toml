@@ -23,6 +23,7 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "AuthenticationExtensionsClientOutputs",
     "AuthenticatorAssertionResponse",
+    "AuthenticatorAttestationResponse",
     "AuthenticatorResponse",
     "Credential",
     "CredentialCreationOptions",

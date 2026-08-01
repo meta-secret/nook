@@ -1,17 +1,31 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
-use js_sys::{Array, Function, Reflect, Uint8Array};
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::PublicKeyCredential;
+use js_sys::{Array, ArrayBuffer, Uint8Array};
+use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
+use web_sys::{
+    AuthenticatorAssertionResponse, AuthenticatorAttestationResponse, PublicKeyCredential,
+};
 
 use crate::storage::device_access::PasskeyBrowserObservation;
 
-pub(crate) fn observe(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
-    let response: JsValue = credential.response().into();
-    let authenticator_data = authenticator_data(&response);
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = PublicKeyCredential, typescript_type = "PublicKeyCredential")]
+    type ObservedPublicKeyCredential;
+
+    #[wasm_bindgen(method, getter, structural, js_name = authenticatorAttachment)]
+    fn authenticator_attachment(credential: &ObservedPublicKeyCredential) -> Option<String>;
+}
+
+pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
+    let response: AuthenticatorAttestationResponse = credential.response().unchecked_into();
+    let authenticator_data = response
+        .get_authenticator_data()
+        .ok()
+        .and_then(|buffer| authenticator_data(&buffer));
     PasskeyBrowserObservation {
         attachment: attachment(credential),
-        transports: transports(&response),
+        transports: transports(&response.get_transports()),
         backup_state: authenticator_data
             .as_deref()
             .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
@@ -20,29 +34,30 @@ pub(crate) fn observe(credential: &PublicKeyCredential) -> PasskeyBrowserObserva
     }
 }
 
+pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
+    let response: AuthenticatorAssertionResponse = credential.response().unchecked_into();
+    let authenticator_data = authenticator_data(&response.authenticator_data());
+    PasskeyBrowserObservation {
+        attachment: attachment(credential),
+        transports: Vec::new(),
+        backup_state: authenticator_data
+            .as_deref()
+            .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
+        aaguid: None,
+        client_environment: client_environment(),
+    }
+}
+
 fn attachment(credential: &PublicKeyCredential) -> nook_core::PasskeyAuthenticatorAttachment {
-    let value = Reflect::get(
-        credential.as_ref(),
-        &JsValue::from_str("authenticatorAttachment"),
-    );
-    match value.ok().and_then(|value| value.as_string()).as_deref() {
+    let credential: &ObservedPublicKeyCredential = credential.unchecked_ref();
+    match credential.authenticator_attachment().as_deref() {
         Some("platform") => nook_core::PasskeyAuthenticatorAttachment::Platform,
         Some("cross-platform") => nook_core::PasskeyAuthenticatorAttachment::CrossPlatform,
         _ => nook_core::PasskeyAuthenticatorAttachment::Unknown,
     }
 }
 
-fn transports(response: &JsValue) -> Vec<String> {
-    let Ok(method) = Reflect::get(response, &JsValue::from_str("getTransports")) else {
-        return Vec::new();
-    };
-    let Some(method) = method.dyn_ref::<Function>() else {
-        return Vec::new();
-    };
-    let Ok(value) = method.call0(response) else {
-        return Vec::new();
-    };
-    let array = Array::from(&value);
+fn transports(array: &Array) -> Vec<String> {
     let mut values = Vec::new();
     for value in array.iter() {
         let Some(value) = value.as_string() else {
@@ -60,16 +75,8 @@ fn transports(response: &JsValue) -> Vec<String> {
     values
 }
 
-fn authenticator_data(response: &JsValue) -> Option<Vec<u8>> {
-    let direct = Reflect::get(response, &JsValue::from_str("authenticatorData")).ok();
-    let value =
-        if let Some(value) = direct.filter(|value| !value.is_null() && !value.is_undefined()) {
-            value
-        } else {
-            let method = Reflect::get(response, &JsValue::from_str("getAuthenticatorData")).ok()?;
-            method.dyn_ref::<Function>()?.call0(response).ok()?
-        };
-    let array = Uint8Array::new(&value);
+fn authenticator_data(buffer: &ArrayBuffer) -> Option<Vec<u8>> {
+    let array = Uint8Array::new(buffer);
     (array.length() > 0).then(|| array.to_vec())
 }
 
@@ -113,10 +120,7 @@ fn aaguid(data: &[u8]) -> Option<String> {
 }
 
 fn client_environment() -> Option<String> {
-    let navigator: JsValue = gloo_utils::window().navigator().into();
-    let user_agent = Reflect::get(&navigator, &JsValue::from_str("userAgent"))
-        .ok()?
-        .as_string()?;
+    let user_agent = gloo_utils::window().navigator().user_agent().ok()?;
     let browser = if user_agent.contains("Edg/") {
         "Edge"
     } else if user_agent.contains("Firefox/") {
