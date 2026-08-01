@@ -259,6 +259,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(
         app_tasks.contains("s3api list-objects-v2 --bucket \"{{.SCCACHE_BUCKET}}\"")
             && app_tasks.contains("--continuation-token \"$continuation_token\"")
+            && app_tasks.matches("--no-paginate").count() >= 2
             && app_tasks.contains("Scanned $total_objects compiler-cache objects")
             && app_tasks.contains("Total Objects: $total_objects")
             && !app_tasks.contains("tail -n 2"),

@@ -173,6 +173,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(core_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
     assert!(core_dockerfile.contains("COPY . ."));
     assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
+    assert!(core_dockerfile.contains("focused-native-test-compile"));
+    assert!(core_dockerfile.contains("--no-run"));
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
     assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));

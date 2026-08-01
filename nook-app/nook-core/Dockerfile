@@ -118,3 +118,21 @@ RUN find \
     && git config user.name nook \
     && git add -A \
     && git commit -q -m "nook-rust-test source snapshot" >/dev/null
+
+# Compile the exact focused test graph inside BuildKit before loading the runtime image. Remote
+# workers can then publish these source-sensitive target artifacts to their branch-and-task Zot
+# ref; the disposable runtime below only executes the already-built binaries.
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo nextest run \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-companion-wasm \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --profile ci \
+      --no-run \
+    && nook-sccache-report focused-native-test-compile
