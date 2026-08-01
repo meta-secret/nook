@@ -4,6 +4,8 @@
   import { onMount, tick, untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    type DevicesAccessHostMount,
+    DevicesAccessHostMountKind,
     DevicesAccessNudgePreference,
     DevicesAccessTriggerKind,
     parseDevicesAccessNudgePreference,
@@ -158,7 +160,9 @@
   let showProviderSetupLink = $state(false)
   let devicesAccessOpen = $state(false)
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
-  let loginGateElement = $state<HTMLDivElement>()
+  let devicesAccessHost = $state<DevicesAccessHostMount>({
+    kind: DevicesAccessHostMountKind.Unmounted,
+  })
   let devicesAccessNudgePreference = $state(
     DevicesAccessNudgePreference.Visible,
   )
@@ -176,15 +180,32 @@
     }
   }
 
+  function captureDevicesAccessHost(element: HTMLDivElement) {
+    devicesAccessHost = {
+      kind: DevicesAccessHostMountKind.Mounted,
+      element,
+    }
+    return {
+      destroy() {
+        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
+      },
+    }
+  }
+
+  function focusHostButton(testId: string): void {
+    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
+    devicesAccessHost.element
+      .querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+      ?.focus()
+  }
+
   async function openDevicesAccess(
     trigger: DevicesAccessTriggerKind,
   ): Promise<void> {
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
     await tick()
-    loginGateElement
-      ?.querySelector<HTMLButtonElement>('[data-testid="devices-access-back"]')
-      ?.focus()
+    focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
@@ -194,9 +215,7 @@
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
         ? 'devices-access-nudge-review'
         : 'login-devices-access'
-    loginGateElement
-      ?.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
-      ?.focus()
+    focusHostButton(testId)
   }
 
   onMount(() => {
@@ -353,7 +372,7 @@
 </script>
 
 <div
-  bind:this={loginGateElement}
+  use:captureDevicesAccessHost
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}

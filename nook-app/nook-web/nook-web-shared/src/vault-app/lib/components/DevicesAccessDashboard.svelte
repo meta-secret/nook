@@ -28,6 +28,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     NookPasskeyBackupState,
     PasskeyObservedBrowser,
     PasskeyObservedPlatform,
+    PasskeyTransport,
     deviceAccessSnapshot,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
@@ -73,7 +74,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     createdAt: DashboardText
     lastUsedAt: DashboardText
     attachment: NookPasskeyAttachmentState
-    transports: DashboardText
+    transports: PasskeyTransport[]
     backupState: NookPasskeyBackupState
     aaguid: DashboardText
     observedBrowser: PasskeyObservedBrowser
@@ -141,6 +142,13 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
             entry.free()
           }
         })
+        const transports = snapshot.transports().map((entry) => {
+          try {
+            return entry.kind
+          } finally {
+            entry.free()
+          }
+        })
         if (generation !== loadGeneration) return
         const view: DashboardView = {
           protection: snapshot.protection,
@@ -153,7 +161,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           createdAt: readText(snapshot.createdAt),
           lastUsedAt: readText(snapshot.lastUsedAt),
           attachment: snapshot.attachment,
-          transports: readText(snapshot.transports),
+          transports,
           backupState: snapshot.backupState,
           aaguid: readText(snapshot.aaguid),
           observedBrowser: snapshot.observedBrowser,
@@ -277,6 +285,30 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       return vault.t('devices_access.backup_not_eligible')
     }
     return vault.t('devices_access.unknown')
+  }
+
+  function transportLabel(value: PasskeyTransport): string {
+    if (value === PasskeyTransport.Ble) {
+      return vault.t('devices_access.transport_ble')
+    }
+    if (value === PasskeyTransport.Hybrid) {
+      return vault.t('devices_access.transport_hybrid')
+    }
+    if (value === PasskeyTransport.Internal) {
+      return vault.t('devices_access.transport_internal')
+    }
+    if (value === PasskeyTransport.Nfc) {
+      return vault.t('devices_access.transport_nfc')
+    }
+    return vault.t('devices_access.transport_usb')
+  }
+
+  function transportsLabel(values: PasskeyTransport[]): string {
+    if (values.length === 0) return vault.t('devices_access.unknown')
+    return new Intl.ListFormat(vault.locale, {
+      style: 'long',
+      type: 'conjunction',
+    }).format(values.map(transportLabel))
   }
 
   $effect(() => {
@@ -502,7 +534,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.created')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.createdAt) ? formatDate(textValue(loadState.view.createdAt)) : vault.t('devices_access.unknown')}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.attachment')}</dt><dd class="mt-1 text-foreground">{attachmentLabel(loadState.view.attachment)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.backup_status')}</dt><dd class="mt-1 text-foreground">{backupLabel(loadState.view.backupState)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{knownText(loadState.view.transports) ? textValue(loadState.view.transports) : vault.t('devices_access.unknown')}</dd></div>
+                  <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.transports')}</dt><dd class="mt-1 text-foreground">{transportsLabel(loadState.view.transports)}</dd></div>
                   <div><dt class="text-xs text-muted-foreground">{vault.t('devices_access.aaguid')}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.aaguid) ? textValue(loadState.view.aaguid) : vault.t('devices_access.unknown')}</dd></div>
                   <div class="sm:col-span-2"><dt class="text-xs text-muted-foreground">{vault.t('devices_access.last_client')}</dt><dd class="mt-1 text-foreground">{clientEnvironmentLabel(loadState.view.observedBrowser, loadState.view.observedPlatform)}</dd></div>
                 </dl>
@@ -573,7 +605,24 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
                 </div>
                 <ul class="space-y-1.5 text-sm text-muted-foreground">
                   {#each vault.vaultMembers.slice(0, 4) as member (member.authId)}
-                    <li class="flex items-center gap-2"><span class="size-1.5 rounded-full bg-muted-foreground/50"></span><span class="truncate">{member.label.trim() || member.deviceId}</span></li>
+                    {@const memberLabel = member.label.trim()}
+                    <li class="flex items-start gap-2">
+                      <span class="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/50"></span>
+                      <div class="min-w-0">
+                        <p class="truncate">
+                          {memberLabel || vault.t('devices_access.unnamed_device')}
+                        </p>
+                        <details
+                          class="mt-0.5 text-xs text-muted-foreground"
+                          data-testid="devices-access-member-details"
+                        >
+                          <summary class="cursor-pointer select-none hover:text-foreground">
+                            {vault.t('devices_access.device_technical_details')}
+                          </summary>
+                          <p class="mt-1 break-all font-mono text-[0.7rem]">{member.deviceId}</p>
+                        </details>
+                      </div>
+                    </li>
                   {/each}
                 </ul>
                 <Button type="button" variant="outline" size="sm" onclick={onManageVaultDevices}>

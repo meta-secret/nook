@@ -16,7 +16,7 @@ const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasskeyBrowserObservation {
     pub attachment: nook_core::PasskeyAuthenticatorAttachment,
-    pub transports: Vec<String>,
+    pub transports: Vec<nook_core::PasskeyTransport>,
     pub backup_state: nook_core::PasskeyBackupState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aaguid: Option<String>,
@@ -64,6 +64,8 @@ pub(crate) enum PasskeyCreationCeremony {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasskeyAccessProfile {
     #[serde(default)]
+    pub credential_fingerprint: String,
+    #[serde(default)]
     pub nook_name: String,
     #[serde(default)]
     pub provider_label: String,
@@ -107,12 +109,14 @@ impl Default for DeviceAccessProfile {
 impl DeviceAccessProfile {
     fn record_passkey_created(
         &mut self,
+        credential_fingerprint: &str,
         nook_name: &str,
         observation: PasskeyBrowserObservation,
         now: nook_core::IsoTimestamp,
         ceremony: PasskeyCreationCeremony,
     ) {
         self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
             nook_name: nook_name.trim().to_owned(),
             // This reminder belongs to one credential. A replacement may be
             // stored by a different provider, so require fresh user evidence.
@@ -128,14 +132,25 @@ impl DeviceAccessProfile {
 
     fn record_passkey_used(
         &mut self,
+        credential_fingerprint: &str,
         observation: PasskeyBrowserObservation,
         now: nook_core::IsoTimestamp,
     ) {
-        let passkey = self
+        if let Some(passkey) = self
             .passkey
-            .get_or_insert_with(PasskeyAccessProfile::default);
-        passkey.last_used_at = Some(now);
-        passkey.observation.merge_usage(observation);
+            .as_mut()
+            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
+        {
+            passkey.last_used_at = Some(now);
+            passkey.observation.merge_usage(observation);
+            return;
+        }
+        self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            last_used_at: Some(now),
+            observation,
+            ..PasskeyAccessProfile::default()
+        });
     }
 
     fn record_verified_vault_access(
@@ -237,6 +252,7 @@ async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(),
 }
 
 pub(crate) async fn record_passkey_created(
+    credential_fingerprint: &str,
     nook_name: &str,
     observation: PasskeyBrowserObservation,
     ceremony: PasskeyCreationCeremony,
@@ -247,11 +263,18 @@ pub(crate) async fn record_passkey_created(
     else {
         return Ok(());
     };
-    profile.record_passkey_created(nook_name, observation, now, ceremony);
+    profile.record_passkey_created(
+        credential_fingerprint,
+        nook_name,
+        observation,
+        now,
+        ceremony,
+    );
     save_device_access_profile(&profile).await
 }
 
 pub(crate) async fn record_passkey_used(
+    credential_fingerprint: &str,
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
     let DeviceAccessProfileUpdate::Writable(mut profile) =
@@ -259,7 +282,7 @@ pub(crate) async fn record_passkey_used(
     else {
         return Ok(());
     };
-    profile.record_passkey_used(observation, browser_timestamp());
+    profile.record_passkey_used(credential_fingerprint, observation, browser_timestamp());
     save_device_access_profile(&profile).await
 }
 
@@ -314,7 +337,7 @@ mod tests {
     fn observation() -> PasskeyBrowserObservation {
         PasskeyBrowserObservation {
             attachment: nook_core::PasskeyAuthenticatorAttachment::Platform,
-            transports: vec!["internal".to_owned()],
+            transports: vec![nook_core::PasskeyTransport::Internal],
             backup_state: nook_core::PasskeyBackupState::Eligible,
             aaguid: Some("aaguid-one".to_owned()),
             browser: nook_core::PasskeyObservedBrowser::Safari,
@@ -349,6 +372,7 @@ mod tests {
     -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
         profile.record_passkey_created(
+            "passkey:first",
             "First credential",
             observation(),
             timestamp("2026-01-01T00:00:00.000Z"),
@@ -370,8 +394,9 @@ mod tests {
 
         let mut replacement = observation();
         replacement.aaguid = Some("aaguid-two".to_owned());
-        replacement.transports = vec!["hybrid".to_owned()];
+        replacement.transports = vec![nook_core::PasskeyTransport::Hybrid];
         profile.record_passkey_created(
+            "passkey:replacement",
             "Replacement credential",
             replacement,
             timestamp("2026-02-01T00:00:00.000Z"),
@@ -398,12 +423,19 @@ mod tests {
             platform: nook_core::PasskeyObservedPlatform::Linux,
             legacy_client_environment: None,
         };
-        profile.record_passkey_used(usage, timestamp("2026-03-01T00:00:00.000Z"));
+        profile.record_passkey_used(
+            "passkey:replacement",
+            usage,
+            timestamp("2026-03-01T00:00:00.000Z"),
+        );
         let passkey = profile
             .passkey
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("used passkey profile is missing"))?;
-        assert_eq!(passkey.observation.transports, ["hybrid"]);
+        assert_eq!(
+            passkey.observation.transports,
+            [nook_core::PasskeyTransport::Hybrid]
+        );
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
         assert_eq!(
             passkey.observation.backup_state,
@@ -417,6 +449,50 @@ mod tests {
             passkey.observation.platform,
             nook_core::PasskeyObservedPlatform::Linux
         );
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_usage_clears_metadata_when_the_credential_fingerprint_changes() -> anyhow::Result<()>
+    {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:old",
+            "Old credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+        profile
+            .passkey
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("created passkey profile is missing"))?
+            .provider_label = "Old provider".to_owned();
+
+        let recovered_observation = PasskeyBrowserObservation {
+            attachment: nook_core::PasskeyAuthenticatorAttachment::Unknown,
+            transports: Vec::new(),
+            backup_state: nook_core::PasskeyBackupState::BackedUp,
+            aaguid: None,
+            browser: nook_core::PasskeyObservedBrowser::Firefox,
+            platform: nook_core::PasskeyObservedPlatform::Linux,
+            legacy_client_environment: None,
+        };
+        profile.record_passkey_used(
+            "passkey:recovered",
+            recovered_observation.clone(),
+            timestamp("2026-02-01T00:00:00.000Z"),
+        );
+
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("recovered passkey profile is missing"))?;
+        assert_eq!(passkey.credential_fingerprint, "passkey:recovered");
+        assert!(passkey.nook_name.is_empty());
+        assert!(passkey.provider_label.is_empty());
+        assert_eq!(passkey.created_at, None);
+        assert_eq!(passkey.observation, recovered_observation);
         Ok(())
     }
 
@@ -455,6 +531,7 @@ mod tests {
         delete_device_access_profile().await?;
         let mut profile = DeviceAccessProfile::default();
         profile.record_passkey_created(
+            "passkey:persisted",
             "Persisted credential",
             observation(),
             timestamp("2026-04-01T00:00:00.000Z"),

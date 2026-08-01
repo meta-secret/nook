@@ -74,6 +74,12 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-current-vault'),
     ).toContainText('Emergency recovery')
+    const memberDetails = page
+      .getByTestId('devices-access-member-details')
+      .first()
+    await expect(memberDetails.locator('p')).toBeHidden()
+    await memberDetails.getByText('Device identifier', { exact: true }).click()
+    await expect(memberDetails.locator('p')).toBeVisible()
 
     await page
       .getByTestId('devices-access-provider-label')
@@ -88,10 +94,15 @@ test.describe('devices and access dashboard', () => {
       .click()
     await expect(dashboard).toContainText('Built into this platform')
     await expect(dashboard).toContainText('Backed up or synced')
-    await expect(dashboard).toContainText('hybrid, internal')
+    await expect(dashboard).toContainText('Nearby device or phone')
+    await expect(dashboard).toContainText('Built into this device')
+    await expect(dashboard).not.toContainText('hybrid, internal')
     await expect(dashboard).toContainText(
       '01010101-0101-0101-0101-010101010101',
     )
+
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
 
     await page.getByTestId('header-lock-vault-btn').click()
     await page.getByTestId('login-devices-access').click()

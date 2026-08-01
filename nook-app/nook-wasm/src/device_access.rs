@@ -85,6 +85,21 @@ pub enum NookPasskeyBackupState {
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookPasskeyTransport {
+    kind: nook_core::PasskeyTransport,
+}
+
+#[wasm_bindgen]
+impl NookPasskeyTransport {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(&self) -> nook_core::PasskeyTransport {
+        self.kind
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookDeviceVaultAccess {
     store_id: String,
     label: String,
@@ -136,7 +151,7 @@ pub struct NookDeviceAccessSnapshot {
     created_at: NookDeviceAccessText,
     last_used_at: NookDeviceAccessText,
     attachment: NookPasskeyAttachmentState,
-    transports: NookDeviceAccessText,
+    transports: Vec<NookPasskeyTransport>,
     backup_state: NookPasskeyBackupState,
     aaguid: NookDeviceAccessText,
     observed_browser: nook_core::PasskeyObservedBrowser,
@@ -199,8 +214,8 @@ impl NookDeviceAccessSnapshot {
         self.attachment
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn transports(&self) -> NookDeviceAccessText {
+    #[wasm_bindgen(js_name = transports)]
+    pub fn transports(&self) -> Vec<NookPasskeyTransport> {
         self.transports.clone()
     }
 
@@ -276,7 +291,13 @@ pub async fn device_access_snapshot(
     let passkey = if session_uses_companion {
         device_access::PasskeyAccessProfile::default()
     } else {
-        profile.passkey.unwrap_or_default()
+        profile
+            .passkey
+            .filter(|passkey| {
+                passkey.credential_fingerprint.is_empty()
+                    || passkey.credential_fingerprint == credential_id
+            })
+            .unwrap_or_default()
     };
     let mut vaults = Vec::new();
     for entry in indexed_db::list_vault_registry_entries().await? {
@@ -313,7 +334,12 @@ pub async fn device_access_snapshot(
             passkey.last_used_at.map(|value| value.to_string()),
         ),
         attachment: attachment_state(passkey.observation.attachment),
-        transports: NookDeviceAccessText::from_string(passkey.observation.transports.join(", ")),
+        transports: passkey
+            .observation
+            .transports
+            .into_iter()
+            .map(|kind| NookPasskeyTransport { kind })
+            .collect(),
         backup_state: backup_state(passkey.observation.backup_state),
         aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid),
         observed_browser: passkey.observation.browser,

@@ -28,6 +28,18 @@ export enum DevicesAccessTriggerKind {
   Nudge = "nudge",
 }
 
+export enum DevicesAccessHostMountKind {
+  Unmounted = "unmounted",
+  Mounted = "mounted",
+}
+
+export type DevicesAccessHostMount =
+  | { kind: typeof DevicesAccessHostMountKind.Unmounted }
+  | {
+      kind: typeof DevicesAccessHostMountKind.Mounted;
+      element: HTMLDivElement;
+    };
+
 export enum DevicesAccessNudgeStorageKind {
   Missing = "missing",
   Stored = "stored",

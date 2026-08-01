@@ -74,6 +74,17 @@ pub enum PasskeyObservedPlatform {
     Other,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, Deserialize, Ord, PartialEq, PartialOrd, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PasskeyTransport {
+    Ble,
+    Hybrid,
+    Internal,
+    Nfc,
+    Usb,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PasskeyAuthenticatorAttachment {
@@ -216,6 +227,18 @@ mod tests {
         assert!(user.starts_with("user_"));
         assert!(!credential.contains("credential"));
         assert_eq!(credential.len(), "passkey_".len() + 16);
+    }
+
+    #[test]
+    fn passkey_transports_use_stable_typed_serialization() -> anyhow::Result<()> {
+        let transports = [PasskeyTransport::Hybrid, PasskeyTransport::Internal];
+        let serialized = serde_json::to_string(&transports)?;
+        assert_eq!(serialized, r#"["hybrid","internal"]"#);
+        assert_eq!(
+            serde_json::from_str::<Vec<PasskeyTransport>>(&serialized)?,
+            transports
+        );
+        Ok(())
     }
 
     #[test]

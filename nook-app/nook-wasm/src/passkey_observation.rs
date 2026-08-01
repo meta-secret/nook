@@ -45,7 +45,9 @@ pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyB
     }
 }
 
-fn registration_transports(response: &AuthenticatorAttestationResponse) -> Vec<String> {
+fn registration_transports(
+    response: &AuthenticatorAttestationResponse,
+) -> Vec<nook_core::PasskeyTransport> {
     let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
     let Some(method) = observed_response.get_transports_method() else {
         return Vec::new();
@@ -82,18 +84,22 @@ fn attachment(credential: &PublicKeyCredential) -> nook_core::PasskeyAuthenticat
     }
 }
 
-fn transports(array: &Array) -> Vec<String> {
+fn transports(array: &Array) -> Vec<nook_core::PasskeyTransport> {
     let mut values = Vec::new();
     for value in array.iter() {
         let Some(value) = value.as_string() else {
             continue;
         };
-        if matches!(
-            value.as_str(),
-            "internal" | "hybrid" | "usb" | "nfc" | "ble"
-        ) && !values.contains(&value)
-        {
-            values.push(value);
+        let transport = match value.as_str() {
+            "ble" => nook_core::PasskeyTransport::Ble,
+            "hybrid" => nook_core::PasskeyTransport::Hybrid,
+            "internal" => nook_core::PasskeyTransport::Internal,
+            "nfc" => nook_core::PasskeyTransport::Nfc,
+            "usb" => nook_core::PasskeyTransport::Usb,
+            _ => continue,
+        };
+        if !values.contains(&transport) {
+            values.push(transport);
         }
     }
     values.sort();

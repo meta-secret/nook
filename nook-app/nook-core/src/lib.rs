@@ -20,9 +20,10 @@ pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
     DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessIdentityState, DeviceAccessProtectionKind,
     DeviceAccessProviderLabelError, PasskeyAuthenticatorAttachment, PasskeyBackupState,
-    PasskeyObservedBrowser, PasskeyObservedPlatform, classify_device_access_identity_state,
-    classify_device_access_protection, normalize_device_access_provider_label,
-    passkey_credential_identifier, passkey_user_handle_identifier,
+    PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport,
+    classify_device_access_identity_state, classify_device_access_protection,
+    normalize_device_access_provider_label, passkey_credential_identifier,
+    passkey_user_handle_identifier,
 };
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
