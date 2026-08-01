@@ -404,7 +404,7 @@ pub(super) fn is_wasm_type_alias(line: &str, wasm_bindings: &HashSet<String>) ->
     if TYPESCRIPT_DOMAIN_ALIAS_NAMES.contains(&declaration_name) {
         return true;
     }
-    let Some((name, value)) = alias.split_once('=') else {
+    let Some((_, value)) = alias.split_once('=') else {
         return false;
     };
     let value = value.trim_start();
