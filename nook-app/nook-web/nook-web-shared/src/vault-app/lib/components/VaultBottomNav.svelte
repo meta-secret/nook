@@ -70,7 +70,7 @@
     <button
       type="button"
       aria-current={devicesAccessOpen ? 'page' : false}
-      aria-label={vault.t('nav.devices_access')}
+      aria-label={vault.t(I18N_KEYS.NavDevicesAccess)}
       class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/35 px-1 py-2.5 text-center transition-colors sm:border-border/60 sm:px-2 sm:py-3 {devicesAccessOpen
         ? 'bg-background text-primary shadow-xs sm:shadow-none'
         : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
@@ -79,7 +79,7 @@
     >
       <ShieldCheck class="size-5 shrink-0" />
       <span class="text-[0.68rem] font-medium leading-none sm:text-xs"
-        >{vault.t('nav.devices_access')}</span
+        >{vault.t(I18N_KEYS.NavDevicesAccess)}</span
       >
     </button>
     <button

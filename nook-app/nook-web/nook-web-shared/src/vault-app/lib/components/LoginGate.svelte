@@ -395,7 +395,7 @@
         onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Header)}
       >
         <KeyRound class="size-4" />
-        {vault.t('devices_access.title')}
+        {vault.t(I18N_KEYS.DevicesAccessTitle)}
       </Button>
     </div>
 
@@ -407,10 +407,10 @@
       >
         <div class="max-w-[65ch]">
           <p class="text-sm font-medium text-foreground">
-            {vault.t('devices_access.nudge_title')}
+            {vault.t(I18N_KEYS.DevicesAccessNudgeTitle)}
           </p>
           <p class="mt-1 text-sm text-muted-foreground">
-            {vault.t('devices_access.nudge_description')}
+            {vault.t(I18N_KEYS.DevicesAccessNudgeDescription)}
           </p>
         </div>
         <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
@@ -421,7 +421,7 @@
             data-testid="devices-access-nudge-review"
             onclick={() => void openDevicesAccess(DevicesAccessTriggerKind.Nudge)}
           >
-            {vault.t('devices_access.review_action')}
+            {vault.t(I18N_KEYS.DevicesAccessReviewAction)}
           </Button>
           <label class="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
             <input
@@ -432,7 +432,7 @@
                 if (event.currentTarget.checked) dismissDevicesAccessNudge()
               }}
             />
-            {vault.t('devices_access.dont_show_again')}
+            {vault.t(I18N_KEYS.DevicesAccessDontShowAgain)}
           </label>
         </div>
       </aside>

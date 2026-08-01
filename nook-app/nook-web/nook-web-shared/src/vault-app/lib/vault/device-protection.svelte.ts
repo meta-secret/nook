@@ -91,7 +91,8 @@ export async function setupDeviceProtection(
   let deviceIdentityUnlocked = false;
   try {
     const localizedPasskeyLabel =
-      passkeyLabel.trim() || state.t("device_protection.passkey_default_label");
+      passkeyLabel.trim() ||
+      state.t(I18N_KEYS.DeviceProtectionPasskeyDefaultLabel);
     await state.enqueueStorage(() =>
       createPasskeyProtection(
         state.requireManager(),
