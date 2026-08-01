@@ -148,6 +148,10 @@ runs:
           task_hash="$(printf '%s' "$task_name" | sha256sum | cut -c1-12)"
           scope_suffix="-remote-$branch_hash-task-$task_hash"
           fallback_enabled=1
+          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
+          echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_SEED_FROM=type=registry,ref=${{ inputs.registry-host }}/nook/buildcache/nook-hive-linux-amd64-v1:buildcache" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max" >> "$GITHUB_ENV"
           echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"

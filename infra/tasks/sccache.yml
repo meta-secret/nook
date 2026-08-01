@@ -23,6 +23,7 @@ tasks:
         admin_secret_file="$secrets_dir/sccache-admin-secret-key"
         s3_config="$secrets_dir/seaweedfs-s3.json"
         data_dir="/var/lib/nook/seaweedfs"
+        bucket="{{.NOOK_SCCACHE_BUCKET}}"
 
         install -d -m 0700 "$secrets_dir"
         # The pinned SeaweedFS image drops from its root entrypoint to uid/gid
@@ -74,10 +75,10 @@ tasks:
                 }
               ],
               \"actions\": [
-                \"Read:nook-sccache\",
-                \"Write:nook-sccache\",
-                \"List:nook-sccache\",
-                \"Tagging:nook-sccache\"
+                \"Read:$bucket\",
+                \"Write:$bucket\",
+                \"List:$bucket\",
+                \"Tagging:$bucket\"
               ]
             },
             {
@@ -89,8 +90,8 @@ tasks:
                 }
               ],
               \"actions\": [
-                \"Read:nook-sccache\",
-                \"List:nook-sccache\"
+                \"Read:$bucket\",
+                \"List:$bucket\"
               ]
             },
             {

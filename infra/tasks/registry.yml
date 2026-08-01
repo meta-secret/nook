@@ -165,8 +165,27 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         manifest="$remote_dir/infra/k0s/manifests/registry/zot.yaml"
+        rendered_manifest="$(mktemp)"
+        trap 'rm -f "$rendered_manifest"' EXIT
         unit=nook-zot-registry-loopback.service
         kubectl() { sudo -n k0s kubectl "$@"; }
+
+        username="$(cat "$remote_dir/secrets/registry-username")"
+        remote_username="$(cat "$remote_dir/secrets/registry-remote-username")"
+        case "$username" in
+          ''|*[!A-Za-z0-9._-]*) echo "Unsupported Zot Main username" >&2; exit 1 ;;
+        esac
+        case "$remote_username" in
+          ''|*[!A-Za-z0-9._-]*) echo "Unsupported Zot Remote username" >&2; exit 1 ;;
+        esac
+        sed \
+          -e "s/__NOOK_REGISTRY_USERNAME__/$username/g" \
+          -e "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g" \
+          "$manifest" > "$rendered_manifest"
+        if grep -q '__NOOK_REGISTRY_.*USERNAME__' "$rendered_manifest"; then
+          echo "Unresolved Zot authorization principal" >&2
+          exit 1
+        fi
 
         sudo -n systemctl disable --now "$unit" >/dev/null 2>&1 || true
         sudo -n rm -f "/etc/systemd/system/$unit"
@@ -186,7 +205,7 @@ tasks:
         kubectl delete networkpolicy nook-zot-default-deny \
           --namespace hive-data \
           --ignore-not-found=true
-        kubectl apply -f "$manifest"
+        kubectl apply -f "$rendered_manifest"
         for namespace in hive-data hive-system; do
           kubectl create namespace "$namespace" --dry-run=client -o yaml |
             kubectl apply -f -

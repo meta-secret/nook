@@ -50,7 +50,7 @@ data:
             "nook/buildcache/**": {
               "policies": [
                 {
-                  "users": ["nook-remote"],
+                  "users": ["__NOOK_REGISTRY_REMOTE_USERNAME__"],
                   "actions": ["read"]
                 }
               ]
@@ -58,14 +58,14 @@ data:
             "nook/remote-buildcache/**": {
               "policies": [
                 {
-                  "users": ["nook-remote"],
+                  "users": ["__NOOK_REGISTRY_REMOTE_USERNAME__"],
                   "actions": ["read", "create", "update"]
                 }
               ]
             }
           },
           "adminPolicy": {
-            "users": ["nook"],
+            "users": ["__NOOK_REGISTRY_USERNAME__"],
             "actions": ["read", "create", "update", "delete"]
           }
         }

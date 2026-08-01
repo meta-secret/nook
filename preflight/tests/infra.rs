@@ -459,10 +459,10 @@ fn assert_sccache_credential_contract() {
         "sccache-admin-secret-key",
         "install -d -m 0750 -o 1000 -g 1000 \"$data_dir\"",
         r#"\"name\": \"nook-sccache-build\""#,
-        r#"\"Read:nook-sccache\""#,
-        r#"\"Write:nook-sccache\""#,
-        r#"\"List:nook-sccache\""#,
-        r#"\"Tagging:nook-sccache\""#,
+        r#"\"Read:$bucket\""#,
+        r#"\"Write:$bucket\""#,
+        r#"\"List:$bucket\""#,
+        r#"\"Tagging:$bucket\""#,
         r#"\"name\": \"nook-sccache-remote-reader\""#,
         r#"\"name\": \"nook-sccache-admin\""#,
         "gh secret set NOOK_SCCACHE_ACCESS_KEY",
@@ -496,7 +496,7 @@ fn assert_sccache_credential_contract() {
         sccache.contains(
             "\\\"name\\\": \\\"nook-sccache-remote-reader\\\",\n              \\\"credentials\\\""
         ) && sccache.contains(
-            "\\\"actions\\\": [\n                \\\"Read:nook-sccache\\\",\n                \\\"List:nook-sccache\\\"\n              ]"
+            "\\\"actions\\\": [\n                \\\"Read:$bucket\\\",\n                \\\"List:$bucket\\\"\n              ]"
         ),
         "Remote compiler identity must be read/list-only on Main's bucket"
     );
@@ -511,7 +511,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
     for required in [
         "\"nook/buildcache/**\"",
         "\"nook/remote-buildcache/**\"",
-        "\"users\": [\"nook-remote\"]",
+        "\"users\": [\"__NOOK_REGISTRY_REMOTE_USERNAME__\"]",
         "\"actions\": [\"read\", \"create\", \"update\"]",
         "\"repositories\": [\"nook/remote-buildcache/**\"]",
         "\"pushedWithin\": \"168h\"",
@@ -539,6 +539,9 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "NOOK_REGISTRY_CLUSTER_IP",
         "docker-registry nook-registry",
         "certs.d/{{.NOOK_REGISTRY_HOST}}",
+        "s/__NOOK_REGISTRY_USERNAME__/$username/g",
+        "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g",
+        "kubectl apply -f \"$rendered_manifest\"",
     ] {
         assert!(
             deploy.contains(required),

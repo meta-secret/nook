@@ -89,6 +89,9 @@ tasks:
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
+        if [ -n "${HIVE_CACHE_SEED_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_SEED_FROM")
+        fi
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
@@ -125,6 +128,9 @@ tasks:
           --output "type=local,dest=$verified")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${HIVE_CACHE_SEED_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_SEED_FROM")
         fi
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
@@ -199,6 +205,9 @@ tasks:
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
+        if [ -n "${HIVE_CACHE_SEED_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_SEED_FROM")
+        fi
         if [ -n "${HIVE_CACHE_TO:-}" ]; then
           command+=(--cache-to "$HIVE_CACHE_TO")
         fi
@@ -255,6 +264,9 @@ tasks:
           --cache-to "$HIVE_CACHE_TO")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
+        fi
+        if [ -n "${HIVE_CACHE_SEED_FROM:-}" ]; then
+          command+=(--cache-from "$HIVE_CACHE_SEED_FROM")
         fi
         access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}"
         secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}"
