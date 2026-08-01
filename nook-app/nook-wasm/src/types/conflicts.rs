@@ -397,10 +397,7 @@ mod projection_conflict_tests {
         );
 
         assert_eq!(conflict.events(), vec!["event-a".to_owned()]);
-        assert_eq!(
-            conflict.reasons(),
-            vec!["password-rotated".to_owned()]
-        );
+        assert_eq!(conflict.reasons(), vec!["password-rotated".to_owned()]);
     }
 }
 

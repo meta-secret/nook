@@ -16,10 +16,7 @@ type DemoVaultWindow = Window & {
     loginPasswordPrompt: boolean
     passwordEntries: Array<{ id: string; label: string; createdAt: string }>
     clearProjectionConflicts(): void
-    stageSecurityConflictForTesting(
-      events: string[],
-      reasons: string[],
-    ): void
+    stageSecurityConflictForTesting(events: string[], reasons: string[]): void
     stageSyncConflict(conflict: {
       kind: number
       providerLabel: string

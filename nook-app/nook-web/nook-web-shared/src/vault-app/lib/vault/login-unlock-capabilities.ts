@@ -1,7 +1,4 @@
-import {
-  VaultAccessStatus,
-  type NookPasswordEntrySummary,
-} from "$app-wasm";
+import { VaultAccessStatus, type NookPasswordEntrySummary } from "$app-wasm";
 
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
