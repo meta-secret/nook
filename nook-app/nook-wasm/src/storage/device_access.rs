@@ -179,16 +179,20 @@ impl DeviceAccessProfile {
         credential_fingerprint: &str,
         provider_label: String,
     ) -> Result<(), NookError> {
-        let passkey = self.passkey.get_or_insert_with(|| PasskeyAccessProfile {
+        if let Some(passkey) = self.passkey.as_mut() {
+            if passkey.credential_fingerprint != credential_fingerprint {
+                return Err(NookError::Database(
+                    "Passkey changed before its provider label was saved".to_owned(),
+                ));
+            }
+            passkey.provider_label = provider_label;
+            return Ok(());
+        }
+        self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
+            provider_label,
             ..PasskeyAccessProfile::default()
         });
-        if passkey.credential_fingerprint != credential_fingerprint {
-            return Err(NookError::Database(
-                "Passkey changed before its provider label was saved".to_owned(),
-            ));
-        }
-        passkey.provider_label = provider_label;
         Ok(())
     }
 
