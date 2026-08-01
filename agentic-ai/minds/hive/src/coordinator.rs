@@ -138,22 +138,18 @@ impl CoordinatorTaskStore {
     async fn unit(&self, request: Request) -> crate::HiveResult<()> {
         match self.request(request).await? {
             Response::Unit => Ok(()),
-            response => {
-                return Err(crate::error::HiveError::message(format!(
-                    "unexpected coordinator response: {response:?}"
-                )));
-            }
+            response => Err(crate::error::HiveError::message(format!(
+                "unexpected coordinator response: {response:?}"
+            ))),
         }
     }
 
     async fn accepted(&self, request: Request) -> crate::HiveResult<bool> {
         match self.request(request).await? {
             Response::Accepted(accepted) => Ok(accepted),
-            response => {
-                return Err(crate::error::HiveError::message(format!(
-                    "unexpected coordinator response: {response:?}"
-                )));
-            }
+            response => Err(crate::error::HiveError::message(format!(
+                "unexpected coordinator response: {response:?}"
+            ))),
         }
     }
 }

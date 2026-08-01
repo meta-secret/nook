@@ -214,10 +214,10 @@ fn select_successful_main_run<'a>(
             run.head_sha, run.conclusion
         )));
     }
-    return Err(crate::error::HiveError::message(format!(
+    Err(crate::error::HiveError::message(format!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
         merge_commit
-    )));
+    )))
 }
 
 fn latest_delivery_generation<'a>(
