@@ -292,6 +292,8 @@ export async function authorizeWithExternalDeviceIdentity(
     await state.enqueueStorage(() =>
       state.requireManager().rollbackExtensionIdentityHandoff(),
     );
+    state.deviceId = "";
+    state.devicePublicKey = "";
     state.deviceProtectionStatus =
       priorDeviceProtectionStatus === DeviceProtectionStatus.Unlocked
         ? state.deviceProtectionLockedStatus

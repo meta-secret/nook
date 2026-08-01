@@ -321,9 +321,8 @@ impl NookDeviceAccessSnapshot {
     }
 }
 
-#[wasm_bindgen(js_name = deviceAccessSnapshot)]
-pub async fn device_access_snapshot(
-    session_device_id: String,
+pub(crate) async fn device_access_snapshot_for_session(
+    session_device_id: &str,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let protected = indexed_db::load_wrapped_device_identity().await?;
     let session_device_id = session_device_id.trim();

@@ -128,6 +128,19 @@ impl NookVaultManager {
         Ok(indexed_db::device_identity_protection_status().await?)
     }
 
+    /// Project Devices & access from the live Rust session. Caller-owned web
+    /// state is not authoritative because a failed handoff may have populated
+    /// it before this manager rolls the identity back.
+    #[wasm_bindgen(js_name = deviceAccessSnapshot)]
+    pub async fn device_access_snapshot(&self) -> Result<crate::NookDeviceAccessSnapshot, JsError> {
+        let session_device_id = if self.device.identity_private_key.is_empty() {
+            String::new()
+        } else {
+            self.device_identity()?.device_id().as_str().to_owned()
+        };
+        crate::device_access::device_access_snapshot_for_session(&session_device_id).await
+    }
+
     /// Return the product device-protection mode persisted during device setup.
     #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
     pub async fn device_protection_device_mode(

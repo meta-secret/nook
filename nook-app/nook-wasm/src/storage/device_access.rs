@@ -11,9 +11,9 @@ pub(crate) use nook_core::{
 
 use crate::NookError;
 
+use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string};
 #[cfg(test)]
 use super::indexed_db::{idb_delete_key, idb_put_string, save_wrapped_device_identity};
-use super::indexed_db::{idb_get_string, idb_update_string, load_wrapped_device_identity};
 
 pub(super) const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
 const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
@@ -80,12 +80,13 @@ async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(),
 
 async fn update_device_access_profile<F>(
     intent: DeviceAccessProfileUpdateIntent,
+    guard: StringUpdateGuard<'_>,
     update: F,
-) -> Result<(), NookError>
+) -> Result<StringUpdateResult, NookError>
 where
     F: FnOnce(&mut DeviceAccessProfile) -> Result<(), NookError>,
 {
-    idb_update_string(DEVICE_ACCESS_PROFILE_KEY, move |raw| {
+    idb_update_string(DEVICE_ACCESS_PROFILE_KEY, guard, move |raw| {
         let disposition = device_access_profile_for_update(raw.as_deref());
         let mut profile = match intent {
             DeviceAccessProfileUpdateIntent::Interactive => {
@@ -119,6 +120,7 @@ pub(crate) async fn record_passkey_created(
     let now = browser_timestamp();
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::BestEffort,
+        StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
         move |profile| {
             profile.record_passkey_created(
                 credential_fingerprint,
@@ -131,6 +133,7 @@ pub(crate) async fn record_passkey_created(
         },
     )
     .await
+    .map(|_| ())
 }
 
 pub(crate) async fn record_passkey_used(
@@ -140,42 +143,38 @@ pub(crate) async fn record_passkey_used(
     let now = browser_timestamp();
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::BestEffort,
+        StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
         move |profile| {
             profile.record_passkey_used(credential_fingerprint, observation, now);
             Ok(())
         },
     )
     .await
+    .map(|_| ())
 }
 
 pub(crate) async fn set_passkey_provider_label(
     credential_fingerprint: &str,
     label: &str,
 ) -> Result<(), NookError> {
-    let (_, wrapped_identity) = load_wrapped_device_identity()
-        .await?
-        .ok_or_else(|| NookError::Database("Passkey identity is no longer available".to_owned()))?;
-    let current_credential_fingerprint = nook_core::passkey_credential_identifier(
-        &wrapped_identity
-            .credential_id_bytes()
-            .map_err(NookError::from)?,
-    );
-    if current_credential_fingerprint != credential_fingerprint {
-        return Err(NookError::Database(
-            "Passkey changed before its provider label was saved".to_owned(),
-        ));
-    }
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    update_device_access_profile(
+    let result = update_device_access_profile(
         DeviceAccessProfileUpdateIntent::Interactive,
+        StringUpdateGuard::WrappedCredentialFingerprint(credential_fingerprint),
         move |profile| {
             profile
                 .set_passkey_provider_label(credential_fingerprint, normalized)
                 .map_err(|error| NookError::Database(error.to_string()))
         },
     )
-    .await
+    .await?;
+    match result {
+        StringUpdateResult::Applied => Ok(()),
+        StringUpdateResult::GuardRejected => Err(NookError::Database(
+            "Passkey changed before its provider label was saved".to_owned(),
+        )),
+    }
 }
 
 pub(crate) async fn record_verified_vault_access(
@@ -188,12 +187,14 @@ pub(crate) async fn record_verified_vault_access(
     let now = browser_timestamp();
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::BestEffort,
+        StringUpdateGuard::Unconditional,
         move |profile| {
             profile.record_verified_vault_access(device_id, store_id, now);
             Ok(())
         },
     )
     .await
+    .map(|_| ())
 }
 
 #[cfg(test)]
@@ -552,6 +553,46 @@ mod tests {
         })?;
         assert_eq!(passkey.credential_fingerprint, credential_fingerprint);
         assert_eq!(passkey.provider_label, "Bitwarden");
+        let _ = rexie::Rexie::delete("nook_db").await;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn stale_passkey_ceremony_cannot_overwrite_replaced_identity_metadata()
+    -> Result<(), NookError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let current_credential = [8u8; 32];
+        let current_fingerprint = nook_core::passkey_credential_identifier(&current_credential);
+        let current_wrapped = nook_core::passkey_derived_device_identity_record(
+            &current_credential,
+            setup.user_handle(),
+            setup.prf_input(),
+        )?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &current_wrapped).await?;
+
+        record_passkey_created(
+            &current_fingerprint,
+            "Current credential",
+            observation(),
+            PasskeyCreationCeremony::RegistrationOnly,
+        )
+        .await?;
+        record_passkey_created(
+            &nook_core::passkey_credential_identifier(&[7u8; 32]),
+            "Stale credential",
+            observation(),
+            PasskeyCreationCeremony::RegistrationOnly,
+        )
+        .await?;
+
+        let passkey = load_device_access_profile()
+            .await?
+            .passkey
+            .ok_or_else(|| NookError::Database("Passkey profile is missing".to_owned()))?;
+        assert_eq!(passkey.credential_fingerprint, current_fingerprint);
+        assert_eq!(passkey.nook_name, "Current credential");
         let _ = rexie::Rexie::delete("nook_db").await;
         Ok(())
     }

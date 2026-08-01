@@ -32,7 +32,6 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     PasskeyObservedBrowser,
     PasskeyObservedPlatform,
     PasskeyTransport,
-    deviceAccessSnapshot,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
   import type {
@@ -181,7 +180,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     const generation = ++loadGeneration
     loadState = { kind: DashboardLoadKind.Loading }
     try {
-      const snapshot = await deviceAccessSnapshot(vault.deviceId)
+      const snapshot = await vault.requireManager().deviceAccessSnapshot()
       try {
         const vaults = snapshot.vaults().map((entry): VaultAccessView => {
           try {
