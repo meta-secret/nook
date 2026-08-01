@@ -45,13 +45,13 @@ test('Google Drive setup shows the demo-origin gate and provider-agnostic timeou
   await expect(page.getByTestId('google-sign-in-btn')).toBeDisabled()
   await demoBeat(page)
 
-  await page.evaluate(() => {
+  await page.evaluate((timeoutKey) => {
     const vault = (window as DemoVaultWindow).__nookVault
     if (!vault) {
       throw new Error('__nookVault is unavailable')
     }
-    vault.errorMsg = vault.t(I18N_KEYS.ToastsErrorTimeout)
-  })
+    vault.errorMsg = vault.t(timeoutKey)
+  }, I18N_KEYS.ToastsErrorTimeout)
   const vaultError = page.getByTestId('vault-error')
   await expect(vaultError).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(vaultError).toContainText(/provider sign-in/i)
