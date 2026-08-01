@@ -719,14 +719,14 @@ mod tests {
         let first = wasm_bindgen_futures::future_to_promise(async {
             record_verified_vault_access("device-a", "store-one")
                 .await
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
-            Ok(wasm_bindgen::JsValue::UNDEFINED)
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            Ok(js_sys::Object::new().into())
         });
         let second = wasm_bindgen_futures::future_to_promise(async {
             record_verified_vault_access("device-b", "store-two")
                 .await
-                .map_err(|error| wasm_bindgen::JsValue::from_str(&error.to_string()))?;
-            Ok(wasm_bindgen::JsValue::UNDEFINED)
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            Ok(js_sys::Object::new().into())
         });
         let pending = js_sys::Array::new();
         pending.push(&first);
