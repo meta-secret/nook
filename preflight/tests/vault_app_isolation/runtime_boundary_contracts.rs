@@ -8,16 +8,12 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
         "nook-app/nook-web/nook-vault-sentinel/vite.config.ts",
     );
     assert!(!sentinel_config.contains("__NOOK_APP_KIND__"));
-    assert!(
-        sentinel_config.contains("pathname ===")
-            && sentinel_config.contains("/extension-connect")
-    );
+    let recognizes_pathname = sentinel_config.contains("pathname ===");
+    let recognizes_extension_connect = sentinel_config.contains("/extension-connect");
+    assert!(recognizes_pathname && recognizes_extension_connect);
     assert!(!sentinel_config.contains("extension-connect.html"));
 
-    let simple_config = read(
-        &root,
-        "nook-app/nook-web/nook-vault-simple/vite.config.ts",
-    );
+    let simple_config = read(&root, "nook-app/nook-web/nook-vault-simple/vite.config.ts");
     assert!(!simple_config.contains("__NOOK_APP_KIND__"));
     assert!(simple_config.contains("extension-connect"));
 
