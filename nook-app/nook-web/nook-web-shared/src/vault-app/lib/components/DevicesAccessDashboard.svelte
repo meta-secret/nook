@@ -44,12 +44,6 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     onManageVaultPasswords: () => void
   } = $props()
 
-  enum DashboardLoadKind {
-    Loading = 'loading',
-    Ready = 'ready',
-    Failed = 'failed',
-  }
-
   type VaultAccessView = {
     storeId: string
     label: string
@@ -83,12 +77,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   }
 
   type DashboardLoadState =
-    | { kind: DashboardLoadKind.Loading }
-    | { kind: DashboardLoadKind.Ready; view: DashboardView }
-    | { kind: DashboardLoadKind.Failed }
+    | { kind: 'loading' }
+    | { kind: 'ready'; view: DashboardView }
+    | { kind: 'failed' }
 
   let loadState = $state<DashboardLoadState>({
-    kind: DashboardLoadKind.Loading,
+    kind: 'loading',
   })
   let providerDraft = $state('')
   let providerSaving = $state(false)
@@ -96,14 +90,14 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   let loadGeneration = 0
 
   const isPasskeyProtection = $derived(
-    loadState.kind === DashboardLoadKind.Ready &&
+    loadState.kind === 'ready' &&
       (loadState.view.protection ===
         DeviceAccessProtectionKind.PasskeyStandard ||
         loadState.view.protection ===
           DeviceAccessProtectionKind.PasskeyAntiHacker),
   )
   const verifiedVaultCount = $derived(
-    loadState.kind === DashboardLoadKind.Ready
+    loadState.kind === 'ready'
       ? loadState.view.vaults.filter((entry) => entry.verified).length
       : 0,
   )
@@ -114,7 +108,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 
   async function loadDashboard(): Promise<void> {
     const generation = ++loadGeneration
-    loadState = { kind: DashboardLoadKind.Loading }
+    loadState = { kind: 'loading' }
     try {
       const snapshot = await deviceAccessSnapshot(vault.deviceId)
       try {
@@ -157,13 +151,13 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           vaults,
         }
         providerDraft = view.providerLabel
-        loadState = { kind: DashboardLoadKind.Ready, view }
+        loadState = { kind: 'ready', view }
       } finally {
         snapshot.free()
       }
     } catch {
       if (generation === loadGeneration) {
-        loadState = { kind: DashboardLoadKind.Failed }
+        loadState = { kind: 'failed' }
       }
     }
   }
@@ -263,12 +257,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     </div>
   </header>
 
-  {#if loadState.kind === DashboardLoadKind.Loading}
+  {#if loadState.kind === 'loading'}
     <div class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
       <RefreshCw class="size-4 animate-spin" />
       {vault.t('devices_access.loading')}
     </div>
-  {:else if loadState.kind === DashboardLoadKind.Failed}
+  {:else if loadState.kind === 'failed'}
     <div class="rounded-xl border border-destructive/30 bg-destructive/5 p-5" role="alert">
       <p class="font-medium text-foreground">{vault.t('devices_access.load_failed')}</p>
       <Button type="button" variant="outline" class="mt-3" onclick={() => void loadDashboard()}>

@@ -33,7 +33,9 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   )
   await page.waitForTimeout(BEAT_MS)
 
-  await dashboard.getByText('Technical details and browser observations').click()
+  await dashboard
+    .getByText('Technical details and browser observations')
+    .click()
   await expect(dashboard).toContainText('Passkey credential fingerprint')
   await expect(dashboard).toContainText('Backed up or synced')
   await page.waitForTimeout(BEAT_MS)

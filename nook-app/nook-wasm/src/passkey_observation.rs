@@ -1,4 +1,4 @@
-//! Best-effort, non-authoritative metadata reported by a WebAuthn ceremony.
+//! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
 use js_sys::{Array, Function, Reflect, Uint8Array};
 use wasm_bindgen::{JsCast, JsValue};
@@ -21,7 +21,10 @@ pub(crate) fn observe(credential: &PublicKeyCredential) -> PasskeyBrowserObserva
 }
 
 fn attachment(credential: &PublicKeyCredential) -> nook_core::PasskeyAuthenticatorAttachment {
-    let value = Reflect::get(credential.as_ref(), &JsValue::from_str("authenticatorAttachment"));
+    let value = Reflect::get(
+        credential.as_ref(),
+        &JsValue::from_str("authenticatorAttachment"),
+    );
     match value.ok().and_then(|value| value.as_string()).as_deref() {
         Some("platform") => nook_core::PasskeyAuthenticatorAttachment::Platform,
         Some("cross-platform") => nook_core::PasskeyAuthenticatorAttachment::CrossPlatform,
@@ -45,8 +48,10 @@ fn transports(response: &JsValue) -> Vec<String> {
         let Some(value) = value.as_string() else {
             continue;
         };
-        if matches!(value.as_str(), "internal" | "hybrid" | "usb" | "nfc" | "ble")
-            && !values.contains(&value)
+        if matches!(
+            value.as_str(),
+            "internal" | "hybrid" | "usb" | "nfc" | "ble"
+        ) && !values.contains(&value)
         {
             values.push(value);
         }
@@ -57,15 +62,15 @@ fn transports(response: &JsValue) -> Vec<String> {
 
 fn authenticator_data(response: &JsValue) -> Option<Vec<u8>> {
     let direct = Reflect::get(response, &JsValue::from_str("authenticatorData")).ok();
-    let value = match direct.filter(|value| !value.is_null() && !value.is_undefined()) {
-        Some(value) => value,
-        None => {
+    let value =
+        if let Some(value) = direct.filter(|value| !value.is_null() && !value.is_undefined()) {
+            value
+        } else {
             let method = Reflect::get(response, &JsValue::from_str("getAuthenticatorData")).ok()?;
             method.dyn_ref::<Function>()?.call0(response).ok()?
-        }
-    };
+        };
     let array = Uint8Array::new(&value);
-    (!array.is_empty()).then(|| array.to_vec())
+    (array.length() > 0).then(|| array.to_vec())
 }
 
 fn backup_state(data: &[u8]) -> nook_core::PasskeyBackupState {

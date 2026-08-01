@@ -74,13 +74,13 @@ pub fn classify_device_access_protection(
     }
 }
 
-/// Stable, non-secret correlation id for a Nook-managed WebAuthn credential.
+/// Stable, non-secret correlation id for a Nook-managed `WebAuthn` credential.
 #[must_use]
 pub fn passkey_credential_identifier(credential_id: &[u8]) -> String {
     short_identifier("passkey", credential_id)
 }
 
-/// Stable, non-secret correlation id for the RP-scoped WebAuthn user handle.
+/// Stable, non-secret correlation id for the RP-scoped `WebAuthn` user handle.
 #[must_use]
 pub fn passkey_user_handle_identifier(user_handle: &[u8]) -> String {
     short_identifier("user", user_handle)
@@ -108,7 +108,7 @@ fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::{
-        DeviceKeyProtectionSetup, DeviceIdentity, PasskeyDeviceProtectionMode,
+        DeviceIdentity, DeviceKeyProtectionSetup, PasskeyDeviceProtectionMode,
         passkey_derived_device_identity_record, passkey_wrapped_device_identity_record,
         wrap_device_identity_with_pin,
     };
@@ -159,7 +159,10 @@ mod tests {
         let credential = passkey_credential_identifier(b"credential bytes");
         let user = passkey_user_handle_identifier(b"user handle");
 
-        assert_eq!(credential, passkey_credential_identifier(b"credential bytes"));
+        assert_eq!(
+            credential,
+            passkey_credential_identifier(b"credential bytes")
+        );
         assert!(credential.starts_with("passkey_"));
         assert!(user.starts_with("user_"));
         assert!(!credential.contains("credential"));
@@ -172,7 +175,10 @@ mod tests {
             normalize_device_access_provider_label("  Proton Pass  "),
             Ok("Proton Pass".to_owned())
         );
-        assert_eq!(normalize_device_access_provider_label("   "), Ok(String::new()));
+        assert_eq!(
+            normalize_device_access_provider_label("   "),
+            Ok(String::new())
+        );
         assert_eq!(
             normalize_device_access_provider_label(&"x".repeat(81)),
             Err(DeviceAccessProviderLabelError::TooLong)

@@ -44,7 +44,7 @@ impl PasskeyBrowserObservation {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasskeyAccessProfile {
     #[serde(default)]
@@ -57,18 +57,6 @@ pub(crate) struct PasskeyAccessProfile {
     pub last_used_at: Option<nook_core::IsoTimestamp>,
     #[serde(default)]
     pub observation: PasskeyBrowserObservation,
-}
-
-impl Default for PasskeyAccessProfile {
-    fn default() -> Self {
-        Self {
-            nook_name: String::new(),
-            provider_label: String::new(),
-            created_at: None,
-            last_used_at: None,
-            observation: PasskeyBrowserObservation::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -104,8 +92,9 @@ pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, 
     let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
         return Ok(DeviceAccessProfile::default());
     };
-    let profile: DeviceAccessProfile = serde_json::from_str(&raw)
-        .map_err(|error| NookError::IndexedDb(format!("Device access profile parse error: {error}")))?;
+    let profile: DeviceAccessProfile = serde_json::from_str(&raw).map_err(|error| {
+        NookError::IndexedDb(format!("Device access profile parse error: {error}"))
+    })?;
     if profile.version != DEVICE_ACCESS_PROFILE_VERSION {
         return Err(NookError::IndexedDb(format!(
             "Unsupported device access profile version: {}",
@@ -146,7 +135,9 @@ pub(crate) async fn record_passkey_used(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
     let mut profile = load_device_access_profile().await.unwrap_or_default();
-    let passkey = profile.passkey.get_or_insert_with(PasskeyAccessProfile::default);
+    let passkey = profile
+        .passkey
+        .get_or_insert_with(PasskeyAccessProfile::default);
     passkey.last_used_at = Some(browser_timestamp());
     passkey.observation.merge_usage(observation);
     save_device_access_profile(&profile).await
@@ -156,7 +147,9 @@ pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookEr
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
     let mut profile = load_device_access_profile().await.unwrap_or_default();
-    let passkey = profile.passkey.get_or_insert_with(PasskeyAccessProfile::default);
+    let passkey = profile
+        .passkey
+        .get_or_insert_with(PasskeyAccessProfile::default);
     passkey.provider_label = normalized;
     save_device_access_profile(&profile).await
 }

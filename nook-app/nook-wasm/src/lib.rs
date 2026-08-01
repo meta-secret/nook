@@ -29,8 +29,8 @@ mod types;
 #[doc(hidden)]
 pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
-pub use logger::NookLogEntries;
 pub use device_access::*;
+pub use logger::NookLogEntries;
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,

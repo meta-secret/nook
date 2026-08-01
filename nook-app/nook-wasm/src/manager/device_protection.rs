@@ -1,9 +1,9 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
 use super::NookVaultManager;
-use crate::{passkey_browser, passkey_observation};
 use crate::storage::{auth_providers, device_access, indexed_db};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
+use crate::{passkey_browser, passkey_observation};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::{Zeroize, Zeroizing};
@@ -286,8 +286,12 @@ impl NookVaultManager {
         let credential_id = passkey_browser::credential_id(&credential)?;
         let user_handle = passkey_browser::assertion_user_handle(&credential)?;
         let prf_output = passkey_browser::require_prf_output(&credential)?;
-        self.recover_device_protection_with_passkey_material(credential_id, user_handle, prf_output)
-            .await?;
+        self.recover_device_protection_with_passkey_material(
+            credential_id,
+            user_handle,
+            prf_output,
+        )
+        .await?;
         let _ = device_access::record_passkey_used(observation).await;
         Ok(())
     }

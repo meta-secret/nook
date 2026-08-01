@@ -9,10 +9,10 @@ use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
 use std::{cell::RefCell, rc::Rc};
 
 pub(crate) mod auth_providers;
+pub(crate) mod device_access;
 pub(crate) mod drive;
 pub(crate) mod drive_events;
 pub(crate) mod drive_shared;
-pub(crate) mod device_access;
 pub(crate) mod event_db;
 pub(crate) mod extension_state;
 pub(crate) mod github;

@@ -226,26 +226,24 @@ pub async fn device_access_snapshot(
     let protection = if session_uses_companion {
         nook_core::DeviceAccessProtectionKind::CompanionSession
     } else {
-        nook_core::classify_device_access_protection(
-            protected.as_ref().map(|(_, record)| record),
-        )
+        nook_core::classify_device_access_protection(protected.as_ref().map(|(_, record)| record))
     };
     let (device_id, credential_id, user_handle_id) = if session_uses_companion {
         (session_device_id.to_owned(), String::new(), String::new())
     } else {
         match &protected {
-        Some((device_id, record)) => {
-            let credential_id = record
-                .credential_id_bytes()
-                .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
-                .unwrap_or_default();
-            let user_handle_id = record
-                .user_handle_bytes()
-                .map(|bytes| nook_core::passkey_user_handle_identifier(&bytes))
-                .unwrap_or_default();
-            (device_id.clone(), credential_id, user_handle_id)
-        }
-        None => (String::new(), String::new(), String::new()),
+            Some((device_id, record)) => {
+                let credential_id = record
+                    .credential_id_bytes()
+                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+                    .unwrap_or_default();
+                let user_handle_id = record
+                    .user_handle_bytes()
+                    .map(|bytes| nook_core::passkey_user_handle_identifier(&bytes))
+                    .unwrap_or_default();
+                (device_id.clone(), credential_id, user_handle_id)
+            }
+            None => (String::new(), String::new(), String::new()),
         }
     };
     let profile = device_access::load_device_access_profile()
@@ -261,9 +259,7 @@ pub async fn device_access_snapshot(
         let verified_at = profile
             .verified_vaults
             .iter()
-            .find(|access| {
-                access.device_id == device_id && access.store_id == entry.store_id
-            })
+            .find(|access| access.device_id == device_id && access.store_id == entry.store_id)
             .map_or_else(String::new, |access| access.verified_at.to_string());
         vaults.push(NookDeviceVaultAccess {
             store_id: entry.store_id,
@@ -283,7 +279,9 @@ pub async fn device_access_snapshot(
         user_handle_id,
         passkey_name: passkey.nook_name,
         provider_label: passkey.provider_label,
-        created_at: passkey.created_at.map_or_else(String::new, |value| value.to_string()),
+        created_at: passkey
+            .created_at
+            .map_or_else(String::new, |value| value.to_string()),
         last_used_at: passkey
             .last_used_at
             .map_or_else(String::new, |value| value.to_string()),
