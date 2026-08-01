@@ -129,8 +129,7 @@ mod tests {
 
     #[test]
     fn generated_domain_collection_state_is_accepted() {
-        let source =
-            "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
+        let source = "const conflicts = $state.raw<NookSecurityConflict[]>([]);";
         assert!(inline_object_collection_state_lines(source).is_empty());
     }
 }
