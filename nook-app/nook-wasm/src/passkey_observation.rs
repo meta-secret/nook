@@ -1,7 +1,7 @@
 //! Best-effort, non-authoritative metadata reported by a `WebAuthn` ceremony.
 
-use js_sys::{Array, ArrayBuffer, Uint8Array};
-use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
+use js_sys::{Array, ArrayBuffer, Function, Uint8Array};
+use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{
     AuthenticatorAssertionResponse, AuthenticatorAttestationResponse, PublicKeyCredential,
 };
@@ -22,10 +22,10 @@ extern "C" {
     )]
     type ObservedAuthenticatorAttestationResponse;
 
-    #[wasm_bindgen(method, catch, structural, js_name = getTransports)]
-    fn observed_transports(
+    #[wasm_bindgen(method, getter, structural, js_name = getTransports)]
+    fn get_transports_method(
         response: &ObservedAuthenticatorAttestationResponse,
-    ) -> Result<Array, JsValue>;
+    ) -> Option<Function>;
 }
 
 pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
@@ -34,18 +34,29 @@ pub(crate) fn observe_registration(credential: &PublicKeyCredential) -> PasskeyB
         .get_authenticator_data()
         .ok()
         .and_then(|buffer| authenticator_data(&buffer));
-    let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
     PasskeyBrowserObservation {
         attachment: attachment(credential),
-        transports: observed_response
-            .observed_transports()
-            .map_or_else(|_| Vec::new(), |values| transports(&values)),
+        transports: registration_transports(&response),
         backup_state: authenticator_data
             .as_deref()
             .map_or(nook_core::PasskeyBackupState::Unknown, backup_state),
         aaguid: authenticator_data.as_deref().and_then(aaguid),
         ..client_environment()
     }
+}
+
+fn registration_transports(response: &AuthenticatorAttestationResponse) -> Vec<String> {
+    let observed_response: &ObservedAuthenticatorAttestationResponse = response.unchecked_ref();
+    let Some(method) = observed_response.get_transports_method() else {
+        return Vec::new();
+    };
+    let Ok(value) = method.call0(response.as_ref()) else {
+        return Vec::new();
+    };
+    let Ok(values) = value.dyn_into::<Array>() else {
+        return Vec::new();
+    };
+    transports(&values)
 }
 
 pub(crate) fn observe_assertion(credential: &PublicKeyCredential) -> PasskeyBrowserObservation {
