@@ -57,23 +57,15 @@ async function setContentSyncConflict(page: Page) {
     const vault = (
       window as Window & {
         __nookVault: {
-          stageSyncConflict(conflict: {
-            kind: number
-            providerLabel: string
-            remoteYaml: string
-            contentLocalVersion(): number
-            contentRemoteVersion(): number
-          }): void
+          stageContentSyncConflictForTesting(
+            providerLabel: string,
+            localVersion: number,
+            remoteVersion: number,
+          ): void
         }
       }
     ).__nookVault
-    vault.stageSyncConflict({
-      kind: 0,
-      providerLabel: 'Remote provider',
-      remoteYaml: 'remote-vault',
-      contentLocalVersion: () => 1,
-      contentRemoteVersion: () => 2,
-    })
+    vault.stageContentSyncConflictForTesting('Remote provider', 1, 2)
   })
 }
 

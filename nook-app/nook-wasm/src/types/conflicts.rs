@@ -19,9 +19,52 @@ pub struct NookPendingSyncConflict {
 }
 
 const PENDING_SYNC_PROVIDER_ID: &str = "__pending_provider__";
+const TEST_SYNC_PROVIDER_ID: &str = "__test_provider__";
 
 #[wasm_bindgen]
 impl NookPendingSyncConflict {
+    /// E2E/dev seam for rendering a Rust-owned content conflict without storage I/O.
+    #[wasm_bindgen(js_name = forTestingContent)]
+    pub fn for_testing_content(
+        provider_label: String,
+        local_version: u32,
+        remote_version: u32,
+    ) -> Self {
+        Self::content(
+            TEST_SYNC_PROVIDER_ID.to_owned(),
+            provider_label,
+            String::new(),
+            "remote-vault".to_owned(),
+            local_version,
+            remote_version,
+            String::new(),
+            String::new(),
+            String::new(),
+            &NookProviderSyncRevision::untracked(),
+        )
+    }
+
+    /// E2E/dev seam for rendering a Rust-owned store-id conflict without storage I/O.
+    #[wasm_bindgen(js_name = forTestingStoreId)]
+    pub fn for_testing_store_id(
+        provider_label: String,
+        local_store_id: String,
+        remote_store_id: String,
+    ) -> Self {
+        Self::store_id(
+            TEST_SYNC_PROVIDER_ID.to_owned(),
+            provider_label,
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            &NookProviderSyncRevision::untracked(),
+            local_store_id,
+            remote_store_id,
+        )
+    }
+
     #[wasm_bindgen(js_name = content)]
     #[allow(clippy::too_many_arguments)]
     pub fn content(
@@ -262,6 +305,25 @@ mod pending_sync_conflict_tests {
         assert_eq!(conflict.provider_label(), "GitHub");
         assert_eq!(conflict.local_store_id()?, "store_local12345");
         assert_eq!(conflict.remote_store_id()?, "store_remote1234");
+        Ok(())
+    }
+
+    #[test]
+    fn testing_factories_keep_conflict_shapes_in_rust() -> Result<(), wasm_bindgen::JsError> {
+        let content =
+            NookPendingSyncConflict::for_testing_content("Remote provider".to_owned(), 1, 2);
+        assert_eq!(content.kind(), nook_core::VaultSyncConflictKind::Content);
+        assert_eq!(content.content_local_version()?, 1);
+        assert_eq!(content.content_remote_version()?, 2);
+
+        let store_id = NookPendingSyncConflict::for_testing_store_id(
+            "Google Drive".to_owned(),
+            "store_localDemo01".to_owned(),
+            "store_remoteDemo1".to_owned(),
+        );
+        assert_eq!(store_id.kind(), nook_core::VaultSyncConflictKind::StoreId);
+        assert_eq!(store_id.local_store_id()?, "store_localDemo01");
+        assert_eq!(store_id.remote_store_id()?, "store_remoteDemo1");
         Ok(())
     }
 }

@@ -172,6 +172,8 @@ const syncKeys = [
   "replaceProjectionConflicts",
   "clearProjectionConflicts",
   "stageSecurityConflictForTesting",
+  "stageContentSyncConflictForTesting",
+  "stageStoreIdSyncConflictForTesting",
   "syncConflictReview",
   "syncConflictRequiresDecision",
   "stageSyncConflict",

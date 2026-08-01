@@ -3,7 +3,7 @@ import {
   NookLocalFolderHealthState,
   NookManualProviderSync,
   NookManualProviderSyncState,
-  type NookPendingSyncConflict,
+  NookPendingSyncConflict,
   type NookReplacementConflict,
   NookSecurityConflict,
   NookSyncConflictReview,
@@ -72,6 +72,34 @@ export class VaultSyncState {
     this.securityConflictState = [
       NookSecurityConflict.fromDisplayParts(events, reasons),
     ];
+  }
+  /** E2E/dev boundary: construct the injected content conflict in Rust. */
+  stageContentSyncConflictForTesting(
+    providerLabel: string,
+    localVersion: number,
+    remoteVersion: number,
+  ): void {
+    this.stageSyncConflict(
+      NookPendingSyncConflict.forTestingContent(
+        providerLabel,
+        localVersion,
+        remoteVersion,
+      ),
+    );
+  }
+  /** E2E/dev boundary: construct the injected store-id conflict in Rust. */
+  stageStoreIdSyncConflictForTesting(
+    providerLabel: string,
+    localStoreId: string,
+    remoteStoreId: string,
+  ): void {
+    this.stageSyncConflict(
+      NookPendingSyncConflict.forTestingStoreId(
+        providerLabel,
+        localStoreId,
+        remoteStoreId,
+      ),
+    );
   }
   /** User must pick local vs remote before editing when versions match but content differs. */
   private syncConflictState = $state(NookSyncConflictReview.clear());
