@@ -18,6 +18,7 @@ import {
   ActiveVaultKind,
   LocalLoginPreparationState,
 } from "$lib/vault/state/provider.svelte";
+import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabilities";
 
 const log = createLogger("vault-local");
 
@@ -152,6 +153,7 @@ export async function selectVaultForUnlock(
     await state.syncActiveVaultStoreIdToAuth();
     await state.reloadProvidersForActiveVault();
     await state.refreshPasswordEntriesList();
+    await refreshLoginUnlockCapabilities(state);
     state.localLoginPreparation = LocalLoginPreparationState.Ready;
   } catch (e: unknown) {
     state.errorMsg =

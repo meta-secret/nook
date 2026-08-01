@@ -9,8 +9,10 @@
     type PasswordEntrySelection,
   } from '$lib/vault/state/session.svelte'
   import {
+    DeviceKeysUnlockCapabilityKind,
     PasswordUnlockCapabilityKind,
     UnlockMethod,
+    type DeviceKeysUnlockCapability,
     type PasswordUnlockCapability,
   } from './login-unlock-state'
 
@@ -27,6 +29,9 @@
     isInitializing,
     isUnlocking = false,
     loginPasswordPrompt = false,
+    deviceKeysUnlock = {
+      kind: DeviceKeysUnlockCapabilityKind.Unknown,
+    } as DeviceKeysUnlockCapability,
     onUnlock,
     passwordUnlock,
     onSelectPasswordEntry,
@@ -39,6 +44,7 @@
     isInitializing: boolean
     isUnlocking?: boolean
     loginPasswordPrompt?: boolean
+    deviceKeysUnlock?: DeviceKeysUnlockCapability
     onUnlock: () => void | Promise<void>
     passwordUnlock: PasswordUnlockCapability
     onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
@@ -52,17 +58,21 @@
     passwordUnlock.kind === PasswordUnlockCapabilityKind.Available &&
       passwordEntries.length > 0,
   )
+  const deviceKeysAvailable = $derived(
+    deviceKeysUnlock.kind !== DeviceKeysUnlockCapabilityKind.Unavailable,
+  )
   const isPasswordUnlock = $derived(
     unlockMethod === UnlockMethod.Password && showPasswordUnlockOption,
   )
   const canUnlock = $derived(
-    !isPasswordUnlock ||
-      (selectedPasswordEntry.kind === PasswordEntrySelectionKind.Selected &&
-        passwordInput.trim().length > 0),
+    (isPasswordUnlock &&
+      selectedPasswordEntry.kind === PasswordEntrySelectionKind.Selected &&
+      passwordInput.trim().length > 0) ||
+      (!isPasswordUnlock && deviceKeysAvailable),
   )
 
   $effect(() => {
-    if (loginPasswordPrompt) {
+    if (loginPasswordPrompt && showPasswordUnlockOption) {
       unlockMethod = UnlockMethod.Password
       if (
         passwordEntries.length === 1 &&
@@ -74,6 +84,16 @@
         })
       }
       onConsumeLoginPasswordPrompt()
+    }
+  })
+
+  $effect(() => {
+    if (
+      !deviceKeysAvailable &&
+      showPasswordUnlockOption &&
+      unlockMethod === UnlockMethod.Keys
+    ) {
+      unlockMethod = UnlockMethod.Password
     }
   })
 
@@ -93,7 +113,8 @@
   $effect(() => {
     if (
       unlockMethod === UnlockMethod.Password &&
-      passwordEntries.length === 0
+      passwordEntries.length === 0 &&
+      deviceKeysAvailable
     ) {
       unlockMethod = UnlockMethod.Keys
     }
@@ -132,7 +153,7 @@
           ? 'bg-primary/[0.06] text-foreground'
           : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
         data-testid="login-unlock-method-keys"
-        disabled={isVerifying || isInitializing}
+        disabled={isVerifying || isInitializing || !deviceKeysAvailable}
         onclick={() => {
           unlockMethod = UnlockMethod.Keys
           passwordInput = ''
@@ -161,6 +182,17 @@
         </button>
       {/if}
     </div>
+
+    {#if !deviceKeysAvailable}
+      <p
+        class="text-sm text-pretty text-muted-foreground"
+        data-testid="login-device-keys-unavailable"
+      >
+        {deviceKeysUnlock.kind === DeviceKeysUnlockCapabilityKind.Unavailable
+          ? deviceKeysUnlock.reason
+          : vault.t('login.unlock_device_keys_unavailable')}
+      </p>
+    {/if}
 
     {#if isPasswordUnlock}
       <div

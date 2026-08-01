@@ -1,7 +1,9 @@
 use super::*;
 use crate::storage::indexed_db::{
-    get_active_vault_id, import_vault_blob, load_from_indexed_db, switch_active_vault,
+    get_active_vault_id, import_vault_blob, list_vault_registry_entries, load_from_indexed_db,
+    load_vault_blob, switch_active_vault,
 };
+use crate::vault_api::list_local_vaults;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -167,6 +169,89 @@ async fn denied_extension_import_restores_session_and_active_projection() -> any
         .await?;
     assert!(!status.access_granted);
     assert_rollback(&replacement, &previous_store_id).await
+}
+
+#[wasm_bindgen_test]
+async fn locked_external_import_preserves_prior_vault_and_password_entries() -> anyhow::Result<()> {
+    let mut source = NookVaultManager::new();
+    source.application = nook_core::VaultApplication::VaultApp;
+    source
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    source
+        .finish_pin_device_protection("correct horse battery staple".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
+    let identity = source.device_identity()?;
+    source.initialize_genesis_vault(&identity)?;
+    source.vault.store_id = nook_core::generate_store_id()?.to_string();
+    source.bootstrap_event_log_genesis().await?;
+    source
+        .add_vault_password_for_e2e("Recovery".to_owned(), "import-backup-password".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("add backup password: {error:?}"))?;
+    let imported_store_id = source.vault.store_id.clone();
+    let records = source
+        .export_event_log_records()
+        .await?
+        .into_iter()
+        .map(|record| ExternalEventLogRecord {
+            event_id: record.event_id,
+            event: record.event,
+        })
+        .collect::<Vec<_>>();
+
+    let previous_store_id = nook_core::generate_store_id()?.to_string();
+    let previous_projection = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        &[],
+        &nook_core::VaultUnlock::Keys,
+        &[],
+        nook_core::VaultStoreIdentityRef::Assigned(&previous_store_id),
+        nook_core::VaultNameRef::Named("Empty local vault"),
+        nook_core::VaultVersionWrite::Initial,
+        &nook_core::VaultArchitecture::default(),
+    )?;
+    import_vault_blob(previous_projection.as_str(), Some("Empty local vault")).await?;
+    switch_active_vault(&previous_store_id).await?;
+
+    let mut importer = NookVaultManager::new();
+    importer.application = nook_core::VaultApplication::VaultApp;
+    importer.vault.store_id.clone_from(&previous_store_id);
+    importer.reset_vault_session();
+    let _ = importer.sync_external_event_log_records(records).await?;
+    assert_eq!(importer.vault.store_id, imported_store_id);
+    assert!(
+        !importer.vault.password_entries.is_empty(),
+        "locked import must hydrate backup-password entries from the event graph"
+    );
+
+    let registry = list_vault_registry_entries().await?;
+    assert!(
+        registry
+            .iter()
+            .any(|entry| entry.store_id == previous_store_id),
+        "previous empty local vault must remain registered after import"
+    );
+    assert!(
+        registry
+            .iter()
+            .any(|entry| entry.store_id == imported_store_id),
+        "imported provider vault must be registered"
+    );
+    assert!(
+        load_vault_blob(&previous_store_id).await?.is_some(),
+        "previous vault blob must survive import-as-new-vault"
+    );
+    let local_vaults = list_local_vaults()
+        .await
+        .map_err(|error| anyhow::anyhow!("list local vaults: {error:?}"))?;
+    assert_eq!(local_vaults.len(), 2);
+
+    let stranger = nook_core::DeviceIdentity::generate()?;
+    let status = nook_core::assess_connect_access(&importer.stored_records_snapshot(), &stranger);
+    assert_eq!(status, nook_core::ConnectAccessStatus::NeedsEnrollment);
+    Ok(())
 }
 
 #[wasm_bindgen_test]

@@ -14,9 +14,11 @@
   import { isSentinelVault } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
   import {
+    DeviceKeysUnlockCapabilityKind,
     LoginVaultEntryKind,
     LoginVaultWorkflow,
     PasswordUnlockCapabilityKind,
+    type DeviceKeysUnlockCapability,
     type LoginVaultEntry,
     type PasswordUnlockCapability,
   } from './login-unlock-state'
@@ -81,6 +83,14 @@
           unlock: onUnlockWithPassword,
         },
   )
+  const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
+    vault.loginDeviceKeysCapable
+      ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
+      : {
+          kind: DeviceKeysUnlockCapabilityKind.Unavailable,
+          reason: vault.t('login.unlock_device_keys_unavailable'),
+        },
+  )
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
@@ -137,6 +147,7 @@
           {isInitializing}
           {isUnlocking}
           loginPasswordPrompt={vault.loginPasswordPrompt}
+          {deviceKeysUnlock}
           onConsumeLoginPasswordPrompt={() => {
             vault.loginPasswordPrompt = false
           }}

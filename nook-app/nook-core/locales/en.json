@@ -66,6 +66,7 @@
     "unlock_btn": "Unlock",
     "unlock_keys": "This device's keys",
     "unlock_backup": "Backup password",
+    "unlock_device_keys_unavailable": "This device is not enrolled in the selected vault. Use a backup password, or request access from an enrolled device.",
     "password_selected_placeholder": "Password for selected entry",
     "unlock_vault_btn": "Unlock vault",
     "scan_qr": "Or scan enrollment QR code from an active device",

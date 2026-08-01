@@ -31,3 +31,17 @@ export type PasswordUnlockCapability =
       kind: PasswordUnlockCapabilityKind.Available;
       unlock(entryId: string, password: string): void | Promise<void>;
     };
+
+export enum DeviceKeysUnlockCapabilityKind {
+  Unknown = "unknown",
+  Available = "available",
+  Unavailable = "unavailable",
+}
+
+export type DeviceKeysUnlockCapability =
+  | { kind: DeviceKeysUnlockCapabilityKind.Unknown }
+  | { kind: DeviceKeysUnlockCapabilityKind.Available }
+  | {
+      kind: DeviceKeysUnlockCapabilityKind.Unavailable;
+      reason: string;
+    };

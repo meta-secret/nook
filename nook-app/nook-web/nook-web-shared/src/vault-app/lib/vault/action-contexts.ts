@@ -129,7 +129,9 @@ type SyncProviderFields = Pick<
   | "addProviderOpen"
   | "clearLoginSetup"
   | "activateLoginSetup"
+  | "clearSelectedLoginVaultStore"
   | "localVaultPresent"
+  | "localVaults"
   | "loginSetup"
   | "providers"
   | "openActiveVault"
@@ -148,8 +150,10 @@ type SyncSessionFields = Pick<
   | "isPasswordBusy"
   | "joinEnrollmentPrompt"
   | "loginPasswordPrompt"
+  | "loginDeviceKeysCapable"
   | "hasManager"
   | "requireManager"
+  | "passwordEntries"
   | "pendingJoins"
   | "remoteVaultRecoveryState"
   | "sessionExpiredByIdle"
@@ -205,6 +209,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   persistProviders(options?: { replace?: boolean }): Promise<void>;
   providerWasmArgs(provider: StorageProvider): [string, string, string];
   raceStorageTimeout<T>(promise: Promise<T>, label: string): Promise<T>;
+  assessVaultConnectStatus(
+    args?: [string, string, string],
+  ): Promise<VaultAccessStatus>;
   refreshLocalVaultCatalog(): Promise<void>;
   refreshPasswordEntriesList(): Promise<boolean>;
   refreshReplacementConflicts(): Promise<void>;
@@ -273,6 +280,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, "errorMsg"> &
     | "isAuthenticated"
     | "joinEnrollmentPrompt"
     | "loginPasswordPrompt"
+    | "loginDeviceKeysCapable"
     | "hasManager"
     | "requireManager"
     | "passwordEntries"
