@@ -1,6 +1,7 @@
 //! Event-log persistence and provider fan-out.
 
 mod extension_import;
+mod import_as_local;
 mod provider_io;
 mod records;
 
@@ -36,8 +37,6 @@ use nook_core::{
     rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
 };
 use std::collections::BTreeSet;
-use wasm_bindgen::JsError;
-use wasm_bindgen::prelude::wasm_bindgen;
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
@@ -354,6 +353,26 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Hydrate locked-session projection fields from the event graph.
+    ///
+    /// Import-as-new-vault runs while locked, so `apply_event_projection_to_session`
+    /// cannot decrypt secrets. Auth rows and backup-password envelopes still must
+    /// land in the cached YAML so login assess/unlock see the real vault.
+    pub(in crate::manager) async fn hydrate_locked_projection_from_events(
+        &mut self,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.trim().is_empty() {
+            return Ok(());
+        }
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        let projection = project_vault(&graph, &self.vault.store_id)?;
+        self.vault.password_entries = projection.password_entries;
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_sentinel_architecture_from_shares()?;
+        Ok(())
+    }
+
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.vault.meta.to_stored_records();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
@@ -654,6 +673,8 @@ impl NookVaultManager {
             self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if unlocked {
             self.apply_event_projection_to_session().await?;
+        } else if persist_locked_projection {
+            self.hydrate_locked_projection_from_events().await?;
         }
         if unlocked || persist_locked_projection {
             self.persist_projection_cache().await?;
@@ -914,6 +935,7 @@ impl NookVaultManager {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use wasm_bindgen::JsError;
 
     #[test]
     #[allow(
@@ -944,52 +966,3 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 #[path = "event_log_browser_tests.rs"]
 mod browser_tests;
-
-#[wasm_bindgen]
-impl NookVaultManager {
-    /// Copy a single-vault provider event log into local storage as its own vault.
-    ///
-    /// This is the safe recovery path when the active local vault and the provider
-    /// have different `store_id`s: preserve the provider's append-only events
-    /// locally, then let normal unlock/access checks decide whether this device
-    /// can open that vault.
-    #[wasm_bindgen(js_name = importProviderEventLogAsLocalVault)]
-    pub async fn import_provider_event_log_as_local_vault(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<String, JsError> {
-        self.reset_vault_session();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
-        self.sync_events_from_current_provider().await?;
-        if self.vault.store_id.trim().is_empty() {
-            return Err(NookError::Database(
-                "No vault event log was found at this provider.".to_owned(),
-            )
-            .into());
-        }
-        self.persist_projection_cache().await?;
-        Ok(self.vault.store_id.clone())
-    }
-
-    /// Copy a single-vault local-folder event log into local storage as its own vault.
-    #[wasm_bindgen(js_name = importLocalFolderEventLogAsLocalVault)]
-    pub async fn import_local_folder_event_log_as_local_vault(
-        &mut self,
-        handle_id: &str,
-    ) -> Result<String, JsError> {
-        self.reset_vault_session();
-        let remote_records = Self::read_external_local_folder_records(handle_id).await?;
-        let _ = self.sync_external_event_log_records(remote_records).await?;
-        if self.vault.store_id.trim().is_empty() {
-            return Err(NookError::Database(
-                "No vault event log was found in this backup folder.".to_owned(),
-            )
-            .into());
-        }
-        self.persist_projection_cache().await?;
-        Ok(self.vault.store_id.clone())
-    }
-}

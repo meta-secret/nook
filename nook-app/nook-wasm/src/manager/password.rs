@@ -49,7 +49,17 @@ impl NookVaultManager {
                 return Ok(Vec::new());
             }
         }
-        let entries = nook_core::read_vault_password_entries(&content)?;
+        let mut entries = nook_core::read_vault_password_entries(&content)?;
+        // Locked imports historically persisted meta without password envelopes.
+        // Fall back to the event-log projection so backup-password unlock still
+        // appears for an imported vault.
+        if entries.is_empty() && !content.trim().is_empty() {
+            self.capture_vault_unlock(&content)?;
+            if self.event_log_has_events().await? {
+                self.hydrate_locked_projection_from_events().await?;
+                entries = self.vault.password_entries.clone();
+            }
+        }
         self.vault.password_entries = entries.clone();
         Ok(password_entries_to_vec(&entries))
     }

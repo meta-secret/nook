@@ -2,6 +2,8 @@ import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import {
   importNamedLocalVaultBlob,
   RemoteVaultRecoveryState,
+  setActiveVault,
+  setVaultSessionLocked,
   type NookReplacementConflict,
   type NookSecurityConflict,
   VaultSyncConflictKind,
@@ -22,6 +24,7 @@ import {
   LocalFolderProviderConfigurationKind,
   scopedProviderVault,
 } from "$lib/auth-providers";
+import { refreshLoginUnlockCapabilities } from "$lib/vault/login-unlock-capabilities";
 
 const log = createLogger("vault-sync-resolution");
 
@@ -284,15 +287,18 @@ export async function resolveSyncConflictImportRemote(
         )) as string;
       }
     }
+    await setActiveVault(importedStoreId);
     state.openActiveVault(importedStoreId);
-    state.selectLoginVault(importedStoreId);
-    if (state.hasManager) {
-      await state.enqueueStorage(() =>
-        state.requireManager().resetVaultSession(),
-      );
-    }
     state.localVaultPresent = true;
     await state.refreshLocalVaultCatalog();
+    // Keep every prior local vault discoverable. Selecting the imported vault
+    // here used to hide the multi-vault picker even though the toast tells the
+    // user to unlock from that picker.
+    if (state.localVaults.length > 1) {
+      state.clearSelectedLoginVaultStore();
+    } else {
+      state.selectLoginVault(importedStoreId);
+    }
     const providerId = await state.ensureProviderSavedAfterConflict(conflict);
     providerSave = { kind: ConflictProviderSaveKind.Saved, providerId };
     if (conflict.remoteYaml.trim()) {
@@ -317,7 +323,12 @@ export async function resolveSyncConflictImportRemote(
     state.finishStagedProviderConnectAfterConflict(conflict);
     await state.syncActiveVaultStoreIdToAuth();
     importedAsSeparateVault = true;
+    setVaultSessionLocked(true);
     state.clearUnlockedSession();
+    await state.refreshPasswordEntriesList();
+    if (state.localVaults.length <= 1) {
+      await refreshLoginUnlockCapabilities(state);
+    }
     state.showSuccess(
       state.t("auth_storage.sync_conflict_imported_vault", {
         provider: conflict.providerLabel,

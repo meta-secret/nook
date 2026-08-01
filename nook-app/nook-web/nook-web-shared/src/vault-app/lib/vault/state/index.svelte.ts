@@ -114,6 +114,7 @@ const sessionKeys = [
   "joinEnrollmentPrompt",
   "awaitingJoinApproval",
   "loginPasswordPrompt",
+  "loginDeviceKeysCapable",
   "remoteVaultRecoveryState",
   "isPasswordBusy",
   "passwordError",

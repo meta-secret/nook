@@ -146,7 +146,18 @@ impl NookVaultManager {
         // First boot for this session — adopt the remote unlock mode.
         self.capture_vault_unlock(&content)?;
         self.vault.last_synced_content = content.clone();
-        let status = access_status_for_vault_content(&content, &identity)?;
+        // Prefer event-log membership when the local vault has events. A locked
+        // import can leave a thin projection cache that would otherwise look like
+        // a brand-new vault and skip NeedsEnrollment.
+        let status = if self.event_log_has_events().await? {
+            self.hydrate_locked_projection_from_events().await?;
+            nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
+                &self.stored_records_snapshot(),
+                &identity,
+            ))
+        } else {
+            access_status_for_vault_content(&content, &identity)?
+        };
         let _ = self
             .status
             .tx

@@ -265,4 +265,118 @@ test.describe('sync conflict resolution', () => {
     ).not.toBeVisible()
     expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
   })
+
+  test('import as new vault keeps the prior local vault and shows the picker', async ({
+    page,
+  }) => {
+    const fileName = 'nook-e2e-import-new-vault.yaml'
+    const stub = createLocalE2eFileSyncVaultStub('', fileName)
+    await stub.install(page, { fileName })
+
+    await page.goto('/app/')
+    await createLocalVaultOnLogin(page, 'test')
+    await disableVaultIdleLock(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    const vaultAYaml = await readLocalVaultYamlFromIdb(page)
+    const storeA = parseStoreId(vaultAYaml)
+
+    await seedOauthFileSyncProvidersWhileUnlocked(
+      page,
+      [
+        {
+          id: 'e2e-import-sync-a',
+          label: 'Shared File Import A',
+          fileName,
+          accessToken: 'ya29.e2e_file_sync_token',
+        },
+      ],
+      stub,
+    )
+    await triggerVaultSyncRefresh(page)
+    await waitForLoadedSyncProviders(page)
+    await page.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            runFanOutSyncAfterLocalSave?: () => Promise<void>
+          }
+        }
+      ).__nookVault
+      await vault?.runFanOutSyncAfterLocalSave?.()
+    })
+    await waitForSyncRemoteVaultState(
+      stub,
+      (snapshot) =>
+        snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
+    )
+    await expect
+      .poll(() => parseStoreId(stub.getVaultYaml()), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toEqual(storeA)
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('login-vault-workflow-create').click()
+    await page.getByTestId('login-vault-name-input').fill('test-2')
+    await page.getByTestId('login-create-additional-vault-btn').click()
+    await authorizeDeviceProtection(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await disableVaultIdleLock(page)
+
+    const vaultBYaml = await readLocalVaultYamlFromIdb(page)
+    const storeB = parseStoreId(vaultBYaml)
+    expect(storeB).not.toEqual(storeA)
+
+    stub.setVaultYaml(vaultAYaml)
+    await addVaultPassword(page, 'onboard', 'onboard-pass-1')
+    await openOnboardDevicePanel(page)
+    await page
+      .getByTestId('onboard-password-entry-list')
+      .getByRole('radio')
+      .first()
+      .click()
+
+    await installGoogleOAuthMock(page, 'ya29.e2e_file_sync_token')
+    await page.getByTestId('add-provider-btn').click()
+    await page.getByTestId('provider-option-oauth-file').click()
+    await page.getByTestId('drive-file-input').fill(fileName)
+    await page.getByTestId('google-sign-in-btn').click()
+    await expect(
+      page
+        .getByTestId('google-account-status')
+        .or(page.getByTestId('connect-provider-btn')),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('connect-provider-btn').click()
+    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('sync-conflict-import-new-vault-btn').click()
+    await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+
+    await expect(page.getByTestId('login-vault-picker')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-vault-option')).toHaveCount(2)
+    await expect(
+      page.locator(
+        `[data-testid="login-vault-option"][data-store-id="${storeA}"]`,
+      ),
+    ).toBeVisible()
+    await expect(
+      page.locator(
+        `[data-testid="login-vault-option"][data-store-id="${storeB}"]`,
+      ),
+    ).toBeVisible()
+  })
 })

@@ -80,6 +80,11 @@ export class VaultSessionState {
   awaitingJoinApproval = $state(false);
 
   loginPasswordPrompt = $state(false);
+  /**
+   * Whether the current device identity can unwrap vault keys for the selected
+   * login vault. Unknown until assess runs with a device identity in memory.
+   */
+  loginDeviceKeysCapable = $state(true);
   remoteVaultRecoveryState = $state<RemoteVaultRecoveryState>(
     RemoteVaultRecoveryState.None,
   );
