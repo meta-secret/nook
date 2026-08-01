@@ -160,7 +160,7 @@ tasks:
         echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
 
   sccache:stats:
-    desc: Show shared Rust compiler-cache object count on SeaweedFS.
+    desc: Show shared Rust compiler-cache object count and bytes on SeaweedFS.
     deps:
       - sccache:ensure
     cmds:
@@ -179,8 +179,8 @@ tasks:
           -e AWS_DEFAULT_REGION=auto \
           amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
-          s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" --max-items 1 \
-          --query "{KeyCount:KeyCount,IsTruncated:IsTruncated}"'
+          s3 ls "s3://{{.SCCACHE_BUCKET}}" --recursive --summarize |
+          tail -n 2'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
