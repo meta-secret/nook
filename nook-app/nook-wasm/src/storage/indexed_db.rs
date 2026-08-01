@@ -225,6 +225,10 @@ where
 }
 
 pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
+    idb_delete_keys(&[key]).await
+}
+
+async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -232,12 +236,14 @@ pub(super) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     let store = transaction
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-    let id_key = serde_wasm_bindgen::to_value(key)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    store
-        .delete(id_key)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+    for key in keys {
+        let id_key = serde_wasm_bindgen::to_value(key)
+            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+        store
+            .delete(id_key)
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Delete error: {e:?}")))?;
+    }
     transaction
         .done()
         .await
@@ -549,9 +555,12 @@ pub(crate) async fn save_wrapped_device_identity(
 }
 
 pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
-    super::device_access::delete_device_access_profile().await?;
-    idb_delete_key(WRAPPED_DEVICE_IDENTITY_KEY).await?;
-    idb_delete_key(DEVICE_ID_KEY).await
+    idb_delete_keys(&[
+        super::device_access::DEVICE_ACCESS_PROFILE_KEY,
+        WRAPPED_DEVICE_IDENTITY_KEY,
+        DEVICE_ID_KEY,
+    ])
+    .await
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]

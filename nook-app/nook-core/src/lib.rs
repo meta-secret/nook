@@ -18,9 +18,12 @@ pub(crate) use auth::{
 };
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
-    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessIdentityState, DeviceAccessProtectionKind,
-    DeviceAccessProviderLabelError, PasskeyAuthenticatorAttachment, PasskeyBackupState,
-    PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport,
+    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
+    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileTransitionError,
+    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
+    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
+    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyLastUsedAtEvidence,
+    PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
     classify_device_access_identity_state, classify_device_access_protection,
     normalize_device_access_provider_label, passkey_credential_identifier,
     passkey_user_handle_identifier,

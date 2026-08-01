@@ -38,6 +38,7 @@ export enum ProviderSaveKind {
 export enum DashboardFocusTargetKind {
   None = "none",
   DeviceIdentityDetails = "device-identity-details",
+  RetryResult = "retry-result",
 }
 
 export enum DevicesAccessNudgePreference {

@@ -23,7 +23,7 @@
   }: {
     vault: VaultState
     embedded?: boolean
-    onProtectionReady?: () => void
+    onProtectionReady: () => void
   } = $props()
   let pin = $state('')
   let pinConfirm = $state('')
@@ -48,7 +48,7 @@
   ): Promise<void> {
     await action()
     if (vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked) {
-      onProtectionReady?.()
+      onProtectionReady()
     }
   }
 </script>

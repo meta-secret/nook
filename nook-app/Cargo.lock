@@ -1774,6 +1774,7 @@ dependencies = [
  "base64 0.21.7",
  "coset",
  "flume",
+ "futures-util",
  "getrandom 0.2.17",
  "gloo-file",
  "gloo-storage",

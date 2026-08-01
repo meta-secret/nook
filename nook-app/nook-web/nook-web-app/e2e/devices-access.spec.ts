@@ -58,6 +58,7 @@ test.describe('devices and access dashboard', () => {
     page,
   }) => {
     await connectLocalVault(page)
+    await expect(page.getByTestId('devices-access-nudge')).toHaveCount(0)
     await addVaultPassword(
       page,
       'Emergency recovery',

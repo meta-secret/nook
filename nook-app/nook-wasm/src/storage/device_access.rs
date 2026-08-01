@@ -3,270 +3,22 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+pub(crate) use nook_core::{
+    DeviceAccessProfile, PasskeyAccessProfile, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
+    PasskeyCreationCeremony, PasskeyLastUsedAtEvidence,
+};
 
 use crate::NookError;
 
-use super::indexed_db::{
-    idb_delete_key, idb_get_string, idb_update_string, load_wrapped_device_identity,
-};
 #[cfg(test)]
-use super::indexed_db::{idb_put_string, save_wrapped_device_identity};
+use super::indexed_db::{idb_delete_key, idb_put_string, save_wrapped_device_identity};
+use super::indexed_db::{idb_get_string, idb_update_string, load_wrapped_device_identity};
 
-const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
-const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
+pub(super) const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
 const DEVICE_ACCESS_PROFILE_VERSION_ERROR: &str =
     "errors.device_access.profile_version_incompatible";
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct PasskeyBrowserObservation {
-    pub attachment: nook_core::PasskeyAuthenticatorAttachment,
-    pub transports: Vec<nook_core::PasskeyTransport>,
-    pub backup_state: nook_core::PasskeyBackupState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub aaguid: Option<String>,
-    #[serde(default)]
-    pub browser: nook_core::PasskeyObservedBrowser,
-    #[serde(default)]
-    pub platform: nook_core::PasskeyObservedPlatform,
-    // Version 1 persisted an English `clientEnvironment` sentence. Accept and
-    // discard it so existing metadata remains readable without leaking English
-    // presentation text back into localized UI.
-    #[serde(default, alias = "clientEnvironment", skip_serializing)]
-    pub(crate) legacy_client_environment: Option<String>,
-}
-
-impl PasskeyBrowserObservation {
-    pub(crate) fn merge_usage(&mut self, usage: Self) {
-        if self.attachment == nook_core::PasskeyAuthenticatorAttachment::Unknown {
-            self.attachment = usage.attachment;
-        }
-        if self.transports.is_empty() {
-            self.transports = usage.transports;
-        }
-        if usage.backup_state != nook_core::PasskeyBackupState::Unknown {
-            self.backup_state = usage.backup_state;
-        }
-        if self.aaguid.is_none() {
-            self.aaguid = usage.aaguid;
-        }
-        if usage.browser != nook_core::PasskeyObservedBrowser::Unknown {
-            self.browser = usage.browser;
-        }
-        if usage.platform != nook_core::PasskeyObservedPlatform::Unknown {
-            self.platform = usage.platform;
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PasskeyCreationCeremony {
-    RegistrationOnly,
-    RegistrationAndAssertion,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-pub(crate) enum PasskeyCreatedAtEvidence {
-    #[default]
-    Unavailable,
-    Known {
-        timestamp: nook_core::IsoTimestamp,
-    },
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-pub(crate) enum PasskeyLastUsedAtEvidence {
-    NotYetObserved,
-    #[default]
-    Unavailable,
-    Known {
-        timestamp: nook_core::IsoTimestamp,
-    },
-}
-
-fn deserialize_created_at_evidence<'de, D>(
-    deserializer: D,
-) -> Result<PasskeyCreatedAtEvidence, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum WireEvidence {
-        Explicit(PasskeyCreatedAtEvidence),
-        Legacy(Option<nook_core::IsoTimestamp>),
-    }
-
-    Ok(match WireEvidence::deserialize(deserializer)? {
-        WireEvidence::Explicit(evidence) => evidence,
-        WireEvidence::Legacy(Some(timestamp)) => PasskeyCreatedAtEvidence::Known { timestamp },
-        WireEvidence::Legacy(None) => PasskeyCreatedAtEvidence::Unavailable,
-    })
-}
-
-fn deserialize_last_used_at_evidence<'de, D>(
-    deserializer: D,
-) -> Result<PasskeyLastUsedAtEvidence, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum WireEvidence {
-        Explicit(PasskeyLastUsedAtEvidence),
-        Legacy(Option<nook_core::IsoTimestamp>),
-    }
-
-    Ok(match WireEvidence::deserialize(deserializer)? {
-        WireEvidence::Explicit(evidence) => evidence,
-        WireEvidence::Legacy(Some(timestamp)) => PasskeyLastUsedAtEvidence::Known { timestamp },
-        WireEvidence::Legacy(None) => PasskeyLastUsedAtEvidence::Unavailable,
-    })
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct PasskeyAccessProfile {
-    #[serde(default)]
-    pub credential_fingerprint: String,
-    #[serde(default)]
-    pub nook_name: String,
-    #[serde(default)]
-    pub provider_label: String,
-    #[serde(default, deserialize_with = "deserialize_created_at_evidence")]
-    pub created_at: PasskeyCreatedAtEvidence,
-    #[serde(default, deserialize_with = "deserialize_last_used_at_evidence")]
-    pub last_used_at: PasskeyLastUsedAtEvidence,
-    #[serde(default)]
-    pub observation: PasskeyBrowserObservation,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct VerifiedVaultAccess {
-    #[serde(default)]
-    pub device_id: String,
-    pub store_id: String,
-    pub verified_at: nook_core::IsoTimestamp,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DeviceAccessProfile {
-    pub version: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub passkey: Option<PasskeyAccessProfile>,
-    #[serde(default)]
-    pub verified_vaults: Vec<VerifiedVaultAccess>,
-}
-
-impl Default for DeviceAccessProfile {
-    fn default() -> Self {
-        Self {
-            version: DEVICE_ACCESS_PROFILE_VERSION,
-            passkey: None,
-            verified_vaults: Vec::new(),
-        }
-    }
-}
-
-impl DeviceAccessProfile {
-    fn set_passkey_provider_label(
-        &mut self,
-        credential_fingerprint: &str,
-        provider_label: String,
-    ) -> Result<(), NookError> {
-        if self
-            .passkey
-            .as_ref()
-            .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
-        {
-            return Err(NookError::Database(
-                "Passkey changed before its provider label was saved".to_owned(),
-            ));
-        }
-        if let Some(passkey) = self.passkey.as_mut() {
-            passkey.provider_label = provider_label;
-            return Ok(());
-        }
-        self.passkey = Some(PasskeyAccessProfile {
-            credential_fingerprint: credential_fingerprint.to_owned(),
-            provider_label,
-            ..PasskeyAccessProfile::default()
-        });
-        Ok(())
-    }
-
-    fn record_passkey_created(
-        &mut self,
-        credential_fingerprint: &str,
-        nook_name: &str,
-        observation: PasskeyBrowserObservation,
-        now: nook_core::IsoTimestamp,
-        ceremony: PasskeyCreationCeremony,
-    ) {
-        self.passkey = Some(PasskeyAccessProfile {
-            credential_fingerprint: credential_fingerprint.to_owned(),
-            nook_name: nook_name.trim().to_owned(),
-            // This reminder belongs to one credential. A replacement may be
-            // stored by a different provider, so require fresh user evidence.
-            provider_label: String::new(),
-            created_at: PasskeyCreatedAtEvidence::Known {
-                timestamp: now.clone(),
-            },
-            last_used_at: match ceremony {
-                PasskeyCreationCeremony::RegistrationOnly => {
-                    PasskeyLastUsedAtEvidence::NotYetObserved
-                }
-                PasskeyCreationCeremony::RegistrationAndAssertion => {
-                    PasskeyLastUsedAtEvidence::Known { timestamp: now }
-                }
-            },
-            observation,
-        });
-    }
-
-    fn record_passkey_used(
-        &mut self,
-        credential_fingerprint: &str,
-        observation: PasskeyBrowserObservation,
-        now: nook_core::IsoTimestamp,
-    ) {
-        if let Some(passkey) = self
-            .passkey
-            .as_mut()
-            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
-        {
-            passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
-            passkey.observation.merge_usage(observation);
-            return;
-        }
-        self.passkey = Some(PasskeyAccessProfile {
-            credential_fingerprint: credential_fingerprint.to_owned(),
-            last_used_at: PasskeyLastUsedAtEvidence::Known { timestamp: now },
-            observation,
-            ..PasskeyAccessProfile::default()
-        });
-    }
-
-    fn record_verified_vault_access(
-        &mut self,
-        device_id: &str,
-        store_id: &str,
-        now: nook_core::IsoTimestamp,
-    ) {
-        self.verified_vaults
-            .retain(|entry| entry.device_id != device_id || entry.store_id != store_id);
-        self.verified_vaults.push(VerifiedVaultAccess {
-            device_id: device_id.to_owned(),
-            store_id: store_id.to_owned(),
-            verified_at: now,
-        });
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 enum DecodedDeviceAccessProfile {
@@ -307,10 +59,10 @@ fn decode_device_access_profile(raw: &str) -> DecodedDeviceAccessProfile {
     let Ok(version) = serde_json::from_str::<DeviceAccessProfileVersion>(raw) else {
         return DecodedDeviceAccessProfile::RecoverableDefault;
     };
-    if version.version > DEVICE_ACCESS_PROFILE_VERSION {
+    if version.version > nook_core::DEVICE_ACCESS_PROFILE_VERSION {
         return DecodedDeviceAccessProfile::FutureVersion;
     }
-    if version.version != DEVICE_ACCESS_PROFILE_VERSION {
+    if version.version != nook_core::DEVICE_ACCESS_PROFILE_VERSION {
         return DecodedDeviceAccessProfile::RecoverableDefault;
     }
     serde_json::from_str(raw).map_or(
@@ -446,7 +198,11 @@ pub(crate) async fn set_passkey_provider_label(
         .map_err(|error| NookError::Database(error.to_string()))?;
     update_device_access_profile(
         DeviceAccessProfileUpdateIntent::Interactive,
-        move |profile| profile.set_passkey_provider_label(credential_fingerprint, normalized),
+        move |profile| {
+            profile
+                .set_passkey_provider_label(credential_fingerprint, normalized)
+                .map_err(|error| NookError::Database(error.to_string()))
+        },
     )
     .await
 }
@@ -469,6 +225,7 @@ pub(crate) async fn record_verified_vault_access(
     .await
 }
 
+#[cfg(test)]
 pub(crate) async fn delete_device_access_profile() -> Result<(), NookError> {
     idb_delete_key(DEVICE_ACCESS_PROFILE_KEY).await
 }
@@ -846,26 +603,13 @@ mod tests {
     async fn concurrent_verified_access_updates_preserve_both_relationships()
     -> Result<(), NookError> {
         delete_device_access_profile().await?;
-        let first = wasm_bindgen_futures::future_to_promise(async {
-            record_verified_vault_access("device-a", "store-one")
-                .await
-                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-            Ok(js_sys::Object::new().into())
-        });
-        let second = wasm_bindgen_futures::future_to_promise(async {
-            record_verified_vault_access("device-b", "store-two")
-                .await
-                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-            Ok(js_sys::Object::new().into())
-        });
-        let pending = js_sys::Array::new();
-        pending.push(&first);
-        pending.push(&second);
-        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::all(&pending))
-            .await
-            .map_err(|error| {
-                NookError::IndexedDb(format!("Concurrent device access update failed: {error:?}"))
-            })?;
+        let (first, second) = futures_util::future::join(
+            record_verified_vault_access("device-a", "store-one"),
+            record_verified_vault_access("device-b", "store-two"),
+        )
+        .await;
+        first?;
+        second?;
 
         let profile = load_device_access_profile().await?;
         assert!(

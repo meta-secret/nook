@@ -148,14 +148,22 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   }
 
   function focusPendingDashboardTarget(): void {
-    if (
-      pendingFocusTarget !== DashboardFocusTargetKind.DeviceIdentityDetails
-    ) {
-      return
+    let selector: string
+    switch (pendingFocusTarget) {
+      case DashboardFocusTargetKind.None:
+        return
+      case DashboardFocusTargetKind.DeviceIdentityDetails:
+        selector =
+          '[data-testid="devices-access-device-identity"] > summary'
+        break
+      case DashboardFocusTargetKind.RetryResult:
+        selector =
+          loadState.kind === DashboardLoadKind.Failed
+            ? '[data-testid="devices-access-retry"]'
+            : '[data-testid="devices-access-back"]'
+        break
     }
-    const target = document.querySelector<HTMLElement>(
-      '[data-testid="devices-access-device-identity"] > summary',
-    )
+    const target = document.querySelector<HTMLElement>(selector)
     if (!target) return
     pendingFocusTarget = DashboardFocusTargetKind.None
     target.focus()
@@ -225,8 +233,15 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     } catch {
       if (generation === loadGeneration) {
         loadState = { kind: DashboardLoadKind.Failed }
+        await tick()
+        focusPendingDashboardTarget()
       }
     }
+  }
+
+  async function retryDashboard(): Promise<void> {
+    pendingFocusTarget = DashboardFocusTargetKind.RetryResult
+    await loadDashboard()
   }
 
   async function saveProviderLabel(): Promise<void> {
@@ -427,7 +442,13 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   {:else if loadState.kind === DashboardLoadKind.Failed}
     <div class="rounded-xl border border-destructive/30 bg-destructive/5 p-5" role="alert">
       <p class="font-medium text-foreground">{vault.t('devices_access.load_failed')}</p>
-      <Button type="button" variant="outline" class="mt-3" onclick={() => void loadDashboard()}>
+      <Button
+        type="button"
+        variant="outline"
+        class="mt-3"
+        data-testid="devices-access-retry"
+        onclick={() => void retryDashboard()}
+      >
         <RefreshCw class="size-4" />
         {vault.t('devices_access.try_again')}
       </Button>

@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::WrappedDeviceIdentity;
+use crate::{IsoTimestamp, WrappedDeviceIdentity};
 
 pub const DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS: usize = 80;
+pub const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeviceAccessProviderLabelError {
@@ -102,6 +103,270 @@ pub enum PasskeyBackupState {
     NotEligible,
     Eligible,
     BackedUp,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasskeyBrowserObservation {
+    pub attachment: PasskeyAuthenticatorAttachment,
+    pub transports: Vec<PasskeyTransport>,
+    pub backup_state: PasskeyBackupState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aaguid: Option<String>,
+    #[serde(default)]
+    pub browser: PasskeyObservedBrowser,
+    #[serde(default)]
+    pub platform: PasskeyObservedPlatform,
+    // Version 1 persisted an English `clientEnvironment` sentence. Accept and
+    // discard it so old metadata remains readable without leaking presentation
+    // text into localized UI.
+    #[doc(hidden)]
+    #[serde(default, alias = "clientEnvironment", skip_serializing)]
+    pub legacy_client_environment: Option<String>,
+}
+
+impl PasskeyBrowserObservation {
+    pub fn merge_usage(&mut self, usage: Self) {
+        if self.attachment == PasskeyAuthenticatorAttachment::Unknown {
+            self.attachment = usage.attachment;
+        }
+        if self.transports.is_empty() {
+            self.transports = usage.transports;
+        }
+        if usage.backup_state != PasskeyBackupState::Unknown {
+            self.backup_state = usage.backup_state;
+        }
+        if self.aaguid.is_none() {
+            self.aaguid = usage.aaguid;
+        }
+        if usage.browser != PasskeyObservedBrowser::Unknown {
+            self.browser = usage.browser;
+        }
+        if usage.platform != PasskeyObservedPlatform::Unknown {
+            self.platform = usage.platform;
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PasskeyCreationCeremony {
+    RegistrationOnly,
+    RegistrationAndAssertion,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PasskeyCreatedAtEvidence {
+    #[default]
+    Unavailable,
+    Known {
+        timestamp: IsoTimestamp,
+    },
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum PasskeyLastUsedAtEvidence {
+    NotYetObserved,
+    #[default]
+    Unavailable,
+    Known {
+        timestamp: IsoTimestamp,
+    },
+}
+
+fn deserialize_created_at_evidence<'de, D>(
+    deserializer: D,
+) -> Result<PasskeyCreatedAtEvidence, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WireEvidence {
+        Explicit(PasskeyCreatedAtEvidence),
+        Legacy(Option<IsoTimestamp>),
+    }
+
+    Ok(match WireEvidence::deserialize(deserializer)? {
+        WireEvidence::Explicit(evidence) => evidence,
+        WireEvidence::Legacy(Some(timestamp)) => PasskeyCreatedAtEvidence::Known { timestamp },
+        WireEvidence::Legacy(None) => PasskeyCreatedAtEvidence::Unavailable,
+    })
+}
+
+fn deserialize_last_used_at_evidence<'de, D>(
+    deserializer: D,
+) -> Result<PasskeyLastUsedAtEvidence, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WireEvidence {
+        Explicit(PasskeyLastUsedAtEvidence),
+        Legacy(Option<IsoTimestamp>),
+    }
+
+    Ok(match WireEvidence::deserialize(deserializer)? {
+        WireEvidence::Explicit(evidence) => evidence,
+        WireEvidence::Legacy(Some(timestamp)) => PasskeyLastUsedAtEvidence::Known { timestamp },
+        WireEvidence::Legacy(None) => PasskeyLastUsedAtEvidence::Unavailable,
+    })
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasskeyAccessProfile {
+    #[serde(default)]
+    pub credential_fingerprint: String,
+    #[serde(default)]
+    pub nook_name: String,
+    #[serde(default)]
+    pub provider_label: String,
+    #[serde(default, deserialize_with = "deserialize_created_at_evidence")]
+    pub created_at: PasskeyCreatedAtEvidence,
+    #[serde(default, deserialize_with = "deserialize_last_used_at_evidence")]
+    pub last_used_at: PasskeyLastUsedAtEvidence,
+    #[serde(default)]
+    pub observation: PasskeyBrowserObservation,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifiedVaultAccess {
+    #[serde(default)]
+    pub device_id: String,
+    pub store_id: String,
+    pub verified_at: IsoTimestamp,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceAccessProfile {
+    pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passkey: Option<PasskeyAccessProfile>,
+    #[serde(default)]
+    pub verified_vaults: Vec<VerifiedVaultAccess>,
+}
+
+impl Default for DeviceAccessProfile {
+    fn default() -> Self {
+        Self {
+            version: DEVICE_ACCESS_PROFILE_VERSION,
+            passkey: None,
+            verified_vaults: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeviceAccessProfileTransitionError {
+    CredentialChanged,
+}
+
+impl std::fmt::Display for DeviceAccessProfileTransitionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CredentialChanged => {
+                formatter.write_str("passkey changed before its provider label was saved")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DeviceAccessProfileTransitionError {}
+
+impl DeviceAccessProfile {
+    pub fn set_passkey_provider_label(
+        &mut self,
+        credential_fingerprint: &str,
+        provider_label: String,
+    ) -> Result<(), DeviceAccessProfileTransitionError> {
+        if self
+            .passkey
+            .as_ref()
+            .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
+        {
+            return Err(DeviceAccessProfileTransitionError::CredentialChanged);
+        }
+        if let Some(passkey) = self.passkey.as_mut() {
+            passkey.provider_label = provider_label;
+            return Ok(());
+        }
+        self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            provider_label,
+            ..PasskeyAccessProfile::default()
+        });
+        Ok(())
+    }
+
+    pub fn record_passkey_created(
+        &mut self,
+        credential_fingerprint: &str,
+        nook_name: &str,
+        observation: PasskeyBrowserObservation,
+        now: IsoTimestamp,
+        ceremony: PasskeyCreationCeremony,
+    ) {
+        self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            nook_name: nook_name.trim().to_owned(),
+            provider_label: String::new(),
+            created_at: PasskeyCreatedAtEvidence::Known {
+                timestamp: now.clone(),
+            },
+            last_used_at: match ceremony {
+                PasskeyCreationCeremony::RegistrationOnly => {
+                    PasskeyLastUsedAtEvidence::NotYetObserved
+                }
+                PasskeyCreationCeremony::RegistrationAndAssertion => {
+                    PasskeyLastUsedAtEvidence::Known { timestamp: now }
+                }
+            },
+            observation,
+        });
+    }
+
+    pub fn record_passkey_used(
+        &mut self,
+        credential_fingerprint: &str,
+        observation: PasskeyBrowserObservation,
+        now: IsoTimestamp,
+    ) {
+        if let Some(passkey) = self
+            .passkey
+            .as_mut()
+            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
+        {
+            passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
+            passkey.observation.merge_usage(observation);
+            return;
+        }
+        self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            last_used_at: PasskeyLastUsedAtEvidence::Known { timestamp: now },
+            observation,
+            ..PasskeyAccessProfile::default()
+        });
+    }
+
+    pub fn record_verified_vault_access(
+        &mut self,
+        device_id: &str,
+        store_id: &str,
+        now: IsoTimestamp,
+    ) {
+        self.verified_vaults
+            .retain(|entry| entry.device_id != device_id || entry.store_id != store_id);
+        self.verified_vaults.push(VerifiedVaultAccess {
+            device_id: device_id.to_owned(),
+            store_id: store_id.to_owned(),
+            verified_at: now,
+        });
+    }
 }
 
 #[must_use]
@@ -278,6 +543,151 @@ mod tests {
         assert_eq!(
             normalize_device_access_provider_label("Apple\nPasswords"),
             Err(DeviceAccessProviderLabelError::ContainsControlCharacter)
+        );
+    }
+
+    fn timestamp(value: &str) -> IsoTimestamp {
+        IsoTimestamp::from_trusted(value.to_owned())
+    }
+
+    fn observation() -> PasskeyBrowserObservation {
+        PasskeyBrowserObservation {
+            attachment: PasskeyAuthenticatorAttachment::Platform,
+            transports: vec![PasskeyTransport::Internal],
+            backup_state: PasskeyBackupState::Eligible,
+            aaguid: Some("aaguid-one".to_owned()),
+            browser: PasskeyObservedBrowser::Safari,
+            platform: PasskeyObservedPlatform::MacOs,
+            legacy_client_environment: None,
+        }
+    }
+
+    #[test]
+    fn credential_replacement_resets_provider_and_records_creation_evidence() -> anyhow::Result<()>
+    {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:first",
+            "First credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+        profile.set_passkey_provider_label("passkey:first", "Bitwarden".to_owned())?;
+
+        profile.record_passkey_created(
+            "passkey:replacement",
+            " Replacement credential ",
+            observation(),
+            timestamp("2026-02-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationAndAssertion,
+        );
+
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("replacement passkey profile is missing"))?;
+        assert_eq!(passkey.nook_name, "Replacement credential");
+        assert!(passkey.provider_label.is_empty());
+        assert_eq!(
+            passkey.last_used_at,
+            PasskeyLastUsedAtEvidence::Known {
+                timestamp: timestamp("2026-02-01T00:00:00.000Z")
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn matching_usage_merges_new_observations_without_erasing_creation_evidence()
+    -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:current",
+            "Current credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+        profile.record_passkey_used(
+            "passkey:current",
+            PasskeyBrowserObservation {
+                backup_state: PasskeyBackupState::BackedUp,
+                browser: PasskeyObservedBrowser::Firefox,
+                platform: PasskeyObservedPlatform::Linux,
+                ..PasskeyBrowserObservation::default()
+            },
+            timestamp("2026-03-01T00:00:00.000Z"),
+        );
+
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("passkey profile is missing"))?;
+        assert_eq!(passkey.observation.transports, [PasskeyTransport::Internal]);
+        assert_eq!(
+            passkey.observation.backup_state,
+            PasskeyBackupState::BackedUp
+        );
+        assert_eq!(passkey.observation.browser, PasskeyObservedBrowser::Firefox);
+        assert_eq!(
+            passkey.created_at,
+            PasskeyCreatedAtEvidence::Known {
+                timestamp: timestamp("2026-01-01T00:00:00.000Z")
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_label_transition_rejects_a_replaced_credential() -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:current",
+            "Current credential",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+
+        assert_eq!(
+            profile.set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned()),
+            Err(DeviceAccessProfileTransitionError::CredentialChanged)
+        );
+        assert!(
+            profile
+                .passkey
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("passkey profile is missing"))?
+                .provider_label
+                .is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn verified_access_refreshes_only_the_matching_device_and_vault_pair() {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_verified_vault_access(
+            "device-a",
+            "store-one",
+            timestamp("2026-01-01T00:00:00.000Z"),
+        );
+        profile.record_verified_vault_access(
+            "device-b",
+            "store-one",
+            timestamp("2026-02-01T00:00:00.000Z"),
+        );
+        profile.record_verified_vault_access(
+            "device-a",
+            "store-one",
+            timestamp("2026-03-01T00:00:00.000Z"),
+        );
+
+        assert_eq!(profile.verified_vaults.len(), 2);
+        assert_eq!(
+            profile.verified_vaults[1].verified_at,
+            timestamp("2026-03-01T00:00:00.000Z")
         );
     }
 }
