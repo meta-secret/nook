@@ -212,7 +212,9 @@ mod wasm_idb_tests {
         let pat = "github_pat_11WASMtestSECRET";
         save_auth_providers(&identity, &github_snapshot(pat)).await?;
         let raw = read_raw_snapshot().await?;
-        let stored_pat = raw["providers"][0]["githubPat"].as_str()?;
+        let stored_pat = raw["providers"][0]["githubPat"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("sealed githubPat missing from snapshot"))?;
         assert!(nook_core::is_sealed_credential(stored_pat));
         assert!(!stored_pat.contains("WASMtestSECRET"));
         Ok(())
@@ -286,16 +288,23 @@ mod wasm_idb_tests {
         save_auth_providers(&identity, &snapshot).await?;
         let raw = read_raw_snapshot().await?;
         let oauth = &raw["providers"][0]["oauthFile"];
-        let stored_access = oauth["accessToken"].as_str()?;
-        let stored_refresh = oauth["refreshToken"].as_str()?;
+        let stored_access = oauth["accessToken"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("sealed accessToken missing from snapshot"))?;
+        let stored_refresh = oauth["refreshToken"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("sealed refreshToken missing from snapshot"))?;
         assert!(nook_core::is_sealed_credential(stored_access));
         assert!(nook_core::is_sealed_credential(stored_refresh));
         assert!(!stored_access.contains(access));
         assert!(!stored_refresh.contains(refresh));
 
         let loaded = load_auth_providers(&identity).await?;
-        let loaded_oauth = loaded.snapshot.providers[0].oauth_file.as_ref()?;
-        assert_eq!(loaded_oauth.access_token, access);
+        let loaded_oauth = loaded.snapshot.providers[0]
+            .oauth_file
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("loaded oauth_file configuration missing"))?;
+        assert_eq!(loaded_oauth.access_token.as_deref(), Some(access));
         assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
         Ok(())
     }

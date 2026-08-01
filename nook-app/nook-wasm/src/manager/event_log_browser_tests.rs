@@ -174,7 +174,7 @@ async fn denied_extension_import_restores_session_and_active_projection() -> any
 #[wasm_bindgen_test]
 async fn locked_external_import_preserves_prior_vault_and_password_entries() -> anyhow::Result<()> {
     let mut source = NookVaultManager::new();
-    source.application = nook_core::VaultApplication::VaultApp;
+    source.application = nook_core::VaultApplication::Simple;
     source
         .delete_local_browser_data()
         .await
@@ -216,7 +216,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
     switch_active_vault(&previous_store_id).await?;
 
     let mut importer = NookVaultManager::new();
-    importer.application = nook_core::VaultApplication::VaultApp;
+    importer.application = nook_core::VaultApplication::Simple;
     importer.vault.store_id.clone_from(&previous_store_id);
     importer.reset_vault_session();
     let _ = importer.sync_external_event_log_records(records).await?;
