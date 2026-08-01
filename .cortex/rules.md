@@ -83,6 +83,10 @@ This document defines the strict development standards, architectural boundaries
   cache, and DOM absence into an explicit discriminated union. Mutable state
   always uses domain-specific variants with variant-owned data. Generated
   declarations and generated WASM bindings may mirror external contracts.
+- **Svelte TypeScript enums:** Every Svelte build surface enables
+  `vitePreprocess({ script: true })`. Presentation-only closed vocabularies use
+  named TypeScript enums directly in component script blocks when local to one
+  component; shared vocabularies live in cohesive adjacent `.ts` modules.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.

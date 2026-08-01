@@ -157,7 +157,7 @@ async function importWebDependency<TModule>(specifier: string) {
 async function buildSveltePage(page: 'popup') {
   const { build: viteBuild } =
     await importWebDependency<typeof import('vite')>('vite')
-  const { svelte } = await importWebDependency<
+  const { svelte, vitePreprocess } = await importWebDependency<
     typeof import('@sveltejs/vite-plugin-svelte')
   >('@sveltejs/vite-plugin-svelte')
 
@@ -166,7 +166,7 @@ async function buildSveltePage(page: 'popup') {
     configFile: false,
     base: './',
     publicDir: false,
-    plugins: [svelte()],
+    plugins: [svelte({ preprocess: vitePreprocess({ script: true }) })],
     define: simpleVaultDefine,
     build: {
       outDir: join(distDir, page),
