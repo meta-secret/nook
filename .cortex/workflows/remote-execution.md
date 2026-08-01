@@ -43,8 +43,9 @@ the trusted Main BuildKit lineage as fallback, and can write only deterministic
 branch-isolated Zot cache refs under `nook/remote-buildcache/**`. Zot repository
 authorization gives the Remote identity read-only access to `nook/buildcache/**`,
 so tag selection alone is not the security boundary. Rust compiler vertices also use the bucket-scoped
-SeaweedFS build identity to read and write compiler objects. They cannot replace
-Main Zot refs or administer SeaweedFS identities and buckets.
+SeaweedFS Remote identity to read and write compiler objects only in
+`nook-sccache-remote`. They cannot replace Main Zot refs, access Main's
+`nook-sccache` compiler objects, or administer SeaweedFS identities and buckets.
 
 The two cache layers solve different cold-start costs:
 

@@ -171,7 +171,7 @@ tasks:
           "set -eu; \
            install -d -m 0750 '$remote_dir'; \
            install -d -m 0700 '$remote_secrets'; \
-           sudo -n install -d -m 0750 /var/lib/nook/seaweedfs"
+           sudo -n install -d -m 0750 -o 1000 -g 1000 /var/lib/nook/seaweedfs"
         BASH
       - task: sccache:credential:ensure
       - |

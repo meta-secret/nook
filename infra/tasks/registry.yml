@@ -319,7 +319,7 @@ tasks:
         location="$(awk 'tolower($1) == "location:" { $1=""; sub(/^ /, ""); sub(/\r$/, ""); print; exit }' "$headers")"
         test -n "$location"
         case "$location" in
-          http://*|https://*) upload_url="$location" ;;
+          "https://$host/"*) upload_url="$location" ;;
           /*) upload_url="https://$host$location" ;;
           *) echo "Unexpected Zot upload location: $location" >&2; exit 1 ;;
         esac

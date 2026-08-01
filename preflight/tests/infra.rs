@@ -399,7 +399,7 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "ssh -n -o BatchMode=yes",
         "docker compose -f '$remote_compose' up -d --wait --force-recreate seaweedfs",
         "docker compose -f '$remote_compose' up -d --wait --remove-orphans traefik",
-        "sudo -n install -d -m 0750 /var/lib/nook/seaweedfs",
+        "sudo -n install -d -m 0750 -o 1000 -g 1000 /var/lib/nook/seaweedfs",
         "traefik-dynamic.yaml.next",
         "grep -qx seaweedfs",
         "grep -qx traefik",
@@ -422,47 +422,7 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     assert!(!deploy.contains("up -d --wait redis"));
     assert!(!deploy.contains("cloudflare"));
 
-    let sccache = read("infra/tasks/sccache.yml");
-    for required in [
-        "sccache:credential:ensure:",
-        "sccache:credential:sync:",
-        "sccache:bucket:ensure:",
-        "sccache:check:",
-        "home_cache=\"${HOME}/.nook/cache\"",
-        "repo_cache=\"$repo_root/.nook/cache\"",
-        "sccache-access-key",
-        "sccache-secret-key",
-        "sccache-admin-access-key",
-        "sccache-admin-secret-key",
-        r#"\"name\": \"nook-sccache-build\""#,
-        r#"\"Read:nook-sccache\""#,
-        r#"\"Write:nook-sccache\""#,
-        r#"\"List:nook-sccache\""#,
-        r#"\"Tagging:nook-sccache\""#,
-        r#"\"name\": \"nook-sccache-admin\""#,
-        "gh secret set NOOK_SCCACHE_ACCESS_KEY",
-        "gh secret set NOOK_SCCACHE_SECRET_KEY",
-        "NOOK_SCCACHE_ENDPOINT",
-        "sccache.dev.nokey.sh",
-        "nook-sccache",
-        "chmod 0600",
-        "~/.nook/cache",
-        "s3api put-object",
-        "s3api head-object",
-        "s3api delete-object",
-        "authenticated read/write S3 check passed",
-    ] {
-        assert!(
-            sccache.contains(required),
-            "SeaweedFS sccache credential lifecycle is missing: {required}"
-        );
-    }
-    assert!(
-        !sccache.contains("gh secret set NOOK_SCCACHE_ADMIN")
-            && !sccache.contains("$home_cache/sccache-admin")
-            && !sccache.contains("$repo_cache/sccache-admin"),
-        "SeaweedFS administrative credentials must remain server-side"
-    );
+    assert_sccache_credential_contract();
     let registry = read("infra/tasks/registry.yml");
     for required in [
         "home_cache=\"${HOME}/.nook/cache\"",
@@ -482,6 +442,60 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn assert_sccache_credential_contract() {
+    let sccache = read("infra/tasks/sccache.yml");
+    for required in [
+        "sccache:credential:ensure:",
+        "sccache:credential:sync:",
+        "sccache:bucket:ensure:",
+        "sccache:check:",
+        "home_cache=\"${HOME}/.nook/cache\"",
+        "repo_cache=\"$repo_root/.nook/cache\"",
+        "sccache-access-key",
+        "sccache-secret-key",
+        "sccache-remote-access-key",
+        "sccache-remote-secret-key",
+        "sccache-admin-access-key",
+        "sccache-admin-secret-key",
+        "install -d -m 0750 -o 1000 -g 1000 \"$data_dir\"",
+        r#"\"name\": \"nook-sccache-build\""#,
+        r#"\"Read:nook-sccache\""#,
+        r#"\"Write:nook-sccache\""#,
+        r#"\"List:nook-sccache\""#,
+        r#"\"Tagging:nook-sccache\""#,
+        r#"\"name\": \"nook-sccache-remote\""#,
+        r#"\"Read:nook-sccache-remote\""#,
+        r#"\"Write:nook-sccache-remote\""#,
+        r#"\"name\": \"nook-sccache-admin\""#,
+        "gh secret set NOOK_SCCACHE_ACCESS_KEY",
+        "gh secret set NOOK_SCCACHE_SECRET_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_ACCESS_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_SECRET_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_BUCKET",
+        "NOOK_SCCACHE_ENDPOINT",
+        "sccache.dev.nokey.sh",
+        "nook-sccache",
+        "chmod 0600",
+        "~/.nook/cache",
+        "s3api put-object",
+        "s3api head-object",
+        "s3api delete-object",
+        "Main and Remote isolated read/write S3 checks passed",
+        "Remote compiler identity must not read Main's bucket",
+    ] {
+        assert!(
+            sccache.contains(required),
+            "SeaweedFS sccache credential lifecycle is missing: {required}"
+        );
+    }
+    assert!(
+        !sccache.contains("gh secret set NOOK_SCCACHE_ADMIN")
+            && !sccache.contains("$home_cache/sccache-admin")
+            && !sccache.contains("$repo_cache/sccache-admin"),
+        "SeaweedFS administrative credentials must remain server-side"
+    );
+}
+
 fn assert_zot_registry_contract() -> anyhow::Result<()> {
     let manifest = read("infra/k0s/manifests/registry/zot.yaml");
     assert!(
@@ -493,6 +507,8 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "\"nook/remote-buildcache/**\"",
         "\"users\": [\"nook-remote\"]",
         "\"actions\": [\"read\", \"create\", \"update\"]",
+        "\"repositories\": [\"nook/remote-buildcache/**\"]",
+        "\"pushedWithin\": \"168h\"",
         "\"adminPolicy\"",
     ] {
         assert!(
@@ -545,6 +561,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "test \"$remote_main_write\" = 403",
         "test \"$remote_branch_write\" = 202",
         "nook/remote-buildcache/nook-authz-probe",
+        "\"https://$host/\"*) upload_url=\"$location\"",
         "Legacy loopback registry unit must be removed",
     ] {
         assert!(

@@ -14,7 +14,25 @@ data:
         "dedupe": true,
         "gc": true,
         "gcDelay": "24h",
-        "gcInterval": "24h"
+        "gcInterval": "24h",
+        "retention": {
+          "dryRun": false,
+          "delay": "24h",
+          "policies": [
+            {
+              "repositories": ["nook/remote-buildcache/**"],
+              "deleteReferrers": true,
+              "deleteUntagged": true,
+              "keepTags": [{"pushedWithin": "168h"}]
+            },
+            {
+              "repositories": ["**"],
+              "deleteReferrers": false,
+              "deleteUntagged": true,
+              "keepTags": [{"patterns": [".*"]}]
+            }
+          ]
+        }
       },
       "http": {
         "address": "0.0.0.0",

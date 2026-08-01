@@ -314,15 +314,19 @@ cannot consume each other's handoff; Rust `target/` and the compiler toolchain
 never enter `nook-web:local`.
 
 Rust compilation can use authenticated SeaweedFS S3 sccache deployed from
-[`infra/`](infra/) at `https://sccache.dev.nokey.sh` (bucket `nook-sccache`).
+[`infra/`](infra/) at `https://sccache.dev.nokey.sh`. Authorized local, Hive,
+and trusted Main builds use `nook-sccache`; manually dispatched Remote tasks use
+the separately authorized `nook-sccache-remote` bucket so branch-controlled
+compiler objects can never replace objects consumed by Main.
 Run `task infra:sccache:credential:sync` and
 `task infra:registry:credential:sync` once to create mode-`0600` credentials in
 `~/.nook/cache/` (and a copy under the repo `.nook/cache/`). Registry sync also
 runs `docker login registry.dev.nokey.sh`. Without the S3 key files, local and
-untrusted CI builds compile normally without sccache. Hosted
-Main, pull-request, arbitrary-ref, dependency-update, and AI-authored jobs do
-not receive the S3 keys; keeping Main's cache publisher secret-free makes its
-BuildKit layers reusable by PRs. Override the endpoint with `SCCACHE_ENDPOINT`.
+untrusted CI builds compile normally without sccache. Trusted Main and explicit
+Remote tasks receive different bucket-scoped identities; pull-request,
+arbitrary-ref, dependency-update, and AI-authored jobs receive neither. Stable
+BuildKit secret IDs keep credential values out of layer cache keys. Override the
+endpoint with `SCCACHE_ENDPOINT`.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT`.
 

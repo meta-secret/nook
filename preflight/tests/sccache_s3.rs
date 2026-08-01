@@ -215,11 +215,19 @@ fn assert_workflows_scope_cache_credentials() {
     let remote = read(".github/workflows/remote.yml");
     let selected_jobs = remote.matches("if: inputs.task == '").count();
     assert_eq!(
-        remote.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
+        remote.matches("NOOK_SCCACHE_REMOTE_ACCESS_KEY").count(),
         selected_jobs
     );
     assert_eq!(
-        remote.matches("NOOK_SCCACHE_SECRET_KEY").count(),
+        remote.matches("NOOK_SCCACHE_REMOTE_SECRET_KEY").count(),
+        selected_jobs
+    );
+    assert_eq!(
+        remote.matches("NOOK_SCCACHE_REMOTE_BUCKET").count(),
+        selected_jobs
+    );
+    assert_eq!(
+        remote.matches("NOOK_SCCACHE_ENDPOINT").count(),
         selected_jobs
     );
     assert_eq!(

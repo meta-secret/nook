@@ -4,6 +4,7 @@ version: '3'
 vars:
   NOOK_SCCACHE_HOST: '{{default "sccache.dev.nokey.sh" .NOOK_SCCACHE_HOST}}'
   NOOK_SCCACHE_BUCKET: '{{default "nook-sccache" .NOOK_SCCACHE_BUCKET}}'
+  NOOK_SCCACHE_REMOTE_BUCKET: '{{default "nook-sccache-remote" .NOOK_SCCACHE_REMOTE_BUCKET}}'
 
 tasks:
   sccache:credential:ensure:
@@ -17,13 +18,17 @@ tasks:
         secrets_dir="$remote_dir/secrets"
         access_file="$secrets_dir/sccache-access-key"
         secret_file="$secrets_dir/sccache-secret-key"
+        remote_access_file="$secrets_dir/sccache-remote-access-key"
+        remote_secret_file="$secrets_dir/sccache-remote-secret-key"
         admin_access_file="$secrets_dir/sccache-admin-access-key"
         admin_secret_file="$secrets_dir/sccache-admin-secret-key"
         s3_config="$secrets_dir/seaweedfs-s3.json"
         data_dir="/var/lib/nook/seaweedfs"
 
         install -d -m 0700 "$secrets_dir"
-        sudo -n install -d -m 0750 -o root -g root "$data_dir"
+        # The pinned SeaweedFS image drops from its root entrypoint to uid/gid
+        # 1000. The bind-mount root itself must remain traversable after restart.
+        sudo -n install -d -m 0750 -o 1000 -g 1000 "$data_dir"
         if test ! -s "$access_file"; then
           umask 077
           openssl rand -hex 20 > "$access_file"
@@ -31,6 +36,14 @@ tasks:
         if test ! -s "$secret_file"; then
           umask 077
           openssl rand -hex 40 > "$secret_file"
+        fi
+        if test ! -s "$remote_access_file"; then
+          umask 077
+          openssl rand -hex 20 > "$remote_access_file"
+        fi
+        if test ! -s "$remote_secret_file"; then
+          umask 077
+          openssl rand -hex 40 > "$remote_secret_file"
         fi
         if test ! -s "$admin_access_file"; then
           umask 077
@@ -42,9 +55,12 @@ tasks:
         fi
         chmod 0600 \
           "$access_file" "$secret_file" \
+          "$remote_access_file" "$remote_secret_file" \
           "$admin_access_file" "$admin_secret_file"
         access_key="$(cat "$access_file")"
         secret_key="$(cat "$secret_file")"
+        remote_access_key="$(cat "$remote_access_file")"
+        remote_secret_key="$(cat "$remote_secret_file")"
         admin_access_key="$(cat "$admin_access_file")"
         admin_secret_key="$(cat "$admin_secret_file")"
         umask 077
@@ -63,6 +79,21 @@ tasks:
                 \"Write:nook-sccache\",
                 \"List:nook-sccache\",
                 \"Tagging:nook-sccache\"
+              ]
+            },
+            {
+              \"name\": \"nook-sccache-remote\",
+              \"credentials\": [
+                {
+                  \"accessKey\": \"$remote_access_key\",
+                  \"secretKey\": \"$remote_secret_key\"
+                }
+              ],
+              \"actions\": [
+                \"Read:nook-sccache-remote\",
+                \"Write:nook-sccache-remote\",
+                \"List:nook-sccache-remote\",
+                \"Tagging:nook-sccache-remote\"
               ]
             },
             {
@@ -90,6 +121,7 @@ tasks:
         repo_root="$(git rev-parse --show-toplevel)"
         host="{{.NOOK_SCCACHE_HOST}}"
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        remote_bucket="{{.NOOK_SCCACHE_REMOTE_BUCKET}}"
         home_cache="${HOME}/.nook/cache"
         repo_cache="$repo_root/.nook/cache"
         install -d -m 0700 "$home_cache" "$repo_cache"
@@ -124,6 +156,13 @@ tasks:
         gh secret set NOOK_SCCACHE_SECRET_KEY \
           --body "$(cat "$home_cache/sccache-secret-key")"
         gh secret set NOOK_SCCACHE_BUCKET --body "$bucket"
+        gh secret set NOOK_SCCACHE_REMOTE_ACCESS_KEY \
+          --body "$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-remote-access-key'")"
+        gh secret set NOOK_SCCACHE_REMOTE_SECRET_KEY \
+          --body "$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "cat '{{.INFRA_REMOTE_DIR}}/secrets/sccache-remote-secret-key'")"
+        gh secret set NOOK_SCCACHE_REMOTE_BUCKET --body "$remote_bucket"
         echo "SeaweedFS sccache credentials synchronized to ~/.nook/cache and .nook/cache"
         BASH
 
@@ -139,6 +178,7 @@ tasks:
         access_key="$(cat "$remote_dir/secrets/sccache-admin-access-key")"
         secret_key="$(cat "$remote_dir/secrets/sccache-admin-secret-key")"
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        remote_bucket="{{.NOOK_SCCACHE_REMOTE_BUCKET}}"
         # Create bucket via path-style PutBucket against loopback S3.
         docker run --rm --network host \
           -e AWS_ACCESS_KEY_ID="$access_key" \
@@ -153,7 +193,21 @@ tasks:
           -e AWS_DEFAULT_REGION=auto \
           amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url http://127.0.0.1:8333 \
+          s3api create-bucket --bucket "$remote_bucket" >/dev/null 2>&1 || true
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url http://127.0.0.1:8333 \
           s3api head-bucket --bucket "$bucket"
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url http://127.0.0.1:8333 \
+          s3api head-bucket --bucket "$remote_bucket"
         REMOTE
 
   sccache:check:
@@ -166,8 +220,11 @@ tasks:
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         host="{{.NOOK_SCCACHE_HOST}}"
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
+        remote_bucket="{{.NOOK_SCCACHE_REMOTE_BUCKET}}"
         access_key="$(cat "$remote_dir/secrets/sccache-access-key")"
         secret_key="$(cat "$remote_dir/secrets/sccache-secret-key")"
+        remote_access_key="$(cat "$remote_dir/secrets/sccache-remote-access-key")"
+        remote_secret_key="$(cat "$remote_dir/secrets/sccache-remote-secret-key")"
         probe_file="$(mktemp)"
         trap 'rm -f "$probe_file"' EXIT
 
@@ -199,7 +256,7 @@ tasks:
           amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api head-bucket --bucket "$bucket"
-        probe_key="health/build-identity-write-probe"
+        probe_key="health/build-identity-write-probe-$(openssl rand -hex 12)"
         docker run --rm --network host \
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
@@ -222,5 +279,39 @@ tasks:
           amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api delete-object --bucket "$bucket" --key "$probe_key" >/dev/null
-        echo "sccache.dev.nokey.sh authenticated read/write S3 check passed"
+
+        if docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "https://$host" \
+          s3api head-bucket --bucket "$bucket" >/dev/null 2>&1; then
+          echo "Remote compiler identity must not read Main's bucket" >&2
+          exit 1
+        fi
+        remote_probe_key="health/remote-build-identity-write-probe-$(openssl rand -hex 12)"
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          -v "$probe_file:/tmp/empty:ro" \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "https://$host" \
+          s3api put-object --bucket "$remote_bucket" --key "$remote_probe_key" --body /tmp/empty >/dev/null
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "https://$host" \
+          s3api head-object --bucket "$remote_bucket" --key "$remote_probe_key" >/dev/null
+        docker run --rm --network host \
+          -e AWS_ACCESS_KEY_ID="$remote_access_key" \
+          -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
+          -e AWS_DEFAULT_REGION=auto \
+          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          --endpoint-url "https://$host" \
+          s3api delete-object --bucket "$remote_bucket" --key "$remote_probe_key" >/dev/null
+        echo "sccache.dev.nokey.sh Main and Remote isolated read/write S3 checks passed"
         REMOTE

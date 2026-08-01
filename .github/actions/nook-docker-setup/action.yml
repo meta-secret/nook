@@ -36,6 +36,14 @@ inputs:
     description: SeaweedFS S3 secret key for Rust compiler objects.
     required: false
     default: ""
+  sccache-endpoint:
+    description: Public HTTPS hostname for the SeaweedFS S3 endpoint.
+    required: false
+    default: "sccache.dev.nokey.sh"
+  sccache-bucket:
+    description: SeaweedFS S3 bucket used by this trust domain.
+    required: false
+    default: "nook-sccache"
 
 runs:
   using: composite
@@ -82,6 +90,8 @@ runs:
       with:
         sccache-access-key: ${{ inputs.sccache-access-key }}
         sccache-secret-key: ${{ inputs.sccache-secret-key }}
+        sccache-endpoint: ${{ inputs.sccache-endpoint }}
+        sccache-bucket: ${{ inputs.sccache-bucket }}
 
     - name: Select hosted BuildKit cache
       shell: bash
