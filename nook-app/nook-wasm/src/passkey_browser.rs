@@ -480,7 +480,7 @@ fn optional_rp_id(rp_id: &str) -> Option<String> {
     (!rp_id.is_empty()).then(|| rp_id.to_owned())
 }
 
-fn normalized_passkey_label(label: &str) -> String {
+pub(crate) fn normalized_passkey_label(label: &str) -> String {
     let trimmed = label.trim();
     if trimmed.is_empty() {
         DEFAULT_PASSKEY_LABEL.to_owned()
@@ -601,6 +601,12 @@ fn base64_url(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use serde::de::DeserializeOwned;
+
+    #[test]
+    fn blank_passkey_labels_use_the_persisted_default_name() {
+        assert_eq!(normalized_passkey_label("  "), DEFAULT_PASSKEY_LABEL);
+        assert_eq!(normalized_passkey_label("  Personal Mac  "), "Personal Mac");
+    }
 
     fn through_json<T>(value: &T) -> Result<T, JsError>
     where

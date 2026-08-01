@@ -153,6 +153,12 @@ enum DecodedDeviceAccessProfile {
     FutureVersion,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum DeviceAccessProfileUpdate {
+    Writable(DeviceAccessProfile),
+    PreserveFutureVersion,
+}
+
 #[derive(Deserialize)]
 struct DeviceAccessProfileVersion {
     version: u32,
@@ -185,14 +191,22 @@ pub(crate) async fn load_device_access_profile() -> Result<DeviceAccessProfile, 
     })
 }
 
-async fn load_device_access_profile_for_update() -> Result<Option<DeviceAccessProfile>, NookError> {
+async fn load_device_access_profile_for_update() -> Result<DeviceAccessProfileUpdate, NookError> {
     let Some(raw) = idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
-        return Ok(Some(DeviceAccessProfile::default()));
+        return Ok(DeviceAccessProfileUpdate::Writable(
+            DeviceAccessProfile::default(),
+        ));
     };
     Ok(match decode_device_access_profile(&raw) {
-        DecodedDeviceAccessProfile::Current(profile) => Some(profile),
-        DecodedDeviceAccessProfile::RecoverableDefault => Some(DeviceAccessProfile::default()),
-        DecodedDeviceAccessProfile::FutureVersion => None,
+        DecodedDeviceAccessProfile::Current(profile) => {
+            DeviceAccessProfileUpdate::Writable(profile)
+        }
+        DecodedDeviceAccessProfile::RecoverableDefault => {
+            DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default())
+        }
+        DecodedDeviceAccessProfile::FutureVersion => {
+            DeviceAccessProfileUpdate::PreserveFutureVersion
+        }
     })
 }
 
@@ -208,7 +222,9 @@ pub(crate) async fn record_passkey_created(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
     let now = browser_timestamp();
-    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+    let DeviceAccessProfileUpdate::Writable(mut profile) =
+        load_device_access_profile_for_update().await?
+    else {
         return Ok(());
     };
     profile.record_passkey_created(nook_name, observation, now);
@@ -218,7 +234,9 @@ pub(crate) async fn record_passkey_created(
 pub(crate) async fn record_passkey_used(
     observation: PasskeyBrowserObservation,
 ) -> Result<(), NookError> {
-    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+    let DeviceAccessProfileUpdate::Writable(mut profile) =
+        load_device_access_profile_for_update().await?
+    else {
         return Ok(());
     };
     profile.record_passkey_used(observation, browser_timestamp());
@@ -228,7 +246,9 @@ pub(crate) async fn record_passkey_used(
 pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookError> {
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+    let DeviceAccessProfileUpdate::Writable(mut profile) =
+        load_device_access_profile_for_update().await?
+    else {
         return Ok(());
     };
     let passkey = profile
@@ -245,7 +265,9 @@ pub(crate) async fn record_verified_vault_access(
     if device_id.trim().is_empty() || store_id.trim().is_empty() {
         return Ok(());
     }
-    let Some(mut profile) = load_device_access_profile_for_update().await? else {
+    let DeviceAccessProfileUpdate::Writable(mut profile) =
+        load_device_access_profile_for_update().await?
+    else {
         return Ok(());
     };
     profile.record_verified_vault_access(device_id, store_id, browser_timestamp());

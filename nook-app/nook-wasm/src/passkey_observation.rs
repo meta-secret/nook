@@ -148,17 +148,7 @@ fn client_environment() -> PasskeyBrowserObservation {
     let Ok(user_agent) = gloo_utils::window().navigator().user_agent() else {
         return PasskeyBrowserObservation::default();
     };
-    let browser = if user_agent.contains("Edg/") {
-        nook_core::PasskeyObservedBrowser::Edge
-    } else if user_agent.contains("Firefox/") {
-        nook_core::PasskeyObservedBrowser::Firefox
-    } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
-        nook_core::PasskeyObservedBrowser::Chrome
-    } else if user_agent.contains("Safari/") {
-        nook_core::PasskeyObservedBrowser::Safari
-    } else {
-        nook_core::PasskeyObservedBrowser::Other
-    };
+    let browser = observed_browser(&user_agent);
     let platform = if user_agent.contains("Android") {
         nook_core::PasskeyObservedPlatform::Android
     } else if user_agent.contains("iPhone") || user_agent.contains("iPad") {
@@ -176,6 +166,20 @@ fn client_environment() -> PasskeyBrowserObservation {
         browser,
         platform,
         ..PasskeyBrowserObservation::default()
+    }
+}
+
+fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
+    if user_agent.contains("Edg/") || user_agent.contains("EdgiOS/") {
+        nook_core::PasskeyObservedBrowser::Edge
+    } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
+        nook_core::PasskeyObservedBrowser::Firefox
+    } else if user_agent.contains("CriOS/") || user_agent.contains("Chrome/") {
+        nook_core::PasskeyObservedBrowser::Chrome
+    } else if user_agent.contains("Safari/") {
+        nook_core::PasskeyObservedBrowser::Safari
+    } else {
+        nook_core::PasskeyObservedBrowser::Other
     }
 }
 
@@ -206,6 +210,18 @@ mod tests {
         assert_eq!(
             aaguid(&data).as_deref(),
             Some("01010101-0101-0101-0101-010101010101")
+        );
+    }
+
+    #[test]
+    fn recognizes_ios_browser_tokens_before_safari_fallback() {
+        assert_eq!(
+            observed_browser("Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"),
+            nook_core::PasskeyObservedBrowser::Firefox
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"),
+            nook_core::PasskeyObservedBrowser::Edge
         );
     }
 }

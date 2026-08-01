@@ -373,7 +373,13 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="space-y-1">
               <h2 class="text-lg font-semibold text-foreground">{vault.t('devices_access.this_browser')}</h2>
-              <p class="text-sm text-muted-foreground">{vault.t('devices_access.this_browser_desc')}</p>
+              <p class="text-sm text-muted-foreground">
+                {#if loadState.view.protection === DeviceAccessProtectionKind.CompanionSession}
+                  {vault.t('devices_access.this_browser_companion_desc')}
+                {:else}
+                  {vault.t('devices_access.this_browser_desc')}
+                {/if}
+              </p>
             </div>
             <div class="flex flex-wrap justify-end gap-2">
               <span

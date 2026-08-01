@@ -693,6 +693,7 @@
     "provenance_unknown_desc": "Unavailable or predates this dashboard.",
     "this_browser": "This browser identity",
     "this_browser_desc": "The private age key remains wrapped in browser storage and never appears on this page.",
+    "this_browser_companion_desc": "This active identity was provided for the current companion session. Its private key never appears on this page.",
     "identity_unlocked": "Identity unlocked",
     "identity_locked": "Identity locked",
     "identity_missing": "No browser identity",

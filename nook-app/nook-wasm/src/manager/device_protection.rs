@@ -179,13 +179,14 @@ impl NookVaultManager {
         device_mode: nook_core::DeviceMode,
     ) -> Result<(), JsError> {
         let mode = passkey_mode_from_device_mode(device_mode);
+        let passkey_label = passkey_browser::normalized_passkey_label(passkey_label);
         let setup = self.begin_device_protection().await?;
         let user_handle = setup.user_handle();
         let prf_input = setup.prf_input();
         let creation_options = passkey_browser::creation_options(
             rp_id,
             rp_name,
-            passkey_label,
+            &passkey_label,
             &user_handle,
             &prf_input,
         )?;
@@ -225,9 +226,9 @@ impl NookVaultManager {
         };
         let result = self.save_passkey_material(&material).await;
         let device_id = result?;
-        let _ = device_access::record_passkey_created(passkey_label, observation).await;
+        let _ = device_access::record_passkey_created(&passkey_label, observation).await;
         let updated_label =
-            passkey_browser::passkey_label_with_device_id(passkey_label, &device_id);
+            passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
         passkey_browser::signal_current_user_details(rp_id, &user_handle, &updated_label).await;
         Ok(())
     }

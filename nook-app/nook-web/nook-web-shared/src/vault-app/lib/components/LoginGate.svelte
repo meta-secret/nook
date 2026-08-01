@@ -4,6 +4,10 @@
   import { onMount, untrack } from 'svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    DevicesAccessNudgePreference,
+    parseDevicesAccessNudgePreference,
+  } from './devices-access-dashboard-state'
+  import {
     SentinelVaultUnlockState,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
@@ -151,13 +155,18 @@
   let enrollmentPanelOpen = $state(false)
   let showProviderSetupLink = $state(false)
   let devicesAccessOpen = $state(false)
-  let devicesAccessNudgeVisible = $state(false)
+  let devicesAccessNudgePreference = $state(
+    DevicesAccessNudgePreference.Visible,
+  )
   const devicesAccessNudgeStorageKey = 'nook.devices-access.nudge-dismissed.v1'
 
   function dismissDevicesAccessNudge(): void {
-    devicesAccessNudgeVisible = false
+    devicesAccessNudgePreference = DevicesAccessNudgePreference.Dismissed
     try {
-      localStorage.setItem(devicesAccessNudgeStorageKey, '1')
+      localStorage.setItem(
+        devicesAccessNudgeStorageKey,
+        DevicesAccessNudgePreference.Dismissed,
+      )
     } catch {
       // Browser preference only. Private browsing may reject local storage.
     }
@@ -165,10 +174,11 @@
 
   onMount(() => {
     try {
-      devicesAccessNudgeVisible =
-        localStorage.getItem(devicesAccessNudgeStorageKey) !== '1'
+      devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
+        localStorage.getItem(devicesAccessNudgeStorageKey),
+      )
     } catch {
-      devicesAccessNudgeVisible = true
+      devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible
     }
   })
 
@@ -338,7 +348,7 @@
       </Button>
     </div>
 
-    {#if devicesAccessNudgeVisible}
+    {#if devicesAccessNudgePreference === DevicesAccessNudgePreference.Visible}
       <aside
         class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/8 p-4 sm:flex-row sm:items-center sm:justify-between"
         data-testid="devices-access-nudge"

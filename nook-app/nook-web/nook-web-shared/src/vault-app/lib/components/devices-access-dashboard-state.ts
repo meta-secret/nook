@@ -17,3 +17,17 @@ export enum DashboardTextKind {
 export type DashboardText =
   | { kind: typeof DashboardTextKind.Unknown }
   | { kind: typeof DashboardTextKind.Known; value: string };
+
+export enum DevicesAccessNudgePreference {
+  Visible = "visible",
+  Dismissed = "dismissed",
+}
+
+export function parseDevicesAccessNudgePreference(
+  serialized: string | null,
+): DevicesAccessNudgePreference {
+  return serialized === DevicesAccessNudgePreference.Dismissed ||
+    serialized === "1"
+    ? DevicesAccessNudgePreference.Dismissed
+    : DevicesAccessNudgePreference.Visible;
+}
