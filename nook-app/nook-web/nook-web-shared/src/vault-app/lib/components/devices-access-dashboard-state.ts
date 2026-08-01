@@ -35,6 +35,11 @@ export enum ProviderSaveKind {
   Failed = "failed",
 }
 
+export enum DashboardFocusTargetKind {
+  None = "none",
+  DeviceIdentityDetails = "device-identity-details",
+}
+
 export enum DevicesAccessNudgePreference {
   Visible = "visible",
   Dismissed = "dismissed",

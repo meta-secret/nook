@@ -42,6 +42,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    DashboardFocusTargetKind,
     DashboardLoadKind,
     type DashboardLoadState,
     type DashboardText,
@@ -95,6 +96,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   })
   let providerDraft = $state('')
   let providerSaveState = $state<ProviderSaveKind>(ProviderSaveKind.Idle)
+  let pendingFocusTarget = $state<DashboardFocusTargetKind>(
+    DashboardFocusTargetKind.None,
+  )
   let loadGeneration = 0
 
   const isPasskeyProtection = $derived(
@@ -141,6 +145,27 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 
   function textValue(value: DashboardText): string {
     return value.kind === DashboardTextKind.Known ? value.value : ''
+  }
+
+  function focusPendingDashboardTarget(): void {
+    if (
+      pendingFocusTarget !== DashboardFocusTargetKind.DeviceIdentityDetails
+    ) {
+      return
+    }
+    const target = document.querySelector<HTMLElement>(
+      '[data-testid="devices-access-device-identity"] > summary',
+    )
+    if (!target) return
+    pendingFocusTarget = DashboardFocusTargetKind.None
+    target.focus()
+  }
+
+  async function focusAfterProtectionReady(): Promise<void> {
+    pendingFocusTarget = DashboardFocusTargetKind.DeviceIdentityDetails
+    if (loadState.kind !== DashboardLoadKind.Ready) return
+    await tick()
+    focusPendingDashboardTarget()
   }
 
   async function loadDashboard(): Promise<void> {
@@ -192,6 +217,8 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
         }
         providerDraft = textValue(view.providerLabel)
         loadState = { kind: DashboardLoadKind.Ready, view }
+        await tick()
+        focusPendingDashboardTarget()
       } finally {
         snapshot.free()
       }
@@ -521,7 +548,11 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 
           {#if loadState.view.protection === DeviceAccessProtectionKind.Missing}
             <div class="border-t border-border/60 pt-5" data-testid="devices-access-prepare-browser">
-              <DeviceProtectionGate {vault} embedded />
+              <DeviceProtectionGate
+                {vault}
+                embedded
+                onProtectionReady={() => void focusAfterProtectionReady()}
+              />
             </div>
           {:else if isPasskeyProtection}
             <div class="grid gap-4 border-t border-border/60 pt-5 sm:grid-cols-2">

@@ -7,9 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::NookError;
 
+use super::indexed_db::{
+    idb_delete_key, idb_get_string, idb_update_string, load_wrapped_device_identity,
+};
 #[cfg(test)]
-use super::indexed_db::idb_put_string;
-use super::indexed_db::{idb_delete_key, idb_get_string, idb_update_string};
+use super::indexed_db::{idb_put_string, save_wrapped_device_identity};
 
 const DEVICE_ACCESS_PROFILE_KEY: &str = "device_access_profile";
 const DEVICE_ACCESS_PROFILE_VERSION: u32 = 1;
@@ -177,15 +179,15 @@ impl DeviceAccessProfile {
         credential_fingerprint: &str,
         provider_label: String,
     ) -> Result<(), NookError> {
-        let passkey = self
-            .passkey
-            .as_mut()
-            .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
-            .ok_or_else(|| {
-                NookError::Database(
-                    "Passkey changed before its provider label was saved".to_owned(),
-                )
-            })?;
+        let passkey = self.passkey.get_or_insert_with(|| PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            ..PasskeyAccessProfile::default()
+        });
+        if passkey.credential_fingerprint != credential_fingerprint {
+            return Err(NookError::Database(
+                "Passkey changed before its provider label was saved".to_owned(),
+            ));
+        }
         passkey.provider_label = provider_label;
         Ok(())
     }
@@ -419,6 +421,19 @@ pub(crate) async fn set_passkey_provider_label(
     credential_fingerprint: &str,
     label: &str,
 ) -> Result<(), NookError> {
+    let (_, wrapped_identity) = load_wrapped_device_identity()
+        .await?
+        .ok_or_else(|| NookError::Database("Passkey identity is no longer available".to_owned()))?;
+    let current_credential_fingerprint = nook_core::passkey_credential_identifier(
+        &wrapped_identity
+            .credential_id_bytes()
+            .map_err(NookError::from)?,
+    );
+    if current_credential_fingerprint != credential_fingerprint {
+        return Err(NookError::Database(
+            "Passkey changed before its provider label was saved".to_owned(),
+        ));
+    }
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
     update_device_access_profile(
@@ -667,6 +682,22 @@ mod tests {
     }
 
     #[test]
+    fn provider_label_update_initializes_recoverable_missing_metadata() -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+
+        profile.set_passkey_provider_label("passkey:current", "Proton Pass".to_owned())?;
+
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("recovered passkey profile is missing"))?;
+        assert_eq!(passkey.credential_fingerprint, "passkey:current");
+        assert_eq!(passkey.provider_label, "Proton Pass");
+        assert_eq!(passkey.created_at, PasskeyCreatedAtEvidence::Unavailable);
+        Ok(())
+    }
+
+    #[test]
     fn timestamp_evidence_deserializes_legacy_values_without_conflating_new_states()
     -> anyhow::Result<()> {
         let legacy_known = r#"{
@@ -745,6 +776,41 @@ mod tests {
             load_device_access_profile().await?,
             DeviceAccessProfile::default()
         );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn provider_label_recovers_missing_metadata_only_for_the_wrapped_passkey()
+    -> Result<(), NookError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+        let secret =
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
+        let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
+        let credential_id = [7u8; 32];
+        let wrapped = nook_core::passkey_derived_device_identity_record(
+            &credential_id,
+            setup.user_handle(),
+            setup.prf_input(),
+        )?;
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
+        delete_device_access_profile().await?;
+
+        assert!(
+            set_passkey_provider_label("passkey:stale", "Bitwarden")
+                .await
+                .is_err()
+        );
+        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+        set_passkey_provider_label(&credential_fingerprint, "Bitwarden").await?;
+
+        let profile = load_device_access_profile().await?;
+        let passkey = profile.passkey.ok_or_else(|| {
+            NookError::Database("Recovered passkey profile is missing".to_owned())
+        })?;
+        assert_eq!(passkey.credential_fingerprint, credential_fingerprint);
+        assert_eq!(passkey.provider_label, "Bitwarden");
+        let _ = rexie::Rexie::delete("nook_db").await;
         Ok(())
     }
 

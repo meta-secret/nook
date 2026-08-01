@@ -38,6 +38,14 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-prepare-browser'),
     ).toBeVisible()
     await expect(dashboard).toContainText('No local vaults yet')
+    await page.getByTestId('device-protection-create-new-choice').click()
+    await page
+      .getByTestId('device-protection-label-input')
+      .fill('Dashboard focus passkey')
+    await page.getByTestId('device-protection-setup-btn').click()
+    await expect(
+      page.getByTestId('devices-access-device-identity').locator('summary'),
+    ).toBeFocused({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('login-devices-access')).toBeFocused()
 
