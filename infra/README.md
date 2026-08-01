@@ -46,7 +46,10 @@ never copied to a checkout or GitHub.
 `task infra:registry:credential:sync` copies the registry token into
 `~/.nook/cache/` and the repo `.nook/cache/`, runs `docker login` for
 `registry.dev.nokey.sh`, and upserts GitHub Actions secrets
-`NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`, and `NOOK_REGISTRY_PASSWORD`.
+`NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`, `NOOK_REGISTRY_PASSWORD`,
+`NOOK_REGISTRY_REMOTE_USERNAME`, and `NOOK_REGISTRY_REMOTE_PASSWORD`. The Main
+identity administers the registry; the Remote identity may update only
+`nook/remote-buildcache/**` and can read but not update `nook/buildcache/**`.
 
 DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
 Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can
@@ -57,7 +60,9 @@ after k0s firewall updates. Public Redis `:6380` is retired.
 Hosted Docker builds use BuildKit `type=registry` cache refs on
 `registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
 restore them read-only after `docker login`. Explicit Remote tasks use
-branch-isolated Zot refs with Main fallback and write only those branch refs. Rust compiler vertices use
+branch-isolated Zot refs with Main fallback and write only those branch refs in
+the separately authorized `nook/remote-buildcache/**` repository path. Zot
+deduplicates identical layer blobs shared with Main. Rust compiler vertices use
 authenticated SeaweedFS S3 through stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 

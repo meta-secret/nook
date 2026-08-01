@@ -346,13 +346,14 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(bake.contains("variable \"GHA_CACHE_SEED_SCOPE_SUFFIX\""));
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
     assert!(bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
+    assert!(bake.contains(
+        "write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook/remote-buildcache\" : \"nook/buildcache\""
+    ));
     assert!(bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
     assert!(bake.contains("rust_wasm_deps_write_scope"));
-    assert!(
-        bake.contains(
-            "nook/buildcache/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
-        )
-    );
+    assert!(bake.contains(
+        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
+    ));
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
         .context("bake file must define the WASM source cache inputs")?
@@ -396,18 +397,18 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             "delivery cache must isolate immutable PR job generations: {scope}"
         );
     }
-    for main_scope in [
-        "nook/buildcache/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "nook/buildcache/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+    for write_scope in [
+        "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
     ] {
         assert!(
-            bake.contains(main_scope),
-            "registry BuildKit cache ref is missing: {main_scope}"
+            bake.contains(write_scope),
+            "registry BuildKit write cache ref is missing: {write_scope}"
         );
     }
     assert!(

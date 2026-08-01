@@ -576,6 +576,8 @@ registry credentials are configured. Cache restoration is an optimization: an
 unavailable cache falls back to a correct cold build. Main publishes shared
 cache manifests after lane verification. Explicit Remote tasks restore their
 deterministic branch ref first and Main second, then export only the branch ref;
+the Remote credential can update only `nook/remote-buildcache/**` and has read-only
+access to Main's `nook/buildcache/**` repository path. Other
 pull-request, release, and e2e jobs remain read-only. Fork pull requests do not
 receive credentials. Hive images also publish and pull through Zot. There is no
 host `:5000` listener and no `kubectl port-forward` for the registry.

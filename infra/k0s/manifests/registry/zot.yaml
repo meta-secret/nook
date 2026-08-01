@@ -26,6 +26,30 @@ data:
           "htpasswd": {
             "path": "/etc/zot/htpasswd"
           }
+        },
+        "accessControl": {
+          "repositories": {
+            "nook/buildcache/**": {
+              "policies": [
+                {
+                  "users": ["nook-remote"],
+                  "actions": ["read"]
+                }
+              ]
+            },
+            "nook/remote-buildcache/**": {
+              "policies": [
+                {
+                  "users": ["nook-remote"],
+                  "actions": ["read", "create", "update"]
+                }
+              ]
+            }
+          },
+          "adminPolicy": {
+            "users": ["nook"],
+            "actions": ["read", "create", "update", "delete"]
+          }
         }
       },
       "log": {

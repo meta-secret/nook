@@ -82,8 +82,8 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     );
     assert!(!workflow.contains("runs-on: nook"));
     assert!(
-        workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
-            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}")
+        workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
+            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}")
             && workflow.contains("sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}")
             && workflow.contains("sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}"),
         "remote jobs must authenticate to Zot layers and SeaweedFS compiler objects"
@@ -91,8 +91,12 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     let secret_refs = workflow.matches("${{ secrets.").count();
     assert_eq!(
         secret_refs,
-        workflow.matches("secrets.NOOK_REGISTRY_USERNAME").count()
-            + workflow.matches("secrets.NOOK_REGISTRY_PASSWORD").count()
+        workflow
+            .matches("secrets.NOOK_REGISTRY_REMOTE_USERNAME")
+            .count()
+            + workflow
+                .matches("secrets.NOOK_REGISTRY_REMOTE_PASSWORD")
+                .count()
             + workflow.matches("secrets.NOOK_SCCACHE_ACCESS_KEY").count()
             + workflow.matches("secrets.NOOK_SCCACHE_SECRET_KEY").count(),
         "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"

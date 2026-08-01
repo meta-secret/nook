@@ -56,8 +56,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -75,8 +75,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -94,8 +94,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -113,8 +113,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -132,8 +132,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -151,8 +151,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -170,8 +170,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -189,8 +189,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -208,8 +208,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -227,8 +227,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -246,8 +246,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -275,8 +275,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -294,8 +294,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -323,8 +323,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -342,8 +342,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -361,8 +361,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
@@ -380,8 +380,8 @@ jobs:
       - uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"

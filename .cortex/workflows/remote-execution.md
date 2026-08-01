@@ -40,7 +40,9 @@ The command accepts only catalog names. The workflow contains the corresponding
 literal Taskfile command; user input is never evaluated as arbitrary shell.
 Remote jobs receive read-only repository and Actions permissions, restore only
 the trusted Main BuildKit lineage as fallback, and can write only deterministic
-branch-isolated Zot cache refs. Rust compiler vertices also use the bucket-scoped
+branch-isolated Zot cache refs under `nook/remote-buildcache/**`. Zot repository
+authorization gives the Remote identity read-only access to `nook/buildcache/**`,
+so tag selection alone is not the security boundary. Rust compiler vertices also use the bucket-scoped
 SeaweedFS build identity to read and write compiler objects. They cannot replace
 Main Zot refs or administer SeaweedFS identities and buckets.
 
@@ -48,7 +50,7 @@ The two cache layers solve different cold-start costs:
 
 - Zot stores BuildKit layers, Cargo downloads, and completed dependency stages.
   A Remote branch restores its own ref first and Main second, then exports only
-  its own ref.
+  its own ref. Both repositories use Zot's content-addressed blob deduplication.
 - SeaweedFS stores `sccache` compiler objects. A genuinely new dependency compile
   writes objects that later Rust/WASM vertices can reuse even when their Docker
   layer key differs.

@@ -467,7 +467,7 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     for required in [
         "home_cache=\"${HOME}/.nook/cache\"",
         "docker login \"$host\"",
-        "~/.nook/cache",
+        "gh secret set NOOK_REGISTRY_REMOTE_PASSWORD",
     ] {
         assert!(
             registry.contains(required),
@@ -488,6 +488,18 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         manifest.contains("\"compat\": [\"docker2s2\"]"),
         "Zot must accept legacy Docker Schema 2 manifests without changing their digests"
     );
+    for required in [
+        "\"nook/buildcache/**\"",
+        "\"nook/remote-buildcache/**\"",
+        "\"users\": [\"nook-remote\"]",
+        "\"actions\": [\"read\", \"create\", \"update\"]",
+        "\"adminPolicy\"",
+    ] {
+        assert!(
+            manifest.contains(required),
+            "Zot repository authorization is missing: {required}"
+        );
+    }
     let tasks = read("infra/tasks/registry.yml");
     let deploy = tasks
         .split("\n  registry:deploy:\n")
@@ -530,6 +542,9 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "https://$host/v2/",
         "test \"$public_code\" = 401",
         "test \"$public_auth\" = 200",
+        "test \"$remote_main_write\" = 403",
+        "test \"$remote_branch_write\" = 202",
+        "nook/remote-buildcache/nook-authz-probe",
         "Legacy loopback registry unit must be removed",
     ] {
         assert!(
@@ -547,8 +562,14 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         credential.contains("htpasswd")
             && credential.contains("-nbB")
             && credential.contains("nook-zot-htpasswd")
-            && credential.contains("registry-password"),
-        "registry credential ensure must materialize bcrypt htpasswd for Zot"
+            && credential.contains("registry-password")
+            && credential.contains("registry-remote-password"),
+        "registry credential lifecycle must materialize separate Main and Remote Zot identities"
+    );
+    assert!(
+        tasks.contains("gh secret set NOOK_REGISTRY_REMOTE_USERNAME")
+            && tasks.contains("gh secret set NOOK_REGISTRY_REMOTE_PASSWORD"),
+        "registry credential sync must publish only the scoped Remote Zot identity to Remote jobs"
     );
 
     let uninstall = read("infra/tasks/k0s.yml");
