@@ -31,8 +31,8 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
-  # Local runtime Rust commands may use authenticated SeaweedFS S3 sccache. Docker build stages
-  # never receive these credentials and rely on BuildKit dependency layers instead.
+  # Rust commands and cache-missed Docker compiler vertices use authenticated SeaweedFS S3
+  # sccache. Stable BuildKit secret IDs keep credential values out of images and cache checksums.
   SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
   SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
   SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
@@ -64,6 +64,18 @@ vars:
         mounts="$mounts --mount type=bind,src=$secret_file,dst=/run/secrets/sccache_s3_secret_key,readonly";
       fi;
       printf '%s' "$mounts"
+  SCCACHE_S3_BUILD_SECRETS:
+    sh: >-
+      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+      secrets="";
+      if [ -n "$access_file" ] && [ -r "$access_file" ] &&
+         [ -n "$secret_file" ] && [ -r "$secret_file" ]; then
+        secrets="--allow=fs.read=$access_file --allow=fs.read=$secret_file";
+        secrets="$secrets --set '*.secrets=id=sccache_s3_access_key,src=$access_file'";
+        secrets="$secrets --set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'";
+      fi;
+      printf '%s' "$secrets"
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -72,6 +84,7 @@ vars:
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
+    {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl

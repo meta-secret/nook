@@ -112,30 +112,28 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
 }
 
 #[test]
-fn github_actions_keep_remote_credentials_out_of_delivery_builds() -> anyhow::Result<()> {
-    assert_hosted_docker_builds_use_buildkit_only();
+fn trusted_github_actions_share_compiler_objects_without_weakening_prs() -> anyhow::Result<()> {
+    assert_hosted_docker_builds_connect_scoped_compiler_cache();
     assert_workflows_scope_cache_credentials();
     assert_rust_build_cache_boundary();
     Ok(())
 }
 
-fn assert_hosted_docker_builds_use_buildkit_only() {
+fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     let action = read(".github/actions/nook-docker-setup/action.yml");
     for required in [
-        "NOOK_SCCACHE_BACKEND=direct_compile",
-        "NOOK_SCCACHE_BACKEND_REASON=hosted_buildkit_only",
+        "sccache-access-key",
+        "sccache-secret-key",
+        "uses: ./.github/actions/nook-cache-connect",
+        "isolated-cache-write",
     ] {
         assert!(
             action.contains(required),
             "hosted Docker cache configuration is missing: {required}"
         );
     }
-    assert!(
-        !action.contains("sccache-access-key")
-            && !action.contains("cache-redis-password")
-            && !action.contains("uses: ./.github/actions/nook-cache-connect"),
-        "hosted Docker builds must rely on BuildKit without attaching S3 credentials"
-    );
+    assert!(!action.contains("cache-redis-password"));
+    assert!(!action.contains("hosted_buildkit_only"));
     assert!(!action.contains("cloudflare-client"));
     assert!(!action.contains("ssh -fNT") && !action.contains("CACHE_SSH_PRIVATE_KEY"));
 
@@ -195,12 +193,18 @@ fn assert_workflows_scope_cache_credentials() {
 
     let main = read(".github/workflows/main.yml");
     assert!(
-        !main.contains("NOOK_SCCACHE_ACCESS_KEY")
-            && !main.contains("NOOK_SCCACHE_SECRET_KEY")
+        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 2
+            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 2
             && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
-        "hosted cache publishers must stay secret-free so their BuildKit compiler layers are reusable by PRs"
+        "trusted Main Rust and WASM producers must populate SeaweedFS compiler objects"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
+
+    let remote = read(".github/workflows/remote.yml");
+    let selected_jobs = remote.matches("if: inputs.task == '").count();
+    assert_eq!(remote.matches("NOOK_SCCACHE_ACCESS_KEY").count(), selected_jobs);
+    assert_eq!(remote.matches("NOOK_SCCACHE_SECRET_KEY").count(), selected_jobs);
+    assert_eq!(remote.matches("isolated-cache-write: \"true\"").count(), selected_jobs);
 
     let hive = read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
@@ -211,17 +215,18 @@ fn assert_workflows_scope_cache_credentials() {
 fn assert_rust_build_cache_boundary() {
     let bake = read("nook-app/docker-bake.hcl");
     let app_tasks = read("nook-app/Taskfile.yml");
+    assert!(!bake.contains("SCCACHE_S3_ACCESS_KEY"));
+    assert!(!bake.contains("secret =") && !bake.contains("SCCACHE_REDIS"));
     assert!(
-        !bake.contains("SCCACHE_S3_ACCESS_KEY")
-            && !bake.contains("id=sccache_s3_")
-            && !bake.contains("secret =")
-            && !bake.contains("SCCACHE_REDIS"),
-        "Bake must not attach S3 credentials to hosted Docker builds"
+        app_tasks.contains("--set '*.secrets=id=sccache_s3_access_key,src=$access_file'")
+            && app_tasks.contains("--set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'")
+            && app_tasks.contains("--allow=fs.read=$access_file")
+            && app_tasks.contains("--allow=fs.read=$secret_file")
+            && !app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
+        "Bake must receive compiler credentials through stable secret IDs and runner-local files"
     );
-    assert!(
-        !app_tasks.contains("SCCACHE_REDIS_BAKE_ALLOW"),
-        "Task must not grant BuildKit access to local sccache credentials for delivery bake"
-    );
+    assert!(!app_tasks.contains("--build-arg SCCACHE_S3_ACCESS_KEY"));
+    assert!(!app_tasks.contains("--build-arg SCCACHE_S3_SECRET_KEY"));
 
     let wrapper = read("nook-app/docker/sccache-wrapper.sh");
     assert!(wrapper.contains("/run/secrets/sccache_s3_access_key"));
@@ -240,17 +245,27 @@ fn assert_rust_build_cache_boundary() {
     assert!(bake.contains("SCCACHE_S3_MODE") && bake.contains("= SCCACHE_S3_MODE"));
     assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
 
-    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
-    let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
-    for (path, dockerfile) in [
-        ("nook-app/nook-core/Dockerfile", core_dockerfile.as_str()),
-        ("nook-app/nook-wasm/Dockerfile", wasm_dockerfile.as_str()),
+    for path in [
+        "nook-app/docker/base.Dockerfile",
+        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-wasm/Dockerfile",
     ] {
+        let dockerfile = read(path);
+        let reports = dockerfile.matches("nook-sccache-report ").count();
         assert!(
-            !dockerfile.contains("--mount=type=secret")
-                && !dockerfile.contains("/run/secrets/sccache_s3_"),
-            "{path} must not attach secrets to compiler layers"
+            reports > 0
+                && dockerfile
+                    .matches("--mount=type=secret,id=sccache_s3_access_key,required=false")
+                    .count()
+                    == reports
+                && dockerfile
+                    .matches("--mount=type=secret,id=sccache_s3_secret_key,required=false")
+                    .count()
+                    == reports,
+            "every reported compiler vertex in {path} must use the same two optional secret mounts"
         );
+        assert!(!dockerfile.contains("ARG SCCACHE_S3_ACCESS_KEY"));
+        assert!(!dockerfile.contains("ARG SCCACHE_S3_SECRET_KEY"));
     }
 }
 
@@ -291,8 +306,12 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
     assert!(setup.contains("main-cache-only requires cache-write=false"));
+    assert!(setup.contains("isolated-cache-write requires workflow_dispatch"));
+    assert!(setup.contains("branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""));
+    assert!(setup.contains("scope_suffix=\"-remote-$branch_hash\""));
+    assert!(setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
+    assert!(setup.contains("GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled"));
     assert!(!setup.contains("cache_total_count()"));
-    assert!(!setup.contains("GHA_CACHE_SCOPE_SUFFIX=$scope_suffix"));
 
     assert_release_cache_fingerprint_contract()?;
 
@@ -303,11 +322,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(bake.contains("variable \"GHA_RUST_WASM_DEPS_SCOPE\""));
     assert!(bake.contains("variable \"NOOK_REGISTRY_CACHE_HOST\""));
     assert!(bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
-    assert!(
-        bake.contains(
-            "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,timeout=10m"
-        )
-    );
+    assert!(bake.contains("rust_wasm_deps_write_scope"));
+    assert!(bake.contains(
+        "nook/buildcache/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
+    ));
     let wasm_source_cache = bake
         .split_once("rust_wasm_source_cache_from =")
         .context("bake file must define the WASM source cache inputs")?
@@ -327,6 +345,15 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}:buildcache"
     ));
     assert!(!bake.contains("type=gha"));
+    for fallback in [
+        "nook/buildcache/nook-rust-base-v1:buildcache",
+        "nook/buildcache/nook-rust-deps-v2:buildcache",
+        "nook/buildcache/nook-rust-native-source-v2:buildcache",
+        "nook/buildcache/nook-rust-wasm-source-v2:buildcache",
+        "nook/buildcache/nook-web-v1:buildcache",
+    ] {
+        assert!(bake.contains(fallback), "Main fallback cache ref is missing: {fallback}");
+    }
     for scope in [
         "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-rust-deps-v2${GHA_CACHE_SCOPE_SUFFIX}",

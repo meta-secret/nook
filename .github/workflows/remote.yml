@@ -58,8 +58,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task preflight
 
   rust-test:
@@ -74,8 +77,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task remote:rust:test
 
   rust-lint:
@@ -90,8 +96,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task rust:lint
 
   rust-coverage:
@@ -106,8 +115,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task rust:coverage
 
   wasm-build:
@@ -122,8 +134,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task wasm:build
 
   wasm-test:
@@ -138,8 +153,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task wasm:test
 
   wasm-test-browser:
@@ -154,8 +172,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task wasm:test:browser
 
   web-check:
@@ -170,8 +191,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task remote:web:check
 
   web-test:
@@ -186,8 +210,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task remote:web:test
 
   web-build:
@@ -202,8 +229,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task web:build
 
   web-e2e:
@@ -218,8 +248,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: >-
           task web:test:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
@@ -244,8 +277,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task remote:extension:check
 
   extension-e2e:
@@ -260,8 +296,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: >-
           task extension:test:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts
@@ -286,8 +325,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task hive:verify
 
   check:
@@ -302,8 +344,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task check
 
   ci-pr:
@@ -318,8 +363,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: task ci:pr
 
   ci-pr-e2e:
@@ -334,8 +382,11 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           cache-write: "false"
           main-cache-only: "true"
+          isolated-cache-write: "true"
       - run: >-
           task ci:pr:e2e
           E2E_ARTIFACT_DIR=${{ runner.temp }}/nook-e2e-artifacts

@@ -71,6 +71,8 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
       - name: Native Rust format, tests, and coverage
         run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
@@ -135,6 +137,8 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
       - name: WASM clippy, build, and package export
         run: task ci:pr:wasm CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
         env:

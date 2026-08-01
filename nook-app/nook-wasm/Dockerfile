@@ -39,7 +39,9 @@ RUN touch nook-app-common/src/i18n.rs
 # in parallel with the export path prevents the Node-test join from rebuilding workspace crates.
 FROM builder-wasm-source AS builder-wasm-clippy
 
-RUN cargo clippy --release --target wasm32-unknown-unknown \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy --release --target wasm32-unknown-unknown \
       -p nook-wasm -p nook-companion-wasm \
       -- -D warnings \
     && nook-sccache-report wasm-clippy \
@@ -48,7 +50,9 @@ RUN cargo clippy --release --target wasm32-unknown-unknown \
 FROM builder-wasm-source AS builder-wasm-build
 
 # Emit the vault-app WASM package and the tiny companion package into the shared web source tree.
-RUN case "$WASM_BUILD_MODE" in \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    case "$WASM_BUILD_MODE" in \
       prod) wasm_opt_flag="" && stamp_mode="optimized" ;; \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
@@ -86,7 +90,9 @@ FROM builder-wasm-source AS builder-wasm-tests
 
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
-RUN CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    CARGO_BUILD_TARGET=wasm32-unknown-unknown cargo build --tests --release -p nook-wasm -p nook-companion-wasm \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
 
@@ -101,7 +107,9 @@ COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm
 COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
-RUN wasm-pack test --node --release nook-wasm \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    wasm-pack test --node --release nook-wasm \
     && nook-sccache-report wasm-node-test
 
 FROM scratch AS wasm-export

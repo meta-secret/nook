@@ -5,10 +5,9 @@ set -eu
 access_file=/run/secrets/sccache_s3_access_key
 secret_file=/run/secrets/sccache_s3_secret_key
 
-# Trusted runtime commands mount the SeaweedFS S3 credentials. Image-build RUNs
-# deliberately do not: secret-dependent compiler vertices cannot be reused safely
-# across delivery workflows. In external mode, compile directly when credentials
-# are absent; local mode remains passwordless for offline builds.
+# Runtime commands and cache-missed BuildKit compiler vertices mount the same
+# stable secret IDs. BuildKit excludes secret contents from cache checksums; the
+# IDs and target paths remain constant across all builds.
 if [ "${NOOK_SCCACHE_S3_MODE:-local}" = external ] \
   && [ -z "${AWS_ACCESS_KEY_ID:-}" ] \
   && [ ! -r "$access_file" ]; then

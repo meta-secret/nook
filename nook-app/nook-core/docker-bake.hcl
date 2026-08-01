@@ -1,6 +1,6 @@
 // nook-core build targets: cargo-chef dependency cache + native verify warm-up.
 // `builder-deps` is also the shared base for the wasm build (see nook-app/nook-wasm/docker-bake.hcl).
-// The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust GHA scope.
+// The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust Zot refs.
 
 // Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
 target "builder-deps" {

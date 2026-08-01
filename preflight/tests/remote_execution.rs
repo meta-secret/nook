@@ -83,19 +83,28 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     assert!(!workflow.contains("runs-on: nook"));
     assert!(
         workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
-            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
-        "remote jobs must authenticate to registry.dev.nokey.sh for BuildKit cache restore"
+            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}")
+            && workflow.contains("sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}")
+            && workflow.contains("sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}"),
+        "remote jobs must authenticate to Zot layers and SeaweedFS compiler objects"
     );
     let secret_refs = workflow.matches("${{ secrets.").count();
     assert_eq!(
         secret_refs,
         workflow.matches("secrets.NOOK_REGISTRY_USERNAME").count()
-            + workflow.matches("secrets.NOOK_REGISTRY_PASSWORD").count(),
-        "remote workflow may only use the Nook registry login secrets"
+            + workflow.matches("secrets.NOOK_REGISTRY_PASSWORD").count()
+            + workflow.matches("secrets.NOOK_SCCACHE_ACCESS_KEY").count()
+            + workflow.matches("secrets.NOOK_SCCACHE_SECRET_KEY").count(),
+        "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
+    assert_eq!(
+        workflow.matches("isolated-cache-write: \"true\"").count(),
+        task_catalog.len(),
+        "every Remote task must write only its branch-isolated Zot namespace"
+    );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
         ("web:check", "remote:web:check"),

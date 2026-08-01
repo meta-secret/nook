@@ -77,8 +77,8 @@ Use this workflow for quality, CI, and deployment changes.
     task owns the normal PR, checks, review loop, squash merge, and replacement
     Main verification; the scheduled implementation worker does not claim it.
     Hive verification materializes its real-lock test and Clippy dependency
-    graphs in independent BuildKit stages so they execute in parallel. Redis
-    `sccache` supplies compiler objects, Main alone publishes both verified GHA
+    graphs in independent BuildKit stages so they execute in parallel. SeaweedFS
+    S3 `sccache` supplies compiler objects, Main publishes shared verified Zot
     BuildKit layers, and pull requests restore them read-only.
 11. **GitHub-hosted agent execution:** When an iteration is coherent, agents run `task format` (and the UI demo contract when UI paths change), commit, and push the exact head. Focused builds/tests use `task remote TASK_NAME=<name>`. Complete PR checks run only after `task pr:validate PR=<number>`. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine. Local mirrors remain available to humans. See [remote-execution.md](remote-execution.md), [coding-bro.md](coding-bro.md), and [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation).
 12. Prove the latest pushed head with explicitly triggered green repository-owned checks before merge or handoff. After a remote failure, fix, format, commit, push, use focused hosted proof as useful, and explicitly trigger complete validation again.

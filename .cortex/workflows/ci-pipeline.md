@@ -11,7 +11,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 | Workflow                                                                             | Trigger                                     | What runs                                                                                                                                                                                                                                        | GitHub PAT                                |
 | ------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| [`remote.yml`](../../.github/workflows/remote.yml)                                   | Manual allowlisted task dispatch            | One selected focused Taskfile command on an independent GitHub-hosted runner; read-only Main cache lineage; no merge authorization | No                                        |
+| [`remote.yml`](../../.github/workflows/remote.yml)                                   | Manual allowlisted task dispatch            | One selected focused Taskfile command on an independent GitHub-hosted runner; branch-isolated Zot writes with Main fallback and scoped SeaweedFS compiler-object writes; no merge authorization | No                                        |
 | [`pr.yml`](../../.github/workflows/pr.yml)                                           | Explicit `ci:validate` / `ci:full-e2e` label | **Rust domain unit tests + coverage**, no-opt WASM, web/unit tests, all three web builds, changed headless UI demo specs + 90-day artifact when UI changes, internal harness plus isolated native Pages aliases, `github-pages` deployment status; `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite | No                                        |
 | [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)     | Successful same-repository PR workflow      | From trusted default-branch code, verify the successful source run and required jobs, validate native/WASM artifact shapes, attach provenance, and publish exact-input handoffs that later PRs may trust | No                                        |
 | [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)                   | Successful PR workflow / PR close           | From the trusted default branch, download the PR demo artifact, publish its 10 largest WebMs to Linear, update the PR comment, and complete/cancel the matching Linear issue | No                                        |
@@ -161,7 +161,7 @@ provider, those handlers read and write real event files under a temp directory.
 PR, main, release, AI, scheduled, manual e2e, and research jobs use
 GitHub-hosted `ubuntu-latest`, so concurrent work scales across the repository's
 hosted-runner allowance instead of queueing on one Docker host. Delivery builds
-restore distinct GitHub Actions BuildKit cache scopes; Main refreshes the
+restore distinct private Zot BuildKit cache refs; Main refreshes the
 default-branch scopes that new PRs may access. Every PR job restores only this
 trusted Main lineage and disables cache export. Exact-input handoffs own
 repeat-run acceleration, so PR jobs do not need mutable branch-local cache
@@ -171,13 +171,13 @@ lineage. Main's preparation selects both dependency targets and the native
 source target as explicit cache-only outputs; consuming them as named build
 contexts is not sufficient to run their dedicated exporters. Only a `push`
 event on `refs/heads/main` may write the shared scopes. Release, agent,
-manual, and PR workflows are read-only. Keeping Main as the sole hosted-cache
-writer also prevents short-lived lineages from exhausting the repository cache
-quota. The self-hosted `nook` label is reserved for runner cleanup while that
-machine remains registered.
+manual, and PR workflows are read-only. Remote workflow dispatches are the one
+branch exception: they write deterministic branch-isolated refs, fall back to
+Main on restore, and cannot replace shared Main manifests. The self-hosted
+`nook` label is reserved for runner cleanup while that machine remains registered.
 
-Focused `remote.yml` jobs retain the same hosted placement and read-only Main
-cache policy. The common Rust test and web/extension check routes use smaller
+Focused `remote.yml` jobs retain the same hosted placement. The common Rust test
+and web/extension check routes use smaller
 source-sealed image targets so their solve graphs stop before unrelated
 coverage, WASM-test, browser, full-verification, and production-build stages.
 These remote-only routes preserve the exact check command while reducing
@@ -527,13 +527,13 @@ branch-local cache generations unnecessary. Native coverage and WASM
 source-sensitive layers have separate v2
 GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
 non-Rust pushes do not repeat unchanged Cargo compilation.
-Hosted Main, manual e2e, and PR Docker builds all omit SeaweedFS S3 sccache
-credentials (`hosted_secret_free_by_design`). This makes Main's exported
-compiler vertices reusable by the secret-free PR solve; a secret-backed Main
-vertex would force every PR to recompile the dependency graph. The hosted remote
-cache is authenticated registry BuildKit refs on `registry.dev.nokey.sh`;
-SeaweedFS S3 sccache remains an optional authorized local/Hive optimization and
-never a correctness input.
+Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote
+tasks use authenticated SeaweedFS S3 `sccache`. Compiler vertices receive the
+bucket-scoped build identity only through stable optional BuildKit secret IDs;
+secret contents do not participate in Docker cache checksums, so secret-free PR
+solves can still restore Main's exported vertices. PR, release, and arbitrary-ref
+workflows do not receive the compiler-cache credentials. SeaweedFS remains an
+optimization and never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
@@ -570,15 +570,15 @@ Sentinel, then verifies app identity, security headers, exact commit, and
 extension-route presence/absence before publishing the GitHub Release.
 
 Delivery BuildKit caches use authenticated `type=registry` refs on
-`registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd). Local builds use
-only their local BuildKit content store unless registry credentials are
-configured. Cache restoration is an optimization: an unavailable cache falls
-back to a correct cold build. Main alone publishes shared cache manifests after
-lane verification; pull-request, remote, release, and e2e jobs restore
-read-only after `docker login` with repository secrets. Fork pull requests do
-not receive those secrets. Hive images also publish and pull through
-`registry.dev.nokey.sh`. There is no host `:5000` listener and no
-`kubectl port-forward` for the registry.
+`registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions
+cache storage. Local builds use only their local BuildKit content store unless
+registry credentials are configured. Cache restoration is an optimization: an
+unavailable cache falls back to a correct cold build. Main publishes shared
+cache manifests after lane verification. Explicit Remote tasks restore their
+deterministic branch ref first and Main second, then export only the branch ref;
+pull-request, release, and e2e jobs remain read-only. Fork pull requests do not
+receive credentials. Hive images also publish and pull through Zot. There is no
+host `:5000` listener and no `kubectl port-forward` for the registry.
 `main.yml` attaches and upserts the three
 custom domains, points the landing and both vault domains at their projects'
 `development` branch aliases so the main-channel build cannot replace a

@@ -35,10 +35,13 @@ registry credentials when needed and never copies them into the repository. The
 containing `secrets/` directory is mode `0700`; credential files are mode
 `0600`.
 
-`task infra:sccache:credential:sync` copies the S3 keys into `~/.nook/cache/`
-(shared across checkouts) and the repo `.nook/cache/`, then upserts GitHub
+`task infra:sccache:credential:sync` copies the bucket-scoped build keys into
+`~/.nook/cache/` (shared across checkouts) and the repo `.nook/cache/`, then upserts GitHub
 Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,
-`NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`.
+`NOOK_SCCACHE_SECRET_KEY`, and `NOOK_SCCACHE_BUCKET`. That identity has only
+read, write, list, and tagging actions for `nook-sccache`. A separate
+administrative identity creates the bucket and remains server-side; its keys are
+never copied to a checkout or GitHub.
 
 `task infra:registry:credential:sync` copies the registry token into
 `~/.nook/cache/` and the repo `.nook/cache/`, runs `docker login` for
@@ -52,10 +55,11 @@ succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
 after k0s firewall updates. Public Redis `:6380` is retired.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
-`registry.dev.nokey.sh`. Main alone publishes shared cache manifests; pull
-requests restore them read-only after `docker login`. Hive images also publish
-and pull through `registry.dev.nokey.sh`. Hosted delivery never receives
-SeaweedFS S3 keys so compiler vertices stay secret-free.
+`registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
+restore them read-only after `docker login`. Explicit Remote tasks use
+branch-isolated Zot refs with Main fallback and write only those branch refs. Rust compiler vertices use
+authenticated SeaweedFS S3 through stable BuildKit secret IDs; secret contents
+never enter image layers or cache checksums.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

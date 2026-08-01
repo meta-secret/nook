@@ -431,6 +431,14 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "repo_cache=\"$repo_root/.nook/cache\"",
         "sccache-access-key",
         "sccache-secret-key",
+        "sccache-admin-access-key",
+        "sccache-admin-secret-key",
+        "\"name\": \"nook-sccache-build\"",
+        "\"Read:nook-sccache\"",
+        "\"Write:nook-sccache\"",
+        "\"List:nook-sccache\"",
+        "\"Tagging:nook-sccache\"",
+        "\"name\": \"nook-sccache-admin\"",
         "gh secret set NOOK_SCCACHE_ACCESS_KEY",
         "gh secret set NOOK_SCCACHE_SECRET_KEY",
         "NOOK_SCCACHE_ENDPOINT",
@@ -438,12 +446,22 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "nook-sccache",
         "chmod 0600",
         "~/.nook/cache",
+        "s3api put-object",
+        "s3api head-object",
+        "s3api delete-object",
+        "authenticated read/write S3 check passed",
     ] {
         assert!(
             sccache.contains(required),
             "SeaweedFS sccache credential lifecycle is missing: {required}"
         );
     }
+    assert!(
+        !sccache.contains("gh secret set NOOK_SCCACHE_ADMIN")
+            && !sccache.contains("$home_cache/sccache-admin")
+            && !sccache.contains("$repo_cache/sccache-admin"),
+        "SeaweedFS administrative credentials must remain server-side"
+    );
     let registry = read("infra/tasks/registry.yml");
     for required in [
         "home_cache=\"${HOME}/.nook/cache\"",

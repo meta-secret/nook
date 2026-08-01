@@ -39,7 +39,24 @@ task remote TASK_NAME=rust:test
 The command accepts only catalog names. The workflow contains the corresponding
 literal Taskfile command; user input is never evaluated as arbitrary shell.
 Remote jobs receive read-only repository and Actions permissions, restore only
-the trusted Main BuildKit lineage, and never write shared caches.
+the trusted Main BuildKit lineage as fallback, and can write only deterministic
+branch-isolated Zot cache refs. Rust compiler vertices also use the bucket-scoped
+SeaweedFS build identity to read and write compiler objects. They cannot replace
+Main Zot refs or administer SeaweedFS identities and buckets.
+
+The two cache layers solve different cold-start costs:
+
+- Zot stores BuildKit layers, Cargo downloads, and completed dependency stages.
+  A Remote branch restores its own ref first and Main second, then exports only
+  its own ref.
+- SeaweedFS stores `sccache` compiler objects. A genuinely new dependency compile
+  writes objects that later Rust/WASM vertices can reuse even when their Docker
+  layer key differs.
+
+Credentials enter compiler vertices only through fixed optional BuildKit secret
+IDs and target paths. Secret contents are never build arguments or image state
+and do not participate in the layer cache checksum. A missing or unavailable
+SeaweedFS cache falls back to direct compilation.
 
 The most frequently used checks have remote-only narrow orchestration:
 `rust:test` loads a source-sealed native dependency image, and `web:check`,
@@ -86,8 +103,9 @@ task remote TASK_NAME=wasm:test
 task remote TASK_NAME=web:test
 ```
 
-The first version deliberately does not accept arbitrary environment variables,
-commands, or secrets. Add a reviewed catalog entry when another stable remote
+The workflow deliberately does not accept arbitrary environment variables or
+commands. Its only credentials are the reviewed Zot login and scoped SeaweedFS
+build identity. Add a reviewed catalog entry when another stable remote
 capability is needed.
 
 ## Explicit complete PR validation

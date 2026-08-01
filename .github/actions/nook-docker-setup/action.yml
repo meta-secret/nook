@@ -10,6 +10,10 @@ inputs:
     description: Restore only the trusted default-branch cache and disable cache writes.
     required: false
     default: "false"
+  isolated-cache-write:
+    description: Publish only a workflow-dispatch branch cache while retaining Main as fallback.
+    required: false
+    default: "false"
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
     required: false
@@ -24,6 +28,14 @@ inputs:
   registry-password:
     description: OCI registry password or token.
     required: true
+  sccache-access-key:
+    description: SeaweedFS S3 access key for Rust compiler objects.
+    required: false
+    default: ""
+  sccache-secret-key:
+    description: SeaweedFS S3 secret key for Rust compiler objects.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -65,6 +77,12 @@ runs:
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.registry-password }}
 
+    - name: Connect SeaweedFS compiler cache
+      uses: ./.github/actions/nook-cache-connect
+      with:
+        sccache-access-key: ${{ inputs.sccache-access-key }}
+        sccache-secret-key: ${{ inputs.sccache-secret-key }}
+
     - name: Select hosted BuildKit cache
       shell: bash
       run: |
@@ -85,7 +103,22 @@ runs:
             echo "::warning::Pull-request jobs are forced to restore Main's cache read-only"
           fi
         fi
-        if [ "${{ inputs.main-cache-only }}" = "true" ]; then
+        isolated_cache_write="${{ inputs.isolated-cache-write }}"
+        if [ "$isolated_cache_write" = "true" ]; then
+          if [ "$event_name" != "workflow_dispatch" ] \
+            || [ "${{ inputs.main-cache-only }}" != "true" ] \
+            || [ "${{ inputs.cache-write }}" != "false" ]; then
+            echo "isolated-cache-write requires workflow_dispatch, main-cache-only=true, and cache-write=false" >&2
+            exit 1
+          fi
+          case "$git_ref" in
+            refs/heads/*) ;;
+            *)
+              echo "isolated-cache-write requires a repository branch ref" >&2
+              exit 1
+              ;;
+          esac
+        elif [ "${{ inputs.main-cache-only }}" = "true" ]; then
           if [ "${{ inputs.cache-write }}" != "false" ]; then
             echo "main-cache-only requires cache-write=false" >&2
             exit 1
@@ -93,8 +126,16 @@ runs:
           read_only=1
         fi
 
-        echo "GHA_CACHE_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        echo "GHA_CACHE_FALLBACK_ENABLED=" >> "$GITHUB_ENV"
+        scope_suffix=""
+        fallback_enabled=""
+        if [ "$isolated_cache_write" = "true" ]; then
+          branch_hash="$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-20)"
+          scope_suffix="-remote-$branch_hash"
+          fallback_enabled=1
+          echo "Remote cache writes are isolated to $scope_suffix with trusted Main fallback"
+        fi
+        echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
+        echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         wasm_deps_fingerprint="${{ hashFiles('nook-app/Cargo.toml', 'nook-app/Cargo.lock', 'nook-app/**/Cargo.toml', 'nook-app/.cargo/**', 'nook-app/.config/**', 'nook-app/Taskfile.yml', 'nook-app/docker-bake.hcl', 'nook-app/**/docker-bake.hcl', 'nook-app/docker/*.docker-bake.hcl', 'nook-app/docker/base.Dockerfile', 'nook-app/docker/Taskfile.yml', 'nook-app/docker/sccache-wrapper.sh', 'nook-app/docker/sccache-report.sh', 'nook-app/nook-core/Dockerfile') }}"
         if [[ ! "$wasm_deps_fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
@@ -103,7 +144,9 @@ runs:
         fi
         echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v4-$wasm_deps_fingerprint" >> "$GITHUB_ENV"
         cache_write_enabled=""
-        if [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
+        if [ "$isolated_cache_write" = "true" ]; then
+          cache_write_enabled=1
+        elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi
         echo "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled" >> "$GITHUB_ENV"
@@ -112,8 +155,6 @@ runs:
       shell: bash
       run: |
         echo "NOOK_ENV=ci" >> "$GITHUB_ENV"
-        echo "NOOK_SCCACHE_BACKEND=direct_compile" >> "$GITHUB_ENV"
-        echo "NOOK_SCCACHE_BACKEND_REASON=hosted_buildkit_only" >> "$GITHUB_ENV"
 
     - name: Start cache telemetry
       continue-on-error: true
