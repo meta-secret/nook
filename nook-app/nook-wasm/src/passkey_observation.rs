@@ -170,7 +170,9 @@ fn client_environment() -> PasskeyBrowserObservation {
 }
 
 fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
-    if user_agent.contains("Edg/") || user_agent.contains("EdgiOS/") {
+    if user_agent.contains("OPR/") {
+        nook_core::PasskeyObservedBrowser::Other
+    } else if user_agent.contains("Edg/") || user_agent.contains("EdgiOS/") {
         nook_core::PasskeyObservedBrowser::Edge
     } else if user_agent.contains("Firefox/") || user_agent.contains("FxiOS/") {
         nook_core::PasskeyObservedBrowser::Firefox
@@ -222,6 +224,14 @@ mod tests {
         assert_eq!(
             observed_browser("Mozilla/5.0 EdgiOS/140.0 Mobile/15E148 Safari/605.1.15"),
             nook_core::PasskeyObservedBrowser::Edge
+        );
+    }
+
+    #[test]
+    fn recognizes_opera_before_the_generic_chrome_token() {
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
+            nook_core::PasskeyObservedBrowser::Other
         );
     }
 }

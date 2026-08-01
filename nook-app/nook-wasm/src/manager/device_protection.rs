@@ -204,8 +204,11 @@ impl NookVaultManager {
             },
             mode,
         )?;
-        let material = match resolution {
-            nook_core::PasskeyRegistrationResolution::Complete(material) => *material,
+        let (material, ceremony) = match resolution {
+            nook_core::PasskeyRegistrationResolution::Complete(material) => (
+                *material,
+                device_access::PasskeyCreationCeremony::RegistrationOnly,
+            ),
             nook_core::PasskeyRegistrationResolution::NeedsAssertion(request) => {
                 let request_options = passkey_browser::request_options(
                     rp_id,
@@ -215,18 +218,21 @@ impl NookVaultManager {
                 let credential = passkey_browser::get_credential(&request_options).await?;
                 observation.merge_usage(passkey_observation::observe_assertion(&credential));
                 let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
-                nook_core::finish_passkey_device_identity_for_mode(
-                    request.credential_id(),
-                    &user_handle,
-                    request.prf_input(),
-                    prf_output.as_slice(),
-                    mode,
-                )?
+                (
+                    nook_core::finish_passkey_device_identity_for_mode(
+                        request.credential_id(),
+                        &user_handle,
+                        request.prf_input(),
+                        prf_output.as_slice(),
+                        mode,
+                    )?,
+                    device_access::PasskeyCreationCeremony::RegistrationAndAssertion,
+                )
             }
         };
         let result = self.save_passkey_material(&material).await;
         let device_id = result?;
-        let _ = device_access::record_passkey_created(&passkey_label, observation).await;
+        let _ = device_access::record_passkey_created(&passkey_label, observation, ceremony).await;
         let updated_label =
             passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
         passkey_browser::signal_current_user_details(rp_id, &user_handle, &updated_label).await;

@@ -869,6 +869,7 @@
     "pin_unlock_action": "Continue with PIN or passphrase",
     "passkey_label": "Passkey label",
     "passkey_label_placeholder": "This browser",
+    "passkey_default_label": "Nook device",
     "pin_label": "PIN or passphrase",
     "pin_confirm_label": "Confirm PIN or passphrase",
     "pin_mismatch": "The PINs or passphrases do not match.",

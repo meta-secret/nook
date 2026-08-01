@@ -146,7 +146,13 @@ impl NookVaultManager {
         self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
         self.vault.meta = meta;
         self.purge_legacy_plaintext_search_catalog().await?;
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        let _ = crate::storage::device_access::record_verified_vault_access(
+            identity.device_id().as_str(),
+            &self.vault.store_id,
+        )
+        .await;
+        Ok(records)
     }
 
     /// Device B publishes a join request record with its public key.
@@ -470,7 +476,13 @@ impl NookVaultManager {
         }
         self.persist_vault_change(Vec::new()).await?;
         self.purge_legacy_plaintext_search_catalog().await?;
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        let _ = crate::storage::device_access::record_verified_vault_access(
+            identity.device_id().as_str(),
+            &self.vault.store_id,
+        )
+        .await;
+        Ok(records)
     }
 
     /// Back-compat alias — `members_key` must equal `secrets_key` (legacy test path only).

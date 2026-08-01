@@ -6,6 +6,7 @@
   import {
     DevicesAccessNudgePreference,
     parseDevicesAccessNudgePreference,
+    readDevicesAccessNudgeStorage,
   } from './devices-access-dashboard-state'
   import {
     SentinelVaultUnlockState,
@@ -175,7 +176,10 @@
   onMount(() => {
     try {
       devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
-        localStorage.getItem(devicesAccessNudgeStorageKey)?.valueOf(),
+        readDevicesAccessNudgeStorage(
+          localStorage,
+          devicesAccessNudgeStorageKey,
+        ),
       )
     } catch {
       devicesAccessNudgePreference = DevicesAccessNudgePreference.Visible

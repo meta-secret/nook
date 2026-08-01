@@ -54,6 +54,12 @@ impl PasskeyBrowserObservation {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PasskeyCreationCeremony {
+    RegistrationOnly,
+    RegistrationAndAssertion,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PasskeyAccessProfile {
@@ -104,6 +110,7 @@ impl DeviceAccessProfile {
         nook_name: &str,
         observation: PasskeyBrowserObservation,
         now: nook_core::IsoTimestamp,
+        ceremony: PasskeyCreationCeremony,
     ) {
         let provider_label = self
             .passkey
@@ -113,7 +120,10 @@ impl DeviceAccessProfile {
             nook_name: nook_name.trim().to_owned(),
             provider_label,
             created_at: Some(now.clone()),
-            last_used_at: Some(now),
+            last_used_at: match ceremony {
+                PasskeyCreationCeremony::RegistrationOnly => None,
+                PasskeyCreationCeremony::RegistrationAndAssertion => Some(now),
+            },
             observation,
         });
     }
@@ -157,6 +167,17 @@ enum DecodedDeviceAccessProfile {
 enum DeviceAccessProfileUpdate {
     Writable(DeviceAccessProfile),
     PreserveFutureVersion,
+}
+
+impl DeviceAccessProfileUpdate {
+    fn into_interactive_profile(self) -> Result<DeviceAccessProfile, NookError> {
+        match self {
+            Self::Writable(profile) => Ok(profile),
+            Self::PreserveFutureVersion => Err(NookError::Database(
+                "errors.device_access.profile_version_incompatible".to_owned(),
+            )),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -220,6 +241,7 @@ async fn save_device_access_profile(profile: &DeviceAccessProfile) -> Result<(),
 pub(crate) async fn record_passkey_created(
     nook_name: &str,
     observation: PasskeyBrowserObservation,
+    ceremony: PasskeyCreationCeremony,
 ) -> Result<(), NookError> {
     let now = browser_timestamp();
     let DeviceAccessProfileUpdate::Writable(mut profile) =
@@ -227,7 +249,7 @@ pub(crate) async fn record_passkey_created(
     else {
         return Ok(());
     };
-    profile.record_passkey_created(nook_name, observation, now);
+    profile.record_passkey_created(nook_name, observation, now, ceremony);
     save_device_access_profile(&profile).await
 }
 
@@ -246,11 +268,9 @@ pub(crate) async fn record_passkey_used(
 pub(crate) async fn set_passkey_provider_label(label: &str) -> Result<(), NookError> {
     let normalized = nook_core::normalize_device_access_provider_label(label)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let DeviceAccessProfileUpdate::Writable(mut profile) =
-        load_device_access_profile_for_update().await?
-    else {
-        return Ok(());
-    };
+    let mut profile = load_device_access_profile_for_update()
+        .await?
+        .into_interactive_profile()?;
     let passkey = profile
         .passkey
         .get_or_insert_with(PasskeyAccessProfile::default);
@@ -318,13 +338,24 @@ mod tests {
     }
 
     #[test]
+    fn future_profiles_reject_interactive_updates() {
+        assert!(
+            DeviceAccessProfileUpdate::PreserveFutureVersion
+                .into_interactive_profile()
+                .is_err()
+        );
+    }
+
+    #[test]
     fn passkey_creation_replaces_credential_metadata_and_usage_merges_observations() {
         let mut profile = DeviceAccessProfile::default();
         profile.record_passkey_created(
             "First credential",
             observation(),
             timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
         );
+        assert_eq!(profile.passkey.as_ref().unwrap().last_used_at, None);
         profile.passkey.as_mut().unwrap().provider_label = "Bitwarden".to_owned();
 
         let mut replacement = observation();
@@ -334,11 +365,16 @@ mod tests {
             "Replacement credential",
             replacement,
             timestamp("2026-02-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationAndAssertion,
         );
         let passkey = profile.passkey.as_ref().unwrap();
         assert_eq!(passkey.nook_name, "Replacement credential");
         assert_eq!(passkey.provider_label, "Bitwarden");
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
+        assert_eq!(
+            passkey.last_used_at,
+            Some(timestamp("2026-02-01T00:00:00.000Z"))
+        );
 
         let usage = PasskeyBrowserObservation {
             attachment: nook_core::PasskeyAuthenticatorAttachment::Unknown,
@@ -403,6 +439,7 @@ mod tests {
             "Persisted credential",
             observation(),
             timestamp("2026-04-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
         );
         save_device_access_profile(&profile).await?;
         assert_eq!(load_device_access_profile().await?, profile);
@@ -421,6 +458,7 @@ mod tests {
         idb_put_string(DEVICE_ACCESS_PROFILE_KEY, FUTURE_PROFILE).await?;
 
         record_verified_vault_access("device-a", "store-one").await?;
+        assert!(set_passkey_provider_label("1Password").await.is_err());
         assert_eq!(
             idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?.as_deref(),
             Some(FUTURE_PROFILE)

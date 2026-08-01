@@ -23,11 +23,34 @@ export enum DevicesAccessNudgePreference {
   Dismissed = "dismissed",
 }
 
+export enum DevicesAccessNudgeStorageKind {
+  Missing = "missing",
+  Stored = "stored",
+}
+
+export type DevicesAccessNudgeStorageState =
+  | { kind: typeof DevicesAccessNudgeStorageKind.Missing }
+  | {
+      kind: typeof DevicesAccessNudgeStorageKind.Stored;
+      serialized: string;
+    };
+
+export function readDevicesAccessNudgeStorage(
+  storage: Storage,
+  storageKey: string,
+): DevicesAccessNudgeStorageState {
+  const serialized = storage.getItem(storageKey);
+  return typeof serialized === "string"
+    ? { kind: DevicesAccessNudgeStorageKind.Stored, serialized }
+    : { kind: DevicesAccessNudgeStorageKind.Missing };
+}
+
 export function parseDevicesAccessNudgePreference(
-  serialized?: string,
+  storageState: DevicesAccessNudgeStorageState,
 ): DevicesAccessNudgePreference {
-  return serialized === DevicesAccessNudgePreference.Dismissed ||
-    serialized === "1"
+  return storageState.kind === DevicesAccessNudgeStorageKind.Stored &&
+    (storageState.serialized === DevicesAccessNudgePreference.Dismissed ||
+      storageState.serialized === "1")
     ? DevicesAccessNudgePreference.Dismissed
     : DevicesAccessNudgePreference.Visible;
 }

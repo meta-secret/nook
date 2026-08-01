@@ -1153,6 +1153,7 @@
     "pin_unlock_action": "Продолжить с PIN или кодовой фразой",
     "passkey_label": "Название passkey",
     "passkey_label_placeholder": "Этот браузер",
+    "passkey_default_label": "Устройство Nook",
     "pin_label": "PIN или кодовая фраза",
     "pin_confirm_label": "Подтвердите PIN или кодовую фразу",
     "pin_mismatch": "PIN или кодовые фразы не совпадают.",

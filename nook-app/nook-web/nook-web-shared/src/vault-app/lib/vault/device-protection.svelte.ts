@@ -90,8 +90,14 @@ export async function setupDeviceProtection(
   state.errorMsg = "";
   let deviceIdentityUnlocked = false;
   try {
+    const localizedPasskeyLabel =
+      passkeyLabel.trim() || state.t("device_protection.passkey_default_label");
     await state.enqueueStorage(() =>
-      createPasskeyProtection(state.requireManager(), passkeyLabel, deviceMode),
+      createPasskeyProtection(
+        state.requireManager(),
+        localizedPasskeyLabel,
+        deviceMode,
+      ),
     );
     deviceIdentityUnlocked = true;
     await finishAuthorizedInitialization(state, DeviceProtectionStatus.Passkey);
