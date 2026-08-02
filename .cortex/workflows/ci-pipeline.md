@@ -259,7 +259,7 @@ so the persistent-context smoke cannot compete with other headed Chromium tests.
 
 | Workflow                                                                | `runs-on`       | Why                                                            |
 | ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
-| `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with main-seeded GHA BuildKit caches |
+| `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches  |
 | `agent-implement.yml`, `ci-agent-smoke.yml`                            | `ubuntu-latest` | Long-running background AI work scales independently           |
 | `e2e-pr.yml`, `web-research.yml`                                       | `ubuntu-latest` | Manual and research work scales independently                  |
 | `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
@@ -520,13 +520,12 @@ release use GitHub-hosted runners. Main verifies each native/WASM/web lane
 read-only, then serially exports its already-solved graph from the same
 job-scoped builder. The WASM dependency export clears `cache-from` and forces
 zstd recompression so a thin reimported index cannot replace the complete cook
-lineage. Main thereby exports the default-branch cache that
-new PRs can restore under GitHub's cache visibility rules. All PR jobs are
-default-branch-cache-only, with writes disabled; exact trusted handoffs make
-branch-local cache generations unnecessary. Native coverage and WASM
-source-sensitive layers have separate v2
-GHA BuildKit scopes in addition to the manifest-only dependency scopes, so
-non-Rust pushes do not repeat unchanged Cargo compilation.
+lineage. Main thereby exports protected default-branch refs that PR jobs restore
+from private Zot. Zot ACLs deny the Remote identity write access to
+`nook/buildcache/**`; ordinary PR jobs receive no registry credentials at all.
+Native coverage and WASM source-sensitive layers have separate Zot refs in
+addition to the manifest-only dependency refs, so non-Rust pushes do not repeat
+unchanged Cargo compilation.
 Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote
 tasks use authenticated SeaweedFS S3 `sccache`. Compiler vertices receive the
 bucket-scoped build identity only through stable optional BuildKit secret IDs;

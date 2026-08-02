@@ -335,6 +335,26 @@ tasks:
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-test
 
+  setup:rust:lint:
+    desc: Build the source-sealed Rust lint image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-lint
+
+  setup:rust:coverage:
+    desc: Build the source-sealed Rust coverage image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-coverage
+
   setup:rust:fast:
     desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.
     dir: '{{.REPO_ROOT}}'

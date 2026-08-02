@@ -124,6 +124,8 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
+        ("rust:lint", "remote:rust:lint"),
+        ("rust:coverage", "remote:rust:coverage"),
         ("web:check", "remote:web:check"),
         ("web:test", "remote:web:test"),
         ("extension:check", "remote:extension:check"),
@@ -135,10 +137,12 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     }
     assert_eq!(
         workflow.matches("- run: task remote:").count(),
-        4,
+        6,
         "only the mechanically reviewed focused routes may bypass their full local task"
     );
     assert!(!workflow.contains("- run: task rust:test\n"));
+    assert!(!workflow.contains("- run: task rust:lint\n"));
+    assert!(!workflow.contains("- run: task rust:coverage\n"));
     assert!(!workflow.contains("- run: task web:check\n"));
     assert!(!workflow.contains("- run: task web:test\n"));
     assert!(!workflow.contains("- run: task extension:check\n"));
@@ -167,6 +171,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         );
     }
     assert!(core_tasks.contains("remote:rust:test:"));
+    assert!(core_tasks.contains("remote:rust:lint:"));
+    assert!(core_tasks.contains("remote:rust:coverage:"));
     assert!(web_tasks.contains("remote:web:check:"));
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
@@ -174,6 +180,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(core_dockerfile.contains("COPY . ."));
     assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
     assert!(core_dockerfile.contains("focused-native-test-compile"));
+    assert!(core_dockerfile.contains("focused-rust-lint-compile"));
+    assert!(core_dockerfile.contains("focused-rust-coverage-compile"));
     assert!(core_dockerfile.contains("--no-run"));
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));

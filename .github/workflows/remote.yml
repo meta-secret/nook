@@ -109,7 +109,7 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
-      - run: task rust:lint
+      - run: task remote:rust:lint
 
   rust-coverage:
     if: inputs.task == 'rust:coverage'
@@ -130,7 +130,7 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
-      - run: task rust:coverage
+      - run: task remote:rust:coverage
 
   wasm-build:
     if: inputs.task == 'wasm:build'

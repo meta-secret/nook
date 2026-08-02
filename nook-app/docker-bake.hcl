@@ -305,6 +305,18 @@ target "nook-rust-test" {
   output   = ["type=docker"]
 }
 
+target "nook-rust-lint" {
+  inherits = ["_nook-rust-lint-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
+target "nook-rust-coverage" {
+  inherits = ["_nook-rust-coverage-common"]
+  tags     = [DOCKER_RUST_IMAGE]
+  output   = ["type=docker"]
+}
+
 target "nook-rust-fast" {
   inherits = ["_nook-rust-fast-common"]
   tags     = [DOCKER_RUST_FAST_IMAGE]

@@ -136,3 +136,63 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       --profile ci \
       --no-run \
     && nook-sccache-report focused-native-test-compile
+
+# Remote lint runs compile inside the exported graph so a clean worker can restore the complete
+# source-sensitive native and WASM lint state from its branch-and-task Zot ref.
+FROM builder-deps AS nook-rust-lint
+
+WORKDIR /meta-secret/nook
+
+COPY . .
+
+RUN find nook-app -type f -name '*.rs' -exec touch {} + \
+    && test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-lint source snapshot" >/dev/null
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo clippy \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --all-targets -- -D warnings \
+    && cargo clippy --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm -- -D warnings \
+    && nook-sccache-report focused-rust-lint-compile
+
+# Remote coverage likewise executes inside BuildKit. The runtime command still prints the report,
+# but its instrumented binaries and source-sensitive target state are restored from Zot.
+FROM builder-deps AS nook-rust-coverage
+
+WORKDIR /meta-secret/nook
+
+COPY . .
+
+RUN find nook-app -type f -name '*.rs' -exec touch {} + \
+    && test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo llvm-cov nextest --no-clean --profile ci \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --summary-only \
+    && nook-sccache-report focused-rust-coverage-compile

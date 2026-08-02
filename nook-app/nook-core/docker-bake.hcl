@@ -78,3 +78,29 @@ target "_nook-rust-test-common" {
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
 }
+
+target "_nook-rust-lint-common" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-core/Dockerfile"
+  target     = "nook-rust-lint"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-deps = "target:builder-deps"
+  }
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+}
+
+target "_nook-rust-coverage-common" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/nook-core/Dockerfile"
+  target     = "nook-rust-coverage"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    builder-deps = "target:builder-deps"
+  }
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+}
