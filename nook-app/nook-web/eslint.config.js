@@ -25,7 +25,10 @@ export default [
   {
     files: ['nook-web-extension/src/**/*.{ts,svelte}'],
     languageOptions: {
-      globals: globals.webextensions,
+      globals: {
+        ...globals.webextensions,
+        chrome: 'readonly',
+      },
     },
   },
   {
