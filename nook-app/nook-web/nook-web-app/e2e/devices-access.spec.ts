@@ -175,6 +175,69 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
   })
 
+  test('never claims access to a vault this device key has not opened', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    const vaultsNode = page.getByTestId('devices-access-node-vaults')
+    await expect(vaultsNode).toHaveAccessibleName(/opens/, {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    // Verified access is descriptive metadata written after an unlock succeeds.
+    // Removing it leaves the vault registered on this browser with nothing
+    // proving this device key ever opened it, which is how a locally cached
+    // vault from another identity arrives.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open('nook_db')
+          request.onerror = () => reject(request.error)
+          request.onsuccess = () => {
+            const db = request.result
+            const transaction = db.transaction('vault', 'readwrite')
+            const store = transaction.objectStore('vault')
+            const profileRequest = store.get('device_access_profile')
+            profileRequest.onsuccess = () => {
+              const raw = profileRequest.result
+              if (typeof raw !== 'string') {
+                reject(new Error('Device access profile is missing'))
+                return
+              }
+              const profile = JSON.parse(raw) as { verifiedVaults: unknown[] }
+              profile.verifiedVaults = []
+              store.put(JSON.stringify(profile), 'device_access_profile')
+            }
+            transaction.onerror = () => reject(transaction.error)
+            transaction.oncomplete = () => {
+              db.close()
+              resolve()
+            }
+          }
+        }),
+    )
+
+    // The dashboard reads the snapshot when it mounts, so leave and come back.
+    await page.getByTestId('vault-secrets-tab').click()
+    await page.getByTestId('vault-devices-access-tab').click()
+
+    const chain = page.getByTestId('devices-access-chain')
+    await expect(vaultsNode).toContainText('None verified yet')
+    await expect(chain).toContainText('not verified')
+    await expect(chain).not.toContainText('opens')
+    // Sighted and screen-reader readouts have to agree that access is unproven.
+    await expect(vaultsNode).toHaveAccessibleName(/not verified/)
+    await expect(vaultsNode).not.toHaveAccessibleName(/opens/)
+
+    await vaultsNode.click()
+    const panel = page.getByTestId('devices-access-panel')
+    await expect(panel).toContainText('Vaults known to this device key')
+    const vaults = page.getByTestId('devices-access-vaults')
+    await expect(vaults).toContainText('Access not yet verified')
+    await expect(vaults).not.toContainText('Access verified')
+  })
+
   test('keeps the passkey provider reminder editable and recovers from a failed save', async ({
     page,
   }) => {
