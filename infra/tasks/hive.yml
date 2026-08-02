@@ -134,8 +134,8 @@ tasks:
         cat "$remote_dir/hive-image"
         REMOTE
 
-  hive:auth:sync:
-    internal: true
+  hive:auth:rotate:
+    desc: Explicitly replace Hive Codex authentication from a local bootstrap file.
     silent: true
     cmds:
       - |
@@ -179,9 +179,29 @@ tasks:
           trap - EXIT
           cleanup_auth
         else
-          ssh -o BatchMode=yes "$ssh_target" \
-            "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null"
+          echo "HIVE_CODEX_AUTH_FILE is required for explicit Hive authentication publication" >&2
+          exit 2
         fi
+        BASH
+
+  hive:auth:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        if ssh -o BatchMode=yes "$ssh_target" \
+          "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null 2>&1"; then
+          echo "Preserving cluster-persisted Hive Codex authentication"
+          exit 0
+        fi
+        if test -z "${HIVE_CODEX_AUTH_FILE:-}"; then
+          echo "Initial Hive deployment requires HIVE_CODEX_AUTH_FILE" >&2
+          exit 2
+        fi
+        task infra:hive:auth:rotate
         BASH
 
   hive:github:sync:

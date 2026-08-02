@@ -123,6 +123,45 @@ fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
 }
 
 #[test]
+fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
+    let tasks = read_fallible("infra/tasks/hive.yml")?;
+    let rotate = tasks
+        .split("\n  hive:auth:rotate:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  hive:auth:sync:\n").next())
+        .context("Hive tasks must define explicit Codex auth rotation")?;
+    assert!(
+        rotate.contains("HIVE_CODEX_AUTH_FILE is required")
+            && rotate.contains("kubectl create secret generic hive-codex-auth"),
+        "explicit auth rotation must validate and replace the Hive Codex Secret"
+    );
+
+    let sync = tasks
+        .split("\n  hive:auth:sync:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  hive:github:sync:\n").next())
+        .context("Hive deploy must define Codex auth bootstrap")?;
+    let existing_secret = sync
+        .find("kubectl get secret hive-codex-auth")
+        .context("Hive deploy must inspect the cluster-owned Codex Secret")?;
+    let preserve = sync
+        .find("Preserving cluster-persisted Hive Codex authentication")
+        .context("Hive deploy must report credential preservation")?;
+    let rotate_missing = sync
+        .find("task infra:hive:auth:rotate")
+        .context("Hive deploy must bootstrap a missing Codex Secret")?;
+    assert!(
+        existing_secret < preserve && preserve < rotate_missing,
+        "normal Hive deploy must preserve cluster-rotated auth before considering bootstrap"
+    );
+    assert!(
+        !sync.contains("kubectl create secret generic hive-codex-auth"),
+        "normal Hive deploy must not directly overwrite cluster-rotated Codex auth"
+    );
+    Ok(())
+}
+
+#[test]
 fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     let tasks = read("infra/tasks/neo4j.yml");
     let start = tasks

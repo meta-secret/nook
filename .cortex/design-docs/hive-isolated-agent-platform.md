@@ -655,8 +655,8 @@ task infra:deploy
 `task infra:deploy` is the complete entrypoint: it deploys the private
 infrastructure services, syncs the repository-owned k0s configuration, installs
 and verifies k0s/Kata, deploys persistent Neo4j, builds and publishes the exact
-Hive image to the loopback registry, synchronizes credentials, deploys the warm
-pool, and verifies Pod replacement.
+Hive image to the public Zot registry, preserves cluster-rotated credentials,
+deploys the warm pool, and verifies Pod replacement.
 
 The encryption-provider file remains `root:root 0600`; a read-only POSIX ACL
 grants the dedicated `kube-apiserver` OS user access without granting ownership
@@ -684,7 +684,7 @@ exact `/32` rather than a deployment-time endpoint lookup. The
 and is enabled across reboots; installation verifies both unit state and the
 live `lo` address.
 
-Credential synchronization requires explicit local file inputs:
+Initial credential bootstrap requires explicit local file inputs:
 
 ```text
 HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json
@@ -693,7 +693,19 @@ HIVE_GITHUB_TOKEN_FILE=/absolute/path/to/token
 
 Copying these credentials into encrypted Kubernetes Secrets is a
 security-sensitive deployment action and requires immediate user confirmation
-before `task infra:deploy` or `task infra:hive:deploy` is invoked.
+before the initial `task infra:deploy` or `task infra:hive:deploy` is invoked.
+Routine public-Zot image deployments preserve the existing
+`hive-codex-auth` Secret because Hive refreshes and persists that credential in
+the cluster. Replacing it from a local bootstrap file is a separate explicit
+operation:
+
+```sh
+HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json task infra:hive:auth:rotate
+```
+
+Never pass an older local Codex auth file to routine deployment as a rotation
+substitute. The GitHub publication credential retains its existing explicit
+file synchronization contract.
 
 Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
 encrypted Neo4j recovery material by default. It removes the owned live k0s
