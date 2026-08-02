@@ -154,7 +154,8 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let core_tasks = read("nook-app/.task/core.yml");
     let web_tasks = read("nook-app/nook-web/.task/web.yml");
     let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
-    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
+    let base_dockerfile = read("nook-app/docker/base.Dockerfile");
+    let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
     let bake = read("nook-app/docker-bake.hcl");
 
@@ -176,18 +177,18 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(web_tasks.contains("remote:web:check:"));
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
-    assert!(core_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
-    assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
-    assert!(core_dockerfile.contains("focused-native-test-compile"));
-    assert!(core_dockerfile.contains("focused-rust-lint-compile"));
-    assert!(core_dockerfile.contains("focused-rust-coverage-compile"));
-    assert!(core_dockerfile.contains("--no-run"));
+    assert!(base_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
+    assert!(base_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
+    assert!(base_dockerfile.contains("focused-native-test-compile"));
+    assert!(base_dockerfile.contains("focused-rust-lint-compile"));
+    assert!(base_dockerfile.contains("focused-rust-coverage-compile"));
+    assert!(base_dockerfile.contains("--no-run"));
     for (target, compile_marker) in [
         ("nook-rust-test", "focused-native-test-compile"),
         ("nook-rust-lint", "focused-rust-lint-compile"),
         ("nook-rust-coverage", "focused-rust-coverage-compile"),
     ] {
-        let stage = core_dockerfile
+        let stage = base_dockerfile
             .split(&format!("AS {target}\n"))
             .nth(1)
             .and_then(|remainder| remainder.split("\nFROM ").next())
@@ -212,6 +213,19 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
     assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
+    for target in [
+        "_nook-rust-test-common",
+        "_nook-rust-lint-common",
+        "_nook-rust-coverage-common",
+    ] {
+        let stage = core_bake
+            .split(&format!("target \"{target}\" {{\n"))
+            .nth(1)
+            .and_then(|remainder| remainder.split("\n}").next())
+            .unwrap_or_else(|| panic!("focused Bake target must exist: {target}"));
+        assert!(stage.contains("dockerfile = \"nook-app/docker/base.Dockerfile\""));
+        assert!(!stage.contains("builder-deps = \"target:builder-deps\""));
+    }
     assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
     assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
     assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
