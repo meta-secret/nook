@@ -251,7 +251,7 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
         .split("group \"prepare\" {\n")
         .nth(1)
         .and_then(|remainder| remainder.split("\n}").next())
-        .expect("prepare Bake group must exist");
+        .unwrap_or_else(|| panic!("prepare Bake group must exist"));
     assert!(
         prepare.contains("\"builder-debug\""),
         "broad setup must select builder-debug so its dedicated Zot exporter runs"
