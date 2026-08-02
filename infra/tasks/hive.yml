@@ -168,13 +168,33 @@ tasks:
         remote_dir="$remote_dir"
         auth_file="\$remote_dir/secrets/codex-auth.json.next"
         trap 'rm -f "\$auth_file"' EXIT
+        kubectl() { sudo -n k0s kubectl "\$@"; }
         chmod 0600 "\$auth_file"
-        sudo -n k0s kubectl create secret generic hive-codex-auth \
+        kubectl create secret generic hive-codex-auth \
           --namespace hive-system \
           --from-file=auth.json="\$auth_file" \
           --dry-run=client \
           -o yaml |
-          sudo -n k0s kubectl apply -f -
+          kubectl apply -f -
+        deployment_ref="\$(
+          kubectl get deployment hive \
+            --namespace hive-system \
+            --ignore-not-found \
+            -o name
+        )"
+        case "\$deployment_ref" in
+          deployment.apps/hive)
+            kubectl rollout restart deployment/hive --namespace hive-system
+            kubectl rollout status deployment/hive \
+              --namespace hive-system \
+              --timeout=10m
+            ;;
+          '') ;;
+          *)
+            echo "Unexpected Hive deployment lookup: \$deployment_ref" >&2
+            exit 1
+            ;;
+        esac
         REMOTE
           trap - EXIT
           cleanup_auth
@@ -191,17 +211,39 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        ssh_target="{{.INFRA_SSH_TARGET}}"
-        if ssh -o BatchMode=yes "$ssh_target" \
-          "sudo -n k0s kubectl get secret hive-codex-auth --namespace hive-system >/dev/null 2>&1"; then
-          echo "Preserving cluster-persisted Hive Codex authentication"
-          exit 0
-        fi
-        if test -z "${HIVE_CODEX_AUTH_FILE:-}"; then
-          echo "Initial Hive deployment requires HIVE_CODEX_AUTH_FILE" >&2
-          exit 2
-        fi
-        task infra:hive:auth:rotate
+        # HIVE_AUTH_SYNC_BEGIN
+        sync_hive_auth() {
+          ssh_target="{{.INFRA_SSH_TARGET}}"
+          secret_ref="$(
+            ssh -o BatchMode=yes "$ssh_target" \
+              "sudo -n k0s kubectl get secret hive-codex-auth \
+                --namespace hive-system \
+                --ignore-not-found \
+                -o name"
+          )" || {
+            echo "Hive Codex authentication lookup failed" >&2
+            return 1
+          }
+          case "$secret_ref" in
+            secret/hive-codex-auth)
+              echo "Preserving cluster-persisted Hive Codex authentication"
+              return
+              ;;
+            '')
+              if test -z "${HIVE_CODEX_AUTH_FILE:-}"; then
+                echo "Initial Hive deployment requires HIVE_CODEX_AUTH_FILE" >&2
+                return 2
+              fi
+              task infra:hive:auth:rotate
+              ;;
+            *)
+              echo "Unexpected Hive Codex authentication lookup: $secret_ref" >&2
+              return 1
+              ;;
+          esac
+        }
+        # HIVE_AUTH_SYNC_END
+        sync_hive_auth
         BASH
 
   hive:github:sync:

@@ -124,6 +124,18 @@ fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
 
 #[test]
 fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
+    let root = repository_root();
+    let output = Command::new("bash")
+        .arg(root.join("preflight/tests/hive_auth_sync.sh"))
+        .arg(&root)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "Hive auth synchronization harness failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
     let tasks = read_fallible("infra/tasks/hive.yml")?;
     let rotate = tasks
         .split("\n  hive:auth:rotate:\n")
@@ -132,31 +144,10 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         .context("Hive tasks must define explicit Codex auth rotation")?;
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
-            && rotate.contains("kubectl create secret generic hive-codex-auth"),
-        "explicit auth rotation must validate and replace the Hive Codex Secret"
-    );
-
-    let sync = tasks
-        .split("\n  hive:auth:sync:\n")
-        .nth(1)
-        .and_then(|tail| tail.split("\n  hive:github:sync:\n").next())
-        .context("Hive deploy must define Codex auth bootstrap")?;
-    let existing_secret = sync
-        .find("kubectl get secret hive-codex-auth")
-        .context("Hive deploy must inspect the cluster-owned Codex Secret")?;
-    let preserve = sync
-        .find("Preserving cluster-persisted Hive Codex authentication")
-        .context("Hive deploy must report credential preservation")?;
-    let rotate_missing = sync
-        .find("task infra:hive:auth:rotate")
-        .context("Hive deploy must bootstrap a missing Codex Secret")?;
-    assert!(
-        existing_secret < preserve && preserve < rotate_missing,
-        "normal Hive deploy must preserve cluster-rotated auth before considering bootstrap"
-    );
-    assert!(
-        !sync.contains("kubectl create secret generic hive-codex-auth"),
-        "normal Hive deploy must not directly overwrite cluster-rotated Codex auth"
+            && rotate.contains("kubectl create secret generic hive-codex-auth")
+            && rotate.contains("kubectl rollout restart deployment/hive")
+            && rotate.contains("kubectl rollout status deployment/hive"),
+        "explicit auth rotation must replace the Secret and roll the warm pool"
     );
     Ok(())
 }
