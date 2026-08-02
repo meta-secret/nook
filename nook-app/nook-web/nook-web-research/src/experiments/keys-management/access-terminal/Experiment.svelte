@@ -274,11 +274,12 @@ every route it carries, as aligned columns and box-drawn ASCII.
           ),
           columns(
             [
-              'carried by',
-              `${passkeysForVault(graph, vault).length} passkeys`,
-              `${stores.size} managers`,
+              'routes',
+              `${passkeysForVault(graph, vault).length}`,
+              'managers',
+              `${stores.size}`,
             ],
-            [12, 14, 14],
+            [9, 10, 10, 6],
           ),
           '',
           ...routeLines(routes),

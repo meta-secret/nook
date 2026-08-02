@@ -124,7 +124,7 @@ dims every onion it does not reach, and dims the layers inside the ones it does.
     const stops = shell.passkeys.map((passkey, index) => {
       const from = Math.round((index / count) * 100)
       const to = Math.round(((index + 1) / count) * 100)
-      return `${tint(STORE_INK[passkey.store], 0.13)} ${from}% ${to}%`
+      return `${tint(STORE_INK[passkey.store], 0.34)} ${from}% ${to}%`
     })
     return `background-image:linear-gradient(115deg, ${stops.join(', ')})`
   }
