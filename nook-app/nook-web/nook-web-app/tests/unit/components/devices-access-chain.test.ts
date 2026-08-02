@@ -62,7 +62,8 @@ describe('access chain nodes', () => {
     })
 
     // Vault ids would flood the diagram, so the last link summarizes instead.
-    expect(vaults.title).toBe('Family, Archive')
+    // Only the opened vault is named; the count keeps the rest visible.
+    expect(vaults.title).toBe('Family')
     expect(vaults.detail).toEqual({
       kind: AccessNodeDetailKind.Summary,
       value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"1","total":"2"})`,
@@ -70,6 +71,26 @@ describe('access chain nodes', () => {
     expect(vaults.incoming).toEqual({
       kind: AccessChainLinkKind.Relation,
       label: I18N_KEYS.DevicesAccessLinkOpens,
+    })
+  })
+
+  test('does not claim access to vaults this device key never opened', () => {
+    const [, , vaults] = buildAccessChainNodes(vault, {
+      protection: DeviceAccessProtectionKind.PasskeyStandard,
+      passkeyName: known('Work laptop'),
+      credentialId: known('passkey_1234'),
+      deviceId: known('device_5678'),
+      vaults: [vaultAccess('Family', false), vaultAccess('Archive', false)],
+    })
+
+    expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
+    expect(vaults.detail).toEqual({
+      kind: AccessNodeDetailKind.Summary,
+      value: `${I18N_KEYS.DevicesAccessVerifiedSummary}({"verified":"0","total":"2"})`,
+    })
+    expect(vaults.incoming).toEqual({
+      kind: AccessChainLinkKind.Relation,
+      label: I18N_KEYS.DevicesAccessLinkUnverified,
     })
   })
 

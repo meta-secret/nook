@@ -58,6 +58,9 @@ vault keys, backup-password values, and plaintext vault contents are forbidden.
   and lets exactly one link be inspected at a time. Each link shows at most one
   identifier so the relationship stays readable instead of becoming a list of
   key ids.
+- The chain claims access only where a device-key open actually succeeded. The
+  vault link names verified vaults only, and while known vaults exist with none
+  verified, the relation drops the access verb instead of implying reach.
 - The login surface always offers **Devices & access**.
 - A first-run suggestion may invite the user to review access before choosing a
   vault; **Don't show again** is a browser-local preference and never hides the

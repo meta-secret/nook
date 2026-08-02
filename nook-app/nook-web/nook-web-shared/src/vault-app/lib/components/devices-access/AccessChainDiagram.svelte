@@ -9,7 +9,9 @@ never drift apart.
     type AccessChainNode,
     AccessChainLinkKind,
     AccessChainStage,
+    accessChainTab,
     accessChainTabId,
+    AccessChainTabKind,
     AccessNodeDetailKind,
   } from './access-chain'
 
@@ -33,7 +35,9 @@ never drift apart.
     const next = order[(current + offset + order.length) % order.length]
     onSelect(next)
     await tick()
-    document.getElementById(accessChainTabId(next))?.focus()
+    const tab = accessChainTab(next)
+    if (tab.kind === AccessChainTabKind.Missing) return
+    tab.element.focus()
   }
 
   function handleKeydown(event: KeyboardEvent): void {

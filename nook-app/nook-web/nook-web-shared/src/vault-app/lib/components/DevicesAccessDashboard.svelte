@@ -54,7 +54,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   import {
     AccessChainLinkKind,
     AccessChainStage,
+    accessChainTab,
     accessChainTabId,
+    AccessChainTabKind,
     buildAccessChainNodes,
     identityStateLabel,
     panelDescription,
@@ -146,10 +148,10 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       case DashboardFocusTargetKind.None:
         return
       case DashboardFocusTargetKind.ChainSelection: {
-        const tab = document.getElementById(accessChainTabId(selectedStage))
-        if (!tab) return
+        const tab = accessChainTab(selectedStage)
+        if (tab.kind === AccessChainTabKind.Missing) return
         pendingFocusTarget = DashboardFocusTargetKind.None
-        tab.focus()
+        tab.element.focus()
         return
       }
       case DashboardFocusTargetKind.RetryResult: {

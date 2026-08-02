@@ -69,6 +69,23 @@ export function accessChainTabId(stage: AccessChainStage): string {
   return `devices-access-tab-${stage}`;
 }
 
+export enum AccessChainTabKind {
+  Mounted = "mounted",
+  Missing = "missing",
+}
+
+/** A chain tab can be gone by the time a rerender settles, so say so. */
+export type AccessChainTab =
+  | { kind: typeof AccessChainTabKind.Mounted; element: HTMLElement }
+  | { kind: typeof AccessChainTabKind.Missing };
+
+export function accessChainTab(stage: AccessChainStage): AccessChainTab {
+  const element = document.getElementById(accessChainTabId(stage));
+  return element
+    ? { kind: AccessChainTabKind.Mounted, element }
+    : { kind: AccessChainTabKind.Missing };
+}
+
 export function knownText(value: DashboardText): boolean {
   return value.kind === DashboardTextKind.Known;
 }
@@ -282,24 +299,53 @@ export function buildAccessChainNodes(
         label: vault.t(I18N_KEYS.DevicesAccessLinkUnlocks),
       },
     },
-    {
-      stage: AccessChainStage.Vaults,
-      caption: stageLabel(vault, AccessChainStage.Vaults, input.protection),
-      title:
-        input.vaults.length === 0
-          ? vault.t(I18N_KEYS.DevicesAccessNoVaultsShort)
-          : input.vaults.map((entry) => entry.label).join(", "),
-      detail:
-        input.vaults.length === 0
-          ? { kind: AccessNodeDetailKind.Absent }
-          : {
-              kind: AccessNodeDetailKind.Summary,
-              value: verifiedVaultsSummary(vault, input.vaults),
-            },
-      incoming: {
-        kind: AccessChainLinkKind.Relation,
-        label: vault.t(I18N_KEYS.DevicesAccessLinkOpens),
-      },
-    },
+    vaultsNode(vault, input.protection, input.vaults),
   ];
+}
+
+/**
+ * A vault is only known to be reachable from this device key once that key
+ * actually opened it, so the node names verified vaults only. With rows present
+ * and none verified the relation drops the access claim; with no rows at all it
+ * keeps the verb, because then it describes the shape of the chain to come.
+ */
+function vaultsNode(
+  vault: VaultState,
+  protection: DeviceAccessProtectionKind,
+  vaults: readonly VaultAccessView[],
+): AccessChainNode {
+  const verified = vaults.filter((entry) => entry.verified);
+  return {
+    stage: AccessChainStage.Vaults,
+    caption: stageLabel(vault, AccessChainStage.Vaults, protection),
+    title: vaultsNodeTitle(vault, vaults, verified),
+    detail:
+      vaults.length === 0
+        ? { kind: AccessNodeDetailKind.Absent }
+        : {
+            kind: AccessNodeDetailKind.Summary,
+            value: verifiedVaultsSummary(vault, vaults),
+          },
+    incoming: {
+      kind: AccessChainLinkKind.Relation,
+      label: vault.t(
+        vaults.length > 0 && verified.length === 0
+          ? I18N_KEYS.DevicesAccessLinkUnverified
+          : I18N_KEYS.DevicesAccessLinkOpens,
+      ),
+    },
+  };
+}
+
+function vaultsNodeTitle(
+  vault: VaultState,
+  vaults: readonly VaultAccessView[],
+  verified: readonly VaultAccessView[],
+): string {
+  if (vaults.length === 0) {
+    return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort);
+  }
+  return verified.length === 0
+    ? vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
+    : verified.map((entry) => entry.label).join(", ");
 }
