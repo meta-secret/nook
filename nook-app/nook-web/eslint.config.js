@@ -23,7 +23,11 @@ export default [
     },
   },
   {
-    files: ['nook-web-extension/src/**/*.{ts,svelte}'],
+    // The shared config is invoked from both nook-web and nook-web-extension.
+    files: [
+      'nook-web-extension/src/**/*.{ts,svelte}',
+      'src/**/*.{ts,svelte}',
+    ],
     languageOptions: {
       globals: {
         ...globals.webextensions,
