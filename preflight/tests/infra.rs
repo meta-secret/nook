@@ -145,9 +145,24 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
             && rotate.contains("kubectl create secret generic hive-codex-auth")
-            && rotate.contains("kubectl rollout restart deployment/hive")
+            && rotate.contains("kubectl scale deployment/hive")
+            && rotate.contains("--replicas=0")
+            && rotate.contains("--for=delete")
             && rotate.contains("kubectl rollout status deployment/hive"),
-        "explicit auth rotation must replace the Secret and roll the warm pool"
+        "explicit auth rotation must quiesce brokers, replace the Secret, and restore the pool"
+    );
+    let quiesce = rotate
+        .find("--replicas=0")
+        .context("auth rotation must quiesce the warm pool")?;
+    let publish = rotate
+        .find("kubectl create secret generic hive-codex-auth")
+        .context("auth rotation must publish the replacement Secret")?;
+    let restore = rotate
+        .rfind("restore_hive_workers")
+        .context("auth rotation must restore the warm pool")?;
+    assert!(
+        quiesce < publish && publish < restore,
+        "auth rotation must stop brokers before publication and restore them afterward"
     );
     Ok(())
 }

@@ -167,15 +167,25 @@ tasks:
         set -euo pipefail
         remote_dir="$remote_dir"
         auth_file="\$remote_dir/secrets/codex-auth.json.next"
-        trap 'rm -f "\$auth_file"' EXIT
         kubectl() { sudo -n k0s kubectl "\$@"; }
+        original_replicas=""
+        restore_hive_workers() {
+          if test -n "\$original_replicas"; then
+            kubectl scale deployment/hive \
+              --namespace hive-system \
+              --replicas="\$original_replicas"
+            kubectl rollout status deployment/hive \
+              --namespace hive-system \
+              --timeout=10m
+            original_replicas=""
+          fi
+        }
+        cleanup_rotation() {
+          restore_hive_workers
+          rm -f "\$auth_file"
+        }
+        trap cleanup_rotation EXIT
         chmod 0600 "\$auth_file"
-        kubectl create secret generic hive-codex-auth \
-          --namespace hive-system \
-          --from-file=auth.json="\$auth_file" \
-          --dry-run=client \
-          -o yaml |
-          kubectl apply -f -
         deployment_ref="\$(
           kubectl get deployment hive \
             --namespace hive-system \
@@ -184,10 +194,33 @@ tasks:
         )"
         case "\$deployment_ref" in
           deployment.apps/hive)
-            kubectl rollout restart deployment/hive --namespace hive-system
+            original_replicas="\$(
+              kubectl get deployment hive \
+                --namespace hive-system \
+                -o jsonpath='{.spec.replicas}'
+            )"
+            case "\$original_replicas" in
+              ''|*[!0-9]*)
+                echo "Hive deployment has an invalid replica count" >&2
+                exit 1
+                ;;
+            esac
+            kubectl scale deployment/hive \
+              --namespace hive-system \
+              --replicas=0
             kubectl rollout status deployment/hive \
               --namespace hive-system \
               --timeout=10m
+            if kubectl get pod \
+              --namespace hive-system \
+              --selector app.kubernetes.io/name=hive \
+              -o name | grep -q .; then
+              kubectl wait pod \
+                --namespace hive-system \
+                --selector app.kubernetes.io/name=hive \
+                --for=delete \
+                --timeout=10m
+            fi
             ;;
           '') ;;
           *)
@@ -195,6 +228,13 @@ tasks:
             exit 1
             ;;
         esac
+        kubectl create secret generic hive-codex-auth \
+          --namespace hive-system \
+          --from-file=auth.json="\$auth_file" \
+          --dry-run=client \
+          -o yaml |
+          kubectl apply -f -
+        restore_hive_workers
         REMOTE
           trap - EXIT
           cleanup_auth

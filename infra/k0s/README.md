@@ -108,8 +108,17 @@ task infra:deploy
 ```
 
 The GitHub token needs Nook contents and pull-request write access plus Actions
-read access. Later deployments reuse the encrypted Secrets unless replacement
-files are explicitly supplied.
+read access. Later deployments preserve Hive's cluster-rotated Codex Secret
+even if `HIVE_CODEX_AUTH_FILE` remains set. Intentionally replacing Codex
+authentication is a separate operation that quiesces the warm pool before
+publishing the replacement and restores the prior replica count afterward:
+
+```bash
+HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate
+```
+
+The GitHub publication Secret retains its existing explicit file-sync behavior
+during deployment.
 Durable Hive queue state is inspected through the repository Taskfile:
 
 ```bash
