@@ -8,6 +8,8 @@ const TRANSLATION_MARKUP = {
 
 export function replaceWithSafeTranslationHtml(element, html) {
   const fragment = DOMPurify.sanitize(html, TRANSLATION_MARKUP)
-  const sanitizedNodes = Array.from(fragment.childNodes)
+  const sanitizedNodes = Array.from(fragment.childNodes, (node) =>
+    node.cloneNode(true),
+  )
   element.replaceChildren(...sanitizedNodes)
 }

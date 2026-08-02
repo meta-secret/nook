@@ -12,7 +12,7 @@ const siteRoot = join(webRoot, 'nook-web-app/dist/site')
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
   const files = await Promise.all(
-    entries.map((entry) => {
+    entries.map(async (entry) => {
       const path = join(directory, entry.name)
       return entry.isDirectory() ? filesBelow(path) : [path]
     }),

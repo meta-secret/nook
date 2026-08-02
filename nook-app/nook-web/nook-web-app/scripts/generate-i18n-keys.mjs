@@ -342,6 +342,8 @@ async function verifyNoRawBrowserMessageKeys() {
 async function landingKeys() {
   const source = await readFile(landingMessagesPath, 'utf8')
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+  // The URL contains only the local translation catalog read immediately above.
+  // eslint-disable-next-line no-unsanitized/method
   const { landingMessages } = await import(moduleUrl)
   const englishKeys = Object.keys(landingMessages.en).sort()
   const russianKeys = Object.keys(landingMessages.ru).sort()
