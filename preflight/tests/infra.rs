@@ -125,16 +125,27 @@ fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
 #[test]
 fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     let root = repository_root();
-    let output = Command::new("bash")
-        .arg(root.join("preflight/tests/hive_auth_sync.sh"))
-        .arg(&root)
-        .output()?;
-    assert!(
-        output.status.success(),
-        "Hive auth synchronization harness failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for (harness, description) in [
+        (
+            "preflight/tests/hive_auth_sync.sh",
+            "Hive auth synchronization",
+        ),
+        (
+            "preflight/tests/hive_auth_rotation.sh",
+            "Hive auth rotation",
+        ),
+    ] {
+        let output = Command::new("bash")
+            .arg(root.join(harness))
+            .arg(&root)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{description} harness failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     let tasks = read_fallible("infra/tasks/hive.yml")?;
     let rotate = tasks

@@ -168,6 +168,9 @@ tasks:
         remote_dir="$remote_dir"
         auth_file="\$remote_dir/secrets/codex-auth.json.next"
         kubectl() { sudo -n k0s kubectl "\$@"; }
+        # HIVE_AUTH_ROTATION_BEGIN
+        rotate_hive_auth() {
+          auth_file="\$1"
         original_replicas=""
         restore_hive_workers() {
           if test -n "\$original_replicas"; then
@@ -181,8 +184,8 @@ tasks:
           fi
         }
         cleanup_rotation() {
-          restore_hive_workers
           rm -f "\$auth_file"
+          restore_hive_workers
         }
         trap cleanup_rotation EXIT
         chmod 0600 "\$auth_file"
@@ -234,7 +237,12 @@ tasks:
           --dry-run=client \
           -o yaml |
           kubectl apply -f -
+        rm -f "\$auth_file"
         restore_hive_workers
+        trap - EXIT
+        }
+        # HIVE_AUTH_ROTATION_END
+        rotate_hive_auth "\$auth_file"
         REMOTE
           trap - EXIT
           cleanup_auth
