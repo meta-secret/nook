@@ -257,3 +257,7 @@ export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
   }
   await chrome.tabs.create({ url: launcherUrl })
 }
+
+export function openCompanionLauncherBestEffort(intent?: 'pair'): void {
+  void openCompanionLauncher(intent).catch(() => undefined)
+}

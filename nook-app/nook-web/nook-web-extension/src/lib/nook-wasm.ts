@@ -217,9 +217,9 @@ async function createPasskey(
 }
 
 export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectionStatus> {
-  const { status } = await sessionMessage<
-    SessionResponse<{ status: DeviceProtectionStatus }>
-  >({ type: 'nook:extension-session-status' })
+  const { status } = await sessionMessage<SessionResponse<{ status: unknown }>>(
+    { type: 'nook:extension-session-status' },
+  )
   switch (status) {
     case DeviceProtectionStatus.Missing:
     case DeviceProtectionStatus.Plaintext:
@@ -233,6 +233,8 @@ export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectio
       throw new Error(
         `Unsupported extension device protection status: ${status}`,
       )
+    default:
+      throw new Error('Unsupported extension device protection status.')
   }
 }
 

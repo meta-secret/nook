@@ -16,7 +16,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
   isUnlockedSessionStatus,
-  openCompanionLauncher,
+  openCompanionLauncherBestEffort,
 } from './session-lifecycle'
 
 type PendingAuthenticatorPicker = {
@@ -211,7 +211,7 @@ export async function authorizedWebsiteGrant(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
-    await openCompanionLauncher()
+    openCompanionLauncherBestEffort()
     return { response: { ok: false, reason: reasons.locked } }
   }
   return { grant }

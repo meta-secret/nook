@@ -21,3 +21,24 @@ describe('ensureExtensionSessionDocument', () => {
     expect(createAttempts).toBe(1)
   })
 })
+
+describe('openCompanionLauncherBestEffort', () => {
+  test('contains launcher failures for callers returning locked responses', async () => {
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    })
+    globalThis.chrome = {
+      runtime: {
+        getURL: () => 'chrome-extension://nook/popup/index.html',
+      },
+      windows: {
+        create: () => Promise.reject(new Error('launcher unavailable')),
+      },
+    } as typeof chrome
+    const { openCompanionLauncherBestEffort } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    expect(() => openCompanionLauncherBestEffort()).not.toThrow()
+    await Promise.resolve()
+  })
+})

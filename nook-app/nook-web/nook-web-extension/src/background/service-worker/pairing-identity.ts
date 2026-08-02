@@ -39,7 +39,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
   isUnlockedSessionStatus,
-  openCompanionLauncher,
+  openCompanionLauncherBestEffort,
 } from './session-lifecycle'
 
 enum PendingIdentityHandoffKind {
@@ -468,7 +468,7 @@ export async function requestPairedVaultUnlock(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
   if (!isUnlockedSessionStatus(statusResponse)) {
-    await openCompanionLauncher()
+    openCompanionLauncherBestEffort()
   }
   return { ok: true, requestId, vaultStoreId }
 }
@@ -716,7 +716,7 @@ export async function availableWebsiteGrants(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
-    await openCompanionLauncher()
+    openCompanionLauncherBestEffort()
     return { response: { ok: true, status: 'locked', accounts: [] } }
   }
   return { grants }
