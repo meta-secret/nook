@@ -151,6 +151,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               observationIndex: 0,
             },
           }
+        case undefined:
         default:
           return { ok: true }
       }
@@ -235,6 +236,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         case 'nook:website-authenticator-enroll-dismiss':
           enrollStaged = false
           return { ok: true }
+        case undefined:
         default:
           return { ok: true }
       }
@@ -258,6 +260,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             ok: true,
             password: 'DemoGeneratedPassword!234567',
           }
+        case undefined:
         default:
           return { ok: true }
       }
@@ -339,6 +342,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
         case 'nook:website-login-save-dismiss':
           stagedOffer = { kind: StagedOfferKind.Empty }
           return { ok: true }
+        case undefined:
         default:
           return { ok: true }
       }
@@ -420,6 +424,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               : 'pilot@example.test',
           password: 'demo-password-never-recorded',
         }
+      case undefined:
       default:
         return { ok: true }
     }
