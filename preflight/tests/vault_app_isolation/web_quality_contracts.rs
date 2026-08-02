@@ -16,6 +16,20 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
+    let research_manifest = read(
+        &root,
+        "nook-app/nook-web/nook-web-research/package.json",
+    );
+    for required in [
+        "\"security\": \"bun audit --prod --audit-level=high\"",
+        "\"check\": \"bun run security",
+    ] {
+        assert!(
+            research_manifest.contains(required),
+            "the independently deployed research quality gate must retain `{required}`"
+        );
+    }
+
     let eslint = read(&root, "nook-app/nook-web/eslint.config.js");
     for required in [
         "'@typescript-eslint/await-thenable': 'error'",

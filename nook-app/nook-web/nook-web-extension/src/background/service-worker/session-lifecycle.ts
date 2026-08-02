@@ -259,5 +259,5 @@ export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
 }
 
 export function openCompanionLauncherBestEffort(intent?: 'pair'): void {
-  void openCompanionLauncher(intent).catch(() => false)
+  void openCompanionLauncher(intent).catch(() => {})
 }

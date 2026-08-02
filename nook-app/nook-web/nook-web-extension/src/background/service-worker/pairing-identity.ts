@@ -39,6 +39,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
   isUnlockedSessionStatus,
+  openCompanionLauncher,
   openCompanionLauncherBestEffort,
 } from './session-lifecycle'
 
@@ -468,7 +469,7 @@ export async function requestPairedVaultUnlock(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })) as ExtensionSessionStatusResponse
   if (!isUnlockedSessionStatus(statusResponse)) {
-    openCompanionLauncherBestEffort()
+    await openCompanionLauncher()
   }
   return { ok: true, requestId, vaultStoreId }
 }

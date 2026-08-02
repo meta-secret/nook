@@ -21,8 +21,9 @@ Use this workflow for quality, CI, and deployment changes.
      includes every linted TypeScript and Svelte source, enables
      promise/exhaustiveness type-aware rules, and rejects unsanitized DOM HTML
      sinks outside test and e2e fixtures
-   - `bun audit --prod --audit-level=high` — the web-family lint path rejects
-     high-severity production dependency advisories
+   - `bun audit --prod --audit-level=high` — every independently installed web
+     package runs the audit in its CI check path and rejects high-severity
+     production dependency advisories
    - `knip` (`bun run unused`) — unused/unreachable files, exports, class
      members, and dependencies in `nook-web-app` / `nook-web-research` (and any
      package that runs Knip in its check/lint path)
