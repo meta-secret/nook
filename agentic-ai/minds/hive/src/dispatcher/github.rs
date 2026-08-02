@@ -159,6 +159,24 @@ mod tests {
     }
 
     #[test]
+    fn every_workflow_status_branch_is_classified() -> crate::HiveResult<()> {
+        for (marker, expected_status, expected_conclusion) in [
+            ("favicons/favicon-failure.svg", "completed", Some("failure")),
+            ("aria-label=\"cancelled: \"", "completed", Some("cancelled")),
+            ("aria-label=\"skipped: \"", "completed", Some("skipped")),
+            ("favicons/favicon-pending.svg", "in_progress", None),
+        ] {
+            let run = parse_typed_run(marker)?;
+            assert_eq!(run.status, expected_status);
+            assert_eq!(run.conclusion.as_deref(), expected_conclusion);
+        }
+        expect_rejection(
+            &run_page("favicons/favicon-unknown.svg"),
+            "recognized workflow status",
+        )
+    }
+
+    #[test]
     fn every_missing_provenance_marker_fails_closed() -> crate::HiveResult<()> {
         let page = run_page("favicons/favicon-failure.svg");
         expect_rejection(
