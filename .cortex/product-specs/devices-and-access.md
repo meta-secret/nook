@@ -53,6 +53,20 @@ vault keys, backup-password values, and plaintext vault contents are forbidden.
 
 ## Interaction requirements
 
+- The dashboard presents the access model as one three-link chain — what the
+  person presents, the browser device key it unlocks, and the vaults it opens —
+  and lets exactly one link be inspected at a time. Each link shows at most one
+  identifier so the relationship stays readable instead of becoming a list of
+  key ids.
+- The chain claims access only where a device-key open actually succeeded. The
+  vault link names verified vaults only, and while known vaults exist with none
+  verified, the relation drops the access verb instead of implying reach.
+- Each link's incoming relation is part of its accessible name, so the chain
+  reads as a chain without seeing the drawn connectors.
+- An unprepared browser has chosen neither a passkey nor a PIN, so its preview
+  names the first link generically rather than promising either. A companion
+  session's identity is attributed to the paired device, never to local browser
+  storage.
 - The login surface always offers **Devices & access**.
 - A first-run suggestion may invite the user to review access before choosing a
   vault; **Don't show again** is a browser-local preference and never hides the

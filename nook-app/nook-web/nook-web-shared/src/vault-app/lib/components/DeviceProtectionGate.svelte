@@ -7,7 +7,10 @@
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import ExistingVaultRecoverySummary from '$lib/components/ExistingVaultRecoverySummary.svelte'
-  import { DeviceProtectionSetupWorkflow } from './device-protection-gate-state'
+  import {
+    DeviceProtectionGateFrame,
+    DeviceProtectionSetupWorkflow,
+  } from './device-protection-gate-state'
   import {
     Card,
     CardContent,
@@ -18,11 +21,11 @@
 
   let {
     vault,
-    embedded = false,
+    frame,
     onProtectionReady,
   }: {
     vault: VaultState
-    embedded?: boolean
+    frame: DeviceProtectionGateFrame
     onProtectionReady: () => void
   } = $props()
   let pin = $state('')
@@ -54,18 +57,20 @@
 </script>
 
 <Card
-  class={`mx-auto w-full max-w-lg gap-4 py-5 animate-in fade-in duration-300 ${
-    embedded ? 'rounded-none border-0 bg-transparent shadow-none' : ''
-  }`}
+  class="mx-auto w-full max-w-lg gap-4 py-5 rounded-none border-0 bg-transparent shadow-none animate-in fade-in duration-300"
   data-testid="device-protection-gate"
 >
   <CardHeader class="gap-2 text-center">
-    <p
-      class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-      data-testid="device-protection-step"
-    >
-      {vault.t(I18N_KEYS.DeviceProtectionStepLabel)}
-    </p>
+    <!-- The step counter belongs to the two-step vault setup flow; a host that
+         already frames this gate in its own narrative shows no step. -->
+    {#if frame === DeviceProtectionGateFrame.SetupStep}
+      <p
+        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+        data-testid="device-protection-step"
+      >
+        {vault.t(I18N_KEYS.DeviceProtectionStepLabel)}
+      </p>
+    {/if}
     <div
       class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
     >

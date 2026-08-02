@@ -37,8 +37,50 @@ export enum ProviderSaveKind {
 
 export enum DashboardFocusTargetKind {
   None = "none",
-  DeviceIdentityDetails = "device-identity-details",
+  ChainSelection = "chain-selection",
   RetryResult = "retry-result",
+}
+
+export enum DashboardElementKind {
+  Mounted = "mounted",
+  Missing = "missing",
+}
+
+/** A dashboard control can be gone by the time an awaited reload settles. */
+export type DashboardElement =
+  | { kind: typeof DashboardElementKind.Mounted; element: HTMLElement }
+  | { kind: typeof DashboardElementKind.Missing };
+
+export function dashboardElement(testId: string): DashboardElement {
+  const element = document.querySelector<HTMLElement>(
+    `[data-testid="${testId}"]`,
+  );
+  return element
+    ? { kind: DashboardElementKind.Mounted, element }
+    : { kind: DashboardElementKind.Missing };
+}
+
+export enum ProviderSaveFocusKind {
+  Control = "control",
+  SelectedChainLink = "selected-chain-link",
+}
+
+export type ProviderSaveFocus =
+  | { kind: typeof ProviderSaveFocusKind.Control; element: HTMLElement }
+  | { kind: typeof ProviderSaveFocusKind.SelectedChainLink };
+
+/**
+ * A provider save can outlive the panel that started it: selecting another link
+ * unmounts the input the save would return focus to. Focus then belongs to the
+ * link the person is actually looking at, never to the document body.
+ */
+export function providerSaveFocus(
+  unlockSelected: boolean,
+  control: DashboardElement,
+): ProviderSaveFocus {
+  return unlockSelected && control.kind === DashboardElementKind.Mounted
+    ? { kind: ProviderSaveFocusKind.Control, element: control.element }
+    : { kind: ProviderSaveFocusKind.SelectedChainLink };
 }
 
 export enum DevicesAccessNudgePreference {
