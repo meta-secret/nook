@@ -103,7 +103,17 @@ fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult
 
 #[cfg(test)]
 mod tests {
+    use crate::HiveContext;
+
     const SHA: &str = "1783e5db6458451a3ce30f16b8b64f87a8e148cf";
+
+    #[derive(Debug, serde::Deserialize)]
+    struct RunEvidence {
+        id: u64,
+        head_sha: String,
+        status: String,
+        conclusion: Option<String>,
+    }
 
     fn run_page(status: &str) -> String {
         format!(
@@ -114,28 +124,64 @@ mod tests {
         )
     }
 
+    fn parse_typed_run(status: &str) -> crate::HiveResult<RunEvidence> {
+        let run = super::parse_run_page(42, &run_page(status))?;
+        serde_json::from_value(run).hive_context("deserialize parsed run evidence")
+    }
+
+    fn expect_rejection(page: &str, evidence: &str) -> crate::HiveResult<()> {
+        match super::parse_run_page(42, page) {
+            Ok(run) => Err(crate::error::HiveError::message(format!(
+                "page without {evidence} unexpectedly parsed as {run}"
+            ))),
+            Err(error) if format!("{error:#}").contains(evidence) => Ok(()),
+            Err(error) => Err(crate::error::HiveError::message(format!(
+                "page without {evidence} returned the wrong error: {error:#}"
+            ))),
+        }
+    }
+
     #[test]
     fn public_failure_page_binds_exact_main_push() -> crate::HiveResult<()> {
-        let run = super::parse_run_page(42, &run_page("favicons/favicon-failure.svg"))?;
-        assert_eq!(run["id"], 42);
-        assert_eq!(run["head_sha"], SHA);
-        assert_eq!(run["conclusion"], "failure");
+        let run = parse_typed_run("favicons/favicon-failure.svg")?;
+        assert_eq!(run.id, 42);
+        assert_eq!(run.head_sha, SHA);
+        assert_eq!(run.conclusion.as_deref(), Some("failure"));
         Ok(())
     }
 
     #[test]
     fn public_success_page_retires_repair() -> crate::HiveResult<()> {
-        let run = super::parse_run_page(42, &run_page("favicons/favicon-success.svg"))?;
-        assert_eq!(run["status"], "completed");
-        assert_eq!(run["conclusion"], "success");
+        let run = parse_typed_run("favicons/favicon-success.svg")?;
+        assert_eq!(run.status, "completed");
+        assert_eq!(run.conclusion.as_deref(), Some("success"));
         Ok(())
     }
 
     #[test]
-    fn page_without_exact_provenance_fails_closed() {
-        match super::parse_run_page(42, "favicons/favicon-failure.svg") {
-            Ok(run) => panic!("page unexpectedly parsed as {run}"),
-            Err(error) => assert!(format!("{error:#}").contains("full commit identity")),
-        }
+    fn every_missing_provenance_marker_fails_closed() -> crate::HiveResult<()> {
+        let page = run_page("favicons/favicon-failure.svg");
+        expect_rejection(
+            &page.replace(&format!("/meta-secret/nook/commit/{SHA}"), "/commit/short"),
+            "full commit identity",
+        )?;
+        expect_rejection(
+            &page.replace(
+                "title=\"main\" href=\"/meta-secret/nook/tree/refs/heads/main\"",
+                "title=\"feature\" href=\"/meta-secret/nook/tree/refs/heads/feature\"",
+            ),
+            "main branch",
+        )?;
+        expect_rejection(
+            &page.replace(
+                "href=\"/meta-secret/nook/actions/workflows/main.yml\"",
+                "href=\"/meta-secret/nook/actions/workflows/pr.yml\"",
+            ),
+            "Main workflow",
+        )?;
+        expect_rejection(
+            &page.replace(">on: push</div>", ">on: pull_request</div>"),
+            "push trigger",
+        )
     }
 }
