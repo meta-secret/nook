@@ -1,329 +1,394 @@
 <!--
-DIRECTION: Not an inventory — a risk read. One column of graded links, each
-answering "what happens if you lose this" and "can it come back", with the
-weakest link stated before anything else. Grades are derived from the fixture
-only: protection kind, backup state, vault trust, backup-password counts.
+DIRECTION: Redundancy drawn as rope. One row per vault; every passkey that
+reaches it is a strand, carrying its own identifier and the device knot it
+passes through. Count the strands and you have counted your ways back in — and
+strands of one colour mean one password manager holds all of them.
 -->
 <script lang="ts">
-  import {
-    ChevronDown,
-    Fingerprint,
-    Laptop,
-    TriangleAlert,
-    Vault,
-  } from '@lucide/svelte'
+  import { Fingerprint, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
-  import ScenarioSwitch from '../_shared/ScenarioSwitch.svelte'
+  import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    BrowserProtection,
-    CHAIN_STAGES,
-    ChainStage,
-    type AccessScenario,
-    type Fact,
-    FactKind,
-    factText,
-    isPrepared,
-    ScenarioId,
-    scenarioById,
-    stageCaption,
-    stageEvidence,
-    stageIdentifier,
-    stageTitle,
-    verifiedVaults,
-  } from '../_shared/keys-management-state'
+    defaultNode,
+    devicesForVault,
+    GraphId,
+    graphById,
+    HereKind,
+    hereDevices,
+    highlightFor,
+    type KeyGraph,
+    KeyStore,
+    NodeKind,
+    type NodeRef,
+    openableHere,
+    passkeysForVault,
+    Reach,
+    storeLabel,
+    type Vault,
+    vaultsForPasskey,
+  } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { Grade } from './chain-grade'
+  import { Redundancy } from './chain-grade'
 
-  interface LinkRead {
-    stage: ChainStage
-    grade: Grade
-    loss: string
-    recovery: string
-    action: string
-    identifier: Fact
+  interface Knot {
+    id: string
+    shortId: string
+  }
+
+  interface Strand {
+    key: string
+    passkeyId: string
+    shortId: string
+    store: KeyStore
+    storeName: string
+    here: boolean
+    knots: Knot[]
+  }
+
+  interface VaultRead {
+    vault: Vault
+    strands: Strand[]
+    managers: number
+    pips: boolean[]
+    grade: Redundancy
+  }
+
+  const STORE_INK: Record<KeyStore, string> = {
+    [KeyStore.ApplePasswords]: '#6b7280',
+    [KeyStore.Bitwarden]: '#2f5fd0',
+    [KeyStore.OnePassword]: '#1f7a5c',
+    [KeyStore.SecurityKey]: '#a1751a',
   }
 
   let { navigate }: ExperimentProps = $props()
-  let scenarioId = $state(ScenarioId.Shared)
-  let openStage = $state(ChainStage.Passkey)
-  const scenario = $derived(scenarioById(scenarioId))
-  const reads = $derived(CHAIN_STAGES.map((stage) => readFor(scenario, stage)))
-  const weakest = $derived(weakestOf(reads))
+  let graphId = $state(GraphId.Tangle)
+  let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
 
-  const GRADES: Record<Grade, { rank: number; label: string }> = {
-    [Grade.Absent]: { rank: 0, label: 'Not present yet' },
-    [Grade.SinglePoint]: { rank: 1, label: 'Single point of failure' },
-    [Grade.Rederivable]: { rank: 2, label: 'Can be re-derived' },
-    [Grade.Recoverable]: { rank: 3, label: 'Recoverable elsewhere' },
-  }
+  const graph = $derived(graphById(graphId))
+  const highlight = $derived(highlightFor(graph, selected))
+  const reads = $derived(graph.vaults.map((vault) => readFor(graph, vault)))
 
-  const STAGE_ICON = {
-    [ChainStage.Passkey]: Fingerprint,
-    [ChainStage.DeviceKey]: Laptop,
-    [ChainStage.Vaults]: Vault,
-  }
-
-  function passkeyRead(access: AccessScenario): LinkRead {
-    const identifier = stageIdentifier(access, ChainStage.Passkey)
-    if (access.protection === BrowserProtection.NotPrepared) {
-      return {
-        stage: ChainStage.Passkey,
-        grade: Grade.Absent,
-        loss: 'Nothing to lose yet. No passkey has been created for this browser, so no route in exists.',
-        recovery: `Nothing to recover either. Whether a future passkey can be restored is settled when you make it: ${access.passkey.backupState.toLowerCase()}.`,
-        action: 'Create a passkey for this browser.',
-        identifier,
-      }
-    }
-    const recoverable =
-      access.protection === BrowserProtection.PasskeyRecoverable
+  function readFor(graph: KeyGraph, vault: Vault): VaultRead {
+    const strands = passkeysForVault(graph, vault).map((passkey) => ({
+      key: `${vault.id}-${passkey.id}`,
+      passkeyId: passkey.id,
+      shortId: passkey.shortId,
+      store: passkey.store,
+      storeName: storeLabel(passkey.store),
+      here: passkey.reach === Reach.Here,
+      knots: devicesForVault(graph, vault)
+        .filter((device) => device.passkeyIds.includes(passkey.id))
+        .map((device) => ({ id: device.id, shortId: device.shortId })),
+    }))
+    const managers = new Set(strands.map((strand) => strand.store)).size
     return {
-      stage: ChainStage.Passkey,
-      grade: recoverable ? Grade.Recoverable : Grade.SinglePoint,
-      loss: 'Lose this passkey and nothing can unlock this browser again. Nook never held the passkey itself — only a fingerprint of it.',
-      recovery: recoverable
-        ? `${access.passkey.backupState}, so you can present it again from another device signed in to ${factText(access.passkey.savedIn)}.`
-        : `${access.passkey.backupState}. Nothing can re-derive it, so losing that authenticator closes this route for good.`,
-      action: recoverable
-        ? `Confirm ${factText(access.passkey.savedIn)} is still syncing on a second device you own.`
-        : 'Add a second passkey, and keep a backup password for every vault you cannot afford to lose.',
-      identifier,
+      vault,
+      strands,
+      managers,
+      pips: graph.passkeys.map((_passkey, index) => index < strands.length),
+      grade: gradeOf(strands.length, managers),
     }
   }
 
-  function deviceRead(access: AccessScenario): LinkRead {
-    const identifier = stageIdentifier(access, ChainStage.DeviceKey)
-    if (!isPrepared(access)) {
-      return {
-        stage: ChainStage.DeviceKey,
-        grade: Grade.Absent,
-        loss: `Nothing here to lose. ${access.device.boundary}`,
-        recovery: `${factText(access.device.id)}, and it will live only in ${access.device.browser} on ${access.device.platform}.`,
-        action: 'Prepare this browser so a device key exists.',
-        identifier,
-      }
-    }
-    const thin = verifiedVaults(access).filter(
-      (vault) => vault.enrolledDevices < 2,
-    )
-    return {
-      stage: ChainStage.DeviceKey,
-      grade: Grade.Rederivable,
-      loss: `Clear this browser's storage and the device key is gone with it. ${access.device.boundary}`,
-      recovery: `It is re-derived the next time that passkey unlocks ${access.device.browser} here — but only while the passkey still exists.`,
-      action:
-        thin.length === 0
-          ? 'Every verified vault already has another enrolled device. Nothing to do here.'
-          : `Only this device is enrolled in ${thin.map((vault) => vault.label).join(', ')}. Enrol a second device.`,
-      identifier,
-    }
+  function gradeOf(routes: number, managers: number): Redundancy {
+    if (routes === 0) return Redundancy.Severed
+    if (routes === 1) return Redundancy.Single
+    return managers === 1 ? Redundancy.OneManager : Redundancy.Spread
   }
 
-  function vaultRead(access: AccessScenario): LinkRead {
-    const identifier = stageIdentifier(access, ChainStage.Vaults)
-    const verified = verifiedVaults(access)
-    if (verified.length === 0) {
-      return {
-        stage: ChainStage.Vaults,
-        grade: Grade.Absent,
-        loss: 'Nothing is reachable from this browser, so nothing here can be lost.',
-        recovery:
-          'A vault counts as reachable only after this device key has actually opened it.',
-        action: 'Open or join a vault from this browser.',
-        identifier,
-      }
-    }
-    const unbacked = verified.filter((vault) => vault.backupPasswords === 0)
-    const unverified = access.vaults.length - verified.length
-    return {
-      stage: ChainStage.Vaults,
-      grade: unbacked.length === 0 ? Grade.Recoverable : Grade.SinglePoint,
-      loss:
-        unbacked.length === 0
-          ? 'A vault is reachable through a verified key or its backup password. Every verified vault here still has a second way in.'
-          : `${unbacked.map((vault) => vault.label).join(', ')} can only be opened by a verified key. Lose every key and the data is unreadable.`,
-      recovery:
-        unverified === 0
-          ? 'Backup passwords stay wrapped in this browser, so they survive losing the passkey but not losing this browser.'
-          : `${unverified} of the vaults listed here has never been opened by this key, so it is not proven reachable at all.`,
-      action:
-        unbacked.length === 0
-          ? 'Keep one backup password written down somewhere outside this browser.'
-          : `Set a backup password for ${unbacked.map((vault) => vault.label).join(', ')}.`,
-      identifier,
-    }
+  function gradeLabel(read: VaultRead): string {
+    if (read.grade === Redundancy.Severed) return 'no passkey'
+    if (read.grade === Redundancy.Single) return '1 route'
+    return `${read.strands.length} routes · ${read.managers} manager${read.managers === 1 ? '' : 's'}`
   }
 
-  function readFor(access: AccessScenario, stage: ChainStage): LinkRead {
-    if (stage === ChainStage.Passkey) return passkeyRead(access)
-    if (stage === ChainStage.DeviceKey) return deviceRead(access)
-    return vaultRead(access)
+  function gradeInk(grade: Redundancy): string {
+    if (grade === Redundancy.Spread) return 'text-[#1f5c44]'
+    if (grade === Redundancy.OneManager) return 'text-[#8a5d0f]'
+    return 'text-[#a8431c]'
   }
 
-  function weakestOf(rows: LinkRead[]): LinkRead {
-    return rows.reduce((worst, row) =>
-      GRADES[row.grade].rank < GRADES[worst.grade].rank ? row : worst,
-    )
+  function gradeEdge(grade: Redundancy): string {
+    if (grade === Redundancy.Spread) return 'border-l-[#1f5c44]'
+    if (grade === Redundancy.OneManager) return 'border-l-[#8a5d0f]'
+    return 'border-l-[#a8431c]'
   }
 
-  function prose(read: LinkRead): { label: string; text: string }[] {
-    return [
-      { label: 'If you lose it', text: read.loss },
-      { label: 'Can it come back', text: read.recovery },
-    ]
+  function gradePip(grade: Redundancy): string {
+    if (grade === Redundancy.Spread) return 'bg-[#1f5c44]'
+    if (grade === Redundancy.OneManager) return 'bg-[#8a5d0f]'
+    return 'bg-[#a8431c]'
   }
 
-  function gradeInk(grade: Grade): string {
-    if (grade === Grade.SinglePoint) return 'text-[#a8431c]'
-    if (grade === Grade.Absent) return 'text-[#1a1815]/35'
-    return 'text-[#1a1815]/65'
+  function braceY(count: number, index: number): number {
+    return ((index + 0.5) / count) * 100
   }
 
-  function gradeEdge(grade: Grade): string {
-    if (grade === Grade.SinglePoint)
-      return 'border-[#a8431c]/45 bg-[#a8431c]/[0.04]'
-    if (grade === Grade.Absent) return 'border-dashed border-[#1a1815]/25'
-    return 'border-[#1a1815]/15'
+  function pick(kind: NodeKind, id: string) {
+    selected = { kind, id }
+  }
+
+  function isSelected(kind: NodeKind, id: string): boolean {
+    return selected.kind === kind && selected.id === id
+  }
+
+  function dim(lit: boolean): string {
+    return lit ? 'opacity-100' : 'opacity-25'
+  }
+
+  function chosenEdge(chosen: boolean): string {
+    return chosen ? 'border-[#1a1815]' : 'border-[#1a1815]/25'
   }
 </script>
 
 <main class="min-h-[100svh] bg-[#f6f3ec] text-[#1a1815]">
   <ExperimentBack {navigate} light />
-  <ScenarioSwitch
-    {scenario}
+  <GraphSwitch
+    {graph}
     light
-    onScenario={(next) => {
-      scenarioId = next
-      openStage = ChainStage.Passkey
+    onGraph={(next) => {
+      graphId = next
+      selected = defaultNode(graphById(next))
     }}
   />
 
-  <section class="mx-auto max-w-2xl px-5 py-24 sm:px-8 sm:py-28">
-    <p
-      class="font-mono text-[11px] tracking-[0.24em] text-[#1a1815]/45 uppercase"
-    >
-      Devices &amp; access · assessment
-    </p>
-    <h1
-      class="mt-6 text-3xl leading-tight font-normal tracking-[-0.02em] sm:text-4xl"
-    >
-      Three links hold your data.<br />
-      Here is what happens if one goes.
-    </h1>
-
-    <div
-      class="mt-10 border-l-2 border-[#a8431c] bg-[#a8431c]/[0.05] py-5 pr-5 pl-5"
-    >
-      <p
-        class="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-[#a8431c] uppercase"
+  <section class="mx-auto max-w-3xl px-5 pt-28 pb-20 sm:px-8 sm:pt-24">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span
+        class="font-mono text-[10px] tracking-[0.22em] text-[#1a1815]/45 uppercase"
       >
-        <TriangleAlert class="size-3.5" aria-hidden="true" />
-        Weakest link · {stageCaption(weakest.stage)}
-      </p>
-      <p class="mt-3 text-[15px] leading-6">{weakest.loss}</p>
-      <p class="mt-3 text-sm leading-6 text-[#1a1815]/60">{weakest.action}</p>
+        This browser
+      </span>
+      {#each hereDevices(graph) as device (device.id)}
+        <button
+          type="button"
+          aria-pressed={isSelected(NodeKind.Device, device.id)}
+          class={`rounded-full border px-2.5 py-1 font-mono text-[11px] transition motion-reduce:transition-none ${chosenEdge(isSelected(NodeKind.Device, device.id))}`}
+          onclick={() => pick(NodeKind.Device, device.id)}
+        >
+          {device.shortId}
+        </button>
+      {/each}
+      {#if graph.here.kind === HereKind.Unprepared}
+        <span
+          class="rounded-full border border-dashed border-[#a8431c]/60 px-2.5 py-1 font-mono text-[11px] text-[#a8431c]"
+        >
+          no device key
+        </span>
+      {/if}
     </div>
 
-    <ol class="mt-12 space-y-4">
-      {#each reads as read, index (read.stage)}
-        {@const Icon = STAGE_ICON[read.stage]}
-        {@const open = openStage === read.stage}
-        <li class={`border ${gradeEdge(read.grade)}`}>
-          <button
-            type="button"
-            class="flex w-full items-start gap-4 px-5 py-4 text-left"
-            aria-expanded={open}
-            onclick={() => (openStage = read.stage)}
+    <p
+      class="mt-10 font-mono text-[10px] tracking-[0.22em] text-[#1a1815]/45 uppercase"
+    >
+      Passkeys
+    </p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      {#each graph.passkeys as passkey (passkey.id)}
+        {@const chosen = isSelected(NodeKind.Passkey, passkey.id)}
+        <button
+          type="button"
+          aria-pressed={chosen}
+          class={`flex items-center gap-2 border px-3 py-2 transition motion-reduce:transition-none ${chosenEdge(chosen)} ${dim(highlight.passkeyIds.includes(passkey.id))}`}
+          onclick={() => pick(NodeKind.Passkey, passkey.id)}
+        >
+          <span
+            class="size-2 shrink-0 rounded-full"
+            style={`background:${STORE_INK[passkey.store]}`}
+            aria-hidden="true"
+          ></span>
+          <span class="font-mono text-[13px] tracking-[0.06em]">
+            {passkey.shortId}
+          </span>
+          <span class="text-[11px] text-[#1a1815]/55">
+            {storeLabel(passkey.store)}
+          </span>
+          <span
+            class={`font-mono text-[10px] tracking-[0.14em] uppercase ${passkey.reach === Reach.Here ? 'text-[#1f5c44]' : 'text-[#a8431c]'}`}
           >
-            <span
-              class="mt-0.5 font-mono text-[11px] text-[#1a1815]/35 tabular-nums"
+            {passkey.reach === Reach.Here ? 'here' : 'elsewhere'}
+          </span>
+          <span class="flex items-center gap-1" aria-hidden="true">
+            {#each vaultsForPasskey(graph, passkey.id) as vault (vault.id)}
+              <span class="h-2.5 w-1.5 rounded-[1px] bg-[#1a1815]/45"></span>
+            {/each}
+          </span>
+          <span class="sr-only">
+            {vaultsForPasskey(graph, passkey.id).length} vaults
+          </span>
+        </button>
+      {/each}
+    </div>
+
+    <p
+      class="mt-12 font-mono text-[10px] tracking-[0.22em] text-[#1a1815]/45 uppercase"
+    >
+      Vaults · strands are the passkeys that reach them
+    </p>
+
+    <ul class="mt-3 space-y-3">
+      {#each reads as read (read.vault.id)}
+        {@const lit = highlight.vaultIds.includes(read.vault.id)}
+        {@const chosen = isSelected(NodeKind.Vault, read.vault.id)}
+        <li
+          class={`border border-l-2 transition motion-reduce:transition-none ${gradeEdge(read.grade)} ${chosen ? 'border-y-[#1a1815] border-r-[#1a1815]' : 'border-y-[#1a1815]/20 border-r-[#1a1815]/20'} ${dim(lit)} ${
+            read.grade === Redundancy.Severed
+              ? 'bg-[repeating-linear-gradient(45deg,#a8431c14_0_6px,transparent_6px_12px)]'
+              : ''
+          }`}
+        >
+          <div class="flex flex-col sm:flex-row-reverse sm:items-stretch">
+            <button
+              type="button"
+              aria-pressed={chosen}
+              class="flex shrink-0 flex-col justify-center gap-1.5 border-b border-[#1a1815]/15 px-4 py-3 text-left sm:w-56 sm:border-b-0 sm:border-l"
+              onclick={() => pick(NodeKind.Vault, read.vault.id)}
             >
-              0{index + 1}
-            </span>
-            <span class="min-w-0 flex-1">
               <span class="flex items-center gap-2">
-                <Icon
-                  class={`size-3.5 shrink-0 ${gradeInk(read.grade)}`}
+                <VaultIcon
+                  class="size-3.5 shrink-0 text-[#1a1815]/55"
                   aria-hidden="true"
                 />
+                <span class="truncate text-[13px]">{read.vault.label}</span>
                 <span
-                  class="font-mono text-[10px] tracking-[0.2em] text-[#1a1815]/45 uppercase"
+                  class={`ml-auto shrink-0 font-mono text-[9px] tracking-[0.14em] uppercase ${openableHere(graph, read.vault) ? 'text-[#1f5c44]' : 'text-[#1a1815]/40'}`}
                 >
-                  {stageCaption(read.stage)}
+                  {openableHere(graph, read.vault) ? 'opens here' : 'locked'}
                 </span>
               </span>
-              <span
-                class="mt-1.5 block text-lg leading-6 font-normal break-words"
-              >
-                {stageTitle(scenario, read.stage)}
+              <span class="font-mono text-xl tracking-[0.08em]">
+                {read.vault.shortId}
               </span>
-              <span class={`mt-1 block text-[13px] ${gradeInk(read.grade)}`}>
-                {GRADES[read.grade].label}
+              <span class="flex items-center gap-1.5">
+                <span class="flex items-center gap-1" aria-hidden="true">
+                  {#each read.pips as filled, index (index)}
+                    <span
+                      class={`size-2 rounded-full ${filled ? gradePip(read.grade) : 'border border-[#1a1815]/25'}`}
+                    ></span>
+                  {/each}
+                </span>
+                <span
+                  class={`font-mono text-[10px] tracking-[0.1em] uppercase ${gradeInk(read.grade)}`}
+                >
+                  {gradeLabel(read)}
+                </span>
               </span>
-            </span>
-            <ChevronDown
-              class={`mt-1 size-4 shrink-0 text-[#1a1815]/35 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </button>
+              <span class="font-mono text-[10px] text-[#1a1815]/40">
+                {read.vault.secrets} secrets
+              </span>
+            </button>
 
-          {#if open}
-            <div class="border-t border-[#1a1815]/10 px-5 py-5">
-              <dl class="space-y-4">
-                {#each prose(read) as row (row.label)}
-                  <div>
-                    <dt
-                      class="font-mono text-[10px] tracking-[0.18em] text-[#1a1815]/40 uppercase"
+            <div class="relative hidden w-8 shrink-0 sm:block">
+              <svg
+                viewBox="0 0 24 100"
+                preserveAspectRatio="none"
+                class="absolute inset-0 h-full w-full"
+                aria-hidden="true"
+                focusable="false"
+              >
+                {#each read.strands as strand, index (strand.key)}
+                  <path
+                    d={`M0 ${braceY(read.strands.length, index)} H7 C15 ${braceY(read.strands.length, index)} 15 50 24 50`}
+                    fill="none"
+                    vector-effect="non-scaling-stroke"
+                    stroke-width={highlight.passkeyIds.includes(
+                      strand.passkeyId,
+                    )
+                      ? 1.5
+                      : 1}
+                    class={highlight.passkeyIds.includes(strand.passkeyId)
+                      ? 'stroke-[#1a1815]/70'
+                      : 'stroke-[#1a1815]/20'}
+                  />
+                {/each}
+              </svg>
+            </div>
+
+            {#if read.strands.length === 0}
+              <div class="flex flex-1 items-center gap-3 px-4 py-5">
+                <span class="flex-1 border-t border-dashed border-[#a8431c]/60"
+                ></span>
+                <span
+                  class="font-mono text-[11px] tracking-[0.16em] text-[#a8431c] uppercase"
+                >
+                  no passkey reaches this
+                </span>
+                <span class="flex-1 border-t border-dashed border-[#a8431c]/60"
+                ></span>
+              </div>
+            {:else}
+              <div
+                class="grid min-w-0 flex-1"
+                style={`grid-template-rows: repeat(${read.strands.length}, minmax(0, 1fr))`}
+              >
+                {#each read.strands as strand (strand.key)}
+                  {@const strandLit = highlight.passkeyIds.includes(
+                    strand.passkeyId,
+                  )}
+                  <div
+                    class={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 transition motion-reduce:transition-none ${dim(strandLit)}`}
+                  >
+                    <span
+                      class="size-2 shrink-0 rounded-full"
+                      style={`background:${STORE_INK[strand.store]}`}
+                      aria-hidden="true"
+                    ></span>
+                    <button
+                      type="button"
+                      aria-pressed={isSelected(
+                        NodeKind.Passkey,
+                        strand.passkeyId,
+                      )}
+                      aria-label={`Passkey ${strand.shortId} in ${strand.storeName}`}
+                      class={`flex items-center gap-1.5 border-b font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
+                        isSelected(NodeKind.Passkey, strand.passkeyId)
+                          ? 'border-b-[#1a1815]'
+                          : 'border-b-transparent'
+                      }`}
+                      onclick={() => pick(NodeKind.Passkey, strand.passkeyId)}
                     >
-                      {row.label}
-                    </dt>
-                    <dd class="mt-1.5 text-sm leading-6">{row.text}</dd>
+                      <Fingerprint
+                        class="size-3 shrink-0 text-[#1a1815]/50"
+                        aria-hidden="true"
+                      />
+                      {strand.shortId}
+                    </button>
+                    <span class="shrink-0 text-[11px] text-[#1a1815]/55">
+                      {strand.storeName}
+                    </span>
+                    {#if !strand.here}
+                      <span
+                        class="shrink-0 font-mono text-[9px] tracking-[0.14em] text-[#a8431c] uppercase"
+                      >
+                        elsewhere
+                      </span>
+                    {/if}
+                    <span
+                      class={`min-w-6 flex-1 border-t ${strand.here ? 'border-[#1a1815]/30' : 'border-dashed border-[#a8431c]/50'}`}
+                      aria-hidden="true"
+                    ></span>
+                    {#each strand.knots as knot (knot.id)}
+                      <button
+                        type="button"
+                        aria-pressed={isSelected(NodeKind.Device, knot.id)}
+                        aria-label={`Device key ${knot.shortId}`}
+                        class={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px] transition motion-reduce:transition-none ${chosenEdge(isSelected(NodeKind.Device, knot.id))}`}
+                        onclick={() => pick(NodeKind.Device, knot.id)}
+                      >
+                        {knot.shortId}
+                      </button>
+                    {/each}
+                    <span
+                      class={`w-4 shrink-0 border-t ${strand.here ? 'border-[#1a1815]/30' : 'border-dashed border-[#a8431c]/50'}`}
+                      aria-hidden="true"
+                    ></span>
                   </div>
                 {/each}
-              </dl>
-
-              <p
-                class={`mt-5 border-t border-[#1a1815]/10 pt-4 text-[13px] leading-6 ${read.identifier.kind === FactKind.Known ? 'font-mono break-all text-[#1a1815]/55' : 'text-[#1a1815]/40 italic'}`}
-              >
-                {factText(read.identifier)}
-              </p>
-
-              <ul class="mt-4 space-y-1.5">
-                {#each stageEvidence(scenario, read.stage) as row (row.label)}
-                  <li class="flex flex-wrap justify-between gap-3 text-[13px]">
-                    <span class="text-[#1a1815]/45">{row.label}</span>
-                    <span
-                      class={row.fact.kind === FactKind.Known
-                        ? 'font-mono break-all'
-                        : 'text-[#1a1815]/35 italic'}
-                    >
-                      {factText(row.fact)}
-                    </span>
-                  </li>
-                {/each}
-              </ul>
-
-              <button
-                type="button"
-                class={`mt-6 w-full px-5 py-3 text-sm font-medium transition motion-reduce:transition-none ${
-                  read.grade === Grade.SinglePoint ||
-                  read.grade === Grade.Absent
-                    ? 'bg-[#a8431c] text-[#f6f3ec] hover:bg-[#8f3817]'
-                    : 'border border-[#1a1815]/25 hover:border-[#1a1815]/60'
-                }`}
-              >
-                {read.action}
-              </button>
-            </div>
-          {/if}
+              </div>
+            {/if}
+          </div>
         </li>
       {/each}
-    </ol>
-
-    <p class="mt-12 text-[13px] leading-6 text-[#1a1815]/45">
-      Every grade above is read off what this browser can actually observe. The
-      passkey never leaves your manager, the device key exists only here, and a
-      vault is counted only once this key has opened it.
-    </p>
+    </ul>
   </section>
 </main>

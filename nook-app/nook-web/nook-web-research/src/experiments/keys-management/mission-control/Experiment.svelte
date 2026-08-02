@@ -1,228 +1,522 @@
 <!--
-DIRECTION: A dark operator console. Everything is on screen at once — status
-strip, the three links as a selectable stack, the selected link's readout, and
-the vault ledger — because an operator scans rather than navigates.
+DIRECTION: A patch panel. Passkeys down the side, vaults across the top, and in
+every cell the device key that carries the route — so "which of my three
+passkeys opens this vault" is answered by looking down one column. The strip
+above counts only what this browser can do right now.
 -->
 <script lang="ts">
-  import { Fingerprint, Laptop, ShieldCheck, Vault } from '@lucide/svelte'
-  import ExperimentBack from '$lib/components/ExperimentBack.svelte'
-  import ScenarioSwitch from '../_shared/ScenarioSwitch.svelte'
   import {
-    CHAIN_STAGES,
-    ChainStage,
-    FactKind,
-    factText,
-    IdentityState,
-    isPrepared,
-    relationInto,
-    ScenarioId,
-    scenarioById,
-    stageCaption,
-    stageEvidence,
-    stageIdentifier,
-    stageMeaning,
-    stageTitle,
-    VaultTrust,
-    verifiedSummary,
-  } from '../_shared/keys-management-state'
+    Fingerprint,
+    Laptop,
+    TriangleAlert,
+    Vault as VaultIcon,
+  } from '@lucide/svelte'
+  import ExperimentBack from '$lib/components/ExperimentBack.svelte'
+  import GraphSwitch from '../_shared/GraphSwitch.svelte'
+  import {
+    defaultNode,
+    type Device,
+    devicesForVault,
+    GraphId,
+    graphById,
+    hereDevices,
+    highlightFor,
+    isHere,
+    type KeyGraph,
+    kindLabel,
+    NodeKind,
+    type NodeRef,
+    openableHere,
+    type Passkey,
+    passkeysForVault,
+    Reach,
+    storeLabel,
+    usableHere,
+    type Vault,
+    vaultsOpenableHere,
+  } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
 
-  let { navigate }: ExperimentProps = $props()
-  let scenarioId = $state(ScenarioId.Shared)
-  let selected = $state(ChainStage.Passkey)
-  const scenario = $derived(scenarioById(scenarioId))
-  const evidence = $derived(stageEvidence(scenario, selected))
-  const identifier = $derived(stageIdentifier(scenario, selected))
+  interface Readout {
+    label: string
+    items: readonly { id: string; shortId: string }[]
+  }
 
-  const stageIcons = {
-    [ChainStage.Passkey]: Fingerprint,
-    [ChainStage.DeviceKey]: Laptop,
-    [ChainStage.Vaults]: Vault,
+  let { navigate }: ExperimentProps = $props()
+  let graphId = $state(GraphId.Tangle)
+  let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
+
+  const graph = $derived(graphById(graphId))
+  const highlight = $derived(highlightFor(graph, selected))
+  const here = $derived(hereDevices(graph))
+  const usable = $derived(usableHere(graph))
+  const openHere = $derived(vaultsOpenableHere(graph))
+  const lonely = $derived(graph.vaults.filter((vault) => single(vault)))
+  const chosenShortId = $derived(shortIdOf(graph, selected))
+  const readout = $derived<Readout[]>([
+    {
+      label: 'Passkeys',
+      items: graph.passkeys.filter((passkey) =>
+        highlight.passkeyIds.includes(passkey.id),
+      ),
+    },
+    {
+      label: 'Device keys',
+      items: graph.devices.filter((device) =>
+        highlight.deviceIds.includes(device.id),
+      ),
+    },
+    {
+      label: 'Vaults',
+      items: graph.vaults.filter((vault) =>
+        highlight.vaultIds.includes(vault.id),
+      ),
+    },
+  ])
+
+  /** The device keys that carry this passkey into this vault. */
+  function route(passkey: Passkey, vault: Vault): Device[] {
+    return devicesForVault(graph, vault).filter((device) =>
+      device.passkeyIds.includes(passkey.id),
+    )
+  }
+
+  function single(vault: Vault): boolean {
+    return passkeysForVault(graph, vault).length === 1
+  }
+
+  function shortIdOf(graph: KeyGraph, node: NodeRef): string {
+    const pool: { id: string; shortId: string }[] = [
+      ...graph.passkeys,
+      ...graph.devices,
+      ...graph.vaults,
+    ]
+    const match = pool.find((item) => item.id === node.id)
+    return match ? match.shortId : ''
+  }
+
+  function pick(kind: NodeKind, id: string) {
+    selected = { kind, id }
+  }
+
+  function isSelected(kind: NodeKind, id: string): boolean {
+    return selected.kind === kind && selected.id === id
+  }
+
+  function cellLit(passkey: Passkey, vault: Vault, routes: Device[]): boolean {
+    return (
+      highlight.passkeyIds.includes(passkey.id) &&
+      highlight.vaultIds.includes(vault.id) &&
+      routes.some((device) => highlight.deviceIds.includes(device.id))
+    )
+  }
+
+  function headTone(chosen: boolean, lit: boolean): string {
+    if (chosen) return 'bg-[#16200f]'
+    if (lit) return 'bg-[#0f1411]'
+    return 'opacity-30 hover:opacity-100 focus-visible:opacity-100'
+  }
+
+  function chipTone(chosen: boolean): string {
+    return chosen
+      ? 'border-[#a6e22e] bg-[#1c2a10] text-[#d7f59a]'
+      : 'border-[#33402c] text-[#a6e22e] hover:border-[#a6e22e]'
   }
 </script>
 
-<main class="min-h-[100svh] bg-[#0a0a0b] text-[#e6e6e3]">
+<main class="min-h-[100svh] bg-[#08090b] text-[#dfe4dc]">
   <ExperimentBack {navigate} />
-  <ScenarioSwitch {scenario} onScenario={(next) => (scenarioId = next)} />
+  <GraphSwitch
+    {graph}
+    onGraph={(next) => {
+      graphId = next
+      selected = defaultNode(graphById(next))
+    }}
+  />
 
-  <section class="mx-auto max-w-6xl px-6 py-20">
-    <header class="flex flex-wrap items-end justify-between gap-6">
-      <div>
-        <p
-          class="font-mono text-[11px] tracking-[0.28em] text-[#6f6f6a] uppercase"
-        >
-          Devices &amp; access
-        </p>
-        <h1 class="mt-3 text-3xl font-light tracking-[-0.03em]">
-          Access chain, this browser
-        </h1>
-      </div>
-      <div class="flex items-center gap-2 font-mono text-[11px]">
-        <span
-          class={`size-2 rounded-full ${scenario.identity === IdentityState.Unlocked ? 'bg-[#a6e22e]' : 'bg-[#8a8a85]'}`}
-        ></span>
-        <span class="tracking-[0.18em] uppercase">{scenario.identityLabel}</span
-        >
-      </div>
-    </header>
+  <section class="mx-auto max-w-6xl px-4 pt-28 pb-16 sm:px-6 sm:pt-24">
+    <p class="font-mono text-[10px] tracking-[0.3em] text-[#6f7a6a] uppercase">
+      Nook · routing
+    </p>
 
     <div
-      class="mt-10 grid gap-px overflow-hidden rounded-lg border border-[#232326] bg-[#232326] sm:grid-cols-3"
+      class="mt-4 grid gap-px overflow-hidden rounded-md border border-[#1b1f24] bg-[#1b1f24] sm:grid-cols-2 lg:grid-cols-4"
     >
-      <div class="bg-[#0f0f11] px-5 py-4">
+      <div class="bg-[#0d1013] px-4 py-3">
         <p
-          class="font-mono text-[10px] tracking-[0.2em] text-[#6f6f6a] uppercase"
+          class="font-mono text-[9px] tracking-[0.18em] text-[#6f7a6a] uppercase"
         >
-          Protection
+          Passkeys usable here
         </p>
-        <p class="mt-2 text-sm">{scenario.protectionLabel}</p>
-      </div>
-      <div class="bg-[#0f0f11] px-5 py-4">
-        <p
-          class="font-mono text-[10px] tracking-[0.2em] text-[#6f6f6a] uppercase"
-        >
-          Device key
-        </p>
-        <p class="mt-2 font-mono text-sm break-all">
-          {factText(scenario.device.id)}
-        </p>
-      </div>
-      <div class="bg-[#0f0f11] px-5 py-4">
-        <p
-          class="font-mono text-[10px] tracking-[0.2em] text-[#6f6f6a] uppercase"
-        >
-          Verified vaults
-        </p>
-        <p class="mt-2 text-sm">{verifiedSummary(scenario)}</p>
-      </div>
-    </div>
-
-    <div class="mt-8 grid gap-8 lg:grid-cols-[22rem_1fr]">
-      <div role="tablist" aria-label="Access chain" class="space-y-1">
-        {#each CHAIN_STAGES as stage, index (stage)}
-          {@const Icon = stageIcons[stage]}
-          {@const active = stage === selected}
-          {#if index > 0}
-            <p
-              class="pl-6 font-mono text-[10px] tracking-[0.24em] text-[#5c5c58] uppercase"
-            >
-              │ {relationInto(stage)}
-            </p>
-          {/if}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={active}
-            class={`flex w-full items-start gap-3 rounded-md border px-4 py-3 text-left transition ${
-              active
-                ? 'border-[#a6e22e]/50 bg-[#16180f]'
-                : 'border-[#232326] bg-[#0f0f11] hover:border-[#3a3a3e]'
-            }`}
-            onclick={() => (selected = stage)}
+        <p class="mt-1.5 font-mono text-2xl leading-none text-[#a6e22e]">
+          {usable.length}<span class="text-sm text-[#6f7a6a]"
+            >/{graph.passkeys.length}</span
           >
-            <Icon
-              class={`mt-0.5 size-4 ${active ? 'text-[#a6e22e]' : 'text-[#6f6f6a]'}`}
-              aria-hidden="true"
-            />
-            <span class="min-w-0">
-              <span
-                class="block font-mono text-[10px] tracking-[0.2em] text-[#6f6f6a] uppercase"
-              >
-                {stageCaption(stage)}
-              </span>
-              <span class="mt-1 block truncate text-sm"
-                >{stageTitle(scenario, stage)}</span
-              >
-            </span>
-          </button>
-        {/each}
-      </div>
-
-      <div class="rounded-lg border border-[#232326] bg-[#0f0f11] p-6">
-        <div class="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 class="text-lg font-light">{stageCaption(selected)}</h2>
-          {#if identifier.kind === FactKind.Known}
-            <p class="font-mono text-xs break-all text-[#8a8a85]">
-              {identifier.value}
-            </p>
-          {/if}
-        </div>
-        <p class="mt-3 max-w-2xl text-sm leading-6 text-[#9a9a95]">
-          {stageMeaning(selected)}
         </p>
-        <dl
-          class="mt-6 space-y-px overflow-hidden rounded border border-[#232326]"
-        >
-          {#each evidence as row (row.label)}
-            <div
-              class="flex flex-wrap items-baseline justify-between gap-4 bg-[#141416] px-4 py-2.5"
+        <ul class="mt-2 flex flex-wrap gap-1">
+          {#each usable as passkey (passkey.id)}
+            <li
+              class="border border-[#2a3327] px-1.5 py-0.5 font-mono text-[10px] text-[#c7d2c1]"
             >
-              <dt
-                class="font-mono text-[11px] tracking-[0.12em] text-[#6f6f6a] uppercase"
-              >
-                {row.label}
-              </dt>
-              <dd
-                class={`text-sm ${row.fact.kind === FactKind.Known ? 'font-mono break-all' : 'text-[#6f6f6a] italic'}`}
-              >
-                {factText(row.fact)}
-              </dd>
-            </div>
+              {passkey.shortId}
+            </li>
           {/each}
-        </dl>
+          {#if usable.length === 0}
+            <li
+              class="font-mono text-[10px] tracking-[0.14em] text-[#e0a33b] uppercase"
+            >
+              None
+            </li>
+          {/if}
+        </ul>
+      </div>
+
+      <div class="bg-[#0d1013] px-4 py-3">
+        <p
+          class="font-mono text-[9px] tracking-[0.18em] text-[#6f7a6a] uppercase"
+        >
+          Vaults openable here
+        </p>
+        <p class="mt-1.5 font-mono text-2xl leading-none text-[#a6e22e]">
+          {openHere.length}<span class="text-sm text-[#6f7a6a]"
+            >/{graph.vaults.length}</span
+          >
+        </p>
+        <ul class="mt-2 flex flex-wrap gap-1">
+          {#each openHere as vault (vault.id)}
+            <li
+              class="border border-[#2a3327] px-1.5 py-0.5 font-mono text-[10px] text-[#c7d2c1]"
+            >
+              {vault.shortId}
+            </li>
+          {/each}
+          {#if openHere.length === 0}
+            <li
+              class="font-mono text-[10px] tracking-[0.14em] text-[#e0a33b] uppercase"
+            >
+              None
+            </li>
+          {/if}
+        </ul>
+      </div>
+
+      <div class="bg-[#0d1013] px-4 py-3">
+        <p
+          class="flex items-center gap-1.5 font-mono text-[9px] tracking-[0.18em] text-[#6f7a6a] uppercase"
+        >
+          <TriangleAlert class="size-3 text-[#e0a33b]" aria-hidden="true" />
+          One passkey only
+        </p>
+        <p class="mt-1.5 font-mono text-2xl leading-none text-[#e0a33b]">
+          {lonely.length}<span class="text-sm text-[#6f7a6a]"
+            >/{graph.vaults.length}</span
+          >
+        </p>
+        <ul class="mt-2 flex flex-wrap gap-1">
+          {#each lonely as vault (vault.id)}
+            <li
+              class="border border-[#40361f] px-1.5 py-0.5 font-mono text-[10px] text-[#e0a33b]"
+            >
+              {vault.shortId}
+            </li>
+          {/each}
+          {#if lonely.length === 0}
+            <li
+              class="font-mono text-[10px] tracking-[0.14em] text-[#6f7a6a] uppercase"
+            >
+              None
+            </li>
+          {/if}
+        </ul>
+      </div>
+
+      <div class="bg-[#0d1013] px-4 py-3">
+        <p
+          class="font-mono text-[9px] tracking-[0.18em] text-[#6f7a6a] uppercase"
+        >
+          This browser
+        </p>
+        {#each here as device (device.id)}
+          <p class="mt-1.5 font-mono text-2xl leading-none text-[#a6e22e]">
+            {device.shortId}
+          </p>
+          <p
+            class="mt-2 font-mono text-[10px] tracking-[0.14em] text-[#c7d2c1] uppercase"
+          >
+            {device.platform}
+          </p>
+        {/each}
+        {#if here.length === 0}
+          <p
+            class="mt-1.5 font-mono text-base leading-none tracking-[0.14em] text-[#e0a33b] uppercase"
+          >
+            No device key
+          </p>
+          <p
+            class="mt-2 font-mono text-[10px] tracking-[0.14em] text-[#6f7a6a] uppercase"
+          >
+            Nothing opens from here
+          </p>
+        {/if}
       </div>
     </div>
 
-    {#if scenario.vaults.length > 0}
-      <table class="mt-8 w-full border-collapse text-left text-sm">
+    <div class="mt-4 overflow-x-auto pb-1">
+      <ul class="flex w-max min-w-full gap-2">
+        {#each graph.devices as device (device.id)}
+          {@const chosen = isSelected(NodeKind.Device, device.id)}
+          <li class="shrink-0">
+            <button
+              type="button"
+              aria-pressed={chosen}
+              class={`w-[11rem] rounded-sm border px-3 py-2 text-left transition motion-reduce:transition-none ${
+                chosen ? 'border-[#a6e22e]' : 'border-[#1b1f24]'
+              } ${headTone(chosen, highlight.deviceIds.includes(device.id))}`}
+              onclick={() => pick(NodeKind.Device, device.id)}
+            >
+              <span class="flex items-center gap-1.5">
+                <Laptop
+                  class="size-3.5 shrink-0 text-[#6f7a6a]"
+                  aria-hidden="true"
+                />
+                <span class="truncate text-[12px]">{device.label}</span>
+              </span>
+              <span
+                class="mt-1 block font-mono text-[13px] tracking-[0.1em] text-[#a6e22e]"
+              >
+                {device.shortId}
+              </span>
+              <span class="mt-0.5 flex items-baseline gap-2">
+                <span
+                  class="truncate font-mono text-[9px] tracking-[0.14em] text-[#6f7a6a] uppercase"
+                >
+                  {device.platform}
+                </span>
+                {#if isHere(graph, device)}
+                  <span
+                    class="ml-auto font-mono text-[9px] tracking-[0.14em] text-[#a6e22e] uppercase"
+                  >
+                    Here
+                  </span>
+                {/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+
+    <div class="mt-4 overflow-x-auto pb-2">
+      <table class="w-max min-w-full border-collapse text-left">
+        <caption class="sr-only">
+          Passkeys by vault. Each cell names the device key that carries the
+          route.
+        </caption>
         <thead>
-          <tr
-            class="font-mono text-[10px] tracking-[0.2em] text-[#6f6f6a] uppercase"
-          >
-            <th class="border-b border-[#232326] py-2 font-normal">Vault</th>
-            <th class="border-b border-[#232326] py-2 font-normal">Access</th>
-            <th class="border-b border-[#232326] py-2 font-normal">Devices</th>
-            <th class="border-b border-[#232326] py-2 font-normal">Backups</th>
+          <tr>
+            <td class="border border-[#1b1f24] bg-[#0d1013] p-0">
+              <div
+                class="w-full min-w-[10.5rem] px-3 py-2.5 font-mono text-[9px] leading-4 tracking-[0.16em] text-[#6f7a6a] uppercase"
+              >
+                Passkey ↓<br />Vault →
+              </div>
+            </td>
+            {#each graph.vaults as vault (vault.id)}
+              {@const chosen = isSelected(NodeKind.Vault, vault.id)}
+              <th
+                scope="col"
+                class="border border-[#1b1f24] bg-[#0d1013] p-0 align-top font-normal"
+              >
+                <button
+                  type="button"
+                  aria-pressed={chosen}
+                  class={`block w-full min-w-[8.25rem] px-3 py-2.5 text-left transition motion-reduce:transition-none ${headTone(
+                    chosen,
+                    highlight.vaultIds.includes(vault.id),
+                  )}`}
+                  onclick={() => pick(NodeKind.Vault, vault.id)}
+                >
+                  <span class="flex items-center gap-1.5">
+                    <VaultIcon
+                      class="size-3.5 shrink-0 text-[#6f7a6a]"
+                      aria-hidden="true"
+                    />
+                    <span class="truncate text-[12px]">{vault.label}</span>
+                    {#if single(vault)}
+                      <TriangleAlert
+                        class="ml-auto size-3 shrink-0 text-[#e0a33b]"
+                        aria-hidden="true"
+                      />
+                      <span class="sr-only">One passkey only</span>
+                    {/if}
+                  </span>
+                  <span
+                    class="mt-1 block font-mono text-[13px] tracking-[0.1em] text-[#a6e22e]"
+                  >
+                    {vault.shortId}
+                  </span>
+                  <span
+                    class="mt-0.5 block font-mono text-[9px] tracking-[0.14em] text-[#6f7a6a] uppercase"
+                  >
+                    {vault.secrets} secrets
+                  </span>
+                  <span
+                    class={`mt-1 block font-mono text-[9px] tracking-[0.14em] uppercase ${
+                      openableHere(graph, vault)
+                        ? 'text-[#a6e22e]'
+                        : 'text-[#e0a33b]'
+                    }`}
+                  >
+                    {openableHere(graph, vault)
+                      ? 'Opens here'
+                      : 'Not from here'}
+                  </span>
+                </button>
+              </th>
+            {/each}
           </tr>
         </thead>
         <tbody>
-          {#each scenario.vaults as vault (vault.id)}
+          {#each graph.passkeys as passkey (passkey.id)}
+            {@const chosen = isSelected(NodeKind.Passkey, passkey.id)}
             <tr>
-              <td class="border-b border-[#1a1a1d] py-3">{vault.label}</td>
-              <td class="border-b border-[#1a1a1d] py-3">
-                <span class="flex items-center gap-2">
-                  {#if vault.trust === VaultTrust.Verified}
-                    <ShieldCheck
-                      class="size-3.5 text-[#a6e22e]"
+              <th
+                scope="row"
+                class="border border-[#1b1f24] bg-[#0d1013] p-0 align-top font-normal"
+              >
+                <button
+                  type="button"
+                  aria-pressed={chosen}
+                  class={`block w-full min-w-[10.5rem] px-3 py-2.5 text-left transition motion-reduce:transition-none ${headTone(
+                    chosen,
+                    highlight.passkeyIds.includes(passkey.id),
+                  )}`}
+                  onclick={() => pick(NodeKind.Passkey, passkey.id)}
+                >
+                  <span class="flex items-center gap-1.5">
+                    <Fingerprint
+                      class="size-3.5 shrink-0 text-[#6f7a6a]"
                       aria-hidden="true"
                     />
-                    <span class="font-mono text-xs"
-                      >{factText(vault.verifiedAt)}</span
-                    >
-                  {:else}
-                    <span class="font-mono text-xs text-[#6f6f6a]"
-                      >{factText(vault.verifiedAt)}</span
-                    >
-                  {/if}
-                </span>
-              </td>
-              <td class="border-b border-[#1a1a1d] py-3 font-mono text-xs"
-                >{vault.enrolledDevices}</td
-              >
-              <td class="border-b border-[#1a1a1d] py-3 font-mono text-xs"
-                >{vault.backupPasswords}</td
-              >
+                    <span class="truncate text-[12px]">{passkey.label}</span>
+                  </span>
+                  <span
+                    class="mt-1 block font-mono text-[13px] tracking-[0.1em] text-[#a6e22e]"
+                  >
+                    {passkey.shortId}
+                  </span>
+                  <span
+                    class="mt-0.5 block truncate font-mono text-[9px] tracking-[0.14em] text-[#6f7a6a] uppercase"
+                  >
+                    {storeLabel(passkey.store)}
+                  </span>
+                  <span
+                    class={`mt-1 block font-mono text-[9px] tracking-[0.14em] uppercase ${
+                      passkey.reach === Reach.Here
+                        ? 'text-[#a6e22e]'
+                        : 'text-[#e0a33b]'
+                    }`}
+                  >
+                    {passkey.reach === Reach.Here ? 'In hand' : 'Elsewhere'}
+                  </span>
+                </button>
+              </th>
+
+              {#each graph.vaults as vault (vault.id)}
+                {@const routes = route(passkey, vault)}
+                {@const lit = cellLit(passkey, vault, routes)}
+                <td
+                  class={`border border-[#1b1f24] p-0 align-top ${
+                    routes.length === 0
+                      ? 'bg-[#08090b]'
+                      : lit
+                        ? 'bg-[#111a0c]'
+                        : 'bg-[#0b0e11]'
+                  }`}
+                >
+                  <div
+                    class={`flex w-full min-w-[8.25rem] flex-wrap items-start gap-1 px-3 py-2.5 transition motion-reduce:transition-none ${
+                      routes.length === 0 || lit ? '' : 'opacity-30'
+                    }`}
+                  >
+                    {#each routes as device (device.id)}
+                      <button
+                        type="button"
+                        aria-pressed={isSelected(NodeKind.Device, device.id)}
+                        aria-label={`Passkey ${passkey.shortId} opens vault ${vault.shortId} through device key ${device.shortId}`}
+                        class={`rounded-sm border px-1.5 py-0.5 font-mono text-[11px] transition motion-reduce:transition-none ${chipTone(
+                          isSelected(NodeKind.Device, device.id),
+                        )}`}
+                        onclick={() => pick(NodeKind.Device, device.id)}
+                      >
+                        {device.shortId}
+                      </button>
+                    {/each}
+                    {#if routes.length === 0}
+                      <span
+                        class="font-mono text-[11px] text-[#2f353b]"
+                        aria-hidden="true">·····</span
+                      >
+                      <span class="sr-only">
+                        Passkey {passkey.shortId} does not open vault {vault.shortId}
+                      </span>
+                    {/if}
+                  </div>
+                </td>
+              {/each}
             </tr>
           {/each}
         </tbody>
       </table>
-    {:else if !isPrepared(scenario)}
-      <p
-        class="mt-8 rounded-lg border border-dashed border-[#33333a] px-5 py-4 text-sm text-[#8a8a85]"
+    </div>
+
+    <div class="mt-4 overflow-hidden rounded-md border border-[#1b1f24]">
+      <div
+        class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[#1b1f24] bg-[#0d1013] px-4 py-3"
       >
-        No links exist yet. Preparing this browser creates the passkey, derives
-        the device key, and only then can a vault be verified from here.
-      </p>
-    {/if}
+        <span
+          class="font-mono text-[9px] tracking-[0.2em] text-[#6f7a6a] uppercase"
+        >
+          Selected
+        </span>
+        <span
+          class="font-mono text-[10px] tracking-[0.16em] text-[#c7d2c1] uppercase"
+        >
+          {kindLabel(selected.kind)}
+        </span>
+        {#if chosenShortId.length > 0}
+          <span class="font-mono text-base tracking-[0.12em] text-[#a6e22e]">
+            {chosenShortId}
+          </span>
+        {/if}
+      </div>
+      <div class="grid gap-px bg-[#1b1f24] sm:grid-cols-3">
+        {#each readout as pane (pane.label)}
+          <div class="bg-[#0d1013] px-4 py-3">
+            <p
+              class="font-mono text-[9px] tracking-[0.18em] text-[#6f7a6a] uppercase"
+            >
+              {pane.label} · {pane.items.length}
+            </p>
+            <ul class="mt-2 flex flex-wrap gap-1">
+              {#each pane.items as item (item.id)}
+                <li
+                  class="rounded-sm border border-[#2a3327] px-1.5 py-0.5 font-mono text-[11px] text-[#c7d2c1]"
+                >
+                  {item.shortId}
+                </li>
+              {/each}
+              {#if pane.items.length === 0}
+                <li
+                  class="font-mono text-[10px] tracking-[0.14em] text-[#e0a33b] uppercase"
+                >
+                  None
+                </li>
+              {/if}
+            </ul>
+          </div>
+        {/each}
+      </div>
+    </div>
   </section>
 </main>

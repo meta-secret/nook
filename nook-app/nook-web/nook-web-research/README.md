@@ -37,9 +37,19 @@ different layout or visual direction.
   **Landing** both share: name vault → Simple or Sentinel → card stack
   (default) or vault terminal.
 - **`vault`** — standalone Sentinel vault genesis UI directions.
-- **`keys-management`** — Devices & access directions for the browser access
-  chain shipped in [PR #904](https://github.com/meta-secret/nook/pull/904):
-  which passkey protects this browser, which device key it unlocks, and which
-  vaults that key opens. Every sketch reads the same fixture in
-  `keys-management/_shared/keys-management-state.ts` and supports the three
-  scenarios in its top-right switch: one vault, several vaults, new browser.
+- **`keys-management`** — Devices & access directions, successors to the chain
+  shipped in [PR #904](https://github.com/meta-secret/nook/pull/904). They
+  answer the question a person actually has in front of a locked vault: _which
+  of my passkeys opens this, and can I use it from this browser?_ Every sketch
+  reads `keys-management/_shared/key-graph.ts` — a graph of passkeys, device
+  keys, and vaults, where a passkey reaches a vault only through a device in
+  between — and supports the three graphs in its top-right switch: three
+  passkeys, one passkey, new browser.
+- **`inspiration`** — sketches frozen for an interaction or visual idea rather
+  than as candidates. Borrow from them; do not iterate on them. They may read
+  older fixtures, kept beside them.
+
+Sketches in `keys-management` share two rules. Every node shows the short
+identifier a person would compare against what 1Password or Bitwarden displays,
+in a mono font. Selecting any node lights only the subgraph it truly reaches and
+dims the rest — use `highlightFor` so this behaves identically everywhere.

@@ -1,27 +1,38 @@
 <!--
-DIRECTION: The chain as a travel document. A data page for this browser with a
-device sigil where the photo would be, a stamps page carrying one ink stamp per
-vault this key has actually opened, and a machine-readable zone that spells out
-the two identifiers Nook really holds.
+DIRECTION: One travel document per passkey. The visa pages are the
+relationships: an admitted stamp for every vault that passkey opens, carrying
+the vault identifier and the device key it travelled through, and a refusal for
+every border it cannot cross. The register at the foot shows, per vault, which
+passports carry a stamp for it — so two passports on one vault is visible.
 -->
 <script lang="ts">
-  import { Stamp, IdCard } from '@lucide/svelte'
+  import { Fingerprint, Stamp, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
-  import ScenarioSwitch from '../_shared/ScenarioSwitch.svelte'
+  import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    type AccessScenario,
-    type Fact,
-    FactKind,
-    factText,
-    isPrepared,
-    known,
-    ScenarioId,
-    scenarioById,
-    VaultTrust,
-    verifiedVaults,
-  } from '../_shared/keys-management-state'
+    defaultNode,
+    type Device,
+    devicesForPasskey,
+    devicesForVault,
+    GraphId,
+    graphById,
+    hereDevices,
+    highlightFor,
+    isHere,
+    type KeyGraph,
+    KeyStore,
+    NodeKind,
+    opens,
+    type Passkey,
+    passkeysForDevice,
+    passkeysForVault,
+    openableHere,
+    Reach,
+    storeLabel,
+    type Vault,
+    vaultsForPasskey,
+  } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { PassportPage } from './passport-page'
 
   interface SigilCell {
     id: string
@@ -30,8 +41,8 @@ the two identifiers Nook really holds.
 
   interface DataField {
     label: string
-    fact: Fact
-    machine: boolean
+    value: string
+    mono: boolean
   }
 
   interface MrzLine {
@@ -40,295 +51,525 @@ the two identifiers Nook really holds.
   }
 
   const SIGIL_SIDE = 6
+  const MRZ_WIDTH = 40
 
-  const PAGE_TABS = [
-    { id: PassportPage.Data, label: 'Data page', icon: IdCard },
-    { id: PassportPage.Stamps, label: 'Stamps', icon: Stamp },
-  ]
+  const STORE_INK: Record<KeyStore, string> = {
+    [KeyStore.ApplePasswords]: '#5c4a34',
+    [KeyStore.Bitwarden]: '#2f4c8c',
+    [KeyStore.OnePassword]: '#1f6b52',
+    [KeyStore.SecurityKey]: '#8a5a12',
+  }
+
+  const TILTS = ['-rotate-2', 'rotate-1', 'rotate-2', '-rotate-1']
 
   let { navigate }: ExperimentProps = $props()
-  let scenarioId = $state(ScenarioId.Unlocked)
-  let page = $state(PassportPage.Data)
-  const scenario = $derived(scenarioById(scenarioId))
-  const prepared = $derived(isPrepared(scenario))
-  const fields = $derived(dataFields(scenario))
-  const sigil = $derived(sigilCells(factText(scenario.device.id)))
-  const mrz = $derived(mrzLines(scenario))
-  const stamped = $derived(verifiedVaults(scenario))
-  const unstamped = $derived(
-    scenario.vaults.filter((vault) => vault.trust === VaultTrust.Unverified),
-  )
+  let graphId = $state(GraphId.Tangle)
+  let openId = $state(openingPasskeyId(graphById(GraphId.Tangle)))
 
-  function dataFields(access: AccessScenario): DataField[] {
+  const graph = $derived(graphById(graphId))
+  const highlight = $derived(
+    highlightFor(graph, { kind: NodeKind.Passkey, id: openId }),
+  )
+  const open = $derived(
+    graph.passkeys.filter((passkey) => passkey.id === openId),
+  )
+  const here = $derived(hereDevices(graph))
+
+  /** The passport you would be holding: the one this browser could present. */
+  function openingPasskeyId(graph: KeyGraph): string {
+    const node = defaultNode(graph)
+    if (node.kind === NodeKind.Passkey) return node.id
+    const [onDevice] = graph.devices
+      .filter((device) => device.id === node.id)
+      .flatMap((device) => passkeysForDevice(graph, device))
+    if (onDevice) return onDevice.id
+    const [first] = graph.passkeys
+    return first ? first.id : ''
+  }
+
+  function via(vault: Vault, passkeyId: string): Device[] {
+    return devicesForVault(graph, vault).filter((device) =>
+      device.passkeyIds.includes(passkeyId),
+    )
+  }
+
+  function shortIds(items: readonly { shortId: string }[]): string {
+    return items.length === 0
+      ? 'none'
+      : items.map((item) => item.shortId).join(' · ')
+  }
+
+  function dataFields(passkey: Passkey): DataField[] {
     return [
+      { label: 'Issued', value: passkey.createdAt, mono: false },
+      { label: 'Last presented', value: passkey.lastUsedAt, mono: false },
       {
-        label: 'Document type',
-        fact: known('Browser custody record'),
-        machine: false,
+        label: 'Visas',
+        value: `${vaultsForPasskey(graph, passkey.id).length}/${graph.vaults.length}`,
+        mono: true,
       },
       {
-        label: 'Authority',
-        fact: known(access.protectionLabel),
-        machine: false,
-      },
-      { label: 'Held in', fact: access.passkey.savedIn, machine: false },
-      { label: 'Bearer', fact: access.passkey.name, machine: false },
-      { label: 'Issued', fact: access.device.preparedAt, machine: false },
-      {
-        label: 'Last presented',
-        fact: access.passkey.lastUsedAt,
-        machine: false,
-      },
-      {
-        label: 'Attachment',
-        fact: known(access.passkey.attachment),
-        machine: false,
-      },
-      {
-        label: 'Terminal',
-        fact: known(`${access.device.browser} · ${access.device.platform}`),
-        machine: false,
-      },
-      { label: 'Device key', fact: access.device.id, machine: true },
-      {
-        label: 'Passkey fingerprint',
-        fact: access.passkey.fingerprint,
-        machine: true,
+        label: 'Carried',
+        value: passkey.reach === Reach.Here ? 'In hand' : 'Elsewhere',
+        mono: false,
       },
     ]
   }
 
-  /** A deterministic mark drawn from the device key, so it changes with the key. */
+  /** A deterministic mark drawn from the identifier, mirrored down the middle. */
   function sigilCells(seed: string): SigilCell[] {
     const cells: SigilCell[] = []
-    for (let index = 0; index < SIGIL_SIDE * SIGIL_SIDE; index += 1) {
-      const code = seed.charCodeAt(index % Math.max(seed.length, 1)) + index * 7
-      cells.push({ id: `cell-${index}`, filled: code % 3 !== 0 })
+    const span = Math.max(seed.length, 1)
+    for (let row = 0; row < SIGIL_SIDE; row += 1) {
+      for (let col = 0; col < SIGIL_SIDE; col += 1) {
+        const mirrored = col < SIGIL_SIDE / 2 ? col : SIGIL_SIDE - 1 - col
+        const code = seed.charCodeAt((row * 3 + mirrored) % span)
+        cells.push({
+          id: `${row}-${col}`,
+          filled: (code + row * 5 + mirrored * 3) % 3 !== 0,
+        })
+      }
     }
     return cells
   }
 
-  function mrzField(value: string, width: number): string {
-    const clean = value.toUpperCase().replace(/[^A-Z0-9]/g, '<')
-    return clean.slice(0, width).padEnd(width, '<')
+  function mrzField(value: string): string {
+    const clean = value.toUpperCase().replace(/[^A-Z0-9]+/g, '<')
+    return clean.slice(0, MRZ_WIDTH).padEnd(MRZ_WIDTH, '<')
   }
 
-  function mrzLines(access: AccessScenario): MrzLine[] {
-    if (!isPrepared(access)) {
-      return [
-        { id: 'passkey', text: `NOOKP<${mrzField('NO PASSKEY', 26)}` },
-        { id: 'device', text: `NOOKD<${mrzField('NO KEY', 18)}<V00<<<<<<` },
-      ]
-    }
-    const vaults = verifiedVaults(access).length
+  function mrzList(items: readonly { shortId: string }[]): string {
+    return items.length === 0
+      ? 'NONE'
+      : items.map((item) => item.shortId).join('<')
+  }
+
+  function mrzLines(passkey: Passkey): MrzLine[] {
+    const reach = passkey.reach === Reach.Here ? 'HERE' : 'AWAY'
     return [
       {
         id: 'passkey',
-        text: `NOOKP<${mrzField(factText(access.passkey.fingerprint), 26)}`,
+        text: mrzField(
+          `PK<${passkey.shortId}<${reach}<${storeLabel(passkey.store)}`,
+        ),
       },
       {
-        id: 'device',
-        text: `NOOKD<${mrzField(factText(access.device.id), 18)}<V${String(vaults).padStart(2, '0')}<${mrzField(factText(access.passkey.savedIn), 6)}`,
+        id: 'devices',
+        text: mrzField(`DK<${mrzList(devicesForPasskey(graph, passkey.id))}`),
+      },
+      {
+        id: 'vaults',
+        text: mrzField(`VA<${mrzList(vaultsForPasskey(graph, passkey.id))}`),
       },
     ]
   }
 
-  function fieldInk(field: DataField): string {
-    if (field.fact.kind === FactKind.NotObserved)
-      return 'text-[#5c4a34]/70 italic'
-    return field.machine ? 'font-mono break-all' : ''
-  }
-
   function tilt(index: number): string {
-    const angles = ['-rotate-3', 'rotate-2', '-rotate-1', 'rotate-3']
-    return angles[index % angles.length]
-  }
-
-  function tabClass(target: PassportPage): string {
-    return page === target
-      ? 'border-[#6b4a2b] bg-[#6b4a2b] text-[#efe6d2]'
-      : 'border-[#6b4a2b]/35 text-[#6b4a2b] hover:border-[#6b4a2b]/70'
+    const angle = TILTS[index % TILTS.length]
+    return angle ? angle : 'rotate-0'
   }
 </script>
 
-<main class="min-h-[100svh] bg-[#cdc1a8] py-20 text-[#2c231a]">
+<main class="min-h-[100svh] bg-[#cdc1a8] text-[#2c231a]">
   <ExperimentBack {navigate} light />
-  <ScenarioSwitch
-    {scenario}
+  <GraphSwitch
+    {graph}
     light
-    onScenario={(next) => {
-      scenarioId = next
-      page = PassportPage.Data
+    onGraph={(next) => {
+      graphId = next
+      openId = openingPasskeyId(graphById(next))
     }}
   />
 
-  <section class="mx-auto max-w-3xl px-4 sm:px-8">
-    <p
-      class="text-center font-mono text-[10px] tracking-[0.32em] text-[#5c4a34] uppercase"
-    >
-      Devices &amp; access
-    </p>
-
-    <div
-      class="mt-6 rounded-sm border border-[#2c231a]/20 bg-[#efe6d2] shadow-[0_24px_60px_rgb(44_35_26/0.35)]"
-    >
-      <header
-        class="flex flex-wrap items-center justify-between gap-3 border-b border-[#2c231a]/15 px-5 py-4 sm:px-8"
+  <section class="mx-auto max-w-4xl px-4 pt-28 pb-16 sm:px-8 sm:pt-24">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p
+        class="font-mono text-[10px] tracking-[0.3em] text-[#5c4a34] uppercase"
       >
-        <p class="font-mono text-[10px] tracking-[0.26em] uppercase">
-          Nook · custody passport
-        </p>
-        <div role="tablist" aria-label="Passport page" class="flex gap-2">
-          {#each PAGE_TABS as tab (tab.id)}
-            {@const TabIcon = tab.icon}
+        Nook · custody
+      </p>
+      <p
+        class="flex items-center gap-2 rounded-full border border-[#2c231a]/25 px-3 py-1 font-mono text-[10px] tracking-[0.16em] uppercase"
+      >
+        <span class="text-[#5c4a34]">This browser</span>
+        {#each here as device (device.id)}
+          <span class="tracking-[0.1em]">{device.shortId}</span>
+        {/each}
+        {#if here.length === 0}
+          <span class="text-[#8c3b2e]">No device key</span>
+        {/if}
+      </p>
+    </div>
+
+    <div class="mt-5 -mx-4 overflow-x-auto px-4 pb-2 sm:-mx-8 sm:px-8">
+      <ul class="flex w-max min-w-full gap-3">
+        {#each graph.passkeys as passkey (passkey.id)}
+          {@const chosen = passkey.id === openId}
+          {@const visas = vaultsForPasskey(graph, passkey.id)}
+          <li class="shrink-0">
             <button
               type="button"
-              role="tab"
-              id={`tab-${tab.id}`}
-              aria-selected={page === tab.id}
-              class={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.16em] uppercase transition motion-reduce:transition-none ${tabClass(tab.id)}`}
-              onclick={() => (page = tab.id)}
+              aria-pressed={chosen}
+              class={`relative w-[10.5rem] overflow-hidden rounded-sm border px-3 py-3 text-left transition motion-reduce:transition-none ${
+                chosen
+                  ? 'border-[#2c231a] bg-[#efe6d2] shadow-[0_10px_24px_rgb(44_35_26/0.28)]'
+                  : 'border-[#2c231a]/25 bg-[#e0d7c1] opacity-30 hover:opacity-100 focus-visible:opacity-100'
+              }`}
+              onclick={() => (openId = passkey.id)}
             >
-              <TabIcon class="size-3" aria-hidden="true" />
-              {tab.label}
+              <span
+                class="absolute inset-y-0 left-0 w-1"
+                style={`background:${STORE_INK[passkey.store]}`}
+                aria-hidden="true"
+              ></span>
+              <span class="block pl-2">
+                <span
+                  class="block truncate font-mono text-[9px] tracking-[0.16em] text-[#5c4a34] uppercase"
+                >
+                  {storeLabel(passkey.store)}
+                </span>
+                <span class="mt-1 block font-mono text-lg tracking-[0.12em]">
+                  {passkey.shortId}
+                </span>
+                <span class="mt-0.5 block truncate text-[11px] text-[#5c4a34]">
+                  {passkey.label}
+                </span>
+                <span class="mt-2 flex items-center gap-2">
+                  <span
+                    class={`font-mono text-[9px] tracking-[0.14em] uppercase ${
+                      passkey.reach === Reach.Here
+                        ? 'text-[#1f6b52]'
+                        : 'text-[#8c3b2e]'
+                    }`}
+                  >
+                    {passkey.reach === Reach.Here ? 'In hand' : 'Not here'}
+                  </span>
+                  <span class="ml-auto flex gap-[3px]" aria-hidden="true">
+                    {#each graph.vaults as vault (vault.id)}
+                      <span
+                        class={`size-1.5 rounded-[1px] ${
+                          opens(graph, passkey.id, vault)
+                            ? 'bg-[#8c3b2e]'
+                            : 'bg-[#2c231a]/20'
+                        }`}
+                      ></span>
+                    {/each}
+                  </span>
+                  <span class="sr-only">
+                    {visas.length} of {graph.vaults.length} vaults stamped
+                  </span>
+                </span>
+              </span>
             </button>
-          {/each}
-        </div>
-      </header>
+          </li>
+        {/each}
+      </ul>
+    </div>
 
-      <div role="tabpanel" aria-labelledby={`tab-${page}`}>
-        {#if page === PassportPage.Data}
-          <div class="grid gap-6 px-5 py-7 sm:grid-cols-[9rem_1fr] sm:px-8">
-            <div>
+    {#each open as passkey (passkey.id)}
+      {@const carried = passkey.reach === Reach.Here}
+      {@const admitted = vaultsForPasskey(graph, passkey.id)}
+      {@const refused = graph.vaults.filter(
+        (vault) => !opens(graph, passkey.id, vault),
+      )}
+      {@const keys = devicesForPasskey(graph, passkey.id)}
+      <article
+        class={`mt-4 rounded-sm border shadow-[0_24px_60px_rgb(44_35_26/0.35)] ${
+          carried
+            ? 'border-[#2c231a]/25 bg-[#efe6d2]'
+            : 'border-dashed border-[#2c231a]/40 bg-[#e3dbc8]'
+        }`}
+      >
+        <header
+          class="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-[#2c231a]/15 px-5 py-4 sm:px-7"
+        >
+          <p class="font-mono text-[10px] tracking-[0.26em] uppercase">
+            Custody passport
+          </p>
+          <p
+            class="flex items-center gap-2 font-mono text-[10px] tracking-[0.16em] uppercase"
+          >
+            <span class="text-[#5c4a34]">Authority</span>
+            <span>{storeLabel(passkey.store)}</span>
+          </p>
+          <p
+            class={`ml-auto -rotate-3 border-2 px-2.5 py-1 font-mono text-[10px] tracking-[0.18em] uppercase ${
+              carried
+                ? 'border-[#1f6b52]/70 text-[#1f6b52]'
+                : 'border-[#8c3b2e]/70 text-[#8c3b2e]'
+            }`}
+          >
+            {carried ? 'In hand' : 'Not on this computer'}
+          </p>
+        </header>
+
+        <div
+          class="grid gap-7 px-5 py-6 sm:px-7 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]"
+        >
+          <div class="min-w-0">
+            <div class="flex gap-4">
               <div
-                class={`grid aspect-[3/4] w-full grid-cols-6 grid-rows-6 gap-[2px] border p-2 ${prepared ? 'border-[#2c231a]/30 bg-[#e3d7bd]' : 'border-dashed border-[#2c231a]/30'}`}
+                class={`grid aspect-[3/4] w-[5.5rem] shrink-0 grid-cols-6 grid-rows-6 gap-[2px] border p-1.5 ${
+                  carried
+                    ? 'border-[#2c231a]/30 bg-[#e3d7bd]'
+                    : 'border-dashed border-[#2c231a]/30'
+                }`}
                 aria-hidden="true"
               >
-                {#if prepared}
-                  {#each sigil as cell (cell.id)}
-                    <span
-                      class={cell.filled ? 'bg-[#3d3122]' : 'bg-[#2c231a]/10'}
-                    ></span>
-                  {/each}
-                {/if}
+                {#each sigilCells(passkey.shortId) as cell (cell.id)}
+                  <span
+                    class={cell.filled
+                      ? carried
+                        ? 'bg-[#3d3122]'
+                        : 'bg-[#2c231a]/35'
+                      : 'bg-[#2c231a]/10'}
+                  ></span>
+                {/each}
               </div>
-              <p class="mt-2 font-mono text-[9px] tracking-[0.14em] uppercase">
-                {prepared ? 'Device sigil' : 'No sigil yet'}
-              </p>
+              <div class="min-w-0">
+                <p
+                  class="flex items-center gap-1.5 font-mono text-[9px] tracking-[0.18em] text-[#5c4a34] uppercase"
+                >
+                  <Fingerprint class="size-3" aria-hidden="true" />
+                  Passkey
+                </p>
+                <p
+                  class="mt-1 font-mono text-2xl leading-none tracking-[0.1em] break-all"
+                >
+                  {passkey.shortId}
+                </p>
+                <p class="mt-2 text-[13px] break-words">{passkey.label}</p>
+                <p
+                  class="mt-1 font-mono text-[10px] tracking-[0.14em] text-[#5c4a34] uppercase"
+                >
+                  {storeLabel(passkey.store)}
+                </p>
+              </div>
             </div>
 
-            <dl class="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-              {#each fields as field (field.label)}
+            <dl
+              class="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#2c231a]/15 pt-4"
+            >
+              {#each dataFields(passkey) as field (field.label)}
                 <div class="min-w-0">
                   <dt
-                    class="font-mono text-[9px] tracking-[0.18em] text-[#5c4a34] uppercase"
+                    class="font-mono text-[9px] tracking-[0.16em] text-[#5c4a34] uppercase"
                   >
                     {field.label}
                   </dt>
-                  <dd class={`mt-1 text-sm leading-5 ${fieldInk(field)}`}>
-                    {factText(field.fact)}
+                  <dd
+                    class={`mt-0.5 text-[13px] leading-5 ${
+                      field.mono ? 'font-mono break-all' : ''
+                    }`}
+                  >
+                    {field.value}
                   </dd>
                 </div>
               {/each}
             </dl>
+
+            <div class="mt-4 border-t border-[#2c231a]/15 pt-4">
+              <p
+                class="font-mono text-[9px] tracking-[0.16em] text-[#5c4a34] uppercase"
+              >
+                Device keys
+              </p>
+              <ul class="mt-2 flex flex-wrap gap-1.5">
+                {#each keys as device (device.id)}
+                  <li
+                    class={`flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] ${
+                      isHere(graph, device)
+                        ? 'border-[#1f6b52]/60 text-[#1f6b52]'
+                        : 'border-[#2c231a]/25 text-[#3d3122]'
+                    }`}
+                  >
+                    <span class="tracking-[0.08em]">{device.shortId}</span>
+                    <span class="tracking-[0.12em] uppercase opacity-70">
+                      {isHere(graph, device) ? 'here' : device.platform}
+                    </span>
+                  </li>
+                {/each}
+                {#if keys.length === 0}
+                  <li
+                    class="rounded-sm border border-dashed border-[#2c231a]/35 px-2 py-1 font-mono text-[10px] tracking-[0.14em] text-[#8c3b2e] uppercase"
+                  >
+                    None
+                  </li>
+                {/if}
+              </ul>
+            </div>
           </div>
 
-          <p
-            class="border-t border-[#2c231a]/10 px-5 py-4 text-[13px] leading-6 text-[#5c4a34] sm:px-8"
-          >
-            The passkey itself never leaves {factText(
-              scenario.passkey.savedIn,
-            )}. This page copies only the fingerprint Nook keeps to recognise
-            it, and the device key that exists nowhere but this browser.
-          </p>
-        {:else}
-          <div class="px-5 py-7 sm:px-8">
+          <div class="min-w-0">
             <p
-              class="font-mono text-[10px] tracking-[0.2em] text-[#5c4a34] uppercase"
+              class="font-mono text-[9px] tracking-[0.18em] text-[#5c4a34] uppercase"
             >
-              Vaults this device key has opened
+              Visas · {admitted.length}
             </p>
-
-            {#if stamped.length === 0}
-              <div
-                class="mt-5 border border-dashed border-[#2c231a]/30 px-5 py-10 text-center"
-              >
-                <p class="text-sm text-[#5c4a34]">
-                  No stamps. A vault is only stamped once this device key has
-                  actually opened it.
-                </p>
-              </div>
-            {:else}
-              <div class="mt-6 grid gap-5 sm:grid-cols-2">
-                {#each stamped as vault, index (vault.id)}
-                  <div
-                    class={`border-2 border-[#8c3b2e]/70 px-4 py-4 text-[#8c3b2e] ${tilt(index)}`}
+            {#if admitted.length > 0}
+              <ul class="mt-3 grid gap-4 sm:grid-cols-2">
+                {#each admitted as vault, index (vault.id)}
+                  <li
+                    class={`border-2 border-[#8c3b2e]/70 px-3 py-3 text-[#8c3b2e] ${tilt(
+                      index,
+                    )}`}
                   >
-                    <p class="font-mono text-[9px] tracking-[0.2em] uppercase">
-                      Opened here
-                    </p>
-                    <p class="mt-1.5 text-lg leading-6 break-words">
-                      {vault.label}
-                    </p>
-                    <p class="mt-1 font-mono text-[11px]">
-                      {factText(vault.verifiedAt)}
+                    <p
+                      class="flex items-center gap-1.5 font-mono text-[9px] tracking-[0.2em] uppercase"
+                    >
+                      <Stamp class="size-3" aria-hidden="true" />
+                      Admitted
                     </p>
                     <p
-                      class="mt-3 font-mono text-[9px] tracking-[0.14em] uppercase"
+                      class="mt-1.5 font-mono text-xl leading-none tracking-[0.1em] break-all"
                     >
-                      Devices {vault.enrolledDevices} · Backups {vault.backupPasswords}
+                      {vault.shortId}
                     </p>
-                  </div>
+                    <p class="mt-1.5 text-[13px] break-words text-[#2c231a]">
+                      {vault.label}
+                    </p>
+                    <p
+                      class="mt-2 font-mono text-[9px] tracking-[0.14em] break-all uppercase"
+                    >
+                      via {shortIds(via(vault, passkey.id))}
+                    </p>
+                    <p
+                      class="mt-1 font-mono text-[9px] tracking-[0.14em] uppercase"
+                    >
+                      {vault.secrets} secrets · {openableHere(graph, vault)
+                        ? 'opens here'
+                        : 'not from here'}
+                    </p>
+                  </li>
                 {/each}
-              </div>
+              </ul>
+            {:else}
+              <p
+                class="mt-3 border border-dashed border-[#2c231a]/35 px-4 py-8 text-center font-mono text-[10px] tracking-[0.18em] text-[#5c4a34] uppercase"
+              >
+                No visas
+              </p>
             {/if}
 
-            {#if unstamped.length > 0}
-              <ul class="mt-8 border-t border-[#2c231a]/15 pt-5">
-                {#each unstamped as vault (vault.id)}
+            {#if refused.length > 0}
+              <p
+                class="mt-6 font-mono text-[9px] tracking-[0.18em] text-[#5c4a34] uppercase"
+              >
+                Refused · {refused.length}
+              </p>
+              <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+                {#each refused as vault (vault.id)}
                   <li
-                    class="flex flex-wrap items-baseline justify-between gap-3 py-2 text-sm"
+                    class="relative overflow-hidden border border-dashed border-[#2c231a]/35 px-3 py-3 text-[#5c4a34]"
                   >
-                    <span class="text-[#5c4a34]">{vault.label}</span>
-                    <span class="text-[13px] text-[#5c4a34]/70 italic">
-                      {factText(vault.verifiedAt)}
-                    </span>
+                    <span
+                      class="pointer-events-none absolute inset-x-[-10%] top-1/2 h-px -rotate-12 bg-[#8c3b2e]/40"
+                      aria-hidden="true"
+                    ></span>
+                    <p class="font-mono text-[9px] tracking-[0.2em] uppercase">
+                      No visa
+                    </p>
+                    <p
+                      class="mt-1 font-mono text-base leading-none tracking-[0.1em] break-all"
+                    >
+                      {vault.shortId}
+                    </p>
+                    <p class="mt-1.5 text-[12px] break-words">{vault.label}</p>
+                    <p
+                      class="mt-1.5 font-mono text-[9px] tracking-[0.14em] break-all uppercase"
+                    >
+                      needs {shortIds(devicesForVault(graph, vault))}
+                    </p>
                   </li>
                 {/each}
               </ul>
             {/if}
           </div>
-        {/if}
-      </div>
-
-      <div
-        class="border-t-2 border-[#2c231a]/25 bg-[#e6dcc2] px-5 py-4 sm:px-8"
-      >
-        <p
-          class="font-mono text-[9px] tracking-[0.2em] text-[#5c4a34] uppercase"
-        >
-          Machine-readable zone
-        </p>
-        <div class="mt-2 space-y-1 font-mono text-[11px] break-all sm:text-xs">
-          {#each mrz as line (line.id)}
-            <p>{line.text}</p>
-          {/each}
         </div>
-      </div>
-    </div>
 
-    {#if !prepared}
-      <div class="mx-auto mt-8 max-w-md text-center">
-        <p class="text-sm leading-6 text-[#3d3122]">
-          This document is blank. Preparing the browser issues it: a passkey you
-          choose, a device key derived here, and stamps as vaults open.
-        </p>
-        <button
-          class="mt-5 rounded-sm bg-[#3d3122] px-6 py-3 text-sm font-medium text-[#efe6d2] transition hover:bg-[#2c231a] motion-reduce:transition-none"
+        <div
+          class="border-t-2 border-[#2c231a]/25 bg-[#e6dcc2] px-5 py-4 sm:px-7"
         >
-          Prepare this browser
-        </button>
-      </div>
-    {/if}
+          <p
+            class="font-mono text-[9px] tracking-[0.2em] text-[#5c4a34] uppercase"
+          >
+            Machine-readable zone
+          </p>
+          <div
+            class="mt-2 space-y-1 font-mono text-[10px] break-all sm:text-xs"
+          >
+            {#each mrzLines(passkey) as line (line.id)}
+              <p>{line.text}</p>
+            {/each}
+          </div>
+        </div>
+      </article>
+    {/each}
+
+    <div
+      class="mt-4 rounded-sm border border-[#2c231a]/20 bg-[#e6dcc2] px-5 py-5 sm:px-7"
+    >
+      <p
+        class="font-mono text-[10px] tracking-[0.24em] text-[#5c4a34] uppercase"
+      >
+        Border register
+      </p>
+      <ul class="mt-2 divide-y divide-[#2c231a]/10">
+        {#each graph.vaults as vault (vault.id)}
+          {@const lit = highlight.vaultIds.includes(vault.id)}
+          <li
+            class={`flex flex-wrap items-center gap-x-3 gap-y-2 py-3 transition motion-reduce:transition-none ${
+              lit ? '' : 'opacity-30 hover:opacity-100 focus-within:opacity-100'
+            }`}
+          >
+            <VaultIcon
+              class="size-3.5 shrink-0 text-[#5c4a34]"
+              aria-hidden="true"
+            />
+            <span class="font-mono text-sm tracking-[0.1em]">
+              {vault.shortId}
+            </span>
+            <span class="text-[13px] text-[#3d3122]">{vault.label}</span>
+            <span
+              class={`font-mono text-[9px] tracking-[0.14em] uppercase ${
+                openableHere(graph, vault) ? 'text-[#1f6b52]' : 'text-[#8c3b2e]'
+              }`}
+            >
+              {openableHere(graph, vault) ? 'Opens here' : 'Not from here'}
+            </span>
+            <span class="ml-auto flex flex-wrap items-center gap-1.5">
+              <Fingerprint
+                class="size-3 shrink-0 text-[#5c4a34]"
+                aria-hidden="true"
+              />
+              {#each passkeysForVault(graph, vault) as passkey (passkey.id)}
+                <button
+                  type="button"
+                  aria-pressed={passkey.id === openId}
+                  aria-label={`Open passport ${passkey.shortId}, ${storeLabel(
+                    passkey.store,
+                  )}`}
+                  class={`rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.08em] transition motion-reduce:transition-none ${
+                    passkey.id === openId
+                      ? 'border-[#2c231a] bg-[#2c231a] text-[#efe6d2]'
+                      : 'border-[#2c231a]/30 hover:border-[#2c231a]'
+                  }`}
+                  onclick={() => (openId = passkey.id)}
+                >
+                  {passkey.shortId}
+                </button>
+              {/each}
+              {#if passkeysForVault(graph, vault).length === 0}
+                <span
+                  class="font-mono text-[10px] tracking-[0.14em] text-[#8c3b2e] uppercase"
+                >
+                  None
+                </span>
+              {/if}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    </div>
   </section>
 </main>

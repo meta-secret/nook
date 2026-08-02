@@ -16,23 +16,17 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
-import AccessSentence from './keys-management/access-sentence/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
 import Blueprint from './keys-management/blueprint/Experiment.svelte'
-import ChainRail from './keys-management/chain-rail/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
-import CustodyLanes from './keys-management/custody-lanes/Experiment.svelte'
 import CustodyPassport from './keys-management/custody-passport/Experiment.svelte'
 import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
-import HandoffStory from './keys-management/handoff-story/Experiment.svelte'
+import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import Keyring from './keys-management/keyring/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
-import NestedDoors from './keys-management/nested-doors/Experiment.svelte'
-import OrbitMap from './keys-management/orbit-map/Experiment.svelte'
-import PassStack from './keys-management/pass-stack/Experiment.svelte'
-import PlainAnswers from './keys-management/plain-answers/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
+import HandoffStory from './inspiration/handoff-story/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -90,7 +84,13 @@ export const categories: ExperimentCategory[] = [
     slug: 'keys-management',
     title: 'Keys Management',
     description:
-      'Devices & access: which passkey protects this browser, which device key it unlocks, and which vaults that key opens. Every sketch reads the same fixture and supports one vault / several vaults / new browser.',
+      'Which of my passkeys opens this vault, and can I use it from this browser? Every sketch draws the same graph of passkeys, device keys, and vaults, shows the identifiers you would compare against a password manager, and supports three passkeys / one passkey / new browser.',
+  },
+  {
+    slug: 'inspiration',
+    title: 'Inspiration',
+    description:
+      'Sketches kept unchanged for their interaction or visual idea, not as candidates. They may read older fixtures.',
   },
 ]
 
@@ -139,23 +139,30 @@ export const subcategories: ExperimentSubcategory[] = [
   {
     categorySlug: 'keys-management',
     slug: ExperimentVersion.V1,
-    title: 'V1 · Say it in words',
+    title: 'V1 · Show possession',
     description:
-      'Directions that explain the chain in plain language before drawing anything.',
+      'Containment and inventory: what holds what, and what you own in total.',
   },
   {
     categorySlug: 'keys-management',
     slug: ExperimentVersion.V2,
     title: 'V2 · Draw the relationship',
     description:
-      'Directions where a diagram or a physical object carries the relationship.',
+      'Wiring diagrams. Select any node and only what it actually reaches stays lit.',
   },
   {
     categorySlug: 'keys-management',
     slug: ExperimentVersion.V3,
     title: 'V3 · Inspect the evidence',
     description:
-      'Operator-density directions: consoles, ledgers, artifacts, and a risk read.',
+      'Operator density: consoles and artifacts that put identifiers side by side.',
+  },
+  {
+    categorySlug: 'inspiration',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Kept as-is',
+    description:
+      'Frozen references. Do not iterate on these; borrow from them instead.',
   },
 ]
 
@@ -172,6 +179,8 @@ const v4 = subcategories[5]
 const keysV1 = subcategories[6]
 const keysV2 = subcategories[7]
 const keysV3 = subcategories[8]
+const inspiration = categories[4]
+const inspirationV1 = subcategories[9]
 
 export const experiments: Experiment[] = [
   {
@@ -328,58 +337,22 @@ export const experiments: Experiment[] = [
     component: DistributedVaultPairing,
   },
   {
-    slug: 'access-sentence',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Access sentence',
-    description:
-      'No diagram. The chain is one sentence whose links are inline tokens you open in place.',
-    component: AccessSentence,
-  },
-  {
-    slug: 'plain-answers',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Plain answers',
-    description:
-      'A support answer page: three literal questions, one plain answer each, records folded away.',
-    component: PlainAnswers,
-  },
-  {
-    slug: 'chain-rail',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Chain rail',
-    description:
-      'One vertical rail with the relation verb riding on the line; a stop expands inside the chain.',
-    component: ChainRail,
-  },
-  {
-    slug: 'nested-doors',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Nested doors',
-    description:
-      'Three receding door frames: walking inward is the chain, and the evidence is written on each door.',
-    component: NestedDoors,
-  },
-  {
     slug: 'concentric-trust',
     category: keys,
     subcategory: keysV1,
     title: 'Concentric trust',
     description:
-      'Containment instead of sequence: vaults at the centre, device key around them, passkey outermost.',
+      'Possession drawn as containment: rings you can nest, split, and read identifiers off.',
     component: ConcentricTrust,
   },
   {
-    slug: 'handoff-story',
+    slug: 'key-index',
     category: keys,
     subcategory: keysV1,
-    title: 'Handoff story',
+    title: 'Key index',
     description:
-      'Three acts of a handoff, each naming what an actor is trusted to do and what it never is.',
-    component: HandoffStory,
+      'A standing index of everything you own, borrowing the act rail as permanent navigation.',
+    component: KeyIndex,
   },
   {
     slug: 'signal-flow',
@@ -387,17 +360,8 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Signal flow',
     description:
-      'A wired board where testing the chain walks one pulse down the copper and stops at the first gap.',
+      'Three tiers wired together. Select a node and only the paths it truly reaches stay lit.',
     component: SignalFlow,
-  },
-  {
-    slug: 'orbit-map',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Orbit map',
-    description:
-      'Radial instead of linear: the device key is the centre because it is the only thing that exists here.',
-    component: OrbitMap,
   },
   {
     slug: 'blueprint',
@@ -405,7 +369,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Blueprint',
     description:
-      'A drafted sheet: dimensioned elements, leader lines to callouts, and a title block of standing facts.',
+      'The same graph drafted as an engineering sheet, with every part numbered by identifier.',
     component: Blueprint,
   },
   {
@@ -414,7 +378,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Keyring',
     description:
-      'A physical hoop of hanging tags; picking a tag lifts it and reads the facts stamped in its face.',
+      'Physical hoops: one ring per passkey, carrying the vault tags that passkey actually opens.',
     component: Keyring,
   },
   {
@@ -423,17 +387,8 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Custody passport',
     description:
-      'A travel document: a data page for this browser and a stamp per vault it has actually opened.',
+      'A document per passkey whose visa pages are the vaults it opens and the borders it cannot cross.',
     component: CustodyPassport,
-  },
-  {
-    slug: 'pass-stack',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Pass stack',
-    description:
-      'A wallet of perforated passes; each stub stamps the one identifier its link owns.',
-    component: PassStack,
   },
   {
     slug: 'mission-control',
@@ -441,7 +396,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Mission control',
     description:
-      'A dark operator console: status strip, selectable link stack, live readout, vault ledger.',
+      'A dark operator console: pick a vault, watch which passkeys and devices light up.',
     component: MissionControl,
   },
   {
@@ -450,7 +405,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Chain strength',
     description:
-      'Reframed as a risk read: what each link costs to lose, and what recovers it.',
+      'Coverage as risk: how many independent passkeys reach each vault, and which are single-threaded.',
     component: ChainStrength,
   },
   {
@@ -459,17 +414,8 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Access terminal',
     description:
-      'Keyboard-first console: query one link at a time, or print the whole chain as ASCII.',
+      'Keyboard-first console. Query any identifier and get the reachable set printed back.',
     component: AccessTerminal,
-  },
-  {
-    slug: 'custody-lanes',
-    category: keys,
-    subcategory: keysV3,
-    title: 'Custody lanes',
-    description:
-      'Three swimlanes compared side by side, with the derivation verb drawn in the gap.',
-    component: CustodyLanes,
   },
   {
     slug: 'evidence-drawers',
@@ -477,7 +423,16 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Evidence drawers',
     description:
-      'A cabinet: closed faces carry only the engraved identifier; one drawer opens at a time.',
+      'A cabinet of engraved faces; opening one drawer wires it to the drawers it reaches.',
     component: EvidenceDrawers,
+  },
+  {
+    slug: 'handoff-story',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Handoff story',
+    description:
+      'Kept for its act rail: a fixed index that keeps the whole set visible while you read one part.',
+    component: HandoffStory,
   },
 ]
