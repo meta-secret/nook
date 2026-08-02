@@ -199,6 +199,7 @@ mod tests {
             super::RunLifecycle::Completed(super::RunConclusion::Failure)
         );
         assert!(run.requires_repair(SHA));
+        assert!(!run.requires_repair("ffffffffffffffffffffffffffffffffffffffff"));
         Ok(())
     }
 
