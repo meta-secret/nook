@@ -16,6 +16,23 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
+import AccessSentence from './keys-management/access-sentence/Experiment.svelte'
+import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
+import Blueprint from './keys-management/blueprint/Experiment.svelte'
+import ChainRail from './keys-management/chain-rail/Experiment.svelte'
+import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
+import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
+import CustodyLanes from './keys-management/custody-lanes/Experiment.svelte'
+import CustodyPassport from './keys-management/custody-passport/Experiment.svelte'
+import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
+import HandoffStory from './keys-management/handoff-story/Experiment.svelte'
+import Keyring from './keys-management/keyring/Experiment.svelte'
+import MissionControl from './keys-management/mission-control/Experiment.svelte'
+import NestedDoors from './keys-management/nested-doors/Experiment.svelte'
+import OrbitMap from './keys-management/orbit-map/Experiment.svelte'
+import PassStack from './keys-management/pass-stack/Experiment.svelte'
+import PlainAnswers from './keys-management/plain-answers/Experiment.svelte'
+import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -69,6 +86,12 @@ export const categories: ExperimentCategory[] = [
     description:
       'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
   },
+  {
+    slug: 'keys-management',
+    title: 'Keys Management',
+    description:
+      'Devices & access: which passkey protects this browser, which device key it unlocks, and which vaults that key opens. Every sketch reads the same fixture and supports one vault / several vaults / new browser.',
+  },
 ]
 
 export const subcategories: ExperimentSubcategory[] = [
@@ -113,17 +136,42 @@ export const subcategories: ExperimentSubcategory[] = [
     description:
       "External interaction and visual references translated into Nook's Sentinel genesis model.",
   },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Say it in words',
+    description:
+      'Directions that explain the chain in plain language before drawing anything.',
+  },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V2,
+    title: 'V2 · Draw the relationship',
+    description:
+      'Directions where a diagram or a physical object carries the relationship.',
+  },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V3,
+    title: 'V3 · Inspect the evidence',
+    description:
+      'Operator-density directions: consoles, ledgers, artifacts, and a risk read.',
+  },
 ]
 
 const auth = categories[0]
 const workflow = categories[1]
 const vault = categories[2]
+const keys = categories[3]
 const authV1 = subcategories[0]
 const workflowV1 = subcategories[1]
 const v1 = subcategories[2]
 const v2 = subcategories[3]
 const v3 = subcategories[4]
 const v4 = subcategories[5]
+const keysV1 = subcategories[6]
+const keysV2 = subcategories[7]
+const keysV3 = subcategories[8]
 
 export const experiments: Experiment[] = [
   {
@@ -278,5 +326,158 @@ export const experiments: Experiment[] = [
     description:
       'A restrained dark operations console for K-of-N policy and participant public-key onboarding.',
     component: DistributedVaultPairing,
+  },
+  {
+    slug: 'access-sentence',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Access sentence',
+    description:
+      'No diagram. The chain is one sentence whose links are inline tokens you open in place.',
+    component: AccessSentence,
+  },
+  {
+    slug: 'plain-answers',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Plain answers',
+    description:
+      'A support answer page: three literal questions, one plain answer each, records folded away.',
+    component: PlainAnswers,
+  },
+  {
+    slug: 'chain-rail',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Chain rail',
+    description:
+      'One vertical rail with the relation verb riding on the line; a stop expands inside the chain.',
+    component: ChainRail,
+  },
+  {
+    slug: 'nested-doors',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Nested doors',
+    description:
+      'Three receding door frames: walking inward is the chain, and the evidence is written on each door.',
+    component: NestedDoors,
+  },
+  {
+    slug: 'concentric-trust',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Concentric trust',
+    description:
+      'Containment instead of sequence: vaults at the centre, device key around them, passkey outermost.',
+    component: ConcentricTrust,
+  },
+  {
+    slug: 'handoff-story',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Handoff story',
+    description:
+      'Three acts of a handoff, each naming what an actor is trusted to do and what it never is.',
+    component: HandoffStory,
+  },
+  {
+    slug: 'signal-flow',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Signal flow',
+    description:
+      'A wired board where testing the chain walks one pulse down the copper and stops at the first gap.',
+    component: SignalFlow,
+  },
+  {
+    slug: 'orbit-map',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Orbit map',
+    description:
+      'Radial instead of linear: the device key is the centre because it is the only thing that exists here.',
+    component: OrbitMap,
+  },
+  {
+    slug: 'blueprint',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Blueprint',
+    description:
+      'A drafted sheet: dimensioned elements, leader lines to callouts, and a title block of standing facts.',
+    component: Blueprint,
+  },
+  {
+    slug: 'keyring',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Keyring',
+    description:
+      'A physical hoop of hanging tags; picking a tag lifts it and reads the facts stamped in its face.',
+    component: Keyring,
+  },
+  {
+    slug: 'custody-passport',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Custody passport',
+    description:
+      'A travel document: a data page for this browser and a stamp per vault it has actually opened.',
+    component: CustodyPassport,
+  },
+  {
+    slug: 'pass-stack',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Pass stack',
+    description:
+      'A wallet of perforated passes; each stub stamps the one identifier its link owns.',
+    component: PassStack,
+  },
+  {
+    slug: 'mission-control',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Mission control',
+    description:
+      'A dark operator console: status strip, selectable link stack, live readout, vault ledger.',
+    component: MissionControl,
+  },
+  {
+    slug: 'chain-strength',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Chain strength',
+    description:
+      'Reframed as a risk read: what each link costs to lose, and what recovers it.',
+    component: ChainStrength,
+  },
+  {
+    slug: 'access-terminal',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Access terminal',
+    description:
+      'Keyboard-first console: query one link at a time, or print the whole chain as ASCII.',
+    component: AccessTerminal,
+  },
+  {
+    slug: 'custody-lanes',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Custody lanes',
+    description:
+      'Three swimlanes compared side by side, with the derivation verb drawn in the gap.',
+    component: CustodyLanes,
+  },
+  {
+    slug: 'evidence-drawers',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Evidence drawers',
+    description:
+      'A cabinet: closed faces carry only the engraved identifier; one drawer opens at a time.',
+    component: EvidenceDrawers,
   },
 ]
