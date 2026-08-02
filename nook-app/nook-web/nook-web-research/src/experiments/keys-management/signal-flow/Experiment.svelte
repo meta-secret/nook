@@ -1,293 +1,506 @@
+<!--
+DIRECTION: One printed board carrying one route at a time. The device key of
+this browser is a board of its own — passkey sockets above it, a vault slot
+below it, copper in between that a test pulse either crosses or does not.
+Every other device key is a line in a quiet register underneath, nothing more.
+-->
 <script lang="ts">
-  import { Fingerprint, Laptop, Vault as VaultIcon } from '@lucide/svelte'
+  import {
+    Fingerprint,
+    Laptop,
+    Pencil,
+    Plus,
+    Trash2,
+    Vault as VaultIcon,
+    Zap,
+  } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    defaultNode,
-    edgeLit,
+    type Device,
     GraphId,
     graphById,
-    type Highlight,
-    highlightFor,
+    hereDevices,
     isHere,
     type KeyGraph,
-    KeyStore,
-    NodeKind,
-    type NodeRef,
     openableHere,
-    passkeysForVault,
+    type Passkey,
     Reach,
     storeLabel,
     type Vault,
+    vaultsForDevice,
+    vaultsOpenableHere,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
+  import { Circuit, Socket } from './circuit'
 
-  interface Edge {
-    id: string
-    x1: number
-    y1: number
-    x2: number
-    y2: number
-    lit: boolean
-  }
-
-  const PASSKEY_Y = 13
-  const DEVICE_Y = 50
-  const VAULT_Y = 87
-
-  const STORE_INK: Record<KeyStore, string> = {
-    [KeyStore.ApplePasswords]: '#9aa3ad',
-    [KeyStore.Bitwarden]: '#4d7cfe',
-    [KeyStore.OnePassword]: '#2fa37c',
-    [KeyStore.SecurityKey]: '#e0a33b',
-  }
+  /** Two doglegs and a junction, the way copper actually turns a corner. */
+  const TRACE = 'M12 0 V14 L4 24 V42 L12 52 V56'
+  const STEP_MS = 460
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
-  let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
+  let passkeyId = $state(firstPasskeyId(graphById(GraphId.Tangle)))
+  let vaultId = $state(firstVaultId(graphById(GraphId.Tangle)))
+  let runToken = $state(1)
+  /** How many of the three parts the pulse has energized so far. */
+  let reached = $state(0)
 
   const graph = $derived(graphById(graphId))
-  const highlight = $derived(highlightFor(graph, selected))
-  const edges = $derived(buildEdges(graph, highlight))
-  const selectedVaults = $derived(
-    graph.vaults.filter(
-      (vault) => selected.kind === NodeKind.Vault && vault.id === selected.id,
-    ),
+  const myDevice = $derived(localDevice(graph))
+  const others = $derived(
+    graph.devices.filter((device) => !isHere(graph, device)),
+  )
+  const seated = $derived(
+    graph.passkeys.find((passkey) => passkey.id === passkeyId),
+  )
+  const slotted = $derived(graph.vaults.find((vault) => vault.id === vaultId))
+  const circuit = $derived(circuitOf(myDevice, seated, slotted))
+  const conducts = $derived(conductsOf(circuit))
+  const running = $derived(reached < conducts)
+  const brokenUpper = $derived(
+    circuit === Circuit.PasskeyElsewhere ||
+      circuit === Circuit.NotEnrolled ||
+      circuit === Circuit.NoDeviceKey,
+  )
+  const brokenLower = $derived(
+    circuit === Circuit.VaultUnreachable || circuit === Circuit.NoDeviceKey,
   )
 
-  function spread(count: number, index: number): number {
-    return ((index + 1) / (count + 1)) * 100
+  /** Walks the pulse one part per tick. A new run cancels the one in flight. */
+  $effect(() => {
+    const stops = runToken > 0 ? conducts : 0
+    reached = 0
+    const timers: ReturnType<typeof setTimeout>[] = []
+    for (let step = 1; step <= stops; step += 1) {
+      timers.push(setTimeout(() => (reached = step), step * STEP_MS))
+    }
+    return () => {
+      for (const timer of timers) clearTimeout(timer)
+    }
+  })
+
+  function localDevice(graph: KeyGraph): Device | undefined {
+    const [device] = hereDevices(graph)
+    return device
   }
 
-  function passkeyX(graph: KeyGraph, id: string): number {
-    return spread(
-      graph.passkeys.length,
-      graph.passkeys.findIndex((passkey) => passkey.id === id),
+  function firstPasskeyId(graph: KeyGraph): string {
+    const device = localDevice(graph)
+    const own = graph.passkeys.filter(
+      (passkey) =>
+        passkey.reach === Reach.Here &&
+        device !== undefined &&
+        device.passkeyIds.includes(passkey.id),
     )
+    const [pick] = own.length > 0 ? own : graph.passkeys
+    return pick ? pick.id : ''
   }
 
-  function deviceX(graph: KeyGraph, id: string): number {
-    return spread(
-      graph.devices.length,
-      graph.devices.findIndex((device) => device.id === id),
-    )
+  function firstVaultId(graph: KeyGraph): string {
+    const open = vaultsOpenableHere(graph)
+    const [pick] = open.length > 0 ? open : graph.vaults
+    return pick ? pick.id : ''
   }
 
-  function vaultX(graph: KeyGraph, id: string): number {
-    return spread(
-      graph.vaults.length,
-      graph.vaults.findIndex((vault) => vault.id === id),
-    )
+  function circuitOf(
+    device: Device | undefined,
+    passkey: Passkey | undefined,
+    vault: Vault | undefined,
+  ): Circuit {
+    if (!device) return Circuit.NoDeviceKey
+    if (!passkey || passkey.reach === Reach.Elsewhere) {
+      return Circuit.PasskeyElsewhere
+    }
+    if (!device.passkeyIds.includes(passkey.id)) return Circuit.NotEnrolled
+    if (!vault || !vault.deviceIds.includes(device.id)) {
+      return Circuit.VaultUnreachable
+    }
+    return Circuit.Closed
   }
 
-  function buildEdges(graph: KeyGraph, highlight: Highlight): Edge[] {
-    const unlocks = graph.devices.flatMap((device) =>
-      device.passkeyIds.map((passkeyId) => ({
-        id: `${passkeyId}-${device.id}`,
-        x1: passkeyX(graph, passkeyId),
-        y1: PASSKEY_Y,
-        x2: deviceX(graph, device.id),
-        y2: DEVICE_Y,
-        lit: edgeLit(highlight, NodeKind.Passkey, passkeyId, device.id),
-      })),
-    )
-    const opens = graph.vaults.flatMap((vault) =>
-      vault.deviceIds.map((deviceId) => ({
-        id: `${deviceId}-${vault.id}`,
-        x1: deviceX(graph, deviceId),
-        y1: DEVICE_Y,
-        x2: vaultX(graph, vault.id),
-        y2: VAULT_Y,
-        lit: edgeLit(highlight, NodeKind.Device, deviceId, vault.id),
-      })),
-    )
-    return [...unlocks, ...opens]
+  function conductsOf(circuit: Circuit): number {
+    if (circuit === Circuit.NoDeviceKey) return 0
+    if (circuit === Circuit.Closed) return 3
+    return circuit === Circuit.VaultUnreachable ? 2 : 1
   }
 
-  function pick(kind: NodeKind, id: string) {
-    selected = { kind, id }
+  function verdict(circuit: Circuit): string {
+    if (circuit === Circuit.Closed) return 'continuity'
+    if (circuit === Circuit.NoDeviceKey) return 'no device key'
+    if (circuit === Circuit.PasskeyElsewhere) return 'open · passkey elsewhere'
+    if (circuit === Circuit.NotEnrolled) return 'open · not on this key'
+    return 'open · vault not enrolled'
   }
 
-  function isSelected(kind: NodeKind, id: string): boolean {
-    return selected.kind === kind && selected.id === id
+  function socketOf(device: Device | undefined, passkey: Passkey): Socket {
+    if (passkey.reach === Reach.Elsewhere) return Socket.Elsewhere
+    if (!device || !device.passkeyIds.includes(passkey.id)) {
+      return Socket.NotEnrolled
+    }
+    return Socket.Live
   }
 
-  function litClass(lit: boolean, chosen: boolean): string {
-    if (chosen) return 'border-[#7ce0c0] bg-[#0e1c19] opacity-100'
-    if (lit) return 'border-[#2f5049] bg-[#0b1412] opacity-100'
-    return 'border-[#1e2126] bg-[#0a0c0e] opacity-30'
+  function socketWord(socket: Socket): string {
+    if (socket === Socket.Live) return 'on this key'
+    return socket === Socket.Elsewhere ? 'elsewhere' : 'other device'
   }
 
-  function vaultChips(vault: Vault): string[] {
-    return passkeysForVault(graph, vault).map((passkey) => passkey.shortId)
+  function carrier(energized: boolean, empty: boolean): string {
+    if (empty) return 'border-dashed border-[#1d2b30] bg-transparent'
+    if (energized) {
+      return 'border-[#2dd4bf]/55 bg-[#08191b] shadow-[0_0_26px_-10px_#2dd4bf]'
+    }
+    return 'border-[#12242a] bg-[#080f12]'
+  }
+
+  function seat(id: string) {
+    passkeyId = id
+    runToken += 1
+  }
+
+  function slot(id: string) {
+    vaultId = id
+    runToken += 1
+  }
+
+  function swapGraph(next: GraphId) {
+    graphId = next
+    passkeyId = firstPasskeyId(graphById(next))
+    vaultId = firstVaultId(graphById(next))
+    runToken += 1
   }
 </script>
 
-<main class="min-h-[100svh] bg-[#05070a] text-[#dfe5ea]">
+{#snippet designator(caption: string, tag: string)}
+  <div
+    class="flex items-baseline justify-between gap-2 px-3 pt-2.5 font-mono text-[10px] tracking-[0.2em] text-[#4a6b68] uppercase"
+  >
+    <span>{caption}</span>
+    <span>{tag}</span>
+  </div>
+{/snippet}
+
+{#snippet trace(live: boolean, broken: boolean, label: string)}
+  <div class="flex items-center gap-3 pl-5">
+    <svg
+      viewBox="0 0 24 56"
+      class="h-14 w-6 shrink-0"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d={TRACE}
+        fill="none"
+        stroke-width="1.25"
+        pathLength="1"
+        stroke-dasharray={broken ? '0.44 0.16 0.4' : undefined}
+        class={broken ? 'stroke-[#3d2c17]' : 'stroke-[#173139]'}
+      />
+      {#if broken}
+        <circle cx="4" cy="24.4" r="1.5" class="fill-[#e0a35c]" />
+        <circle cx="4" cy="34" r="1.5" class="fill-[#e0a35c]" />
+      {:else}
+        <path
+          d={TRACE}
+          fill="none"
+          stroke-width="1.75"
+          pathLength="1"
+          class="stroke-[#2dd4bf] transition-[stroke-dashoffset] duration-[440ms] ease-linear [stroke-dasharray:1] motion-reduce:duration-0"
+          style={`stroke-dashoffset: ${live ? 0 : 1}`}
+        />
+        <circle
+          cx="4"
+          cy="24"
+          r="1.9"
+          class={live ? 'fill-[#2dd4bf]' : 'fill-[#1c353c]'}
+        />
+      {/if}
+    </svg>
+    <span
+      class={`font-mono text-[10px] tracking-[0.22em] uppercase ${
+        broken ? 'text-[#e0a35c]' : live ? 'text-[#2dd4bf]' : 'text-[#3f5d5b]'
+      }`}
+    >
+      {broken ? 'cut' : label}
+    </span>
+  </div>
+{/snippet}
+
+<main class="min-h-[100svh] bg-[#04070a] text-[#d5e4e2]">
   <ExperimentBack {navigate} />
-  <GraphSwitch
-    {graph}
-    onGraph={(next) => {
-      graphId = next
-      selected = defaultNode(graphById(next))
-    }}
-  />
+  <GraphSwitch {graph} onGraph={swapGraph} />
 
-  <section class="mx-auto max-w-5xl px-4 py-20 sm:px-8">
-    <div class="overflow-x-auto pb-3">
-      <div class="relative h-[34rem] min-w-[40rem]">
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          class="absolute inset-0 h-full w-full"
-          aria-hidden="true"
-          focusable="false"
+  <div class="mx-auto max-w-2xl px-4 pt-24 pb-20 sm:px-8 sm:pt-20">
+    <section
+      class="rounded-xl border border-[#2dd4bf]/30 bg-[#070d10] p-3 shadow-[inset_0_1px_0_#14282e] sm:p-5"
+      aria-label="My device"
+    >
+      <header class="flex flex-wrap items-center gap-x-2 gap-y-2 px-1">
+        <span
+          class="rounded-sm bg-[#2dd4bf] px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#04211f] uppercase"
         >
-          {#each edges as edge (edge.id)}
-            <line
-              x1={edge.x1}
-              y1={edge.y1}
-              x2={edge.x2}
-              y2={edge.y2}
-              vector-effect="non-scaling-stroke"
-              stroke-width={edge.lit ? 1.6 : 1}
-              class={edge.lit ? 'stroke-[#4ad6a8]' : 'stroke-[#1b2026]'}
-            />
-          {/each}
-        </svg>
+          My device
+        </span>
+        <span class="truncate text-[12px] text-[#7c948f]">
+          {myDevice ? myDevice.platform : 'not set up in this browser'}
+        </span>
+      </header>
 
-        {#each [{ y: PASSKEY_Y, text: 'Passkeys' }, { y: DEVICE_Y, text: 'Device keys' }, { y: VAULT_Y, text: 'Vaults' }] as row (row.text)}
-          <span
-            class="absolute left-0 -translate-y-1/2 font-mono text-[9px] tracking-[0.2em] text-[#48525c] uppercase"
-            style={`top:${row.y}%`}
-          >
-            {row.text}
-          </span>
-        {/each}
-
-        {#each graph.passkeys as passkey (passkey.id)}
+      <div class="mt-2.5 flex flex-wrap gap-1.5 px-1">
+        {#if myDevice}
           <button
             type="button"
-            aria-pressed={isSelected(NodeKind.Passkey, passkey.id)}
-            class={`absolute w-[9rem] -translate-x-1/2 -translate-y-1/2 rounded-lg border px-3 py-2.5 text-left transition ${litClass(
-              highlight.passkeyIds.includes(passkey.id),
-              isSelected(NodeKind.Passkey, passkey.id),
-            )}`}
-            style={`left:${passkeyX(graph, passkey.id)}%;top:${PASSKEY_Y}%`}
-            onclick={() => pick(NodeKind.Passkey, passkey.id)}
+            class="flex items-center gap-1.5 rounded-sm border border-[#1c3a3f] px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-[#8fb3ae] uppercase transition hover:border-[#2dd4bf]/60 hover:text-[#2dd4bf] motion-reduce:transition-none"
           >
-            <span class="flex items-center gap-1.5">
-              <Fingerprint class="size-3.5 shrink-0" aria-hidden="true" />
-              <span class="truncate text-[13px]">{passkey.label}</span>
+            <Pencil class="size-3" aria-hidden="true" />
+            Rename
+          </button>
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-sm border border-[#1c3a3f] px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-[#8fb3ae] uppercase transition hover:border-[#2dd4bf]/60 hover:text-[#2dd4bf] motion-reduce:transition-none"
+          >
+            <Plus class="size-3" aria-hidden="true" />
+            Enrol passkey
+          </button>
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-sm border border-[#3d2c17] px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-[#c08a4a] uppercase transition hover:border-[#e0a35c]/70 hover:text-[#e0a35c] motion-reduce:transition-none"
+          >
+            <Trash2 class="size-3" aria-hidden="true" />
+            Revoke
+          </button>
+        {:else}
+          <button
+            type="button"
+            class="flex items-center gap-1.5 rounded-sm bg-[#2dd4bf] px-2.5 py-1 font-mono text-[10px] font-semibold tracking-[0.12em] text-[#04211f] uppercase"
+          >
+            <Plus class="size-3" aria-hidden="true" />
+            Set up this browser
+          </button>
+        {/if}
+      </div>
+
+      <div
+        class="mt-5 rounded-md border transition {carrier(reached >= 1, false)}"
+      >
+        {@render designator('Passkey', 'U1')}
+        <ul class="space-y-1 p-2">
+          {#each graph.passkeys as passkey (passkey.id)}
+            {@const kind = socketOf(myDevice, passkey)}
+            {@const chosen = passkey.id === passkeyId}
+            <li>
+              <button
+                type="button"
+                aria-pressed={chosen}
+                class={`flex w-full items-start gap-2.5 rounded-sm border px-2.5 py-2 text-left transition motion-reduce:transition-none ${
+                  chosen
+                    ? 'border-[#2dd4bf]/60 bg-[#0b1f21]'
+                    : 'border-transparent bg-[#060c0f] hover:border-[#1c3a3f]'
+                }`}
+                onclick={() => seat(passkey.id)}
+              >
+                <span
+                  class={`mt-1 size-2.5 shrink-0 rounded-[2px] border ${
+                    kind === Socket.Live
+                      ? 'border-[#2dd4bf] bg-[#2dd4bf]'
+                      : 'border-[#e0a35c]/70'
+                  }`}
+                  aria-hidden="true"
+                ></span>
+                <span
+                  class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                >
+                  <span
+                    class="font-mono text-[15px] tracking-[0.08em] text-[#e6f5f1]"
+                  >
+                    {passkey.shortId}
+                  </span>
+                  <span class="truncate text-[11px] text-[#7c948f]">
+                    {storeLabel(passkey.store)}
+                  </span>
+                </span>
+                <span
+                  class={`shrink-0 font-mono text-[9px] tracking-[0.14em] uppercase ${
+                    kind === Socket.Live ? 'text-[#2dd4bf]' : 'text-[#c08a4a]'
+                  }`}
+                >
+                  {socketWord(kind)}
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+
+      {@render trace(reached >= 2, brokenUpper, 'unlocks')}
+
+      <div
+        class="rounded-md border px-3 pb-3 transition {carrier(
+          reached >= 2,
+          myDevice === undefined,
+        )}"
+      >
+        {@render designator('Device key', 'U2')}
+        {#if myDevice}
+          <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Laptop class="size-4 shrink-0 text-[#2dd4bf]" aria-hidden="true" />
+            <span
+              class="font-mono text-2xl tracking-[0.1em] text-[#e6f5f1] tabular-nums"
+            >
+              {myDevice.shortId}
             </span>
-            <span class="mt-1.5 flex items-center gap-1.5">
+            <span
+              class="rounded-sm border border-[#2dd4bf]/50 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] text-[#2dd4bf] uppercase"
+            >
+              This browser
+            </span>
+          </div>
+        {:else}
+          <p
+            class="mt-1.5 font-mono text-[13px] tracking-[0.14em] text-[#c08a4a] uppercase"
+          >
+            empty socket
+          </p>
+        {/if}
+      </div>
+
+      {@render trace(reached >= 3, brokenLower, 'opens')}
+
+      <div class="rounded-md border transition {carrier(reached >= 3, false)}">
+        {@render designator('Vault', 'U3')}
+        <div class="flex flex-wrap gap-1.5 px-2 pt-2">
+          {#each graph.vaults as vault (vault.id)}
+            {@const chosen = vault.id === vaultId}
+            {@const reachable = openableHere(graph, vault)}
+            <button
+              type="button"
+              aria-pressed={chosen}
+              class={`flex items-center gap-1.5 rounded-sm border px-2 py-1 transition motion-reduce:transition-none ${
+                chosen
+                  ? 'border-[#2dd4bf]/60 bg-[#0b1f21]'
+                  : 'border-[#12242a] bg-[#060c0f] hover:border-[#1c3a3f]'
+              }`}
+              onclick={() => slot(vault.id)}
+            >
               <span
-                class="size-2 shrink-0 rounded-full"
-                style={`background:${STORE_INK[passkey.store]}`}
+                class={`size-1.5 shrink-0 rounded-full ${
+                  reachable ? 'bg-[#2dd4bf]' : 'bg-[#3d4a4d]'
+                }`}
                 aria-hidden="true"
               ></span>
-              <span class="truncate text-[10px] text-[#8e9aa5]">
-                {storeLabel(passkey.store)}
+              <span class="font-mono text-[12px] tracking-[0.06em]">
+                {vault.shortId}
               </span>
-            </span>
-            <span class="mt-1.5 block font-mono text-[11px] text-[#7ce0c0]">
-              {passkey.shortId}
-            </span>
-            {#if passkey.reach === Reach.Elsewhere}
-              <span
-                class="mt-1 block font-mono text-[9px] tracking-[0.14em] text-[#6a747e] uppercase"
-              >
-                Not on this computer
-              </span>
-            {/if}
-          </button>
-        {/each}
-
-        {#each graph.devices as device (device.id)}
-          <button
-            type="button"
-            aria-pressed={isSelected(NodeKind.Device, device.id)}
-            class={`absolute w-[9rem] -translate-x-1/2 -translate-y-1/2 rounded-lg border px-3 py-2.5 text-left transition ${litClass(
-              highlight.deviceIds.includes(device.id),
-              isSelected(NodeKind.Device, device.id),
-            )}`}
-            style={`left:${deviceX(graph, device.id)}%;top:${DEVICE_Y}%`}
-            onclick={() => pick(NodeKind.Device, device.id)}
+              <span class="text-[11px] text-[#7c948f]">{vault.label}</span>
+            </button>
+          {/each}
+        </div>
+        {#if slotted}
+          <div
+            class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#12242a] px-3 py-3"
           >
-            <span class="flex items-center gap-1.5">
-              <Laptop class="size-3.5 shrink-0" aria-hidden="true" />
-              <span class="truncate text-[13px]">{device.label}</span>
+            <VaultIcon
+              class={`size-4 shrink-0 ${reached >= 3 ? 'text-[#2dd4bf]' : 'text-[#3f5d5b]'}`}
+              aria-hidden="true"
+            />
+            <span
+              class="font-mono text-2xl tracking-[0.1em] text-[#e6f5f1] tabular-nums"
+            >
+              {slotted.shortId}
             </span>
-            <span class="mt-1 block truncate text-[10px] text-[#8e9aa5]">
-              {device.platform}
+            <span class="text-[12px] text-[#7c948f]">{slotted.label}</span>
+            <span class="ml-auto font-mono text-[10px] text-[#4a6b68]">
+              {slotted.secrets} secrets
             </span>
-            <span class="mt-1.5 block font-mono text-[11px] text-[#7ce0c0]">
-              {device.shortId}
-            </span>
-            {#if isHere(graph, device)}
-              <span
-                class="mt-1 block font-mono text-[9px] tracking-[0.14em] text-[#4ad6a8] uppercase"
-              >
-                You are here
-              </span>
-            {/if}
-          </button>
-        {/each}
-
-        {#each graph.vaults as vault (vault.id)}
-          <button
-            type="button"
-            aria-pressed={isSelected(NodeKind.Vault, vault.id)}
-            class={`absolute w-[8.5rem] -translate-x-1/2 -translate-y-1/2 rounded-lg border px-3 py-2.5 text-left transition ${
-              openableHere(graph, vault) ? '' : 'border-dashed'
-            } ${litClass(
-              highlight.vaultIds.includes(vault.id),
-              isSelected(NodeKind.Vault, vault.id),
-            )}`}
-            style={`left:${vaultX(graph, vault.id)}%;top:${VAULT_Y}%`}
-            onclick={() => pick(NodeKind.Vault, vault.id)}
-          >
-            <span class="flex items-center gap-1.5">
-              <VaultIcon class="size-3.5 shrink-0" aria-hidden="true" />
-              <span class="truncate text-[13px]">{vault.label}</span>
-            </span>
-            <span class="mt-1.5 block font-mono text-[11px] text-[#7ce0c0]">
-              {vault.shortId}
-            </span>
-            <span class="mt-1 block text-[10px] text-[#8e9aa5]">
-              {vault.secrets} secrets
-            </span>
-          </button>
-        {/each}
+          </div>
+        {/if}
       </div>
-    </div>
 
-    {#each selectedVaults as vault (vault.id)}
       <div
-        class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[#1e2126] px-4 py-3"
+        class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-dashed border-[#12242a] px-1 pt-3"
       >
-        <span
-          class="font-mono text-[10px] tracking-[0.18em] text-[#48525c] uppercase"
-        >
-          Opened by
+        <span class="flex items-center gap-1" aria-hidden="true">
+          {#each [0, 1, 2] as index (index)}
+            <span
+              class={`size-2 rounded-full transition motion-reduce:transition-none ${
+                reached > index
+                  ? 'bg-[#2dd4bf]'
+                  : 'border border-[#1c353c] bg-transparent'
+              }`}
+            ></span>
+          {/each}
         </span>
-        {#each vaultChips(vault) as chip (chip)}
-          <span
-            class="rounded-md border border-[#2f5049] px-2 py-1 font-mono text-[11px] text-[#7ce0c0]"
-          >
-            {chip}
-          </span>
-        {/each}
         <span
-          class={`ml-auto rounded-md px-2 py-1 font-mono text-[10px] tracking-[0.14em] uppercase ${
-            openableHere(graph, vault)
-              ? 'bg-[#12261f] text-[#4ad6a8]'
-              : 'bg-[#261a12] text-[#e0a33b]'
+          class={`font-mono text-[11px] tracking-[0.16em] uppercase ${
+            circuit === Circuit.Closed ? 'text-[#2dd4bf]' : 'text-[#e0a35c]'
           }`}
         >
-          {openableHere(graph, vault) ? 'Opens here' : 'Not from this browser'}
+          {verdict(circuit)}
         </span>
+        <button
+          type="button"
+          class="ml-auto flex items-center gap-1.5 rounded-sm bg-[#2dd4bf] px-3 py-1.5 font-mono text-[10px] font-semibold tracking-[0.16em] text-[#04211f] uppercase transition hover:bg-[#5ee7d6] motion-reduce:transition-none"
+          onclick={() => (runToken += 1)}
+        >
+          <Zap class="size-3.5" aria-hidden="true" />
+          {running ? 'pulse' : 'test'}
+        </button>
       </div>
-    {/each}
-  </section>
+    </section>
+
+    <section class="mt-10" aria-label="Other devices">
+      <header
+        class="flex items-baseline gap-2 px-1 font-mono text-[10px] tracking-[0.2em] uppercase"
+      >
+        <span class="text-[#3f5d5b]">Other devices</span>
+        <span class="text-[#2a3f42]">read only</span>
+        <span class="ml-auto text-[#2a3f42]">{others.length}</span>
+      </header>
+      <ul class="mt-1">
+        {#each others as device (device.id)}
+          {@const touches = vaultsForDevice(graph, device.id).some(
+            (vault) => vault.id === vaultId,
+          )}
+          <li
+            class={`flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-[#101a1e] px-1 py-2.5 transition motion-reduce:transition-none ${
+              touches ? 'opacity-100' : 'opacity-45'
+            }`}
+          >
+            <Fingerprint
+              class="size-3 shrink-0 self-center text-[#2a3f42]"
+              aria-hidden="true"
+            />
+            <span
+              class="font-mono text-[13px] tracking-[0.08em] text-[#9fb8b4]"
+            >
+              {device.shortId}
+            </span>
+            <span class="min-w-0 truncate text-[11px] text-[#5f7a77]">
+              {device.label} · {device.platform}
+            </span>
+            <span class="ml-auto flex flex-wrap items-center gap-1">
+              {#each vaultsForDevice(graph, device.id) as vault (vault.id)}
+                <span
+                  class={`rounded-sm px-1.5 py-0.5 font-mono text-[10px] tracking-[0.06em] ${
+                    vault.id === vaultId
+                      ? 'bg-[#123033] text-[#8fd8cd]'
+                      : 'text-[#46605d]'
+                  }`}
+                >
+                  {vault.shortId}
+                </span>
+              {/each}
+            </span>
+          </li>
+        {:else}
+          <li
+            class="border-t border-[#101a1e] px-1 py-2.5 font-mono text-[11px] tracking-[0.16em] text-[#2a3f42] uppercase"
+          >
+            none
+          </li>
+        {/each}
+      </ul>
+    </section>
+  </div>
 </main>

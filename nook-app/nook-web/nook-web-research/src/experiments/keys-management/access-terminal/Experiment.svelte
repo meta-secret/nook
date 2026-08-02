@@ -1,14 +1,17 @@
 <!--
-DIRECTION: Keyboard-first. The graph is not drawn, it is queried — type a short
-identifier you copied out of a password manager and the console prints back
-every route it carries, as aligned columns and box-drawn ASCII.
+DIRECTION: Keyboard-first, but my device key is not something you have to ask
+for: it is bolted above the console as its own pane, with the passkeys that
+unlock it, the vaults it opens, and the handles I may turn. The console below
+answers by identifier. Its map is vault-centric — a vault, then the passkeys
+that open it. Other devices only ever print as existence: identifier, name, the
+vaults they touch.
 -->
 <script lang="ts">
+  import { tick } from 'svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    devicesForPasskey,
-    devicesForVault,
+    type Device,
     GraphId,
     graphById,
     HereKind,
@@ -23,17 +26,23 @@ every route it carries, as aligned columns and box-drawn ASCII.
     passkeysForVault,
     Reach,
     storeLabel,
-    usableHere,
     type Vault,
     vaultsForDevice,
     vaultsForPasskey,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
+  import { Ink } from './terminal-ink'
 
   interface Block {
     id: number
     prompt: string
     lines: string[]
+  }
+
+  interface Segment {
+    key: string
+    text: string
+    ink: Ink
   }
 
   interface Match {
@@ -43,46 +52,29 @@ every route it carries, as aligned columns and box-drawn ASCII.
     label: string
   }
 
-  interface Route {
-    passkey: string
-    device: string
-    vault: string
-    store: string
-    reach: string
-  }
-
-  const BOX_W = 12
-  const PITCH = 4
   const INPUT_ID = 'access-terminal-input'
   const LOG_ID = 'access-terminal-log'
+  const COMMANDS = ['map', 'ls', 'here', 'help', 'clear']
 
-  /** Box-drawing strokes as north/south/east/west bits, so crossing wires
-   *  merge into the right junction instead of overwriting each other. */
-  const STROKES: Record<string, number> = {
-    '│': 3,
-    '─': 12,
-    '└': 5,
-    '┌': 6,
-    '├': 7,
-    '┘': 9,
-    '┐': 10,
-    '┤': 11,
-    '┴': 13,
-    '┬': 14,
-    '┼': 15,
-  }
-  const GLYPHS = ' │││─└┌├─┘┐┤─┴┬┼'
+  const TOKEN =
+    /(\b[0-9a-f]{6}\b|\belsewhere\b|\blocked\b|\bopens here\b|\bopens\b|\bhere\b|\bno passkey\b|\bno route\b)/
+  const EXACT =
+    /^([0-9a-f]{6}|elsewhere|locked|opens here|opens|here|no passkey|no route)$/
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
   let draft = $state('')
   let history = $state<string[]>([])
   let historyIndex = $state(0)
-  let nextId = $state(1)
-  let transcript = $state<Block[]>([banner(graphById(GraphId.Tangle))])
+  let nextId = $state(2)
+  let transcript = $state<Block[]>(opening(graphById(GraphId.Tangle)))
 
   const graph = $derived(graphById(graphId))
-  const suggestions = $derived(suggestionsFor(graph))
+  const mine = $derived(hereDevices(graph))
+  const mineId = $derived(mine.map((device) => device.shortId).join(''))
+  const otherDevices = $derived(
+    graph.devices.filter((device) => !isHere(graph, device)),
+  )
 
   function pad(text: string, width: number): string {
     return text.length >= width ? text : text + ' '.repeat(width - text.length)
@@ -95,65 +87,244 @@ every route it carries, as aligned columns and box-drawn ASCII.
       .trimEnd()
   }
 
+  function ids(shortIds: string[]): string {
+    return shortIds.length > 0 ? shortIds.join('  ') : '—'
+  }
+
+  /** The identifier of this browser's device key, or an empty string. */
+  function hereId(graph: KeyGraph): string {
+    return hereDevices(graph)
+      .map((device) => device.shortId)
+      .join('')
+  }
+
   function reachWord(passkey: Passkey): string {
     return passkey.reach === Reach.Here ? 'here' : 'elsewhere'
   }
 
-  function banner(graph: KeyGraph): Block {
-    const here = hereDevices(graph).map((device) => device.shortId)
-    return {
-      id: 0,
-      prompt: '',
-      lines: [
-        `nook keys · ${graph.label}`,
+  /** Whether this passkey opens this vault through the key of this browser. */
+  function routeHere(graph: KeyGraph, passkeyId: string, vault: Vault) {
+    return hereDevices(graph).some(
+      (device) =>
+        vault.deviceIds.includes(device.id) &&
+        device.passkeyIds.includes(passkeyId),
+    )
+  }
+
+  /** `here`, or the identifiers of the other devices the route depends on. */
+  function routeWord(graph: KeyGraph, passkeyId: string, vault: Vault): string {
+    if (routeHere(graph, passkeyId, vault)) return 'here'
+    const via = graph.devices
+      .filter(
+        (device) =>
+          vault.deviceIds.includes(device.id) &&
+          device.passkeyIds.includes(passkeyId),
+      )
+      .map((device) => device.shortId)
+    return via.length > 0 ? `via ${via.join(' ')}` : 'no route'
+  }
+
+  function branch(index: number, count: number): string {
+    return index === count - 1 ? '└─' : '├─'
+  }
+
+  function vaultBlock(graph: KeyGraph, vault: Vault): string[] {
+    const head = columns(
+      [
+        vault.shortId,
+        vault.label,
+        `${vault.secrets}`,
+        openableHere(graph, vault) ? 'opens here' : 'locked',
+      ],
+      [8, 16, 5, 12],
+    )
+    const openers = passkeysForVault(graph, vault)
+    if (openers.length === 0) return [head, '  ╳  no passkey']
+    return [
+      head,
+      ...openers.map((passkey, index) =>
         columns(
           [
-            `passkeys ${graph.passkeys.length}`,
-            `device keys ${graph.devices.length}`,
-            `vaults ${graph.vaults.length}`,
+            `  ${branch(index, openers.length)} ${passkey.shortId}`,
+            storeLabel(passkey.store),
+            routeWord(graph, passkey.id, vault),
           ],
-          [14, 17, 12],
+          [14, 18, 14],
         ),
-        `here ${here.length > 0 ? here.join(' ') : '—  no device key'}`,
-        '',
-        'ls · id <id> · opens <id> · here · map · help · clear',
-      ],
-    }
+      ),
+    ]
   }
 
-  function passkeyMatches(graph: KeyGraph, query: string): Match[] {
-    return graph.passkeys
-      .filter((passkey) =>
-        hits(query, passkey.shortId, passkey.id, passkey.label),
-      )
-      .map((passkey) => ({
-        kind: NodeKind.Passkey,
-        id: passkey.id,
-        shortId: passkey.shortId,
-        label: passkey.label,
-      }))
+  function mapLines(graph: KeyGraph): string[] {
+    const here = hereId(graph)
+    return [
+      'vaults · what opens each',
+      '',
+      ...graph.vaults.flatMap((vault) => [...vaultBlock(graph, vault), '']),
+      here.length > 0
+        ? `here = through my device key ${here}`
+        : 'no device key in this browser',
+    ]
   }
 
-  function deviceMatches(graph: KeyGraph, query: string): Match[] {
-    return graph.devices
-      .filter((device) => hits(query, device.shortId, device.id, device.label))
-      .map((device) => ({
-        kind: NodeKind.Device,
-        id: device.id,
-        shortId: device.shortId,
-        label: device.label,
-      }))
+  function myLines(graph: KeyGraph): string[] {
+    const devices = hereDevices(graph)
+    const open = graph.vaults
+      .filter((vault) => openableHere(graph, vault))
+      .map((vault) => vault.shortId)
+    const shut = graph.vaults
+      .filter((vault) => !openableHere(graph, vault))
+      .map((vault) => vault.shortId)
+    const head = devices.flatMap((device) => [
+      columns(['my device', device.shortId, device.platform], [12, 9, 22]),
+      columns(
+        [
+          'unlocked',
+          ids(
+            passkeysForDevice(graph, device).map((passkey) => passkey.shortId),
+          ),
+        ],
+        [12, 30],
+      ),
+    ])
+    return [
+      ...head,
+      ...(devices.length > 0
+        ? []
+        : [columns(['my device', '—  no device key'], [12, 30])]),
+      columns(['opens', ids(open)], [12, 30]),
+      columns(['locked', ids(shut)], [12, 30]),
+    ]
   }
 
-  function vaultMatches(graph: KeyGraph, query: string): Match[] {
-    return graph.vaults
-      .filter((vault) => hits(query, vault.shortId, vault.id, vault.label))
-      .map((vault) => ({
-        kind: NodeKind.Vault,
-        id: vault.id,
-        shortId: vault.shortId,
-        label: vault.label,
-      }))
+  function otherDeviceLines(graph: KeyGraph, device: Device): string[] {
+    return [
+      columns(['other device', device.shortId, device.label], [14, 9, 20]),
+      columns(['platform', device.platform], [14, 24]),
+      columns(
+        [
+          'vaults',
+          ids(vaultsForDevice(graph, device.id).map((vault) => vault.shortId)),
+        ],
+        [14, 30],
+      ),
+    ]
+  }
+
+  function passkeyLines(graph: KeyGraph, passkey: Passkey): string[] {
+    const reached = vaultsForPasskey(graph, passkey.id)
+    return [
+      columns(['passkey', passkey.shortId, passkey.label], [10, 9, 24]),
+      columns(['manager', storeLabel(passkey.store)], [10, 24]),
+      columns(['present', reachWord(passkey)], [10, 24]),
+      '',
+      'opens',
+      ...(reached.length === 0
+        ? ['  ╳  no vault']
+        : reached.map((vault, index) =>
+            columns(
+              [
+                `  ${branch(index, reached.length)} ${vault.shortId}`,
+                vault.label,
+                routeWord(graph, passkey.id, vault),
+              ],
+              [14, 18, 14],
+            ),
+          )),
+    ]
+  }
+
+  function listPasskeys(graph: KeyGraph): string[] {
+    return [
+      'passkeys',
+      columns(['  id', 'manager', 'present', 'vaults'], [10, 19, 11, 8]),
+      ...graph.passkeys.map((passkey) =>
+        columns(
+          [
+            `  ${passkey.shortId}`,
+            storeLabel(passkey.store),
+            reachWord(passkey),
+            `${vaultsForPasskey(graph, passkey.id).length}`,
+          ],
+          [10, 19, 11, 8],
+        ),
+      ),
+    ]
+  }
+
+  function listVaults(graph: KeyGraph): string[] {
+    return [
+      'vaults',
+      columns(['  id', 'name', 'secrets', 'keys', 'here'], [10, 16, 9, 7, 12]),
+      ...graph.vaults.map((vault) =>
+        columns(
+          [
+            `  ${vault.shortId}`,
+            vault.label,
+            `${vault.secrets}`,
+            `${passkeysForVault(graph, vault).length}`,
+            openableHere(graph, vault) ? 'opens' : 'locked',
+          ],
+          [10, 16, 9, 7, 12],
+        ),
+      ),
+    ]
+  }
+
+  function listOthers(graph: KeyGraph): string[] {
+    const devices = graph.devices.filter((device) => !isHere(graph, device))
+    if (devices.length === 0) return ['other devices', '  —']
+    return [
+      'other devices',
+      ...devices.map((device) =>
+        columns(
+          [
+            `  ${device.shortId}`,
+            device.label,
+            device.platform,
+            `${vaultsForDevice(graph, device.id).length} vaults`,
+          ],
+          [10, 16, 18, 10],
+        ),
+      ),
+    ]
+  }
+
+  function helpLines(): string[] {
+    return [
+      columns(['  map', 'vaults · the passkeys that open them'], [12, 40]),
+      columns(['  ls', 'passkeys · vaults · other devices'], [12, 40]),
+      columns(['  id <id>', 'one identifier'], [12, 40]),
+      columns(['  here', 'what this browser can do now'], [12, 40]),
+      columns(['  tab', 'complete an identifier'], [12, 40]),
+      columns(['  clear', 'wipe the transcript'], [12, 40]),
+    ]
+  }
+
+  function opening(graph: KeyGraph): Block[] {
+    const others = graph.devices.filter(
+      (device) => !isHere(graph, device),
+    ).length
+    return [
+      {
+        id: 0,
+        prompt: '',
+        lines: [
+          `nook keys · ${graph.label}`,
+          columns(
+            [
+              `passkeys ${graph.passkeys.length}`,
+              `vaults ${graph.vaults.length}`,
+              `other devices ${others}`,
+            ],
+            [13, 11, 18],
+          ),
+          '',
+          'map · ls · id <id> · here · help · clear',
+        ],
+      },
+      { id: 1, prompt: 'map', lines: mapLines(graph) },
+    ]
   }
 
   function hits(query: string, shortId: string, id: string, label: string) {
@@ -165,488 +336,137 @@ every route it carries, as aligned columns and box-drawn ASCII.
     )
   }
 
-  function routesFromPasskey(graph: KeyGraph, passkeyId: string): Route[] {
-    return graph.passkeys
-      .filter((passkey) => passkey.id === passkeyId)
-      .flatMap((passkey) =>
-        devicesForPasskey(graph, passkey.id).flatMap((device) =>
-          vaultsForDevice(graph, device.id).map((vault) => ({
-            passkey: passkey.shortId,
-            device: device.shortId,
-            vault: vault.shortId,
-            store: storeLabel(passkey.store),
-            reach: reachWord(passkey),
-          })),
-        ),
-      )
+  function lookup(graph: KeyGraph, query: string): Match[] {
+    return [
+      ...graph.passkeys
+        .filter((passkey) =>
+          hits(query, passkey.shortId, passkey.id, passkey.label),
+        )
+        .map((passkey) => ({
+          kind: NodeKind.Passkey,
+          id: passkey.id,
+          shortId: passkey.shortId,
+          label: passkey.label,
+        })),
+      ...graph.vaults
+        .filter((vault) => hits(query, vault.shortId, vault.id, vault.label))
+        .map((vault) => ({
+          kind: NodeKind.Vault,
+          id: vault.id,
+          shortId: vault.shortId,
+          label: vault.label,
+        })),
+      ...graph.devices
+        .filter((device) =>
+          hits(query, device.shortId, device.id, device.label),
+        )
+        .map((device) => ({
+          kind: NodeKind.Device,
+          id: device.id,
+          shortId: device.shortId,
+          label: device.label,
+        })),
+    ]
   }
 
-  function routesIntoVault(graph: KeyGraph, vault: Vault): Route[] {
-    return devicesForVault(graph, vault).flatMap((device) =>
-      passkeysForDevice(graph, device).map((passkey) => ({
-        passkey: passkey.shortId,
-        device: device.shortId,
-        vault: vault.shortId,
-        store: storeLabel(passkey.store),
-        reach: reachWord(passkey),
-      })),
+  /** My device key never reads as one more `Device key` row among the rest. */
+  function kindWord(graph: KeyGraph, match: Match): string {
+    if (match.kind !== NodeKind.Device) return kindLabel(match.kind)
+    return graph.devices.some(
+      (device) => device.id === match.id && isHere(graph, device),
     )
+      ? 'my device'
+      : 'other device'
   }
 
-  function routeLines(routes: Route[]): string[] {
-    if (routes.length === 0) return ['  —  no route']
-    return routes.map((route) =>
+  function matchLines(graph: KeyGraph, matches: Match[]): string[] {
+    return matches.map((match) =>
       columns(
-        [
-          `  ${route.passkey} ──> ${route.device} ──> ${route.vault}`,
-          route.store,
-          route.reach,
-        ],
-        [34, 18, 10],
+        [`  ${match.shortId}`, kindWord(graph, match), match.label],
+        [10, 14, 22],
       ),
     )
   }
 
-  function passkeyReport(graph: KeyGraph, id: string): string[] {
-    return graph.passkeys
-      .filter((passkey) => passkey.id === id)
-      .flatMap((passkey) => [
-        columns(['passkey', passkey.shortId, passkey.label], [9, 9, 24]),
-        columns(['store', storeLabel(passkey.store)], [9, 24]),
-        columns(['reach', reachWord(passkey)], [9, 24]),
-        columns(
-          [
-            'unlocks',
-            devicesForPasskey(graph, passkey.id)
-              .map((device) => device.shortId)
-              .join('  '),
-          ],
-          [9, 24],
-        ),
-        columns(
-          [
-            'opens',
-            vaultsForPasskey(graph, passkey.id)
-              .map((vault) => vault.shortId)
-              .join('  '),
-          ],
-          [9, 24],
-        ),
-        '',
-        ...routeLines(routesFromPasskey(graph, passkey.id)),
-      ])
-  }
-
-  function deviceReport(graph: KeyGraph, id: string): string[] {
-    return graph.devices
-      .filter((device) => device.id === id)
-      .flatMap((device) => [
-        columns(['device', device.shortId, device.label], [9, 9, 24]),
-        columns(['platform', device.platform], [9, 24]),
-        columns(['here', isHere(graph, device) ? 'yes' : 'no'], [9, 24]),
-        '',
-        ...routeLines(
-          vaultsForDevice(graph, device.id).flatMap((vault) =>
-            passkeysForDevice(graph, device).map((passkey) => ({
-              passkey: passkey.shortId,
-              device: device.shortId,
-              vault: vault.shortId,
-              store: storeLabel(passkey.store),
-              reach: reachWord(passkey),
-            })),
-          ),
-        ),
-      ])
-  }
-
-  function vaultReport(graph: KeyGraph, id: string): string[] {
-    return graph.vaults
-      .filter((vault) => vault.id === id)
-      .flatMap((vault) => {
-        const routes = routesIntoVault(graph, vault)
-        const stores = new Set(routes.map((route) => route.store))
-        return [
-          columns(['vault', vault.shortId, vault.label], [9, 9, 24]),
-          columns(['secrets', `${vault.secrets}`], [9, 24]),
-          columns(
-            ['here', openableHere(graph, vault) ? 'opens' : 'locked'],
-            [9, 24],
-          ),
-          columns(
-            [
-              'routes',
-              `${passkeysForVault(graph, vault).length}`,
-              'managers',
-              `${stores.size}`,
-            ],
-            [9, 10, 10, 6],
-          ),
-          '',
-          ...routeLines(routes),
-        ]
-      })
+  /** The identifiers you can ask about, grouped so classes never interleave. */
+  function indexLines(graph: KeyGraph): string[] {
+    const others = graph.devices.filter((device) => !isHere(graph, device))
+    return [
+      'passkeys',
+      ...graph.passkeys.map((passkey) =>
+        columns([`  ${passkey.shortId}`, passkey.label], [10, 24]),
+      ),
+      '',
+      'vaults',
+      ...graph.vaults.map((vault) =>
+        columns([`  ${vault.shortId}`, vault.label], [10, 24]),
+      ),
+      ...(others.length > 0
+        ? [
+            '',
+            'other devices',
+            ...others.map((device) =>
+              columns([`  ${device.shortId}`, device.label], [10, 24]),
+            ),
+          ]
+        : []),
+    ]
   }
 
   function reportFor(graph: KeyGraph, match: Match): string[] {
-    if (match.kind === NodeKind.Passkey) return passkeyReport(graph, match.id)
-    if (match.kind === NodeKind.Device) return deviceReport(graph, match.id)
-    return vaultReport(graph, match.id)
-  }
-
-  function matchLines(matches: Match[]): string[] {
-    return matches.map((match) =>
-      columns(
-        [`  ${match.shortId}`, kindLabel(match.kind), match.label],
-        [10, 12, 24],
-      ),
-    )
-  }
-
-  function listPasskeys(graph: KeyGraph): string[] {
-    return [
-      'passkeys',
-      columns(
-        ['  id', 'manager', 'reach', 'unlocks', 'opens'],
-        [10, 18, 12, 10, 8],
-      ),
-      ...graph.passkeys.map((passkey) =>
-        columns(
-          [
-            `  ${passkey.shortId}`,
-            storeLabel(passkey.store),
-            reachWord(passkey),
-            `${devicesForPasskey(graph, passkey.id).length}`,
-            `${vaultsForPasskey(graph, passkey.id).length}`,
-          ],
-          [10, 18, 12, 10, 8],
-        ),
-      ),
-    ]
-  }
-
-  function listDevices(graph: KeyGraph): string[] {
-    return [
-      'device keys',
-      columns(
-        ['  id', 'platform', 'here', 'passkeys', 'vaults'],
-        [10, 18, 8, 18, 8],
-      ),
-      ...graph.devices.map((device) =>
-        columns(
-          [
-            `  ${device.shortId}`,
-            device.platform,
-            isHere(graph, device) ? 'yes' : '·',
-            passkeysForDevice(graph, device)
-              .map((passkey) => passkey.shortId)
-              .join(' '),
-            `${vaultsForDevice(graph, device.id).length}`,
-          ],
-          [10, 18, 8, 18, 8],
-        ),
-      ),
-    ]
-  }
-
-  function listVaults(graph: KeyGraph): string[] {
-    return [
-      'vaults',
-      columns(
-        ['  id', 'name', 'secrets', 'passkeys', 'here'],
-        [10, 16, 10, 25, 8],
-      ),
-      ...graph.vaults.map((vault) =>
-        columns(
-          [
-            `  ${vault.shortId}`,
-            vault.label,
-            `${vault.secrets}`,
-            passkeysForVault(graph, vault)
-              .map((passkey) => passkey.shortId)
-              .join(' '),
-            openableHere(graph, vault) ? 'opens' : 'locked',
-          ],
-          [10, 16, 10, 25, 8],
-        ),
-      ),
-    ]
-  }
-
-  function hereReport(graph: KeyGraph): string[] {
-    const devices = hereDevices(graph)
-    const usable = usableHere(graph).map((passkey) => passkey.shortId)
-    const open = graph.vaults
-      .filter((vault) => openableHere(graph, vault))
-      .map((vault) => vault.shortId)
-    return [
-      columns(
-        [
-          'browser',
-          devices.length > 0
-            ? devices.map((device) => device.shortId).join(' ')
-            : '—  no device key',
-        ],
-        [10, 30],
-      ),
-      columns(
-        ['present', usable.length > 0 ? usable.join('  ') : '—'],
-        [10, 30],
-      ),
-      columns(['opens', open.length > 0 ? open.join('  ') : '—'], [10, 30]),
-    ]
-  }
-
-  function put(grid: string[][], x: number, y: number, mark: string) {
-    const row = grid[y]
-    if (!row) return
-    if (x < 0 || x >= row.length) return
-    const current = row[x]
-    row[x] = merge(current ? current : ' ', mark)
-  }
-
-  function merge(current: string, mark: string): string {
-    if (mark === '>') return mark
-    if (current === ' ') return mark
-    const held = STROKES[current]
-    const added = STROKES[mark]
-    if (!held || !added) return current
-    return GLYPHS.charAt(held | added)
-  }
-
-  function box(grid: string[][], x: number, top: number, body: string) {
-    const bar = '─'.repeat(BOX_W - 2)
-    const face = [`┌${bar}┐`, `│ ${pad(body, BOX_W - 4)} │`, `└${bar}┘`]
-    face.forEach((line, row) =>
-      line.split('').forEach((mark, i) => put(grid, x + i, top + row, mark)),
-    )
-  }
-
-  function wire(
-    grid: string[][],
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-    channel: number,
-  ) {
-    for (let x = fromX; x < channel; x += 1) put(grid, x, fromY, '─')
-    if (fromY === toY) {
-      put(grid, channel, fromY, '─')
-    } else {
-      const step = fromY < toY ? 1 : -1
-      put(grid, channel, fromY, step === 1 ? '┐' : '┘')
-      for (let y = fromY + step; y !== toY; y += step)
-        put(grid, channel, y, '│')
-      put(grid, channel, toY, step === 1 ? '└' : '┌')
+    if (match.kind === NodeKind.Passkey) {
+      return graph.passkeys
+        .filter((passkey) => passkey.id === match.id)
+        .flatMap((passkey) => passkeyLines(graph, passkey))
     }
-    for (let x = channel + 1; x < toX - 1; x += 1) put(grid, x, toY, '─')
-    put(grid, toX - 1, toY, '>')
-  }
-
-  function place(line: string[], x: number, text: string) {
-    text.split('').forEach((mark, i) => {
-      if (x + i < line.length) line[x + i] = mark
-    })
-  }
-
-  function mapArt(graph: KeyGraph): string[] {
-    const unlocks = graph.devices.flatMap((device) =>
-      device.passkeyIds.map((passkeyId) => ({
-        from: passkeyId,
-        to: device.id,
-      })),
-    )
-    const opens = graph.vaults.flatMap((vault) =>
-      vault.deviceIds.map((deviceId) => ({ from: deviceId, to: vault.id })),
-    )
-    const passkeyX = 1
-    const deviceX = passkeyX + BOX_W + 2 * unlocks.length + 1
-    const vaultX = deviceX + BOX_W + 2 * opens.length + 1
-    const width = vaultX + BOX_W + 1
-    const rows =
-      Math.max(
-        graph.passkeys.length,
-        graph.devices.length,
-        graph.vaults.length,
-      ) *
-        PITCH -
-      1
-    const grid: string[][] = Array.from({ length: rows }, () =>
-      Array.from({ length: width }, () => ' '),
-    )
-
-    graph.passkeys.forEach((passkey, index) =>
-      box(
-        grid,
-        passkeyX,
-        index * PITCH,
-        `${passkey.shortId} ${passkey.reach === Reach.Here ? '*' : '.'}`,
-      ),
-    )
-    graph.devices.forEach((device, index) =>
-      box(
-        grid,
-        deviceX,
-        index * PITCH,
-        `${device.shortId} ${isHere(graph, device) ? '*' : '.'}`,
-      ),
-    )
-    graph.vaults.forEach((vault, index) =>
-      box(
-        grid,
-        vaultX,
-        index * PITCH,
-        `${vault.shortId} ${openableHere(graph, vault) ? '*' : '.'}`,
-      ),
-    )
-
-    unlocks.forEach((edge, index) => {
-      const fromRow =
-        graph.passkeys.findIndex((passkey) => passkey.id === edge.from) *
-          PITCH +
-        1
-      const toRow =
-        graph.devices.findIndex((device) => device.id === edge.to) * PITCH + 1
-      wire(
-        grid,
-        passkeyX + BOX_W,
-        fromRow,
-        deviceX,
-        toRow,
-        passkeyX + BOX_W + 1 + 2 * index,
+    if (match.kind === NodeKind.Vault) {
+      return graph.vaults
+        .filter((vault) => vault.id === match.id)
+        .flatMap((vault) => vaultBlock(graph, vault))
+    }
+    return graph.devices
+      .filter((device) => device.id === match.id)
+      .flatMap((device) =>
+        isHere(graph, device)
+          ? myLines(graph)
+          : otherDeviceLines(graph, device),
       )
-    })
-    opens.forEach((edge, index) => {
-      const fromRow =
-        graph.devices.findIndex((device) => device.id === edge.from) * PITCH + 1
-      const toRow =
-        graph.vaults.findIndex((vault) => vault.id === edge.to) * PITCH + 1
-      wire(
-        grid,
-        deviceX + BOX_W,
-        fromRow,
-        vaultX,
-        toRow,
-        deviceX + BOX_W + 1 + 2 * index,
-      )
-    })
-
-    const heading = Array.from({ length: width }, () => ' ')
-    place(heading, passkeyX, 'PASSKEYS')
-    place(heading, deviceX, 'DEVICE KEYS')
-    place(heading, vaultX, 'VAULTS')
-
-    return [
-      heading.join('').trimEnd(),
-      '',
-      ...grid.map((row) => row.join('').trimEnd()),
-      '',
-      '* usable from this browser   . elsewhere',
-    ]
-  }
-
-  function legend(graph: KeyGraph): string[] {
-    return [
-      ...graph.passkeys.map((passkey) =>
-        columns(
-          [`  ${passkey.shortId}`, passkey.label, storeLabel(passkey.store)],
-          [10, 20, 18],
-        ),
-      ),
-      ...graph.devices.map((device) =>
-        columns(
-          [`  ${device.shortId}`, device.label, device.platform],
-          [10, 20, 18],
-        ),
-      ),
-      ...graph.vaults.map((vault) =>
-        columns(
-          [`  ${vault.shortId}`, vault.label, `${vault.secrets} secrets`],
-          [10, 20, 18],
-        ),
-      ),
-    ]
-  }
-
-  function helpLines(): string[] {
-    return [
-      columns(['  ls', 'passkeys · device keys · vaults'], [16, 40]),
-      columns(['  id <id>', 'everything that identifier reaches'], [16, 40]),
-      columns(['  opens <id>', 'passkeys that open a vault'], [16, 40]),
-      columns(['  here', 'what this browser holds'], [16, 40]),
-      columns(['  map', 'the whole graph, drawn'], [16, 40]),
-      columns(['  clear', 'wipe the transcript'], [16, 40]),
-    ]
-  }
-
-  function lookup(graph: KeyGraph, query: string): Match[] {
-    return [
-      ...passkeyMatches(graph, query),
-      ...deviceMatches(graph, query),
-      ...vaultMatches(graph, query),
-    ]
   }
 
   function idCommand(graph: KeyGraph, query: string): string[] {
-    if (query.length === 0) return ['id <id>', ...matchLines(lookup(graph, ''))]
+    if (query.length === 0) return ['id <id>', '', ...indexLines(graph)]
     const matches = lookup(graph, query)
     if (matches.length === 0) {
-      return [`no match  ${query}`, '', ...matchLines(lookup(graph, ''))]
+      return [`no match  ${query}`, '', ...indexLines(graph)]
     }
     if (matches.length > 1) {
-      return [`${matches.length} matches  ${query}`, '', ...matchLines(matches)]
+      return [
+        `${matches.length} matches  ${query}`,
+        '',
+        ...matchLines(graph, matches),
+      ]
     }
     return matches.flatMap((match) => reportFor(graph, match))
-  }
-
-  function opensCommand(graph: KeyGraph, query: string): string[] {
-    if (query.length === 0) {
-      return ['opens <id>', '', ...matchLines(vaultMatches(graph, ''))]
-    }
-    const matches = vaultMatches(graph, query)
-    if (matches.length === 0) {
-      return [`no vault  ${query}`, '', ...matchLines(vaultMatches(graph, ''))]
-    }
-    return matches.flatMap((match) => vaultReport(graph, match.id))
   }
 
   function outputFor(graph: KeyGraph, command: string): string[] {
     const [verb, ...rest] = command.split(' ')
     const argument = rest.join(' ')
+    if (command === 'map') return mapLines(graph)
     if (command === 'ls') {
       return [
         ...listPasskeys(graph),
         '',
-        ...listDevices(graph),
-        '',
         ...listVaults(graph),
+        '',
+        ...listOthers(graph),
       ]
     }
-    if (command === 'ls passkeys') return listPasskeys(graph)
-    if (command === 'ls devices' || command === 'ls device-keys') {
-      return listDevices(graph)
-    }
-    if (command === 'ls vaults') return listVaults(graph)
-    if (command === 'here') return hereReport(graph)
-    if (command === 'map' || command === 'graph') {
-      return [...mapArt(graph), '', ...legend(graph)]
-    }
+    if (command === 'here') return myLines(graph)
     if (command === 'help') return helpLines()
-    if (verb === 'id' || verb === 'show') return idCommand(graph, argument)
-    if (verb === 'opens') return opensCommand(graph, argument)
-    if (verb.length === 6) return idCommand(graph, verb)
+    if (verb === 'id') return idCommand(graph, argument)
+    if (verb && verb.length === 6) return idCommand(graph, verb)
     return [`unknown  ${command}`, '', ...helpLines()]
-  }
-
-  function suggestionsFor(graph: KeyGraph): string[] {
-    return [
-      'map',
-      'ls',
-      'here',
-      ...graph.passkeys.map((passkey) => `id ${passkey.shortId}`),
-      ...graph.vaults.map((vault) => `opens ${vault.shortId}`),
-      'clear',
-    ]
   }
 
   function run(raw: string) {
@@ -656,8 +476,9 @@ every route it carries, as aligned columns and box-drawn ASCII.
     historyIndex = history.length
     draft = ''
     if (command === 'clear') {
-      transcript = [banner(graph)]
-      nextId = 1
+      transcript = opening(graph)
+      nextId = 2
+      void scrollToEnd()
       return
     }
     transcript = [
@@ -665,6 +486,30 @@ every route it carries, as aligned columns and box-drawn ASCII.
       { id: nextId, prompt: command, lines: outputFor(graph, command) },
     ]
     nextId += 1
+    void scrollToEnd()
+  }
+
+  function allShortIds(graph: KeyGraph): string[] {
+    return [
+      ...graph.passkeys.map((passkey) => passkey.shortId),
+      ...graph.vaults.map((vault) => vault.shortId),
+      ...graph.devices.map((device) => device.shortId),
+    ]
+  }
+
+  /** Tab: complete the last word to a short identifier, cycling through them. */
+  function completed(text: string): string {
+    const parts = text.split(' ')
+    const [tail] = parts.slice(-1)
+    const stem = tail ? tail : ''
+    const pool = allShortIds(graph)
+    const at = pool.indexOf(stem)
+    const [candidate] =
+      at >= 0
+        ? pool.slice((at + 1) % pool.length)
+        : pool.filter((id) => id.startsWith(stem))
+    if (!candidate) return text
+    return [...parts.slice(0, -1), candidate].join(' ')
   }
 
   function historyAt(index: number): string {
@@ -673,6 +518,14 @@ every route it carries, as aligned columns and box-drawn ASCII.
   }
 
   function onKey(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      run(draft)
+    }
+    if (event.key === 'Tab' && !event.shiftKey) {
+      event.preventDefault()
+      draft = completed(draft)
+    }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
       historyIndex = Math.max(0, historyIndex - 1)
@@ -690,16 +543,47 @@ every route it carries, as aligned columns and box-drawn ASCII.
     if (node instanceof HTMLInputElement) node.focus()
   }
 
-  $effect(() => {
-    const count = transcript.length
-    const frame = requestAnimationFrame(() => {
-      const node = document.getElementById(LOG_ID)
-      if (node instanceof HTMLElement && count > 0) {
-        node.scrollTop = node.scrollHeight
-      }
-    })
-    return () => cancelAnimationFrame(frame)
-  })
+  function insertId(shortId: string) {
+    const trimmed = draft.trimEnd()
+    draft = trimmed.length === 0 ? `id ${shortId}` : `${trimmed} ${shortId}`
+    focusInput()
+  }
+
+  function inkOf(text: string, here: string): Ink {
+    if (/^[0-9a-f]{6}$/.test(text)) {
+      return text === here && here.length > 0 ? Ink.Mine : Ink.Id
+    }
+    if (text === 'here' || text === 'opens' || text === 'opens here') {
+      return Ink.Good
+    }
+    return Ink.Warn
+  }
+
+  function segmentsOf(line: string, here: string): Segment[] {
+    return line
+      .split(TOKEN)
+      .filter((part) => part.length > 0)
+      .map((part, index) => ({
+        key: `${index}-${part}`,
+        text: part,
+        ink: EXACT.test(part) ? inkOf(part, here) : Ink.Plain,
+      }))
+  }
+
+  function inkClass(ink: Ink): string {
+    if (ink === Ink.Mine) return 'text-[#f0b463] underline underline-offset-4'
+    if (ink === Ink.Id) return 'text-[#f4e6c6]'
+    if (ink === Ink.Good) return 'text-[#8fb87c]'
+    if (ink === Ink.Warn) return 'text-[#c8794f]'
+    return 'text-[#b6a98f]'
+  }
+
+  /** Keep the newest block in view once the transcript has been rendered. */
+  async function scrollToEnd(): Promise<void> {
+    await tick()
+    const node = document.getElementById(LOG_ID)
+    if (node instanceof HTMLElement) node.scrollTop = node.scrollHeight
+  }
 </script>
 
 <main class="min-h-[100svh] bg-[#14110c] text-[#e8dcc4]">
@@ -710,14 +594,132 @@ every route it carries, as aligned columns and box-drawn ASCII.
       graphId = next
       history = []
       historyIndex = 0
-      nextId = 1
-      transcript = [banner(graphById(next))]
+      nextId = 2
+      draft = ''
+      transcript = opening(graphById(next))
     }}
   />
 
   <section class="mx-auto max-w-3xl px-4 pt-28 pb-16 sm:px-6 sm:pt-24">
+    <p class="font-mono text-[10px] tracking-[0.26em] text-[#e0a458] uppercase">
+      My device
+    </p>
+
+    {#each mine as device (device.id)}
+      <div
+        class="mt-2 rounded-lg border-2 border-[#e0a458] bg-[linear-gradient(180deg,#221a10_0%,#16120c_100%)] p-4 shadow-[0_20px_46px_rgb(0_0_0/0.5)]"
+      >
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button
+            type="button"
+            aria-label={`Insert device key ${device.shortId}`}
+            class="font-mono text-2xl tracking-[0.1em] text-[#f7e3bb] underline decoration-[#8a6c2c] underline-offset-4 sm:text-3xl"
+            onclick={() => insertId(device.shortId)}
+          >
+            {device.shortId}
+          </button>
+          <span class="text-[13px] text-[#cbbfa7]">{device.label}</span>
+          <span class="font-mono text-[11px] text-[#93856b]">
+            {device.platform}
+          </span>
+        </div>
+
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt
+              class="font-mono text-[10px] tracking-[0.2em] text-[#8a7c60] uppercase"
+            >
+              Unlocked by
+            </dt>
+            <dd class="mt-1.5 flex flex-wrap gap-1.5">
+              {#each passkeysForDevice(graph, device) as passkey (passkey.id)}
+                <button
+                  type="button"
+                  aria-label={`Insert passkey ${passkey.shortId}, ${storeLabel(passkey.store)}`}
+                  class="flex items-baseline gap-1.5 rounded border border-[#5f4d2e] bg-[#1d1710] px-2 py-1 transition hover:border-[#e0a458] motion-reduce:transition-none"
+                  onclick={() => insertId(passkey.shortId)}
+                >
+                  <span class="font-mono text-[12px] text-[#f4e6c6]">
+                    {passkey.shortId}
+                  </span>
+                  <span class="text-[10px] text-[#a2937a]">
+                    {storeLabel(passkey.store)}
+                  </span>
+                  {#if passkey.reach === Reach.Elsewhere}
+                    <span
+                      class="font-mono text-[9px] tracking-[0.1em] text-[#c8794f] uppercase"
+                    >
+                      elsewhere
+                    </span>
+                  {/if}
+                </button>
+              {/each}
+            </dd>
+          </div>
+          <div>
+            <dt
+              class="font-mono text-[10px] tracking-[0.2em] text-[#8a7c60] uppercase"
+            >
+              Opens
+            </dt>
+            <dd class="mt-1.5 flex flex-wrap gap-1.5">
+              {#each vaultsForDevice(graph, device.id) as vault (vault.id)}
+                <button
+                  type="button"
+                  aria-label={`Insert vault ${vault.shortId}, ${vault.label}`}
+                  class="flex items-baseline gap-1.5 rounded border border-[#5f4d2e] bg-[#1d1710] px-2 py-1 transition hover:border-[#e0a458] motion-reduce:transition-none"
+                  onclick={() => insertId(vault.shortId)}
+                >
+                  <span class="font-mono text-[12px] text-[#f4e6c6]">
+                    {vault.shortId}
+                  </span>
+                  <span class="text-[10px] text-[#a2937a]">{vault.label}</span>
+                </button>
+              {/each}
+            </dd>
+          </div>
+        </dl>
+
+        <div class="mt-4 flex flex-wrap gap-1.5 border-t border-[#3a3020] pt-3">
+          {#each ['Rename', 'Enrol passkey', 'Revoke'] as action (action)}
+            <button
+              type="button"
+              class="rounded border border-[#4a3f2c] px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-[#c3b18d] uppercase transition hover:border-[#e0a458] hover:text-[#f7e3bb] motion-reduce:transition-none"
+            >
+              {action}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/each}
+
+    {#if graph.here.kind === HereKind.Unprepared}
+      <div
+        class="mt-2 rounded-lg border-2 border-dashed border-[#4a3f2c] bg-[repeating-linear-gradient(135deg,#17130d_0_6px,#12100b_6px_12px)] p-4"
+      >
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span class="font-mono text-2xl tracking-[0.1em] text-[#6b6047]">
+            ······
+          </span>
+          <span
+            class="font-mono text-[11px] tracking-[0.16em] text-[#8a7c66] uppercase"
+          >
+            no device key
+          </span>
+        </div>
+        <div class="mt-4 border-t border-[#241e15] pt-3">
+          <button
+            type="button"
+            class="rounded border border-[#4a3f2c] px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-[#e0a458] uppercase"
+          >
+            Create device key
+          </button>
+        </div>
+      </div>
+    {/if}
+
     <div
-      class="overflow-hidden rounded-lg border border-[#3a3020] bg-[#0f0d09] shadow-[0_24px_60px_rgb(0_0_0/0.45)]"
+      class="mt-6 overflow-hidden rounded-lg border border-[#3a3020] bg-[#0f0d09] shadow-[0_24px_60px_rgb(0_0_0/0.45)]"
     >
       <div
         class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[#3a3020] bg-[#191510] px-4 py-2.5"
@@ -728,20 +730,6 @@ every route it carries, as aligned columns and box-drawn ASCII.
           <span class="size-2.5 rounded-full bg-[#4a3f2c]"></span>
         </span>
         <span class="font-mono text-[11px] text-[#8a7c66]">nook keys</span>
-        <span class="ml-auto flex items-center gap-2 font-mono text-[10px]">
-          <span
-            class={`size-1.5 rounded-full ${graph.here.kind === HereKind.Prepared ? 'bg-[#e0a458]' : 'bg-[#5d5340]'}`}
-            aria-hidden="true"
-          ></span>
-          {#each hereDevices(graph) as device (device.id)}
-            <span class="tracking-[0.16em] text-[#e0a458]">
-              {device.shortId}
-            </span>
-          {/each}
-          {#if graph.here.kind === HereKind.Unprepared}
-            <span class="tracking-[0.16em] text-[#8a7c66]">no device key</span>
-          {/if}
-        </span>
       </div>
 
       <div
@@ -749,7 +737,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
         role="log"
         aria-live="polite"
         aria-label="Key graph console output"
-        class="h-[26rem] overflow-auto px-4 py-4 sm:h-[32rem]"
+        class="h-[24rem] overflow-auto px-4 py-4 sm:h-[30rem]"
       >
         {#each transcript as block (block.id)}
           <div class="mb-4">
@@ -758,36 +746,24 @@ every route it carries, as aligned columns and box-drawn ASCII.
                 keys ▸ {block.prompt}
               </p>
             {/if}
-            <pre
-              class="mt-1 font-mono text-[11px] leading-5 whitespace-pre text-[#cbbfa7] sm:text-xs">{block.lines.join(
-                '\n',
-              )}</pre>
+            {#each block.lines as line, index (index)}
+              <p
+                class="flex min-h-5 font-mono text-[11px] leading-5 sm:text-xs"
+              >
+                {#each segmentsOf(line, mineId) as segment (segment.key)}
+                  <span class={`whitespace-pre ${inkClass(segment.ink)}`}>
+                    {segment.text}
+                  </span>
+                {/each}
+              </p>
+            {/each}
           </div>
         {/each}
       </div>
 
       <div class="border-t border-[#3a3020] bg-[#12100b] px-4 py-3">
-        <div
-          class="flex flex-wrap gap-1.5"
-          role="group"
-          aria-label="Suggested commands"
-        >
-          {#each suggestions as command (command)}
-            <button
-              type="button"
-              class="rounded border border-[#3a3020] px-2 py-1 font-mono text-[10px] text-[#a8977a] transition hover:border-[#e0a458] hover:text-[#e8dcc4] motion-reduce:transition-none"
-              onclick={() => {
-                run(command)
-                focusInput()
-              }}
-            >
-              {command}
-            </button>
-          {/each}
-        </div>
-
         <form
-          class="mt-3 flex items-center gap-2 border-t border-[#241e15] pt-3"
+          class="flex items-center gap-2"
           onsubmit={(event) => {
             event.preventDefault()
             run(draft)
@@ -803,7 +779,7 @@ every route it carries, as aligned columns and box-drawn ASCII.
             onkeydown={onKey}
             autocomplete="off"
             spellcheck="false"
-            placeholder="id 4f2a91"
+            placeholder="id 5f0a7c"
             class="min-w-0 flex-1 bg-transparent font-mono text-xs text-[#e8dcc4] outline-none placeholder:text-[#6b6047]"
           />
           <button
@@ -813,7 +789,95 @@ every route it carries, as aligned columns and box-drawn ASCII.
             Run
           </button>
         </form>
+
+        <div
+          class="mt-3 flex flex-wrap gap-1.5 border-t border-[#241e15] pt-3"
+          role="group"
+          aria-label="Commands"
+        >
+          {#each COMMANDS as command (command)}
+            <button
+              type="button"
+              class="rounded border border-[#3a3020] px-2 py-1 font-mono text-[10px] text-[#a8977a] transition hover:border-[#e0a458] hover:text-[#e8dcc4] motion-reduce:transition-none"
+              onclick={() => {
+                run(command)
+                focusInput()
+              }}
+            >
+              {command}
+            </button>
+          {/each}
+        </div>
+
+        <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            class="font-mono text-[9px] tracking-[0.2em] text-[#6b6047] uppercase"
+          >
+            Passkeys
+          </span>
+          {#each graph.passkeys as passkey (passkey.id)}
+            <button
+              type="button"
+              aria-label={`Insert passkey ${passkey.shortId}`}
+              class="rounded border border-[#3a3020] px-2 py-0.5 font-mono text-[11px] text-[#f4e6c6] transition hover:border-[#e0a458] motion-reduce:transition-none"
+              onclick={() => insertId(passkey.shortId)}
+            >
+              {passkey.shortId}
+            </button>
+          {/each}
+        </div>
+
+        <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            class="font-mono text-[9px] tracking-[0.2em] text-[#6b6047] uppercase"
+          >
+            Vaults
+          </span>
+          {#each graph.vaults as vault (vault.id)}
+            <button
+              type="button"
+              aria-label={`Insert vault ${vault.shortId}`}
+              class="rounded border border-[#3a3020] px-2 py-0.5 font-mono text-[11px] text-[#f4e6c6] transition hover:border-[#e0a458] motion-reduce:transition-none"
+              onclick={() => insertId(vault.shortId)}
+            >
+              {vault.shortId}
+            </button>
+          {/each}
+        </div>
       </div>
     </div>
+
+    {#if otherDevices.length > 0}
+      <p
+        class="mt-6 font-mono text-[10px] tracking-[0.24em] text-[#6b6047] uppercase"
+      >
+        Other devices
+      </p>
+      <ul class="mt-2 border-l border-dashed border-[#332b1e] pl-3">
+        {#each otherDevices as device (device.id)}
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
+            <button
+              type="button"
+              aria-label={`Insert device key ${device.shortId}`}
+              class="font-mono text-[13px] text-[#a8977a] transition hover:text-[#e8dcc4] motion-reduce:transition-none"
+              onclick={() => insertId(device.shortId)}
+            >
+              {device.shortId}
+            </button>
+            <span class="text-[12px] text-[#8a7c66]">{device.label}</span>
+            <span class="font-mono text-[10px] text-[#6b6047]">
+              {device.platform}
+            </span>
+            <span class="ml-auto flex shrink-0 flex-wrap gap-1.5">
+              {#each vaultsForDevice(graph, device.id) as vault (vault.id)}
+                <span class="font-mono text-[11px] text-[#6b6047]">
+                  {vault.shortId}
+                </span>
+              {/each}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </section>
 </main>

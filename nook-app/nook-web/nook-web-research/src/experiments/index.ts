@@ -20,12 +20,12 @@ import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
 import Blueprint from './keys-management/blueprint/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
-import CustodyPassport from './keys-management/custody-passport/Experiment.svelte'
 import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
-import Keyring from './keys-management/keyring/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
+import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
+import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
 import HandoffStory from './inspiration/handoff-story/Experiment.svelte'
 
 export interface ExperimentProps {
@@ -342,7 +342,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV1,
     title: 'Concentric trust',
     description:
-      'Possession drawn as containment: rings you can nest, split, and read identifiers off.',
+      'One vault at a time, drawn as nested frames: passkeys outside, device keys within, vault at the core.',
     component: ConcentricTrust,
   },
   {
@@ -351,7 +351,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV1,
     title: 'Key index',
     description:
-      'A standing index of everything you own, borrowing the act rail as permanent navigation.',
+      'Your device stands at the head of a permanent index; selecting anything answers in plain identifier chips.',
     component: KeyIndex,
   },
   {
@@ -360,7 +360,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Signal flow',
     description:
-      'Three tiers wired together. Select a node and only the paths it truly reaches stay lit.',
+      'A circuit board for your device alone. Seat a passkey, slot a vault, and watch the pulse reach the end or hit a cut trace.',
     component: SignalFlow,
   },
   {
@@ -369,26 +369,8 @@ export const experiments: Experiment[] = [
     subcategory: keysV2,
     title: 'Blueprint',
     description:
-      'The same graph drafted as an engineering sheet, with every part numbered by identifier.',
+      'An engineering sheet with your device in the title block and every other part numbered by identifier.',
     component: Blueprint,
-  },
-  {
-    slug: 'keyring',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Keyring',
-    description:
-      'Physical hoops: one ring per passkey, carrying the vault tags that passkey actually opens.',
-    component: Keyring,
-  },
-  {
-    slug: 'custody-passport',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Custody passport',
-    description:
-      'A document per passkey whose visa pages are the vaults it opens and the borders it cannot cross.',
-    component: CustodyPassport,
   },
   {
     slug: 'mission-control',
@@ -396,7 +378,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Mission control',
     description:
-      'A dark operator console: pick a vault, watch which passkeys and devices light up.',
+      'A status board: one line per vault, counting passkeys, how many work from here, and enrolled devices.',
     component: MissionControl,
   },
   {
@@ -405,7 +387,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Chain strength',
     description:
-      'Coverage as risk: how many independent passkeys reach each vault, and which are single-threaded.',
+      'One row per vault, passkeys as strands running through a device key to reach it. Redundancy at a glance.',
     component: ChainStrength,
   },
   {
@@ -414,7 +396,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Access terminal',
     description:
-      'Keyboard-first console. Query any identifier and get the reachable set printed back.',
+      'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
     component: AccessTerminal,
   },
   {
@@ -423,8 +405,26 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Evidence drawers',
     description:
-      'A cabinet of engraved faces; opening one drawer wires it to the drawers it reaches.',
+      'A cabinet of engraved faces. Pull a drawer and it prints what reaches it; the rest recede.',
     component: EvidenceDrawers,
+  },
+  {
+    slug: 'frozen-chain-strength',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Chain strength · kept',
+    description:
+      'The adopted read: one row per vault, passkeys as strands converging on it. Frozen before iteration.',
+    component: FrozenChainStrength,
+  },
+  {
+    slug: 'frozen-access-terminal',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Access terminal · kept',
+    description:
+      'Query the graph by identifier and print it as ASCII. Frozen before iteration.',
+    component: FrozenAccessTerminal,
   },
   {
     slug: 'handoff-story',

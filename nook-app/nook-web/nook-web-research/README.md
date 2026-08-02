@@ -49,7 +49,13 @@ different layout or visual direction.
   than as candidates. Borrow from them; do not iterate on them. They may read
   older fixtures, kept beside them.
 
-Sketches in `keys-management` share two rules. Every node shows the short
+Sketches in `keys-management` share three rules. Every node shows the short
 identifier a person would compare against what 1Password or Bitwarden displays,
 in a mono font. Selecting any node lights only the subgraph it truly reaches and
-dims the rest — use `highlightFor` so this behaves identically everywhere.
+dims the rest — use `highlightFor` so this behaves identically everywhere. And
+the device key of the browser you are sitting in is drawn as a different class of
+object from every other device key — a vault has many devices, so `isHere` must
+be visible at a glance, not read off a label.
+
+Drawing every relation at once produced a net nobody could read. Prefer showing
+one vault, or one route, at a time.

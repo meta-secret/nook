@@ -327,16 +327,6 @@ export function passkeysForVault(graph: KeyGraph, vault: Vault): Passkey[] {
   )
 }
 
-export function opens(
-  graph: KeyGraph,
-  passkeyId: string,
-  vault: Vault,
-): boolean {
-  return passkeysForVault(graph, vault).some(
-    (passkey) => passkey.id === passkeyId,
-  )
-}
-
 /** The device keys of this browser, if it has one at all. */
 export function hereDevices(graph: KeyGraph): Device[] {
   if (graph.here.kind === HereKind.Unprepared) return []
