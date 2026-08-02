@@ -2,7 +2,7 @@
 PRODUCT: Nook makes local device identity and vault access understandable without exposing secrets.
 USER: A person who cannot remember which passkey manager, browser, PIN, or vault relationship they used.
 MOMENT: They may have no vault, a locked vault, or an unlocked vault and need one trustworthy inventory.
-DIRECTION: An evidence ledger—identity first, protection chain second, vault relationships third—with explicit provenance and unknown states.
+DIRECTION: A hairline schematic of the access chain as the subject—passkey, browser device key, vaults—with a quiet readout rail and one link's evidence inspected at a time.
 DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, responsive shell, and light/dark themes.
 -->
 <script lang="ts">
@@ -10,28 +10,24 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   import { tick } from 'svelte'
   import {
     ArrowLeft,
-    Check,
-    ChevronRight,
     CircleHelp,
     Fingerprint,
-    KeyRound,
     Laptop,
     LockKeyhole,
     RefreshCw,
     ShieldCheck,
-    Users,
   } from '@lucide/svelte'
   import {
     DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
-    NookPasskeyAttachmentState,
-    NookPasskeyBackupState,
+    type NookPasskeyAttachmentState,
+    type NookPasskeyBackupState,
     NookPasskeyTimestampEvidenceKind,
-    PasskeyObservedBrowser,
-    PasskeyObservedPlatform,
-    PasskeyTransport,
+    type PasskeyObservedBrowser,
+    type PasskeyObservedPlatform,
+    type PasskeyTransport,
     setDeviceAccessPasskeyProviderLabel,
   } from '$app-wasm'
   import type {
@@ -51,6 +47,24 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     DashboardTimestampKind,
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
+  import AccessChainDiagram from './devices-access/AccessChainDiagram.svelte'
+  import AccessDeviceKeyPanel from './devices-access/AccessDeviceKeyPanel.svelte'
+  import AccessUnlockPanel from './devices-access/AccessUnlockPanel.svelte'
+  import AccessVaultsPanel from './devices-access/AccessVaultsPanel.svelte'
+  import {
+    AccessChainLinkKind,
+    AccessChainStage,
+    accessChainTabId,
+    buildAccessChainNodes,
+    identityStateLabel,
+    panelDescription,
+    panelTitle,
+    protectionLabel,
+    stageLabel,
+    textValue,
+    type VaultAccessView,
+    verifiedVaultsLabel,
+  } from './devices-access/access-chain'
 
   let {
     vault,
@@ -63,14 +77,6 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     onManageVaultDevices: () => void
     onManageVaultPasswords: () => void
   } = $props()
-
-  type VaultAccessView = {
-    storeId: string
-    label: string
-    verified: boolean
-    verifiedAt: DashboardText
-    lastLocalUpdateAt: DashboardText
-  }
 
   type DashboardView = {
     protection: DeviceAccessProtectionKind
@@ -91,9 +97,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     vaults: VaultAccessView[]
   }
 
+  const PANEL_ID = 'devices-access-panel'
+
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
   })
+  let selectedStage = $state(AccessChainStage.Unlock)
   let providerDraft = $state('')
   let providerSaveState = $state<ProviderSaveKind>(ProviderSaveKind.Idle)
   let pendingFocusTarget = $state<DashboardFocusTargetKind>(
@@ -101,17 +110,10 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   )
   let loadGeneration = 0
 
-  const isPasskeyProtection = $derived(
-    loadState.kind === DashboardLoadKind.Ready &&
-      (loadState.view.protection ===
-        DeviceAccessProtectionKind.PasskeyStandard ||
-        loadState.view.protection ===
-          DeviceAccessProtectionKind.PasskeyAntiHacker),
-  )
-  const verifiedVaultCount = $derived(
+  const chainNodes = $derived.by(() =>
     loadState.kind === DashboardLoadKind.Ready
-      ? loadState.view.vaults.filter((entry) => entry.verified).length
-      : 0,
+      ? buildAccessChainNodes(vault, loadState.view)
+      : [],
   )
 
   function readText(value: NookDeviceAccessText): DashboardText {
@@ -139,38 +141,34 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     }
   }
 
-  function knownText(value: DashboardText): boolean {
-    return value.kind === DashboardTextKind.Known
-  }
-
-  function textValue(value: DashboardText): string {
-    return value.kind === DashboardTextKind.Known ? value.value : ''
-  }
-
   function focusPendingDashboardTarget(): void {
-    let selector: string
     switch (pendingFocusTarget) {
       case DashboardFocusTargetKind.None:
         return
-      case DashboardFocusTargetKind.DeviceIdentityDetails:
-        selector =
-          '[data-testid="devices-access-device-identity"] > summary'
-        break
-      case DashboardFocusTargetKind.RetryResult:
-        selector =
+      case DashboardFocusTargetKind.ChainSelection: {
+        const tab = document.getElementById(accessChainTabId(selectedStage))
+        if (!tab) return
+        pendingFocusTarget = DashboardFocusTargetKind.None
+        tab.focus()
+        return
+      }
+      case DashboardFocusTargetKind.RetryResult: {
+        const target = document.querySelector<HTMLElement>(
           loadState.kind === DashboardLoadKind.Failed
             ? '[data-testid="devices-access-retry"]'
-            : '[data-testid="devices-access-back"]'
-        break
+            : '[data-testid="devices-access-back"]',
+        )
+        if (!target) return
+        pendingFocusTarget = DashboardFocusTargetKind.None
+        target.focus()
+        return
+      }
     }
-    const target = document.querySelector<HTMLElement>(selector)
-    if (!target) return
-    pendingFocusTarget = DashboardFocusTargetKind.None
-    target.focus()
   }
 
   async function focusAfterProtectionReady(): Promise<void> {
-    pendingFocusTarget = DashboardFocusTargetKind.DeviceIdentityDetails
+    selectedStage = AccessChainStage.Unlock
+    pendingFocusTarget = DashboardFocusTargetKind.ChainSelection
     if (loadState.kind !== DashboardLoadKind.Ready) return
     await tick()
     focusPendingDashboardTarget()
@@ -189,13 +187,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       try {
         const vaults = snapshot.vaults().map((entry): VaultAccessView => {
           try {
-            const verifiedAt = readText(entry.verifiedAt)
             return {
               storeId: entry.storeId,
               label: entry.label,
               verified:
                 entry.accessState === NookDeviceVaultAccessState.Verified,
-              verifiedAt,
+              verifiedAt: readText(entry.verifiedAt),
               lastLocalUpdateAt: readText(entry.lastLocalUpdateAt),
             }
           } finally {
@@ -290,130 +287,10 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     }
   }
 
-  function lastUsedLabel(value: DashboardTimestamp): string {
-    if (value.kind === DashboardTimestampKind.Known) {
-      return formatDate(value.value)
+  function clearProviderSaveFailure(): void {
+    if (providerSaveState === ProviderSaveKind.Failed) {
+      providerSaveState = ProviderSaveKind.Idle
     }
-    return value.kind === DashboardTimestampKind.NotYetObserved
-      ? vault.t(I18N_KEYS.DevicesAccessNotUsedYet)
-      : vault.t(I18N_KEYS.DevicesAccessUnknownLegacy)
-  }
-
-  function formatDate(value: string): string {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return vault.t(I18N_KEYS.DevicesAccessUnknown)
-    return new Intl.DateTimeFormat(vault.locale, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(date)
-  }
-
-  function protectionLabel(value: DeviceAccessProtectionKind): string {
-    if (value === DeviceAccessProtectionKind.PasskeyStandard) {
-      return vault.t(I18N_KEYS.DevicesAccessPasskeyStandard)
-    }
-    if (value === DeviceAccessProtectionKind.CompanionSession) {
-      return vault.t(I18N_KEYS.DevicesAccessCompanionSession)
-    }
-    if (value === DeviceAccessProtectionKind.PasskeyAntiHacker) {
-      return vault.t(I18N_KEYS.DevicesAccessPasskeyHighSecurity)
-    }
-    if (value === DeviceAccessProtectionKind.PinOrPassphrase) {
-      return vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessNotPrepared)
-  }
-
-  function identityStateLabel(value: DeviceAccessIdentityState): string {
-    if (value === DeviceAccessIdentityState.Unlocked) {
-      return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked)
-    }
-    if (value === DeviceAccessIdentityState.Locked) {
-      return vault.t(I18N_KEYS.DevicesAccessIdentityLocked)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessIdentityMissing)
-  }
-
-  function browserLabel(value: PasskeyObservedBrowser): string {
-    if (value === PasskeyObservedBrowser.Edge) return vault.t(I18N_KEYS.DevicesAccessBrowserEdge)
-    if (value === PasskeyObservedBrowser.Firefox) return vault.t(I18N_KEYS.DevicesAccessBrowserFirefox)
-    if (value === PasskeyObservedBrowser.Chrome) return vault.t(I18N_KEYS.DevicesAccessBrowserChrome)
-    if (value === PasskeyObservedBrowser.Safari) return vault.t(I18N_KEYS.DevicesAccessBrowserSafari)
-    if (value === PasskeyObservedBrowser.Other) return vault.t(I18N_KEYS.DevicesAccessBrowserOther)
-    return vault.t(I18N_KEYS.DevicesAccessUnknown)
-  }
-
-  function platformLabel(value: PasskeyObservedPlatform): string {
-    if (value === PasskeyObservedPlatform.Android) return vault.t(I18N_KEYS.DevicesAccessPlatformAndroid)
-    if (value === PasskeyObservedPlatform.AppleMobile) return vault.t(I18N_KEYS.DevicesAccessPlatformAppleMobile)
-    if (value === PasskeyObservedPlatform.MacOs) return vault.t(I18N_KEYS.DevicesAccessPlatformMacos)
-    if (value === PasskeyObservedPlatform.Windows) return vault.t(I18N_KEYS.DevicesAccessPlatformWindows)
-    if (value === PasskeyObservedPlatform.Linux) return vault.t(I18N_KEYS.DevicesAccessPlatformLinux)
-    if (value === PasskeyObservedPlatform.Other) return vault.t(I18N_KEYS.DevicesAccessPlatformOther)
-    return vault.t(I18N_KEYS.DevicesAccessUnknown)
-  }
-
-  function clientEnvironmentLabel(
-    browser: PasskeyObservedBrowser,
-    platform: PasskeyObservedPlatform,
-  ): string {
-    if (
-      browser === PasskeyObservedBrowser.Unknown &&
-      platform === PasskeyObservedPlatform.Unknown
-    ) {
-      return vault.t(I18N_KEYS.DevicesAccessUnknown)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessClientDescription, {
-      browser: browserLabel(browser),
-      platform: platformLabel(platform),
-    })
-  }
-
-  function attachmentLabel(value: NookPasskeyAttachmentState): string {
-    if (value === NookPasskeyAttachmentState.Platform) {
-      return vault.t(I18N_KEYS.DevicesAccessAttachmentPlatform)
-    }
-    if (value === NookPasskeyAttachmentState.CrossPlatform) {
-      return vault.t(I18N_KEYS.DevicesAccessAttachmentCrossPlatform)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessUnknown)
-  }
-
-  function backupLabel(value: NookPasskeyBackupState): string {
-    if (value === NookPasskeyBackupState.BackedUp) {
-      return vault.t(I18N_KEYS.DevicesAccessBackupBackedUp)
-    }
-    if (value === NookPasskeyBackupState.Eligible) {
-      return vault.t(I18N_KEYS.DevicesAccessBackupEligible)
-    }
-    if (value === NookPasskeyBackupState.NotEligible) {
-      return vault.t(I18N_KEYS.DevicesAccessBackupNotEligible)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessUnknown)
-  }
-
-  function transportLabel(value: PasskeyTransport): string {
-    if (value === PasskeyTransport.Ble) {
-      return vault.t(I18N_KEYS.DevicesAccessTransportBle)
-    }
-    if (value === PasskeyTransport.Hybrid) {
-      return vault.t(I18N_KEYS.DevicesAccessTransportHybrid)
-    }
-    if (value === PasskeyTransport.Internal) {
-      return vault.t(I18N_KEYS.DevicesAccessTransportInternal)
-    }
-    if (value === PasskeyTransport.Nfc) {
-      return vault.t(I18N_KEYS.DevicesAccessTransportNfc)
-    }
-    return vault.t(I18N_KEYS.DevicesAccessTransportUsb)
-  }
-
-  function transportsLabel(values: PasskeyTransport[]): string {
-    if (values.length === 0) return vault.t(I18N_KEYS.DevicesAccessUnknown)
-    return new Intl.ListFormat(vault.locale, {
-      style: 'long',
-      type: 'conjunction',
-    }).format(values.map(transportLabel))
   }
 
   $effect(() => {
@@ -424,7 +301,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 </script>
 
 <section
-  class="mx-auto w-full max-w-5xl space-y-6 pb-4"
+  class="mx-auto w-full max-w-5xl space-y-8 pb-4"
   data-testid="devices-access-dashboard"
 >
   <header class="flex items-start gap-3 border-b border-border/60 pb-5">
@@ -440,23 +317,35 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       <ArrowLeft class="size-4" />
     </Button>
     <div class="min-w-0 space-y-1">
-      <h1 class="text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <h1
+        class="text-2xl font-semibold tracking-tight text-balance text-foreground sm:text-3xl"
+      >
         {vault.t(I18N_KEYS.DevicesAccessTitle)}
       </h1>
-      <p class="max-w-[70ch] text-pretty text-sm leading-relaxed text-muted-foreground">
+      <p
+        class="max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground"
+      >
         {vault.t(I18N_KEYS.DevicesAccessDescription)}
       </p>
     </div>
   </header>
 
   {#if loadState.kind === DashboardLoadKind.Loading}
-    <div class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+    <div
+      class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"
+      role="status"
+    >
       <RefreshCw class="size-4 animate-spin" />
       {vault.t(I18N_KEYS.DevicesAccessLoading)}
     </div>
   {:else if loadState.kind === DashboardLoadKind.Failed}
-    <div class="rounded-xl border border-destructive/30 bg-destructive/5 p-5" role="alert">
-      <p class="font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessLoadFailed)}</p>
+    <div
+      class="rounded-xl border border-destructive/30 bg-destructive/5 p-5"
+      role="alert"
+    >
+      <p class="font-medium text-foreground">
+        {vault.t(I18N_KEYS.DevicesAccessLoadFailed)}
+      </p>
       <Button
         type="button"
         variant="outline"
@@ -469,308 +358,225 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
       </Button>
     </div>
   {:else}
-    <div class="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside class="space-y-5 lg:sticky lg:top-24 lg:self-start">
-        <div class="space-y-2">
-          <h2 class="text-sm font-semibold text-foreground">
-            {vault.t(I18N_KEYS.DevicesAccessHowItWorks)}
-          </h2>
-          <p class="text-pretty text-sm leading-relaxed text-muted-foreground">
-            {vault.t(I18N_KEYS.DevicesAccessHowItWorksDesc)}
-          </p>
-        </div>
-        <dl class="space-y-3 text-xs">
-          <div class="flex gap-2">
-            <ShieldCheck class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <div>
-              <dt class="font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceVerified)}</dt>
-              <dd class="text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceVerifiedDesc)}</dd>
-            </div>
+    {@const view = loadState.view}
+    <div class="grid gap-8 lg:grid-cols-[11.5rem_minmax(0,1fr)] lg:gap-10">
+      <aside
+        class="order-2 space-y-4 lg:order-1"
+        data-testid="devices-access-rail"
+      >
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-1">
+          <div>
+            <dt class="access-micro-label text-muted-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessStatusLabel)}
+            </dt>
+            <dd
+              class="mt-1.5 flex items-start gap-1.5 text-sm text-foreground"
+              data-testid="devices-access-identity-state"
+            >
+              {#if view.identityState === DeviceAccessIdentityState.Unlocked}
+                <ShieldCheck
+                  class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                />
+              {:else if view.identityState === DeviceAccessIdentityState.Locked}
+                <LockKeyhole
+                  class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+                />
+              {:else}
+                <CircleHelp
+                  class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                />
+              {/if}
+              <span>{identityStateLabel(vault, view.identityState)}</span>
+            </dd>
           </div>
-          <div class="flex gap-2">
-            <Laptop class="mt-0.5 size-3.5 shrink-0 text-primary" />
-            <div>
-              <dt class="font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceBrowser)}</dt>
-              <dd class="text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceBrowserDesc)}</dd>
-            </div>
+          <div>
+            <dt class="access-micro-label text-muted-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessProtectionLabel)}
+            </dt>
+            <dd class="mt-1.5 text-sm text-foreground">
+              {protectionLabel(vault, view.protection)}
+            </dd>
           </div>
-          <div class="flex gap-2">
-            <Fingerprint class="mt-0.5 size-3.5 shrink-0 text-primary" />
-            <div>
-              <dt class="font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceUser)}</dt>
-              <dd class="text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceUserDesc)}</dd>
-            </div>
-          </div>
-          <div class="flex gap-2">
-            <CircleHelp class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-            <div>
-              <dt class="font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceUnknown)}</dt>
-              <dd class="text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProvenanceUnknownDesc)}</dd>
-            </div>
+          <div>
+            <dt class="access-micro-label text-muted-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessVerifiedVaultsLabel)}
+            </dt>
+            <dd class="mt-1.5 text-sm text-foreground">
+              {verifiedVaultsLabel(vault, view.vaults)}
+            </dd>
           </div>
         </dl>
+
+        <div class="h-px bg-border"></div>
+
+        <details data-testid="devices-access-legend">
+          <summary
+            class="access-micro-label min-h-11 cursor-pointer list-none py-3 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            {vault.t(I18N_KEYS.DevicesAccessEvidenceLegend)}
+          </summary>
+          <dl class="space-y-3 pb-1 text-xs">
+            <div class="flex gap-2">
+              <ShieldCheck
+                class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+              />
+              <div>
+                <dt class="font-medium text-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceVerified)}
+                </dt>
+                <dd class="text-muted-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceVerifiedDesc)}
+                </dd>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <Laptop class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              <div>
+                <dt class="font-medium text-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceBrowser)}
+                </dt>
+                <dd class="text-muted-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceBrowserDesc)}
+                </dd>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <Fingerprint
+                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <dt class="font-medium text-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUser)}
+                </dt>
+                <dd class="text-muted-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUserDesc)}
+                </dd>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <CircleHelp
+                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <dt class="font-medium text-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUnknown)}
+                </dt>
+                <dd class="text-muted-foreground">
+                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUnknownDesc)}
+                </dd>
+              </div>
+            </div>
+          </dl>
+        </details>
       </aside>
 
-      <div class="overflow-hidden rounded-xl border border-border/70 bg-card" data-testid="devices-access-ledger">
-        <section class="space-y-5 p-5 sm:p-6">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="space-y-1">
-              <h2 class="text-lg font-semibold text-foreground">{vault.t(I18N_KEYS.DevicesAccessThisBrowser)}</h2>
-              <p class="text-sm text-muted-foreground">
-                {#if loadState.view.protection === DeviceAccessProtectionKind.CompanionSession}
-                  {vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)}
-                {:else}
-                  {vault.t(I18N_KEYS.DevicesAccessThisBrowserDesc)}
+      <div class="order-1 min-w-0 lg:order-2">
+        {#if view.protection === DeviceAccessProtectionKind.Missing}
+          <div class="space-y-3" data-testid="devices-access-chain-preview">
+            <p class="access-micro-label text-muted-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessChainLabel)}
+            </p>
+            <ol class="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {#each chainNodes as node (node.stage)}
+                {#if node.incoming.kind === AccessChainLinkKind.Relation}
+                  <li class="access-micro-label text-muted-foreground">
+                    {node.incoming.label}
+                  </li>
                 {/if}
-              </p>
-            </div>
-            <div class="flex flex-wrap justify-end gap-2">
-              <span
-                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-xs font-medium text-foreground"
-                data-testid="devices-access-identity-state"
-              >
-                {#if loadState.view.identityState === DeviceAccessIdentityState.Unlocked}
-                  <ShieldCheck class="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                {:else if loadState.view.identityState === DeviceAccessIdentityState.Locked}
-                  <LockKeyhole class="size-3.5 text-amber-600 dark:text-amber-400" />
-                {:else}
-                  <CircleHelp class="size-3.5 text-muted-foreground" />
-                {/if}
-                {identityStateLabel(loadState.view.identityState)}
-              </span>
-              <span class="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-                {protectionLabel(loadState.view.protection)}
-              </span>
-            </div>
-          </div>
-
-          <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch" aria-label={vault.t(I18N_KEYS.DevicesAccessAccessChain)}>
-            <div class="rounded-lg bg-muted/45 p-3">
-              <p class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProtectedBy)}</p>
-              <p class="mt-1 text-sm font-medium text-foreground">{protectionLabel(loadState.view.protection)}</p>
-            </div>
-            <ChevronRight class="mx-auto size-4 rotate-90 self-center text-muted-foreground sm:rotate-0" />
-            <div class="rounded-lg bg-muted/45 p-3">
-              <p class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessProtects)}</p>
-              <p class="mt-1 text-sm font-medium text-foreground">{vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey)}</p>
-            </div>
-            <ChevronRight class="mx-auto size-4 rotate-90 self-center text-muted-foreground sm:rotate-0" />
-            <div class="rounded-lg bg-muted/45 p-3">
-              <p class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessOpens)}</p>
-              <p class="mt-1 text-sm font-medium text-foreground">
-                {vault.t(I18N_KEYS.DevicesAccessVerifiedVaultCount, { count: String(verifiedVaultCount) })}
-              </p>
-            </div>
-          </div>
-
-          <p class="rounded-lg bg-primary/8 px-3 py-2.5 text-sm leading-relaxed text-foreground">
-            <LockKeyhole class="mr-1 inline size-4 text-primary" />
-            {vault.t(I18N_KEYS.DevicesAccessBackupPasswordBoundary)}
-          </p>
-
-          {#if loadState.view.protection !== DeviceAccessProtectionKind.Missing}
-            <details class="rounded-lg border border-border/60 bg-background" data-testid="devices-access-device-identity">
-              <summary class="min-h-11 cursor-pointer list-none px-3 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                {vault.t(I18N_KEYS.DevicesAccessDeviceTechnicalDetails)}
-              </summary>
-              <p class="border-t border-border/50 px-3 pt-3 text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessDeviceId)}</p>
-              <p class="break-all px-3 pb-3 pt-1 font-mono text-xs text-foreground">
-                {knownText(loadState.view.deviceId)
-                  ? textValue(loadState.view.deviceId)
-                  : vault.t(I18N_KEYS.DevicesAccessUnknown)}
-              </p>
-            </details>
-          {/if}
-
-          {#if loadState.view.protection === DeviceAccessProtectionKind.Missing}
-            <div class="border-t border-border/60 pt-5" data-testid="devices-access-prepare-browser">
-              <DeviceProtectionGate
-                {vault}
-                embedded
-                onProtectionReady={() => void focusAfterProtectionReady()}
-              />
-            </div>
-          {:else if isPasskeyProtection}
-            <div class="grid gap-4 border-t border-border/60 pt-5 sm:grid-cols-2">
-              <div>
-                <p class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessNookPasskeyName)}</p>
-                <p class="mt-1 text-sm font-medium text-foreground">
-                  {knownText(loadState.view.passkeyName)
-                    ? textValue(loadState.view.passkeyName)
-                    : vault.t(I18N_KEYS.DevicesAccessUnknown)}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessLastSuccessfulUse)}</p>
-                <p class="mt-1 text-sm font-medium text-foreground">
-                  {lastUsedLabel(loadState.view.lastUsedAt)}
-                </p>
-              </div>
-              <div class="sm:col-span-2">
-                <label for="devices-access-provider-label" class="text-xs text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessWhereSaved)}
-                </label>
-                <div class="mt-1.5 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    id="devices-access-provider-label"
-                    class="min-h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-                    maxlength="80"
-                    placeholder={vault.t(I18N_KEYS.DevicesAccessWhereSavedPlaceholder)}
-                    bind:value={providerDraft}
-                    disabled={providerSaveState === ProviderSaveKind.Saving}
-                    oninput={() => {
-                      if (providerSaveState === ProviderSaveKind.Failed) {
-                        providerSaveState = ProviderSaveKind.Idle
-                      }
-                    }}
-                    data-testid="devices-access-provider-label"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    class="min-h-11"
-                    disabled={providerSaveState === ProviderSaveKind.Saving || loadState.view.credentialId.kind !== DashboardTextKind.Known || providerDraft.trim() === textValue(loadState.view.providerLabel)}
-                    data-testid="devices-access-provider-save"
-                    onclick={() => void saveProviderLabel()}
-                  >
-                    {#if providerSaveState === ProviderSaveKind.Saving}<RefreshCw class="size-4 animate-spin" />{:else}<Check class="size-4" />{/if}
-                    {vault.t(I18N_KEYS.CommonSave)}
-                  </Button>
-                </div>
-                <p class="mt-1.5 text-xs text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessWhereSavedHelp)}
-                </p>
-                {#if providerSaveState === ProviderSaveKind.Failed}
-                  <p class="mt-1 text-xs text-destructive" role="alert">{vault.t(I18N_KEYS.DevicesAccessProviderSaveFailed)}</p>
-                {/if}
-              </div>
-
-              <details class="sm:col-span-2 rounded-lg bg-muted/35 open:bg-muted/50">
-                <summary class="min-h-11 cursor-pointer list-none px-3 py-3 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
-                  {vault.t(I18N_KEYS.DevicesAccessTechnicalDetails)}
-                </summary>
-                <dl class="grid gap-x-5 gap-y-3 border-t border-border/50 px-3 py-4 text-sm sm:grid-cols-2">
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessCredentialId)}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.credentialId) ? textValue(loadState.view.credentialId) : vault.t(I18N_KEYS.DevicesAccessUnknown)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessUserHandleId)}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.userHandleId) ? textValue(loadState.view.userHandleId) : vault.t(I18N_KEYS.DevicesAccessUnknown)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessCreated)}</dt><dd class="mt-1 text-foreground">{loadState.view.createdAt.kind === DashboardTimestampKind.Known ? formatDate(loadState.view.createdAt.value) : vault.t(I18N_KEYS.DevicesAccessUnknown)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessAttachment)}</dt><dd class="mt-1 text-foreground">{attachmentLabel(loadState.view.attachment)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessBackupStatus)}</dt><dd class="mt-1 text-foreground">{backupLabel(loadState.view.backupState)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessTransports)}</dt><dd class="mt-1 text-foreground">{transportsLabel(loadState.view.transports)}</dd></div>
-                  <div><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessAaguid)}</dt><dd class="mt-1 break-all font-mono text-xs text-foreground">{knownText(loadState.view.aaguid) ? textValue(loadState.view.aaguid) : vault.t(I18N_KEYS.DevicesAccessUnknown)}</dd></div>
-                  <div class="sm:col-span-2"><dt class="text-xs text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessLastClient)}</dt><dd class="mt-1 text-foreground">{clientEnvironmentLabel(loadState.view.observedBrowser, loadState.view.observedPlatform)}</dd></div>
-                </dl>
-              </details>
-            </div>
-          {/if}
-        </section>
-
-        <section class="space-y-4 border-t border-border/70 p-5 sm:p-6" data-testid="devices-access-vaults">
-          <div>
-            <h2 class="text-lg font-semibold text-foreground">{vault.t(I18N_KEYS.DevicesAccessVaultRelationships)}</h2>
-            <p class="mt-1 text-sm text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessVaultRelationshipsDesc)}</p>
-          </div>
-          {#if loadState.view.vaults.length === 0}
-            <div class="rounded-lg bg-muted/35 p-4 text-sm text-muted-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessNoVaults)}
-            </div>
-          {:else}
-            <ul class="divide-y divide-border/60 rounded-lg border border-border/60">
-              {#each loadState.view.vaults as entry (entry.storeId)}
-                <li class="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-medium text-foreground">{entry.label}</p>
-                    <details class="mt-1 text-xs text-muted-foreground">
-                      <summary class="cursor-pointer select-none hover:text-foreground">
-                        {vault.t(I18N_KEYS.DevicesAccessVaultTechnicalDetails)}
-                      </summary>
-                      <p class="mt-1 break-all font-mono text-[0.7rem]">{entry.storeId}</p>
-                    </details>
-                  </div>
-                  <div class="text-left sm:text-right">
-                    {#if entry.verified}
-                      <p class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                        <ShieldCheck class="size-3.5" />
-                        {vault.t(I18N_KEYS.DevicesAccessAccessVerified)}
-                      </p>
-                      <p class="text-xs text-muted-foreground">{knownText(entry.verifiedAt) ? formatDate(textValue(entry.verifiedAt)) : vault.t(I18N_KEYS.DevicesAccessUnknown)}</p>
-                    {:else}
-                      <p class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                        <CircleHelp class="size-3.5" />
-                        {vault.t(I18N_KEYS.DevicesAccessAccessUnknown)}
-                      </p>
-                      <p class="text-xs text-muted-foreground">
-                        {knownText(entry.lastLocalUpdateAt)
-                          ? vault.t(I18N_KEYS.DevicesAccessLastLocalUpdate, { date: formatDate(textValue(entry.lastLocalUpdateAt)) })
-                          : vault.t(I18N_KEYS.DevicesAccessNoLocalUpdate)}
-                      </p>
-                    {/if}
-                  </div>
+                <li
+                  class="rounded-lg border border-dashed border-border px-2.5 py-1.5 text-sm text-muted-foreground"
+                >
+                  {stageLabel(vault, node.stage, view.protection)}
                 </li>
               {/each}
-            </ul>
-          {/if}
-        </section>
+            </ol>
+          </div>
+          <div
+            class="mt-8 border-t border-border/70 pt-6"
+            data-testid="devices-access-prepare-browser"
+          >
+            <DeviceProtectionGate
+              {vault}
+              embedded
+              showsSetupStep={false}
+              onProtectionReady={() => void focusAfterProtectionReady()}
+            />
+          </div>
+        {:else}
+          <div class="space-y-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4">
+              <p class="access-micro-label text-muted-foreground">
+                {vault.t(I18N_KEYS.DevicesAccessChainLabel)}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {vault.t(I18N_KEYS.DevicesAccessChainHint)}
+              </p>
+            </div>
+            <AccessChainDiagram
+              nodes={chainNodes}
+              selected={selectedStage}
+              label={vault.t(I18N_KEYS.DevicesAccessChainLabel)}
+              panelId={PANEL_ID}
+              onSelect={(stage) => {
+                selectedStage = stage
+              }}
+            />
+          </div>
 
-        {#if vault.isAuthenticated}
-          <section class="space-y-4 border-t border-border/70 p-5 sm:p-6" data-testid="devices-access-current-vault">
-            <div>
-              <h2 class="text-lg font-semibold text-foreground">{vault.t(I18N_KEYS.DevicesAccessInsideCurrentVault)}</h2>
-              <p class="mt-1 text-sm text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessInsideCurrentVaultDesc)}</p>
+          <div
+            id={PANEL_ID}
+            role="tabpanel"
+            aria-labelledby={accessChainTabId(selectedStage)}
+            tabindex="0"
+            class="mt-8 border-t border-border/70 pt-6"
+            data-testid="devices-access-panel"
+          >
+            <h2 class="text-base font-semibold text-foreground">
+              {panelTitle(vault, selectedStage, view.protection)}
+            </h2>
+            <p
+              class="mt-1 max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground"
+            >
+              {panelDescription(vault, selectedStage, view.protection)}
+            </p>
+            <div class="mt-5">
+              {#if selectedStage === AccessChainStage.Unlock}
+                <AccessUnlockPanel
+                  {vault}
+                  protection={view.protection}
+                  passkeyName={view.passkeyName}
+                  credentialId={view.credentialId}
+                  userHandleId={view.userHandleId}
+                  providerLabel={view.providerLabel}
+                  createdAt={view.createdAt}
+                  lastUsedAt={view.lastUsedAt}
+                  attachment={view.attachment}
+                  transports={view.transports}
+                  backupState={view.backupState}
+                  aaguid={view.aaguid}
+                  observedBrowser={view.observedBrowser}
+                  observedPlatform={view.observedPlatform}
+                  bind:providerDraft
+                  {providerSaveState}
+                  onSaveProviderLabel={() => void saveProviderLabel()}
+                  onProviderDraftInput={clearProviderSaveFailure}
+                />
+              {:else if selectedStage === AccessChainStage.DeviceKey}
+                <AccessDeviceKeyPanel
+                  {vault}
+                  protection={view.protection}
+                  deviceId={view.deviceId}
+                />
+              {:else}
+                <AccessVaultsPanel
+                  {vault}
+                  vaults={view.vaults}
+                  {onManageVaultDevices}
+                  {onManageVaultPasswords}
+                />
+              {/if}
             </div>
-            <div class="grid gap-5 sm:grid-cols-2">
-              <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                  <Users class="size-4 text-primary" />
-                  <h3 class="text-sm font-semibold text-foreground">{vault.t(I18N_KEYS.DevicesAccessEnrolledDevices)}</h3>
-                  <span class="text-xs text-muted-foreground">{vault.vaultMembers.length}</span>
-                </div>
-                <ul class="space-y-1.5 text-sm text-muted-foreground">
-                  {#each vault.vaultMembers.slice(0, 4) as member (member.authId)}
-                    {@const memberLabel = member.label.trim()}
-                    <li class="flex items-start gap-2">
-                      <span class="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/50"></span>
-                      <div class="min-w-0">
-                        <p class="truncate">
-                          {memberLabel || vault.t(I18N_KEYS.DevicesAccessUnnamedDevice)}
-                        </p>
-                        <details
-                          class="mt-0.5 text-xs text-muted-foreground"
-                          data-testid="devices-access-member-details"
-                        >
-                          <summary class="cursor-pointer select-none hover:text-foreground">
-                            {vault.t(I18N_KEYS.DevicesAccessDeviceTechnicalDetails)}
-                          </summary>
-                          <p class="mt-1 break-all font-mono text-[0.7rem]">{member.deviceId}</p>
-                        </details>
-                      </div>
-                    </li>
-                  {/each}
-                </ul>
-                <Button type="button" variant="outline" size="sm" onclick={onManageVaultDevices}>
-                  {vault.t(I18N_KEYS.DevicesAccessManageDevices)}
-                </Button>
-              </div>
-              <div class="space-y-3">
-                <div class="flex items-center gap-2">
-                  <KeyRound class="size-4 text-primary" />
-                  <h3 class="text-sm font-semibold text-foreground">{vault.t(I18N_KEYS.DevicesAccessBackupPasswords)}</h3>
-                  <span class="text-xs text-muted-foreground">{vault.passwordEntries.length}</span>
-                </div>
-                {#if vault.passwordEntries.length > 0}
-                  <ul class="space-y-1.5 text-sm text-muted-foreground">
-                    {#each vault.passwordEntries.slice(0, 4) as entry (entry.id)}
-                      <li class="flex items-center gap-2"><span class="size-1.5 rounded-full bg-muted-foreground/50"></span><span class="truncate">{entry.label}</span></li>
-                    {/each}
-                  </ul>
-                {:else}
-                  <p class="text-sm text-muted-foreground">{vault.t(I18N_KEYS.DevicesAccessNoBackupPasswords)}</p>
-                {/if}
-                <Button type="button" variant="outline" size="sm" onclick={onManageVaultPasswords}>
-                  {vault.t(I18N_KEYS.DevicesAccessManageBackupPasswords)}
-                </Button>
-              </div>
-            </div>
-          </section>
+          </div>
         {/if}
       </div>
     </div>

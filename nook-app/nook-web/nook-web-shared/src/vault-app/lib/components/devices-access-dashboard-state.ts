@@ -37,7 +37,7 @@ export enum ProviderSaveKind {
 
 export enum DashboardFocusTargetKind {
   None = "none",
-  DeviceIdentityDetails = "device-identity-details",
+  ChainSelection = "chain-selection",
   RetryResult = "retry-result",
 }
 

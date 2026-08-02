@@ -19,10 +19,12 @@
   let {
     vault,
     embedded = false,
+    showsSetupStep = true,
     onProtectionReady,
   }: {
     vault: VaultState
     embedded?: boolean
+    showsSetupStep?: boolean
     onProtectionReady: () => void
   } = $props()
   let pin = $state('')
@@ -60,12 +62,16 @@
   data-testid="device-protection-gate"
 >
   <CardHeader class="gap-2 text-center">
-    <p
-      class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-      data-testid="device-protection-step"
-    >
-      {vault.t(I18N_KEYS.DeviceProtectionStepLabel)}
-    </p>
+    <!-- The step counter belongs to the two-step vault setup flow; a host that
+         already frames this gate in its own narrative opts out. -->
+    {#if showsSetupStep}
+      <p
+        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+        data-testid="device-protection-step"
+      >
+        {vault.t(I18N_KEYS.DeviceProtectionStepLabel)}
+      </p>
+    {/if}
     <div
       class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
     >

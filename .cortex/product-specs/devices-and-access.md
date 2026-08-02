@@ -53,6 +53,11 @@ vault keys, backup-password values, and plaintext vault contents are forbidden.
 
 ## Interaction requirements
 
+- The dashboard presents the access model as one three-link chain — what the
+  person presents, the browser device key it unlocks, and the vaults it opens —
+  and lets exactly one link be inspected at a time. Each link shows at most one
+  identifier so the relationship stays readable instead of becoming a list of
+  key ids.
 - The login surface always offers **Devices & access**.
 - A first-run suggestion may invite the user to review access before choosing a
   vault; **Don't show again** is a browser-local preference and never hides the

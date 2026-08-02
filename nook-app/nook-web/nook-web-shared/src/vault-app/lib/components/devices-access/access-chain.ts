@@ -1,0 +1,305 @@
+import { I18N_KEYS } from "../../../../generated/i18n-keys";
+import {
+  DeviceAccessIdentityState,
+  DeviceAccessProtectionKind,
+} from "$app-wasm";
+import type { VaultState } from "$lib/vault.svelte";
+import {
+  type DashboardText,
+  DashboardTextKind,
+  type DashboardTimestamp,
+  DashboardTimestampKind,
+} from "../devices-access-dashboard-state";
+
+/** One link of the browser access chain the dashboard lets a person inspect. */
+export enum AccessChainStage {
+  Unlock = "unlock",
+  DeviceKey = "device-key",
+  Vaults = "vaults",
+}
+
+export const ACCESS_CHAIN_STAGES: readonly AccessChainStage[] = [
+  AccessChainStage.Unlock,
+  AccessChainStage.DeviceKey,
+  AccessChainStage.Vaults,
+];
+
+export enum AccessNodeDetailKind {
+  Absent = "absent",
+  Identifier = "identifier",
+  Summary = "summary",
+}
+
+/**
+ * The single supporting line under a node title: one short public identifier
+ * rendered as data, a plain-language summary, or nothing yet.
+ */
+export type AccessNodeDetail =
+  | { kind: typeof AccessNodeDetailKind.Absent }
+  | { kind: typeof AccessNodeDetailKind.Identifier; value: string }
+  | { kind: typeof AccessNodeDetailKind.Summary; value: string };
+
+export enum AccessChainLinkKind {
+  Origin = "origin",
+  Relation = "relation",
+}
+
+/** The connector drawn before a node: nothing for the first, a verb otherwise. */
+export type AccessChainLink =
+  | { kind: typeof AccessChainLinkKind.Origin }
+  | { kind: typeof AccessChainLinkKind.Relation; label: string };
+
+export type AccessChainNode = {
+  stage: AccessChainStage;
+  caption: string;
+  title: string;
+  detail: AccessNodeDetail;
+  incoming: AccessChainLink;
+};
+
+export type VaultAccessView = {
+  storeId: string;
+  label: string;
+  verified: boolean;
+  verifiedAt: DashboardText;
+  lastLocalUpdateAt: DashboardText;
+};
+
+export function accessChainTabId(stage: AccessChainStage): string {
+  return `devices-access-tab-${stage}`;
+}
+
+export function knownText(value: DashboardText): boolean {
+  return value.kind === DashboardTextKind.Known;
+}
+
+export function textValue(value: DashboardText): string {
+  return value.kind === DashboardTextKind.Known ? value.value : "";
+}
+
+export function formatAccessDate(vault: VaultState, value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return vault.t(I18N_KEYS.DevicesAccessUnknown);
+  }
+  return new Intl.DateTimeFormat(vault.locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+export function lastUsedLabel(
+  vault: VaultState,
+  value: DashboardTimestamp,
+): string {
+  if (value.kind === DashboardTimestampKind.Known) {
+    return formatAccessDate(vault, value.value);
+  }
+  return value.kind === DashboardTimestampKind.NotYetObserved
+    ? vault.t(I18N_KEYS.DevicesAccessNotUsedYet)
+    : vault.t(I18N_KEYS.DevicesAccessUnknownLegacy);
+}
+
+export function isPasskeyProtection(
+  protection: DeviceAccessProtectionKind,
+): boolean {
+  return (
+    protection === DeviceAccessProtectionKind.PasskeyStandard ||
+    protection === DeviceAccessProtectionKind.PasskeyAntiHacker
+  );
+}
+
+export function protectionLabel(
+  vault: VaultState,
+  protection: DeviceAccessProtectionKind,
+): string {
+  if (protection === DeviceAccessProtectionKind.PasskeyStandard) {
+    return vault.t(I18N_KEYS.DevicesAccessPasskeyStandard);
+  }
+  if (protection === DeviceAccessProtectionKind.PasskeyAntiHacker) {
+    return vault.t(I18N_KEYS.DevicesAccessPasskeyHighSecurity);
+  }
+  if (protection === DeviceAccessProtectionKind.CompanionSession) {
+    return vault.t(I18N_KEYS.DevicesAccessCompanionSession);
+  }
+  if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    return vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase);
+  }
+  return vault.t(I18N_KEYS.DevicesAccessNotPrepared);
+}
+
+export function identityStateLabel(
+  vault: VaultState,
+  state: DeviceAccessIdentityState,
+): string {
+  if (state === DeviceAccessIdentityState.Unlocked) {
+    return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked);
+  }
+  return state === DeviceAccessIdentityState.Locked
+    ? vault.t(I18N_KEYS.DevicesAccessIdentityLocked)
+    : vault.t(I18N_KEYS.DevicesAccessIdentityMissing);
+}
+
+/**
+ * The short stage name used by the chain nodes. The first link is whatever the
+ * person actually presents, so it follows the protection kind.
+ */
+export function stageLabel(
+  vault: VaultState,
+  stage: AccessChainStage,
+  protection: DeviceAccessProtectionKind,
+): string {
+  if (stage === AccessChainStage.DeviceKey) {
+    return vault.t(I18N_KEYS.DevicesAccessStageDeviceKey);
+  }
+  if (stage === AccessChainStage.Vaults) {
+    return vault.t(I18N_KEYS.DevicesAccessStageVaults);
+  }
+  if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    return vault.t(I18N_KEYS.DevicesAccessStagePin);
+  }
+  return protection === DeviceAccessProtectionKind.CompanionSession
+    ? vault.t(I18N_KEYS.DevicesAccessStageSession)
+    : vault.t(I18N_KEYS.DevicesAccessStagePasskey);
+}
+
+export function panelTitle(
+  vault: VaultState,
+  stage: AccessChainStage,
+  protection: DeviceAccessProtectionKind,
+): string {
+  if (stage === AccessChainStage.DeviceKey) {
+    return vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey);
+  }
+  if (stage === AccessChainStage.Vaults) {
+    return vault.t(I18N_KEYS.DevicesAccessVaultRelationships);
+  }
+  return protectionLabel(vault, protection);
+}
+
+export function panelDescription(
+  vault: VaultState,
+  stage: AccessChainStage,
+  protection: DeviceAccessProtectionKind,
+): string {
+  if (stage === AccessChainStage.DeviceKey) {
+    return protection === DeviceAccessProtectionKind.CompanionSession
+      ? vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)
+      : vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc);
+  }
+  if (stage === AccessChainStage.Vaults) {
+    return vault.t(I18N_KEYS.DevicesAccessVaultRelationshipsDesc);
+  }
+  if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    return vault.t(I18N_KEYS.DevicesAccessPinPanelDesc);
+  }
+  return protection === DeviceAccessProtectionKind.CompanionSession
+    ? vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)
+    : vault.t(I18N_KEYS.DevicesAccessPasskeyPanelDesc);
+}
+
+export function verifiedVaultsLabel(
+  vault: VaultState,
+  vaults: readonly VaultAccessView[],
+): string {
+  return vault.t(I18N_KEYS.DevicesAccessVerifiedOfTotal, {
+    verified: String(vaults.filter((entry) => entry.verified).length),
+    total: String(vaults.length),
+  });
+}
+
+function verifiedVaultsSummary(
+  vault: VaultState,
+  vaults: readonly VaultAccessView[],
+): string {
+  return vault.t(I18N_KEYS.DevicesAccessVerifiedSummary, {
+    verified: String(vaults.filter((entry) => entry.verified).length),
+    total: String(vaults.length),
+  });
+}
+
+function identifierFrom(value: DashboardText): AccessNodeDetail {
+  return value.kind === DashboardTextKind.Known
+    ? { kind: AccessNodeDetailKind.Identifier, value: value.value }
+    : { kind: AccessNodeDetailKind.Absent };
+}
+
+/**
+ * The node caption already names the stage, so the title names the specific
+ * thing at that stage: the passkey a manager holds, or who else could present
+ * this credential when nothing is stored.
+ */
+function unlockNodeTitle(
+  vault: VaultState,
+  protection: DeviceAccessProtectionKind,
+  passkeyName: DashboardText,
+): string {
+  if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle);
+  }
+  if (protection === DeviceAccessProtectionKind.CompanionSession) {
+    return vault.t(I18N_KEYS.DevicesAccessSessionNodeTitle);
+  }
+  if (!isPasskeyProtection(protection)) {
+    return vault.t(I18N_KEYS.DevicesAccessNotPrepared);
+  }
+  return knownText(passkeyName)
+    ? textValue(passkeyName)
+    : vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed);
+}
+
+/**
+ * Build the three chain nodes. Each node shows at most one short identifier so
+ * the relationship stays readable instead of turning into a list of key ids.
+ */
+export function buildAccessChainNodes(
+  vault: VaultState,
+  input: {
+    protection: DeviceAccessProtectionKind;
+    passkeyName: DashboardText;
+    credentialId: DashboardText;
+    deviceId: DashboardText;
+    vaults: readonly VaultAccessView[];
+  },
+): AccessChainNode[] {
+  return [
+    {
+      stage: AccessChainStage.Unlock,
+      caption: stageLabel(vault, AccessChainStage.Unlock, input.protection),
+      title: unlockNodeTitle(vault, input.protection, input.passkeyName),
+      detail: isPasskeyProtection(input.protection)
+        ? identifierFrom(input.credentialId)
+        : { kind: AccessNodeDetailKind.Absent },
+      incoming: { kind: AccessChainLinkKind.Origin },
+    },
+    {
+      stage: AccessChainStage.DeviceKey,
+      caption: stageLabel(vault, AccessChainStage.DeviceKey, input.protection),
+      title: vault.t(I18N_KEYS.DevicesAccessThisDevice),
+      detail: identifierFrom(input.deviceId),
+      incoming: {
+        kind: AccessChainLinkKind.Relation,
+        label: vault.t(I18N_KEYS.DevicesAccessLinkUnlocks),
+      },
+    },
+    {
+      stage: AccessChainStage.Vaults,
+      caption: stageLabel(vault, AccessChainStage.Vaults, input.protection),
+      title:
+        input.vaults.length === 0
+          ? vault.t(I18N_KEYS.DevicesAccessNoVaultsShort)
+          : input.vaults.map((entry) => entry.label).join(", "),
+      detail:
+        input.vaults.length === 0
+          ? { kind: AccessNodeDetailKind.Absent }
+          : {
+              kind: AccessNodeDetailKind.Summary,
+              value: verifiedVaultsSummary(vault, input.vaults),
+            },
+      incoming: {
+        kind: AccessChainLinkKind.Relation,
+        label: vault.t(I18N_KEYS.DevicesAccessLinkOpens),
+      },
+    },
+  ];
+}
