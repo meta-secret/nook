@@ -102,7 +102,14 @@ FROM builder-deps AS nook-rust-test
 
 WORKDIR /meta-secret/nook
 
-COPY . .
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
 
 RUN find \
       nook-app/nook-app-common/src \
@@ -111,13 +118,7 @@ RUN find \
       nook-app/nook-event-log/src \
       nook-app/nook-companion-core/src \
       nook-app/nook-core/src \
-      -type f -name '*.rs' -exec touch {} + \
-    && test -f nook-app/Taskfile.yml \
-    && git init -q \
-    && git config user.email nook@local \
-    && git config user.name nook \
-    && git add -A \
-    && git commit -q -m "nook-rust-test source snapshot" >/dev/null
+      -type f -name '*.rs' -exec touch {} +
 
 # Compile the exact focused test graph inside BuildKit before loading the runtime image. Remote
 # workers can then publish these source-sensitive target artifacts to their branch-and-task Zot
@@ -137,21 +138,33 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       --no-run \
     && nook-sccache-report focused-native-test-compile
 
+# The full checkout is runtime input only. Keeping it after the compile vertex means docs, web,
+# and infrastructure changes do not invalidate the source-sensitive Rust layer exported to Zot.
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-test source snapshot" >/dev/null
+
 # Remote lint runs compile inside the exported graph so a clean worker can restore the complete
 # source-sensitive native and WASM lint state from its branch-and-task Zot ref.
 FROM builder-deps AS nook-rust-lint
 
 WORKDIR /meta-secret/nook
 
-COPY . .
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
 
-RUN find nook-app -type f -name '*.rs' -exec touch {} + \
-    && test -f nook-app/Taskfile.yml \
-    && git init -q \
-    && git config user.email nook@local \
-    && git config user.name nook \
-    && git add -A \
-    && git commit -q -m "nook-rust-lint source snapshot" >/dev/null
+RUN find nook-app -type f -name '*.rs' -exec touch {} +
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -168,21 +181,29 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-wasm -p nook-companion-wasm -- -D warnings \
     && nook-sccache-report focused-rust-lint-compile
 
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-lint source snapshot" >/dev/null
+
 # Remote coverage likewise executes inside BuildKit. The runtime command still prints the report,
 # but its instrumented binaries and source-sensitive target state are restored from Zot.
 FROM builder-deps AS nook-rust-coverage
 
 WORKDIR /meta-secret/nook
 
-COPY . .
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
 
-RUN find nook-app -type f -name '*.rs' -exec touch {} + \
-    && test -f nook-app/Taskfile.yml \
-    && git init -q \
-    && git config user.email nook@local \
-    && git config user.name nook \
-    && git add -A \
-    && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null
+RUN find nook-app -type f -name '*.rs' -exec touch {} +
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -196,3 +217,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
       -p nook-event-log \
       --summary-only \
     && nook-sccache-report focused-rust-coverage-compile
+
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null

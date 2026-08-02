@@ -177,12 +177,33 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
     assert!(core_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
-    assert!(core_dockerfile.contains("COPY . ."));
     assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
     assert!(core_dockerfile.contains("focused-native-test-compile"));
     assert!(core_dockerfile.contains("focused-rust-lint-compile"));
     assert!(core_dockerfile.contains("focused-rust-coverage-compile"));
     assert!(core_dockerfile.contains("--no-run"));
+    for (target, compile_marker) in [
+        ("nook-rust-test", "focused-native-test-compile"),
+        ("nook-rust-lint", "focused-rust-lint-compile"),
+        ("nook-rust-coverage", "focused-rust-coverage-compile"),
+    ] {
+        let stage = core_dockerfile
+            .split(&format!("AS {target}\n"))
+            .nth(1)
+            .and_then(|remainder| remainder.split("\nFROM ").next())
+            .unwrap_or_else(|| panic!("focused Dockerfile stage must exist: {target}"));
+        let compile = stage
+            .find(compile_marker)
+            .unwrap_or_else(|| panic!("focused compile marker must exist: {compile_marker}"));
+        let full_checkout = stage
+            .find("COPY . .")
+            .unwrap_or_else(|| panic!("focused stage must seal the full checkout: {target}"));
+        assert!(
+            compile < full_checkout,
+            "{target} must compile from narrow Rust inputs before copying the full checkout"
+        );
+        assert!(stage[..compile].contains("COPY nook-app/nook-core nook-app/nook-core"));
+    }
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
     assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
