@@ -36,6 +36,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+  import { DeviceProtectionGateFrame } from '$lib/components/device-protection-gate-state'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     dashboardElement,
@@ -517,8 +518,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
           >
             <DeviceProtectionGate
               {vault}
-              embedded
-              showsSetupStep={false}
+              frame={DeviceProtectionGateFrame.HostSection}
               onProtectionReady={() => void focusAfterProtectionReady()}
             />
           </div>
