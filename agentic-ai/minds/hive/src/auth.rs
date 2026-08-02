@@ -83,6 +83,10 @@ impl BrokerExternalAuth {
     pub async fn validate(&self) -> std::io::Result<()> {
         self.request(false).await.map(drop)
     }
+
+    pub async fn refresh_and_validate(&self) -> std::io::Result<()> {
+        self.request(true).await.map(drop)
+    }
 }
 
 impl ExternalAuth for BrokerExternalAuth {
@@ -93,6 +97,19 @@ impl ExternalAuth for BrokerExternalAuth {
     fn refresh(&self, _context: ExternalAuthRefreshContext) -> ExternalAuthFuture<'_, CodexAuth> {
         Box::pin(self.request(true))
     }
+}
+
+pub(crate) async fn prepare_worker_auth_and_readiness(
+    external_auth: &BrokerExternalAuth,
+    workspace: &Path,
+) -> crate::HiveResult<()> {
+    external_auth
+        .refresh_and_validate()
+        .await
+        .hive_context("Hive auth refresh failed before worker readiness")?;
+    tokio::fs::write(workspace.join(".hive-worker-ready"), b"ready")
+        .await
+        .hive_context("failed to publish worker readiness")
 }
 
 pub async fn run_auth_broker(
@@ -273,6 +290,10 @@ async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> cra
             "--fail",
             "--silent",
             "--show-error",
+            "--connect-timeout",
+            "5",
+            "--max-time",
+            "30",
             "--request",
             "PATCH",
             "--cacert",
@@ -304,7 +325,47 @@ async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> cra
 
 #[cfg(test)]
 mod tests {
-    use super::{BrokerRequest, BrokerResponse};
+    use super::{
+        BrokerExternalAuth, BrokerRequest, BrokerResponse, prepare_worker_auth_and_readiness,
+    };
+
+    #[tokio::test]
+    async fn worker_refreshes_once_before_readiness_then_uses_cached_validation()
+    -> crate::HiveResult<()> {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::UnixListener;
+
+        let root = tempfile::tempdir()?;
+        let socket = root.path().join("broker.sock");
+        let workspace = root.path().join("workspace");
+        tokio::fs::create_dir(&workspace).await?;
+        let listener = UnixListener::bind(&socket)?;
+        let ready_marker = workspace.join(".hive-worker-ready");
+        let broker = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await?;
+            let mut channel = BufReader::new(stream);
+            for expected_refresh in [true, false] {
+                let mut request = String::new();
+                channel.read_line(&mut request).await?;
+                let request: BrokerRequest = serde_json::from_str(&request)?;
+                assert_eq!(request.refresh, expected_refresh);
+                assert_eq!(ready_marker.exists(), !expected_refresh);
+                channel
+                    .get_mut()
+                    .write_all(b"{\"access_token\":\"e30.e30.c2ln\",\"account_id\":\"account\"}\n")
+                    .await?;
+                channel.get_mut().flush().await?;
+            }
+            Ok::<(), crate::HiveError>(())
+        });
+
+        let external_auth = BrokerExternalAuth::connect(&socket).await?;
+        prepare_worker_auth_and_readiness(&external_auth, &workspace).await?;
+        external_auth.validate().await?;
+        broker.await??;
+        assert!(workspace.join(".hive-worker-ready").exists());
+        Ok(())
+    }
 
     #[test]
     fn broker_protocol_does_not_serialize_refresh_tokens() -> crate::HiveResult<()> {

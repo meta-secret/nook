@@ -21,6 +21,9 @@ pub use worker::{Worker, WorkerConfig};
 
 static RUSTLS_PROVIDER_INSTALL: OnceLock<Result<(), &'static str>> = OnceLock::new();
 
+#[cfg(test)]
+pub(crate) static GIT_PROCESS_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 pub fn install_rustls_crypto_provider() -> HiveResult<()> {
     match RUSTLS_PROVIDER_INSTALL.get_or_init(|| {
         rustls::crypto::aws_lc_rs::default_provider()
