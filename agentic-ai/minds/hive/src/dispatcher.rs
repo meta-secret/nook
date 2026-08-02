@@ -10,6 +10,17 @@ use tokio::process::Command;
 use crate::model::{EnqueueTask, TaskId, TaskTrigger};
 use crate::store::TaskStore;
 
+mod health;
+
+pub use health::{
+    check_workbench_dispatcher_health, check_workbench_dispatcher_progress,
+    prepare_dispatcher_health,
+};
+use health::{
+    record_dispatcher_health, sleep_while_recording_dispatcher_progress,
+    while_recording_dispatcher_progress,
+};
+
 const MAIN_FAILURE_PREFIX: &str = "main-failure-";
 const MAIN_FAILURE_SUFFIX: &str = ".md";
 const DEFERRED_E2E_RETIREMENT_MARKER: &str = "<!-- hive-retired:deferred-e2e -->";
@@ -20,6 +31,7 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
     store: S,
     repository_url: &str,
     checkout: &Path,
+    health_path: &Path,
     poll_seconds: u64,
 ) -> crate::HiveResult<()> {
     if poll_seconds <= WORKER_HEARTBEAT_SECONDS {
@@ -27,25 +39,38 @@ pub async fn run_workbench_dispatcher<S: TaskStore>(
             "Workbench polling must exceed the worker heartbeat interval",
         ));
     }
-    store.migrate().await?;
+    while_recording_dispatcher_progress(health_path, store.migrate()).await?;
     let mut reconciled_revision = None;
     let mut reconciled_incidents = HashMap::new();
     loop {
-        match sync_workbench_checkout(repository_url, checkout).await {
-            Ok(revision) if reconciled_revision.as_deref() == Some(revision.as_str()) => {}
-            Ok(revision) => {
-                if let Err(error) = dispatch_once(&store, checkout, &mut reconciled_incidents).await
-                {
-                    eprintln!("Hive Workbench reconciliation failed and will retry: {error:#}");
-                } else {
-                    reconciled_revision = Some(revision);
+        let reconciled = while_recording_dispatcher_progress(health_path, async {
+            match sync_workbench_checkout(repository_url, checkout).await {
+                Ok(revision) if reconciled_revision.as_deref() == Some(revision.as_str()) => {
+                    Ok(true)
+                }
+                Ok(revision) => {
+                    if let Err(error) =
+                        dispatch_once(&store, checkout, &mut reconciled_incidents).await
+                    {
+                        eprintln!("Hive Workbench reconciliation failed and will retry: {error:#}");
+                        Ok(false)
+                    } else {
+                        reconciled_revision = Some(revision);
+                        Ok(true)
+                    }
+                }
+                Err(error) => {
+                    eprintln!("Hive Workbench synchronization failed and will retry: {error:#}");
+                    Ok(false)
                 }
             }
-            Err(error) => {
-                eprintln!("Hive Workbench synchronization failed and will retry: {error:#}");
-            }
+        })
+        .await?;
+        if reconciled && let Err(error) = record_dispatcher_health(health_path).await {
+            eprintln!("Hive Workbench health heartbeat failed and will retry: {error:#}");
         }
-        tokio::time::sleep(Duration::from_secs(poll_seconds)).await;
+        sleep_while_recording_dispatcher_progress(health_path, Duration::from_secs(poll_seconds))
+            .await?;
     }
 }
 
@@ -80,13 +105,13 @@ async fn sync_workbench_checkout(
             .parent()
             .hive_context("Workbench checkout has no parent directory")?;
         tokio::fs::create_dir_all(parent).await?;
-        let output = Command::new("git")
+        let mut command = Command::new("git");
+        command
+            .args(workbench_git_transport_arguments())
             .args(["clone", "--depth=1", "--branch=main", "--"])
             .arg(repository_url)
-            .arg(checkout)
-            .output()
-            .await
-            .hive_context("start Workbench clone")?;
+            .arg(checkout);
+        let output = bounded_command_output(command, "Workbench clone").await?;
         if !output.status.success() {
             return Err(crate::error::HiveError::message(format!(
                 "Workbench clone failed: {}",
@@ -104,7 +129,7 @@ async fn sync_workbench_checkout(
         git(checkout, &["branch", "--delete", "--force", "main"]).await?;
     }
     git(checkout, &["reflog", "expire", "--expire=now", "--all"]).await?;
-    git(checkout, &["gc", "--prune=now"]).await?;
+    git(checkout, workbench_cleanup_arguments()).await?;
     let output = git(checkout, &["rev-parse", "HEAD"]).await?;
     let revision = String::from_utf8(output)
         .hive_context("Workbench revision is not UTF-8")?
@@ -118,14 +143,18 @@ async fn sync_workbench_checkout(
     Ok(revision)
 }
 
+fn workbench_cleanup_arguments() -> &'static [&'static str] {
+    &["gc", "--prune=now", "--no-detach"]
+}
+
 async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
+        .args(workbench_git_transport_arguments())
         .arg("-C")
         .arg(checkout)
-        .args(args)
-        .output()
-        .await
-        .hive_context("start Workbench Git operation")?;
+        .args(args);
+    let output = bounded_command_output(command, "Workbench Git operation").await?;
     if !output.status.success() {
         return Err(crate::error::HiveError::message(format!(
             "Workbench Git operation failed: {}",
@@ -133,6 +162,21 @@ async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
         )));
     }
     Ok(output.stdout)
+}
+
+fn workbench_git_transport_arguments() -> &'static [&'static str] {
+    &["-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=60"]
+}
+
+async fn bounded_command_output(
+    mut command: Command,
+    operation: &str,
+) -> crate::HiveResult<std::process::Output> {
+    command.kill_on_drop(true);
+    tokio::time::timeout(Duration::from_secs(300), command.output())
+        .await
+        .map_err(|_| crate::HiveError::message(format!("{operation} exceeded 300 seconds")))?
+        .with_hive_context(|| format!("start {operation}"))
 }
 
 async fn dispatch_once<S: TaskStore>(
@@ -412,6 +456,10 @@ async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
             "--location",
             "--retry",
             "3",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "90",
             "--header",
             "Accept: application/vnd.github+json",
             "--header",
@@ -435,6 +483,8 @@ async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    #[cfg(target_os = "linux")]
+    use std::collections::HashSet;
     use std::process::Command as StdCommand;
     use std::sync::{Arc, Mutex};
 
@@ -700,10 +750,12 @@ mod tests {
     #[tokio::test]
     async fn dispatcher_rejects_sub_heartbeat_polling() -> crate::HiveResult<()> {
         let checkout = tempfile::tempdir()?;
+        let health = checkout.path().join("health");
         let error = run_workbench_dispatcher(
             RecordingStore::default(),
             "https://example.invalid/workbench.git",
             checkout.path(),
+            &health,
             60,
         )
         .await
@@ -771,6 +823,7 @@ mod tests {
 
     #[tokio::test]
     async fn workbench_checkout_reuses_the_same_public_git_snapshot() -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
         let origin = tempfile::tempdir()?;
         let checkout = tempfile::tempdir()?;
         let checkout_path = checkout.path().join("workbench");
@@ -830,5 +883,89 @@ mod tests {
         assert!(reachable.status.success());
         assert_eq!(String::from_utf8(reachable.stdout)?.trim(), "1");
         Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn workbench_cleanup_leaves_no_git_process_behind() -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
+        let repository = tempfile::tempdir()?;
+        let status = StdCommand::new("git")
+            .arg("-C")
+            .arg(repository.path())
+            .args(["init", "--initial-branch=main"])
+            .status()?;
+        assert!(status.success());
+        let (before_zombies, _) = git_process_ids(repository.path())?;
+        super::git(repository.path(), super::workbench_cleanup_arguments()).await?;
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let (after_zombies, matching_repository) = git_process_ids(repository.path())?;
+        assert!(
+            after_zombies.is_subset(&before_zombies),
+            "cleanup left a new Git zombie: {after_zombies:?}"
+        );
+        assert!(
+            matching_repository.is_empty(),
+            "cleanup left Git running for its repository: {matching_repository:?}"
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn git_process_ids(
+        repository: &std::path::Path,
+    ) -> crate::HiveResult<(HashSet<u32>, HashSet<u32>)> {
+        let mut zombies = HashSet::new();
+        let mut matching_repository = HashSet::new();
+        let repository = repository.to_string_lossy();
+        for entry in std::fs::read_dir("/proc")? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Ok(process_id) = name.to_string_lossy().parse::<u32>() else {
+                continue;
+            };
+            let command = match std::fs::read_to_string(entry.path().join("comm")) {
+                Ok(command) => command,
+                Err(error) if process_vanished(&error) => continue,
+                Err(error) => return Err(error.into()),
+            };
+            if command.trim() == "git" {
+                let stat = match std::fs::read_to_string(entry.path().join("stat")) {
+                    Ok(stat) => stat,
+                    Err(error) if process_vanished(&error) => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                if stat
+                    .rfind(") ")
+                    .and_then(|position| stat.as_bytes().get(position + 2))
+                    == Some(&b'Z')
+                {
+                    zombies.insert(process_id);
+                }
+                let command_line = match std::fs::read(entry.path().join("cmdline")) {
+                    Ok(command_line) => command_line,
+                    Err(error) if process_vanished(&error) => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                if String::from_utf8_lossy(&command_line).contains(repository.as_ref()) {
+                    matching_repository.insert(process_id);
+                }
+            }
+        }
+        Ok((zombies, matching_repository))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn process_vanished(error: &std::io::Error) -> bool {
+        error.kind() == std::io::ErrorKind::NotFound || error.raw_os_error() == Some(3)
+    }
+
+    #[test]
+    fn workbench_cleanup_cannot_detach_from_the_dispatcher() {
+        assert_eq!(
+            super::workbench_cleanup_arguments(),
+            ["gc", "--prune=now", "--no-detach"]
+        );
     }
 }
