@@ -102,6 +102,9 @@ FROM builder-deps AS nook-rust-test
 
 WORKDIR /meta-secret/nook
 
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
 COPY nook-app/nook-app-common nook-app/nook-app-common
 COPY nook-app/nook-auth2 nook-app/nook-auth2
 COPY nook-app/nook-replication nook-app/nook-replication
@@ -155,6 +158,9 @@ FROM builder-deps AS nook-rust-lint
 
 WORKDIR /meta-secret/nook
 
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
 COPY nook-app/nook-app-common nook-app/nook-app-common
 COPY nook-app/nook-auth2 nook-app/nook-auth2
 COPY nook-app/nook-replication nook-app/nook-replication
@@ -196,6 +202,9 @@ FROM builder-deps AS nook-rust-coverage
 
 WORKDIR /meta-secret/nook
 
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
 COPY nook-app/nook-app-common nook-app/nook-app-common
 COPY nook-app/nook-auth2 nook-app/nook-auth2
 COPY nook-app/nook-replication nook-app/nook-replication

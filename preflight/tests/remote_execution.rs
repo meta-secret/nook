@@ -202,6 +202,10 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
             compile < full_checkout,
             "{target} must compile from narrow Rust inputs before copying the full checkout"
         );
+        assert!(stage[..compile]
+            .contains("COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/"));
+        assert!(stage[..compile].contains("COPY nook-app/.cargo nook-app/.cargo"));
+        assert!(stage[..compile].contains("COPY nook-app/.config nook-app/.config"));
         assert!(stage[..compile].contains("COPY nook-app/nook-core nook-app/nook-core"));
     }
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
