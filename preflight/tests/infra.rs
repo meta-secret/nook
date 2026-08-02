@@ -500,6 +500,21 @@ fn assert_sccache_credential_contract() {
         ),
         "Remote compiler identity must be read/list-only on Main's bucket"
     );
+    let bucket_ensure = sccache
+        .split("\n  sccache:bucket:ensure:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  sccache:check:\n").next())
+        .unwrap_or_else(|| panic!("infra must define SeaweedFS bucket ensure"));
+    let reload = bucket_ensure
+        .find("up -d --wait --force-recreate seaweedfs")
+        .unwrap_or_else(|| panic!("bucket ensure must reload SeaweedFS credentials"));
+    let admin_login = bucket_ensure
+        .find("sccache-admin-access-key")
+        .unwrap_or_else(|| panic!("bucket ensure must load the server-side admin identity"));
+    assert!(
+        reload < admin_login,
+        "bucket ensure must reload SeaweedFS before using newly generated admin credentials"
+    );
 }
 
 fn assert_zot_registry_contract() -> anyhow::Result<()> {

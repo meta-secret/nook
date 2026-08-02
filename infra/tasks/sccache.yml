@@ -172,6 +172,14 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
+        compose_file="$remote_dir/compose.yaml"
+        docker compose -f "$compose_file" config --quiet
+        # SeaweedFS loads the bind-mounted identity document at process start.
+        # Always recreate it after credential:ensure so an upgraded live stack
+        # recognizes newly generated admin credentials before bucket bootstrap.
+        docker compose -f "$compose_file" up -d --wait --force-recreate seaweedfs
+        docker compose -f "$compose_file" ps --services --filter status=running |
+          grep -qx seaweedfs
         access_key="$(cat "$remote_dir/secrets/sccache-admin-access-key")"
         secret_key="$(cat "$remote_dir/secrets/sccache-admin-secret-key")"
         bucket="{{.NOOK_SCCACHE_BUCKET}}"
