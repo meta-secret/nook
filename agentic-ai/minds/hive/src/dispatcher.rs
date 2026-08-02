@@ -79,16 +79,7 @@ async fn sync_workbench_checkout(
     checkout: &Path,
 ) -> crate::HiveResult<String> {
     if checkout.join(".git").is_dir() {
-        git(
-            checkout,
-            &[
-                "fetch",
-                "--depth=1",
-                "origin",
-                "+main:refs/remotes/origin/main",
-            ],
-        )
-        .await?;
+        git(checkout, workbench_fetch_arguments()).await?;
         git(
             checkout,
             &["checkout", "--detach", "--force", "origin/main"],
@@ -147,6 +138,16 @@ fn workbench_cleanup_arguments() -> &'static [&'static str] {
     &["gc", "--prune=now", "--no-detach"]
 }
 
+fn workbench_fetch_arguments() -> &'static [&'static str] {
+    &[
+        "fetch",
+        "--no-auto-maintenance",
+        "--depth=1",
+        "origin",
+        "+main:refs/remotes/origin/main",
+    ]
+}
+
 async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
     let mut command = Command::new("git");
     command
@@ -165,7 +166,16 @@ async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
 }
 
 fn workbench_git_transport_arguments() -> &'static [&'static str] {
-    &["-c", "http.lowSpeedLimit=1", "-c", "http.lowSpeedTime=60"]
+    &[
+        "-c",
+        "http.lowSpeedLimit=1",
+        "-c",
+        "http.lowSpeedTime=60",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "gc.auto=0",
+    ]
 }
 
 async fn bounded_command_output(
@@ -966,6 +976,20 @@ mod tests {
         assert_eq!(
             super::workbench_cleanup_arguments(),
             ["gc", "--prune=now", "--no-detach"]
+        );
+    }
+
+    #[test]
+    fn workbench_fetch_cannot_start_automatic_maintenance() {
+        assert!(
+            super::workbench_fetch_arguments().contains(&"--no-auto-maintenance"),
+            "Workbench fetch must not orphan automatic Git maintenance"
+        );
+        assert!(
+            super::workbench_git_transport_arguments()
+                .windows(2)
+                .any(|arguments| arguments == ["-c", "maintenance.auto=false"]),
+            "all Workbench Git commands must disable automatic maintenance"
         );
     }
 }
