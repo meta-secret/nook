@@ -240,7 +240,7 @@ group "default" {
 // Phase one of `task setup`: Rust/WASM validation + tiny artifact export runs concurrently with
 // Bun dependency preparation. The second phase builds nook-web from the host artifact directory.
 group "prepare" {
-  targets = ["rust-format-check", "web-artifacts", "web-deps"]
+  targets = ["builder-debug", "rust-format-check", "web-artifacts", "web-deps"]
 }
 
 // Formatting must be able to build source-sealed images before the host applies the emitted diff.

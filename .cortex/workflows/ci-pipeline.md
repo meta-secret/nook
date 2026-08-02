@@ -521,8 +521,10 @@ read-only, then serially exports its already-solved graph from the same
 job-scoped builder. The WASM dependency export clears `cache-from` and forces
 zstd recompression so a thin reimported index cannot replace the complete cook
 lineage. Main thereby exports protected default-branch refs that PR jobs restore
-from private Zot. Zot ACLs deny the Remote identity write access to
-`nook/buildcache/**`; ordinary PR jobs receive no registry credentials at all.
+from private Zot. Same-repository PR jobs authenticate with the Remote registry
+identity, while Zot ACLs deny that identity write access to
+`nook/buildcache/**` and their Bake configuration disables every exporter. Fork
+pull requests receive no registry credentials.
 Native coverage and WASM source-sensitive layers have separate Zot refs in
 addition to the manifest-only dependency refs, so non-Rust pushes do not repeat
 unchanged Cargo compilation.

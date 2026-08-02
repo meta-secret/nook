@@ -155,6 +155,7 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let web_tasks = read("nook-app/nook-web/.task/web.yml");
     let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
     let base_dockerfile = read("nook-app/docker/base.Dockerfile");
+    let base_dockerignore = read("nook-app/docker/base.Dockerfile.dockerignore");
     let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
     let bake = read("nook-app/docker-bake.hcl");
@@ -183,6 +184,18 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(base_dockerfile.contains("focused-rust-lint-compile"));
     assert!(base_dockerfile.contains("focused-rust-coverage-compile"));
     assert!(base_dockerfile.contains("--no-run"));
+    for ignored in [
+        "**/docker-bake.hcl",
+        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-core/coverage-floor.json",
+        "nook-app/nook-wasm/Dockerfile",
+        "nook-app/nook-wasm/LICENSE",
+    ] {
+        assert!(
+            base_dockerignore.lines().any(|line| line == ignored),
+            "focused Rust context must ignore non-compiler input: {ignored}"
+        );
+    }
     for (target, compile_marker) in [
         ("nook-rust-test", "focused-native-test-compile"),
         ("nook-rust-lint", "focused-rust-lint-compile"),
@@ -229,6 +242,32 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
     assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
     assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
+}
+
+#[test]
+fn broad_remote_tasks_export_native_layers_without_main_write_access() {
+    let bake = read("nook-app/docker-bake.hcl");
+    let prepare = bake
+        .split("group \"prepare\" {\n")
+        .nth(1)
+        .and_then(|remainder| remainder.split("\n}").next())
+        .expect("prepare Bake group must exist");
+    assert!(
+        prepare.contains("\"builder-debug\""),
+        "broad setup must select builder-debug so its dedicated Zot exporter runs"
+    );
+
+    let pr = read(".github/workflows/pr.yml");
+    assert!(!pr.contains("secrets.NOOK_REGISTRY_USERNAME"));
+    assert!(!pr.contains("secrets.NOOK_REGISTRY_PASSWORD"));
+    assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_USERNAME"));
+    assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_PASSWORD"));
+    assert_eq!(
+        pr.matches("cache-write: \"false\"").count(),
+        pr.matches("uses: ./.github/actions/nook-docker-setup")
+            .count(),
+        "every PR registry login must keep Bake exporters disabled"
+    );
 }
 
 #[test]
