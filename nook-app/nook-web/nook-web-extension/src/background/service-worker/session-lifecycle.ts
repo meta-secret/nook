@@ -167,7 +167,7 @@ export function isUnlockedSessionStatus(status: unknown): boolean {
 }
 
 export function openSimpleVault(path = ''): void {
-  chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+  void chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
 enum ActiveTabQueryKind {

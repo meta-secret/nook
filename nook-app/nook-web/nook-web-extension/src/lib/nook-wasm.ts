@@ -227,7 +227,9 @@ export async function extensionDeviceProtectionStatus(): Promise<DeviceProtectio
     case DeviceProtectionStatus.Pin:
     case DeviceProtectionStatus.Unlocked:
       return status
-    default:
+    case DeviceProtectionStatus.Loading:
+    case DeviceProtectionStatus.PinSetup:
+    case DeviceProtectionStatus.Error:
       throw new Error(
         `Unsupported extension device protection status: ${status}`,
       )

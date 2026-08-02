@@ -23,6 +23,12 @@ export default [
     },
   },
   {
+    files: ['nook-web-extension/src/**/*.{ts,svelte}'],
+    languageOptions: {
+      globals: globals.webextensions,
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     ...ts.configs.disableTypeChecked,
     languageOptions: {

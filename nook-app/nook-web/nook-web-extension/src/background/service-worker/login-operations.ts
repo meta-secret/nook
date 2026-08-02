@@ -220,7 +220,7 @@ export async function websiteLoginSaveOffer(
     !isUnlockedSessionStatus(status)
   ) {
     pendingPassword.value = ''
-    openCompanionLauncher()
+    await openCompanionLauncher()
     return { ok: true, status: 'locked' }
   }
 
@@ -392,7 +392,7 @@ export async function websiteLoginSaveCommit(
     typeof status !== 'object' ||
     !isUnlockedSessionStatus(status)
   ) {
-    openCompanionLauncher()
+    await openCompanionLauncher()
     return { ok: false, reason: 'login-save-locked' }
   }
   return sendSessionMessage({

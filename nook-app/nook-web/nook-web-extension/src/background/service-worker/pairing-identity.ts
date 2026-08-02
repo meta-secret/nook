@@ -169,7 +169,7 @@ export async function openExtensionPairing(
       ExtensionConnectScope.SyncProviderCredentials,
     ].join(','),
   )
-  chrome.tabs.create({ url: url.toString() })
+  void chrome.tabs.create({ url: url.toString() })
 }
 
 export function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
@@ -716,7 +716,7 @@ export async function availableWebsiteGrants(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncher()
+    await openCompanionLauncher()
     return { response: { ok: true, status: 'locked', accounts: [] } }
   }
   return { grants }

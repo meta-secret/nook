@@ -211,7 +211,7 @@ export async function authorizedWebsiteGrant(
     payload: { queueExpiresAt, queuePriority: 'interactive' },
   })
   if (!isUnlockedSessionStatus(status)) {
-    openCompanionLauncher()
+    await openCompanionLauncher()
     return { response: { ok: false, reason: reasons.locked } }
   }
   return { grant }
