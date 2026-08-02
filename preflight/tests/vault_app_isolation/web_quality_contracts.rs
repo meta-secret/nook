@@ -60,14 +60,10 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         );
     }
 
-    let extension_manifest = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/package.json",
-    );
+    let extension_manifest = read(&root, "nook-app/nook-web/nook-web-extension/package.json");
     assert!(
-        extension_manifest.contains(
-            "eslint --config ../eslint.config.js scripts src e2e playwright.config.ts"
-        ),
+        extension_manifest
+            .contains("eslint --config ../eslint.config.js scripts src e2e playwright.config.ts"),
         "the extension lint command must retain its production source tree"
     );
 
