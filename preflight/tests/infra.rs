@@ -96,6 +96,27 @@ fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
 }
 
 #[test]
+fn hive_dispatcher_keeps_github_run_reads_token_free() {
+    let manifest = read("infra/k0s/manifests/hive/dispatcher.yaml");
+    assert!(!manifest.contains("GH_TOKEN"));
+    assert!(!manifest.contains("hive-github-publication"));
+
+    let client = read("agentic-ai/minds/hive/src/dispatcher/github.rs");
+    assert!(
+        client.contains("https://github.com/meta-secret/nook/actions/runs"),
+        "Hive dispatcher must use the public run page outside the REST API rate budget"
+    );
+    assert!(
+        !client.contains("api.github.com") && !client.contains("Authorization"),
+        "Hive dispatcher must not own a GitHub credential"
+    );
+    assert!(
+        client.contains("kill_on_drop(true)") && client.contains("timeout("),
+        "Hive dispatcher GitHub requests must remain bounded"
+    );
+}
+
+#[test]
 fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     let tasks = read("infra/tasks/neo4j.yml");
     let start = tasks

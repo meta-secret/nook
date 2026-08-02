@@ -10,6 +10,7 @@ use tokio::process::Command;
 use crate::model::{EnqueueTask, TaskId, TaskTrigger};
 use crate::store::TaskStore;
 
+mod github;
 mod health;
 
 pub use health::{
@@ -248,13 +249,7 @@ async fn dispatch_once<S: TaskStore>(
         }
         let (run_id, run_attempt) = main_failure_run(&body)
             .hive_context("ready Main failure issue has no workflow-run marker")?;
-        let run: serde_json::Value = serde_json::from_slice(
-            &fetch(&format!(
-                "https://api.github.com/repos/meta-secret/nook/actions/runs/{run_id}"
-            ))
-            .await?,
-        )
-        .hive_context("decode current Main workflow-run state")?;
+        let run = github::fetch_run(run_id).await?;
         if !main_run_requires_repair(&run, &source_commit) {
             reconciled_incidents.insert(name, body);
             continue;
@@ -455,39 +450,6 @@ fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> boo
             run.get("conclusion").and_then(serde_json::Value::as_str),
             Some("success" | "neutral" | "skipped")
         )
-}
-
-async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
-    let output = Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--retry",
-            "3",
-            "--connect-timeout",
-            "10",
-            "--max-time",
-            "90",
-            "--header",
-            "Accept: application/vnd.github+json",
-            "--header",
-            "X-GitHub-Api-Version: 2022-11-28",
-            "--user-agent",
-            "nook-hive-workbench-dispatcher",
-            url,
-        ])
-        .output()
-        .await
-        .hive_context("start Workbench fetch")?;
-    if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
-            "Workbench fetch failed with status {}",
-            output.status
-        )));
-    }
-    Ok(output.stdout)
 }
 
 #[cfg(test)]
