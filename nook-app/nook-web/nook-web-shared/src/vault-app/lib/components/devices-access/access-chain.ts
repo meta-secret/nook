@@ -211,15 +211,30 @@ export function panelTitle(
   return protectionLabel(vault, protection);
 }
 
+/**
+ * A recoverable passkey identity is re-derived from the passkey each unlock and
+ * has no stored key material; high-security and PIN modes keep the key wrapped
+ * in this browser. Saying "wrapped" for all of them would be untrue.
+ */
+function deviceKeyDescription(
+  vault: VaultState,
+  protection: DeviceAccessProtectionKind,
+): string {
+  if (protection === DeviceAccessProtectionKind.CompanionSession) {
+    return vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc);
+  }
+  return protection === DeviceAccessProtectionKind.PasskeyStandard
+    ? vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDescDerived)
+    : vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc);
+}
+
 export function panelDescription(
   vault: VaultState,
   stage: AccessChainStage,
   protection: DeviceAccessProtectionKind,
 ): string {
   if (stage === AccessChainStage.DeviceKey) {
-    return protection === DeviceAccessProtectionKind.CompanionSession
-      ? vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)
-      : vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc);
+    return deviceKeyDescription(vault, protection);
   }
   if (stage === AccessChainStage.Vaults) {
     return vault.t(I18N_KEYS.DevicesAccessVaultRelationshipsDesc);

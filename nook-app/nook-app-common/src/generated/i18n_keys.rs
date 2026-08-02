@@ -444,6 +444,8 @@ pub const DEVICES_ACCESS_BACKUP_BACKED_UP: &str = "devices_access.backup_backed_
 pub const DEVICES_ACCESS_BACKUP_ELIGIBLE: &str = "devices_access.backup_eligible";
 pub const DEVICES_ACCESS_BACKUP_NOT_ELIGIBLE: &str = "devices_access.backup_not_eligible";
 pub const DEVICES_ACCESS_BACKUP_PASSWORD_BOUNDARY: &str = "devices_access.backup_password_boundary";
+pub const DEVICES_ACCESS_BACKUP_PASSWORD_BOUNDARY_COMPANION: &str =
+    "devices_access.backup_password_boundary_companion";
 pub const DEVICES_ACCESS_BACKUP_PASSWORDS: &str = "devices_access.backup_passwords";
 pub const DEVICES_ACCESS_BACKUP_STATUS: &str = "devices_access.backup_status";
 pub const DEVICES_ACCESS_BROWSER_CHROME: &str = "devices_access.browser_chrome";
@@ -463,6 +465,8 @@ pub const DEVICES_ACCESS_DESCRIPTION: &str = "devices_access.description";
 pub const DEVICES_ACCESS_DEVICE_AGE_KEY: &str = "devices_access.device_age_key";
 pub const DEVICES_ACCESS_DEVICE_ID: &str = "devices_access.device_id";
 pub const DEVICES_ACCESS_DEVICE_KEY_PANEL_DESC: &str = "devices_access.device_key_panel_desc";
+pub const DEVICES_ACCESS_DEVICE_KEY_PANEL_DESC_DERIVED: &str =
+    "devices_access.device_key_panel_desc_derived";
 pub const DEVICES_ACCESS_DEVICE_TECHNICAL_DETAILS: &str = "devices_access.device_technical_details";
 pub const DEVICES_ACCESS_DONT_SHOW_AGAIN: &str = "devices_access.dont_show_again";
 pub const DEVICES_ACCESS_ENROLLED_DEVICES: &str = "devices_access.enrolled_devices";

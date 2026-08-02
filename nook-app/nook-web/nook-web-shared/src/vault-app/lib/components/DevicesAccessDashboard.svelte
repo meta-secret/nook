@@ -7,7 +7,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import {
     ArrowLeft,
     CircleHelp,
@@ -181,7 +181,12 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
 
   async function loadDashboard(): Promise<DashboardLoadKind> {
     const generation = ++loadGeneration
-    loadState = { kind: DashboardLoadKind.Loading }
+    // A re-read keeps the current readout on screen. Blanking it would move
+    // focus and hide the link the person is reading mid-save. The check is
+    // untracked because the reloading effect must not depend on its own writes.
+    if (untrack(() => loadState.kind) !== DashboardLoadKind.Ready) {
+      loadState = { kind: DashboardLoadKind.Loading }
+    }
     try {
       const snapshotRequest = vault
         .requireManager()

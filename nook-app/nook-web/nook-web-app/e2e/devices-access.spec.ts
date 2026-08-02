@@ -221,6 +221,44 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
       'Proton Pass family vault',
     )
+
+    // Selecting another link while the save is re-reading the snapshot unmounts
+    // the input the save would have refocused, so focus has to follow the link.
+    await page.evaluate(() => {
+      const scope = window as Window & {
+        __nookVault?: {
+          requireManager(): { deviceAccessSnapshotRequest: () => unknown }
+        }
+        __nookReloadSettled?: boolean
+      }
+      const manager = scope.__nookVault?.requireManager()
+      if (!manager) throw new Error('Vault manager is not exposed')
+      scope.__nookReloadSettled = false
+      const original = manager.deviceAccessSnapshotRequest
+      manager.deviceAccessSnapshotRequest = () => {
+        manager.deviceAccessSnapshotRequest = original
+        const request = original.call(manager) as {
+          resolve: () => Promise<unknown>
+        }
+        const resolve = request.resolve.bind(request)
+        request.resolve = async () => {
+          await new Promise((settle) => setTimeout(settle, 750))
+          const snapshot = await resolve()
+          scope.__nookReloadSettled = true
+          return snapshot
+        }
+        return request
+      }
+    })
+    await page.getByTestId('devices-access-provider-label').fill('1Password')
+    await page.getByTestId('devices-access-provider-save').click()
+    await page.getByTestId('devices-access-node-vaults').click()
+    await page.waitForFunction(
+      () =>
+        (window as Window & { __nookReloadSettled?: boolean })
+          .__nookReloadSettled === true,
+    )
+    await expect(page.getByTestId('devices-access-node-vaults')).toBeFocused()
   })
 
   test('a locked browser identity keeps last-known vault access without vault contents', async ({
