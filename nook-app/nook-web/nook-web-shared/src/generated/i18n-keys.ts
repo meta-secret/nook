@@ -445,6 +445,7 @@ export const I18N_KEYS = {
   DevicesAccessVaultRelationshipsDesc: 'devices_access.vault_relationships_desc',
   DevicesAccessVaultTechnicalDetails: 'devices_access.vault_technical_details',
   DevicesAccessVerifiedOfTotal: 'devices_access.verified_of_total',
+  DevicesAccessVerifiedPlusMore: 'devices_access.verified_plus_more',
   DevicesAccessVerifiedSummary: 'devices_access.verified_summary',
   DevicesAccessVerifiedVaultsLabel: 'devices_access.verified_vaults_label',
   DevicesAccessWhereSaved: 'devices_access.where_saved',

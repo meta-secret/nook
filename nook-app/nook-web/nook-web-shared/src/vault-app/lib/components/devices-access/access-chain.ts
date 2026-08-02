@@ -354,6 +354,7 @@ function vaultsNode(
   };
 }
 
+/** One link, one name: further verified vaults become a count, not a list. */
 function vaultsNodeTitle(
   vault: VaultState,
   vaults: readonly VaultAccessView[],
@@ -362,7 +363,14 @@ function vaultsNodeTitle(
   if (vaults.length === 0) {
     return vault.t(I18N_KEYS.DevicesAccessNoVaultsShort);
   }
-  return verified.length === 0
-    ? vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort)
-    : verified.map((entry) => entry.label).join(", ");
+  if (verified.length === 0) {
+    return vault.t(I18N_KEYS.DevicesAccessNoVerifiedVaultsShort);
+  }
+  const [primary, ...rest] = verified;
+  return rest.length === 0
+    ? primary.label
+    : vault.t(I18N_KEYS.DevicesAccessVerifiedPlusMore, {
+        label: primary.label,
+        count: String(rest.length),
+      });
 }

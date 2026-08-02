@@ -38,6 +38,7 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
+    dashboardElement,
     DashboardFocusTargetKind,
     DashboardLoadKind,
     type DashboardLoadState,
@@ -45,6 +46,8 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     DashboardTextKind,
     type DashboardTimestamp,
     DashboardTimestampKind,
+    providerSaveFocus,
+    ProviderSaveFocusKind,
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
   import AccessChainDiagram from './devices-access/AccessChainDiagram.svelte'
@@ -280,13 +283,23 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     } finally {
       if (loadState.kind === DashboardLoadKind.Ready) {
         await tick()
-        document
-          .querySelector<HTMLInputElement>(
-            '[data-testid="devices-access-provider-label"]',
-          )
-          ?.focus()
+        focusAfterProviderSave()
       }
     }
+  }
+
+  function focusAfterProviderSave(): void {
+    const focus = providerSaveFocus(
+      selectedStage === AccessChainStage.Unlock,
+      dashboardElement('devices-access-provider-label'),
+    )
+    if (focus.kind === ProviderSaveFocusKind.Control) {
+      focus.element.focus()
+      return
+    }
+    const tab = accessChainTab(selectedStage)
+    if (tab.kind === AccessChainTabKind.Missing) return
+    tab.element.focus()
   }
 
   function clearProviderSaveFailure(): void {

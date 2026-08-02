@@ -75,6 +75,24 @@ describe('access chain nodes', () => {
     })
   })
 
+  test('keeps one vault name on the link and counts the rest', () => {
+    const [, , vaults] = buildAccessChainNodes(vault, {
+      protection: DeviceAccessProtectionKind.PasskeyStandard,
+      passkeyName: known('Work laptop'),
+      credentialId: known('passkey_1234'),
+      deviceId: known('device_5678'),
+      vaults: [
+        vaultAccess('Family', true),
+        vaultAccess('Archive', true),
+        vaultAccess('Travel', true),
+      ],
+    })
+
+    expect(vaults.title).toBe(
+      `${I18N_KEYS.DevicesAccessVerifiedPlusMore}({"label":"Family","count":"2"})`,
+    )
+  })
+
   test('does not claim access to vaults this device key never opened', () => {
     const [, , vaults] = buildAccessChainNodes(vault, {
       protection: DeviceAccessProtectionKind.PasskeyStandard,

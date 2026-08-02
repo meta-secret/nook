@@ -544,6 +544,7 @@ pub const DEVICES_ACCESS_VAULT_RELATIONSHIPS: &str = "devices_access.vault_relat
 pub const DEVICES_ACCESS_VAULT_RELATIONSHIPS_DESC: &str = "devices_access.vault_relationships_desc";
 pub const DEVICES_ACCESS_VAULT_TECHNICAL_DETAILS: &str = "devices_access.vault_technical_details";
 pub const DEVICES_ACCESS_VERIFIED_OF_TOTAL: &str = "devices_access.verified_of_total";
+pub const DEVICES_ACCESS_VERIFIED_PLUS_MORE: &str = "devices_access.verified_plus_more";
 pub const DEVICES_ACCESS_VERIFIED_SUMMARY: &str = "devices_access.verified_summary";
 pub const DEVICES_ACCESS_VERIFIED_VAULTS_LABEL: &str = "devices_access.verified_vaults_label";
 pub const DEVICES_ACCESS_WHERE_SAVED: &str = "devices_access.where_saved";
