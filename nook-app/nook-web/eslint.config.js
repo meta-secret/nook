@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import noUnsanitized from 'eslint-plugin-no-unsanitized'
 import svelte from 'eslint-plugin-svelte'
 import globals from 'globals'
 import ts from 'typescript-eslint'
@@ -15,29 +16,63 @@ export default [
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs['flat/recommended'],
+  noUnsanitized.configs.recommended,
   {
     languageOptions: {
       globals: globals.browser,
     },
   },
   {
-    files: ['**/*.mjs'],
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    ...ts.configs.disableTypeChecked,
     languageOptions: {
+      ...ts.configs.disableTypeChecked.languageOptions,
       globals: globals.node,
     },
   },
   {
     files: ['**/*.ts', '**/*.svelte.ts'],
+    rules: {
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': [
+        'error',
+        { considerDefaultExhaustiveForUnions: true },
+      ],
+    },
     languageOptions: {
       parser: ts.parser,
+      parserOptions: {
+        project: './tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
   },
   {
     files: ['**/*.svelte'],
+    rules: {
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/switch-exhaustiveness-check': [
+        'error',
+        { considerDefaultExhaustiveForUnions: true },
+      ],
+    },
     languageOptions: {
       parserOptions: {
         parser: ts.parser,
+        project: './tsconfig.eslint.json',
+        extraFileExtensions: ['.svelte'],
+        tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  {
+    files: ['**/tests/**', '**/e2e/**'],
+    rules: {
+      'no-unsanitized/property': 'off',
     },
   },
 ]

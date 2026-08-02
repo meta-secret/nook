@@ -359,6 +359,8 @@ export function parseVaultEventLogSnapshot(
           joins.clear()
           passwordEntries.clear()
           break
+        default:
+          break
       }
     }
   }

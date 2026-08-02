@@ -107,6 +107,8 @@ export function applyVaultSyncResult(
       state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
       state.awaitingJoinApproval = true;
       break;
+    case UnauthenticatedSyncDecision.Ignore:
+      break;
   }
 }
 

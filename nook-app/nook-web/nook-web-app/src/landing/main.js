@@ -4,6 +4,7 @@ import './vault-visual.css'
 import './product-sections.css'
 import './responsive.css'
 import { landingMessages } from './messages.js'
+import { replaceWithSafeTranslationHtml } from './translation-html.js'
 import {
   GitHubStarsCacheLookupKind,
   GitHubStarsStateKind,
@@ -224,7 +225,7 @@ function applyLandingLocale(locale, persist = false) {
     element.textContent = messages[element.dataset.i18n]
   }
   for (const element of document.querySelectorAll('[data-i18n-html]')) {
-    element.innerHTML = messages[element.dataset.i18nHtml]
+    replaceWithSafeTranslationHtml(element, messages[element.dataset.i18nHtml])
   }
   for (const element of document.querySelectorAll('[data-i18n-aria-label]')) {
     element.setAttribute('aria-label', messages[element.dataset.i18nAriaLabel])

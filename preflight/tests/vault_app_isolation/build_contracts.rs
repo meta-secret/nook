@@ -80,6 +80,66 @@ fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
 }
 
 #[test]
+fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
+    let root = repository_root();
+    let manifest = read(&root, "nook-app/nook-web/nook-web-app/package.json");
+    for required in [
+        "\"fast-check\":",
+        "\"eslint-plugin-no-unsanitized\":",
+        "\"security\": \"bun audit --prod --audit-level=high\"",
+        "\"lint\": \"bun run security",
+    ] {
+        assert!(
+            manifest.contains(required),
+            "the web quality gate must retain `{required}`"
+        );
+    }
+
+    let eslint = read(&root, "nook-app/nook-web/eslint.config.js");
+    for required in [
+        "'@typescript-eslint/await-thenable': 'error'",
+        "'@typescript-eslint/no-floating-promises': 'error'",
+        "'@typescript-eslint/no-misused-promises': 'error'",
+        "'@typescript-eslint/switch-exhaustiveness-check': [",
+        "considerDefaultExhaustiveForUnions: true",
+        "project: './tsconfig.eslint.json'",
+        "extraFileExtensions: ['.svelte']",
+        "noUnsanitized.configs.recommended",
+    ] {
+        assert!(
+            eslint.contains(required),
+            "the web static-analysis config must retain `{required}`"
+        );
+    }
+
+    let translation_html = read(
+        &root,
+        "nook-app/nook-web/nook-web-app/src/landing/translation-html.js",
+    );
+    for required in [
+        "DOMPurify.sanitize",
+        "ALLOWED_TAGS: ['br', 'code']",
+        "ALLOWED_ATTR: []",
+        "RETURN_DOM_FRAGMENT: true",
+    ] {
+        assert!(
+            translation_html.contains(required),
+            "landing translation markup must retain `{required}`"
+        );
+    }
+
+    let property_tests = read(
+        &root,
+        "nook-app/nook-web/nook-web-app/tests/unit/lib/log.test.ts",
+    );
+    assert!(
+        property_tests.contains("fc.property(")
+            && property_tests.contains("never persists query or fragment secrets"),
+        "the unit gate must retain a security-relevant property test"
+    );
+}
+
+#[test]
 fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
