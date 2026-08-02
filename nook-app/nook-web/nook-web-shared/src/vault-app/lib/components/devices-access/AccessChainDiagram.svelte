@@ -91,6 +91,11 @@ never drift apart.
       onclick={() => onSelect(node.stage)}
       onkeydown={handleKeydown}
     >
+      {#if node.incoming.kind === AccessChainLinkKind.Relation}
+        <!-- The drawn connector is decorative, so each tab carries its own
+        incoming relation for anyone who never sees the schematic. -->
+        <span class="sr-only">{node.incoming.label}</span>
+      {/if}
       <span
         class="access-micro-label block {isSelected
           ? 'text-background/70'

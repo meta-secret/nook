@@ -97,6 +97,10 @@ test.describe('devices and access dashboard', () => {
     await expect(unlockNode).toHaveAttribute('aria-selected', 'true')
     await expect(deviceKeyNode).toContainText('This browser')
     await expect(vaultsNode).toContainText('1 of 1')
+    // The drawn connector is decorative, so each link's own name has to carry
+    // the relation for anyone who never sees the schematic.
+    await expect(deviceKeyNode).toHaveAccessibleName(/unlocks/)
+    await expect(vaultsNode).toHaveAccessibleName(/opens/)
 
     // The first link opens selected: one passkey fingerprint, and the same
     // fingerprint on its node, so the relationship and the evidence agree.
