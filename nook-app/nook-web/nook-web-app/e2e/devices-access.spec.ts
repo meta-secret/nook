@@ -39,7 +39,10 @@ test.describe('devices and access dashboard', () => {
     // An unprepared browser previews the chain it is about to build instead of
     // offering evidence it cannot have yet.
     const preview = page.getByTestId('devices-access-chain-preview')
-    await expect(preview).toContainText('Passkey')
+    // Passkey and PIN setup are both still ahead, so the preview promises
+    // neither.
+    await expect(preview).toContainText('Unlock')
+    await expect(preview).not.toContainText('Passkey')
     await expect(preview).toContainText('unlocks')
     await expect(preview).toContainText('Device key')
     await expect(preview).toContainText('opens')
@@ -136,7 +139,7 @@ test.describe('devices and access dashboard', () => {
 
     await deviceKeyNode.press('ArrowRight')
     await expect(vaultsNode).toBeFocused()
-    await expect(panel).toContainText('Vaults this device key opens')
+    await expect(panel).toContainText('Vaults known to this device key')
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
       'Access verified',
     )

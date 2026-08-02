@@ -159,7 +159,9 @@ export function identityStateLabel(
 
 /**
  * The short stage name used by the chain nodes. The first link is whatever the
- * person actually presents, so it follows the protection kind.
+ * person actually presents, so it follows the protection kind. An unprepared
+ * browser has not chosen yet — passkey and PIN setup are both still ahead — so
+ * that stage stays generic instead of promising a passkey.
  */
 export function stageLabel(
   vault: VaultState,
@@ -175,9 +177,22 @@ export function stageLabel(
   if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
     return vault.t(I18N_KEYS.DevicesAccessStagePin);
   }
+  if (protection === DeviceAccessProtectionKind.CompanionSession) {
+    return vault.t(I18N_KEYS.DevicesAccessStageSession);
+  }
+  return isPasskeyProtection(protection)
+    ? vault.t(I18N_KEYS.DevicesAccessStagePasskey)
+    : vault.t(I18N_KEYS.DevicesAccessStageUnlock);
+}
+
+/** A companion session's identity belongs to the paired device, not here. */
+function deviceKeyTitle(
+  vault: VaultState,
+  protection: DeviceAccessProtectionKind,
+): string {
   return protection === DeviceAccessProtectionKind.CompanionSession
-    ? vault.t(I18N_KEYS.DevicesAccessStageSession)
-    : vault.t(I18N_KEYS.DevicesAccessStagePasskey);
+    ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
+    : vault.t(I18N_KEYS.DevicesAccessThisDevice);
 }
 
 export function panelTitle(
@@ -186,7 +201,9 @@ export function panelTitle(
   protection: DeviceAccessProtectionKind,
 ): string {
   if (stage === AccessChainStage.DeviceKey) {
-    return vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey);
+    return protection === DeviceAccessProtectionKind.CompanionSession
+      ? vault.t(I18N_KEYS.DevicesAccessCompanionIdentity)
+      : vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey);
   }
   if (stage === AccessChainStage.Vaults) {
     return vault.t(I18N_KEYS.DevicesAccessVaultRelationships);
@@ -292,7 +309,7 @@ export function buildAccessChainNodes(
     {
       stage: AccessChainStage.DeviceKey,
       caption: stageLabel(vault, AccessChainStage.DeviceKey, input.protection),
-      title: vault.t(I18N_KEYS.DevicesAccessThisDevice),
+      title: deviceKeyTitle(vault, input.protection),
       detail: identifierFrom(input.deviceId),
       incoming: {
         kind: AccessChainLinkKind.Relation,

@@ -6,6 +6,7 @@ import {
   AccessChainStage,
   AccessNodeDetailKind,
   buildAccessChainNodes,
+  panelTitle,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
 import {
   type DashboardText,
@@ -107,6 +108,38 @@ describe('access chain nodes', () => {
     expect(passkey.detail.kind).toBe(AccessNodeDetailKind.Absent)
     expect(vaults.title).toBe(I18N_KEYS.DevicesAccessNoVaultsShort)
     expect(vaults.detail.kind).toBe(AccessNodeDetailKind.Absent)
+  })
+
+  test('promises neither a passkey nor a PIN before the browser is prepared', () => {
+    const [unlock] = buildAccessChainNodes(vault, {
+      protection: DeviceAccessProtectionKind.Missing,
+      passkeyName: unknown,
+      credentialId: unknown,
+      deviceId: unknown,
+      vaults: [],
+    })
+
+    expect(unlock.caption).toBe(I18N_KEYS.DevicesAccessStageUnlock)
+    expect(unlock.title).toBe(I18N_KEYS.DevicesAccessNotPrepared)
+  })
+
+  test('attributes a companion session identity to the paired device', () => {
+    const [, deviceKey] = buildAccessChainNodes(vault, {
+      protection: DeviceAccessProtectionKind.CompanionSession,
+      passkeyName: unknown,
+      credentialId: unknown,
+      deviceId: known('device_5678'),
+      vaults: [],
+    })
+
+    expect(deviceKey.title).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
+    expect(
+      panelTitle(
+        vault,
+        AccessChainStage.DeviceKey,
+        DeviceAccessProtectionKind.CompanionSession,
+      ),
+    ).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
   })
 
   test('names a PIN-protected link by who can present it, not by a stored id', () => {
