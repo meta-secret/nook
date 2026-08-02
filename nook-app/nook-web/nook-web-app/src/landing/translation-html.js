@@ -3,12 +3,15 @@ import DOMPurify from 'dompurify'
 const TRANSLATION_MARKUP = {
   ALLOWED_ATTR: [],
   ALLOWED_TAGS: ['br', 'code'],
-  RETURN_DOM: true,
 }
 
 export function replaceWithSafeTranslationHtml(element, html) {
-  const sanitizedBody = DOMPurify.sanitize(html, TRANSLATION_MARKUP)
-  const sanitizedNodes = Array.from(sanitizedBody.childNodes, (node) =>
+  const sanitizedHtml = DOMPurify.sanitize(html, TRANSLATION_MARKUP)
+  const inertDocument = new DOMParser().parseFromString(
+    sanitizedHtml,
+    'text/html',
+  )
+  const sanitizedNodes = Array.from(inertDocument.body.childNodes, (node) =>
     node.cloneNode(true),
   )
   element.replaceChildren(...sanitizedNodes)
