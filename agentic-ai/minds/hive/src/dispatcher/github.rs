@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use serde_json::json;
 use tokio::process::Command;
 
 use crate::HiveContext;
@@ -8,7 +7,37 @@ use crate::HiveContext;
 const NOOK_RUN_URL: &str = "https://github.com/meta-secret/nook/actions/runs";
 const COMMIT_LINK_PREFIX: &str = "href=\"/meta-secret/nook/commit/";
 
-pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<serde_json::Value> {
+#[derive(Debug, Eq, PartialEq)]
+pub(super) struct RunEvidence {
+    head_sha: String,
+    lifecycle: RunLifecycle,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum RunLifecycle {
+    InProgress,
+    Completed(RunConclusion),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum RunConclusion {
+    Success,
+    Failure,
+    Cancelled,
+    Skipped,
+}
+
+impl RunEvidence {
+    pub(super) fn requires_repair(&self, source_commit: &str) -> bool {
+        self.head_sha == source_commit
+            && matches!(
+                self.lifecycle,
+                RunLifecycle::Completed(RunConclusion::Failure | RunConclusion::Cancelled)
+            )
+    }
+}
+
+pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<RunEvidence> {
     let url = format!("{NOOK_RUN_URL}/{run_id}");
     let mut command = Command::new("curl");
     command
@@ -45,50 +74,76 @@ pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<serde_json::Valu
     parse_run_page(run_id, &page)
 }
 
-fn parse_run_page(run_id: u64, page: &str) -> crate::HiveResult<serde_json::Value> {
-    let head_sha = page
+fn parse_run_page(run_id: u64, page: &str) -> crate::HiveResult<RunEvidence> {
+    let header = run_scope(page, run_id, "header_partial", "</page-header>", "header")?;
+    let summary = run_scope(
+        page,
+        run_id,
+        "summary_partial",
+        "aria-label=\"Workflow run graph\"",
+        "summary",
+    )?;
+    let graph = run_scope(page, run_id, "graph_partial", "</action-graph>", "graph")?;
+
+    let head_sha = summary
         .split_once(COMMIT_LINK_PREFIX)
         .and_then(|(_, remainder)| remainder.get(..40))
         .filter(|value| value.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .hive_context("GitHub run page has no full commit identity")?;
     require_marker(
-        page,
+        summary,
         "title=\"main\" href=\"/meta-secret/nook/tree/refs/heads/main\"",
         "main branch",
     )?;
     require_marker(
-        page,
+        header,
         "href=\"/meta-secret/nook/actions/workflows/main.yml\"",
         "Main workflow",
     )?;
-    require_marker(page, ">on: push</div>", "push trigger")?;
+    require_marker(
+        graph,
+        &format!("href=\"/meta-secret/nook/actions/runs/{run_id}/workflow\""),
+        "run workflow",
+    )?;
+    require_marker(graph, ">on: push</div>", "push trigger")?;
 
-    let (status, conclusion) = if page.contains("favicons/favicon-success.svg") {
-        ("completed", Some("success"))
-    } else if page.contains("favicons/favicon-failure.svg") {
-        ("completed", Some("failure"))
-    } else if page.contains("aria-label=\"cancelled: \"") {
-        ("completed", Some("cancelled"))
-    } else if page.contains("aria-label=\"skipped: \"") {
-        ("completed", Some("skipped"))
-    } else if page.contains("favicons/favicon-pending.svg") {
-        ("in_progress", None)
+    let lifecycle = if header.contains("favicons/favicon-success.svg") {
+        RunLifecycle::Completed(RunConclusion::Success)
+    } else if header.contains("favicons/favicon-failure.svg") {
+        RunLifecycle::Completed(RunConclusion::Failure)
+    } else if header.contains("aria-label=\"cancelled: \"") {
+        RunLifecycle::Completed(RunConclusion::Cancelled)
+    } else if header.contains("aria-label=\"skipped: \"") {
+        RunLifecycle::Completed(RunConclusion::Skipped)
+    } else if header.contains("favicons/favicon-pending.svg") {
+        RunLifecycle::InProgress
     } else {
         return Err(crate::error::HiveError::message(
             "GitHub run page has no recognized workflow status",
         ));
     };
 
-    Ok(json!({
-        "id": run_id,
-        "name": "Main",
-        "head_branch": "main",
-        "head_sha": head_sha,
-        "event": "push",
-        "status": status,
-        "conclusion": conclusion,
-        "repository": { "full_name": "meta-secret/nook" }
-    }))
+    Ok(RunEvidence {
+        head_sha: head_sha.to_owned(),
+        lifecycle,
+    })
+}
+
+fn run_scope<'a>(
+    page: &'a str,
+    run_id: u64,
+    partial: &str,
+    end: &str,
+    evidence: &str,
+) -> crate::HiveResult<&'a str> {
+    let start = format!("data-url=\"/meta-secret/nook/actions/runs/{run_id}/{partial}\"");
+    let (_, remainder) = page
+        .split_once(&start)
+        .with_hive_context(|| format!("GitHub run page has no run-scoped {evidence}"))?;
+    remainder
+        .split_once(end)
+        .map(|(scope, _)| scope)
+        .with_hive_context(|| format!("GitHub run page has no bounded {evidence}"))
 }
 
 fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult<()> {
@@ -103,36 +158,30 @@ fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult
 
 #[cfg(test)]
 mod tests {
-    use crate::HiveContext;
-
     const SHA: &str = "1783e5db6458451a3ce30f16b8b64f87a8e148cf";
 
-    #[derive(Debug, serde::Deserialize)]
-    struct RunEvidence {
-        id: u64,
-        head_sha: String,
-        status: String,
-        conclusion: Option<String>,
-    }
-
-    fn run_page(status: &str) -> String {
+    fn run_page(run_id: u64, status: &str) -> String {
         format!(
-            r#"<a href="/meta-secret/nook/actions/workflows/main.yml">Main</a>
+            r#"<div data-url="/meta-secret/nook/actions/runs/{run_id}/header_partial">
+<span data-favicon-override="{status}"></span>
+<a href="/meta-secret/nook/actions/workflows/main.yml">Main</a></page-header>
+<div aria-label="Workflow run summary" data-url="/meta-secret/nook/actions/runs/{run_id}/summary_partial">
 <a href="/meta-secret/nook/commit/{SHA}">commit</a>
-<a title="main" href="/meta-secret/nook/tree/refs/heads/main">main</a>
-<div>on: push</div><span data-favicon-override="{status}"></span>"#
+<a title="main" href="/meta-secret/nook/tree/refs/heads/main">main</a></div>
+<div aria-label="Workflow run graph" data-url="/meta-secret/nook/actions/runs/{run_id}/graph_partial">
+<a href="/meta-secret/nook/actions/runs/{run_id}/workflow">main.yml</a>
+<div>on: push</div></action-graph>"#
         )
     }
 
-    fn parse_typed_run(status: &str) -> crate::HiveResult<RunEvidence> {
-        let run = super::parse_run_page(42, &run_page(status))?;
-        serde_json::from_value(run).hive_context("deserialize parsed run evidence")
+    fn parse_run(status: &str) -> crate::HiveResult<super::RunEvidence> {
+        super::parse_run_page(42, &run_page(42, status))
     }
 
     fn expect_rejection(page: &str, evidence: &str) -> crate::HiveResult<()> {
         match super::parse_run_page(42, page) {
             Ok(run) => Err(crate::error::HiveError::message(format!(
-                "page without {evidence} unexpectedly parsed as {run}"
+                "page without {evidence} unexpectedly parsed as {run:?}"
             ))),
             Err(error) if format!("{error:#}").contains(evidence) => Ok(()),
             Err(error) => Err(crate::error::HiveError::message(format!(
@@ -143,42 +192,59 @@ mod tests {
 
     #[test]
     fn public_failure_page_binds_exact_main_push() -> crate::HiveResult<()> {
-        let run = parse_typed_run("favicons/favicon-failure.svg")?;
-        assert_eq!(run.id, 42);
+        let run = parse_run("favicons/favicon-failure.svg")?;
         assert_eq!(run.head_sha, SHA);
-        assert_eq!(run.conclusion.as_deref(), Some("failure"));
+        assert_eq!(
+            run.lifecycle,
+            super::RunLifecycle::Completed(super::RunConclusion::Failure)
+        );
+        assert!(run.requires_repair(SHA));
         Ok(())
     }
 
     #[test]
     fn public_success_page_retires_repair() -> crate::HiveResult<()> {
-        let run = parse_typed_run("favicons/favicon-success.svg")?;
-        assert_eq!(run.status, "completed");
-        assert_eq!(run.conclusion.as_deref(), Some("success"));
+        let run = parse_run("favicons/favicon-success.svg")?;
+        assert_eq!(
+            run.lifecycle,
+            super::RunLifecycle::Completed(super::RunConclusion::Success)
+        );
+        assert!(!run.requires_repair(SHA));
         Ok(())
     }
 
     #[test]
     fn every_workflow_status_branch_is_classified() -> crate::HiveResult<()> {
-        for (marker, expected_status, expected_conclusion) in [
-            ("favicons/favicon-failure.svg", "completed", Some("failure")),
-            ("aria-label=\"cancelled: \"", "completed", Some("cancelled")),
-            ("aria-label=\"skipped: \"", "completed", Some("skipped")),
-            ("favicons/favicon-pending.svg", "in_progress", None),
+        for (marker, expected_lifecycle) in [
+            (
+                "favicons/favicon-failure.svg",
+                super::RunLifecycle::Completed(super::RunConclusion::Failure),
+            ),
+            (
+                "aria-label=\"cancelled: \"",
+                super::RunLifecycle::Completed(super::RunConclusion::Cancelled),
+            ),
+            (
+                "aria-label=\"skipped: \"",
+                super::RunLifecycle::Completed(super::RunConclusion::Skipped),
+            ),
+            (
+                "favicons/favicon-pending.svg",
+                super::RunLifecycle::InProgress,
+            ),
         ] {
-            let run = parse_typed_run(marker)?;
-            assert_eq!(run.status, expected_status);
-            assert_eq!(run.conclusion.as_deref(), expected_conclusion);
+            let run = parse_run(marker)?;
+            assert_eq!(run.lifecycle, expected_lifecycle);
         }
         expect_rejection(
-            &run_page("favicons/favicon-unknown.svg"),
+            &run_page(42, "favicons/favicon-unknown.svg"),
             "recognized workflow status",
         )
     }
 
     #[test]
     fn every_missing_provenance_marker_fails_closed() -> crate::HiveResult<()> {
-        let page = run_page("favicons/favicon-failure.svg");
+        let page = run_page(42, "favicons/favicon-failure.svg");
         expect_rejection(
             &page.replace(&format!("/meta-secret/nook/commit/{SHA}"), "/commit/short"),
             "full commit identity",
@@ -200,6 +266,38 @@ mod tests {
         expect_rejection(
             &page.replace(">on: push</div>", ">on: pull_request</div>"),
             "push trigger",
+        )
+    }
+
+    #[test]
+    fn every_marker_is_bound_to_the_requested_run() -> crate::HiveResult<()> {
+        let page = run_page(42, "favicons/favicon-failure.svg");
+        expect_rejection(
+            &page.replace("runs/42/header_partial", "runs/41/header_partial"),
+            "run-scoped header",
+        )?;
+        expect_rejection(
+            &page.replace("runs/42/summary_partial", "runs/41/summary_partial"),
+            "run-scoped summary",
+        )?;
+        expect_rejection(
+            &page.replace("runs/42/graph_partial", "runs/41/graph_partial"),
+            "run-scoped graph",
+        )?;
+        expect_rejection(
+            &page.replace("runs/42/workflow", "runs/41/workflow"),
+            "run workflow",
+        )?;
+
+        let unrelated_main_link =
+            r#"<nav><a href="/meta-secret/nook/actions/workflows/main.yml">Main</a></nav>"#;
+        let other_workflow = run_page(42, "favicons/favicon-failure.svg").replace(
+            "href=\"/meta-secret/nook/actions/workflows/main.yml\"",
+            "href=\"/meta-secret/nook/actions/workflows/other.yml\"",
+        );
+        expect_rejection(
+            &format!("{unrelated_main_link}{other_workflow}"),
+            "Main workflow",
         )
     }
 }

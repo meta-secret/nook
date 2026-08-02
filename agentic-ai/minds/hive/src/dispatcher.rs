@@ -250,7 +250,7 @@ async fn dispatch_once<S: TaskStore>(
         let (run_id, run_attempt) = main_failure_run(&body)
             .hive_context("ready Main failure issue has no workflow-run marker")?;
         let run = github::fetch_run(run_id).await?;
-        if !main_run_requires_repair(&run, &source_commit) {
+        if !run.requires_repair(&source_commit) {
             reconciled_incidents.insert(name, body);
             continue;
         }
@@ -436,22 +436,6 @@ fn main_failure_task_ids(task_base: &str, body: &str) -> crate::HiveResult<Vec<T
     Ok(task_ids)
 }
 
-fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> bool {
-    run.get("name").and_then(serde_json::Value::as_str) == Some("Main")
-        && run.get("event").and_then(serde_json::Value::as_str) == Some("push")
-        && run.get("head_branch").and_then(serde_json::Value::as_str) == Some("main")
-        && run.get("head_sha").and_then(serde_json::Value::as_str) == Some(source_commit)
-        && run
-            .pointer("/repository/full_name")
-            .and_then(serde_json::Value::as_str)
-            == Some("meta-secret/nook")
-        && run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
-        && !matches!(
-            run.get("conclusion").and_then(serde_json::Value::as_str),
-            Some("success" | "neutral" | "skipped")
-        )
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -461,7 +445,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
-    use serde_json::json;
 
     use crate::model::{
         AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
@@ -472,8 +455,7 @@ mod tests {
     use super::{
         DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
         main_failure_commit, main_failure_run, main_failure_task_id, main_failure_task_ids,
-        main_run_requires_repair, reconcile_delivery, run_workbench_dispatcher,
-        sync_workbench_checkout,
+        reconcile_delivery, run_workbench_dispatcher, sync_workbench_checkout,
     };
 
     #[derive(Clone, Default)]
@@ -575,16 +557,6 @@ mod tests {
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() -> crate::HiveResult<()> {
-        let source_commit = "0123456789abcdef0123456789abcdef01234567";
-        let failed_main = json!({
-            "name": "Main",
-            "event": "push",
-            "head_branch": "main",
-            "head_sha": source_commit,
-            "repository": {"full_name": "meta-secret/nook"},
-            "status": "completed",
-            "conclusion": "failure"
-        });
         let sha = "abcdef0123456789abcdef0123456789abcdef01";
         assert_eq!(
             main_failure_commit(&format!("main-failure-{sha}.md")).as_deref(),
@@ -621,34 +593,6 @@ mod tests {
             main_failure_task_id("main-failure-abcdef", 123456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
-        assert!(main_run_requires_repair(&failed_main, source_commit));
-        assert!(!main_run_requires_repair(
-            &json!({
-                "name": "Main",
-                "event": "push",
-                "head_branch": "main",
-                "head_sha": source_commit,
-                "repository": {"full_name": "meta-secret/nook"},
-                "status": "completed",
-                "conclusion": "success"
-            }),
-            source_commit
-        ));
-        assert!(!main_run_requires_repair(
-            &json!({
-                "name": "Main",
-                "event": "push",
-                "head_branch": "main",
-                "head_sha": source_commit,
-                "repository": {"full_name": "meta-secret/nook"},
-                "status": "in_progress",
-                "conclusion": null
-            }),
-            source_commit
-        ));
-        let mut unrelated = failed_main;
-        unrelated["head_sha"] = json!("ffffffffffffffffffffffffffffffffffffffff");
-        assert!(!main_run_requires_repair(&unrelated, source_commit));
         Ok(())
     }
 
