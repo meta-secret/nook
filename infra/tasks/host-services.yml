@@ -171,7 +171,7 @@ tasks:
           "set -eu; \
            install -d -m 0750 '$remote_dir'; \
            install -d -m 0700 '$remote_secrets'; \
-           sudo -n install -d -m 0750 /var/lib/nook/seaweedfs"
+           sudo -n install -d -m 0750 -o 1000 -g 1000 /var/lib/nook/seaweedfs"
         BASH
       - task: sccache:credential:ensure
       - |
@@ -196,7 +196,8 @@ tasks:
            mv '$remote_traefik_next' '$remote_traefik'; \
            mv '$remote_next' '$remote_compose'; \
            docker compose -f '$remote_compose' pull; \
-           docker compose -f '$remote_compose' up -d --wait --remove-orphans seaweedfs traefik; \
+           docker compose -f '$remote_compose' up -d --wait --force-recreate seaweedfs; \
+           docker compose -f '$remote_compose' up -d --wait --remove-orphans traefik; \
            docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx seaweedfs; \
            docker compose -f '$remote_compose' ps --services --filter status=running | grep -qx traefik; \
            docker compose -f '$remote_compose' ps; \

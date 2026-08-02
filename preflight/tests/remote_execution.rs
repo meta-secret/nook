@@ -82,22 +82,50 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     );
     assert!(!workflow.contains("runs-on: nook"));
     assert!(
-        workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}")
-            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}"),
-        "remote jobs must authenticate to registry.dev.nokey.sh for BuildKit cache restore"
+        workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
+            && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}")
+            && workflow
+                .contains("sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}")
+            && workflow
+                .contains("sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}")
+            && workflow.contains("sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}")
+            && workflow.contains("sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}"),
+        "remote jobs must authenticate to Zot layers and SeaweedFS compiler objects"
     );
     let secret_refs = workflow.matches("${{ secrets.").count();
     assert_eq!(
         secret_refs,
-        workflow.matches("secrets.NOOK_REGISTRY_USERNAME").count()
-            + workflow.matches("secrets.NOOK_REGISTRY_PASSWORD").count(),
-        "remote workflow may only use the Nook registry login secrets"
+        workflow
+            .matches("secrets.NOOK_REGISTRY_REMOTE_USERNAME")
+            .count()
+            + workflow
+                .matches("secrets.NOOK_REGISTRY_REMOTE_PASSWORD")
+                .count()
+            + workflow
+                .matches("secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY")
+                .count()
+            + workflow
+                .matches("secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY")
+                .count()
+            + workflow.matches("secrets.NOOK_SCCACHE_ENDPOINT").count()
+            + workflow
+                .matches("secrets.NOOK_SCCACHE_REMOTE_BUCKET")
+                .count(),
+        "remote workflow may only use the Zot and scoped SeaweedFS cache credentials"
     );
     assert!(!workflow.contains("${{ inputs.command }}"));
+    assert!(workflow.contains("group: remote-${{ github.ref }}-${{ inputs.task }}"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
+    assert_eq!(
+        workflow.matches("isolated-cache-write: \"true\"").count(),
+        task_catalog.len(),
+        "every Remote task must write only its branch-and-task Zot namespace"
+    );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
+        ("rust:lint", "remote:rust:lint"),
+        ("rust:coverage", "remote:rust:coverage"),
         ("web:check", "remote:web:check"),
         ("web:test", "remote:web:test"),
         ("extension:check", "remote:extension:check"),
@@ -109,10 +137,12 @@ fn hosted_workflow_matches_the_taskfile_catalog() {
     }
     assert_eq!(
         workflow.matches("- run: task remote:").count(),
-        4,
+        6,
         "only the mechanically reviewed focused routes may bypass their full local task"
     );
     assert!(!workflow.contains("- run: task rust:test\n"));
+    assert!(!workflow.contains("- run: task rust:lint\n"));
+    assert!(!workflow.contains("- run: task rust:coverage\n"));
     assert!(!workflow.contains("- run: task web:check\n"));
     assert!(!workflow.contains("- run: task web:test\n"));
     assert!(!workflow.contains("- run: task extension:check\n"));
@@ -124,7 +154,9 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
     let core_tasks = read("nook-app/.task/core.yml");
     let web_tasks = read("nook-app/nook-web/.task/web.yml");
     let extension_tasks = read("nook-app/nook-web/.task/extension.yml");
-    let core_dockerfile = read("nook-app/nook-core/Dockerfile");
+    let base_dockerfile = read("nook-app/docker/base.Dockerfile");
+    let base_dockerignore = read("nook-app/docker/base.Dockerfile.dockerignore");
+    let core_bake = read("nook-app/nook-core/docker-bake.hcl");
     let wasm_dockerfile = read("nook-app/nook-wasm/Dockerfile");
     let bake = read("nook-app/docker-bake.hcl");
 
@@ -141,18 +173,101 @@ fn frequent_remote_checks_use_narrow_source_sealed_images() {
         );
     }
     assert!(core_tasks.contains("remote:rust:test:"));
+    assert!(core_tasks.contains("remote:rust:lint:"));
+    assert!(core_tasks.contains("remote:rust:coverage:"));
     assert!(web_tasks.contains("remote:web:check:"));
     assert!(web_tasks.contains("remote:web:test:"));
     assert!(extension_tasks.contains("remote:extension:check:"));
-    assert!(core_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
-    assert!(core_dockerfile.contains("COPY . ."));
-    assert!(core_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
+    assert!(base_dockerfile.contains("FROM builder-deps AS nook-rust-test"));
+    assert!(base_dockerfile.contains("-type f -name '*.rs' -exec touch {} +"));
+    assert!(base_dockerfile.contains("focused-native-test-compile"));
+    assert!(base_dockerfile.contains("focused-rust-lint-compile"));
+    assert!(base_dockerfile.contains("focused-rust-coverage-compile"));
+    assert!(base_dockerfile.contains("--no-run"));
+    for ignored in [
+        "**/docker-bake.hcl",
+        "nook-app/nook-core/Dockerfile",
+        "nook-app/nook-core/coverage-floor.json",
+        "nook-app/nook-wasm/Dockerfile",
+        "nook-app/nook-wasm/LICENSE",
+    ] {
+        assert!(
+            base_dockerignore.lines().any(|line| line == ignored),
+            "focused Rust context must ignore non-compiler input: {ignored}"
+        );
+    }
+    for (target, compile_marker) in [
+        ("nook-rust-test", "focused-native-test-compile"),
+        ("nook-rust-lint", "focused-rust-lint-compile"),
+        ("nook-rust-coverage", "focused-rust-coverage-compile"),
+    ] {
+        let stage = base_dockerfile
+            .split(&format!("AS {target}\n"))
+            .nth(1)
+            .and_then(|remainder| remainder.split("\nFROM ").next())
+            .unwrap_or_else(|| panic!("focused Dockerfile stage must exist: {target}"));
+        let compile = stage
+            .find(compile_marker)
+            .unwrap_or_else(|| panic!("focused compile marker must exist: {compile_marker}"));
+        let full_checkout = stage
+            .find("COPY . .")
+            .unwrap_or_else(|| panic!("focused stage must seal the full checkout: {target}"));
+        assert!(
+            compile < full_checkout,
+            "{target} must compile from narrow Rust inputs before copying the full checkout"
+        );
+        assert!(
+            stage[..compile].contains("COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/")
+        );
+        assert!(stage[..compile].contains("COPY nook-app/.cargo nook-app/.cargo"));
+        assert!(stage[..compile].contains("COPY nook-app/.config nook-app/.config"));
+        assert!(stage[..compile].contains("COPY nook-app/nook-core nook-app/nook-core"));
+    }
     assert!(wasm_dockerfile.contains("FROM builder-wasm-build AS focused-web-artifacts-source"));
     assert!(wasm_dockerfile.contains("FROM scratch AS focused-web-artifacts"));
     assert!(bake.contains("inherits = [\"_nook-rust-test-common\"]"));
+    for target in [
+        "_nook-rust-test-common",
+        "_nook-rust-lint-common",
+        "_nook-rust-coverage-common",
+    ] {
+        let stage = core_bake
+            .split(&format!("target \"{target}\" {{\n"))
+            .nth(1)
+            .and_then(|remainder| remainder.split("\n}").next())
+            .unwrap_or_else(|| panic!("focused Bake target must exist: {target}"));
+        assert!(stage.contains("dockerfile = \"nook-app/docker/base.Dockerfile\""));
+        assert!(!stage.contains("builder-deps = \"target:builder-deps\""));
+    }
     assert!(bake.contains("inherits = [\"_nook-web-focused-common\"]"));
     assert!(!bake.contains("target \"nook-rust-test\" {\n  inherits = [\"_nook-rust-common\"]"));
     assert!(!bake.contains("target \"nook-web-focused\" {\n  inherits = [\"_nook-web-common\"]"));
+}
+
+#[test]
+fn broad_remote_tasks_export_native_layers_without_main_write_access() {
+    let bake = read("nook-app/docker-bake.hcl");
+    let prepare = bake
+        .split("group \"prepare\" {\n")
+        .nth(1)
+        .and_then(|remainder| remainder.split("\n}").next())
+        .unwrap_or_else(|| panic!("prepare Bake group must exist"));
+    assert!(
+        prepare.contains("\"builder-debug\""),
+        "broad setup must select builder-debug so its dedicated Zot exporter runs"
+    );
+
+    let pr = read(".github/workflows/pr.yml");
+    assert!(!pr.contains("secrets.NOOK_REGISTRY_USERNAME"));
+    assert!(!pr.contains("secrets.NOOK_REGISTRY_PASSWORD"));
+    assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_USERNAME"));
+    assert!(pr.contains("secrets.NOOK_REGISTRY_REMOTE_PASSWORD"));
+    assert_eq!(
+        pr.matches("cache-write: \"false\"").count(),
+        pr.matches("uses: ./.github/actions/nook-docker-setup")
+            .count(),
+        "every PR registry login must keep Bake exporters disabled"
+    );
 }
 
 #[test]

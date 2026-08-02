@@ -1,6 +1,6 @@
 // nook-core build targets: cargo-chef dependency cache + native verify warm-up.
 // `builder-deps` is also the shared base for the wasm build (see nook-app/nook-wasm/docker-bake.hcl).
-// The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust GHA scope.
+// The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust Zot refs.
 
 // Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
 target "builder-deps" {
@@ -67,10 +67,31 @@ target "coverage-export" {
 target "_nook-rust-test-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/nook-core/Dockerfile"
+  dockerfile = "nook-app/docker/base.Dockerfile"
   target     = "nook-rust-test"
   platforms  = ["linux/amd64"]
-  contexts = {
-    builder-deps = "target:builder-deps"
-  }
+  // Focused Remote rust:test runs own a branch-scoped Zot export. Trusted Main remains the
+  // fallback restore source, while untrusted pull-request workflows never receive write access.
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+}
+
+target "_nook-rust-lint-common" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/docker/base.Dockerfile"
+  target     = "nook-rust-lint"
+  platforms  = ["linux/amd64"]
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
+}
+
+target "_nook-rust-coverage-common" {
+  inherits   = ["_sccache"]
+  context    = "."
+  dockerfile = "nook-app/docker/base.Dockerfile"
+  target     = "nook-rust-coverage"
+  platforms  = ["linux/amd64"]
+  cache-from = rust_native_source_cache_from
+  cache-to   = rust_native_source_cache_to
 }

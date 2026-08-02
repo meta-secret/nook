@@ -147,9 +147,13 @@ COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # layer blobs — index-only refs to older scopes are not enough for PR restores.
 ARG NOOK_WASM_DEPS_CACHE_EPOCH=v5-companion-wasm-1
 RUN printf '%s\n' "${NOOK_WASM_DEPS_CACHE_EPOCH}" >/etc/nook-wasm-deps-cache-epoch
-RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-release
-RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
     && nook-sccache-report chef-wasm-clippy
 RUN cargo fetch --locked
 
@@ -157,37 +161,197 @@ FROM builder-deps-common AS builder-wasm-deps
 
 RUN mkdir -p nook-app-common/src nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
     && touch nook-app-common/src/lib.rs nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
-RUN cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-test-dependencies
 
 FROM builder-wasm-deps AS builder-deps
 
-RUN cargo nextest run --no-run -p nook-app-common --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-app-common --profile ci \
     && nook-sccache-report native-app-common-nextest-dependencies
-RUN cargo nextest run --no-run -p nook-auth2 --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-auth2 --profile ci \
     && nook-sccache-report native-auth-nextest-dependencies
-RUN cargo nextest run --no-run -p nook-replication --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-replication --profile ci \
     && nook-sccache-report native-replication-nextest-dependencies
-RUN cargo nextest run --no-run -p nook-event-log --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-event-log --profile ci \
     && nook-sccache-report native-event-log-nextest-dependencies
-RUN cargo nextest run --no-run -p nook-companion-core --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-companion-core --profile ci \
     && nook-sccache-report native-companion-core-nextest-dependencies
-RUN cargo nextest run --no-run -p nook-core --profile ci \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-core --profile ci \
     && nook-sccache-report native-core-nextest-dependencies
-RUN cargo clippy -p nook-app-common --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-app-common --all-targets -- -D warnings \
     && nook-sccache-report native-app-common-clippy-dependencies
-RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-auth2 --all-targets -- -D warnings \
     && nook-sccache-report native-auth-clippy-dependencies
-RUN cargo clippy -p nook-replication --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-replication --all-targets -- -D warnings \
     && nook-sccache-report native-replication-clippy-dependencies
-RUN cargo clippy -p nook-event-log --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-event-log --all-targets -- -D warnings \
     && nook-sccache-report native-event-log-clippy-dependencies
-RUN cargo clippy -p nook-companion-core --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-companion-core --all-targets -- -D warnings \
     && nook-sccache-report native-companion-core-clippy-dependencies
-RUN cargo clippy -p nook-core --all-targets -- -D warnings \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo clippy -p nook-core --all-targets -- -D warnings \
     && nook-sccache-report native-core-clippy-dependencies
-RUN cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
+
+# Keep focused source stages in this Dockerfile so their builder-deps parent identity is portable
+# across disposable BuildKit daemons. Named Bake target contexts do not preserve that identity.
+FROM builder-deps AS nook-rust-test
+
+WORKDIR /meta-secret/nook
+
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
+
+RUN find \
+      nook-app/nook-app-common/src \
+      nook-app/nook-auth2/src \
+      nook-app/nook-replication/src \
+      nook-app/nook-event-log/src \
+      nook-app/nook-companion-core/src \
+      nook-app/nook-core/src \
+      -type f -name '*.rs' -exec touch {} +
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo nextest run \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-companion-wasm \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --profile ci \
+      --no-run \
+    && nook-sccache-report focused-native-test-compile
+
+# The full checkout is runtime input only and cannot invalidate the compile vertex above.
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-test source snapshot" >/dev/null
+
+FROM builder-deps AS nook-rust-lint
+
+WORKDIR /meta-secret/nook
+
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
+
+RUN find nook-app -type f -name '*.rs' -exec touch {} +
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo clippy \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --all-targets -- -D warnings \
+    && cargo clippy --release --target wasm32-unknown-unknown \
+      -p nook-wasm -p nook-companion-wasm -- -D warnings \
+    && nook-sccache-report focused-rust-lint-compile
+
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-lint source snapshot" >/dev/null
+
+FROM builder-deps AS nook-rust-coverage
+
+WORKDIR /meta-secret/nook
+
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+
+RUN find nook-app -type f -name '*.rs' -exec touch {} +
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo llvm-cov nextest --no-clean --profile ci \
+      -p nook-app-common \
+      -p nook-companion-core \
+      -p nook-core \
+      -p nook-auth2 \
+      -p nook-replication \
+      -p nook-event-log \
+      --summary-only \
+    && nook-sccache-report focused-rust-coverage-compile
+
+COPY . .
+
+RUN test -f nook-app/Taskfile.yml \
+    && git init -q \
+    && git config user.email nook@local \
+    && git config user.name nook \
+    && git add -A \
+    && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null
 
 # --- Web/e2e branch ---------------------------------------------------------
 FROM debian:${DEBIAN_RELEASE}-slim AS web-base

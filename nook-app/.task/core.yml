@@ -86,6 +86,22 @@ tasks:
       - task: docker:rust:task
         vars: { TASK: _rust:test }
 
+  remote:rust:lint:
+    desc: Run Rust lint in the source-sealed Remote image whose compiled graph is exported to Zot.
+    deps:
+      - setup:rust:lint
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:lint }
+
+  remote:rust:coverage:
+    desc: Run Rust coverage in the source-sealed Remote image whose compiled graph is exported to Zot.
+    deps:
+      - setup:rust:coverage
+    cmds:
+      - task: docker:rust:task
+        vars: { TASK: _rust:coverage }
+
   rust:coverage:
     desc: Report portable Rust crate line coverage (cargo llvm-cov + nextest).
     deps:

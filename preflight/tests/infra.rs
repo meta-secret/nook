@@ -397,8 +397,9 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     for required in [
         "docker compose -f \"$compose_file\" config --quiet",
         "ssh -n -o BatchMode=yes",
-        "docker compose -f '$remote_compose' up -d --wait --remove-orphans seaweedfs traefik",
-        "sudo -n install -d -m 0750 /var/lib/nook/seaweedfs",
+        "docker compose -f '$remote_compose' up -d --wait --force-recreate seaweedfs",
+        "docker compose -f '$remote_compose' up -d --wait --remove-orphans traefik",
+        "sudo -n install -d -m 0750 -o 1000 -g 1000 /var/lib/nook/seaweedfs",
         "traefik-dynamic.yaml.next",
         "grep -qx seaweedfs",
         "grep -qx traefik",
@@ -421,34 +422,12 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     assert!(!deploy.contains("up -d --wait redis"));
     assert!(!deploy.contains("cloudflare"));
 
-    let sccache = read("infra/tasks/sccache.yml");
-    for required in [
-        "sccache:credential:ensure:",
-        "sccache:credential:sync:",
-        "sccache:bucket:ensure:",
-        "sccache:check:",
-        "home_cache=\"${HOME}/.nook/cache\"",
-        "repo_cache=\"$repo_root/.nook/cache\"",
-        "sccache-access-key",
-        "sccache-secret-key",
-        "gh secret set NOOK_SCCACHE_ACCESS_KEY",
-        "gh secret set NOOK_SCCACHE_SECRET_KEY",
-        "NOOK_SCCACHE_ENDPOINT",
-        "sccache.dev.nokey.sh",
-        "nook-sccache",
-        "chmod 0600",
-        "~/.nook/cache",
-    ] {
-        assert!(
-            sccache.contains(required),
-            "SeaweedFS sccache credential lifecycle is missing: {required}"
-        );
-    }
+    assert_sccache_credential_contract();
     let registry = read("infra/tasks/registry.yml");
     for required in [
         "home_cache=\"${HOME}/.nook/cache\"",
         "docker login \"$host\"",
-        "~/.nook/cache",
+        "gh secret set NOOK_REGISTRY_REMOTE_PASSWORD",
     ] {
         assert!(
             registry.contains(required),
@@ -463,12 +442,101 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn assert_sccache_credential_contract() {
+    let sccache = read("infra/tasks/sccache.yml");
+    for required in [
+        "sccache:credential:ensure:",
+        "sccache:credential:sync:",
+        "sccache:bucket:ensure:",
+        "sccache:check:",
+        "home_cache=\"${HOME}/.nook/cache\"",
+        "repo_cache=\"$repo_root/.nook/cache\"",
+        "sccache-access-key",
+        "sccache-secret-key",
+        "sccache-remote-access-key",
+        "sccache-remote-secret-key",
+        "sccache-admin-access-key",
+        "sccache-admin-secret-key",
+        "install -d -m 0750 -o 1000 -g 1000 \"$data_dir\"",
+        r#"\"name\": \"nook-sccache-build\""#,
+        r#"\"Read:$bucket\""#,
+        r#"\"Write:$bucket\""#,
+        r#"\"List:$bucket\""#,
+        r#"\"Tagging:$bucket\""#,
+        r#"\"name\": \"nook-sccache-remote-reader\""#,
+        r#"\"name\": \"nook-sccache-admin\""#,
+        "gh secret set NOOK_SCCACHE_ACCESS_KEY",
+        "gh secret set NOOK_SCCACHE_SECRET_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_ACCESS_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_SECRET_KEY",
+        "gh secret set NOOK_SCCACHE_REMOTE_BUCKET",
+        "NOOK_SCCACHE_ENDPOINT",
+        "sccache.dev.nokey.sh",
+        "nook-sccache",
+        "chmod 0600",
+        "~/.nook/cache",
+        "s3api put-object",
+        "s3api head-object",
+        "s3api delete-object",
+        "Main read/write and Remote read-only S3 checks passed",
+        "Remote compiler identity must not write Main's bucket",
+    ] {
+        assert!(
+            sccache.contains(required),
+            "SeaweedFS sccache credential lifecycle is missing: {required}"
+        );
+    }
+    assert!(
+        !sccache.contains("gh secret set NOOK_SCCACHE_ADMIN")
+            && !sccache.contains("$home_cache/sccache-admin")
+            && !sccache.contains("$repo_cache/sccache-admin"),
+        "SeaweedFS administrative credentials must remain server-side"
+    );
+    assert!(
+        sccache.contains(
+            "\\\"name\\\": \\\"nook-sccache-remote-reader\\\",\n              \\\"credentials\\\""
+        ) && sccache.contains(
+            "\\\"actions\\\": [\n                \\\"Read:$bucket\\\",\n                \\\"List:$bucket\\\"\n              ]"
+        ),
+        "Remote compiler identity must be read/list-only on Main's bucket"
+    );
+    let bucket_ensure = sccache
+        .split("\n  sccache:bucket:ensure:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  sccache:check:\n").next())
+        .unwrap_or_else(|| panic!("infra must define SeaweedFS bucket ensure"));
+    let reload = bucket_ensure
+        .find("up -d --wait --force-recreate seaweedfs")
+        .unwrap_or_else(|| panic!("bucket ensure must reload SeaweedFS credentials"));
+    let admin_login = bucket_ensure
+        .find("sccache-admin-access-key")
+        .unwrap_or_else(|| panic!("bucket ensure must load the server-side admin identity"));
+    assert!(
+        reload < admin_login,
+        "bucket ensure must reload SeaweedFS before using newly generated admin credentials"
+    );
+}
+
 fn assert_zot_registry_contract() -> anyhow::Result<()> {
     let manifest = read("infra/k0s/manifests/registry/zot.yaml");
     assert!(
         manifest.contains("\"compat\": [\"docker2s2\"]"),
         "Zot must accept legacy Docker Schema 2 manifests without changing their digests"
     );
+    for required in [
+        "\"nook/buildcache/**\"",
+        "\"nook/remote-buildcache/**\"",
+        "\"users\": [\"__NOOK_REGISTRY_REMOTE_USERNAME__\"]",
+        "\"actions\": [\"read\", \"create\", \"update\"]",
+        "\"repositories\": [\"nook/remote-buildcache/**\"]",
+        "\"pushedWithin\": \"168h\"",
+        "\"adminPolicy\"",
+    ] {
+        assert!(
+            manifest.contains(required),
+            "Zot repository authorization is missing: {required}"
+        );
+    }
     let tasks = read("infra/tasks/registry.yml");
     let deploy = tasks
         .split("\n  registry:deploy:\n")
@@ -486,6 +554,9 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "NOOK_REGISTRY_CLUSTER_IP",
         "docker-registry nook-registry",
         "certs.d/{{.NOOK_REGISTRY_HOST}}",
+        "s/__NOOK_REGISTRY_USERNAME__/$username/g",
+        "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g",
+        "kubectl apply -f \"$rendered_manifest\"",
     ] {
         assert!(
             deploy.contains(required),
@@ -511,6 +582,10 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "https://$host/v2/",
         "test \"$public_code\" = 401",
         "test \"$public_auth\" = 200",
+        "test \"$remote_main_write\" = 403",
+        "test \"$remote_branch_write\" = 202",
+        "nook/remote-buildcache/nook-authz-probe",
+        "\"https://$host/\"*) upload_url=\"$location\"",
         "Legacy loopback registry unit must be removed",
     ] {
         assert!(
@@ -528,8 +603,21 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         credential.contains("htpasswd")
             && credential.contains("-nbB")
             && credential.contains("nook-zot-htpasswd")
-            && credential.contains("registry-password"),
-        "registry credential ensure must materialize bcrypt htpasswd for Zot"
+            && credential.contains("registry-password")
+            && credential.contains("registry-remote-password"),
+        "registry credential lifecycle must materialize separate Main and Remote Zot identities"
+    );
+    assert!(
+        tasks.contains("gh secret set NOOK_REGISTRY_REMOTE_USERNAME")
+            && tasks.contains("gh secret set NOOK_REGISTRY_REMOTE_PASSWORD"),
+        "registry credential sync must publish only the scoped Remote Zot identity to Remote jobs"
+    );
+    assert_eq!(
+        tasks
+            .matches("Main and Remote Zot usernames must be distinct")
+            .count(),
+        2,
+        "credential generation and manifest rendering must both reject a shared Zot principal"
     );
 
     let uninstall = read("infra/tasks/k0s.yml");

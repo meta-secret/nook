@@ -138,5 +138,5 @@ jobs:
       - name: Publish verified Hive cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max
+          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max,timeout=15m
         run: task hive:cache:publish

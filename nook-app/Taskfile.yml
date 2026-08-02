@@ -31,8 +31,8 @@ vars:
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
-  # Local runtime Rust commands may use authenticated SeaweedFS S3 sccache. Docker build stages
-  # never receive these credentials and rely on BuildKit dependency layers instead.
+  # Rust commands and cache-missed Docker compiler vertices use authenticated SeaweedFS S3
+  # sccache. Stable BuildKit secret IDs keep credential values out of images and cache checksums.
   SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
   SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
   SCCACHE_BUCKET: '{{default "nook-sccache" .SCCACHE_BUCKET}}'
@@ -64,6 +64,18 @@ vars:
         mounts="$mounts --mount type=bind,src=$secret_file,dst=/run/secrets/sccache_s3_secret_key,readonly";
       fi;
       printf '%s' "$mounts"
+  SCCACHE_S3_BUILD_SECRETS:
+    sh: >-
+      access_file="{{.SCCACHE_S3_ACCESS_KEY_FILE}}";
+      secret_file="{{.SCCACHE_S3_SECRET_KEY_FILE}}";
+      secrets="";
+      if [ -n "$access_file" ] && [ -r "$access_file" ] &&
+         [ -n "$secret_file" ] && [ -r "$secret_file" ]; then
+        secrets="--allow=fs.read=$access_file --allow=fs.read=$secret_file";
+        secrets="$secrets --set '*.secrets=id=sccache_s3_access_key,src=$access_file'";
+        secrets="$secrets --set '*.secrets+=id=sccache_s3_secret_key,src=$secret_file'";
+      fi;
+      printf '%s' "$secrets"
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
@@ -72,6 +84,7 @@ vars:
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
+    {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
@@ -147,7 +160,7 @@ tasks:
         echo "task sccache:ensure: SeaweedFS S3 sccache is healthy"'
 
   sccache:stats:
-    desc: Show shared Rust compiler-cache object count on SeaweedFS.
+    desc: Show shared Rust compiler-cache object count and bytes on SeaweedFS.
     deps:
       - sccache:ensure
     cmds:
@@ -160,14 +173,44 @@ tasks:
           echo "task sccache:stats: no S3 credential";
           exit 0;
         fi;
-        {{.DOCKER}} run --rm \
-          -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
-          -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
-          -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
-          --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
-          s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" --max-items 1 \
-          --query "{KeyCount:KeyCount,IsTruncated:IsTruncated}"'
+        page_file="$(mktemp)";
+        trap '"'"'rm -f "$page_file"'"'"' EXIT;
+        continuation_token="";
+        total_objects=0;
+        total_bytes=0;
+        while true; do
+          if [ -n "$continuation_token" ]; then
+            {{.DOCKER}} run --rm \
+              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+              -e AWS_DEFAULT_REGION=auto \
+              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
+              --no-paginate --max-keys 1000 \
+              --continuation-token "$continuation_token" > "$page_file";
+          else
+            {{.DOCKER}} run --rm \
+              -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
+              -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \
+              -e AWS_DEFAULT_REGION=auto \
+              amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+              --endpoint-url "{{.SCCACHE_ENDPOINT}}" \
+              s3api list-objects-v2 --bucket "{{.SCCACHE_BUCKET}}" \
+              --no-paginate --max-keys 1000 > "$page_file";
+          fi;
+          page_objects="$(jq '"'"'(.Contents // []) | length'"'"' "$page_file")";
+          page_bytes="$(jq '"'"'[.Contents[]?.Size] | add // 0'"'"' "$page_file")";
+          total_objects=$((total_objects + page_objects));
+          total_bytes=$((total_bytes + page_bytes));
+          echo "Scanned $total_objects compiler-cache objects ($total_bytes bytes)";
+          continuation_token="$(jq -r '"'"'.NextContinuationToken // empty'"'"' "$page_file")";
+          if [ -z "$continuation_token" ]; then
+            break;
+          fi;
+        done;
+        echo "Total Objects: $total_objects";
+        echo "Total Size: $total_bytes"'
 
   setup:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
@@ -291,6 +334,26 @@ tasks:
       - >-
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
         {{.NOOK_BAKE_FILES}} nook-rust-test
+
+  setup:rust:lint:
+    desc: Build the source-sealed Rust lint image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-lint
+
+  setup:rust:coverage:
+    desc: Build the source-sealed Rust coverage image and export its compiled graph.
+    dir: '{{.REPO_ROOT}}'
+    deps:
+      - sccache:ensure
+    cmds:
+      - >-
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}} nook-rust-coverage
 
   setup:rust:fast:
     desc: Build the manifest-keyed Rust/WASM development image for mounted source builds.

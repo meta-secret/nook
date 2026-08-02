@@ -784,6 +784,18 @@ unless hive_taskfile.include?("--target cache-publish") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
+unless hive_taskfile.scan('command+=(--cache-from "$HIVE_CACHE_SEED_FROM")').length == 4
+  raise "Hive verification must restore its task-scoped Remote cache before trusted Main fallback"
+end
+unless hive_taskfile.scan('--build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"').length == 4 &&
+       hive_taskfile.scan('--build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"').length == 4
+  raise "Every Hive BuildKit path must forward the configured SeaweedFS location"
+end
+hive_delivery_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
+unless hive_delivery_workflow.include?("HIVE_CACHE_TO: type=registry") &&
+       hive_delivery_workflow.include?("mode=max,timeout=15m")
+  raise "Hive cache publication must permit large registry layer uploads to finish"
+end
 unless hive_taskfile.include?('${HOME}/.nook/cache/sccache-access-key') &&
        hive_taskfile.include?('${HOME}/.nook/cache/sccache-secret-key') &&
        hive_taskfile.include?(

@@ -4,6 +4,7 @@ version: '3'
 vars:
   NOOK_REGISTRY_HOST: '{{default "registry.dev.nokey.sh" .NOOK_REGISTRY_HOST}}'
   NOOK_REGISTRY_USERNAME: '{{default "nook" .NOOK_REGISTRY_USERNAME}}'
+  NOOK_REGISTRY_REMOTE_USERNAME: '{{default "nook-remote" .NOOK_REGISTRY_REMOTE_USERNAME}}'
   NOOK_REGISTRY_CLUSTER_IP: '{{default "10.96.90.10" .NOOK_REGISTRY_CLUSTER_IP}}'
 
 tasks:
@@ -19,25 +20,45 @@ tasks:
         secrets_dir="$remote_dir/secrets"
         password_file="$secrets_dir/registry-password"
         username_file="$secrets_dir/registry-username"
+        remote_password_file="$secrets_dir/registry-remote-password"
+        remote_username_file="$secrets_dir/registry-remote-username"
         htpasswd_file="$secrets_dir/registry-htpasswd"
         username="{{.NOOK_REGISTRY_USERNAME}}"
+        remote_username="{{.NOOK_REGISTRY_REMOTE_USERNAME}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
+
+        if [ "$username" = "$remote_username" ]; then
+          echo "Main and Remote Zot usernames must be distinct" >&2
+          exit 1
+        fi
 
         install -d -m 0700 "$secrets_dir"
         if test ! -s "$password_file"; then
           umask 077
           openssl rand -hex 32 > "$password_file"
         fi
+        if test ! -s "$remote_password_file"; then
+          umask 077
+          openssl rand -hex 32 > "$remote_password_file"
+        fi
         chmod 0600 "$password_file"
+        chmod 0600 "$remote_password_file"
         printf '%s\n' "$username" > "$username_file"
+        printf '%s\n' "$remote_username" > "$remote_username_file"
         chmod 0600 "$username_file"
+        chmod 0600 "$remote_username_file"
         password="$(cat "$password_file")"
+        remote_password="$(cat "$remote_password_file")"
         # Zot accepts only bcrypt htpasswd hashes (`htpasswd -B`).
         docker run --rm --entrypoint htpasswd \
           httpd:2.4.63-alpine3.21@sha256:4aec2953509e2d3aa5a8d73c580a381be44803fd2481875b15d9ad7d2810d7ca \
           -nbB "$username" "$password" > "$htpasswd_file"
+        docker run --rm --entrypoint htpasswd \
+          httpd:2.4.63-alpine3.21@sha256:4aec2953509e2d3aa5a8d73c580a381be44803fd2481875b15d9ad7d2810d7ca \
+          -nbB "$remote_username" "$remote_password" >> "$htpasswd_file"
         chmod 0600 "$htpasswd_file"
         grep -Eq "^${username}"':\$2[ay]\$' "$htpasswd_file"
+        grep -Eq "^${remote_username}"':\$2[ay]\$' "$htpasswd_file"
 
         kubectl create namespace hive-data --dry-run=client -o yaml |
           kubectl apply -f -
@@ -94,29 +115,49 @@ tasks:
           ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
             "cat '{{.INFRA_REMOTE_DIR}}/secrets/registry-password'"
         )"
+        remote_username="$(
+          ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "cat '{{.INFRA_REMOTE_DIR}}/secrets/registry-remote-username'"
+        )"
+        remote_password="$(
+          ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "cat '{{.INFRA_REMOTE_DIR}}/secrets/registry-remote-password'"
+        )"
         test -n "$username"
         test -n "$password"
+        test -n "$remote_username"
+        test -n "$remote_password"
         printf '%s\n' "$host" > "$home_cache/registry-host"
         printf '%s\n' "$username" > "$home_cache/registry-username"
         printf '%s\n' "$password" > "$home_cache/registry-password"
+        printf '%s\n' "$remote_username" > "$home_cache/registry-remote-username"
+        printf '%s\n' "$remote_password" > "$home_cache/registry-remote-password"
         chmod 0600 \
           "$home_cache/registry-host" \
           "$home_cache/registry-username" \
-          "$home_cache/registry-password"
+          "$home_cache/registry-password" \
+          "$home_cache/registry-remote-username" \
+          "$home_cache/registry-remote-password"
         cp -f \
           "$home_cache/registry-host" \
           "$home_cache/registry-username" \
           "$home_cache/registry-password" \
+          "$home_cache/registry-remote-username" \
+          "$home_cache/registry-remote-password" \
           "$credential_dir/"
         chmod 0600 \
           "$credential_dir/registry-host" \
           "$credential_dir/registry-username" \
-          "$credential_dir/registry-password"
+          "$credential_dir/registry-password" \
+          "$credential_dir/registry-remote-username" \
+          "$credential_dir/registry-remote-password"
         printf '%s\n' "$password" | docker login "$host" -u "$username" --password-stdin
         printf '%s\n' "$host" | gh secret set NOOK_REGISTRY_HOST --repo meta-secret/nook
         printf '%s\n' "$username" | gh secret set NOOK_REGISTRY_USERNAME --repo meta-secret/nook
         printf '%s\n' "$password" | gh secret set NOOK_REGISTRY_PASSWORD --repo meta-secret/nook
-        echo "Registry credentials synchronized to ~/.nook/cache, .nook/cache, docker login, and GitHub Actions secrets"
+        printf '%s\n' "$remote_username" | gh secret set NOOK_REGISTRY_REMOTE_USERNAME --repo meta-secret/nook
+        printf '%s\n' "$remote_password" | gh secret set NOOK_REGISTRY_REMOTE_PASSWORD --repo meta-secret/nook
+        echo "Main and remote registry credentials synchronized to local caches, Docker, and GitHub Actions secrets"
         BASH
 
   registry:deploy:
@@ -129,8 +170,31 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         manifest="$remote_dir/infra/k0s/manifests/registry/zot.yaml"
+        rendered_manifest="$(mktemp)"
+        trap 'rm -f "$rendered_manifest"' EXIT
         unit=nook-zot-registry-loopback.service
         kubectl() { sudo -n k0s kubectl "$@"; }
+
+        username="$(cat "$remote_dir/secrets/registry-username")"
+        remote_username="$(cat "$remote_dir/secrets/registry-remote-username")"
+        case "$username" in
+          ''|*[!A-Za-z0-9._-]*) echo "Unsupported Zot Main username" >&2; exit 1 ;;
+        esac
+        case "$remote_username" in
+          ''|*[!A-Za-z0-9._-]*) echo "Unsupported Zot Remote username" >&2; exit 1 ;;
+        esac
+        if [ "$username" = "$remote_username" ]; then
+          echo "Main and Remote Zot usernames must be distinct" >&2
+          exit 1
+        fi
+        sed \
+          -e "s/__NOOK_REGISTRY_USERNAME__/$username/g" \
+          -e "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g" \
+          "$manifest" > "$rendered_manifest"
+        if grep -q '__NOOK_REGISTRY_.*USERNAME__' "$rendered_manifest"; then
+          echo "Unresolved Zot authorization principal" >&2
+          exit 1
+        fi
 
         sudo -n systemctl disable --now "$unit" >/dev/null 2>&1 || true
         sudo -n rm -f "/etc/systemd/system/$unit"
@@ -150,7 +214,7 @@ tasks:
         kubectl delete networkpolicy nook-zot-default-deny \
           --namespace hive-data \
           --ignore-not-found=true
-        kubectl apply -f "$manifest"
+        kubectl apply -f "$rendered_manifest"
         for namespace in hive-data hive-system; do
           kubectl create namespace "$namespace" --dry-run=client -o yaml |
             kubectl apply -f -
@@ -211,6 +275,8 @@ tasks:
         host="{{.NOOK_REGISTRY_HOST}}"
         username="$(cat "$remote_dir/secrets/registry-username")"
         password="$(cat "$remote_dir/secrets/registry-password")"
+        remote_username="$(cat "$remote_dir/secrets/registry-remote-username")"
+        remote_password="$(cat "$remote_dir/secrets/registry-remote-password")"
 
         if systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit"; then
           if systemctl is-enabled --quiet "$unit" 2>/dev/null ||
@@ -258,6 +324,36 @@ tasks:
           -u "$username:$password" \
           "https://$host/v2/")"
         test "$public_auth" = 200
+
+        remote_auth="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -u "$remote_username:$remote_password" \
+          "https://$host/v2/")"
+        test "$remote_auth" = 200
+        remote_main_write="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -u "$remote_username:$remote_password" \
+          -X POST \
+          "https://$host/v2/nook/buildcache/nook-authz-probe/blobs/uploads/")"
+        test "$remote_main_write" = 403
+
+        headers="$(mktemp)"
+        body="$(mktemp)"
+        cleanup() { rm -f "$headers" "$body"; }
+        trap cleanup EXIT
+        remote_branch_write="$(curl -sS -D "$headers" -o "$body" -w '%{http_code}' \
+          -u "$remote_username:$remote_password" \
+          -X POST \
+          "https://$host/v2/nook/remote-buildcache/nook-authz-probe/blobs/uploads/")"
+        test "$remote_branch_write" = 202
+        location="$(awk 'tolower($1) == "location:" { $1=""; sub(/^ /, ""); sub(/\r$/, ""); print; exit }' "$headers")"
+        test -n "$location"
+        case "$location" in
+          "https://$host/"*) upload_url="$location" ;;
+          /*) upload_url="https://$host$location" ;;
+          *) echo "Unexpected Zot upload location: $location" >&2; exit 1 ;;
+        esac
+        cleanup_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -u "$username:$password" -X DELETE "$upload_url")"
+        test "$cleanup_code" = 204
         REMOTE
 
   registry:diagnose:
