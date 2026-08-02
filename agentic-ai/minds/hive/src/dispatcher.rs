@@ -10,6 +10,7 @@ use tokio::process::Command;
 use crate::model::{EnqueueTask, TaskId, TaskTrigger};
 use crate::store::TaskStore;
 
+mod github;
 mod health;
 
 pub use health::{
@@ -248,14 +249,8 @@ async fn dispatch_once<S: TaskStore>(
         }
         let (run_id, run_attempt) = main_failure_run(&body)
             .hive_context("ready Main failure issue has no workflow-run marker")?;
-        let run: serde_json::Value = serde_json::from_slice(
-            &fetch(&format!(
-                "https://api.github.com/repos/meta-secret/nook/actions/runs/{run_id}"
-            ))
-            .await?,
-        )
-        .hive_context("decode current Main workflow-run state")?;
-        if !main_run_requires_repair(&run, &source_commit) {
+        let run = github::fetch_run(run_id).await?;
+        if !run.requires_repair(&source_commit) {
             reconciled_incidents.insert(name, body);
             continue;
         }
@@ -441,55 +436,6 @@ fn main_failure_task_ids(task_base: &str, body: &str) -> crate::HiveResult<Vec<T
     Ok(task_ids)
 }
 
-fn main_run_requires_repair(run: &serde_json::Value, source_commit: &str) -> bool {
-    run.get("name").and_then(serde_json::Value::as_str) == Some("Main")
-        && run.get("event").and_then(serde_json::Value::as_str) == Some("push")
-        && run.get("head_branch").and_then(serde_json::Value::as_str) == Some("main")
-        && run.get("head_sha").and_then(serde_json::Value::as_str) == Some(source_commit)
-        && run
-            .pointer("/repository/full_name")
-            .and_then(serde_json::Value::as_str)
-            == Some("meta-secret/nook")
-        && run.get("status").and_then(serde_json::Value::as_str) == Some("completed")
-        && !matches!(
-            run.get("conclusion").and_then(serde_json::Value::as_str),
-            Some("success" | "neutral" | "skipped")
-        )
-}
-
-async fn fetch(url: &str) -> crate::HiveResult<Vec<u8>> {
-    let output = Command::new("curl")
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--location",
-            "--retry",
-            "3",
-            "--connect-timeout",
-            "10",
-            "--max-time",
-            "90",
-            "--header",
-            "Accept: application/vnd.github+json",
-            "--header",
-            "X-GitHub-Api-Version: 2022-11-28",
-            "--user-agent",
-            "nook-hive-workbench-dispatcher",
-            url,
-        ])
-        .output()
-        .await
-        .hive_context("start Workbench fetch")?;
-    if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
-            "Workbench fetch failed with status {}",
-            output.status
-        )));
-    }
-    Ok(output.stdout)
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -499,7 +445,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
-    use serde_json::json;
 
     use crate::model::{
         AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact, EnqueueTask,
@@ -510,8 +455,7 @@ mod tests {
     use super::{
         DEFERRED_E2E_RETIREMENT_MARKER, incident_needs_reconciliation, is_ready_agent_issue,
         main_failure_commit, main_failure_run, main_failure_task_id, main_failure_task_ids,
-        main_run_requires_repair, reconcile_delivery, run_workbench_dispatcher,
-        sync_workbench_checkout,
+        reconcile_delivery, run_workbench_dispatcher, sync_workbench_checkout,
     };
 
     #[derive(Clone, Default)]
@@ -613,16 +557,6 @@ mod tests {
 
     #[test]
     fn recognizes_only_ready_automated_main_incidents() -> crate::HiveResult<()> {
-        let source_commit = "0123456789abcdef0123456789abcdef01234567";
-        let failed_main = json!({
-            "name": "Main",
-            "event": "push",
-            "head_branch": "main",
-            "head_sha": source_commit,
-            "repository": {"full_name": "meta-secret/nook"},
-            "status": "completed",
-            "conclusion": "failure"
-        });
         let sha = "abcdef0123456789abcdef0123456789abcdef01";
         assert_eq!(
             main_failure_commit(&format!("main-failure-{sha}.md")).as_deref(),
@@ -659,34 +593,6 @@ mod tests {
             main_failure_task_id("main-failure-abcdef", 123456, 2)?.as_str(),
             "main-failure-abcdef-run-123456-attempt-2"
         );
-        assert!(main_run_requires_repair(&failed_main, source_commit));
-        assert!(!main_run_requires_repair(
-            &json!({
-                "name": "Main",
-                "event": "push",
-                "head_branch": "main",
-                "head_sha": source_commit,
-                "repository": {"full_name": "meta-secret/nook"},
-                "status": "completed",
-                "conclusion": "success"
-            }),
-            source_commit
-        ));
-        assert!(!main_run_requires_repair(
-            &json!({
-                "name": "Main",
-                "event": "push",
-                "head_branch": "main",
-                "head_sha": source_commit,
-                "repository": {"full_name": "meta-secret/nook"},
-                "status": "in_progress",
-                "conclusion": null
-            }),
-            source_commit
-        ));
-        let mut unrelated = failed_main;
-        unrelated["head_sha"] = json!("ffffffffffffffffffffffffffffffffffffffff");
-        assert!(!main_run_requires_repair(&unrelated, source_commit));
         Ok(())
     }
 
