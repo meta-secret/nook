@@ -27,6 +27,18 @@ export default [
     ...ts.configs.disableTypeChecked,
     languageOptions: {
       ...ts.configs.disableTypeChecked.languageOptions,
+      globals: globals.browser,
+    },
+  },
+  {
+    files: [
+      'eslint.config.js',
+      '**/eslint.config.js',
+      '**/svelte.config.js',
+      '**/scripts/**/*.{js,mjs,cjs}',
+      '**/e2e/**/*.{js,mjs,cjs}',
+    ],
+    languageOptions: {
       globals: globals.node,
     },
   },
@@ -38,7 +50,7 @@ export default [
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': [
         'error',
-        { considerDefaultExhaustiveForUnions: true },
+        { considerDefaultExhaustiveForUnions: false },
       ],
     },
     languageOptions: {
@@ -57,7 +69,7 @@ export default [
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': [
         'error',
-        { considerDefaultExhaustiveForUnions: true },
+        { considerDefaultExhaustiveForUnions: false },
       ],
     },
     languageOptions: {

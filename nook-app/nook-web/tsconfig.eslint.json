@@ -8,6 +8,8 @@
     "nook-web-app/playwright.config.ts",
     "nook-web-app/playwright.isolation.config.ts",
     "nook-web-extension/scripts/**/*.ts",
+    "nook-web-extension/src/**/*.ts",
+    "nook-web-extension/src/**/*.svelte",
     "nook-web-extension/e2e/**/*.ts",
     "nook-web-extension/e2e/**/*.svelte",
     "nook-web-extension/playwright.config.ts",

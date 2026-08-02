@@ -101,7 +101,7 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
         "'@typescript-eslint/no-floating-promises': 'error'",
         "'@typescript-eslint/no-misused-promises': 'error'",
         "'@typescript-eslint/switch-exhaustiveness-check': [",
-        "considerDefaultExhaustiveForUnions: true",
+        "considerDefaultExhaustiveForUnions: false",
         "project: './tsconfig.eslint.json'",
         "extraFileExtensions: ['.svelte']",
         "noUnsanitized.configs.recommended",
@@ -127,6 +127,28 @@ fn web_quality_gate_includes_typed_security_property_and_dependency_checks() {
             "landing translation markup must retain `{required}`"
         );
     }
+
+    let typed_project = read(&root, "nook-app/nook-web/tsconfig.eslint.json");
+    for required in [
+        "nook-web-extension/src/**/*.ts",
+        "nook-web-extension/src/**/*.svelte",
+    ] {
+        assert!(
+            typed_project.contains(required),
+            "the typed lint project must retain extension production sources matching `{required}`"
+        );
+    }
+
+    let extension_manifest = read(
+        &root,
+        "nook-app/nook-web/nook-web-extension/package.json",
+    );
+    assert!(
+        extension_manifest.contains(
+            "eslint --config ../eslint.config.js scripts src e2e playwright.config.ts"
+        ),
+        "the extension lint command must retain its production source tree"
+    );
 
     let property_tests = read(
         &root,
