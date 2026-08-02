@@ -167,7 +167,7 @@ export function isUnlockedSessionStatus(status: unknown): boolean {
 }
 
 export function openSimpleVault(path = ''): void {
-  chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
+  void chrome.tabs.create({ url: runtimeSimpleVaultUrl(path) })
 }
 
 enum ActiveTabQueryKind {
@@ -256,4 +256,8 @@ export async function openCompanionLauncher(intent?: 'pair'): Promise<void> {
     return
   }
   await chrome.tabs.create({ url: launcherUrl })
+}
+
+export function openCompanionLauncherBestEffort(intent?: 'pair'): void {
+  void openCompanionLauncher(intent).catch(() => {})
 }

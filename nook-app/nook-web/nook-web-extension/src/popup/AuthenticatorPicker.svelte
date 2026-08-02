@@ -103,7 +103,7 @@
     const cancelPendingPicker = () => {
       if (completed) return
       completed = true
-      chrome.runtime.sendMessage({
+      void chrome.runtime.sendMessage({
         type: 'nook:authenticator-picker-cancel',
         payload: { requestId },
       })

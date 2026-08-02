@@ -238,7 +238,7 @@ function echo(level: LogLevel, text: string) {
     case LogLevel.Trace:
       originalConsole.debug(line);
       break;
-    default:
+    case LogLevel.Info:
       originalConsole.info(line);
   }
 }

@@ -8,10 +8,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "bun run unused && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
+    "check": "bun run security && bun run unused && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "unused": "knip --reporter compact"
+    "unused": "knip --reporter compact",
+    "security": "bun audit --prod --audit-level=high"
   },
   "dependencies": {
     "@lucide/svelte": "1.21.0",
