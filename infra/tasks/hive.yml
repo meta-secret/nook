@@ -205,12 +205,12 @@ tasks:
               *) echo "Unexpected Hive Codex authentication bootstrap lookup: $secret_ref" >&2; return 1 ;;
             esac
           fi
-          original_replicas=""; replica_state="$remote_dir/hive-auth-desired-replicas"
+          original_replicas=""; replica_annotation="nook.nokey.sh/hive-auth-desired-replicas"
           restore_hive_workers() {
             if test -n "$original_replicas"; then
               kubectl scale deployment/hive --namespace hive-system --replicas="$original_replicas"
               kubectl rollout status deployment/hive --namespace hive-system --timeout=10m
-              rm -f "$replica_state"
+              kubectl annotate deployment/hive --namespace hive-system "$replica_annotation-"
               original_replicas=""
             fi
           }
@@ -219,20 +219,20 @@ tasks:
           deployment_ref="$(kubectl get deployment hive --namespace hive-system --ignore-not-found -o name)"
           case "$deployment_ref" in
             deployment.apps/hive)
-              if test -f "$replica_state"; then
-                original_replicas="$(cat "$replica_state")"
-              else
+              original_replicas="$(kubectl get deployment hive --namespace hive-system \
+                -o jsonpath='{.metadata.annotations.nook\.nokey\.sh/hive-auth-desired-replicas}')"
+              if test -z "$original_replicas"; then
                 original_replicas="$(kubectl get deployment hive --namespace hive-system -o jsonpath='{.spec.replicas}')"
-                printf '%s\n' "$original_replicas" >"$replica_state.next"
-                mv "$replica_state.next" "$replica_state"
               fi
               case "$original_replicas" in
                 ''|*[!0-9]*) echo "Hive deployment has an invalid replica count" >&2; return 1 ;;
               esac
+              kubectl annotate deployment/hive --namespace hive-system \
+                "$replica_annotation=$original_replicas" --overwrite
               kubectl scale deployment/hive --namespace hive-system --replicas=0
               kubectl rollout status deployment/hive --namespace hive-system --timeout=10m
               ;;
-            '') test ! -e "$replica_state" || { echo "Hive replica recovery state has no Deployment" >&2; return 1; } ;;
+            '') ;;
             *) echo "Unexpected Hive deployment lookup: $deployment_ref" >&2; return 1 ;;
           esac
           pod_refs="$(kubectl get pod --namespace hive-system --selector app.kubernetes.io/name=hive -o name)" || {

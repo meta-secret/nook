@@ -185,6 +185,8 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             && publish_task.contains("--for=delete")
             && publish_task.contains("exec 9>/run/lock/nook/hive-mutation.lock")
             && publish_task.contains("flock --exclusive --timeout 900 9")
+            && publish_task.contains("nook.nokey.sh/hive-auth-desired-replicas")
+            && !publish_task.contains("$remote_dir/hive-auth-desired-replicas")
             && publish_task.contains("kubectl rollout status deployment/hive"),
         "explicit auth rotation must stream the Secret without staging, quiesce brokers, and restore the pool"
     );

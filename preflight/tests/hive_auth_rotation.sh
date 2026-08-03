@@ -13,7 +13,11 @@ source /dev/stdin <<<"$function_source"
 action_log="$(mktemp)"
 auth_file="$(mktemp)"
 remote_dir="$(mktemp -d)"
-trap 'rm -f "$action_log" "$auth_file" "$remote_dir/hive-mutation.lock" "$remote_dir/hive-auth-desired-replicas" "$remote_dir/hive-auth-desired-replicas.next"; rmdir "$remote_dir"' EXIT
+initial_remote_dir="$remote_dir"
+retry_remote_dir="$(mktemp -d)"
+annotation_state="$(mktemp)"
+rm -f "$annotation_state"
+trap 'rm -f "$action_log" "$auth_file" "$annotation_state" "$initial_remote_dir/hive-mutation.lock" "$retry_remote_dir/hive-mutation.lock"; rmdir "$initial_remote_dir" "$retry_remote_dir"' EXIT
 rotation_mode="success"
 deployment_mode="present"
 bootstrap_secret_mode="absent"
@@ -51,6 +55,10 @@ kubectl() {
         if test "$deployment_mode" = "present"; then
           printf '%s\n' 'deployment.apps/hive'
         fi
+      elif [[ " $* " == *"hive-auth-desired-replicas"* ]]; then
+        if test -f "$annotation_state"; then
+          cat "$annotation_state"
+        fi
       else
         printf '%s' "$reported_replicas"
       fi
@@ -66,6 +74,16 @@ kubectl() {
       if [[ " $* " == *" --replicas=4 "* ]] && test "$restore_mode" = failure; then
         return 1
       fi
+      ;;
+    "annotate deployment/hive")
+      for argument in "$@"; do
+        case "$argument" in
+          nook.nokey.sh/hive-auth-desired-replicas=*)
+            printf '%s\n' "${argument#*=}" >"$annotation_state"
+            ;;
+          nook.nokey.sh/hive-auth-desired-replicas-) rm -f "$annotation_state" ;;
+        esac
+      done
       ;;
     "apply -f")
       cat >/dev/null
@@ -141,13 +159,14 @@ restore_mode="failure"
 reported_replicas="4"
 run_rotation
 test "$rotation_status" -ne 0
-test "$(cat "$remote_dir/hive-auth-desired-replicas")" = 4
+test "$(cat "$annotation_state")" = 4
 printf '%s\n' replacement >"$auth_file"
 restore_mode="success"
 reported_replicas="0"
+remote_dir="$retry_remote_dir"
 run_rotation
 test "$rotation_status" -eq 0
-test ! -e "$remote_dir/hive-auth-desired-replicas"
+test ! -e "$annotation_state"
 grep -Fq -- '--replicas=4' "$action_log"
 reported_replicas="4"
 
