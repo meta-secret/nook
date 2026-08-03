@@ -26,6 +26,7 @@ import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
+import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
 import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
 import HandoffStory from './inspiration/handoff-story/Experiment.svelte'
 
@@ -396,7 +397,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Chain strength',
     description:
-      'My identities as cards titled by their manager, then one row per vault where each way in is a strand.',
+      'Identities are rounded tags, vaults are boxes. Each vault leads its row and its ways in fan out to the right.',
     component: ChainStrength,
   },
   {
@@ -434,6 +435,15 @@ export const experiments: Experiment[] = [
     description:
       'The strand rope before the identity band, with passkeys and vaults listed on the device panel itself.',
     component: FrozenChainStrength,
+  },
+  {
+    slug: 'frozen-chain-identities',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Chain strength · identity band',
+    description:
+      'Identity cards over the strand rope, passkeys still on the right of each vault.',
+    component: FrozenChainIdentities,
   },
   {
     slug: 'frozen-access-terminal',

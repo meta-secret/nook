@@ -1,17 +1,17 @@
 <!--
-DIRECTION: Three bands, and two shapes that never trade places. A passkey is a
-rounded tag with a ring, titled by the manager holding it, because "Bitwarden"
-is what a person recognises and "c07e33" is what they compare. A vault is a
-square box with a weight bar. Each vault leads its own row, and the ways into it
-fan out to its right in the order the chain actually runs: device key first,
-since that is what the vault trusts, then the passkey that unlocks it. Strands
-through my device are solid and marked; the rest are dashed. Other devices only
-get a quiet footer: they exist, and that is all this browser can say about them.
+DIRECTION: Three bands, in the order the questions arrive. My device key first,
+as the one object this browser can act on. Then my identities — one card per
+passkey, titled by the manager that holds it, because "Bitwarden" is what a
+person recognises and "c07e33" is what they compare. Then one row per vault,
+where every way in is a strand reading left to right: passkey, the device key
+it passes through, the vault. Strands through my device are solid and marked;
+the rest are dashed. Other devices only get a quiet footer: they exist, and
+that is all this browser can say about them.
 -->
 <script lang="ts">
   import { Fingerprint, Laptop, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
-  import GraphSwitch from '../_shared/GraphSwitch.svelte'
+  import GraphSwitch from '../../keys-management/_shared/GraphSwitch.svelte'
   import {
     defaultNode,
     type Device,
@@ -32,7 +32,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     storeLabel,
     type Vault,
     vaultsForPasskey,
-  } from '../_shared/key-graph'
+  } from '../../keys-management/_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { PathReach, Redundancy } from './chain-grade'
 
@@ -292,12 +292,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       </article>
     {/if}
 
-    <p class="{CAPS} mt-10 flex items-center gap-1.5 text-[#1a1815]/45">
-      <Fingerprint class="size-3" aria-hidden="true" />
-      My identities
-    </p>
+    <p class="{CAPS} mt-10 text-[#1a1815]/45">My identities</p>
 
-    <ul class="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+    <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {#each graph.passkeys as passkey (passkey.id)}
         {@const chosen = isSelected(NodeKind.Passkey, passkey.id)}
         <li class={dimRow(highlight.passkeyIds.includes(passkey.id))}>
@@ -305,51 +302,44 @@ get a quiet footer: they exist, and that is all this browser can say about them.
             type="button"
             aria-pressed={chosen}
             aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
-            class={`flex h-full w-full items-center gap-2.5 rounded-r-md rounded-l-full border bg-[#fffdf7] py-2 pr-3 pl-2 text-left transition motion-reduce:transition-none ${chosenEdge(chosen)}`}
+            class={`flex h-full w-full flex-col items-start border bg-[#fffdf7] px-3.5 py-3 text-left transition motion-reduce:transition-none ${chosenEdge(chosen)}`}
             onclick={() => pick(NodeKind.Passkey, passkey.id)}
           >
-            <span
-              class="grid size-8 shrink-0 place-items-center rounded-full border-2"
-              style={`border-color:${STORE_INK[passkey.store]};background:${STORE_INK[passkey.store]}14`}
-              aria-hidden="true"
-            >
-              <Fingerprint
-                class="size-3.5"
-                style={`color:${STORE_INK[passkey.store]}`}
-              />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-[11px] text-[#1a1815]/60">
+            <span class="flex w-full items-center gap-2">
+              <span
+                class="flex size-6 shrink-0 items-center justify-center rounded-sm"
+                style={`background:${STORE_INK[passkey.store]}`}
+                aria-hidden="true"
+              >
+                <Fingerprint class="size-3.5 text-[#fffdf7]" />
+              </span>
+              <span class="min-w-0 flex-1 truncate text-[13px]">
                 {storeLabel(passkey.store)}
               </span>
-              <span
-                class="mt-0.5 block font-mono text-[15px] tracking-[0.08em]"
-              >
-                {passkey.shortId}
-              </span>
             </span>
-            <span class="flex shrink-0 flex-col items-end gap-1">
-              <span class="flex items-center gap-1">
-                <span
-                  class={`size-2 shrink-0 rounded-full ${
-                    usableFrom(passkey)
-                      ? 'bg-[#1f5c44]'
-                      : 'border border-[#1a1815]/40'
-                  }`}
-                  aria-hidden="true"
-                ></span>
-                <span
-                  class={`font-mono text-[9px] tracking-[0.1em] uppercase ${usableFrom(passkey) ? 'text-[#1f5c44]' : 'text-[#1a1815]/50'}`}
-                >
-                  {stateWord(passkey)}
-                </span>
+            <span class="mt-2.5 font-mono text-[17px] tracking-[0.08em]">
+              {passkey.shortId}
+            </span>
+            <span
+              class="mt-2.5 flex w-full items-center gap-1.5 border-t border-[#1a1815]/12 pt-2"
+            >
+              <span
+                class={`size-2 shrink-0 rounded-full ${
+                  usableFrom(passkey)
+                    ? 'bg-[#1f5c44]'
+                    : 'border border-[#1a1815]/40'
+                }`}
+                aria-hidden="true"
+              ></span>
+              <span
+                class={`${CAPS} truncate text-[9px] ${usableFrom(passkey) ? 'text-[#1f5c44]' : 'text-[#1a1815]/50'}`}
+              >
+                {stateWord(passkey)}
               </span>
-              <span class="flex items-center gap-1 text-[#1a1815]/45">
-                <span class="sr-only">{vaultCount(passkey)}</span>
-                <VaultIcon class="size-2.5" aria-hidden="true" />
-                <span class="{CAPS} text-[9px]" aria-hidden="true">
-                  {vaultsForPasskey(graph, passkey.id).length}
-                </span>
+              <span
+                class="{CAPS} ml-auto shrink-0 text-[9px] text-[#1a1815]/45"
+              >
+                {vaultCount(passkey)}
               </span>
             </span>
           </button>
@@ -359,10 +349,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
       {/each}
     </ul>
 
-    <p class="{CAPS} mt-10 flex items-center gap-1.5 text-[#1a1815]/45">
-      <VaultIcon class="size-3" aria-hidden="true" />
-      Vaults
-    </p>
+    <p class="{CAPS} mt-10 text-[#1a1815]/45">Vaults</p>
 
     <ul class="mt-3 space-y-3">
       {#each reads as read (read.vault.id)}
@@ -375,11 +362,11 @@ get a quiet footer: they exist, and that is all this browser can say about them.
               : ''
           }`}
         >
-          <div class="flex flex-col sm:flex-row sm:items-stretch">
+          <div class="flex flex-col sm:flex-row-reverse sm:items-stretch">
             <button
               type="button"
               aria-pressed={chosen}
-              class="flex shrink-0 flex-col justify-center gap-1.5 border-b border-[#1a1815]/15 bg-[#fffdf7] px-4 py-3 text-left sm:w-56 sm:border-r sm:border-b-0"
+              class="flex shrink-0 flex-col justify-center gap-1.5 border-b border-[#1a1815]/15 px-4 py-3 text-left sm:w-56 sm:border-b-0 sm:border-l"
               onclick={() => pick(NodeKind.Vault, read.vault.id)}
             >
               <span class="flex items-center gap-2">
@@ -426,7 +413,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
               >
                 {#each read.strands as strand, index (strand.key)}
                   <path
-                    d={`M24 ${braceY(read.strands.length, index)} H17 C9 ${braceY(read.strands.length, index)} 9 50 0 50`}
+                    d={`M0 ${braceY(read.strands.length, index)} H7 C15 ${braceY(read.strands.length, index)} 15 50 24 50`}
                     fill="none"
                     vector-effect="non-scaling-stroke"
                     stroke-width={strand.reach === PathReach.Now ? 1.5 : 1}
@@ -460,36 +447,9 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                     strand.passkeyId,
                   )}
                   <div
-                    class={`flex min-w-0 items-center gap-x-2 py-2 pr-4 transition motion-reduce:transition-none ${lit ? dim(strandLit) : ''} ${strand.reach === PathReach.Now ? 'bg-[#1f5c44]/8' : ''}`}
+                    class={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 transition motion-reduce:transition-none ${lit ? dim(strandLit) : ''} ${strand.reach === PathReach.Now ? 'bg-[#1f5c44]/8' : ''}`}
                   >
                     <span class="sr-only">{reachWord(strand)}</span>
-                    <span
-                      class={`w-4 shrink-0 border-t ${rule(strand.reach)}`}
-                      aria-hidden="true"
-                    ></span>
-                    <button
-                      type="button"
-                      aria-pressed={isSelected(
-                        NodeKind.Device,
-                        strand.deviceId,
-                      )}
-                      aria-label={strand.mine
-                        ? 'Through my device key'
-                        : `Through device key ${strand.deviceShortId}, ${strand.deviceLabel}`}
-                      class={`flex w-[6.5rem] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase transition motion-reduce:transition-none ${
-                        strand.mine
-                          ? 'bg-[#1a1815] text-[#f6f3ec]'
-                          : `border text-[#1a1815]/55 ${chosenEdge(isSelected(NodeKind.Device, strand.deviceId))}`
-                      }`}
-                      onclick={() => pick(NodeKind.Device, strand.deviceId)}
-                    >
-                      <Laptop class="size-3 shrink-0" aria-hidden="true" />
-                      {strand.mine ? 'my device' : strand.deviceShortId}
-                    </button>
-                    <span
-                      class={`w-5 shrink-0 border-t ${rule(strand.reach)}`}
-                      aria-hidden="true"
-                    ></span>
                     <span
                       class="size-2 shrink-0 rounded-full"
                       style={`background:${STORE_INK[strand.store]}`}
@@ -502,21 +462,22 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                         strand.passkeyId,
                       )}
                       aria-label={`Passkey ${strand.passkeyShortId} in ${strand.storeName}`}
-                      class={`shrink-0 border-b font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
+                      class={`flex items-center gap-1.5 border-b font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
                         isSelected(NodeKind.Passkey, strand.passkeyId)
                           ? 'border-b-[#1a1815]'
                           : 'border-b-transparent'
                       }`}
                       onclick={() => pick(NodeKind.Passkey, strand.passkeyId)}
                     >
+                      <Fingerprint
+                        class="size-3 shrink-0 text-[#1a1815]/50"
+                        aria-hidden="true"
+                      />
                       {strand.passkeyShortId}
                     </button>
-                    <span
-                      class="min-w-0 truncate text-[11px] text-[#1a1815]/55"
-                    >
+                    <span class="shrink-0 text-[11px] text-[#1a1815]/55">
                       {strand.storeName}
                     </span>
-                    <span class="flex-1" aria-hidden="true"></span>
                     {#if strand.reach === PathReach.PasskeyElsewhere}
                       <span
                         class="shrink-0 font-mono text-[9px] tracking-[0.14em] text-[#a8431c] uppercase"
@@ -524,6 +485,33 @@ get a quiet footer: they exist, and that is all this browser can say about them.
                         elsewhere
                       </span>
                     {/if}
+                    <span
+                      class={`min-w-5 flex-1 border-t ${rule(strand.reach)}`}
+                      aria-hidden="true"
+                    ></span>
+                    <button
+                      type="button"
+                      aria-pressed={isSelected(
+                        NodeKind.Device,
+                        strand.deviceId,
+                      )}
+                      aria-label={strand.mine
+                        ? 'Through my device key'
+                        : `Through device key ${strand.deviceShortId}, ${strand.deviceLabel}`}
+                      class={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase transition motion-reduce:transition-none ${
+                        strand.mine
+                          ? 'bg-[#1a1815] text-[#f6f3ec]'
+                          : `border text-[#1a1815]/55 ${chosenEdge(isSelected(NodeKind.Device, strand.deviceId))}`
+                      }`}
+                      onclick={() => pick(NodeKind.Device, strand.deviceId)}
+                    >
+                      <Laptop class="size-3 shrink-0" aria-hidden="true" />
+                      {strand.mine ? 'my device' : strand.deviceShortId}
+                    </button>
+                    <span
+                      class={`w-4 shrink-0 border-t ${rule(strand.reach)}`}
+                      aria-hidden="true"
+                    ></span>
                     {#if strand.reach === PathReach.Now}
                       <span
                         class="shrink-0 rounded-full bg-[#1f5c44] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[#f6f3ec] uppercase"
