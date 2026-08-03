@@ -6,7 +6,7 @@ function_source="$(
   sed -n \
     '/HIVE_AUTH_ROTATION_BEGIN/,/HIVE_AUTH_ROTATION_END/p' \
     "$repo_root/infra/tasks/hive.yml" |
-    sed '1d;$d;s/^        //'
+    sed '1d;$d;s/^        //;s#/run/lock/nook/hive-mutation.lock#$remote_dir/hive-mutation.lock#'
 )"
 source /dev/stdin <<<"$function_source"
 
@@ -25,6 +25,17 @@ flock() {
   if test "$rotation_mode" = "lock-failure"; then
     return 1
   fi
+}
+
+sudo() {
+  test "$1" = -n
+  shift
+  case "$1" in install|touch|chmod) ;; *) return 2 ;; esac
+}
+
+jq() {
+  cat >/dev/null
+  printf '%s\n' replacement-secret
 }
 
 kubectl() {
@@ -73,7 +84,7 @@ run_rotation() {
   set +e
   (
     set -e
-    publish_hive_auth "$auth_file" replace ""
+    publish_hive_auth replace <"$auth_file"
   )
   rotation_status=$?
   set -e
@@ -87,34 +98,31 @@ bootstrap_secret_mode="present"
 set +e
 (
   set -e
-  publish_hive_auth "$auth_file" bootstrap ""
+  publish_hive_auth bootstrap <"$auth_file"
 )
 rotation_status=$?
 set -e
 test "$rotation_status" -eq 0
-test ! -e "$auth_file"
 ! grep -Fq -- 'get deployment' "$action_log"
 ! grep -Fq -- 'apply -f -' "$action_log"
 bootstrap_secret_mode="absent"
 
-# A lock failure still deletes plaintext staging without touching Kubernetes.
+# A lock failure does not touch Kubernetes.
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="lock-failure"
 deployment_mode="present"
 run_rotation
 test "$rotation_status" -ne 0
-test ! -e "$auth_file"
 ! grep -Fq -- 'get deployment' "$action_log"
 
-# Success quiesces every broker before apply, deletes staging, then restores four workers.
+# Success quiesces every broker before applying the stream, then restores four workers.
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="success"
 deployment_mode="present"
 run_rotation
 test "$rotation_status" -eq 0
-test ! -e "$auth_file"
 quiesce_line="$(line_of --replicas=0)"
 lock_line="$(line_of 'flock --exclusive --timeout 900 9')"
 delete_line="$(line_of --for=delete)"
@@ -150,7 +158,6 @@ rotation_mode="success"
 deployment_mode="absent"
 run_rotation
 test "$rotation_status" -eq 0
-test ! -e "$auth_file"
 delete_line="$(line_of --for=delete)"
 apply_line="$(line_of 'apply -f -')"
 test "$delete_line" -lt "$apply_line"
@@ -162,20 +169,18 @@ rotation_mode="pod-list-failure"
 deployment_mode="present"
 run_rotation
 test "$rotation_status" -ne 0
-test ! -e "$auth_file"
 ! grep -Fq -- 'apply -f -' "$action_log"
 quiesce_line="$(line_of --replicas=0)"
 restore_line="$(line_of --replicas=4)"
 test "$quiesce_line" -lt "$restore_line"
 
-# Failed publication still deletes plaintext staging and restores the prior replica count.
+# Failed publication still restores the prior replica count.
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="apply-failure"
 deployment_mode="present"
 run_rotation
 test "$rotation_status" -ne 0
-test ! -e "$auth_file"
 apply_line="$(line_of 'apply -f -')"
 restore_line="$(line_of --replicas=4)"
 test "$apply_line" -lt "$restore_line"

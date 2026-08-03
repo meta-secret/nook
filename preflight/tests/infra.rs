@@ -135,6 +135,10 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             "Hive auth rotation",
         ),
         ("preflight/tests/hive_auth_staging.sh", "Hive auth staging"),
+        (
+            "preflight/tests/hive_mutation_serialization.sh",
+            "Hive mutation serialization",
+        ),
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
@@ -173,35 +177,34 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         "explicit auth rotation must validate and stream the local credential"
     );
     assert!(
-        publish_task.contains("trap cleanup_input EXIT")
-            && publish_task.contains("cat >\"$auth_file\"")
-            && publish_task.contains("NOOK_HIVE_AUTH_STAGING_ROOT:-/dev/shm")
-            && publish_task.contains("nook-hive-auth.XXXXXX")
-            && publish_task.contains("kubectl create secret generic hive-codex-auth")
+        !publish_task.contains("cat >\"$auth_file\"")
+            && !publish_task.contains("NOOK_HIVE_AUTH_STAGING_ROOT")
+            && publish_task.contains("data: {\"auth.json\": (tojson | @base64)}")
             && publish_task.contains("kubectl scale deployment/hive")
             && publish_task.contains("--replicas=0")
             && publish_task.contains("--for=delete")
-            && publish_task.contains("$remote_dir/hive-mutation.lock")
+            && publish_task.contains("exec 9>/run/lock/nook/hive-mutation.lock")
             && publish_task.contains("flock --exclusive --timeout 900 9")
             && publish_task.contains("kubectl rollout status deployment/hive"),
-        "explicit auth rotation must quiesce brokers, replace the Secret, and restore the pool"
+        "explicit auth rotation must stream the Secret without staging, quiesce brokers, and restore the pool"
     );
     assert!(
-        deploy.contains("mutation_lock=\"$remote_dir/hive-mutation.lock\"")
+        deploy.contains("exec 9>/run/lock/nook/hive-mutation.lock")
             && deploy.contains("flock --exclusive --timeout 900 9"),
-        "Hive deployment and auth rotation must share the remote mutation lock"
+        "Hive deployment and auth rotation must share the host-global mutation lock"
     );
     let neo4j = read("infra/tasks/neo4j.yml");
     assert!(
-        neo4j.contains("if test \"$tls_changed\" = true; then\n          mutation_lock=\"$remote_dir/hive-mutation.lock\"")
+        neo4j.contains("if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN")
+            && neo4j.contains("exec 9>/run/lock/nook/hive-mutation.lock")
             && neo4j.contains("flock --exclusive --timeout 900 9"),
-        "Neo4j TLS rotation must share Hive's remote mutation lock"
+        "Neo4j TLS rotation must share Hive's host-global mutation lock"
     );
     let quiesce = publish_task
         .find("--replicas=0")
         .context("auth rotation must quiesce the warm pool")?;
     let publish = publish_task
-        .find("kubectl create secret generic hive-codex-auth")
+        .find("data: {\"auth.json\": (tojson | @base64)}")
         .context("auth rotation must publish the replacement Secret")?;
     let restore = publish_task
         .rfind("restore_hive_workers")
