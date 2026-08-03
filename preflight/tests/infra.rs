@@ -123,6 +123,103 @@ fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
 }
 
 #[test]
+fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
+    let root = repository_root();
+    for (harness, description) in [
+        (
+            "preflight/tests/hive_auth_sync.sh",
+            "Hive auth synchronization",
+        ),
+        (
+            "preflight/tests/hive_auth_rotation.sh",
+            "Hive auth rotation",
+        ),
+        ("preflight/tests/hive_auth_staging.sh", "Hive auth staging"),
+        (
+            "preflight/tests/hive_mutation_serialization.sh",
+            "Hive mutation serialization",
+        ),
+    ] {
+        let output = Command::new("bash")
+            .arg(root.join(harness))
+            .arg(&root)
+            .output()?;
+        assert!(
+            output.status.success(),
+            "{description} harness failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let tasks = read_fallible("infra/tasks/hive.yml")?;
+    let rotate = tasks
+        .split("\n  hive:auth:rotate:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  hive:auth:bootstrap:\n").next())
+        .context("Hive tasks must define explicit Codex auth rotation")?;
+    let publish_task = tasks
+        .split("\n  hive:auth:publish:\n")
+        .nth(1)
+        .and_then(|tail| tail.split("\n  hive:auth:sync:\n").next())
+        .context("Hive tasks must define internal Codex auth publication")?;
+    let deploy = tasks
+        .split("\n  hive:deploy:\n")
+        .nth(1)
+        .context("Hive tasks must define deployment")?;
+    assert!(
+        rotate.contains("HIVE_AUTH_PUBLICATION_MODE: replace")
+            && publish_task.contains("HIVE_CODEX_AUTH_FILE is required")
+            && publish_task.contains("remote_program=\"$(cat <<'REMOTE'")
+            && publish_task.contains("encoded_program=")
+            && publish_task.contains("base64 -d")
+            && publish_task.contains("HIVE_AUTH_REMOTE_BEGIN"),
+        "explicit auth rotation must validate and stream the local credential"
+    );
+    assert!(
+        !publish_task.contains("cat >\"$auth_file\"")
+            && !publish_task.contains("NOOK_HIVE_AUTH_STAGING_ROOT")
+            && publish_task.contains("data: {\"auth.json\": (tojson | @base64)}")
+            && publish_task.contains("kubectl scale deployment/hive")
+            && publish_task.contains("--replicas=0")
+            && publish_task.contains("--for=delete")
+            && publish_task.contains("exec 9>/run/lock/nook/hive-mutation.lock")
+            && publish_task.contains("flock --exclusive --timeout 900 9")
+            && publish_task.contains("nook.nokey.sh/hive-auth-desired-replicas")
+            && !publish_task.contains("$remote_dir/hive-auth-desired-replicas")
+            && publish_task.contains("kubectl rollout status deployment/hive"),
+        "explicit auth rotation must stream the Secret without staging, quiesce brokers, and restore the pool"
+    );
+    assert!(
+        deploy.contains("exec 9>/run/lock/nook/hive-mutation.lock")
+            && deploy.contains("flock --exclusive --timeout 900 9"),
+        "Hive deployment and auth rotation must share the host-global mutation lock"
+    );
+    let neo4j = read("infra/tasks/neo4j.yml");
+    assert!(
+        neo4j.contains(
+            "if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN"
+        ) && neo4j.contains("exec 9>/run/lock/nook/hive-mutation.lock")
+            && neo4j.contains("flock --exclusive --timeout 900 9"),
+        "Neo4j TLS rotation must share Hive's host-global mutation lock"
+    );
+    let quiesce = publish_task
+        .find("--replicas=0")
+        .context("auth rotation must quiesce the warm pool")?;
+    let publish = publish_task
+        .find("data: {\"auth.json\": (tojson | @base64)}")
+        .context("auth rotation must publish the replacement Secret")?;
+    let restore = publish_task
+        .rfind("restore_hive_workers")
+        .context("auth rotation must restore the warm pool")?;
+    assert!(
+        quiesce < publish && publish < restore,
+        "auth rotation must stop brokers before publication and restore them afterward"
+    );
+    Ok(())
+}
+
+#[test]
 fn neo4j_client_secret_normalization_is_upgrade_safe() -> anyhow::Result<()> {
     let tasks = read("infra/tasks/neo4j.yml");
     let start = tasks

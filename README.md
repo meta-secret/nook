@@ -419,6 +419,7 @@ task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
 task infra:hive:dashboard   # open the cluster-private Hive Control Center locally
 task infra:hive:queue:status # inspect durable task and latest/previous attempt state
 task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded budget per Hive release
+HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate # quiesce Hive and explicitly replace Codex auth
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart
 task hive:check             # format-check and lint the Rust Hive worker
@@ -426,6 +427,14 @@ task hive:test              # run Hive lease/DAG behavior tests
 task infra:status           # inspect the remote infrastructure stack
 task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 ```
+
+Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
+authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit
+`infra:hive:auth:rotate` command above only when intentionally replacing that
+credential; a shared infrastructure lock serializes the operation with Hive
+and Neo4j deployment, while rotation stops the warm pool before publication
+and restores it afterward. Credential input is streamed into that cleanup-armed
+remote transaction rather than retained as a reusable host-side file.
 
 The explicitly triggered **Rust ecosystem checks** workflow adds dependency
 policy and RustSec auditing (`cargo-deny` plus `cargo-audit`), generated and

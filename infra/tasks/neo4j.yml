@@ -237,6 +237,15 @@ tasks:
             -extfile "$secret_dir/server.ext" \
             -out "$secret_dir/public.crt"
         fi
+        if test "$tls_changed" = true; then
+          # NEO4J_HIVE_MUTATION_LOCK_BEGIN
+          sudo -n install -d -m 0755 /run/lock/nook
+          sudo -n touch /run/lock/nook/hive-mutation.lock
+          sudo -n chmod 0666 /run/lock/nook/hive-mutation.lock
+          exec 9>/run/lock/nook/hive-mutation.lock
+          flock --exclusive --timeout 900 9
+          # NEO4J_HIVE_MUTATION_LOCK_END
+        fi
         # Legacy prototypes persisted signing and server keys on the host.
         # Kubernetes Secrets are encrypted at rest by the k0s AES-GCM provider,
         # so remove those plaintext copies after the Secret-backed migration.
