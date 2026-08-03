@@ -26,7 +26,7 @@ to open, plus the unlocked vault's own device and backup-password roster.
 <div class="space-y-6">
   {#if vaults.length === 0}
     <p class="text-sm leading-relaxed text-muted-foreground">
-      {vault.t(I18N_KEYS.DevicesAccessNoVaults)}
+      {vault.t(I18N_KEYS.DevicesAccessNoVaultsReady)}
     </p>
   {:else}
     <ul

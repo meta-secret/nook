@@ -142,7 +142,7 @@ describe('access chain nodes', () => {
   })
 
   test('attributes a companion session identity to the paired device', () => {
-    const [, deviceKey] = buildAccessChainNodes(vault, {
+    const [session, deviceKey] = buildAccessChainNodes(vault, {
       protection: DeviceAccessProtectionKind.CompanionSession,
       passkeyName: unknown,
       credentialId: unknown,
@@ -150,6 +150,8 @@ describe('access chain nodes', () => {
       vaults: [],
     })
 
+    expect(session.title).toBe(I18N_KEYS.DevicesAccessSessionNodeTitle)
+    expect(session.detail.kind).toBe(AccessNodeDetailKind.Absent)
     expect(deviceKey.title).toBe(I18N_KEYS.DevicesAccessCompanionIdentity)
     expect(
       panelTitle(

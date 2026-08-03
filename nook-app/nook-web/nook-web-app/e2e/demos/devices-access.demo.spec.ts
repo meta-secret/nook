@@ -27,6 +27,12 @@ test('walk the access chain from passkey to browser device key to vaults', async
   const chain = page.getByTestId('devices-access-chain')
   await expect(chain).toContainText('unlocks')
   await expect(chain).toContainText('opens')
+  await expect(chain).toContainText('My browser')
+  await expect(chain).toContainText('My identities')
+  await expect(chain).toContainText('Vault access')
+  await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
+    0,
+  )
   await page.waitForTimeout(BEAT_MS)
 
   const panel = page.getByTestId('devices-access-panel')
@@ -49,6 +55,9 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-node-vaults').click()
+  await expect(
+    page.getByTestId('devices-access-strength-vaults'),
+  ).toContainText('Verified way in')
   await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',
   )
