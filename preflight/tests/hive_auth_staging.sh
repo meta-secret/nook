@@ -7,8 +7,13 @@ mock_bin="$test_root/bin"
 remote_dir="$test_root/remote"
 barrier_dir="$test_root/barrier"
 apply_log="$test_root/apply.log"
+remote_script="$test_root/hive-auth-remote.sh"
 mkdir -p "$mock_bin" "$remote_dir/secrets" "$barrier_dir"
 trap 'rm -rf "$test_root"' EXIT
+sed -n '/HIVE_AUTH_REMOTE_BEGIN/,/HIVE_AUTH_REMOTE_END/p' \
+  "$repo_root/infra/tasks/hive.yml" |
+  sed '1d;$d;s/^        //' >"$remote_script"
+chmod +x "$remote_script"
 
 cat >"$mock_bin/flock" <<'MOCK'
 #!/usr/bin/env bash
@@ -62,7 +67,7 @@ run_rotation() {
     PATH="$mock_bin:$PATH" \
       BARRIER_DIR="$barrier_dir" \
       APPLY_LOG="$apply_log" \
-      bash "$repo_root/infra/scripts/hive-auth-rotate.sh" replace "$remote_dir"
+      bash "$remote_script" replace "$remote_dir"
 }
 
 run_rotation alpha &

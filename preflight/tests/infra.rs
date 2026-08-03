@@ -158,24 +158,25 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         .split("\n  hive:deploy:\n")
         .nth(1)
         .context("Hive tasks must define deployment")?;
-    let rotation_script = read("infra/scripts/hive-auth-rotate.sh");
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
             && rotate.contains("HIVE_AUTH_ROTATION_MODE:-replace")
-            && rotate.contains("infra/scripts/hive-auth-rotate.sh"),
+            && rotate.contains("remote_program=\"$(cat <<'REMOTE'")
+            && rotate.contains("printf -v remote_command")
+            && rotate.contains("HIVE_AUTH_REMOTE_BEGIN"),
         "explicit auth rotation must validate and stream the local credential"
     );
     assert!(
-        rotation_script.contains("trap cleanup_input EXIT")
-            && rotation_script.contains("cat >\"$auth_file\"")
-            && rotation_script.contains("codex-auth-rotation.XXXXXX")
-            && rotation_script.contains("kubectl create secret generic hive-codex-auth")
-            && rotation_script.contains("kubectl scale deployment/hive")
-            && rotation_script.contains("--replicas=0")
-            && rotation_script.contains("--for=delete")
-            && rotation_script.contains("mutation_lock=\"$remote_dir/hive-mutation.lock\"")
-            && rotation_script.contains("flock --exclusive --timeout 900 9")
-            && rotation_script.contains("kubectl rollout status deployment/hive"),
+        rotate.contains("trap cleanup_input EXIT")
+            && rotate.contains("cat >\"$auth_file\"")
+            && rotate.contains("codex-auth-rotation.XXXXXX")
+            && rotate.contains("kubectl create secret generic hive-codex-auth")
+            && rotate.contains("kubectl scale deployment/hive")
+            && rotate.contains("--replicas=0")
+            && rotate.contains("--for=delete")
+            && rotate.contains("$remote_dir/hive-mutation.lock")
+            && rotate.contains("flock --exclusive --timeout 900 9")
+            && rotate.contains("kubectl rollout status deployment/hive"),
         "explicit auth rotation must quiesce brokers, replace the Secret, and restore the pool"
     );
     assert!(

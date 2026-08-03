@@ -5,8 +5,8 @@ repo_root="$1"
 function_source="$(
   sed -n \
     '/HIVE_AUTH_ROTATION_BEGIN/,/HIVE_AUTH_ROTATION_END/p' \
-    "$repo_root/infra/scripts/hive-auth-rotate.sh" |
-    sed '1d;$d'
+    "$repo_root/infra/tasks/hive.yml" |
+    sed '1d;$d;s/^        //'
 )"
 source /dev/stdin <<<"$function_source"
 
