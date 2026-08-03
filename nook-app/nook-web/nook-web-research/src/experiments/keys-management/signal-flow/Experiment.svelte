@@ -17,12 +17,13 @@ Every other device key is a line in a quiet register underneath, nothing more.
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    type Device,
     GraphId,
     graphById,
-    hereDevices,
     isHere,
     type KeyGraph,
+    type LocalKey,
+    localKey,
+    LocalKeyKind,
     openableHere,
     type Passkey,
     Reach,
@@ -32,7 +33,17 @@ Every other device key is a line in a quiet register underneath, nothing more.
     vaultsOpenableHere,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { Circuit, Socket } from './circuit'
+  import { Circuit, SeatKind, SlotKind, Socket } from './circuit'
+
+  /** What sits in the passkey socket above the board. */
+  type Seat =
+    | { kind: SeatKind.Empty }
+    | { kind: SeatKind.Seated; passkey: Passkey }
+
+  /** What sits in the vault slot below the board. */
+  type Slot =
+    | { kind: SlotKind.Empty }
+    | { kind: SlotKind.Slotted; vault: Vault }
 
   /** Two doglegs and a junction, the way copper actually turns a corner. */
   const TRACE = 'M12 0 V14 L4 24 V42 L12 52 V56'
@@ -47,15 +58,13 @@ Every other device key is a line in a quiet register underneath, nothing more.
   let reached = $state(0)
 
   const graph = $derived(graphById(graphId))
-  const myDevice = $derived(localDevice(graph))
+  const myKey = $derived(localKey(graph))
   const others = $derived(
     graph.devices.filter((device) => !isHere(graph, device)),
   )
-  const seated = $derived(
-    graph.passkeys.find((passkey) => passkey.id === passkeyId),
-  )
-  const slotted = $derived(graph.vaults.find((vault) => vault.id === vaultId))
-  const circuit = $derived(circuitOf(myDevice, seated, slotted))
+  const seated = $derived(seatIn(graph, passkeyId))
+  const slotted = $derived(slotIn(graph, vaultId))
+  const circuit = $derived(circuitOf(myKey, seated, slotted))
   const conducts = $derived(conductsOf(circuit))
   const running = $derived(reached < conducts)
   const brokenUpper = $derived(
@@ -67,9 +76,16 @@ Every other device key is a line in a quiet register underneath, nothing more.
     circuit === Circuit.VaultUnreachable || circuit === Circuit.NoDeviceKey,
   )
 
-  /** Walks the pulse one part per tick. A new run cancels the one in flight. */
+  /**
+   * Walks the pulse one part per tick. A new run cancels the one in flight, and
+   * a reduced-motion request lands on the end state without the staging.
+   */
   $effect(() => {
     const stops = runToken > 0 ? conducts : 0
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      reached = stops
+      return
+    }
     reached = 0
     const timers: ReturnType<typeof setTimeout>[] = []
     for (let step = 1; step <= stops; step += 1) {
@@ -80,40 +96,57 @@ Every other device key is a line in a quiet register underneath, nothing more.
     }
   })
 
-  function localDevice(graph: KeyGraph): Device | undefined {
-    const [device] = hereDevices(graph)
-    return device
+  function seatIn(graph: KeyGraph, id: string): Seat {
+    for (const passkey of graph.passkeys) {
+      if (passkey.id === id) return { kind: SeatKind.Seated, passkey }
+    }
+    return { kind: SeatKind.Empty }
+  }
+
+  function slotIn(graph: KeyGraph, id: string): Slot {
+    for (const vault of graph.vaults) {
+      if (vault.id === id) return { kind: SlotKind.Slotted, vault }
+    }
+    return { kind: SlotKind.Empty }
   }
 
   function firstPasskeyId(graph: KeyGraph): string {
-    const device = localDevice(graph)
+    const key = localKey(graph)
     const own = graph.passkeys.filter(
       (passkey) =>
         passkey.reach === Reach.Here &&
-        device !== undefined &&
-        device.passkeyIds.includes(passkey.id),
+        key.kind === LocalKeyKind.Present &&
+        key.device.passkeyIds.includes(passkey.id),
     )
-    const [pick] = own.length > 0 ? own : graph.passkeys
-    return pick ? pick.id : ''
+    for (const passkey of own.length > 0 ? own : graph.passkeys) {
+      return passkey.id
+    }
+    return ''
   }
 
   function firstVaultId(graph: KeyGraph): string {
     const open = vaultsOpenableHere(graph)
-    const [pick] = open.length > 0 ? open : graph.vaults
-    return pick ? pick.id : ''
+    for (const vault of open.length > 0 ? open : graph.vaults) {
+      return vault.id
+    }
+    return ''
   }
 
-  function circuitOf(
-    device: Device | undefined,
-    passkey: Passkey | undefined,
-    vault: Vault | undefined,
-  ): Circuit {
-    if (!device) return Circuit.NoDeviceKey
-    if (!passkey || passkey.reach === Reach.Elsewhere) {
+  function circuitOf(key: LocalKey, seat: Seat, slot: Slot): Circuit {
+    if (key.kind === LocalKeyKind.Missing) return Circuit.NoDeviceKey
+    if (
+      seat.kind === SeatKind.Empty ||
+      seat.passkey.reach === Reach.Elsewhere
+    ) {
       return Circuit.PasskeyElsewhere
     }
-    if (!device.passkeyIds.includes(passkey.id)) return Circuit.NotEnrolled
-    if (!vault || !vault.deviceIds.includes(device.id)) {
+    if (!key.device.passkeyIds.includes(seat.passkey.id)) {
+      return Circuit.NotEnrolled
+    }
+    if (
+      slot.kind === SlotKind.Empty ||
+      !slot.vault.deviceIds.includes(key.device.id)
+    ) {
       return Circuit.VaultUnreachable
     }
     return Circuit.Closed
@@ -133,9 +166,12 @@ Every other device key is a line in a quiet register underneath, nothing more.
     return 'open · vault not enrolled'
   }
 
-  function socketOf(device: Device | undefined, passkey: Passkey): Socket {
+  function socketOf(key: LocalKey, passkey: Passkey): Socket {
     if (passkey.reach === Reach.Elsewhere) return Socket.Elsewhere
-    if (!device || !device.passkeyIds.includes(passkey.id)) {
+    if (
+      key.kind === LocalKeyKind.Missing ||
+      !key.device.passkeyIds.includes(passkey.id)
+    ) {
       return Socket.NotEnrolled
     }
     return Socket.Live
@@ -243,12 +279,14 @@ Every other device key is a line in a quiet register underneath, nothing more.
           My device
         </span>
         <span class="truncate text-[12px] text-[#7c948f]">
-          {myDevice ? myDevice.platform : 'not set up in this browser'}
+          {myKey.kind === LocalKeyKind.Present
+            ? myKey.device.platform
+            : 'not set up in this browser'}
         </span>
       </header>
 
       <div class="mt-2.5 flex flex-wrap gap-1.5 px-1">
-        {#if myDevice}
+        {#if myKey.kind === LocalKeyKind.Present}
           <button
             type="button"
             class="flex items-center gap-1.5 rounded-sm border border-[#1c3a3f] px-2 py-1 font-mono text-[10px] tracking-[0.12em] text-[#8fb3ae] uppercase transition hover:border-[#2dd4bf]/60 hover:text-[#2dd4bf] motion-reduce:transition-none"
@@ -287,7 +325,7 @@ Every other device key is a line in a quiet register underneath, nothing more.
         {@render designator('Passkey', 'U1')}
         <ul class="space-y-1 p-2">
           {#each graph.passkeys as passkey (passkey.id)}
-            {@const kind = socketOf(myDevice, passkey)}
+            {@const kind = socketOf(myKey, passkey)}
             {@const chosen = passkey.id === passkeyId}
             <li>
               <button
@@ -338,17 +376,17 @@ Every other device key is a line in a quiet register underneath, nothing more.
       <div
         class="rounded-md border px-3 pb-3 transition {carrier(
           reached >= 2,
-          myDevice === undefined,
+          myKey.kind === LocalKeyKind.Missing,
         )}"
       >
         {@render designator('Device key', 'U2')}
-        {#if myDevice}
+        {#if myKey.kind === LocalKeyKind.Present}
           <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Laptop class="size-4 shrink-0 text-[#2dd4bf]" aria-hidden="true" />
             <span
               class="font-mono text-2xl tracking-[0.1em] text-[#e6f5f1] tabular-nums"
             >
-              {myDevice.shortId}
+              {myKey.device.shortId}
             </span>
             <span
               class="rounded-sm border border-[#2dd4bf]/50 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] text-[#2dd4bf] uppercase"
@@ -396,7 +434,7 @@ Every other device key is a line in a quiet register underneath, nothing more.
             </button>
           {/each}
         </div>
-        {#if slotted}
+        {#if slotted.kind === SlotKind.Slotted}
           <div
             class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#12242a] px-3 py-3"
           >
@@ -407,11 +445,12 @@ Every other device key is a line in a quiet register underneath, nothing more.
             <span
               class="font-mono text-2xl tracking-[0.1em] text-[#e6f5f1] tabular-nums"
             >
-              {slotted.shortId}
+              {slotted.vault.shortId}
             </span>
-            <span class="text-[12px] text-[#7c948f]">{slotted.label}</span>
+            <span class="text-[12px] text-[#7c948f]">{slotted.vault.label}</span
+            >
             <span class="ml-auto font-mono text-[10px] text-[#4a6b68]">
-              {slotted.secrets} secrets
+              {slotted.vault.secrets} secrets
             </span>
           </div>
         {/if}

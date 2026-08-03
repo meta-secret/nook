@@ -74,9 +74,11 @@ resolves into hairline-ruled rows where the identifiers sit in mono.
             ></span>
             <span
               class={`hidden ${CAPS} transition sm:block motion-reduce:transition-none ${active ? 'text-[#f4f3f0]' : 'text-[#6d6d6a] group-hover:text-[#a5a5a1]'}`}
+              aria-hidden="true"
             >
               {paneNumeral(option)} · {paneCaption(option)}
             </span>
+            <span class="sr-only">{paneCaption(option)}</span>
           </button>
         </li>
       {/each}

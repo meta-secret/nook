@@ -67,7 +67,7 @@
   }
 </script>
 
-<h1 class={STATEMENT}>Every passkey that can sign in as you.</h1>
+<h1 class={STATEMENT}>Every passkey Nook has seen sign in as you.</h1>
 
 <ul class="mt-12 max-w-3xl">
   {#each graph.passkeys as passkey (passkey.id)}

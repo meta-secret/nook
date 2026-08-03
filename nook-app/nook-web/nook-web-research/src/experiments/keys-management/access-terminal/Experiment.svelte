@@ -301,30 +301,32 @@ vaults they touch.
     ]
   }
 
-  function opening(graph: KeyGraph): Block[] {
+  /** The header the console keeps even after clear, as a real terminal does. */
+  function banner(graph: KeyGraph): Block {
     const others = graph.devices.filter(
       (device) => !isHere(graph, device),
     ).length
-    return [
-      {
-        id: 0,
-        prompt: '',
-        lines: [
-          `nook keys · ${graph.label}`,
-          columns(
-            [
-              `passkeys ${graph.passkeys.length}`,
-              `vaults ${graph.vaults.length}`,
-              `other devices ${others}`,
-            ],
-            [13, 11, 18],
-          ),
-          '',
-          'map · ls · id <id> · here · help · clear',
-        ],
-      },
-      { id: 1, prompt: 'map', lines: mapLines(graph) },
-    ]
+    return {
+      id: 0,
+      prompt: '',
+      lines: [
+        `nook keys · ${graph.label}`,
+        columns(
+          [
+            `passkeys ${graph.passkeys.length}`,
+            `vaults ${graph.vaults.length}`,
+            `other devices ${others}`,
+          ],
+          [13, 11, 18],
+        ),
+        '',
+        'map · ls · id <id> · here · help · clear',
+      ],
+    }
+  }
+
+  function opening(graph: KeyGraph): Block[] {
+    return [banner(graph), { id: 1, prompt: 'map', lines: mapLines(graph) }]
   }
 
   function hits(query: string, shortId: string, id: string, label: string) {
@@ -476,8 +478,8 @@ vaults they touch.
     historyIndex = history.length
     draft = ''
     if (command === 'clear') {
-      transcript = opening(graph)
-      nextId = 2
+      transcript = [banner(graph)]
+      nextId = 1
       void scrollToEnd()
       return
     }

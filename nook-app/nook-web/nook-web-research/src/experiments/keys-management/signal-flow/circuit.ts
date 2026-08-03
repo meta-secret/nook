@@ -20,6 +20,22 @@ export enum Circuit {
   NoDeviceKey = 'no-device-key',
 }
 
+/** Whether the socket above the board holds a passkey right now. */
+export enum SeatKind {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Empty = 'empty',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Seated = 'seated',
+}
+
+/** Whether the slot below the board holds a vault right now. */
+export enum SlotKind {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Empty = 'empty',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Slotted = 'slotted',
+}
+
 /** How one passkey socket sits against the device key of this browser. */
 export enum Socket {
   /** @public Enrolled on this device key and presentable from here. */

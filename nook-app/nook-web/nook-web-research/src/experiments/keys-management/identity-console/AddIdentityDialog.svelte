@@ -2,6 +2,7 @@
   import { ArrowRight, X } from '@lucide/svelte'
   import { KeyStore, storeLabel } from '../_shared/key-graph'
   import { ACCENT, CAPS, RULE } from './console-ui'
+  import { currentOpener, keepFocusInside, restore } from './focus-trap'
 
   interface Props {
     onClose: () => void
@@ -17,13 +18,20 @@
   ]
 
   let primary = $state<HTMLButtonElement>()
+  let panel = $state<HTMLDivElement>()
+  const opener = currentOpener()
 
   $effect(() => {
     primary?.focus()
+    return () => restore(opener)
   })
 
   function onKey(event: KeyboardEvent) {
-    if (event.key === 'Escape') onClose()
+    if (event.key === 'Escape') {
+      onClose()
+      return
+    }
+    if (panel) keepFocusInside(panel, event)
   }
 </script>
 
@@ -38,6 +46,7 @@
   ></button>
 
   <div
+    bind:this={panel}
     role="dialog"
     aria-modal="true"
     aria-labelledby="add-identity-title"
