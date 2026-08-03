@@ -155,7 +155,17 @@ tasks:
           ' "$auth_file" >/dev/null
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
-          remote_auth_file="$remote_dir/secrets/codex-auth.json.next"
+          remote_auth_file="$(
+            ssh -n -o BatchMode=yes "$ssh_target" \
+              "mktemp '$remote_dir/secrets/codex-auth.json.next.XXXXXX'"
+          )"
+          case "$remote_auth_file" in
+            "$remote_dir"/secrets/codex-auth.json.next.??????) ;;
+            *)
+              echo "Hive Codex authentication staging path is invalid" >&2
+              exit 1
+              ;;
+          esac
           cleanup_auth() {
             ssh -n -o BatchMode=yes "$ssh_target" \
               "rm -f '$remote_auth_file'" >/dev/null 2>&1 || true
@@ -166,7 +176,7 @@ tasks:
           ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
         set -euo pipefail
         remote_dir="$remote_dir"
-        auth_file="\$remote_dir/secrets/codex-auth.json.next"
+        auth_file="$remote_auth_file"
         kubectl() { sudo -n k0s kubectl "\$@"; }
         # HIVE_AUTH_ROTATION_BEGIN
         rotate_hive_auth() {

@@ -159,6 +159,8 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         .context("Hive tasks must define deployment")?;
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
+            && rotate.contains("mktemp '$remote_dir/secrets/codex-auth.json.next.XXXXXX'")
+            && rotate.contains("Hive Codex authentication staging path is invalid")
             && rotate.contains("kubectl create secret generic hive-codex-auth")
             && rotate.contains("kubectl scale deployment/hive")
             && rotate.contains("--replicas=0")
