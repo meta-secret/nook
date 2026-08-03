@@ -105,10 +105,11 @@
                 (experiment) =>
                   experiment.subcategory.slug === subcategory.slug,
               )}
-              <section aria-labelledby={`subcategory-${subcategory.slug}`}>
+              {@const subcategoryId = `subcategory-${category.slug}-${subcategory.slug}`}
+              <section aria-labelledby={subcategoryId}>
                 <div class="mb-4 border-t pt-4">
                   <h3
-                    id={`subcategory-${subcategory.slug}`}
+                    id={subcategoryId}
                     class="text-lg font-semibold tracking-tight"
                   >
                     {subcategory.title}

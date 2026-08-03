@@ -50,6 +50,14 @@ mutable flags create the same problem.
   declare the enum in a same-file `<script module>`: Svelte can type-check that
   cross-script reference while omitting the runtime binding from the instance
   bundle.
+- Declaring the enum in the instance `<script lang="ts">` fails the same way and
+  is worse, because it type-checks and only breaks at runtime. The preprocessor
+  transpiles the script in isolation, so esbuild inlines every in-script member
+  read to its literal and then drops the now-unused enum object. Member reads in
+  the template are not part of that transform, survive as `Enum.Member`, and
+  throw `ReferenceError: Enum is not defined` on first render. `svelte-check`,
+  `tsc`, and the Vite build all stay green, so only running the component
+  catches it. The adjacent `.ts` module is the requirement, not a preference.
 - Prefer one enum per cohesive state machine or protocol vocabulary. Do not
   create a repository-wide `StateKind`, `MessageType`, or other generic enum
   that merely centralizes unrelated strings.

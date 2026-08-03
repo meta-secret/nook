@@ -16,6 +16,19 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
+import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
+import Blueprint from './keys-management/blueprint/Experiment.svelte'
+import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
+import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
+import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
+import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
+import KeyIndex from './keys-management/key-index/Experiment.svelte'
+import MissionControl from './keys-management/mission-control/Experiment.svelte'
+import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
+import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
+import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
+import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
+import HandoffStory from './inspiration/handoff-story/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -69,6 +82,18 @@ export const categories: ExperimentCategory[] = [
     description:
       'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
   },
+  {
+    slug: 'keys-management',
+    title: 'Keys Management',
+    description:
+      'Which of my passkeys opens this vault, and can I use it from this browser? Every sketch draws the same graph of passkeys, device keys, and vaults, shows the identifiers you would compare against a password manager, and supports three passkeys / one passkey / new browser.',
+  },
+  {
+    slug: 'inspiration',
+    title: 'Inspiration',
+    description:
+      'Sketches kept unchanged for their interaction or visual idea, not as candidates. They may read older fixtures.',
+  },
 ]
 
 export const subcategories: ExperimentSubcategory[] = [
@@ -113,17 +138,59 @@ export const subcategories: ExperimentSubcategory[] = [
     description:
       "External interaction and visual references translated into Nook's Sentinel genesis model.",
   },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Show possession',
+    description:
+      'Containment and inventory: what holds what, and what you own in total.',
+  },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V2,
+    title: 'V2 · Draw the relationship',
+    description:
+      'Wiring diagrams. Select any node and only what it actually reaches stays lit.',
+  },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V3,
+    title: 'V3 · Inspect the evidence',
+    description:
+      'Operator density: consoles and artifacts that put identifiers side by side.',
+  },
+  {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V4,
+    title: 'V4 · Identity first',
+    description:
+      "Internet Identity's architecture applied to Nook: one passkey is one identity, and access is a list of them.",
+  },
+  {
+    categorySlug: 'inspiration',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Kept as-is',
+    description:
+      'Frozen references. Do not iterate on these; borrow from them instead.',
+  },
 ]
 
 const auth = categories[0]
 const workflow = categories[1]
 const vault = categories[2]
+const keys = categories[3]
 const authV1 = subcategories[0]
 const workflowV1 = subcategories[1]
 const v1 = subcategories[2]
 const v2 = subcategories[3]
 const v3 = subcategories[4]
 const v4 = subcategories[5]
+const keysV1 = subcategories[6]
+const keysV2 = subcategories[7]
+const keysV3 = subcategories[8]
+const keysV4 = subcategories[9]
+const inspiration = categories[4]
+const inspirationV1 = subcategories[10]
 
 export const experiments: Experiment[] = [
   {
@@ -278,5 +345,122 @@ export const experiments: Experiment[] = [
     description:
       'A restrained dark operations console for K-of-N policy and participant public-key onboarding.',
     component: DistributedVaultPairing,
+  },
+  {
+    slug: 'concentric-trust',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Concentric trust',
+    description:
+      'One vault at a time, drawn as nested frames: passkeys outside, device keys within, vault at the core.',
+    component: ConcentricTrust,
+  },
+  {
+    slug: 'key-index',
+    category: keys,
+    subcategory: keysV1,
+    title: 'Key index',
+    description:
+      'Your device stands at the head of a permanent index; selecting anything answers in plain identifier chips.',
+    component: KeyIndex,
+  },
+  {
+    slug: 'signal-flow',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Signal flow',
+    description:
+      'A circuit board for your device alone. Seat a passkey, slot a vault, and watch the pulse reach the end or hit a cut trace.',
+    component: SignalFlow,
+  },
+  {
+    slug: 'blueprint',
+    category: keys,
+    subcategory: keysV2,
+    title: 'Blueprint',
+    description:
+      'An engineering sheet with your device in the title block and every other part numbered by identifier.',
+    component: Blueprint,
+  },
+  {
+    slug: 'mission-control',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Mission control',
+    description:
+      'A status board: one line per vault, counting passkeys, how many work from here, and enrolled devices.',
+    component: MissionControl,
+  },
+  {
+    slug: 'chain-strength',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Chain strength',
+    description:
+      'Identities are rounded tags, vaults are boxes. Each vault leads its row and its ways in fan out to the right.',
+    component: ChainStrength,
+  },
+  {
+    slug: 'access-terminal',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Access terminal',
+    description:
+      'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
+    component: AccessTerminal,
+  },
+  {
+    slug: 'evidence-drawers',
+    category: keys,
+    subcategory: keysV3,
+    title: 'Evidence drawers',
+    description:
+      'A cabinet of engraved faces. Pull a drawer and it prints what reaches it; the rest recede.',
+    component: EvidenceDrawers,
+  },
+  {
+    slug: 'identity-console',
+    category: keys,
+    subcategory: keysV4,
+    title: 'Identity console',
+    description:
+      'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
+    component: IdentityConsole,
+  },
+  {
+    slug: 'frozen-chain-strength',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Chain strength · kept',
+    description:
+      'The strand rope before the identity band, with passkeys and vaults listed on the device panel itself.',
+    component: FrozenChainStrength,
+  },
+  {
+    slug: 'frozen-chain-identities',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Chain strength · identity band',
+    description:
+      'Identity cards over the strand rope, passkeys still on the right of each vault.',
+    component: FrozenChainIdentities,
+  },
+  {
+    slug: 'frozen-access-terminal',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Access terminal · kept',
+    description:
+      'Query the graph by identifier and print it as ASCII. Frozen before iteration.',
+    component: FrozenAccessTerminal,
+  },
+  {
+    slug: 'handoff-story',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Handoff story',
+    description:
+      'Kept for its act rail: a fixed index that keeps the whole set visible while you read one part.',
+    component: HandoffStory,
   },
 ]
