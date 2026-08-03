@@ -190,13 +190,13 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             && neo4j.contains("flock --exclusive --timeout 900 9"),
         "Neo4j TLS rotation must share Hive's remote mutation lock"
     );
-    let quiesce = rotation_script
+    let quiesce = rotate
         .find("--replicas=0")
         .context("auth rotation must quiesce the warm pool")?;
-    let publish = rotation_script
+    let publish = rotate
         .find("kubectl create secret generic hive-codex-auth")
         .context("auth rotation must publish the replacement Secret")?;
-    let restore = rotation_script
+    let restore = rotate
         .rfind("restore_hive_workers")
         .context("auth rotation must restore the warm pool")?;
     assert!(
