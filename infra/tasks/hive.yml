@@ -227,40 +227,42 @@ tasks:
               *) echo "Unexpected Hive Codex authentication bootstrap lookup: $secret_ref" >&2; return 1 ;;
             esac
           fi
-          original_replicas=""
+          original_replicas=""; replica_state="$remote_dir/hive-auth-desired-replicas"
           restore_hive_workers() {
             if test -n "$original_replicas"; then
-              kubectl scale deployment/hive --namespace hive-system \
-                --replicas="$original_replicas"
+              kubectl scale deployment/hive --namespace hive-system --replicas="$original_replicas"
               kubectl rollout status deployment/hive --namespace hive-system --timeout=10m
+              rm -f "$replica_state"
               original_replicas=""
             fi
           }
           cleanup_rotation() { cleanup_staged_auth; restore_hive_workers; }
           trap cleanup_rotation EXIT
-          deployment_ref="$(kubectl get deployment hive --namespace hive-system \
-            --ignore-not-found -o name)"
+          deployment_ref="$(kubectl get deployment hive --namespace hive-system --ignore-not-found -o name)"
           case "$deployment_ref" in
             deployment.apps/hive)
-              original_replicas="$(kubectl get deployment hive --namespace hive-system \
-                -o jsonpath='{.spec.replicas}')"
+              if test -f "$replica_state"; then
+                original_replicas="$(cat "$replica_state")"
+              else
+                original_replicas="$(kubectl get deployment hive --namespace hive-system -o jsonpath='{.spec.replicas}')"
+                printf '%s\n' "$original_replicas" >"$replica_state.next"
+                mv "$replica_state.next" "$replica_state"
+              fi
               case "$original_replicas" in
                 ''|*[!0-9]*) echo "Hive deployment has an invalid replica count" >&2; return 1 ;;
               esac
               kubectl scale deployment/hive --namespace hive-system --replicas=0
               kubectl rollout status deployment/hive --namespace hive-system --timeout=10m
               ;;
-            '') ;;
+            '') test ! -e "$replica_state" || { echo "Hive replica recovery state has no Deployment" >&2; return 1; } ;;
             *) echo "Unexpected Hive deployment lookup: $deployment_ref" >&2; return 1 ;;
           esac
-          pod_refs="$(kubectl get pod --namespace hive-system \
-            --selector app.kubernetes.io/name=hive -o name)" || {
+          pod_refs="$(kubectl get pod --namespace hive-system --selector app.kubernetes.io/name=hive -o name)" || {
             echo "Hive Pod lookup failed while verifying worker quiescence" >&2
             return 1
           }
           if printf '%s\n' "$pod_refs" | grep -q .; then
-            kubectl wait pod --namespace hive-system \
-              --selector app.kubernetes.io/name=hive --for=delete --timeout=10m
+            kubectl wait pod --namespace hive-system --selector app.kubernetes.io/name=hive --for=delete --timeout=10m
           fi
           kubectl create secret generic hive-codex-auth --namespace hive-system \
             --from-file=auth.json="$auth_file" --dry-run=client -o yaml |

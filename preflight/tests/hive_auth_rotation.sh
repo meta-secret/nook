@@ -13,10 +13,12 @@ source /dev/stdin <<<"$function_source"
 action_log="$(mktemp)"
 auth_file="$(mktemp)"
 remote_dir="$(mktemp -d)"
-trap 'rm -f "$action_log" "$auth_file" "$remote_dir/hive-mutation.lock"; rmdir "$remote_dir"' EXIT
+trap 'rm -f "$action_log" "$auth_file" "$remote_dir/hive-mutation.lock" "$remote_dir/hive-auth-desired-replicas" "$remote_dir/hive-auth-desired-replicas.next"; rmdir "$remote_dir"' EXIT
 rotation_mode="success"
 deployment_mode="present"
 bootstrap_secret_mode="absent"
+restore_mode="success"
+reported_replicas="4"
 
 flock() {
   printf 'flock %s\n' "$*" >>"$action_log"
@@ -39,7 +41,7 @@ kubectl() {
           printf '%s\n' 'deployment.apps/hive'
         fi
       else
-        printf '%s' '4'
+        printf '%s' "$reported_replicas"
       fi
       ;;
     "get pod")
@@ -49,6 +51,11 @@ kubectl() {
       printf '%s\n' 'pod/hive-old'
       ;;
     "create secret") printf '%s\n' 'replacement-secret' ;;
+    "scale deployment/hive")
+      if [[ " $* " == *" --replicas=4 "* ]] && test "$restore_mode" = failure; then
+        return 1
+      fi
+      ;;
     "apply -f")
       cat >/dev/null
       if test "$rotation_mode" = "apply-failure"; then
@@ -117,6 +124,24 @@ test "$lock_line" -lt "$quiesce_line"
 test "$quiesce_line" -lt "$delete_line"
 test "$delete_line" -lt "$apply_line"
 test "$apply_line" -lt "$restore_line"
+
+# A retry preserves the pre-quiescence count after both transient restores fail.
+: >"$action_log"
+printf '%s\n' replacement >"$auth_file"
+rotation_mode="success"
+restore_mode="failure"
+reported_replicas="4"
+run_rotation
+test "$rotation_status" -ne 0
+test "$(cat "$remote_dir/hive-auth-desired-replicas")" = 4
+printf '%s\n' replacement >"$auth_file"
+restore_mode="success"
+reported_replicas="0"
+run_rotation
+test "$rotation_status" -eq 0
+test ! -e "$remote_dir/hive-auth-desired-replicas"
+grep -Fq -- '--replicas=4' "$action_log"
+reported_replicas="4"
 
 # Orphaned brokers are awaited even when their Deployment is already absent.
 : >"$action_log"
