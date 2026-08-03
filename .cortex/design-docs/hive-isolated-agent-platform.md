@@ -697,7 +697,8 @@ before the initial `task infra:deploy` or `task infra:hive:deploy` is invoked.
 Routine public-Zot image deployments preserve the existing
 `hive-codex-auth` Secret because Hive refreshes and persists that credential in
 the cluster. Replacing it from a local bootstrap file is a separate explicit
-operation:
+operation. Rotation and deployment share a remote mutation lock so no routine
+deployment can recreate brokers between quiescence and Secret publication:
 
 ```sh
 HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json task infra:hive:auth:rotate

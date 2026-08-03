@@ -111,7 +111,9 @@ The GitHub token needs Nook contents and pull-request write access plus Actions
 read access. Later deployments preserve Hive's cluster-rotated Codex Secret
 even if `HIVE_CODEX_AUTH_FILE` remains set. Intentionally replacing Codex
 authentication is a separate operation that quiesces the warm pool before
-publishing the replacement and restores the prior replica count afterward:
+publishing the replacement and restores the prior replica count afterward. A
+shared remote lock prevents deployment from recreating workers during this
+transaction:
 
 ```bash
 HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate

@@ -431,7 +431,8 @@ task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
 authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit
 `infra:hive:auth:rotate` command above only when intentionally replacing that
-credential; it stops the warm pool before publication and restores it after.
+credential; a shared deployment lock serializes the operation, which stops the
+warm pool before publication and restores it afterward.
 
 The explicitly triggered **Rust ecosystem checks** workflow adds dependency
 policy and RustSec auditing (`cargo-deny` plus `cargo-audit`), generated and

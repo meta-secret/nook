@@ -153,14 +153,25 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         .nth(1)
         .and_then(|tail| tail.split("\n  hive:auth:sync:\n").next())
         .context("Hive tasks must define explicit Codex auth rotation")?;
+    let deploy = tasks
+        .split("\n  hive:deploy:\n")
+        .nth(1)
+        .context("Hive tasks must define deployment")?;
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
             && rotate.contains("kubectl create secret generic hive-codex-auth")
             && rotate.contains("kubectl scale deployment/hive")
             && rotate.contains("--replicas=0")
             && rotate.contains("--for=delete")
+            && rotate.contains("mutation_lock=\"\\$remote_dir/hive-mutation.lock\"")
+            && rotate.contains("flock --exclusive --timeout 900 9")
             && rotate.contains("kubectl rollout status deployment/hive"),
         "explicit auth rotation must quiesce brokers, replace the Secret, and restore the pool"
+    );
+    assert!(
+        deploy.contains("mutation_lock=\"$remote_dir/hive-mutation.lock\"")
+            && deploy.contains("flock --exclusive --timeout 900 9"),
+        "Hive deployment and auth rotation must share the remote mutation lock"
     );
     let quiesce = rotate
         .find("--replicas=0")

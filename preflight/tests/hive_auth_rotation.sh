@@ -12,15 +12,23 @@ source /dev/stdin <<<"$function_source"
 
 action_log="$(mktemp)"
 auth_file="$(mktemp)"
-trap 'rm -f "$action_log" "$auth_file"' EXIT
+remote_dir="$(mktemp -d)"
+trap 'rm -f "$action_log" "$auth_file" "$remote_dir/hive-mutation.lock"; rmdir "$remote_dir"' EXIT
 rotation_mode="success"
+deployment_mode="present"
+
+flock() {
+  printf 'flock %s\n' "$*" >>"$action_log"
+}
 
 kubectl() {
   printf '%s\n' "$*" >>"$action_log"
   case "$1 $2" in
     "get deployment")
       if [[ " $* " == *" --ignore-not-found "* ]]; then
-        printf '%s\n' 'deployment.apps/hive'
+        if test "$deployment_mode" = "present"; then
+          printf '%s\n' 'deployment.apps/hive'
+        fi
       else
         printf '%s' '4'
       fi
@@ -59,21 +67,37 @@ run_rotation() {
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="success"
+deployment_mode="present"
 run_rotation
 test "$rotation_status" -eq 0
 test ! -e "$auth_file"
 quiesce_line="$(line_of --replicas=0)"
+lock_line="$(line_of 'flock --exclusive --timeout 900 9')"
 delete_line="$(line_of --for=delete)"
 apply_line="$(line_of 'apply -f -')"
 restore_line="$(line_of --replicas=4)"
+test "$lock_line" -lt "$quiesce_line"
 test "$quiesce_line" -lt "$delete_line"
 test "$delete_line" -lt "$apply_line"
 test "$apply_line" -lt "$restore_line"
+
+# Orphaned brokers are awaited even when their Deployment is already absent.
+: >"$action_log"
+printf '%s\n' replacement >"$auth_file"
+rotation_mode="success"
+deployment_mode="absent"
+run_rotation
+test "$rotation_status" -eq 0
+test ! -e "$auth_file"
+delete_line="$(line_of --for=delete)"
+apply_line="$(line_of 'apply -f -')"
+test "$delete_line" -lt "$apply_line"
 
 # An unverifiable quiescence fails closed without publishing and still restores workers.
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="pod-list-failure"
+deployment_mode="present"
 run_rotation
 test "$rotation_status" -ne 0
 test ! -e "$auth_file"
@@ -86,6 +110,7 @@ test "$quiesce_line" -lt "$restore_line"
 : >"$action_log"
 printf '%s\n' replacement >"$auth_file"
 rotation_mode="apply-failure"
+deployment_mode="present"
 run_rotation
 test "$rotation_status" -ne 0
 test ! -e "$auth_file"
