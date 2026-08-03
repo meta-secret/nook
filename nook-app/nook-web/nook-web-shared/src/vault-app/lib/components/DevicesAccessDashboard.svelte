@@ -2,21 +2,13 @@
 PRODUCT: Nook makes local device identity and vault access understandable without exposing secrets.
 USER: A person who cannot remember which passkey manager, browser, PIN, or vault relationship they used.
 MOMENT: They may have no vault, a locked vault, or an unlocked vault and need one trustworthy inventory.
-DIRECTION: A hairline schematic of the access chain as the subject—passkey, browser device key, vaults—with a quiet readout rail and one link's evidence inspected at a time.
+DIRECTION: Three calm bands from chain-strength: this browser, its unlock identity, and vault-led relationship rows. Identifiers stay comparable, verified routes stay explicit, and selecting a band opens its evidence below.
 DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, responsive shell, and light/dark themes.
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { tick, untrack } from 'svelte'
-  import {
-    ArrowLeft,
-    CircleHelp,
-    Fingerprint,
-    Laptop,
-    LockKeyhole,
-    RefreshCw,
-    ShieldCheck,
-  } from '@lucide/svelte'
+  import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import {
     DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
@@ -51,25 +43,21 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     ProviderSaveFocusKind,
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
-  import AccessChainDiagram from './devices-access/AccessChainDiagram.svelte'
+  import AccessStrengthMap from './devices-access/AccessStrengthMap.svelte'
+  import AccessStrengthPreview from './devices-access/AccessStrengthPreview.svelte'
   import AccessDeviceKeyPanel from './devices-access/AccessDeviceKeyPanel.svelte'
   import AccessUnlockPanel from './devices-access/AccessUnlockPanel.svelte'
   import AccessVaultsPanel from './devices-access/AccessVaultsPanel.svelte'
   import {
-    AccessChainLinkKind,
     AccessChainStage,
     accessChainTab,
     accessChainTabId,
     AccessChainTabKind,
     buildAccessChainNodes,
-    identityStateLabel,
     panelDescription,
     panelTitle,
-    protectionLabel,
-    stageLabel,
     textValue,
     type VaultAccessView,
-    verifiedVaultsLabel,
   } from './devices-access/access-chain'
 
   let {
@@ -380,138 +368,9 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
     </div>
   {:else}
     {@const view = loadState.view}
-    <div class="grid gap-8 lg:grid-cols-[11.5rem_minmax(0,1fr)] lg:gap-10">
-      <aside
-        class="order-2 space-y-4 lg:order-1"
-        data-testid="devices-access-rail"
-      >
-        <dl class="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-1">
-          <div>
-            <dt class="access-micro-label text-muted-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessStatusLabel)}
-            </dt>
-            <dd
-              class="mt-1.5 flex items-start gap-1.5 text-sm text-foreground"
-              data-testid="devices-access-identity-state"
-            >
-              {#if view.identityState === DeviceAccessIdentityState.Unlocked}
-                <ShieldCheck
-                  class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
-                />
-              {:else if view.identityState === DeviceAccessIdentityState.Locked}
-                <LockKeyhole
-                  class="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-                />
-              {:else}
-                <CircleHelp
-                  class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                />
-              {/if}
-              <span>{identityStateLabel(vault, view.identityState)}</span>
-            </dd>
-          </div>
-          <div>
-            <dt class="access-micro-label text-muted-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessProtectionLabel)}
-            </dt>
-            <dd class="mt-1.5 text-sm text-foreground">
-              {protectionLabel(vault, view.protection)}
-            </dd>
-          </div>
-          <div>
-            <dt class="access-micro-label text-muted-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessVerifiedVaultsLabel)}
-            </dt>
-            <dd class="mt-1.5 text-sm text-foreground">
-              {verifiedVaultsLabel(vault, view.vaults)}
-            </dd>
-          </div>
-        </dl>
-
-        <div class="h-px bg-border"></div>
-
-        <details data-testid="devices-access-legend">
-          <summary
-            class="access-micro-label min-h-11 cursor-pointer list-none py-3 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            {vault.t(I18N_KEYS.DevicesAccessEvidenceLegend)}
-          </summary>
-          <dl class="space-y-3 pb-1 text-xs">
-            <div class="flex gap-2">
-              <ShieldCheck
-                class="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
-              />
-              <div>
-                <dt class="font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceVerified)}
-                </dt>
-                <dd class="text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceVerifiedDesc)}
-                </dd>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <Laptop class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              <div>
-                <dt class="font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceBrowser)}
-                </dt>
-                <dd class="text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceBrowserDesc)}
-                </dd>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <Fingerprint
-                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-              />
-              <div>
-                <dt class="font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUser)}
-                </dt>
-                <dd class="text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUserDesc)}
-                </dd>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <CircleHelp
-                class="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-              />
-              <div>
-                <dt class="font-medium text-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUnknown)}
-                </dt>
-                <dd class="text-muted-foreground">
-                  {vault.t(I18N_KEYS.DevicesAccessProvenanceUnknownDesc)}
-                </dd>
-              </div>
-            </div>
-          </dl>
-        </details>
-      </aside>
-
-      <div class="order-1 min-w-0 lg:order-2">
+    <div class="min-w-0">
         {#if view.protection === DeviceAccessProtectionKind.Missing}
-          <div class="space-y-3" data-testid="devices-access-chain-preview">
-            <p class="access-micro-label text-muted-foreground">
-              {vault.t(I18N_KEYS.DevicesAccessChainLabel)}
-            </p>
-            <ol class="flex flex-wrap items-center gap-x-3 gap-y-2">
-              {#each chainNodes as node (node.stage)}
-                {#if node.incoming.kind === AccessChainLinkKind.Relation}
-                  <li class="access-micro-label text-muted-foreground">
-                    {node.incoming.label}
-                  </li>
-                {/if}
-                <li
-                  class="rounded-lg border border-dashed border-border px-2.5 py-1.5 text-sm text-muted-foreground"
-                >
-                  {stageLabel(vault, node.stage, view.protection)}
-                </li>
-              {/each}
-            </ol>
-          </div>
+          <AccessStrengthPreview {vault} vaults={view.vaults} />
           <div
             class="mt-8 border-t border-border/70 pt-6"
             data-testid="devices-access-prepare-browser"
@@ -523,25 +382,20 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
             />
           </div>
         {:else}
-          <div class="space-y-4">
-            <div class="flex flex-wrap items-baseline justify-between gap-x-4">
-              <p class="access-micro-label text-muted-foreground">
-                {vault.t(I18N_KEYS.DevicesAccessChainLabel)}
-              </p>
-              <p class="text-xs text-muted-foreground">
-                {vault.t(I18N_KEYS.DevicesAccessChainHint)}
-              </p>
-            </div>
-            <AccessChainDiagram
-              nodes={chainNodes}
-              selected={selectedStage}
-              label={vault.t(I18N_KEYS.DevicesAccessChainLabel)}
-              panelId={PANEL_ID}
-              onSelect={(stage) => {
-                selectedStage = stage
-              }}
-            />
-          </div>
+          <AccessStrengthMap
+            {vault}
+            nodes={chainNodes}
+            selected={selectedStage}
+            panelId={PANEL_ID}
+            identityState={view.identityState}
+            protection={view.protection}
+            passkeyName={view.passkeyName}
+            providerLabel={view.providerLabel}
+            vaults={view.vaults}
+            onSelect={(stage) => {
+              selectedStage = stage
+            }}
+          />
 
           <div
             id={PANEL_ID}
@@ -598,7 +452,6 @@ DESIGN SYSTEM: Existing Nook typography, surfaces, semantic colors, controls, re
             </div>
           </div>
         {/if}
-      </div>
     </div>
   {/if}
 </section>
