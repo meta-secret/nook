@@ -10,9 +10,14 @@ apply_log="$test_root/apply.log"
 remote_script="$test_root/hive-auth-remote.sh"
 mkdir -p "$mock_bin" "$remote_dir/secrets" "$lock_dir"
 trap 'rm -rf "$test_root"' EXIT
-sed -n '/HIVE_AUTH_REMOTE_BEGIN/,/HIVE_AUTH_REMOTE_END/p' \
-  "$repo_root/infra/tasks/hive.yml" |
-  sed '1d;$d;s/^        //' |
+program_source="$(
+  sed -n \
+    '/HIVE_AUTH_REMOTE_PROGRAM_BEGIN/,/HIVE_AUTH_REMOTE_PROGRAM_END/p' \
+    "$repo_root/infra/tasks/hive.yml" |
+    sed '1d;$d;s/^        //'
+)"
+source /dev/stdin <<<"$program_source"
+printf '%s\n' "$remote_program" |
   sed "s#/run/lock/nook#$lock_dir#g" >"$remote_script"
 chmod +x "$remote_script"
 

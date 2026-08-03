@@ -170,7 +170,8 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     assert!(
         rotate.contains("HIVE_AUTH_PUBLICATION_MODE: replace")
             && publish_task.contains("HIVE_CODEX_AUTH_FILE is required")
-            && publish_task.contains("remote_program=\"$(cat <<'REMOTE'")
+            && publish_task.contains("IFS= read -r -d '' remote_program <<'REMOTE' || true")
+            && !publish_task.contains("remote_program=\"$(cat <<'REMOTE'")
             && publish_task.contains("encoded_program=")
             && publish_task.contains("base64 -d")
             && publish_task.contains("HIVE_AUTH_REMOTE_BEGIN"),
