@@ -91,6 +91,7 @@ run_rotation() {
     PATH="$mock_bin:$PATH" \
       BARRIER_DIR="$barrier_dir" \
       APPLY_LOG="$apply_log" \
+      NOOK_HIVE_AUTH_STAGING_ROOT="$remote_dir/secrets" \
       sh -c "$remote_command"
 }
 

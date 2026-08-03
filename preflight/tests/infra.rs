@@ -175,7 +175,8 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     assert!(
         publish_task.contains("trap cleanup_input EXIT")
             && publish_task.contains("cat >\"$auth_file\"")
-            && publish_task.contains("codex-auth-rotation.XXXXXX")
+            && publish_task.contains("NOOK_HIVE_AUTH_STAGING_ROOT:-/dev/shm")
+            && publish_task.contains("nook-hive-auth.XXXXXX")
             && publish_task.contains("kubectl create secret generic hive-codex-auth")
             && publish_task.contains("kubectl scale deployment/hive")
             && publish_task.contains("--replicas=0")

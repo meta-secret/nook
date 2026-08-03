@@ -183,7 +183,7 @@ tasks:
         case "$publication_mode" in bootstrap|replace) ;; *) exit 2 ;; esac
         case "$remote_dir" in /*) ;; *) exit 2 ;; esac
         kubectl() { sudo -n k0s kubectl "$@"; }
-        staging_dir=""
+        staging_dir=""; staging_root="${NOOK_HIVE_AUTH_STAGING_ROOT:-/dev/shm}"
         cleanup_input() {
           if test -n "$staging_dir"; then
             rm -f "$staging_dir/auth.json"
@@ -191,7 +191,7 @@ tasks:
           fi
         }
         trap cleanup_input EXIT
-        staging_dir="$(mktemp -d "$remote_dir/secrets/codex-auth-rotation.XXXXXX")"
+        staging_dir="$(mktemp -d "$staging_root/nook-hive-auth.XXXXXX")"
         auth_file="$staging_dir/auth.json"
         cat >"$auth_file"
         chmod 0600 "$auth_file"
