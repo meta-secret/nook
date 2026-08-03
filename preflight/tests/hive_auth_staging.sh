@@ -81,12 +81,17 @@ chmod +x "$mock_bin/flock" "$mock_bin/jq" "$mock_bin/sudo"
 
 run_rotation() {
   account_id="$1"
+  encoded_program="$(base64 <"$remote_script" | tr -d '\n')"
+  encoded_mode="$(printf '%s' replace | base64 | tr -d '\n')"
+  encoded_dir="$(printf '%s' "$remote_dir" | base64 | tr -d '\n')"
+  printf -v remote_command 'bash -c "$(printf %%s %s | base64 -d)" -- "$(printf %%s %s | base64 -d)" "$(printf %%s %s | base64 -d)"' \
+    "$encoded_program" "$encoded_mode" "$encoded_dir"
   printf '{"auth_mode":"chatgpt","tokens":{"access_token":"access-%s","refresh_token":"refresh-%s","account_id":"%s"}}\n' \
     "$account_id" "$account_id" "$account_id" |
     PATH="$mock_bin:$PATH" \
       BARRIER_DIR="$barrier_dir" \
       APPLY_LOG="$apply_log" \
-      bash "$remote_script" replace "$remote_dir"
+      sh -c "$remote_command"
 }
 
 run_rotation alpha &

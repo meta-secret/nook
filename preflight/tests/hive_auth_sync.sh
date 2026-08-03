@@ -40,7 +40,7 @@ test ! -s "$task_log"
 : >"$task_log"
 ssh_mode="missing"
 HIVE_CODEX_AUTH_FILE="/current/local/auth.json" sync_hive_auth
-test "$(cat "$task_log")" = "infra:hive:auth:rotate"
+test "$(cat "$task_log")" = "infra:hive:auth:bootstrap"
 
 # Transport, authorization, and control-plane failures never invoke rotation.
 : >"$task_log"

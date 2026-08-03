@@ -136,6 +136,18 @@ tasks:
 
   hive:auth:rotate:
     desc: Explicitly replace Hive Codex authentication from a local bootstrap file.
+    cmds:
+      - task: hive:auth:publish
+        vars: { HIVE_AUTH_PUBLICATION_MODE: replace }
+
+  hive:auth:bootstrap:
+    internal: true
+    cmds:
+      - task: hive:auth:publish
+        vars: { HIVE_AUTH_PUBLICATION_MODE: bootstrap }
+
+  hive:auth:publish:
+    internal: true
     silent: true
     cmds:
       - |
@@ -143,7 +155,7 @@ tasks:
         set -euo pipefail
         ssh_target="{{.INFRA_SSH_TARGET}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
-        publication_mode="${HIVE_AUTH_ROTATION_MODE:-replace}"
+        publication_mode="{{.HIVE_AUTH_PUBLICATION_MODE}}"
         case "$publication_mode" in
           bootstrap|replace) ;;
           *)
@@ -189,7 +201,6 @@ tasks:
           (.tokens.refresh_token | type == "string" and length > 0) and
           (.tokens.account_id | type == "string" and length > 0)
         ' "$auth_file" >/dev/null
-
         # HIVE_AUTH_ROTATION_BEGIN
         publish_hive_auth() {
           auth_file="$1"
@@ -262,9 +273,12 @@ tasks:
         publish_hive_auth "$auth_file" "$publication_mode" "$staging_dir"
         # HIVE_AUTH_REMOTE_END
         REMOTE
-          )"
-          printf -v remote_command 'bash -c %q -- %q %q' \
-            "$remote_program" "$publication_mode" "$remote_dir"
+        )"
+          encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
+          encoded_mode="$(printf '%s' "$publication_mode" | base64 | tr -d '\n')"
+          encoded_dir="$(printf '%s' "$remote_dir" | base64 | tr -d '\n')"
+          printf -v remote_command 'bash -c "$(printf %%s %s | base64 -d)" -- "$(printf %%s %s | base64 -d)" "$(printf %%s %s | base64 -d)"' \
+            "$encoded_program" "$encoded_mode" "$encoded_dir"
           ssh -o BatchMode=yes "$ssh_target" \
             "$remote_command" \
             <"$auth_file"
@@ -304,7 +318,7 @@ tasks:
                 echo "Initial Hive deployment requires HIVE_CODEX_AUTH_FILE" >&2
                 return 2
               fi
-              HIVE_AUTH_ROTATION_MODE=bootstrap task infra:hive:auth:rotate
+              task infra:hive:auth:bootstrap
               ;;
             *)
               echo "Unexpected Hive Codex authentication lookup: $secret_ref" >&2
