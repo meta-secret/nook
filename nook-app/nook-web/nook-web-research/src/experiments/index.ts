@@ -387,7 +387,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Chain strength',
     description:
-      'One row per vault, passkeys as strands running through a device key to reach it. Redundancy at a glance.',
+      'One row per vault, one line per passkey, and a single column that is filled when it works from here.',
     component: ChainStrength,
   },
   {
@@ -414,7 +414,7 @@ export const experiments: Experiment[] = [
     subcategory: inspirationV1,
     title: 'Chain strength · kept',
     description:
-      'The adopted read: one row per vault, passkeys as strands converging on it. Frozen before iteration.',
+      'Strand form: one line per passkey→device route, my device marked on each. Kept for the converging rope.',
     component: FrozenChainStrength,
   },
   {

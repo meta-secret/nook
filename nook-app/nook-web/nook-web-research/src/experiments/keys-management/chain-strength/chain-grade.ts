@@ -15,16 +15,3 @@ export enum Redundancy {
   /** @public Several passkeys, spread across several managers. */
   Spread = 'spread',
 }
-
-/**
- * Whether one passkey → device key → vault strand can be walked from the
- * browser you are sitting in, and if not, which link is the one that stops it.
- */
-export enum PathReach {
-  /** @public The passkey is here and the device key is this browser's own. */
-  Now = 'now',
-  /** @public The strand runs through a device key that is not this browser's. */
-  OtherDevice = 'other-device',
-  /** @public The passkey itself cannot be presented from this browser. */
-  PasskeyElsewhere = 'passkey-elsewhere',
-}

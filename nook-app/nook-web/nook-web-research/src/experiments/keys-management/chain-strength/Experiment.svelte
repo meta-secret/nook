@@ -1,13 +1,14 @@
 <!--
 DIRECTION: My device key is established once, at the top, as the one object
-this browser can act on. Below it, one row per vault: every way in is a strand
-that reads left to right — passkey identifier, the device key it passes
-through, the vault. Strands that run through my device are solid and marked;
-the rest are dashed. Other devices only get a quiet footer: they exist, and
-that is all this browser can say about them.
+this browser can act on. Below it, one row per vault, and inside it one row per
+passkey that opens it — never one per route, so no identifier is ever printed
+twice. Every row holds the same four columns: which manager holds the passkey,
+which other devices carry it, and a final fixed slot that is filled when the
+passkey works from this browser and hollow when it does not. Reading down that
+last column answers the question without a sentence.
 -->
 <script lang="ts">
-  import { Fingerprint, Laptop, Vault as VaultIcon } from '@lucide/svelte'
+  import { Laptop, Vault as VaultIcon } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
@@ -32,25 +33,25 @@ that is all this browser can say about them.
     vaultsForDevice,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { PathReach, Redundancy } from './chain-grade'
+  import { Redundancy } from './chain-grade'
 
-  /** One passkey → device key → vault way in, as one line of the rope. */
-  interface Strand {
+  /** One passkey that opens a vault, with every device key that carries it. */
+  interface Way {
     key: string
     passkeyId: string
     passkeyShortId: string
     store: KeyStore
     storeName: string
-    deviceId: string
-    deviceShortId: string
-    deviceLabel: string
-    mine: boolean
-    reach: PathReach
+    /** The passkey is not presentable in this browser at all. */
+    elsewhere: boolean
+    /** Presentable here and carried by this browser's device key. */
+    here: boolean
+    others: Device[]
   }
 
   interface VaultRead {
     vault: Vault
-    strands: Strand[]
+    ways: Way[]
     passkeys: number
     managers: number
     now: number
@@ -80,55 +81,52 @@ that is all this browser can say about them.
     graph.devices.filter((device) => !isHere(graph, device)),
   )
 
-  function reachFor(mine: boolean, usable: boolean): PathReach {
-    if (!usable) return PathReach.PasskeyElsewhere
-    return mine ? PathReach.Now : PathReach.OtherDevice
+  function rank(way: Way): number {
+    if (way.here) return 0
+    return way.elsewhere ? 2 : 1
   }
 
-  function rank(reach: PathReach): number {
-    if (reach === PathReach.Now) return 0
-    return reach === PathReach.OtherDevice ? 1 : 2
-  }
-
-  function strandFor(
+  function wayFor(
     source: KeyGraph,
     vault: Vault,
-    device: Device,
     passkey: Passkey,
-  ): Strand {
-    const mine = isHere(source, device)
+    carriers: Device[],
+  ): Way {
+    const carrying = carriers.filter((device) =>
+      device.passkeyIds.includes(passkey.id),
+    )
     return {
-      key: `${vault.id}-${device.id}-${passkey.id}`,
+      key: `${vault.id}-${passkey.id}`,
       passkeyId: passkey.id,
       passkeyShortId: passkey.shortId,
       store: passkey.store,
       storeName: storeLabel(passkey.store),
-      deviceId: device.id,
-      deviceShortId: device.shortId,
-      deviceLabel: device.label,
-      mine,
-      reach: reachFor(mine, passkey.reach === Reach.Here),
+      elsewhere: passkey.reach === Reach.Elsewhere,
+      here:
+        passkey.reach === Reach.Here &&
+        carrying.some((device) => isHere(source, device)),
+      others: carrying.filter((device) => !isHere(source, device)),
     }
   }
 
   function readFor(source: KeyGraph, vault: Vault): VaultRead {
-    const strands = devicesForVault(source, vault)
-      .flatMap((device) =>
-        passkeysForDevice(source, device).map((passkey) =>
-          strandFor(source, vault, device, passkey),
-        ),
-      )
-      .sort((left, right) => rank(left.reach) - rank(right.reach))
-    const reaching = new Set(strands.map((strand) => strand.passkeyId))
-    const managers = new Set(strands.map((strand) => strand.store)).size
+    const carriers = devicesForVault(source, vault)
+    const reaching = new Set(
+      carriers.flatMap((device) => [...device.passkeyIds]),
+    )
+    const ways = source.passkeys
+      .filter((passkey) => reaching.has(passkey.id))
+      .map((passkey) => wayFor(source, vault, passkey, carriers))
+      .sort((left, right) => rank(left) - rank(right))
+    const managers = new Set(ways.map((way) => way.store)).size
     return {
       vault,
-      strands,
-      passkeys: reaching.size,
+      ways,
+      passkeys: ways.length,
       managers,
-      now: strands.filter((strand) => strand.reach === PathReach.Now).length,
+      now: ways.filter((way) => way.here).length,
       pips: source.passkeys.map((passkey) => reaching.has(passkey.id)),
-      grade: gradeOf(reaching.size, managers),
+      grade: gradeOf(ways.length, managers),
     }
   }
 
@@ -166,18 +164,11 @@ that is all this browser can say about them.
     return ((index + 0.5) / count) * 100
   }
 
-  function rule(reach: PathReach): string {
-    return reach === PathReach.Now
-      ? 'border-[#1a1815]/45'
-      : 'border-dashed border-[#1a1815]/25'
-  }
-
-  function reachWord(strand: Strand): string {
-    if (strand.reach === PathReach.Now) return 'Usable from this browser now'
-    if (strand.reach === PathReach.OtherDevice) {
-      return `Runs through ${strand.deviceLabel}`
-    }
-    return 'Passkey not available on this browser'
+  function wayWord(way: Way): string {
+    if (way.here) return 'Usable from this browser now'
+    if (way.elsewhere) return 'Passkey not available on this browser'
+    const names = way.others.map((device) => device.label).join(', ')
+    return `Only through ${names}`
   }
 
   function pick(kind: NodeKind, id: string) {
@@ -326,7 +317,26 @@ that is all this browser can say about them.
 
     <p class="{CAPS} mt-10 text-[#1a1815]/45">Vaults</p>
 
-    <ul class="mt-3 space-y-3">
+    <div class="mt-3 hidden sm:flex" aria-hidden="true">
+      <div class="flex min-w-0 flex-1 items-center gap-2 px-4 pb-1">
+        <span class="size-2 shrink-0"></span>
+        <span class="{CAPS} w-[4.6rem] shrink-0 text-[9px] text-[#1a1815]/35">
+          Passkey
+        </span>
+        <span class="{CAPS} min-w-0 flex-1 text-[9px] text-[#1a1815]/35">
+          Manager
+        </span>
+        <span
+          class="{CAPS} w-[5.4rem] shrink-0 text-right text-[9px] tracking-[0.14em] text-[#1a1815]/35"
+        >
+          From here
+        </span>
+      </div>
+      <div class="w-8 shrink-0"></div>
+      <div class="w-56 shrink-0"></div>
+    </div>
+
+    <ul class="space-y-3">
       {#each reads as read (read.vault.id)}
         {@const lit = highlight.vaultIds.includes(read.vault.id)}
         {@const chosen = isSelected(NodeKind.Vault, read.vault.id)}
@@ -386,13 +396,13 @@ that is all this browser can say about them.
                 aria-hidden="true"
                 focusable="false"
               >
-                {#each read.strands as strand, index (strand.key)}
+                {#each read.ways as way, index (way.key)}
                   <path
-                    d={`M0 ${braceY(read.strands.length, index)} H7 C15 ${braceY(read.strands.length, index)} 15 50 24 50`}
+                    d={`M0 ${braceY(read.ways.length, index)} H7 C15 ${braceY(read.ways.length, index)} 15 50 24 50`}
                     fill="none"
                     vector-effect="non-scaling-stroke"
-                    stroke-width={strand.reach === PathReach.Now ? 1.5 : 1}
-                    class={strand.reach === PathReach.Now
+                    stroke-width={way.here ? 1.5 : 1}
+                    class={way.here
                       ? 'stroke-[#1a1815]/70'
                       : 'stroke-[#1a1815]/20'}
                   />
@@ -400,7 +410,7 @@ that is all this browser can say about them.
               </svg>
             </div>
 
-            {#if read.strands.length === 0}
+            {#if read.ways.length === 0}
               <div class="flex flex-1 items-center gap-3 px-4 py-5">
                 <span class="flex-1 border-t border-dashed border-[#a8431c]/60"
                 ></span>
@@ -415,86 +425,70 @@ that is all this browser can say about them.
             {:else}
               <div
                 class="grid min-w-0 flex-1"
-                style={`grid-template-rows: repeat(${read.strands.length}, minmax(0, 1fr))`}
+                style={`grid-template-rows: repeat(${read.ways.length}, minmax(0, 1fr))`}
               >
-                {#each read.strands as strand (strand.key)}
-                  {@const strandLit = highlight.passkeyIds.includes(
-                    strand.passkeyId,
-                  )}
+                {#each read.ways as way (way.key)}
+                  {@const wayLit = highlight.passkeyIds.includes(way.passkeyId)}
                   <div
-                    class={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 transition motion-reduce:transition-none ${lit ? dim(strandLit) : ''} ${strand.reach === PathReach.Now ? 'bg-[#1f5c44]/8' : ''}`}
+                    class={`flex min-w-0 items-center gap-2 px-4 py-2 transition motion-reduce:transition-none ${lit ? dim(wayLit) : ''} ${way.here ? 'bg-[#1f5c44]/8' : ''}`}
                   >
-                    <span class="sr-only">{reachWord(strand)}</span>
+                    <span class="sr-only">{wayWord(way)}</span>
                     <span
                       class="size-2 shrink-0 rounded-full"
-                      style={`background:${STORE_INK[strand.store]}`}
+                      style={`background:${STORE_INK[way.store]}`}
                       aria-hidden="true"
                     ></span>
                     <button
                       type="button"
-                      aria-pressed={isSelected(
-                        NodeKind.Passkey,
-                        strand.passkeyId,
-                      )}
-                      aria-label={`Passkey ${strand.passkeyShortId} in ${strand.storeName}`}
-                      class={`flex items-center gap-1.5 border-b font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
-                        isSelected(NodeKind.Passkey, strand.passkeyId)
+                      aria-pressed={isSelected(NodeKind.Passkey, way.passkeyId)}
+                      aria-label={`Passkey ${way.passkeyShortId} in ${way.storeName}`}
+                      class={`w-[4.6rem] shrink-0 border-b text-left font-mono text-[13px] tracking-[0.06em] transition motion-reduce:transition-none ${
+                        isSelected(NodeKind.Passkey, way.passkeyId)
                           ? 'border-b-[#1a1815]'
                           : 'border-b-transparent'
                       }`}
-                      onclick={() => pick(NodeKind.Passkey, strand.passkeyId)}
+                      onclick={() => pick(NodeKind.Passkey, way.passkeyId)}
                     >
-                      <Fingerprint
-                        class="size-3 shrink-0 text-[#1a1815]/50"
-                        aria-hidden="true"
-                      />
-                      {strand.passkeyShortId}
+                      {way.passkeyShortId}
                     </button>
-                    <span class="shrink-0 text-[11px] text-[#1a1815]/55">
-                      {strand.storeName}
+                    <span
+                      class="min-w-0 flex-1 truncate text-[11px] text-[#1a1815]/55"
+                    >
+                      {way.storeName}
                     </span>
-                    {#if strand.reach === PathReach.PasskeyElsewhere}
+                    {#if way.elsewhere}
                       <span
                         class="shrink-0 font-mono text-[9px] tracking-[0.14em] text-[#a8431c] uppercase"
                       >
                         elsewhere
                       </span>
                     {/if}
-                    <span
-                      class={`min-w-5 flex-1 border-t ${rule(strand.reach)}`}
-                      aria-hidden="true"
-                    ></span>
-                    <button
-                      type="button"
-                      aria-pressed={isSelected(
-                        NodeKind.Device,
-                        strand.deviceId,
-                      )}
-                      aria-label={strand.mine
-                        ? 'Through my device key'
-                        : `Through device key ${strand.deviceShortId}, ${strand.deviceLabel}`}
-                      class={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase transition motion-reduce:transition-none ${
-                        strand.mine
-                          ? 'bg-[#1a1815] text-[#f6f3ec]'
-                          : `border text-[#1a1815]/55 ${chosenEdge(isSelected(NodeKind.Device, strand.deviceId))}`
-                      }`}
-                      onclick={() => pick(NodeKind.Device, strand.deviceId)}
-                    >
-                      <Laptop class="size-3 shrink-0" aria-hidden="true" />
-                      {strand.mine ? 'my device' : strand.deviceShortId}
-                    </button>
-                    <span
-                      class={`w-4 shrink-0 border-t ${rule(strand.reach)}`}
-                      aria-hidden="true"
-                    ></span>
-                    {#if strand.reach === PathReach.Now}
-                      <span
-                        class="shrink-0 rounded-full bg-[#1f5c44] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.14em] text-[#f6f3ec] uppercase"
-                        aria-hidden="true"
+                    {#each way.others as device (device.id)}
+                      <button
+                        type="button"
+                        aria-pressed={isSelected(NodeKind.Device, device.id)}
+                        aria-label={`Also on device key ${device.shortId}, ${device.label}`}
+                        class={`flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[#1a1815]/55 transition motion-reduce:transition-none ${chosenEdge(isSelected(NodeKind.Device, device.id))}`}
+                        onclick={() => pick(NodeKind.Device, device.id)}
                       >
-                        now
-                      </span>
-                    {/if}
+                        <Laptop class="size-2.5 shrink-0" aria-hidden="true" />
+                        {device.shortId}
+                      </button>
+                    {/each}
+                    <span
+                      class="flex w-6 shrink-0 items-center justify-end sm:w-[5.4rem]"
+                      aria-hidden="true"
+                    >
+                      {#if way.here}
+                        <span
+                          class="size-2.5 rounded-full bg-[#1f5c44] ring-3 ring-[#1f5c44]/20"
+                        ></span>
+                      {:else}
+                        <span
+                          class="size-2.5 rounded-full border border-[#1a1815]/45"
+                        ></span>
+                      {/if}
+                    </span>
                   </div>
                 {/each}
               </div>
