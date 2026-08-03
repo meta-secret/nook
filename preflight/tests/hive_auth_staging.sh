@@ -25,6 +25,19 @@ test "$3" = 900
 test "$4" = 9
 MOCK
 
+cat >"$mock_bin/jq" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+test "$1" = -e
+payload="$(cat)"
+printf '%s' "$payload" | grep -Fq '"auth_mode":"chatgpt"'
+printf '%s' "$payload" | grep -Fq '"access_token":"access-'
+printf '%s' "$payload" | grep -Fq '"refresh_token":"refresh-'
+account_id="$(printf '%s' "$payload" | sed -n 's/.*"account_id":"\([^"]*\)".*/\1/p')"
+test -n "$account_id"
+printf 'account=%s\n' "$account_id"
+MOCK
+
 cat >"$mock_bin/sudo" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -38,7 +51,8 @@ shift
 case "$1 $2" in
   "get deployment"|"get pod") ;;
   "apply -f")
-    account_id="$(jq -r '.data["auth.json"] | @base64d | fromjson | .tokens.account_id')"
+    account_id="$(sed -n 's/^account=//p')"
+    test -n "$account_id"
     printf '%s\n' "$account_id" >>"$APPLY_LOG"
     ;;
   *)
@@ -47,7 +61,7 @@ case "$1 $2" in
     ;;
 esac
 MOCK
-chmod +x "$mock_bin/flock" "$mock_bin/sudo"
+chmod +x "$mock_bin/flock" "$mock_bin/jq" "$mock_bin/sudo"
 
 run_rotation() {
   account_id="$1"
