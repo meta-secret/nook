@@ -134,10 +134,7 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             "preflight/tests/hive_auth_rotation.sh",
             "Hive auth rotation",
         ),
-        (
-            "preflight/tests/hive_auth_staging.sh",
-            "Hive auth staging",
-        ),
+        ("preflight/tests/hive_auth_staging.sh", "Hive auth staging"),
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
