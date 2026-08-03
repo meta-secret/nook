@@ -175,7 +175,8 @@ tasks:
           ' "$auth_file" >/dev/null
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
-          remote_program="$(cat <<'REMOTE'
+          # HIVE_AUTH_REMOTE_PROGRAM_BEGIN
+          IFS= read -r -d '' remote_program <<'REMOTE' || true
         # HIVE_AUTH_REMOTE_BEGIN
         set -euo pipefail
         publication_mode="${1:-}"
@@ -260,7 +261,7 @@ tasks:
         publish_hive_auth "$publication_mode"
         # HIVE_AUTH_REMOTE_END
         REMOTE
-        )"
+          # HIVE_AUTH_REMOTE_PROGRAM_END
           encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
           encoded_mode="$(printf '%s' "$publication_mode" | base64 | tr -d '\n')"
           encoded_dir="$(printf '%s' "$remote_dir" | base64 | tr -d '\n')"
