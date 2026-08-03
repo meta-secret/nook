@@ -195,8 +195,9 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
     );
     let neo4j = read("infra/tasks/neo4j.yml");
     assert!(
-        neo4j.contains("if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN")
-            && neo4j.contains("exec 9>/run/lock/nook/hive-mutation.lock")
+        neo4j.contains(
+            "if test \"$tls_changed\" = true; then\n          # NEO4J_HIVE_MUTATION_LOCK_BEGIN"
+        ) && neo4j.contains("exec 9>/run/lock/nook/hive-mutation.lock")
             && neo4j.contains("flock --exclusive --timeout 900 9"),
         "Neo4j TLS rotation must share Hive's host-global mutation lock"
     );

@@ -34,7 +34,10 @@ export -f sudo
 
 flock() {
   descriptor="${*: -1}"
-  lock_key="$(stat -f '%i' "/dev/fd/$descriptor")"
+  lock_key="$(
+    stat -f '%i' "/dev/fd/$descriptor" 2>/dev/null ||
+      stat -c '%i' "/dev/fd/$descriptor"
+  )"
   NOOK_TEST_HELD_LOCK="$NOOK_TEST_FLOCK_ROOT/$lock_key"
   export NOOK_TEST_HELD_LOCK
   for _attempt in $(seq 1 500); do
