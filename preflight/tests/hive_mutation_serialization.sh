@@ -32,25 +32,27 @@ sudo() {
 }
 export -f sudo
 
-flock() {
-  descriptor="${*: -1}"
-  lock_key="$(
-    stat -f '%i' "/dev/fd/$descriptor" 2>/dev/null ||
-      stat -c '%i' "/dev/fd/$descriptor"
-  )"
-  NOOK_TEST_HELD_LOCK="$NOOK_TEST_FLOCK_ROOT/$lock_key"
-  export NOOK_TEST_HELD_LOCK
-  for _attempt in $(seq 1 500); do
-    if mkdir "$NOOK_TEST_HELD_LOCK" 2>/dev/null; then
-      return
-    fi
-    sleep 0.01
-  done
-  return 1
-}
-export -f flock
 export NOOK_TEST_FLOCK_ROOT="$test_root/flock"
 mkdir -p "$NOOK_TEST_FLOCK_ROOT"
+if ! command -v flock >/dev/null; then
+  flock() {
+    NOOK_TEST_HELD_LOCK="$NOOK_TEST_FLOCK_ROOT/held"
+    export NOOK_TEST_HELD_LOCK
+    for _attempt in $(seq 1 500); do
+      if mkdir "$NOOK_TEST_HELD_LOCK" 2>/dev/null; then
+        return
+      fi
+      sleep 0.01
+    done
+    return 1
+  }
+  export -f flock
+fi
+
+expected_lock="exec 9>$lock_dir/hive-mutation.lock"
+printf '%s\n' "$auth_lock" | grep -Fxq "$expected_lock"
+printf '%s\n' "$deploy_lock" | grep -Fxq "$expected_lock"
+printf '%s\n' "$neo4j_lock" | grep -Fxq "$expected_lock"
 
 run_transaction() {
   transaction="$1"
@@ -66,7 +68,9 @@ run_transaction() {
     sleep 0.15
     printf 'exit:%s\n' '$transaction' >>'$event_log'
     rmdir '$guard_dir'
-    rmdir \"\$NOOK_TEST_HELD_LOCK\"
+    if test -n \"\${NOOK_TEST_HELD_LOCK:-}\"; then
+      rmdir \"\$NOOK_TEST_HELD_LOCK\"
+    fi
   "
 }
 
