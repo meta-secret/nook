@@ -59,3 +59,9 @@ be visible at a glance, not read off a label.
 
 Drawing every relation at once produced a net nobody could read. Prefer showing
 one vault, or one route, at a time.
+
+V4 takes its architecture from [Internet Identity](https://id.ai): the first
+question is not which key wraps which key but who you are signing in as. An
+identity is a passkey, so a person can hold several; Access lists them as cards
+titled by the manager that holds each one, because "Bitwarden" is what someone
+recognises and `c07e33` is what they compare.

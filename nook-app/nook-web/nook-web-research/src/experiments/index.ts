@@ -21,6 +21,7 @@ import Blueprint from './keys-management/blueprint/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
 import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
+import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
@@ -158,6 +159,13 @@ export const subcategories: ExperimentSubcategory[] = [
       'Operator density: consoles and artifacts that put identifiers side by side.',
   },
   {
+    categorySlug: 'keys-management',
+    slug: ExperimentVersion.V4,
+    title: 'V4 · Identity first',
+    description:
+      "Internet Identity's architecture applied to Nook: one passkey is one identity, and access is a list of them.",
+  },
+  {
     categorySlug: 'inspiration',
     slug: ExperimentVersion.V1,
     title: 'V1 · Kept as-is',
@@ -179,8 +187,9 @@ const v4 = subcategories[5]
 const keysV1 = subcategories[6]
 const keysV2 = subcategories[7]
 const keysV3 = subcategories[8]
+const keysV4 = subcategories[9]
 const inspiration = categories[4]
-const inspirationV1 = subcategories[9]
+const inspirationV1 = subcategories[10]
 
 export const experiments: Experiment[] = [
   {
@@ -387,7 +396,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV3,
     title: 'Chain strength',
     description:
-      'One row per vault, one line per passkey, and a single column that is filled when it works from here.',
+      'My identities as cards titled by their manager, then one row per vault where each way in is a strand.',
     component: ChainStrength,
   },
   {
@@ -409,12 +418,21 @@ export const experiments: Experiment[] = [
     component: EvidenceDrawers,
   },
   {
+    slug: 'identity-console',
+    category: keys,
+    subcategory: keysV4,
+    title: 'Identity console',
+    description:
+      'Home picks the identity this browser can continue with, Access lists every passkey by its manager, Vaults hangs off them.',
+    component: IdentityConsole,
+  },
+  {
     slug: 'frozen-chain-strength',
     category: inspiration,
     subcategory: inspirationV1,
     title: 'Chain strength · kept',
     description:
-      'Strand form: one line per passkey→device route, my device marked on each. Kept for the converging rope.',
+      'The strand rope before the identity band, with passkeys and vaults listed on the device panel itself.',
     component: FrozenChainStrength,
   },
   {
