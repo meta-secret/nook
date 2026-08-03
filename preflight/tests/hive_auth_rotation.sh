@@ -25,7 +25,12 @@ kubectl() {
         printf '%s' '4'
       fi
       ;;
-    "get pod") printf '%s\n' 'pod/hive-old' ;;
+    "get pod")
+      if test "$rotation_mode" = "pod-list-failure"; then
+        return 1
+      fi
+      printf '%s\n' 'pod/hive-old'
+      ;;
     "create secret") printf '%s\n' 'replacement-secret' ;;
     "apply -f")
       cat >/dev/null
@@ -64,6 +69,18 @@ restore_line="$(line_of --replicas=4)"
 test "$quiesce_line" -lt "$delete_line"
 test "$delete_line" -lt "$apply_line"
 test "$apply_line" -lt "$restore_line"
+
+# An unverifiable quiescence fails closed without publishing and still restores workers.
+: >"$action_log"
+printf '%s\n' replacement >"$auth_file"
+rotation_mode="pod-list-failure"
+run_rotation
+test "$rotation_status" -ne 0
+test ! -e "$auth_file"
+! grep -Fq -- 'apply -f -' "$action_log"
+quiesce_line="$(line_of --replicas=0)"
+restore_line="$(line_of --replicas=4)"
+test "$quiesce_line" -lt "$restore_line"
 
 # Failed publication still deletes plaintext staging and restores the prior replica count.
 : >"$action_log"

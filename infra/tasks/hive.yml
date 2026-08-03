@@ -214,10 +214,16 @@ tasks:
             kubectl rollout status deployment/hive \
               --namespace hive-system \
               --timeout=10m
-            if kubectl get pod \
-              --namespace hive-system \
-              --selector app.kubernetes.io/name=hive \
-              -o name | grep -q .; then
+            pod_refs="\$(
+              kubectl get pod \
+                --namespace hive-system \
+                --selector app.kubernetes.io/name=hive \
+                -o name
+            )" || {
+              echo "Hive Pod lookup failed after scaling workers to zero" >&2
+              exit 1
+            }
+            if printf '%s\n' "\$pod_refs" | grep -q .; then
               kubectl wait pod \
                 --namespace hive-system \
                 --selector app.kubernetes.io/name=hive \
