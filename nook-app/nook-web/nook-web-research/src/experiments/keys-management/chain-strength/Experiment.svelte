@@ -146,6 +146,20 @@ get a quiet footer: they exist, and that is all this browser can say about them.
     return `${read.passkeys} of ${total} passkeys · ${read.managers} manager${read.managers === 1 ? '' : 's'}`
   }
 
+  /** Says the incoming relation aloud, since only the brace draws it. */
+  function vaultName(read: VaultRead): string {
+    const ways = read.strands.length
+    if (ways === 0) {
+      return `Vault ${read.vault.label}, ${read.vault.shortId}, nothing opens it`
+    }
+    const opened = `opened by ${ways} way${ways === 1 ? '' : 's'} in`
+    const here =
+      read.now === 0
+        ? 'none of them from this browser'
+        : `${read.now} of them from this browser`
+    return `Vault ${read.vault.label}, ${read.vault.shortId}, ${opened}, ${here}`
+  }
+
   function gradeInk(grade: Redundancy): string {
     if (grade === Redundancy.Spread) return 'text-[#1f5c44]'
     if (grade === Redundancy.OneManager) return 'text-[#8a5d0f]'
@@ -379,6 +393,7 @@ get a quiet footer: they exist, and that is all this browser can say about them.
             <button
               type="button"
               aria-pressed={chosen}
+              aria-label={vaultName(read)}
               class="flex shrink-0 flex-col justify-center gap-1.5 border-b border-[#1a1815]/15 bg-[#fffdf7] px-4 py-3 text-left sm:w-56 sm:border-r sm:border-b-0"
               onclick={() => pick(NodeKind.Vault, read.vault.id)}
             >

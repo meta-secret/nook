@@ -26,7 +26,7 @@ Other device keys get a flat strip at the bottom that only reports existence.
     vaultsForDevice,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { BoardStatus } from './board-status'
+  import { BoardStatus, type Row, RowKind } from './board-status'
   import { DeviceAction } from './device-action'
 
   interface Line {
@@ -47,7 +47,7 @@ Other device keys get a flat strip at the bottom that only reports existence.
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
-  let openId = $state('')
+  let row = $state<Row>({ kind: RowKind.Closed })
   let action = $state(DeviceAction.None)
 
   const graph = $derived(graphById(graphId))
@@ -143,7 +143,8 @@ Other device keys get a flat strip at the bottom that only reports existence.
   }
 
   function toggle(id: string) {
-    openId = openId === id ? '' : id
+    const same = row.kind === RowKind.Open && row.vaultId === id
+    row = same ? { kind: RowKind.Closed } : { kind: RowKind.Open, vaultId: id }
   }
 </script>
 
@@ -153,7 +154,7 @@ Other device keys get a flat strip at the bottom that only reports existence.
     {graph}
     onGraph={(next) => {
       graphId = next
-      openId = ''
+      row = { kind: RowKind.Closed }
       action = DeviceAction.None
     }}
   />
@@ -300,7 +301,8 @@ Other device keys get a flat strip at the bottom that only reports existence.
 
     <ul class="mt-2 space-y-2">
       {#each lines as line (line.vault.id)}
-        {@const open = openId === line.vault.id}
+        {@const open =
+          row.kind === RowKind.Open && row.vaultId === line.vault.id}
         <li
           class={`overflow-hidden rounded-sm border border-y-[#1b1f24] border-r-[#1b1f24] border-l-2 bg-[#0d1013] ${statusEdge(line.status)}`}
         >

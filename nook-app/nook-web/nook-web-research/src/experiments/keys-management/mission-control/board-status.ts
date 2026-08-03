@@ -15,3 +15,15 @@ export enum BoardStatus {
   /** @public No passkey reaches this vault at all. */
   Severed = 'severed',
 }
+
+/** Whether a vault row on the board is showing its detail. */
+export enum RowKind {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Closed = 'closed',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
+  Open = 'open',
+}
+
+export type Row =
+  | { kind: RowKind.Closed }
+  | { kind: RowKind.Open; vaultId: string }

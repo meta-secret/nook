@@ -28,22 +28,18 @@ Every other device key is a line in a quiet register underneath, nothing more.
     type Passkey,
     Reach,
     storeLabel,
-    type Vault,
     vaultsForDevice,
     vaultsOpenableHere,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
-  import { Circuit, SeatKind, SlotKind, Socket } from './circuit'
-
-  /** What sits in the passkey socket above the board. */
-  type Seat =
-    | { kind: SeatKind.Empty }
-    | { kind: SeatKind.Seated; passkey: Passkey }
-
-  /** What sits in the vault slot below the board. */
-  type Slot =
-    | { kind: SlotKind.Empty }
-    | { kind: SlotKind.Slotted; vault: Vault }
+  import {
+    Circuit,
+    type Seat,
+    SeatKind,
+    type Slot,
+    SlotKind,
+    Socket,
+  } from './circuit'
 
   /** Two doglegs and a junction, the way copper actually turns a corner. */
   const TRACE = 'M12 0 V14 L4 24 V42 L12 52 V56'
@@ -230,7 +226,7 @@ Every other device key is a line in a quiet register underneath, nothing more.
         fill="none"
         stroke-width="1.25"
         pathLength="1"
-        stroke-dasharray={broken ? '0.44 0.16 0.4' : undefined}
+        stroke-dasharray={broken ? '0.44 0.16 0.4' : 'none'}
         class={broken ? 'stroke-[#3d2c17]' : 'stroke-[#173139]'}
       />
       {#if broken}

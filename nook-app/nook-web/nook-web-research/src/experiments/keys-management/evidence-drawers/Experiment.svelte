@@ -104,10 +104,22 @@ exist, and that is all this browser can say about them.
     )
   }
 
+  /** The drawer face that owns a node, so focus can follow the cabinet. */
+  function faceId(kind: NodeKind, id: string): string {
+    return `face-${kind}-${id}`
+  }
+
   function toggle(kind: NodeKind, id: string) {
-    pull = isPulled(kind, id)
+    const shutting = isPulled(kind, id)
+    pull = shutting
       ? { kind: PullKind.Shut }
       : { kind: PullKind.Open, node: { kind, id } }
+    if (shutting) return
+    // Pulling from inside another drawer hides the button that was clicked.
+    requestAnimationFrame(() => {
+      const face = document.getElementById(faceId(kind, id))
+      if (face instanceof HTMLElement) face.focus()
+    })
   }
 
   function linked(kind: NodeKind, id: string): boolean {
@@ -363,6 +375,7 @@ exist, and that is all this browser can say about them.
           >
             <button
               type="button"
+              id={faceId(NodeKind.Vault, vault.id)}
               aria-expanded={open}
               aria-controls={`drawer-vault-${vault.id}`}
               class={`flex w-full flex-col gap-1 rounded-sm border px-3 py-2 text-left ${FACE} ${edge(state)}`}
@@ -475,6 +488,7 @@ exist, and that is all this browser can say about them.
           >
             <button
               type="button"
+              id={faceId(NodeKind.Passkey, passkey.id)}
               aria-expanded={open}
               aria-controls={`drawer-passkey-${passkey.id}`}
               class={`flex w-full flex-col gap-1 rounded-sm border px-3 py-2 text-left ${away ? AWAY : FACE} ${edge(state)}`}

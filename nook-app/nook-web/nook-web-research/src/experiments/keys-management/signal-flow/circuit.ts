@@ -1,3 +1,5 @@
+import type { Passkey, Vault } from '../_shared/key-graph'
+
 /**
  * Board vocabulary for the signal-flow sketch.
  *
@@ -28,6 +30,11 @@ export enum SeatKind {
   Seated = 'seated',
 }
 
+/** What sits in the passkey socket above the board. */
+export type Seat =
+  | { kind: SeatKind.Empty }
+  | { kind: SeatKind.Seated; passkey: Passkey }
+
 /** Whether the slot below the board holds a vault right now. */
 export enum SlotKind {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
@@ -35,6 +42,11 @@ export enum SlotKind {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Slotted = 'slotted',
 }
+
+/** What sits in the vault slot below the board. */
+export type Slot =
+  | { kind: SlotKind.Empty }
+  | { kind: SlotKind.Slotted; vault: Vault }
 
 /** How one passkey socket sits against the device key of this browser. */
 export enum Socket {

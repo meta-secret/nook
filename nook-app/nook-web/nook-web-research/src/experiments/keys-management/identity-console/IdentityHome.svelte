@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ArrowRight, Plus } from '@lucide/svelte'
   import {
-    hereDevices,
     type KeyGraph,
     NodeKind,
     type NodeRef,
@@ -11,32 +10,25 @@
     vaultsForPasskey,
   } from '../_shared/key-graph'
   import { ACCENT, CAPS, MONO, QUOTE, RULE, STATEMENT } from './console-ui'
+  import { type Lead, leadFor, leadId, LeadKind, usableHere } from './lead'
 
   interface Props {
     graph: KeyGraph
+    selected: NodeRef
     onPick: (node: NodeRef) => void
     onAdd: () => void
   }
 
-  let { graph, onPick, onAdd }: Props = $props()
+  let { graph, selected, onPick, onAdd }: Props = $props()
 
   /** One identity leads, the way one account leads on a sign-in screen. */
-  const lead = $derived(graph.passkeys.find(usableHere))
+  const lead: Lead = $derived(leadFor(graph, selected))
   const rest = $derived(
-    graph.passkeys.filter((passkey) => passkey.id !== lead?.id),
+    graph.passkeys.filter((passkey) => passkey.id !== leadId(lead)),
   )
 
-  function usableHere(passkey: Passkey): boolean {
-    return (
-      passkey.reach === Reach.Here &&
-      hereDevices(graph).some((device) =>
-        device.passkeyIds.includes(passkey.id),
-      )
-    )
-  }
-
   function stateWord(passkey: Passkey): string {
-    if (usableHere(passkey)) return 'ready here'
+    if (usableHere(graph, passkey)) return 'ready here'
     if (passkey.reach === Reach.Elsewhere) return 'not in this browser'
     return 'other devices only'
   }
@@ -48,42 +40,43 @@
 </script>
 
 <h1 class={STATEMENT}>
-  {#if lead}
-    Continue as {lead.label}.
+  {#if lead.kind === LeadKind.Ready}
+    Continue as {lead.passkey.label}.
+  {:else if lead.kind === LeadKind.Away}
+    {lead.passkey.label} is not in this browser.
   {:else}
     No identity works in this browser yet.
   {/if}
 </h1>
 
-{#if lead}
-  <div class="{QUOTE} mt-10 max-w-xl">
-    <p class="text-lg leading-7 sm:text-xl">{storeLabel(lead.store)}</p>
-    <p class="{CAPS} mt-4 text-[#6d6d6a]">Passkey Nook compares</p>
-    <button
-      type="button"
-      class="{MONO} mt-1.5 block text-sm text-[#c9c8c4] transition hover:text-[#f4f3f0] motion-reduce:transition-none"
-      aria-label={`Passkey ${lead.shortId} in ${storeLabel(lead.store)}`}
-      onclick={() => onPick({ kind: NodeKind.Passkey, id: lead.id })}
-    >
-      {lead.shortId}
-    </button>
-  </div>
-
-  <button
-    type="button"
-    class="mt-10 flex items-center gap-3 self-start rounded-full px-6 py-3 text-sm font-medium text-[#08090a] transition hover:opacity-90 motion-reduce:transition-none"
-    style={`background:${ACCENT}`}
-  >
-    Continue
-    <ArrowRight class="size-4" aria-hidden="true" />
-  </button>
-{:else}
+{#if lead.kind === LeadKind.None}
   <p
     class="{QUOTE} mt-10 max-w-xl border-dashed text-base leading-7 text-[#9d9c98]"
   >
     Every passkey you hold lives somewhere else right now. Present one, or enrol
     a new one for this browser.
   </p>
+{:else}
+  <div class="{QUOTE} mt-10 max-w-xl">
+    <p class="text-lg leading-7 sm:text-xl">{storeLabel(lead.passkey.store)}</p>
+    <p class="{CAPS} mt-4 text-[#6d6d6a]">Passkey Nook compares</p>
+    <p class="{MONO} mt-1.5 text-sm text-[#c9c8c4]">{lead.passkey.shortId}</p>
+  </div>
+
+  {#if lead.kind === LeadKind.Ready}
+    <button
+      type="button"
+      class="mt-10 flex items-center gap-3 self-start rounded-full px-6 py-3 text-sm font-medium text-[#08090a] transition hover:opacity-90 motion-reduce:transition-none"
+      style={`background:${ACCENT}`}
+    >
+      Continue
+      <ArrowRight class="size-4" aria-hidden="true" />
+    </button>
+  {:else}
+    <p class="{CAPS} mt-8 text-[#6d6d6a]">
+      Open it where {storeLabel(lead.passkey.store)} is unlocked
+    </p>
+  {/if}
 {/if}
 
 {#if rest.length > 0}
@@ -95,7 +88,7 @@
         <button
           type="button"
           class="group flex w-full flex-wrap items-baseline gap-x-5 gap-y-1 py-4 text-left"
-          aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
+          aria-label={`Continue as ${passkey.label}, passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
           onclick={() => onPick({ kind: NodeKind.Passkey, id: passkey.id })}
         >
           <span class="min-w-0 basis-full sm:flex-1 sm:basis-0">

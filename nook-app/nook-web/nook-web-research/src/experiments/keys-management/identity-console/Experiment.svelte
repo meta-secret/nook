@@ -64,7 +64,7 @@ resolves into hairline-ruled rows where the identifiers sit in mono.
           <button
             type="button"
             class="group flex items-center gap-3 py-2 pr-2 text-left"
-            aria-current={active ? 'page' : undefined}
+            aria-current={active ? 'page' : 'false'}
             onclick={() => (pane = option)}
           >
             <span
@@ -96,6 +96,7 @@ resolves into hairline-ruled rows where the identifiers sit in mono.
       {#if pane === Pane.Home}
         <IdentityHome
           {graph}
+          {selected}
           onPick={(node) => (selected = node)}
           onAdd={() => (adding = true)}
         />

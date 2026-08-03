@@ -2,7 +2,14 @@
   import { ArrowRight, X } from '@lucide/svelte'
   import { KeyStore, storeLabel } from '../_shared/key-graph'
   import { ACCENT, CAPS, RULE } from './console-ui'
-  import { currentOpener, keepFocusInside, restore } from './focus-trap'
+  import {
+    currentOpener,
+    focusPrimary,
+    keepFocusInside,
+    panelById,
+    PanelKind,
+    restore,
+  } from './focus-trap'
 
   interface Props {
     onClose: () => void
@@ -17,12 +24,12 @@
     KeyStore.SecurityKey,
   ]
 
-  let primary = $state<HTMLButtonElement>()
-  let panel = $state<HTMLDivElement>()
+  const PANEL_ID = 'add-identity-panel'
   const opener = currentOpener()
 
   $effect(() => {
-    primary?.focus()
+    const panel = panelById(PANEL_ID)
+    if (panel.kind === PanelKind.Mounted) focusPrimary(panel.node)
     return () => restore(opener)
   })
 
@@ -31,7 +38,8 @@
       onClose()
       return
     }
-    if (panel) keepFocusInside(panel, event)
+    const panel = panelById(PANEL_ID)
+    if (panel.kind === PanelKind.Mounted) keepFocusInside(panel.node, event)
   }
 </script>
 
@@ -46,7 +54,7 @@
   ></button>
 
   <div
-    bind:this={panel}
+    id={PANEL_ID}
     role="dialog"
     aria-modal="true"
     aria-labelledby="add-identity-title"
@@ -71,7 +79,7 @@
     </h2>
 
     <button
-      bind:this={primary}
+      data-primary
       type="button"
       class="mt-8 rounded-full px-6 py-3 text-sm font-medium text-[#08090a] transition hover:opacity-90 motion-reduce:transition-none"
       style={`background:${ACCENT}`}
