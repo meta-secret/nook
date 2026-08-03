@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowRight, Plus, SquarePen } from '@lucide/svelte'
+  import { ArrowRight, Plus } from '@lucide/svelte'
   import {
     hereDevices,
     type KeyGraph,
@@ -10,8 +10,7 @@
     storeLabel,
     vaultsForPasskey,
   } from '../_shared/key-graph'
-  import { CAPS, CARD, MONO, TITLE } from './console-ui'
-  import StoreMark from './StoreMark.svelte'
+  import { ACCENT, CAPS, MONO, QUOTE, RULE, STATEMENT } from './console-ui'
 
   interface Props {
     graph: KeyGraph
@@ -36,100 +35,88 @@
     )
   }
 
+  function stateWord(passkey: Passkey): string {
+    if (usableHere(passkey)) return 'ready here'
+    if (passkey.reach === Reach.Elsewhere) return 'not in this browser'
+    return 'other devices only'
+  }
+
   function vaultWord(passkey: Passkey): string {
     const count = vaultsForPasskey(graph, passkey.id).length
     return count === 1 ? '1 vault' : `${count} vaults`
   }
-
-  function stateWord(passkey: Passkey): string {
-    if (passkey.reach === Reach.Elsewhere) return 'not in this browser'
-    return 'other devices only'
-  }
 </script>
 
-<h1 class={TITLE}>Manage your identity</h1>
-<p class="mt-2 text-[14px] text-white/45">
-  An identity is a passkey. Nook holds as many as you enrol.
-</p>
+<h1 class={STATEMENT}>
+  {#if lead}
+    Continue as {lead.label}.
+  {:else}
+    No identity works in this browser yet.
+  {/if}
+</h1>
 
 {#if lead}
-  <div class="{CARD} mt-7 flex flex-wrap items-center gap-x-4 gap-y-3 p-3.5">
-    <StoreMark store={lead.store} large />
-    <span class="min-w-0 flex-1">
-      <button
-        type="button"
-        class="block max-w-full truncate text-left text-[15px] hover:underline"
-        onclick={() => onPick({ kind: NodeKind.Passkey, id: lead.id })}
-      >
-        {lead.label}
-      </button>
-      <span class="mt-0.5 flex items-center gap-2 text-[12px] text-white/45">
-        {storeLabel(lead.store)}
-        <span class={`${MONO} text-white/70`}>{lead.shortId}</span>
-      </span>
-    </span>
+  <div class="{QUOTE} mt-10 max-w-xl">
+    <p class="text-lg leading-7 sm:text-xl">{storeLabel(lead.store)}</p>
+    <p class="{CAPS} mt-4 text-[#6d6d6a]">Passkey Nook compares</p>
     <button
       type="button"
-      class="flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[13px] font-medium text-black transition hover:bg-white/85 motion-reduce:transition-none"
+      class="{MONO} mt-1.5 block text-sm text-[#c9c8c4] transition hover:text-[#f4f3f0] motion-reduce:transition-none"
+      aria-label={`Passkey ${lead.shortId} in ${storeLabel(lead.store)}`}
+      onclick={() => onPick({ kind: NodeKind.Passkey, id: lead.id })}
     >
-      Continue
-      <ArrowRight class="size-4" aria-hidden="true" />
+      {lead.shortId}
     </button>
   </div>
+
+  <button
+    type="button"
+    class="mt-10 flex items-center gap-3 self-start rounded-full px-6 py-3 text-sm font-medium text-[#08090a] transition hover:opacity-90 motion-reduce:transition-none"
+    style={`background:${ACCENT}`}
+  >
+    Continue
+    <ArrowRight class="size-4" aria-hidden="true" />
+  </button>
 {:else}
-  <div class="{CARD} mt-7 border-dashed p-5">
-    <p class="text-[15px]">No identity works in this browser yet.</p>
-    <p class="mt-1 text-[13px] text-white/45">
-      Continue with one of the passkeys below, or enrol a new one.
-    </p>
-  </div>
+  <p
+    class="{QUOTE} mt-10 max-w-xl border-dashed text-base leading-7 text-[#9d9c98]"
+  >
+    Every passkey you hold lives somewhere else right now. Present one, or enrol
+    a new one for this browser.
+  </p>
 {/if}
 
 {#if rest.length > 0}
-  <div class="mt-8 flex items-center justify-between">
-    <p class="text-[13px] text-white/45">Or continue with another identity</p>
-    <button
-      type="button"
-      class="rounded-md p-1.5 text-white/45 transition hover:bg-white/10 hover:text-white motion-reduce:transition-none"
-      aria-label="Edit identities"
-    >
-      <SquarePen class="size-4" aria-hidden="true" />
-    </button>
-  </div>
+  <p class="{CAPS} mt-14 text-[#6d6d6a]">Other identities</p>
 
-  <ul class="mt-2 space-y-2.5">
+  <ul class="mt-1 max-w-3xl">
     {#each rest as passkey (passkey.id)}
-      <li>
+      <li class="border-t {RULE}">
         <button
           type="button"
-          class="{CARD} flex w-full items-center gap-3.5 p-3.5 text-left transition hover:border-white/25 motion-reduce:transition-none"
+          class="group flex w-full flex-wrap items-baseline gap-x-5 gap-y-1 py-4 text-left"
+          aria-label={`Passkey ${passkey.shortId} in ${storeLabel(passkey.store)}`}
           onclick={() => onPick({ kind: NodeKind.Passkey, id: passkey.id })}
         >
-          <StoreMark store={passkey.store} />
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-[14px]">{passkey.label}</span>
-            <span class="mt-0.5 flex items-center gap-2 text-[12px]">
-              <span class="text-white/45">{storeLabel(passkey.store)}</span>
-              <span class={`${MONO} text-white/60`}>{passkey.shortId}</span>
+          <span class="min-w-0 basis-full sm:flex-1 sm:basis-0">
+            <span
+              class="block text-base transition group-hover:text-[#f4f3f0] motion-reduce:transition-none"
+            >
+              {passkey.label}
+            </span>
+            <span class="mt-1 block text-sm text-[#6d6d6a]">
+              {storeLabel(passkey.store)}
             </span>
           </span>
-          {#if usableHere(passkey)}
-            <span
-              class="flex shrink-0 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-[12px]"
-            >
-              Continue
-              <ArrowRight class="size-3.5" aria-hidden="true" />
-            </span>
-          {:else}
-            <span class="flex shrink-0 flex-col items-end gap-1">
-              <span class="{CAPS} text-[9px] text-white/35">
-                {stateWord(passkey)}
-              </span>
-              <span class="{CAPS} text-[9px] text-white/25">
-                {vaultWord(passkey)}
-              </span>
-            </span>
-          {/if}
+          <span class="{MONO} shrink-0 text-sm text-[#c9c8c4]">
+            {passkey.shortId}
+          </span>
+          <span class="{CAPS} shrink-0 text-[#6d6d6a] sm:w-44 sm:text-right">
+            {stateWord(passkey)}
+          </span>
+          <span class="{CAPS} shrink-0 text-[#6d6d6a] sm:w-20 sm:text-right">
+            {vaultWord(passkey)}
+          </span>
         </button>
       </li>
     {/each}
@@ -138,7 +125,7 @@
 
 <button
   type="button"
-  class="mt-6 flex items-center gap-2 rounded-lg border border-white/15 px-3.5 py-2.5 text-[13px] transition hover:border-white/35 motion-reduce:transition-none"
+  class="{CAPS} mt-10 flex items-center gap-3 self-start text-[#6d6d6a] transition hover:text-[#f4f3f0] motion-reduce:transition-none"
   onclick={onAdd}
 >
   <Plus class="size-4" aria-hidden="true" />

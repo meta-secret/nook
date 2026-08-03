@@ -62,6 +62,12 @@ one vault, or one route, at a time.
 
 V4 takes its architecture from [Internet Identity](https://id.ai): the first
 question is not which key wraps which key but who you are signing in as. An
-identity is a passkey, so a person can hold several; Access lists them as cards
-titled by the manager that holds each one, because "Bitwarden" is what someone
-recognises and `c07e33` is what they compare.
+identity is a passkey, so a person can hold several; Access names each one by the
+manager holding it, because "Bitwarden" is what someone recognises and `c07e33`
+is what they compare.
+
+The surface is Handoff story's rather than id.ai's, because the card grid the
+architecture arrives in reads as one undifferentiated deck. Near-black, a single
+warm accent for what is live here, hairline rules instead of card edges, and
+identifiers in mono against editorial type — the same three-act rail, now
+carrying panes instead of scroll positions.

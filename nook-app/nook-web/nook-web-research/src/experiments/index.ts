@@ -424,7 +424,7 @@ export const experiments: Experiment[] = [
     subcategory: keysV4,
     title: 'Identity console',
     description:
-      'Home picks the identity this browser can continue with, Access lists every passkey by its manager, Vaults hangs off them.',
+      'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
     component: IdentityConsole,
   },
   {
