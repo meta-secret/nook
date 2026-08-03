@@ -113,7 +113,8 @@ even if `HIVE_CODEX_AUTH_FILE` remains set. Intentionally replacing Codex
 authentication is a separate operation that quiesces the warm pool before
 publishing the replacement and restores the prior replica count afterward. A
 shared remote lock prevents Hive or Neo4j deployment from recreating workers
-during this transaction:
+during this transaction. The local credential is streamed into a cleanup-armed
+remote session rather than copied to a reusable host path:
 
 ```bash
 HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate

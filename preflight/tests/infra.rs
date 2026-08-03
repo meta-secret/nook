@@ -134,6 +134,10 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             "preflight/tests/hive_auth_rotation.sh",
             "Hive auth rotation",
         ),
+        (
+            "preflight/tests/hive_auth_staging.sh",
+            "Hive auth staging",
+        ),
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
@@ -157,17 +161,24 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
         .split("\n  hive:deploy:\n")
         .nth(1)
         .context("Hive tasks must define deployment")?;
+    let rotation_script = read("infra/scripts/hive-auth-rotate.sh");
     assert!(
         rotate.contains("HIVE_CODEX_AUTH_FILE is required")
-            && rotate.contains("mktemp '$remote_dir/secrets/codex-auth.json.next.XXXXXX'")
-            && rotate.contains("Hive Codex authentication staging path is invalid")
-            && rotate.contains("kubectl create secret generic hive-codex-auth")
-            && rotate.contains("kubectl scale deployment/hive")
-            && rotate.contains("--replicas=0")
-            && rotate.contains("--for=delete")
-            && rotate.contains("mutation_lock=\"\\$remote_dir/hive-mutation.lock\"")
-            && rotate.contains("flock --exclusive --timeout 900 9")
-            && rotate.contains("kubectl rollout status deployment/hive"),
+            && rotate.contains("HIVE_AUTH_ROTATION_MODE:-replace")
+            && rotate.contains("infra/scripts/hive-auth-rotate.sh"),
+        "explicit auth rotation must validate and stream the local credential"
+    );
+    assert!(
+        rotation_script.contains("trap cleanup_input EXIT")
+            && rotation_script.contains("cat >\"$auth_file\"")
+            && rotation_script.contains("codex-auth-rotation.XXXXXX")
+            && rotation_script.contains("kubectl create secret generic hive-codex-auth")
+            && rotation_script.contains("kubectl scale deployment/hive")
+            && rotation_script.contains("--replicas=0")
+            && rotation_script.contains("--for=delete")
+            && rotation_script.contains("mutation_lock=\"$remote_dir/hive-mutation.lock\"")
+            && rotation_script.contains("flock --exclusive --timeout 900 9")
+            && rotation_script.contains("kubectl rollout status deployment/hive"),
         "explicit auth rotation must quiesce brokers, replace the Secret, and restore the pool"
     );
     assert!(
@@ -181,13 +192,13 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             && neo4j.contains("flock --exclusive --timeout 900 9"),
         "Neo4j TLS rotation must share Hive's remote mutation lock"
     );
-    let quiesce = rotate
+    let quiesce = rotation_script
         .find("--replicas=0")
         .context("auth rotation must quiesce the warm pool")?;
-    let publish = rotate
+    let publish = rotation_script
         .find("kubectl create secret generic hive-codex-auth")
         .context("auth rotation must publish the replacement Secret")?;
-    let restore = rotate
+    let restore = rotation_script
         .rfind("restore_hive_workers")
         .context("auth rotation must restore the warm pool")?;
     assert!(

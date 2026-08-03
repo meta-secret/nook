@@ -699,8 +699,10 @@ Routine public-Zot image deployments preserve the existing
 the cluster. Replacing it from a local bootstrap file is a separate explicit
 operation. Rotation, Hive deployment, and Neo4j TLS rotation share a remote
 mutation lock so no infrastructure operation can recreate brokers between
-quiescence and Secret publication. Concurrent rotation requests use independent
-mode-`0600` staging files before entering that transaction:
+quiescence and Secret publication. Credential bytes stream into cleanup-armed,
+independent mode-`0600` staging directories; bootstrap rechecks the cluster
+Secret after acquiring the lock and skips publication when another waiter has
+already supplied it:
 
 ```sh
 HIVE_CODEX_AUTH_FILE=/absolute/path/to/auth.json task infra:hive:auth:rotate

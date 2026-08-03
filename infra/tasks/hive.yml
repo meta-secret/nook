@@ -143,6 +143,14 @@ tasks:
         set -euo pipefail
         ssh_target="{{.INFRA_SSH_TARGET}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
+        publication_mode="${HIVE_AUTH_ROTATION_MODE:-replace}"
+        case "$publication_mode" in
+          bootstrap|replace) ;;
+          *)
+            echo "Hive Codex authentication publication mode is invalid" >&2
+            exit 2
+            ;;
+        esac
         auth_file="${HIVE_CODEX_AUTH_FILE:-}"
         if test -n "$auth_file"; then
           test -f "$auth_file"
@@ -155,120 +163,9 @@ tasks:
           ' "$auth_file" >/dev/null
           ssh -n -o BatchMode=yes "$ssh_target" \
             "install -d -m 0700 '$remote_dir/secrets'"
-          remote_auth_file="$(
-            ssh -n -o BatchMode=yes "$ssh_target" \
-              "mktemp '$remote_dir/secrets/codex-auth.json.next.XXXXXX'"
-          )"
-          case "$remote_auth_file" in
-            "$remote_dir"/secrets/codex-auth.json.next.??????) ;;
-            *)
-              echo "Hive Codex authentication staging path is invalid" >&2
-              exit 1
-              ;;
-          esac
-          cleanup_auth() {
-            ssh -n -o BatchMode=yes "$ssh_target" \
-              "rm -f '$remote_auth_file'" >/dev/null 2>&1 || true
-          }
-          trap cleanup_auth EXIT
-          scp -q -o BatchMode=yes "$auth_file" \
-            "$ssh_target:$remote_auth_file"
-          ssh -o BatchMode=yes "$ssh_target" 'bash -s' <<REMOTE
-        set -euo pipefail
-        remote_dir="$remote_dir"
-        auth_file="$remote_auth_file"
-        kubectl() { sudo -n k0s kubectl "\$@"; }
-        # HIVE_AUTH_ROTATION_BEGIN
-        rotate_hive_auth() {
-          auth_file="\$1"
-        cleanup_staged_auth() {
-          rm -f "\$auth_file"
-        }
-        trap cleanup_staged_auth EXIT
-        mutation_lock="\$remote_dir/hive-mutation.lock"
-        exec 9>"\$mutation_lock"
-        flock --exclusive --timeout 900 9
-        original_replicas=""
-        restore_hive_workers() {
-          if test -n "\$original_replicas"; then
-            kubectl scale deployment/hive \
-              --namespace hive-system \
-              --replicas="\$original_replicas"
-            kubectl rollout status deployment/hive \
-              --namespace hive-system \
-              --timeout=10m
-            original_replicas=""
-          fi
-        }
-        cleanup_rotation() {
-          rm -f "\$auth_file"
-          restore_hive_workers
-        }
-        trap cleanup_rotation EXIT
-        chmod 0600 "\$auth_file"
-        deployment_ref="\$(
-          kubectl get deployment hive \
-            --namespace hive-system \
-            --ignore-not-found \
-            -o name
-        )"
-        case "\$deployment_ref" in
-          deployment.apps/hive)
-            original_replicas="\$(
-              kubectl get deployment hive \
-                --namespace hive-system \
-                -o jsonpath='{.spec.replicas}'
-            )"
-            case "\$original_replicas" in
-              ''|*[!0-9]*)
-                echo "Hive deployment has an invalid replica count" >&2
-                exit 1
-                ;;
-            esac
-            kubectl scale deployment/hive \
-              --namespace hive-system \
-              --replicas=0
-            kubectl rollout status deployment/hive \
-              --namespace hive-system \
-              --timeout=10m
-            ;;
-          '') ;;
-          *)
-            echo "Unexpected Hive deployment lookup: \$deployment_ref" >&2
-            exit 1
-            ;;
-        esac
-        pod_refs="\$(
-          kubectl get pod \
-            --namespace hive-system \
-            --selector app.kubernetes.io/name=hive \
-            -o name
-        )" || {
-          echo "Hive Pod lookup failed while verifying worker quiescence" >&2
-          exit 1
-        }
-        if printf '%s\n' "\$pod_refs" | grep -q .; then
-          kubectl wait pod \
-            --namespace hive-system \
-            --selector app.kubernetes.io/name=hive \
-            --for=delete \
-            --timeout=10m
-        fi
-        kubectl create secret generic hive-codex-auth \
-          --namespace hive-system \
-          --from-file=auth.json="\$auth_file" \
-          --dry-run=client \
-          -o yaml |
-          kubectl apply -f -
-        rm -f "\$auth_file"
-        restore_hive_workers
-        trap - EXIT
-        }
-        # HIVE_AUTH_ROTATION_END
-        rotate_hive_auth "\$auth_file"
-        REMOTE
-          trap - EXIT
-          cleanup_auth
+          ssh -o BatchMode=yes "$ssh_target" \
+            "bash '$remote_dir/infra/scripts/hive-auth-rotate.sh' '$publication_mode' '$remote_dir'" \
+            <"$auth_file"
         else
           echo "HIVE_CODEX_AUTH_FILE is required for explicit Hive authentication publication" >&2
           exit 2
@@ -305,7 +202,7 @@ tasks:
                 echo "Initial Hive deployment requires HIVE_CODEX_AUTH_FILE" >&2
                 return 2
               fi
-              task infra:hive:auth:rotate
+              HIVE_AUTH_ROTATION_MODE=bootstrap task infra:hive:auth:rotate
               ;;
             *)
               echo "Unexpected Hive Codex authentication lookup: $secret_ref" >&2

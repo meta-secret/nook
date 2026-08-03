@@ -433,7 +433,8 @@ authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit
 `infra:hive:auth:rotate` command above only when intentionally replacing that
 credential; a shared infrastructure lock serializes the operation with Hive
 and Neo4j deployment, while rotation stops the warm pool before publication
-and restores it afterward.
+and restores it afterward. Credential input is streamed into that cleanup-armed
+remote transaction rather than retained as a reusable host-side file.
 
 The explicitly triggered **Rust ecosystem checks** workflow adds dependency
 policy and RustSec auditing (`cargo-deny` plus `cargo-audit`), generated and

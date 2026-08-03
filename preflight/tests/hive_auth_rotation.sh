@@ -5,8 +5,8 @@ repo_root="$1"
 function_source="$(
   sed -n \
     '/HIVE_AUTH_ROTATION_BEGIN/,/HIVE_AUTH_ROTATION_END/p' \
-    "$repo_root/infra/tasks/hive.yml" |
-    sed '1d;$d;s/^        //;s/\\\$/\$/g'
+    "$repo_root/infra/scripts/hive-auth-rotate.sh" |
+    sed '1d;$d'
 )"
 source /dev/stdin <<<"$function_source"
 
@@ -16,6 +16,7 @@ remote_dir="$(mktemp -d)"
 trap 'rm -f "$action_log" "$auth_file" "$remote_dir/hive-mutation.lock"; rmdir "$remote_dir"' EXIT
 rotation_mode="success"
 deployment_mode="present"
+bootstrap_secret_mode="absent"
 
 flock() {
   printf 'flock %s\n' "$*" >>"$action_log"
@@ -27,6 +28,11 @@ flock() {
 kubectl() {
   printf '%s\n' "$*" >>"$action_log"
   case "$1 $2" in
+    "get secret")
+      if test "$bootstrap_secret_mode" = "present"; then
+        printf '%s\n' 'secret/hive-codex-auth'
+      fi
+      ;;
     "get deployment")
       if [[ " $* " == *" --ignore-not-found "* ]]; then
         if test "$deployment_mode" = "present"; then
@@ -60,11 +66,29 @@ run_rotation() {
   set +e
   (
     set -e
-    rotate_hive_auth "$auth_file"
+    publish_hive_auth "$auth_file" replace ""
   )
   rotation_status=$?
   set -e
 }
+
+# Bootstrap rechecks under the lock and preserves a credential published by a waiter.
+: >"$action_log"
+printf '%s\n' replacement >"$auth_file"
+rotation_mode="success"
+bootstrap_secret_mode="present"
+set +e
+(
+  set -e
+  publish_hive_auth "$auth_file" bootstrap ""
+)
+rotation_status=$?
+set -e
+test "$rotation_status" -eq 0
+test ! -e "$auth_file"
+! grep -Fq -- 'get deployment' "$action_log"
+! grep -Fq -- 'apply -f -' "$action_log"
+bootstrap_secret_mode="absent"
 
 # A lock failure still deletes plaintext staging without touching Kubernetes.
 : >"$action_log"
