@@ -17,7 +17,13 @@ Use this workflow for quality, CI, and deployment changes.
      `nook-auth2`, `nook-replication`, and `nook-event-log` coverage vs the **90%** line floor
      (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
-   - `eslint`
+   - `eslint` — the web-family lint command uses a dedicated project that
+     includes every linted TypeScript and Svelte source, enables
+     promise/exhaustiveness type-aware rules, and rejects unsanitized DOM HTML
+     sinks outside test and e2e fixtures
+   - `bun audit --prod --audit-level=high` — every independently installed web
+     package runs the audit in its CI check path and rejects high-severity
+     production dependency advisories
    - `knip` (`bun run unused`) — unused/unreachable files, exports, class
      members, and dependencies in `nook-web-app` / `nook-web-research` (and any
      package that runs Knip in its check/lint path)

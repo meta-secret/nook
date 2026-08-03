@@ -402,7 +402,7 @@ export function createWidgetShell(
     BROWSER_MESSAGE_KEYS.WidgetOpenVault,
   )
   openVaultButton.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
+    void chrome.runtime.sendMessage({ type: 'nook:open-simple-vault' })
   })
 
   body.append(

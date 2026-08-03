@@ -67,6 +67,10 @@ spec:
               value: /tmp/nook-workbench
             - name: HIVE_WORKBENCH_POLL_SECONDS
               value: "120"
+            - name: HIVE_WORKBENCH_HEALTH_PATH
+              value: /tmp/hive-workbench-dispatcher-health
+            - name: HIVE_WORKBENCH_HEALTH_MAX_AGE_SECONDS
+              value: "600"
             - name: NEO4J_URI
               value: neo4j+s://hive-neo4j.hive-data.svc.cluster.local:7687
             - name: SSL_CERT_FILE
@@ -99,6 +103,32 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
+          startupProbe:
+            exec:
+              command:
+                - /usr/local/bin/hive
+                - workbench-dispatcher-health
+                - --progress
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/hive
+                - workbench-dispatcher-health
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/hive
+                - workbench-dispatcher-health
+                - --progress
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
       volumes:
         - name: trust-bundle
           emptyDir:

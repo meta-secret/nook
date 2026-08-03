@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import {
+  DashboardElementKind,
   DevicesAccessNudgePreference,
   DevicesAccessNudgeStorageKind,
   parseDevicesAccessNudgePreference,
+  providerSaveFocus,
+  ProviderSaveFocusKind,
   readDevicesAccessNudgeStorage,
   shouldShowDevicesAccessNudge,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
@@ -52,6 +55,27 @@ describe('Devices & access dashboard state', () => {
         serialized: '1',
       }),
     ).toBe(DevicesAccessNudgePreference.Dismissed)
+  })
+
+  test('returns focus to the selected link when a save outlives its panel', () => {
+    const control = document.createElement('input')
+    expect(
+      providerSaveFocus(true, {
+        kind: DashboardElementKind.Mounted,
+        element: control,
+      }),
+    ).toEqual({ kind: ProviderSaveFocusKind.Control, element: control })
+    // Selecting another link unmounts the input mid-save; focus must not be
+    // dropped on the document body.
+    expect(
+      providerSaveFocus(false, {
+        kind: DashboardElementKind.Mounted,
+        element: control,
+      }),
+    ).toEqual({ kind: ProviderSaveFocusKind.SelectedChainLink })
+    expect(
+      providerSaveFocus(true, { kind: DashboardElementKind.Missing }),
+    ).toEqual({ kind: ProviderSaveFocusKind.SelectedChainLink })
   })
 
   test('offers the first-run nudge only before any local vault exists', () => {

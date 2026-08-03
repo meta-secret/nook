@@ -458,9 +458,10 @@ test.describe('passkey device-key protection', () => {
 
     const pinDeviceId = await readDeviceId(page)
     await page.getByTestId('vault-devices-access-tab').click()
-    await expect(
-      page.getByTestId('devices-access-device-identity'),
-    ).toContainText(pinDeviceId)
+    await page.getByTestId('devices-access-node-device-key').click()
+    await expect(page.getByTestId('devices-access-device-id')).toContainText(
+      pinDeviceId,
+    )
     await expect(page.getByTestId('devices-access-dashboard')).toContainText(
       'PIN or passphrase',
     )

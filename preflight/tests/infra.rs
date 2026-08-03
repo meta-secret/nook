@@ -18,6 +18,11 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn read_fallible(path: &str) -> anyhow::Result<String> {
+    fs::read_to_string(repository_root().join(path))
+        .with_context(|| format!("failed to read {path}"))
+}
+
 #[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
@@ -92,6 +97,28 @@ fn remote_cache_and_registry_are_public_over_tls() -> anyhow::Result<()> {
     assert_infrastructure_deploy_contract()?;
     assert_zot_registry_contract()?;
     assert_mesh_node_contract()?;
+    Ok(())
+}
+
+#[test]
+fn hive_dispatcher_keeps_github_run_reads_token_free() -> anyhow::Result<()> {
+    let manifest = read_fallible("infra/k0s/manifests/hive/dispatcher.yaml")?;
+    assert!(!manifest.contains("GH_TOKEN"));
+    assert!(!manifest.contains("hive-github-publication"));
+
+    let client = read_fallible("agentic-ai/minds/hive/src/dispatcher/github.rs")?;
+    assert!(
+        client.contains("https://github.com/meta-secret/nook/actions/runs"),
+        "Hive dispatcher must use the public run page outside the REST API rate budget"
+    );
+    assert!(
+        !client.contains("api.github.com") && !client.contains("Authorization"),
+        "Hive dispatcher must not own a GitHub credential"
+    );
+    assert!(
+        client.contains("kill_on_drop(true)") && client.contains("timeout("),
+        "Hive dispatcher GitHub requests must remain bounded"
+    );
     Ok(())
 }
 

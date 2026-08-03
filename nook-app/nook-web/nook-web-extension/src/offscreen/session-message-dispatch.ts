@@ -117,7 +117,19 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.UnlockPasskey:
     case ExtensionSessionMessageType.UnlockPin:
       return SessionOperationPriority.Interactive
-    default:
+    case ExtensionSessionMessageType.Status:
+    case ExtensionSessionMessageType.FinishPasskeySetup:
+    case ExtensionSessionMessageType.RecoverPasskey:
+    case ExtensionSessionMessageType.CreatePin:
+    case ExtensionSessionMessageType.ImportVault:
+    case ExtensionSessionMessageType.UpdateVault:
+    case ExtensionSessionMessageType.ListPasskeys:
+    case ExtensionSessionMessageType.AuthenticatorEnrollPreview:
+    case ExtensionSessionMessageType.AuthenticatorEnrollCode:
+    case ExtensionSessionMessageType.PendingLoginSave:
+    case ExtensionSessionMessageType.DismissLoginSave:
+    case ExtensionSessionMessageType.CancelPasskey:
+    case ExtensionSessionMessageType.Lock:
       return SessionOperationPriority.Normal
   }
 }

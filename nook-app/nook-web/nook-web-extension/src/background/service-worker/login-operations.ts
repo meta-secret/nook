@@ -25,7 +25,7 @@ import {
   SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS,
   ensureExtensionSessionDocument,
   isUnlockedSessionStatus,
-  openCompanionLauncher,
+  openCompanionLauncherBestEffort,
 } from './session-lifecycle'
 
 export async function openWebsiteLoginPicker(
@@ -220,7 +220,7 @@ export async function websiteLoginSaveOffer(
     !isUnlockedSessionStatus(status)
   ) {
     pendingPassword.value = ''
-    openCompanionLauncher()
+    openCompanionLauncherBestEffort()
     return { ok: true, status: 'locked' }
   }
 
@@ -392,7 +392,7 @@ export async function websiteLoginSaveCommit(
     typeof status !== 'object' ||
     !isUnlockedSessionStatus(status)
   ) {
-    openCompanionLauncher()
+    openCompanionLauncherBestEffort()
     return { ok: false, reason: 'login-save-locked' }
   }
   return sendSessionMessage({

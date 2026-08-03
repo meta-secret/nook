@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt as _;
 use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 
-use crate::auth::BrokerExternalAuth;
+use crate::auth::{BrokerExternalAuth, prepare_worker_auth_and_readiness};
 use crate::codex::{CodexOptions, InProcessCodexRunner};
 use crate::delivery::verify_main_repair_delivery;
 use crate::model::{
@@ -72,9 +72,7 @@ impl<S: TaskStore> Worker<S> {
         self.store
             .register_agent(&self.config.agent_id, &self.config.pod_name)
             .await?;
-        tokio::fs::write(self.config.workspace.join(".hive-worker-ready"), b"ready")
-            .await
-            .hive_context("failed to publish worker readiness")?;
+        prepare_worker_auth_and_readiness(&external_auth, &self.config.workspace).await?;
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
                 .hive_context("failed to install the worker termination handler")?;
@@ -709,6 +707,7 @@ mod tests {
 
     #[tokio::test]
     async fn implementation_patch_is_durable_before_completion() -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -794,6 +793,7 @@ mod tests {
     #[tokio::test]
     async fn resumed_repair_accepts_changes_already_published_on_its_branch()
     -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
         let repository = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<()> {
             let status = std::process::Command::new("git")
@@ -849,6 +849,7 @@ mod tests {
 
     #[tokio::test]
     async fn completed_dependency_patch_becomes_the_task_baseline() -> crate::HiveResult<()> {
+        let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
         let source = tempfile::tempdir()?;
         let run_git = |arguments: &[&str]| -> std::io::Result<Vec<u8>> {
             let output = std::process::Command::new("git")

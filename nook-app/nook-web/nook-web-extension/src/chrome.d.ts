@@ -19,8 +19,11 @@ declare namespace chrome {
 
     function sendMessage<TResponse = unknown>(
       message: unknown,
-      callback?: (response: TResponse) => void,
+      callback: (response: TResponse) => void,
     ): void
+    function sendMessage<TResponse = unknown>(
+      message: unknown,
+    ): Promise<TResponse>
 
     const onInstalled: {
       addListener(listener: (details: InstalledDetails) => void): void
@@ -80,7 +83,8 @@ declare namespace chrome {
       focused?: boolean
     }
 
-    function create(createData: CreateData, callback?: () => void): void
+    function create(createData: CreateData, callback: () => void): void
+    function create(createData: CreateData): Promise<unknown>
   }
 
   namespace tabs {
@@ -95,13 +99,21 @@ declare namespace chrome {
       callback: (tabs: Tab[]) => void,
     ): void
 
-    function create(createProperties: { url: string }): void
+    function create(
+      createProperties: { url: string },
+      callback: (tab: Tab) => void,
+    ): void
+    function create(createProperties: { url: string }): Promise<Tab>
 
     function sendMessage<TResponse = unknown>(
       tabId: number,
       message: unknown,
-      callback?: (response: TResponse) => void,
+      callback: (response: TResponse) => void,
     ): void
+    function sendMessage<TResponse = unknown>(
+      tabId: number,
+      message: unknown,
+    ): Promise<TResponse>
   }
 
   namespace storage {

@@ -190,8 +190,21 @@ dispatcher_environment = dispatcher_deployment
   .to_h { |entry| [entry.fetch("name"), entry["value"]] }
 unless dispatcher_environment["HIVE_WORKBENCH_REPOSITORY_URL"] ==
        "https://github.com/meta-secret/nook-workbench.git" &&
-       dispatcher_environment["HIVE_WORKBENCH_CHECKOUT"] == "/tmp/nook-workbench"
+       dispatcher_environment["HIVE_WORKBENCH_CHECKOUT"] == "/tmp/nook-workbench" &&
+       dispatcher_environment["HIVE_WORKBENCH_HEALTH_PATH"] ==
+       "/tmp/hive-workbench-dispatcher-health" &&
+       dispatcher_environment["HIVE_WORKBENCH_HEALTH_MAX_AGE_SECONDS"] == "600"
   raise "Hive dispatcher must reconcile a cached public Workbench Git snapshot"
+end
+dispatcher = dispatcher_deployment
+  .dig("spec", "template", "spec", "containers")
+  .find { |container| container["name"] == "dispatcher" }
+dispatcher_health_command = ["/usr/local/bin/hive", "workbench-dispatcher-health"]
+dispatcher_progress_command = dispatcher_health_command + ["--progress"]
+unless dispatcher.dig("startupProbe", "exec", "command") == dispatcher_progress_command &&
+       dispatcher.dig("readinessProbe", "exec", "command") == dispatcher_health_command &&
+       dispatcher.dig("livenessProbe", "exec", "command") == dispatcher_progress_command
+  raise "Hive dispatcher health must detect stale polling and process exhaustion"
 end
 
 manifest_text = File.read(File.join(root, "infra/k0s/manifests/hive/deployment.yaml"))
