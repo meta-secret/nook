@@ -19,6 +19,9 @@ deployment_mode="present"
 
 flock() {
   printf 'flock %s\n' "$*" >>"$action_log"
+  if test "$rotation_mode" = "lock-failure"; then
+    return 1
+  fi
 }
 
 kubectl() {
@@ -62,6 +65,16 @@ run_rotation() {
   rotation_status=$?
   set -e
 }
+
+# A lock failure still deletes plaintext staging without touching Kubernetes.
+: >"$action_log"
+printf '%s\n' replacement >"$auth_file"
+rotation_mode="lock-failure"
+deployment_mode="present"
+run_rotation
+test "$rotation_status" -ne 0
+test ! -e "$auth_file"
+! grep -Fq -- 'get deployment' "$action_log"
 
 # Success quiesces every broker before apply, deletes staging, then restores four workers.
 : >"$action_log"

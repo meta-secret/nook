@@ -171,6 +171,10 @@ tasks:
         # HIVE_AUTH_ROTATION_BEGIN
         rotate_hive_auth() {
           auth_file="\$1"
+        cleanup_staged_auth() {
+          rm -f "\$auth_file"
+        }
+        trap cleanup_staged_auth EXIT
         mutation_lock="\$remote_dir/hive-mutation.lock"
         exec 9>"\$mutation_lock"
         flock --exclusive --timeout 900 9

@@ -173,6 +173,12 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             && deploy.contains("flock --exclusive --timeout 900 9"),
         "Hive deployment and auth rotation must share the remote mutation lock"
     );
+    let neo4j = read("infra/tasks/neo4j.yml");
+    assert!(
+        neo4j.contains("if test \"$tls_changed\" = true; then\n          mutation_lock=\"$remote_dir/hive-mutation.lock\"")
+            && neo4j.contains("flock --exclusive --timeout 900 9"),
+        "Neo4j TLS rotation must share Hive's remote mutation lock"
+    );
     let quiesce = rotate
         .find("--replicas=0")
         .context("auth rotation must quiesce the warm pool")?;
