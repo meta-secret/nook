@@ -58,7 +58,26 @@ case "$1 $2" in
     ;;
 esac
 MOCK
-chmod +x "$mock_bin/flock" "$mock_bin/sudo"
+
+cat >"$mock_bin/jq" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  -e)
+    auth_file="${@: -1}"
+    grep -Fq '"auth_mode":"chatgpt"' "$auth_file"
+    grep -Fq '"access_token":"access-' "$auth_file"
+    grep -Fq '"refresh_token":"refresh-' "$auth_file"
+    grep -Fq '"account_id":"' "$auth_file"
+    ;;
+  -r)
+    test "$2" = .tokens.account_id
+    sed -n 's/.*"account_id":"\([^"]*\)".*/\1/p' "$3"
+    ;;
+  *) exit 2 ;;
+esac
+MOCK
+chmod +x "$mock_bin/flock" "$mock_bin/jq" "$mock_bin/sudo"
 
 run_rotation() {
   account_id="$1"
