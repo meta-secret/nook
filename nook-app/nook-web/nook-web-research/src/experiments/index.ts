@@ -13,6 +13,9 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
+import IdentityTreeFlow from './identity-management/identity-tree-flow/Experiment.svelte'
+import IdentityMeshPipeline from './identity-management/identity-mesh-pipeline/Experiment.svelte'
+import IdentityQuorumFlow from './identity-management/identity-quorum-flow/Experiment.svelte'
 import IdentityChainStrands from './identity-management/identity-chain-strands/Experiment.svelte'
 import IdentityChainRibbon from './identity-management/identity-chain-ribbon/Experiment.svelte'
 import IdentityChainLedger from './identity-management/identity-chain-ledger/Experiment.svelte'
@@ -231,6 +234,33 @@ const inspirationV1 = subcategories.find(
 )!
 
 export const experiments: Experiment[] = [
+  {
+    slug: 'identity-tree-flow',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity tree flow · Pic2 structure',
+    description:
+      'Implements Pic1 identity tree + Pic2 3-tier component flow: Root Owner & Identity Tree above, Central Sentinel Quorum Controller in middle, Vault Entitlement Ledger below.',
+    component: IdentityTreeFlow,
+  },
+  {
+    slug: 'identity-mesh-pipeline',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity mesh pipeline · Pic2 structure',
+    description:
+      'Direct adaptation of Pic2 vertical 3-tier flow: 3 Source Identity Cards top row, Central Entitlement Router middle hero, Full-width Vault Console window below.',
+    component: IdentityMeshPipeline,
+  },
+  {
+    slug: 'identity-quorum-flow',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity quorum flow · Pic2 structure',
+    description:
+      'Editorial paper rendition of Pic2 3-tier flow: Section I Source Identity Register above, Section II Central Multi-Party Engine middle, Section III Vault Quorum Ledger below.',
+    component: IdentityQuorumFlow,
+  },
   {
     slug: 'identity-chain-strands',
     category: identityMgmt,
