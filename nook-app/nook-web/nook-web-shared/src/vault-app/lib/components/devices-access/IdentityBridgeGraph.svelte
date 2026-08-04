@@ -96,10 +96,12 @@
       fitViewOptions={{
         padding: compact ? 0.04 : 0.08,
         minZoom: compact ? 0.42 : 0.05,
-        maxZoom: 1.05,
+        // On a compact canvas, Flow can round a near-1:1 fit outward and
+        // clip the first card. Keep a small, stable visual inset instead.
+        maxZoom: compact ? 0.9 : 1.05,
       }}
       minZoom={compact ? 0.4 : 0.05}
-      maxZoom={compact ? 1.08 : 1.3}
+      maxZoom={compact ? 0.9 : 1.3}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
