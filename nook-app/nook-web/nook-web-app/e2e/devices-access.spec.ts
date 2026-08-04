@@ -127,13 +127,13 @@ test.describe('devices and access dashboard', () => {
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Device evidence')
-    await expect(bridge).toContainText('Identity context')
+    await expect(bridge).toContainText('Local identity state')
     await expect(bridge).toContainText('Verified device-key access')
     await expect(
       bridge.getByRole('article', { name: /Device evidence/ }),
     ).toBeVisible()
     await expect(
-      bridge.getByRole('article', { name: /Selected identity/ }),
+      bridge.getByRole('article', { name: /Browser identity state/ }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('article', { name: /Device-key access/ }),
@@ -149,11 +149,6 @@ test.describe('devices and access dashboard', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(
       bridge.getByRole('img', {
-        name: /device key is available in the shown identity context/i,
-      }),
-    ).toHaveCount(1)
-    await expect(
-      bridge.getByRole('img', {
         name: /device key opened Test vault; an identity-level grant is not inferred/i,
       }),
     ).toHaveCount(1)
@@ -167,10 +162,15 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       bridge.getByRole('img', {
-        name: /Identity context for the device key that opened Test vault/,
+        name: /Test vault was opened by this exact device key/,
       }),
     ).toHaveCount(1)
-    await expect(bridge).toContainText('Identity context')
+    await expect(
+      bridge.getByRole('article', {
+        name: /Device evidence: This browser.*Test vault was opened by this exact device key/i,
+      }),
+    ).toBeVisible()
+    await expect(bridge).not.toContainText('Identity reference')
     await page.getByTestId('devices-access-perspective-identities').click()
     await page.setViewportSize({ width: 1440, height: 900 })
 
@@ -233,7 +233,7 @@ test.describe('devices and access dashboard', () => {
     await vaultIdentifier.getByText('Vault identifier', { exact: true }).click()
     await expect(vaultIdentifier.locator('p')).toBeVisible()
     const fullVaultIdentifier = await vaultIdentifier.locator('p').innerText()
-    await expect(strengthVaults).toContainText(fullVaultIdentifier)
+    await expect(strengthVaults).not.toContainText(fullVaultIdentifier)
     await expect(
       page.getByTestId('devices-access-current-vault'),
     ).toContainText('Emergency recovery')
@@ -258,6 +258,29 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
+  })
+
+  test('keeps localized evidence tabs inside a narrow viewport', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    await page.setViewportSize({ width: 320, height: 844 })
+    await page.getByTestId('header-language-select').click()
+    await page.getByTestId('header-language-option-ru').click()
+
+    await expect(page.getByTestId('devices-access-node-unlock')).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-node-device-key'),
+    ).toBeVisible()
+    await expect(page.getByTestId('devices-access-node-vaults')).toBeVisible()
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true)
   })
 
   test('names PIN protection without inventing a credential identifier', async ({

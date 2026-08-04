@@ -53,6 +53,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     accessChainTabId,
     AccessChainTabKind,
     deviceKeyTitle,
+    formatAccessDate,
     identityStateLabel,
     panelDescription,
     panelTitle,
@@ -484,10 +485,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           view.deviceId.kind === DashboardTextKind.Known
             ? view.deviceId.value
             : vault.t(I18N_KEYS.DevicesAccessUnknown)}
-        {@const identityIdentifier =
-          view.userHandleId.kind === DashboardTextKind.Known
-            ? view.userHandleId.value
-            : vault.t(I18N_KEYS.DevicesAccessUnknown)}
         {@const bridgeCopy = {
           deviceStage: vault.t(I18N_KEYS.DevicesAccessBridgeDeviceEvidence),
           identityStage: vault.t(
@@ -496,9 +493,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           vaultStage: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrants),
           selectedVaultStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeSelectedVault,
-          ),
-          authorizedIdentitiesStage: vault.t(
-            I18N_KEYS.DevicesAccessBridgeAuthorizedIdentities,
           ),
           currentDevice: deviceKeyTitle(vault, view.protection),
           currentIdentity: vault.t(
@@ -512,13 +506,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           oneDeviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeOneDeviceKey),
           identityDescription: protectionLabel(vault, view.protection),
           identityState: identityStateLabel(vault, view.identityState),
-          identityIdentifier: vault.t(
-            I18N_KEYS.DevicesAccessBridgeIdentityIdLabel,
-          ),
           deviceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessBridgeDeviceEvidence,
           ),
-          oneDevice: vault.t(I18N_KEYS.DevicesAccessBridgeOneDevice),
           vaultMetricLabel: vault.t(I18N_KEYS.DevicesAccessVerifiedVaultsLabel),
           verifiedVaultCount: vault.t(
             I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
@@ -527,9 +517,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
           evidenceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessLastSuccessfulUse,
-          ),
-          vaultIdentifierLabel: vault.t(
-            I18N_KEYS.DevicesAccessVaultTechnicalDetails,
           ),
           verifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteVerified),
           unverifiedStatus: vault.t(I18N_KEYS.DevicesAccessRouteUnverified),
@@ -551,17 +538,15 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           noSelectedVaultDescription: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
           ),
-          deviceIdentityRelation: vault.t(
-            I18N_KEYS.DevicesAccessBridgeDeviceIdentityRelation,
-          ),
           deviceVaultRelation: (vaultLabel: string) =>
             vault.t(I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, {
               vault: vaultLabel,
             }),
-          vaultIdentityRelation: (vaultLabel: string) =>
-            vault.t(I18N_KEYS.DevicesAccessBridgeVaultIdentityRelation, {
+          vaultDeviceRelation: (vaultLabel: string) =>
+            vault.t(I18N_KEYS.DevicesAccessBridgeVaultDeviceRelation, {
               vault: vaultLabel,
             }),
+          formatEvidence: (value: string) => formatAccessDate(vault, value),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
         <div
@@ -622,7 +607,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               perspective={selectedPerspective}
               {selectedVault}
               {deviceIdentifier}
-              {identityIdentifier}
               identityStatus={view.identityState}
               protectionLabel={protectionLabel(vault, view.protection)}
               deviceIconKind={view.protection ===
@@ -703,7 +687,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               </p>
             </div>
             <div
-              class="inline-flex w-full border border-border bg-card p-1 sm:w-auto"
+              class="grid w-full grid-cols-3 border border-border bg-card p-1 sm:w-auto"
               role="tablist"
               aria-label={vault.t(I18N_KEYS.DevicesAccessBridgeDetails)}
             >
@@ -806,13 +790,15 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
 
 <style>
   .detail-tab {
+    min-width: 0;
     min-height: 2.5rem;
     flex: 1 1 0;
     padding: 0.5rem 0.8rem;
     color: var(--muted-foreground);
     font-size: 0.75rem;
     font-weight: 500;
-    white-space: nowrap;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
   }
   .detail-tab.active {
     background: var(--foreground);

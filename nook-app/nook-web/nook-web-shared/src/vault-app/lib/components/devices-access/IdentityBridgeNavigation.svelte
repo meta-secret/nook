@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Fingerprint, Vault as VaultIcon } from '@lucide/svelte'
+  import { Fingerprint, KeyRound, Vault as VaultIcon } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import type { VaultAccessView } from './access-chain'
@@ -120,10 +120,9 @@
               >
             </span>
             <span class="entity-count"
-              ><Fingerprint
-                class="size-3"
-                aria-hidden="true"
-              />{vaultEntry.verified ? 1 : 0}</span
+              ><KeyRound class="size-3" aria-hidden="true" />{vaultEntry.verified
+                ? 1
+                : 0}</span
             >
           </button>
         </li>

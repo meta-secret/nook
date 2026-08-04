@@ -16,23 +16,19 @@ const copy: IdentityBridgeCopy = {
   identityStage: 'Identity context',
   vaultStage: 'Verified device-key access',
   selectedVaultStage: 'Selected vault',
-  authorizedIdentitiesStage: 'Identity context',
   currentDevice: 'This browser',
-  currentIdentity: 'This identity',
-  selectedIdentity: 'Selected identity',
+  currentIdentity: 'Local identity state',
+  selectedIdentity: 'Browser identity state',
   vaultGrant: 'Vault access',
   deviceKey: 'Device key',
   oneDeviceKey: '1 key',
   identityDescription: 'Passkey protected',
   identityState: 'Identity unlocked',
-  identityIdentifier: 'Identity reference',
   deviceMetricLabel: 'Device evidence',
-  oneDevice: '1 device',
   vaultMetricLabel: 'Verified vaults',
   verifiedVaultCount: '1 verified',
   statusMetricLabel: 'Status',
   evidenceMetricLabel: 'Last successful use',
-  vaultIdentifierLabel: 'Vault identifier',
   verifiedStatus: 'Verified way in',
   unverifiedStatus: 'Not yet verified',
   noAuthorizedIdentity: 'No verified relationship',
@@ -41,11 +37,11 @@ const copy: IdentityBridgeCopy = {
   noVerifiedVaultsDescription: 'This key has not opened a known vault.',
   noSelectedVault: 'No vault selected',
   noSelectedVaultDescription: 'Select a vault.',
-  deviceIdentityRelation: 'Device key belongs to this identity context',
   deviceVaultRelation: (vaultLabel) =>
     `Device key opened ${vaultLabel}; identity grant unknown`,
-  vaultIdentityRelation: (vaultLabel) =>
-    `Identity context for the key that opened ${vaultLabel}`,
+  vaultDeviceRelation: (vaultLabel) =>
+    `${vaultLabel} was opened by this exact device key`,
+  formatEvidence: (value) => `Local ${value}`,
   unknown: 'Unknown',
 }
 
@@ -71,7 +67,6 @@ function input(
     },
     compact: false,
     deviceIdentifier: 'device_public_key',
-    identityIdentifier: 'passkey_user_handle',
     identityStatus: DeviceAccessIdentityState.Unlocked,
     protectionLabel: 'Passkey protected',
     deviceIconKind: IdentityBridgeDeviceIconKind.Browser,
@@ -81,7 +76,7 @@ function input(
 }
 
 describe('identity bridge graph', () => {
-  test('keeps device-key evidence distinct from the distributed identity', () => {
+  test('keeps the passkey handle out of the local identity-state card', () => {
     const graph = buildIdentityBridge(
       input(IdentityBridgePerspective.Identities),
     )
@@ -94,7 +89,8 @@ describe('identity bridge graph', () => {
     }
     expect(identity?.data.kind).toBe(IdentityBridgeNodeKind.Identity)
     if (identity?.data.kind === IdentityBridgeNodeKind.Identity) {
-      expect(identity.data.identifier).toBe('passkey_user_handle')
+      expect(identity.data).not.toHaveProperty('identifier')
+      expect(identity.data.deviceMetricValue).toBe('1 key')
     }
   })
 
@@ -105,27 +101,28 @@ describe('identity bridge graph', () => {
 
     expect(graph.nodes.some((node) => node.id === 'vault-home')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'vault-archive')).toBe(false)
-    expect(graph.edges.map((edge) => edge.id)).toEqual([
-      'device-to-identity',
-      'device-to-home',
-    ])
+    expect(graph.edges.map((edge) => edge.id)).toEqual(['device-to-home'])
     expect(
       graph.edges.find((edge) => edge.id === 'device-to-home'),
     ).toMatchObject({ source: 'device-current', target: 'vault-home' })
     expect(graph.edges.map((edge) => edge.ariaLabel)).toEqual([
-      'Device key belongs to this identity context',
       'Device key opened Home; identity grant unknown',
     ])
   })
 
-  test('reverses the verified relationship in vault-first view', () => {
+  test('routes vault-first evidence to the exact device key', () => {
     const graph = buildIdentityBridge(input(IdentityBridgePerspective.Vaults))
 
     expect(graph.nodes.some((node) => node.id === 'vault-selected')).toBe(true)
+    expect(graph.nodes.some((node) => node.id === 'device-current')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'identity-current')).toBe(
-      true,
+      false,
     )
-    expect(graph.edges.map((edge) => edge.id)).toEqual(['vault-to-identity'])
+    expect(graph.edges.map((edge) => edge.id)).toEqual(['vault-to-device'])
+    expect(graph.edges[0]).toMatchObject({
+      source: 'vault-selected',
+      target: 'device-current',
+    })
   })
 
   test('shows an honest empty state for an unverified selected vault', () => {
@@ -133,11 +130,27 @@ describe('identity bridge graph', () => {
       input(IdentityBridgePerspective.Vaults, 'archive'),
     )
 
-    expect(graph.nodes.some((node) => node.id === 'identity-empty')).toBe(true)
+    expect(graph.nodes.some((node) => node.id === 'device-empty')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'identity-current')).toBe(
       false,
     )
     expect(graph.edges).toHaveLength(0)
+  })
+
+  test('formats timestamp evidence and keeps vault identifiers out of graph cards', () => {
+    const graph = buildIdentityBridge(
+      input(IdentityBridgePerspective.Identities),
+    )
+    const vaultNode = graph.nodes.find((node) => node.id === 'vault-home')
+
+    expect(vaultNode?.data.kind).toBe(IdentityBridgeNodeKind.Vault)
+    if (vaultNode?.data.kind === IdentityBridgeNodeKind.Vault) {
+      expect(vaultNode.data.evidenceLabel).toBe('Local 2026-08-04T10:00:00Z')
+      expect(vaultNode.data).not.toHaveProperty('identifier')
+      expect(vaultNode.data.incomingRelation).toContain(
+        'Device key opened Home',
+      )
+    }
   })
 
   test('uses a perspective-specific empty state when no known vault was opened', () => {
@@ -163,7 +176,7 @@ describe('identity bridge graph', () => {
 
     expect(graph.nodes.some((node) => node.id === 'device-current')).toBe(false)
     expect(graph.nodes.some((node) => node.id === 'vault-empty')).toBe(true)
-    expect(graph.nodes.some((node) => node.id === 'identity-empty')).toBe(true)
+    expect(graph.nodes.some((node) => node.id === 'device-empty')).toBe(true)
     expect(graph.edges).toHaveLength(0)
   })
 

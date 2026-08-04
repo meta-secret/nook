@@ -25,22 +25,27 @@
 </script>
 
 {#if data.portMode === IdentityBridgePortMode.Target || data.portMode === IdentityBridgePortMode.Both}
-  <Handle
-    class="bridge-handle"
-    type={IdentityBridgeHandleType.Target}
-    id={data.kind === IdentityBridgeNodeKind.Vault && data.lateralAccessPort
-      ? IdentityBridgeHandleId.VaultAccess
-      : undefined}
-    position={data.kind === IdentityBridgeNodeKind.Vault &&
-    data.lateralAccessPort
-      ? Position.Right
-      : data.flow === IdentityBridgeFlow.Vertical
+  {#if data.kind === IdentityBridgeNodeKind.Vault && data.lateralAccessPort}
+    <Handle
+      class="bridge-handle"
+      type={IdentityBridgeHandleType.Target}
+      id={IdentityBridgeHandleId.VaultAccess}
+      position={Position.Right}
+    />
+  {:else}
+    <Handle
+      class="bridge-handle"
+      type={IdentityBridgeHandleType.Target}
+      position={data.flow === IdentityBridgeFlow.Vertical
         ? Position.Top
         : Position.Left}
-  />
+    />
+  {/if}
 {/if}
 
-{#if data.kind === IdentityBridgeNodeKind.Device && data.lateralAccessPort}
+{#if data.kind === IdentityBridgeNodeKind.Device &&
+data.lateralAccessPort &&
+(data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both)}
   <Handle
     class="bridge-handle"
     type={IdentityBridgeHandleType.Source}
@@ -52,7 +57,7 @@
 {#if data.kind === IdentityBridgeNodeKind.Device}
   <article
     class="bridge-card device-card"
-    aria-label={`${data.caption}: ${data.label}`}
+    aria-label={`${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
   >
     <header>
       <span class="node-icon">
@@ -92,7 +97,7 @@
     class="bridge-card identity-card"
     data-testid="devices-access-identity-card"
     data-identity-state={DeviceAccessIdentityState[data.identityStatus]}
-    aria-label={`${data.caption}: ${data.label}`}
+    aria-label={`${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
   >
     <header>
       <span class="node-icon identity-icon"
@@ -122,10 +127,6 @@
         <dt>{data.vaultMetricLabel}</dt>
         <dd>{data.vaultMetricValue}</dd>
       </div>
-      <div>
-        <dt>{data.identifierLabel}</dt>
-        <dd title={data.identifier}>{data.identifier}</dd>
-      </div>
     </dl>
   </article>
 {:else if data.kind === IdentityBridgeNodeKind.Stage}
@@ -141,7 +142,7 @@
   <article
     class:authorized={data.verifiedDeviceAccess}
     class="bridge-card vault-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.statusLabel}`}
+    aria-label={`${data.caption}: ${data.label}. ${data.statusLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
     data-testid="devices-access-strength-vaults"
   >
     <header>
@@ -167,10 +168,6 @@
       <div>
         <dt>{data.evidenceMetricLabel}</dt>
         <dd>{data.evidenceLabel}</dd>
-      </div>
-      <div>
-        <dt>{data.identifierLabel}</dt>
-        <dd title={data.identifier}>{data.identifier}</dd>
       </div>
     </dl>
   </article>
@@ -333,7 +330,7 @@
   }
   dl {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.7rem;
     margin: 0.85rem 0.9rem 0;
     padding-top: 0.7rem;

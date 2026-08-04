@@ -26,7 +26,6 @@
     perspective,
     selectedVault,
     deviceIdentifier,
-    identityIdentifier,
     identityStatus,
     protectionLabel,
     deviceIconKind,
@@ -39,7 +38,6 @@
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
     deviceIdentifier: string
-    identityIdentifier: string
     identityStatus: DeviceAccessIdentityState
     protectionLabel: string
     deviceIconKind: IdentityBridgeDeviceIconKind
@@ -60,7 +58,6 @@
       selectedVault,
       compact,
       deviceIdentifier,
-      identityIdentifier,
       identityStatus,
       protectionLabel,
       deviceIconKind,

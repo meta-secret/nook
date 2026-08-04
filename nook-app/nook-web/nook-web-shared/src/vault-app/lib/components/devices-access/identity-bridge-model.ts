@@ -37,7 +37,6 @@ export enum IdentityBridgeEdgeType {
 }
 
 export enum IdentityBridgeRelationKind {
-  Evidence = "evidence",
   VerifiedDeviceAccess = "verified-device-access",
 }
 
@@ -87,6 +86,7 @@ export type IdentityBridgeDeviceData = {
   installations: IdentityBridgeInstallation[];
   iconKind: IdentityBridgeDeviceIconKind;
   lateralAccessPort: boolean;
+  incomingRelation: string;
 };
 
 export type IdentityBridgeIdentityData = {
@@ -96,14 +96,13 @@ export type IdentityBridgeIdentityData = {
   label: string;
   caption: string;
   description: string;
-  identifier: string;
   stateLabel: string;
   identityStatus: DeviceAccessIdentityState;
   deviceMetricLabel: string;
   deviceMetricValue: string;
   vaultMetricLabel: string;
   vaultMetricValue: string;
-  identifierLabel: string;
+  incomingRelation: string;
 };
 
 export type IdentityBridgeVaultData = {
@@ -113,14 +112,13 @@ export type IdentityBridgeVaultData = {
   label: string;
   caption: string;
   description: string;
-  identifier: string;
   statusLabel: string;
   evidenceLabel: string;
   statusMetricLabel: string;
   evidenceMetricLabel: string;
-  identifierLabel: string;
   verifiedDeviceAccess: boolean;
   lateralAccessPort: boolean;
+  incomingRelation: string;
 };
 
 export type IdentityBridgeStageData = {
@@ -156,7 +154,6 @@ export type IdentityBridgeCopy = {
   identityStage: string;
   vaultStage: string;
   selectedVaultStage: string;
-  authorizedIdentitiesStage: string;
   currentDevice: string;
   currentIdentity: string;
   selectedIdentity: string;
@@ -165,14 +162,11 @@ export type IdentityBridgeCopy = {
   oneDeviceKey: string;
   identityDescription: string;
   identityState: string;
-  identityIdentifier: string;
   deviceMetricLabel: string;
-  oneDevice: string;
   vaultMetricLabel: string;
   verifiedVaultCount: string;
   statusMetricLabel: string;
   evidenceMetricLabel: string;
-  vaultIdentifierLabel: string;
   verifiedStatus: string;
   unverifiedStatus: string;
   noAuthorizedIdentity: string;
@@ -181,9 +175,9 @@ export type IdentityBridgeCopy = {
   noVerifiedVaultsDescription: string;
   noSelectedVault: string;
   noSelectedVaultDescription: string;
-  deviceIdentityRelation: string;
   deviceVaultRelation: (vaultLabel: string) => string;
-  vaultIdentityRelation: (vaultLabel: string) => string;
+  vaultDeviceRelation: (vaultLabel: string) => string;
+  formatEvidence: (value: string) => string;
   unknown: string;
 };
 
@@ -192,7 +186,6 @@ export type IdentityBridgeInput = {
   selectedVault: IdentityBridgeVaultSelection;
   compact: boolean;
   deviceIdentifier: string;
-  identityIdentifier: string;
   identityStatus: DeviceAccessIdentityState;
   protectionLabel: string;
   deviceIconKind: IdentityBridgeDeviceIconKind;
@@ -290,14 +283,13 @@ function identityData(
     label: input.copy.currentIdentity,
     caption: input.copy.selectedIdentity,
     description: input.copy.identityDescription,
-    identifier: input.identityIdentifier,
     stateLabel: input.copy.identityState,
     identityStatus: input.identityStatus,
     deviceMetricLabel: input.copy.deviceMetricLabel,
-    deviceMetricValue: input.copy.oneDevice,
+    deviceMetricValue: input.copy.oneDeviceKey,
     vaultMetricLabel: input.copy.vaultMetricLabel,
     vaultMetricValue: input.copy.verifiedVaultCount,
-    identifierLabel: input.copy.identityIdentifier,
+    incomingRelation: "",
   };
 }
 
@@ -317,35 +309,37 @@ function vaultData(
     description: vault.verified
       ? input.copy.verifiedStatus
       : input.copy.unverifiedStatus,
-    identifier: vault.storeId,
     statusLabel: vault.verified
       ? input.copy.verifiedStatus
       : input.copy.unverifiedStatus,
     evidenceLabel:
       vault.verifiedAt.kind === DashboardTextKind.Known
-        ? vault.verifiedAt.value
+        ? input.copy.formatEvidence(vault.verifiedAt.value)
         : input.copy.unknown,
     statusMetricLabel: input.copy.statusMetricLabel,
     evidenceMetricLabel: input.copy.evidenceMetricLabel,
-    identifierLabel: input.copy.vaultIdentifierLabel,
     verifiedDeviceAccess: vault.verified,
     lateralAccessPort,
+    incomingRelation: input.copy.deviceVaultRelation(vault.label),
   };
 }
 
 function deviceData(
   input: IdentityBridgeInput,
   flow: IdentityBridgeFlow,
+  portMode: IdentityBridgePortMode,
+  incomingRelation: string,
 ): IdentityBridgeDeviceData {
   return {
     kind: IdentityBridgeNodeKind.Device,
     flow,
-    portMode: IdentityBridgePortMode.Source,
+    portMode,
     label: input.copy.currentDevice,
     caption: input.copy.deviceStage,
     countLabel: input.copy.oneDeviceKey,
     iconKind: input.deviceIconKind,
     lateralAccessPort: flow === IdentityBridgeFlow.Vertical,
+    incomingRelation,
     installations: [
       {
         id: input.deviceIdentifier,
@@ -405,7 +399,12 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         ),
         graphNode(
           "device-current",
-          deviceData(input, IdentityBridgeFlow.Vertical),
+          deviceData(
+            input,
+            IdentityBridgeFlow.Vertical,
+            IdentityBridgePortMode.Source,
+            "",
+          ),
           20,
           44,
           300,
@@ -423,7 +422,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           identityData(
             input,
             IdentityBridgeFlow.Vertical,
-            IdentityBridgePortMode.Target,
+            IdentityBridgePortMode.None,
           ),
           40,
           identityY,
@@ -440,13 +439,6 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         ...vaultNodes,
       ],
       edges: [
-        graphEdge(
-          "device-to-identity",
-          "device-current",
-          "identity-current",
-          IdentityBridgeRelationKind.Evidence,
-          input.copy.deviceIdentityRelation,
-        ),
         ...verifiedVaults.map((vault) =>
           graphEdge(
             `device-to-${vault.storeId}`,
@@ -514,7 +506,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         input.copy.identityStage,
         IdentityBridgeFlow.Horizontal,
         385,
-        -54,
+        300,
         230,
       ),
       stageNode(
@@ -527,7 +519,12 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
       ),
       graphNode(
         "device-current",
-        deviceData(input, IdentityBridgeFlow.Horizontal),
+        deviceData(
+          input,
+          IdentityBridgeFlow.Horizontal,
+          IdentityBridgePortMode.Source,
+          "",
+        ),
         0,
         115,
         310,
@@ -537,22 +534,15 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         identityData(
           input,
           IdentityBridgeFlow.Horizontal,
-          IdentityBridgePortMode.Target,
+          IdentityBridgePortMode.None,
         ),
         385,
-        125,
+        350,
         230,
       ),
       ...vaultNodes,
     ],
     edges: [
-      graphEdge(
-        "device-to-identity",
-        "device-current",
-        "identity-current",
-        IdentityBridgeRelationKind.Evidence,
-        input.copy.deviceIdentityRelation,
-      ),
       ...verifiedVaults.map((vault) =>
         graphEdge(
           `device-to-${vault.storeId}`,
@@ -600,15 +590,15 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           width,
         ),
         stageNode(
-          "stage-identities",
-          input.copy.authorizedIdentitiesStage,
+          "stage-device",
+          input.copy.deviceStage,
           IdentityBridgeFlow.Vertical,
           compact ? 20 : 250,
           compact ? 250 : 225,
           compact ? 300 : 570,
         ),
         graphNode(
-          "identity-empty",
+          "device-empty",
           {
             kind: IdentityBridgeNodeKind.Empty,
             flow: IdentityBridgeFlow.Vertical,
@@ -627,19 +617,22 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
   }
   const verifiedDeviceAccess = selectedVault.verified;
   const compact = input.compact;
-  const vaultX = compact ? 20 : 360;
-  const vaultY = compact ? 44 : 0;
-  const identityX = compact ? 40 : 350;
-  const identityY = compact ? 360 : 280;
+  const flow = compact
+    ? IdentityBridgeFlow.Vertical
+    : IdentityBridgeFlow.Horizontal;
+  const vaultX = compact ? 20 : 0;
+  const vaultY = compact ? 44 : 115;
+  const deviceX = compact ? 20 : 590;
+  const deviceY = compact ? 360 : 115;
   const vaultWidth = compact ? 300 : 350;
-  const identityWidth = compact ? 260 : 370;
+  const deviceWidth = compact ? 300 : 310;
   const nodes: IdentityBridgeNode[] = [
     stageNode(
       "stage-vault",
       input.copy.selectedVaultStage,
-      IdentityBridgeFlow.Vertical,
-      compact ? 20 : 360,
-      compact ? 0 : -54,
+      flow,
+      compact ? 20 : 0,
+      compact ? 0 : 0,
       vaultWidth,
     ),
     graphNode(
@@ -647,7 +640,7 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
       vaultData(
         selectedVault,
         input,
-        IdentityBridgeFlow.Vertical,
+        flow,
         verifiedDeviceAccess
           ? IdentityBridgePortMode.Source
           : IdentityBridgePortMode.None,
@@ -657,42 +650,43 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
       vaultWidth,
     ),
     stageNode(
-      "stage-identities",
-      input.copy.authorizedIdentitiesStage,
-      IdentityBridgeFlow.Vertical,
-      compact ? 20 : 250,
-      compact ? 310 : 225,
-      compact ? 300 : 570,
+      "stage-device",
+      input.copy.deviceStage,
+      flow,
+      compact ? 20 : 590,
+      compact ? 310 : 0,
+      compact ? 300 : 310,
     ),
   ];
   if (verifiedDeviceAccess) {
     nodes.push(
       graphNode(
-        "identity-current",
-        identityData(
+        "device-current",
+        deviceData(
           input,
-          IdentityBridgeFlow.Vertical,
+          flow,
           IdentityBridgePortMode.Target,
+          input.copy.vaultDeviceRelation(selectedVault.label),
         ),
-        identityX,
-        identityY,
-        identityWidth,
+        deviceX,
+        deviceY,
+        deviceWidth,
       ),
     );
   } else {
     nodes.push(
       graphNode(
-        "identity-empty",
+        "device-empty",
         {
           kind: IdentityBridgeNodeKind.Empty,
-          flow: IdentityBridgeFlow.Vertical,
+          flow,
           portMode: IdentityBridgePortMode.None,
-          label: input.copy.noAuthorizedIdentity,
+          label: input.copy.noVerifiedVaults,
           description: input.copy.noAuthorizedIdentityDescription,
         },
         compact ? 20 : 350,
-        identityY,
-        compact ? 300 : 370,
+        deviceY,
+        compact ? 300 : 310,
       ),
     );
   }
@@ -701,11 +695,11 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
     edges: verifiedDeviceAccess
       ? [
           graphEdge(
-            "vault-to-identity",
+            "vault-to-device",
             "vault-selected",
-            "identity-current",
+            "device-current",
             IdentityBridgeRelationKind.VerifiedDeviceAccess,
-            input.copy.vaultIdentityRelation(selectedVault.label),
+            input.copy.vaultDeviceRelation(selectedVault.label),
           ),
         ]
       : [],

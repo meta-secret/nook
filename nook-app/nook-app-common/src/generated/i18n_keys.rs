@@ -458,8 +458,6 @@ pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE: &str = "devices_access.bridge_a11y_no
 pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE_MOVED: &str = "devices_access.bridge_a11y_node_moved";
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_IN: &str = "devices_access.bridge_a11y_zoom_in";
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_OUT: &str = "devices_access.bridge_a11y_zoom_out";
-pub const DEVICES_ACCESS_BRIDGE_AUTHORIZED_IDENTITIES: &str =
-    "devices_access.bridge_authorized_identities";
 pub const DEVICES_ACCESS_BRIDGE_BROWSE_BY: &str = "devices_access.bridge_browse_by";
 pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY: &str = "devices_access.bridge_current_identity";
 pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY_DESC: &str =
@@ -469,8 +467,6 @@ pub const DEVICES_ACCESS_BRIDGE_DETAIL_PROTECTION: &str = "devices_access.bridge
 pub const DEVICES_ACCESS_BRIDGE_DETAIL_VAULTS: &str = "devices_access.bridge_detail_vaults";
 pub const DEVICES_ACCESS_BRIDGE_DETAILS: &str = "devices_access.bridge_details";
 pub const DEVICES_ACCESS_BRIDGE_DEVICE_EVIDENCE: &str = "devices_access.bridge_device_evidence";
-pub const DEVICES_ACCESS_BRIDGE_DEVICE_IDENTITY_RELATION: &str =
-    "devices_access.bridge_device_identity_relation";
 pub const DEVICES_ACCESS_BRIDGE_DEVICE_VAULT_RELATION: &str =
     "devices_access.bridge_device_vault_relation";
 pub const DEVICES_ACCESS_BRIDGE_DISTRIBUTED_IDENTITY: &str =
@@ -479,7 +475,6 @@ pub const DEVICES_ACCESS_BRIDGE_GRAPH_CONTROLS: &str = "devices_access.bridge_gr
 pub const DEVICES_ACCESS_BRIDGE_GRAPH_LABEL: &str = "devices_access.bridge_graph_label";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY: &str = "devices_access.bridge_identity";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_HEADLINE: &str = "devices_access.bridge_identity_headline";
-pub const DEVICES_ACCESS_BRIDGE_IDENTITY_ID_LABEL: &str = "devices_access.bridge_identity_id_label";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_LEDE: &str = "devices_access.bridge_identity_lede";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_PLURAL: &str = "devices_access.bridge_identity_plural";
 pub const DEVICES_ACCESS_BRIDGE_IDENTITY_SINGULAR: &str = "devices_access.bridge_identity_singular";
@@ -494,16 +489,15 @@ pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS: &str =
     "devices_access.bridge_no_verified_vaults";
 pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS_DESC: &str =
     "devices_access.bridge_no_verified_vaults_desc";
-pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE: &str = "devices_access.bridge_one_device";
 pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE_KEY: &str = "devices_access.bridge_one_device_key";
 pub const DEVICES_ACCESS_BRIDGE_SELECTED_IDENTITY: &str = "devices_access.bridge_selected_identity";
 pub const DEVICES_ACCESS_BRIDGE_SELECTED_VAULT: &str = "devices_access.bridge_selected_vault";
 pub const DEVICES_ACCESS_BRIDGE_VAULT: &str = "devices_access.bridge_vault";
+pub const DEVICES_ACCESS_BRIDGE_VAULT_DEVICE_RELATION: &str =
+    "devices_access.bridge_vault_device_relation";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_GRANT: &str = "devices_access.bridge_vault_grant";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_GRANTS: &str = "devices_access.bridge_vault_grants";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_HEADLINE: &str = "devices_access.bridge_vault_headline";
-pub const DEVICES_ACCESS_BRIDGE_VAULT_IDENTITY_RELATION: &str =
-    "devices_access.bridge_vault_identity_relation";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_LEDE: &str = "devices_access.bridge_vault_lede";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_PLURAL: &str = "devices_access.bridge_vault_plural";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_SINGULAR: &str = "devices_access.bridge_vault_singular";
