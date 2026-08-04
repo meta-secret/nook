@@ -204,6 +204,11 @@ data.lateralAccessPort &&
 <style>
   .bridge-card,
   .empty-card {
+    /* Flow gives the node its measured width. Keep the rendered card's border
+       box within that measurement at compact zoom levels. */
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
     width: 100%;
     border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
     border-radius: var(--radius);
