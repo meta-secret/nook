@@ -257,7 +257,7 @@ test.describe('passkey device-key protection', () => {
     const invitationLink = await page
       .getByTestId('sentinel-genesis-request-output')
       .inputValue()
-    expect(invitationLink).toContain('/vault/#sentinel-request=')
+    expect(invitationLink).toContain('/vault#sentinel-request=')
     expect(invitationLink).toContain('#sentinel-request=')
 
     const participantNameInput = page.getByTestId(
@@ -298,7 +298,9 @@ test.describe('passkey device-key protection', () => {
       invitationLink,
       'Sentinel participant two',
     )
+    expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
     await page.goto(participantTwo.responseLink)
+    await expect(page).toHaveURL(/\/vault$/)
     await expect(
       page.getByTestId('sentinel-genesis-authentication-ready'),
     ).toContainText('Authentication response received')

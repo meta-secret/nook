@@ -66,7 +66,7 @@ test('Sentinel creation invites participants instead of standalone join', async 
   const invitationLink = await page
     .getByTestId('sentinel-genesis-request-output')
     .inputValue()
-  expect(invitationLink).toContain('/vault/#sentinel-request=')
+  expect(invitationLink).toContain('/vault#sentinel-request=')
   expect(invitationLink).toContain('#sentinel-request=')
   const invitation = new URL(invitationLink)
   const participantUrl = new URL(
