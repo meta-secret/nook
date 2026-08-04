@@ -399,10 +399,9 @@ test.describe('devices and access dashboard', () => {
 
     await page.getByTestId('vault-devices-access-tab').click()
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Paired device identity', {
+    await expect(bridge).toContainText('Paired-device identity state', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(bridge).toContainText('Paired-device identity state')
     await expect(bridge).toContainText('Reported by paired device')
     await expect(bridge).not.toContainText('Browser identity state')
     await expect(bridge).not.toContainText('Local identity state')
