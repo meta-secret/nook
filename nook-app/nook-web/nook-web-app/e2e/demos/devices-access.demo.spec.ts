@@ -31,6 +31,25 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
     1,
   )
+  await page.setViewportSize({ width: 240, height: 844 })
+  await expect
+    .poll(() =>
+      chain.evaluate((element) => {
+        const protection = element.querySelector(
+          'article[aria-label*="Unlock protection"]',
+        )
+        if (!(protection instanceof HTMLElement)) return false
+
+        const bridgeBounds = element.getBoundingClientRect()
+        const protectionBounds = protection.getBoundingClientRect()
+        return (
+          protectionBounds.left >= bridgeBounds.left &&
+          protectionBounds.right <= bridgeBounds.right
+        )
+      }),
+    )
+    .toBe(true)
+  await page.setViewportSize({ width: 1280, height: 720 })
   await page.waitForTimeout(BEAT_MS)
 
   const panel = page.getByTestId('devices-access-panel')

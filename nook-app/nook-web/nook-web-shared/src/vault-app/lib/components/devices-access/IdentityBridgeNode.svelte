@@ -204,6 +204,7 @@ data.lateralAccessPort &&
 <style>
   .bridge-card,
   .empty-card {
+    box-sizing: border-box;
     width: 100%;
     border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
     border-radius: var(--radius);

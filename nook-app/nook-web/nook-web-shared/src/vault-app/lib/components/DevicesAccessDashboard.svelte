@@ -500,9 +500,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
             I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
           ),
           deviceStage: vault.t(I18N_KEYS.DevicesAccessBridgeDeviceEvidence),
-          identityStage: vault.t(
-            I18N_KEYS.DevicesAccessBridgeDistributedIdentity,
-          ),
+          identityStage: companionIdentity
+            ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
+            : vault.t(I18N_KEYS.DevicesAccessBridgeDistributedIdentity),
           vaultStage: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrants),
           selectedVaultStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeSelectedVault,
