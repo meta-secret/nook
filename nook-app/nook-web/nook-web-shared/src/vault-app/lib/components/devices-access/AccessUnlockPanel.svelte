@@ -99,7 +99,9 @@ behind one disclosure.
           {vault.t(I18N_KEYS.DevicesAccessNookPasskeyName)}
         </dt>
         <dd class="mt-1.5 text-sm font-medium text-foreground">
-          {knownText(passkeyName) ? textValue(passkeyName) : unknown}
+          {knownText(passkeyName)
+            ? textValue(passkeyName)
+            : vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed)}
         </dd>
       </div>
       <div>

@@ -118,38 +118,61 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity unlocked')
-    await expect(
-      page.getByTestId('devices-access-node-device-key'),
-    ).toContainText('Passkey · recoverable identity')
+    await expect(page.getByTestId('devices-access-chain')).toContainText(
+      'Passkey · recoverable identity',
+    )
 
     const unlockNode = page.getByTestId('devices-access-node-unlock')
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge).toContainText('Device evidence')
+    await expect(bridge).toContainText('Identity context')
+    await expect(bridge).toContainText('Verified device-key access')
     await expect(
-      page.getByTestId('devices-access-chain').locator('[role="tablist"]'),
-    ).toHaveAttribute('aria-orientation', 'vertical')
-    await expect(page.getByTestId('devices-access-chain')).toContainText(
-      'unlocks',
-    )
+      bridge.getByRole('article', { name: /Device evidence/ }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Selected identity/ }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /Device-key access/ }),
+    ).toBeVisible()
     await expect(unlockNode).toHaveAttribute('aria-selected', 'true')
-    await expect(deviceKeyNode).toContainText('This browser')
-    await expect(vaultsNode).toContainText('1 of 1')
+    await expect(unlockNode).toContainText('Protection')
+    await expect(deviceKeyNode).toContainText('Device key')
+    await expect(vaultsNode).toContainText('Vault access')
     const strengthVaults = page.getByTestId('devices-access-strength-vaults')
-    await expect(strengthVaults).toHaveCount(0)
-    // The drawn connector is decorative, so each link's own name has to carry
-    // the relation for anyone who never sees the schematic.
-    await expect(deviceKeyNode).toHaveAccessibleName(/unlocks/)
-    await expect(deviceKeyNode).toHaveAccessibleName(/My browser/)
-    await expect(deviceKeyNode).toHaveAccessibleName(/Identity unlocked/)
-    await expect(deviceKeyNode).toHaveAccessibleName(
-      /Passkey · recoverable identity/,
-    )
-    await expect(deviceKeyNode).toHaveAccessibleName(/Verified vaults: 1 of 1/)
-    await expect(vaultsNode).toHaveAccessibleName(/opens/)
-    await expect(vaultsNode).toHaveAccessibleName(/Vault access/)
-    await expect(unlockNode).toContainText('Named by you')
-    await expect(unlockNode).toHaveAccessibleName(/Named by you/)
-    await expect(unlockNode).toHaveAccessibleName(/Verified vaults: 1 of 1/)
+    await expect(strengthVaults).toHaveCount(1)
+    await expect(strengthVaults).toContainText('Verified way in')
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(
+      bridge.getByRole('img', {
+        name: /device key is available in the shown identity context/i,
+      }),
+    ).toHaveCount(1)
+    await expect(
+      bridge.getByRole('img', {
+        name: /device key opened Test vault; an identity-level grant is not inferred/i,
+      }),
+    ).toHaveCount(1)
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true)
+    await page.getByTestId('devices-access-perspective-vaults').click()
+    await expect(
+      bridge.getByRole('img', {
+        name: /Identity context for the device key that opened Test vault/,
+      }),
+    ).toHaveCount(1)
+    await expect(bridge).toContainText('Identity context')
+    await page.getByTestId('devices-access-perspective-identities').click()
+    await page.setViewportSize({ width: 1440, height: 900 })
 
     // The first link opens selected: one passkey fingerprint, and the same
     // fingerprint on its node, so the relationship and the evidence agree.
@@ -159,10 +182,7 @@ test.describe('devices and access dashboard', () => {
       .getByTestId('devices-access-credential-id')
       .innerText()
     expect(credentialFingerprint).not.toBe('Unknown')
-    await expect(unlockNode).toHaveAccessibleName(
-      new RegExp(credentialFingerprint),
-    )
-    await expect(unlockNode).toContainText(credentialFingerprint.slice(-8))
+    await expect(panel).toContainText(credentialFingerprint)
     const aaguidRow = panel.getByText('Authenticator AAGUID', { exact: true })
     await expect(aaguidRow).toBeHidden()
     await page.getByTestId('devices-access-browser-reported').click()
@@ -175,37 +195,32 @@ test.describe('devices and access dashboard', () => {
     await expect(panel).toContainText('01010101-0101-0101-0101-010101010101')
 
     // Arrow keys follow the map's visible order, and the panel follows focus.
-    await deviceKeyNode.press('ArrowRight')
-    await expect(unlockNode).toBeFocused()
-    await expect(unlockNode).toHaveAttribute('aria-selected', 'true')
-
     await unlockNode.press('ArrowRight')
+    await expect(deviceKeyNode).toBeFocused()
+    await expect(deviceKeyNode).toHaveAttribute('aria-selected', 'true')
+
+    await deviceKeyNode.press('ArrowRight')
     await expect(vaultsNode).toBeFocused()
     await expect(vaultsNode).toHaveAttribute('aria-selected', 'true')
     await expect(panel).toContainText('Vaults known to this device key')
-    await expect(strengthVaults).toContainText('Opens here')
     await expect(strengthVaults).toContainText('Verified way in')
-    await expect(strengthVaults).toContainText('This browser')
     await expect(
-      page
-        .getByTestId('devices-access-chain')
-        .locator('[role="tablist"]')
-        .getByTestId('devices-access-strength-vaults'),
-    ).toHaveCount(0)
+      bridge.getByRole('article', { name: /Device-key access/ }),
+    ).toHaveCount(1)
 
     await vaultsNode.press('ArrowLeft')
-    await expect(unlockNode).toBeFocused()
-    await unlockNode.press('ArrowLeft')
     await expect(deviceKeyNode).toBeFocused()
     await expect(panel).toContainText('Browser device key')
     const deviceIdentifier = await page
       .getByTestId('devices-access-device-id')
       .innerText()
     expect(deviceIdentifier).not.toBe('Unknown')
-    await expect(deviceKeyNode).toContainText(deviceIdentifier)
+    await expect(panel).toContainText(deviceIdentifier)
     await expect(panel).toContainText('A backup password is different')
 
     await deviceKeyNode.press('ArrowLeft')
+    await expect(unlockNode).toBeFocused()
+    await unlockNode.press('ArrowLeft')
     await expect(vaultsNode).toBeFocused()
     await expect(panel).toContainText('Vaults known to this device key')
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
@@ -218,10 +233,7 @@ test.describe('devices and access dashboard', () => {
     await vaultIdentifier.getByText('Vault identifier', { exact: true }).click()
     await expect(vaultIdentifier.locator('p')).toBeVisible()
     const fullVaultIdentifier = await vaultIdentifier.locator('p').innerText()
-    await expect(strengthVaults).not.toContainText(fullVaultIdentifier)
-    await expect(strengthVaults).not.toContainText(
-      fullVaultIdentifier.replaceAll('-', '').replaceAll('_', '').slice(-8),
-    )
+    await expect(strengthVaults).toContainText(fullVaultIdentifier)
     await expect(
       page.getByTestId('devices-access-current-vault'),
     ).toContainText('Emergency recovery')
@@ -267,14 +279,12 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('device-protection-pin-setup-btn').click()
 
     const unlockNode = page.getByTestId('devices-access-node-unlock')
+    const panel = page.getByTestId('devices-access-panel')
     await expect(unlockNode).toBeFocused()
-    await expect(unlockNode).toContainText('PIN or passphrase')
-    await expect(unlockNode).toContainText('Known only to you')
-    await expect(unlockNode).not.toContainText('Unknown')
-    await expect(unlockNode).not.toContainText('Named by you')
-    await expect(unlockNode).toHaveAccessibleName(/Known only to you/)
-    await expect(unlockNode).toHaveAccessibleName(/PIN or passphrase/)
-    await expect(unlockNode).not.toHaveAccessibleName(/Named by you/)
+    await expect(panel).toContainText('PIN or passphrase')
+    await expect(panel).toContainText('Known only to you')
+    await expect(panel).not.toContainText('Unknown')
+    await expect(panel).not.toContainText('Named by you')
   })
 
   test('does not classify an unnamed passkey as user-named', async ({
@@ -321,12 +331,11 @@ test.describe('devices and access dashboard', () => {
     }, NookDeviceAccessTextKind.Unknown)
 
     await page.getByTestId('vault-devices-access-tab').click()
-    const unlockNode = page.getByTestId('devices-access-node-unlock')
-    await expect(unlockNode).toContainText('Unnamed passkey', {
+    const panel = page.getByTestId('devices-access-panel')
+    await expect(panel).toContainText('Unnamed passkey', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(unlockNode).not.toContainText('Named by you')
-    await expect(unlockNode).not.toHaveAccessibleName(/Named by you/)
+    await expect(panel).not.toContainText('Named by you')
   })
 
   test('attributes a companion session to its paired device', async ({
@@ -366,19 +375,22 @@ test.describe('devices and access dashboard', () => {
     }, DeviceAccessProtectionKind.CompanionSession)
 
     await page.getByTestId('vault-devices-access-tab').click()
-    const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
-    await expect(deviceKeyNode).toContainText('Paired device identity', {
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(deviceKeyNode).not.toContainText('My browser')
-    await expect(deviceKeyNode).toHaveAccessibleName(/Paired device identity/)
-    const unlockNode = page.getByTestId('devices-access-node-unlock')
-    await expect(unlockNode).not.toContainText('Named by you')
-    await expect(unlockNode).not.toHaveAccessibleName(/Named by you/)
+    await expect(bridge).not.toContainText('This browser')
+    const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
+    await deviceKeyNode.click()
+    const panel = page.getByTestId('devices-access-panel')
+    await expect(panel).toContainText('Paired device identity', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(panel).not.toContainText('My browser')
+    await page.getByTestId('devices-access-node-unlock').click()
+    await expect(panel).not.toContainText('Named by you')
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(
-      page.getByTestId('devices-access-strength-vaults'),
-    ).toContainText('Paired device identity')
+    await expect(panel).toContainText('Vaults known to this device key')
   })
 
   test('keeps known vaults visible after identity recovery reset', async ({
@@ -436,7 +448,9 @@ test.describe('devices and access dashboard', () => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
-    await expect(vaultsNode).toHaveAccessibleName(/opens/, {
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toHaveCount(1, {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
@@ -478,12 +492,11 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('vault-devices-access-tab').click()
 
     const chain = page.getByTestId('devices-access-chain')
-    await expect(vaultsNode).toHaveAccessibleName(/None verified yet/)
-    await expect(chain).toContainText('not verified')
-    await expect(chain).not.toContainText('opens')
-    // Sighted and screen-reader readouts have to agree that access is unproven.
-    await expect(vaultsNode).toHaveAccessibleName(/not verified/)
-    await expect(vaultsNode).not.toHaveAccessibleName(/opens/)
+    await expect(chain).toContainText('0 opened by key')
+    await expect(
+      page.getByTestId('devices-access-strength-vaults'),
+    ).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: /0 vaults/ })).toBeVisible()
 
     await vaultsNode.click()
     const panel = page.getByTestId('devices-access-panel')
@@ -509,9 +522,6 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
       'Bitwarden family vault',
     )
-    await expect(
-      page.getByTestId('devices-access-node-unlock'),
-    ).toHaveAccessibleName(/Bitwarden family vault/)
     await expect(
       page.getByTestId('devices-access-provider-label'),
     ).toBeFocused()
