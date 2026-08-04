@@ -16,6 +16,9 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
+import ChainStrengthMatrix from './identity-management/chain-strength-matrix/Experiment.svelte'
+import IdentityMeshInspector from './identity-management/identity-mesh-inspector/Experiment.svelte'
+import SentinelIdentityDeck from './identity-management/sentinel-identity-deck/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -52,6 +55,12 @@ export interface ExperimentSubcategory {
 
 export const categories: ExperimentCategory[] = [
   {
+    slug: 'identity-management',
+    title: 'Identity Management',
+    description:
+      'Independent identity device key management paired with visual vault-identity relationship topology.',
+  },
+  {
     slug: 'nook-auth',
     title: 'Nook Auth',
     description:
@@ -72,6 +81,13 @@ export const categories: ExperimentCategory[] = [
 ]
 
 export const subcategories: ExperimentSubcategory[] = [
+  {
+    categorySlug: 'identity-management',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Identity Concepts',
+    description:
+      'Sketches separating device key breakdown from vault entitlement and quorum relationships.',
+  },
   {
     categorySlug: 'nook-auth',
     slug: ExperimentVersion.V1,
@@ -115,17 +131,61 @@ export const subcategories: ExperimentSubcategory[] = [
   },
 ]
 
-const auth = categories[0]
-const workflow = categories[1]
-const vault = categories[2]
-const authV1 = subcategories[0]
-const workflowV1 = subcategories[1]
-const v1 = subcategories[2]
-const v2 = subcategories[3]
-const v3 = subcategories[4]
-const v4 = subcategories[5]
+const identityMgmt = categories.find((c) => c.slug === 'identity-management')!
+const auth = categories.find((c) => c.slug === 'nook-auth')!
+const workflow = categories.find((c) => c.slug === 'vault-auth-workflow')!
+const vault = categories.find((c) => c.slug === 'vault')!
+
+const identityMgmtV1 = subcategories.find(
+  (s) => s.categorySlug === 'identity-management' && s.slug === ExperimentVersion.V1,
+)!
+const authV1 = subcategories.find(
+  (s) => s.categorySlug === 'nook-auth' && s.slug === ExperimentVersion.V1,
+)!
+const workflowV1 = subcategories.find(
+  (s) => s.categorySlug === 'vault-auth-workflow' && s.slug === ExperimentVersion.V1,
+)!
+const v1 = subcategories.find(
+  (s) => s.categorySlug === 'vault' && s.slug === ExperimentVersion.V1,
+)!
+const v2 = subcategories.find(
+  (s) => s.categorySlug === 'vault' && s.slug === ExperimentVersion.V2,
+)!
+const v3 = subcategories.find(
+  (s) => s.categorySlug === 'vault' && s.slug === ExperimentVersion.V3,
+)!
+const v4 = subcategories.find(
+  (s) => s.categorySlug === 'vault' && s.slug === ExperimentVersion.V4,
+)!
 
 export const experiments: Experiment[] = [
+  {
+    slug: 'chain-strength-matrix',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Chain strength matrix',
+    description:
+      'Independent My Identities device key inventory paired with a visually separate vault-identity quorum matrix.',
+    component: ChainStrengthMatrix,
+  },
+  {
+    slug: 'identity-mesh-inspector',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity mesh inspector',
+    description:
+      'Side-by-side workstation inspector: left panel for devices & key material, right obsidian card for vault-identity topology.',
+    component: IdentityMeshInspector,
+  },
+  {
+    slug: 'sentinel-identity-deck',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Sentinel identity deck',
+    description:
+      'Tactical command deck with device hardware key slots on top and vault authorization policies below.',
+    component: SentinelIdentityDeck,
+  },
   {
     slug: 'whats-there',
     category: auth,
@@ -280,3 +340,4 @@ export const experiments: Experiment[] = [
     component: DistributedVaultPairing,
   },
 ]
+
