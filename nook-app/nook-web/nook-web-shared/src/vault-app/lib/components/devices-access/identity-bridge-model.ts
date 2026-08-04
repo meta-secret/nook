@@ -215,6 +215,23 @@ export type IdentityBridgeDefinition = {
   compactHeight: number;
 };
 
+function nodeAriaLabel(data: IdentityBridgeNodeData): string {
+  switch (data.kind) {
+    case IdentityBridgeNodeKind.Protection:
+      return `${data.caption}: ${data.label}. ${data.description}`;
+    case IdentityBridgeNodeKind.Device:
+      return `${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
+    case IdentityBridgeNodeKind.Identity:
+      return `${data.caption}: ${data.label}. ${data.stateLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
+    case IdentityBridgeNodeKind.Vault:
+      return `${data.caption}: ${data.label}. ${data.statusLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
+    case IdentityBridgeNodeKind.Empty:
+      return `${data.label}. ${data.description}`;
+    case IdentityBridgeNodeKind.Stage:
+      return data.label;
+  }
+}
+
 function graphNode(
   id: string,
   data: IdentityBridgeNodeData,
@@ -230,6 +247,7 @@ function graphNode(
     draggable: false,
     selectable: false,
     focusable: data.kind !== IdentityBridgeNodeKind.Stage,
+    ariaLabel: nodeAriaLabel(data),
     style: `width: ${width}px`,
   };
 }
@@ -666,30 +684,9 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           compact ? 44 : 0,
           width,
         ),
-        stageNode(
-          "stage-device",
-          input.copy.deviceStage,
-          IdentityBridgeFlow.Vertical,
-          compact ? 20 : 250,
-          compact ? 250 : 225,
-          compact ? 300 : 570,
-        ),
-        graphNode(
-          "device-empty",
-          {
-            kind: IdentityBridgeNodeKind.Empty,
-            flow: IdentityBridgeFlow.Vertical,
-            portMode: IdentityBridgePortMode.None,
-            label: input.copy.noAuthorizedIdentity,
-            description: input.copy.noAuthorizedIdentityDescription,
-          },
-          compact ? 20 : 350,
-          compact ? 294 : 280,
-          width,
-        ),
       ],
       edges: [],
-      compactHeight: compact ? 510 : 0,
+      compactHeight: compact ? 280 : 0,
     };
   }
   const verifiedDeviceAccess = selectedVault.verified;

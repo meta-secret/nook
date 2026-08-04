@@ -133,6 +133,12 @@ describe('identity bridge graph', () => {
       source: 'protection-current',
       target: 'device-current',
     })
+    expect(
+      graph.nodes.find((node) => node.id === 'device-current')?.ariaLabel,
+    ).toContain('Unlocks this device key')
+    expect(
+      graph.nodes.find((node) => node.id === 'vault-home')?.ariaLabel,
+    ).toContain('Device key opened Home')
   })
 
   test('routes vault-first evidence to the exact device key', () => {
@@ -208,7 +214,7 @@ describe('identity bridge graph', () => {
 
     expect(graph.nodes.some((node) => node.id === 'device-current')).toBe(false)
     expect(graph.nodes.some((node) => node.id === 'vault-empty')).toBe(true)
-    expect(graph.nodes.some((node) => node.id === 'device-empty')).toBe(true)
+    expect(graph.nodes.some((node) => node.id === 'device-empty')).toBe(false)
     expect(graph.edges).toHaveLength(0)
   })
 
