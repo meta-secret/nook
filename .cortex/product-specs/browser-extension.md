@@ -25,6 +25,15 @@ The extension owns browser-only responsibilities:
 - offering to create and use website passkeys through an explicit consent
   prompt while preserving browser/security-key fallback.
 
+These responsibilities form two user-facing components: the selected virtual
+identity acting through the extension's protected local device key and its
+authorized relationship with a website/origin, then password and
+website-passkey integration backed by an authorized Simple Vault. The first
+belongs to identity management. The second operates on vault-owned content.
+Pairing or trusting a site does not create a vault, and a provider credential
+does not authorize decryption. See
+[identity-vault-architecture.md](../design-docs/identity-vault-architecture.md).
+
 The extension is a Simple Vault capability. It must never pair with, receive a
 grant from, inject a content script into, or open Sentinel Vault. Rust/WASM
 application capability checks enforce the vault-type boundary.
@@ -35,7 +44,7 @@ application capability checks enforce the vault-type boundary.
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                                 |
 | Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
-| Extension background/WASM runtime | Device identity, encrypted state, sync, domain matching, and fill authorization                               |
+| Extension background/WASM runtime | Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization           |
 | In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
@@ -84,9 +93,10 @@ recover, or administer vault items.
 The website origin is a transport and UI boundary, not cryptographic authority
 by itself. An unlocked, authorized vault device creates the approval event.
 
-### Primary Identity And Authentication UX
+### Current Primary Device-Key And Authentication UX
 
-The extension identity is the default device identity whenever the approved,
+The current implementation calls the extension's installation-specific key a
+“device identity.” It is the preferred local device key whenever the approved,
 unlocked extension is available. Opening Simple Vault from the extension,
 refreshing the page, locking and reopening the vault, or navigating within the
 site must not prompt for a second website passkey. The site requests a fresh
@@ -310,11 +320,14 @@ chooser remains the user-presence gate. Silent create/assert and automatic
 submit stay out of scope. See
 [passkey-manager.md](../design-docs/passkey-manager.md).
 
-## Device And Storage Boundary
+## Device-Key And Storage Boundary
 
-The extension creates its own Nook device identity instead of reusing or
-scraping the `simple.nokey.sh` browser device private key. This provides a
-distinct approval/revocation boundary and limits compromise blast radius.
+The extension creates its own installation-specific Nook device key instead of
+reusing or scraping the `simple.nokey.sh` browser device private key. Existing
+code and wire fields call this a device identity; the target identity model
+treats it as a key acting for a selected virtual identity. The separate key
+provides a distinct approval/revocation boundary and limits compromise blast
+radius.
 
 TypeScript performs browser ceremonies and message transport. Rust/WASM owns
 device option construction, PRF validation, key wrapping, authorization
@@ -336,16 +349,16 @@ without requiring a sync provider. Sync providers remain responsible for
 global changes from other browsers/devices; after a provider pull, Simple Vault
 publishes the resulting event log through the same local bridge.
 
-The extension private device identity stays separately wrapped in
+The extension private device key stays separately wrapped in
 extension-origin IndexedDB by WebAuthn PRF. Event replication may occur while
-that identity is locked, but decrypting, matching, or filling requires an
+that key is locked, but decrypting, matching, or filling requires an
 extension-origin unlock ceremony. The passkey is bound to the stable extension
 runtime id, not to the Simple Vault website origin.
 
 The extension database does not need the website private key. Its canonical
 encrypted event log contains the vault-key envelope addressed to the extension
-public key. The extension passkey unlocks the extension age identity, and
-Rust/WASM uses that identity to open the envelope and decrypt the local
+public key. The extension passkey unlocks the extension age device key, and
+Rust/WASM uses that key to open the envelope and decrypt the local
 projection. Non-secret grant and selected-vault status metadata also remain in
 WASM-managed extension-origin Rexie/IndexedDB; browser-vendor storage is not a
 vault persistence boundary. An upgrade may read the legacy

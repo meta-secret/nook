@@ -7,14 +7,21 @@ Nook's security choices belong to their owning lifecycle. Rust owns policy in
 Vault creation chooses only the vault key-access model. Replication is a
 post-creation storage concern, not a vault mode.
 
+Identity creation and device onboarding are separate from vault creation. A
+combined product journey may perform them consecutively, but a person may hold
+multiple virtual identities; each exists independently with zero or more
+registered keys and receives explicit
+grants to independently encrypted vaults. See
+[identity-vault-architecture.md](identity-vault-architecture.md).
+
 ## Architecture Groups
 
 | Group | Values | Owner | Notes |
 | --- | --- | --- | --- |
-| `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Per-device local identity protection. The UI calls the latter High security. |
+| `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Existing protection modes. `standard` deterministically derives the current age identity from passkey PRF and is a compatibility boundary; the target model always wraps a fresh installation-specific device key. The UI calls the latter High security. |
 | `vault_type` | `simple`, `sentinel` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. |
 | Sentinel policy | participant count `N`, threshold `T` | `nook-auth2` / `nook-core` | Chosen only for Sentinel genesis before vault keys exist. |
-| Sync provider | provider-specific connection | `nook-core` / `nook-wasm` | Optional post-genesis encrypted backup/replica transport. Not a vault mode or unlock factor. |
+| Replication provider | provider-specific connection/mount | `nook-replication` / `nook-core` / `nook-wasm` | Neutral encrypted transport usable by identity control logs and vault event logs. Not a vault mode, identity, or unlock factor. |
 
 `replication_type` and its derived `onboarding_type` are legacy implementation
 concepts. Provider account ownership or sharing capability belongs to an

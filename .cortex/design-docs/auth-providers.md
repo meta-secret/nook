@@ -1,11 +1,14 @@
 # Auth Providers, Sync, and Login UX
 
-How Nook persists **sync provider** credentials, the **login gate**, and how that
-relates to **vaults** (not the same thing).
+How Nook persists **replication-provider** credentials, the **login gate**, and
+how provider transports relate independently to identities and vaults.
 
-> **Canonical model:** [unified-vault.md](unified-vault.md),
-> [vault-session-and-lock.md](vault-session-and-lock.md). Sync providers are
-> **replica targets** for the active vault (`store_id`), not separate vaults.
+> **Canonical model:**
+> [identity-vault-architecture.md](identity-vault-architecture.md),
+> [unified-vault.md](unified-vault.md), and
+> [vault-session-and-lock.md](vault-session-and-lock.md). Providers are neutral
+> **replication targets** mounted independently by identity control logs and
+> vault event logs; they are not identities, vaults, or unlock factors.
 > Provider **event-log sync** mechanics live in
 > [vault-event-log.md](vault-event-log.md); this doc owns credentials, sealing,
 > login UX, and OAuth origin constraints.
@@ -22,10 +25,12 @@ relates to **vaults** (not the same thing).
   clears the session and returns to the login gate.
 - **Remember sync credentials:** GitHub PAT and provider labels persist in
   IndexedDB — no repeated token prompts.
-- **Many providers, one vault:** Multiple sync providers replicate the **same**
-  `store_id`; see [vault-session-and-lock.md](vault-session-and-lock.md) §4.
+- **Many mounts:** Multiple providers may replicate the same vault `store_id`;
+  identities may separately use provider targets for encrypted identity-control
+  events before any vault exists.
 - **Separation of concerns:** Provider tokens are storage convenience. Vault keys
-  live in the encrypted YAML; device identity lives in `nook_db`.
+  remain vault authorization material; provider credentials are sealed locally
+  to an installation-specific device key and never prove identity membership.
 
 ---
 
@@ -97,8 +102,9 @@ inside `save_auth_providers` / `seal_provider_credentials` and unsealed inside
 the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps)
 stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
 
-**Device key = existing device identity.** No new key is minted for provider
-storage. The wasm layer reuses this browser's **age X25519 device identity**
+**Current storage mapping:** existing code names the device key a “device
+identity.” No new key is minted for provider storage. The wasm layer reuses
+this browser's **age X25519 device key**
 (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same
 identity that unwraps `auth:` envelopes). The identity must first be authorized
 with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on
@@ -151,6 +157,14 @@ creating a replacement. Personal / private providers keep using `drive.appdata`
 and never enter this grant path.
 
 ### Shared-provider onboarding
+
+This section documents the current vault-coupled enrollment wire. In the target
+architecture, device/member onboarding first extends an identity, and a
+separate authorization step grants that identity access to a vault. The same
+credential-free provider-target rule applies to both identity-control and vault
+event-log replication. Migration of the existing wire requires an explicit
+versioned design; this architecture decision does not silently reinterpret old
+enrollment payloads.
 
 The selected provider target determines the handoff. A shared Google Drive row
 persists its stable `folderId`; enrollment codes carry that folder id and never
@@ -290,7 +304,7 @@ provider sync path.
 ## 6. Security notes
 
 - Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with
-  the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB —
+  the device's age X25519 key** (in Rust/WASM) before hitting IndexedDB —
   never stored as plaintext. A raw `nook_auth` dump exposes age-armored
   ciphertext, not tokens.
 - The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped`
@@ -305,9 +319,9 @@ provider sync path.
 - GitHub PAT in IndexedDB is **storage convenience**, not vault encryption.
   Compromise exposes GitHub repo access, not plaintext vault secrets (still
   independently encrypted in the vault file).
-- Reusing the existing device identity means no extra key material and no new
-  key-management surface; the same identity already gates vault-key envelopes.
-- Device identity and encrypted vault blob remain in a separate IDB database
+- Reusing the existing local device key means no extra key material and no new
+  key-management surface; that key already gates current vault-key envelopes.
+- The local device key and encrypted vault blob remain in a separate IDB database
   (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.
 
 ## 7. OAuth origins and PR previews

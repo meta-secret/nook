@@ -25,6 +25,8 @@ import IdentityConsole from './keys-management/identity-console/Experiment.svelt
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
+import PreservedIdentityChainStrength from './identity-management/chain-strength/Experiment.svelte'
+import IdentityComposition from './identity-management/identity-composition/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
 import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
@@ -87,6 +89,12 @@ export const categories: ExperimentCategory[] = [
     title: 'Keys Management',
     description:
       'Which of my passkeys opens this vault, and can I use it from this browser? Every sketch draws the same graph of passkeys, device keys, and vaults, shows the identifiers you would compare against a password manager, and supports three passkeys / one passkey / new browser.',
+  },
+  {
+    slug: 'identity-management',
+    title: 'Identity Management',
+    description:
+      'One chain-strength proof of concept: a person can use multiple virtual identities whose public device-key records may be local-only or replicated through provider mounts.',
   },
   {
     slug: 'inspiration',
@@ -167,6 +175,13 @@ export const subcategories: ExperimentSubcategory[] = [
       "Internet Identity's architecture applied to Nook: one passkey is one identity, and access is a list of them.",
   },
   {
+    categorySlug: 'identity-management',
+    slug: ExperimentVersion.V1,
+    title: 'V1 · Chain-strength proof of concept',
+    description:
+      'One model only: identity → physical devices → local device keys → passkey access methods, with sync providers attached to the identity record.',
+  },
+  {
     categorySlug: 'inspiration',
     slug: ExperimentVersion.V1,
     title: 'V1 · Kept as-is',
@@ -189,8 +204,10 @@ const keysV1 = subcategories[6]
 const keysV2 = subcategories[7]
 const keysV3 = subcategories[8]
 const keysV4 = subcategories[9]
-const inspiration = categories[4]
-const inspirationV1 = subcategories[10]
+const identityManagement = categories[4]
+const identityManagementV1 = subcategories[10]
+const inspiration = categories[5]
+const inspirationV1 = subcategories[11]
 
 export const experiments: Experiment[] = [
   {
@@ -426,6 +443,24 @@ export const experiments: Experiment[] = [
     description:
       'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
     component: IdentityConsole,
+  },
+  {
+    slug: 'identity-chain-strength',
+    category: identityManagement,
+    subcategory: identityManagementV1,
+    title: 'Identity chain strength',
+    description:
+      'Two independent views: inspect the devices and keys inside one virtual identity, then inspect vault-to-identity grants without key-level detail.',
+    component: IdentityComposition,
+  },
+  {
+    slug: 'frozen-identity-chain-strength',
+    category: inspiration,
+    subcategory: inspirationV1,
+    title: 'Identity chain strength · kept',
+    description:
+      'The accepted dark rope preserved unchanged: physical device, identities, and vault grants through device-key and passkey strands.',
+    component: PreservedIdentityChainStrength,
   },
   {
     slug: 'frozen-chain-strength',

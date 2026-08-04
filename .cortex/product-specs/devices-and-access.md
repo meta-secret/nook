@@ -2,24 +2,46 @@
 
 ## Product statement
 
-Nook exposes one **Devices & access** dashboard per vault-application origin.
-It is available before a vault exists, while a vault is locked, and while a
-vault is open. It explains access authority; it is not a universal passkey
-manager and does not merge the origin-isolated Simple or Sentinel identities.
+**Devices & access** is Nook's identity-management surface. An identity is a
+virtual account analogous to an account or user profile. One person may use
+multiple personal or collective identities, and each identity may exist with
+zero or more keys. The surface is available before a vault exists, while every
+vault is locked, and while a vault is open. It explains identity, physical
+device, device-key, passkey, provider, onboarding, and downstream vault-grant
+relationships; it is not a universal passkey manager.
 The browser extension remains a Simple Vault companion, not a third vault
-application: its separate identity is managed through extension setup and
-connection flows rather than this dashboard.
+application. Its installation-specific device key and relationship to a
+selected virtual identity are managed through extension setup and connection
+flows rather than this dashboard.
 
-## Access model
+The current implementation is browser-device-centered. The target architecture
+expands the same permanent surface to personal and collective identities
+without making a vault the parent of those identities. See
+[identity-vault-architecture.md](../design-docs/identity-vault-architecture.md).
 
-1. A WebAuthn passkey or local PIN/passphrase protects one browser-local age
-   device identity.
-2. The device identity may be enrolled in zero, one, or many independent
-   vaults. Each vault still owns independent vault keys and authorization rows.
-3. A vault backup password opens only its owning vault. It does not unlock or
-   replace the browser device identity.
-4. Storage and sync providers replicate ciphertext. They do not grant vault
-   decryption by themselves.
+## Identity and access model
+
+1. A person owns or participates in zero or more virtual identities.
+2. An identity contains zero or more registered device public keys and passkey
+   credential records. A zero-key identity is a valid but unusable setup state.
+3. A physical device, its Nook/browser installation, and a device key are
+   separate. One physical device may host several installations; each
+   installation generates fresh random private device keys locally and
+   publishes only their public keys to the selected identity record.
+4. A WebAuthn passkey or local PIN/passphrase protects a local device key. A
+   passkey may be synced by its provider and therefore must not be assigned a
+   fabricated physical-device location.
+5. Identity records use zero or more sync-provider mounts to exchange encrypted
+   membership, public-key, passkey-record, and revocation events.
+6. An identity may receive grants to zero, one, or many independent vaults.
+   Each vault owns an independent DEK and encrypts that DEK to the authorized
+   identity key or policy.
+7. A vault backup password opens only its owning vault. It does not unlock or
+   replace a virtual identity or local device key.
+8. Storage and sync providers are neutral replication transports. Identity
+   control logs and vault event logs may mount them independently; provider
+   access never grants Nook identity membership or vault decryption by itself.
+9. Passwords and other secret items are vault content, not identity state.
 
 ## Evidence and provenance
 
@@ -38,6 +60,14 @@ reliably identify the provider selected in a ceremony, confirm that a provider
 still retains a credential, or inventory credentials from another RP ID.
 The dashboard must never imply those capabilities.
 
+WebAuthn also cannot force an ordinary platform passkey to be local-only. The
+authenticator chooses whether a credential is backup eligible. Nook records
+`BE=0` as device-bound and `BE=1` as multi-device/sync-capable, but
+`authenticatorAttachment`, discoverability, and `residentKey` are not locality
+proof. A synced passkey is shown as provider-available, never as stored on one
+physical device. See
+[identity-vault-architecture.md](../design-docs/identity-vault-architecture.md#passkey-locality-and-synced-passkeys).
+
 ## Persistence boundary
 
 Unlock-critical `device_id` and `device_identity_wrapped` records remain
@@ -52,6 +82,28 @@ device-to-vault relationships. Private age keys, PRF output, PIN/passphrases,
 vault keys, backup-password values, and plaintext vault contents are forbidden.
 
 ## Interaction requirements
+
+The shipped dashboard currently presents a three-link device slice. It remains
+a truthful view of the current browser, but it is not the complete target
+identity model. The next identity-management design must also support:
+
+- choosing among personal and collective identities before choosing a vault;
+- showing that one person may use multiple identities;
+- keeping physical devices, installation evidence, device keys, and passkeys
+  as distinct facts and relationships rather than one overloaded “device
+  identity” object;
+- inspecting member-to-device-key relationships and identity-control history;
+- onboarding, suspending, replacing, and revoking identity devices without
+  requiring an open vault;
+- showing identity-specific sync providers and the public keys present in the
+  replicated identity record;
+- inspecting identity-to-vault grants as many-to-many relationships;
+- showing provider connections as separate mounts for identity control logs and
+  vault event logs; and
+- keeping vault passwords, items, DEK epochs, and event history in the vault
+  surface rather than presenting them as identity properties.
+
+Current dashboard requirements:
 
 - The dashboard presents the access model as one three-link chain — what the
   person presents, the browser device key it unlocks, and the vaults it opens —

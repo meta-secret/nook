@@ -5,7 +5,10 @@ under `nook-log/v1/events/`; see [vault-event-log.md](vault-event-log.md).
 The scalar `vault_version` model below is retained as historical context for
 local projection and migration behavior.
 
-This document defines Nook's architecture: **vaults** (logical encrypted databases), **sync providers** (replica targets), local-first storage, and version-based reconciliation.
+This historical document defines Nook's local-first **vault** and provider
+replica model. The current cross-domain ownership of identities, independent
+vault DEKs, authorization grants, onboarding, and provider mounts is defined in
+[identity-vault-architecture.md](identity-vault-architecture.md).
 
 **Related:** [auth-providers.md](auth-providers.md), [vault-session-and-lock.md](vault-session-and-lock.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
 
@@ -28,7 +31,7 @@ flowchart TB
     L[nook_db vault:{store_id} — local cache]
     S[Unlocked session — memory only]
   end
-  subgraph sync["Sync providers (replicas)"]
+  subgraph sync["Replication providers (neutral transports)"]
     G[GitHub]
     D[Google Drive]
   end
@@ -43,7 +46,7 @@ flowchart TB
 | **Vault** | Implicit per provider | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](vault-session-and-lock.md)) |
 | **Primary copy** | Immutable provider event log | Local IndexedDB (`vault:{store_id}`) projection cache for the active vault |
 | **Unlock** | Provider-first wizard | Login gate: unlock local cache or connect provider to fetch a vault |
-| **Sync providers** | Vault selectors | **Replica targets** for the current vault — many providers, one `store_id` |
+| **Sync providers** | Vault selectors | **Mounted replica targets** supplied to vault sync — many providers, one `store_id`; identity control logs may mount providers independently |
 | **Lock** | N/A | Clear decrypted session; encrypted vault + providers remain |
 | **Conflict handling** | Last poll wins | Explicit user choice on version tie |
 

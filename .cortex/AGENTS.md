@@ -27,31 +27,26 @@ counter. Moving unit tests to a separate file to satisfy the counter is itself
 a failing invariant. Full critical contract:
 [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 
-## ⛔ Non-negotiable: load both design skills for every UI task
+## ⛔ Non-negotiable: load Nook's design skill for every UI task
 
 Before designing, implementing, or reviewing any user-visible website or browser
-extension UI, agents MUST read and use both skills:
+extension UI, agents MUST read and use:
 
 - [`design-taste-frontend`](../.agents/skills/design-taste-frontend/SKILL.md)
-- `impeccable`, generated locally with `task impeccable:install`
 
-The upstream Impeccable distribution is a pinned, generated dependency rather
-than authored Nook source. It MUST NOT be committed. A fresh checkout or
-isolated worker runs `task impeccable:install`, then restarts its agent harness
-so Codex discovers `.agents/skills/impeccable/SKILL.md`. Run its executable
-setup through `task impeccable:context -- <arguments>`; repository hooks use
-the same pinned Docker runtime.
+Impeccable is not part of Nook's default UI workflow. Do not install it, load
+its skill, run its context/playbook/detector commands, enable its hooks, or
+delegate its review workflow unless the user explicitly asks to use
+Impeccable. An already installed generated copy may remain in the workspace;
+its presence does not make it active.
 
 This applies to new screens, redesigns, component and style changes, responsive
 behavior, interaction states, and visual polish.
 
-These skills are complementary design-quality lenses, not permission to replace
-Nook's stack or architecture. Nook remains Svelte-based, and this `.cortex`
-guidance remains authoritative for typed Rust/WASM boundaries, translations,
-accessibility, established components and tokens, tests, and dependency
-choices. Use Impeccable's surface mode and task playbook to ground the work,
-then apply the Nook-specific taste skill's Svelte implementation, anti-slop, and
-visual pre-flight guidance.
+The design skill is not permission to replace Nook's stack or architecture.
+Nook remains Svelte-based, and this `.cortex` guidance remains authoritative
+for typed Rust/WASM boundaries, translations, accessibility, established
+components and tokens, tests, and dependency choices.
 
 Full repository-specific application contract:
 [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md).
@@ -376,6 +371,7 @@ build-performance PR. Full policy:
 * [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
 * [design-docs/core-beliefs.md](design-docs/core-beliefs.md) — Agent-first operating beliefs.
 * [design-docs/hive-isolated-agent-platform.md](design-docs/hive-isolated-agent-platform.md) — **Stateful isolated AI-agent platform**: trusted Codex operators, k0s/Kata topology, Neo4j task DAG, direct scoped credentials, disposable workers, complete Main-repair delivery, caching, and Taskfile operations.
+* [design-docs/identity-vault-architecture.md](design-docs/identity-vault-architecture.md) — **Identity and vault separation**: multiple virtual identities per person, physical-device versus device-key boundaries, synced versus device-bound passkeys, identity provider mounts, encrypted DEK grants, and independent vault event logs.
 * [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault** (scalar sync historical; see event-log).
 * [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
 * [design-docs/auth-providers.md](design-docs/auth-providers.md) — Login gate, `nook_auth` sync-provider credentials, OAuth origins.
@@ -407,7 +403,7 @@ build-performance PR. Full policy:
 - [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 - [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
 - [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
-- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Always load both `impeccable` and `design-taste-frontend` for user-visible UI work and apply them through Nook's Svelte/product constraints**.
+- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
 - [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 - [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
 - [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
