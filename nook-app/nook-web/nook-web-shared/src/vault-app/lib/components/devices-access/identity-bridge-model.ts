@@ -755,12 +755,12 @@ function vaultGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           kind: IdentityBridgeNodeKind.Empty,
           flow,
           portMode: IdentityBridgePortMode.None,
-          label: input.copy.noVerifiedVaults,
+          label: input.copy.noAuthorizedIdentity,
           description: input.copy.noAuthorizedIdentityDescription,
         },
-        compact ? 20 : 350,
+        deviceX,
         deviceY,
-        compact ? 300 : 310,
+        deviceWidth,
       ),
     );
   }

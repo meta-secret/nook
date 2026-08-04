@@ -173,6 +173,14 @@ describe('identity bridge graph', () => {
     if (selectedVault?.data.kind === IdentityBridgeNodeKind.Vault) {
       expect(selectedVault.data.incomingRelation).toBe('')
     }
+    const emptyDevice = graph.nodes.find((node) => node.id === 'device-empty')
+    const deviceStage = graph.nodes.find((node) => node.id === 'stage-device')
+    expect(emptyDevice?.data).toMatchObject({
+      kind: IdentityBridgeNodeKind.Empty,
+      label: 'No verified relationship',
+      description: 'No verified evidence exists.',
+    })
+    expect(emptyDevice?.position.x).toBe(deviceStage?.position.x)
   })
 
   test('formats timestamp evidence and keeps vault identifiers out of graph cards', () => {
