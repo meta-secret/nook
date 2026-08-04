@@ -19,6 +19,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await addVaultPassword(page, 'Travel recovery', 'demo recovery passphrase')
 
   await page.getByTestId('vault-devices-access-tab').click()
+  await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(

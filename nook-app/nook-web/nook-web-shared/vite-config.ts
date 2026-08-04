@@ -5,10 +5,22 @@ import { vaultAppHeaders } from "./src/vault-app/security-headers";
 
 type VaultSpaOptions = {
   name: string;
-  spaPaths: string[];
+  spaPaths: readonly string[];
   denyPath?: (pathname: string) => boolean;
-  outputAliases: string[];
+  outputAliases: readonly string[];
 };
+
+export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
+  "admin",
+  "devices-access",
+  "help",
+  "onboard",
+  "settings",
+  "vault",
+] as const;
+
+export const VAULT_WORKSPACE_SPA_PATHS =
+  VAULT_WORKSPACE_OUTPUT_ALIASES.map((alias) => `/${alias}`);
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);

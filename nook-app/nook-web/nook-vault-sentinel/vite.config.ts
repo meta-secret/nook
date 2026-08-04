@@ -2,6 +2,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 import {
+  VAULT_WORKSPACE_OUTPUT_ALIASES,
+  VAULT_WORKSPACE_SPA_PATHS,
   vaultAppAliases,
   vaultSpaPlugin,
 } from "../nook-web-shared/vite-config";
@@ -13,9 +15,15 @@ const simpleAppUrl =
 
 const sentinelSpa = vaultSpaPlugin({
   name: "sentinel-vault-spa",
-  spaPaths: ["/app-logs", "/logs", "/privacy", "/terms"],
+  spaPaths: [
+    ...VAULT_WORKSPACE_SPA_PATHS,
+    "/app-logs",
+    "/logs",
+    "/privacy",
+    "/terms",
+  ],
   denyPath: (pathname) => pathname === "/extension-connect",
-  outputAliases: ["app-logs", "logs"],
+  outputAliases: [...VAULT_WORKSPACE_OUTPUT_ALIASES, "app-logs", "logs"],
 });
 
 export default defineConfig({
