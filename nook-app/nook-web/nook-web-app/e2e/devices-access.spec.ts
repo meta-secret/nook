@@ -175,18 +175,20 @@ test.describe('devices and access dashboard', () => {
           document.documentElement.clientWidth,
       ),
     ).toBe(true)
-    const compactBridgeBounds = await bridge.boundingBox()
-    const compactProtectionBounds = await bridge
-      .getByRole('article', { name: /Unlock protection/ })
-      .boundingBox()
-    expect(compactBridgeBounds).not.toBeNull()
-    expect(compactProtectionBounds).not.toBeNull()
-    expect(compactProtectionBounds!.x).toBeGreaterThanOrEqual(
-      compactBridgeBounds!.x,
-    )
-    expect(
-      compactProtectionBounds!.x + compactProtectionBounds!.width,
-    ).toBeLessThanOrEqual(compactBridgeBounds!.x + compactBridgeBounds!.width)
+    const compactProtectionFitsBridge = await bridge.evaluate((element) => {
+      const protection = element.querySelector(
+        'article[aria-label*="Unlock protection"]',
+      )
+      if (!(protection instanceof HTMLElement)) return false
+
+      const bridgeBounds = element.getBoundingClientRect()
+      const protectionBounds = protection.getBoundingClientRect()
+      return (
+        protectionBounds.left >= bridgeBounds.left &&
+        protectionBounds.right <= bridgeBounds.right
+      )
+    })
+    expect(compactProtectionFitsBridge).toBe(true)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
