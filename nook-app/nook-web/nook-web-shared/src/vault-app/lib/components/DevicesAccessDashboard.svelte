@@ -2,7 +2,7 @@
 THESIS: Identity, protection, and vault access stay separate until typed domain evidence relates them.
 OWN-WORLD: Nook's restrained security surfaces, semantic tokens, evidence-aware language, and real local state remain intact.
 STORY: Choose local identity state or a vault, inspect that subject alone, then review independent protection or vault-access details below.
-FIRST VIEWPORT: Navigation, plain-language consequence, and the complete relationship graph appear before supporting controls.
+FIRST VIEWPORT: Navigation, plain-language consequence, and the complete evidence view appear before supporting controls.
 FORM: The Identity Bridge navigation remains, while its canvas stops drawing unsupported key and identity relationships; standard panels retain existing actions.
 -->
 <script lang="ts">
@@ -10,6 +10,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
   import { tick, untrack } from 'svelte'
   import { ArrowLeft, RefreshCw } from '@lucide/svelte'
   import {
+    DeviceAccessIdentityState,
     DeviceAccessProtectionKind,
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
@@ -51,6 +52,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
     accessChainTabId,
     AccessChainTabKind,
     formatAccessDate,
+    identityStateLabel,
     panelDescription,
     panelTitle,
     textValue,
@@ -79,6 +81,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
 
   type DashboardView = {
     protection: DeviceAccessProtectionKind
+    identityState: DeviceAccessIdentityState
     credentialId: DashboardText
     userHandleId: DashboardText
     passkeyName: DashboardText
@@ -210,6 +213,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
         if (generation !== loadGeneration) return DashboardLoadKind.Loading
         const view: DashboardView = {
           protection: snapshot.protection,
+          identityState: snapshot.identityState,
           credentialId: readText(snapshot.credentialId),
           userHandleId: readText(snapshot.userHandleId),
           passkeyName: readText(snapshot.passkeyName),
@@ -480,6 +484,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
             : vault.t(I18N_KEYS.DevicesAccessBridgeSelectedIdentity),
           vaultAccess: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
           identityDescription,
+          identityState: identityStateLabel(vault, view.identityState),
           statusMetricLabel: vault.t(I18N_KEYS.DevicesAccessStatusLabel),
           evidenceMetricLabel: vault.t(
             I18N_KEYS.DevicesAccessLastSuccessfulUse,
@@ -546,6 +551,7 @@ FORM: The Identity Bridge navigation remains, while its canvas stops drawing uns
             <IdentityBridgeGraph
               perspective={selectedPerspective}
               {selectedVault}
+              identityStatus={view.identityState}
               vaults={view.vaults}
               copy={bridgeCopy}
               graphLabel={vault.t(I18N_KEYS.DevicesAccessBridgeGraphLabel)}

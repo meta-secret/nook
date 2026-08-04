@@ -216,7 +216,7 @@ test.describe('devices and access dashboard', () => {
     await unlockNode.press('ArrowRight')
     await expect(vaultsNode).toBeFocused()
     await expect(vaultsNode).toHaveAttribute('aria-selected', 'true')
-    await expect(panel).toContainText('Vaults known to this browser')
+    await expect(panel).toContainText('Vault access evidence')
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
       'Access verified',
     )
@@ -225,7 +225,7 @@ test.describe('devices and access dashboard', () => {
     await expect(unlockNode).toBeFocused()
     await unlockNode.press('ArrowLeft')
     await expect(vaultsNode).toBeFocused()
-    await expect(panel).toContainText('Vaults known to this browser')
+    await expect(panel).toContainText('Vault access evidence')
     const vaultIdentifier = panel
       .locator('details')
       .filter({ hasText: 'Vault identifier' })
@@ -413,8 +413,11 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(0)
     await expect(panel).not.toContainText('My browser')
     await expect(panel).not.toContainText('Named by you')
+    await expect(
+      page.getByTestId('devices-access-companion-session'),
+    ).toContainText('active vault session was provided by a paired device')
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(panel).toContainText('Vaults known to this browser')
+    await expect(panel).toContainText('Vault access evidence')
   })
 
   test('keeps known vaults visible after identity recovery reset', async ({
@@ -531,7 +534,7 @@ test.describe('devices and access dashboard', () => {
 
     await vaultsNode.click()
     const panel = page.getByTestId('devices-access-panel')
-    await expect(panel).toContainText('Vaults known to this browser')
+    await expect(panel).toContainText('Vault access evidence')
     const vaults = page.getByTestId('devices-access-vaults')
     await expect(vaults).toContainText('Access not yet verified')
     await expect(vaults).not.toContainText('Access verified')
@@ -641,9 +644,12 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     await page.getByTestId('login-devices-access').click()
     await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()
-    await expect(page.getByTestId('devices-access-identity-state')).toHaveCount(
-      0,
-    )
+    await expect(
+      page.getByTestId('devices-access-identity-state'),
+    ).toContainText('Identity locked')
+    await expect(
+      page.getByTestId('devices-access-identity-card'),
+    ).toHaveAttribute('data-identity-state', 'Locked')
     const identityGraph = page.getByTestId('devices-access-chain')
     await expect(identityGraph).not.toContainText('Passkey')
     await expect(identityGraph).not.toContainText('Device key')

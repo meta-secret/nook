@@ -63,7 +63,7 @@ test('inspect independent identity, protection, and vault access evidence', asyn
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-node-vaults').click()
-  await expect(panel).toContainText('Vaults known to this browser')
+  await expect(panel).toContainText('Vault access evidence')
   await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',
   )

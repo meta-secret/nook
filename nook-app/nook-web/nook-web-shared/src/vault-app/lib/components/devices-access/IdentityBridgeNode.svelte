@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
     Fingerprint,
+    LockKeyhole,
     ShieldCheck,
     ShieldQuestion,
     Vault,
   } from '@lucide/svelte'
   import type { NodeProps } from '@xyflow/svelte'
+  import { DeviceAccessIdentityState } from '$app-wasm'
   import {
     IdentityBridgeNodeKind,
     type IdentityBridgeNode,
@@ -16,9 +18,14 @@
 
 {#if data.kind === IdentityBridgeNodeKind.Identity}
   <article
+    class:identity-unlocked={data.identityStatus ===
+      DeviceAccessIdentityState.Unlocked}
+    class:identity-locked={data.identityStatus ===
+      DeviceAccessIdentityState.Locked}
     class="bridge-card identity-card"
     data-testid="devices-access-identity-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.description}`}
+    data-identity-state={DeviceAccessIdentityState[data.identityStatus]}
+    aria-label={`${data.caption}: ${data.label}. ${data.stateLabel}. ${data.description}`}
   >
     <header>
       <span class="node-icon identity-icon"
@@ -28,6 +35,15 @@
         <small>{data.caption}</small>
         <strong>{data.label}</strong>
       </span>
+      <span class="state" data-testid="devices-access-identity-state"
+        >{#if data.identityStatus === DeviceAccessIdentityState.Unlocked}
+          <ShieldCheck class="size-3.5" aria-hidden="true" />
+        {:else if data.identityStatus === DeviceAccessIdentityState.Locked}
+          <LockKeyhole class="size-3.5" aria-hidden="true" />
+        {:else}
+          <ShieldQuestion class="size-3.5" aria-hidden="true" />
+        {/if}{data.stateLabel}</span
+      >
     </header>
     <p>{data.description}</p>
   </article>
@@ -101,6 +117,9 @@
   .vault-card .state {
     grid-column: 2;
   }
+  .identity-card .state {
+    grid-column: 2;
+  }
   .node-icon {
     display: grid;
     width: 2.5rem;
@@ -113,6 +132,14 @@
   }
   .identity-icon {
     color: var(--foreground);
+  }
+  .identity-unlocked .identity-icon {
+    border-color: color-mix(in oklab, var(--primary) 65%, transparent);
+  }
+  .identity-locked .identity-icon,
+  .identity-locked .state {
+    border-color: color-mix(in oklab, var(--destructive) 45%, transparent);
+    color: var(--destructive);
   }
   .node-heading {
     min-width: 0;

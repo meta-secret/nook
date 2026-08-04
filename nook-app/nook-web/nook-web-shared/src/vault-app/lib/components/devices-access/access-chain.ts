@@ -1,5 +1,8 @@
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
-import { DeviceAccessProtectionKind } from "$app-wasm";
+import {
+  DeviceAccessIdentityState,
+  DeviceAccessProtectionKind,
+} from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import {
   type DashboardText,
@@ -105,6 +108,19 @@ export function protectionLabel(
     return vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase);
   }
   return vault.t(I18N_KEYS.DevicesAccessNotPrepared);
+}
+
+export function identityStateLabel(
+  vault: VaultState,
+  state: DeviceAccessIdentityState,
+): string {
+  if (state === DeviceAccessIdentityState.Unlocked) {
+    return vault.t(I18N_KEYS.DevicesAccessIdentityUnlocked);
+  }
+  if (state === DeviceAccessIdentityState.Locked) {
+    return vault.t(I18N_KEYS.DevicesAccessIdentityLocked);
+  }
+  return vault.t(I18N_KEYS.DevicesAccessIdentityMissing);
 }
 
 export function panelTitle(

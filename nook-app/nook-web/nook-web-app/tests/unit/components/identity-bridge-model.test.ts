@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { DeviceAccessIdentityState } from '$app-wasm'
 import {
   buildIdentityBridge,
   IdentityBridgeNodeKind,
@@ -17,6 +18,7 @@ const copy: IdentityBridgeCopy = {
   vaultAccess: 'Local vault access',
   identityDescription:
     'State reported for this browser; no virtual identity ID is inferred.',
+  identityState: 'Identity unlocked',
   statusMetricLabel: 'Status',
   evidenceMetricLabel: 'Last successful use',
   verifiedStatus: 'Verified way in',
@@ -48,6 +50,7 @@ function input(
       storeId: selectedStoreId,
     },
     compact: false,
+    identityStatus: DeviceAccessIdentityState.Unlocked,
     vaults: [vault('home', true), vault('archive', false)],
     copy,
   }
@@ -70,6 +73,8 @@ describe('identity bridge graph', () => {
       label: 'Local identity state',
       description:
         'State reported for this browser; no virtual identity ID is inferred.',
+      identityStatus: DeviceAccessIdentityState.Unlocked,
+      stateLabel: 'Identity unlocked',
     })
   })
 

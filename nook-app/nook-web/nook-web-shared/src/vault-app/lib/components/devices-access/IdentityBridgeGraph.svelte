@@ -8,6 +8,7 @@
     type AriaLabelConfig,
     type NodeTypes,
   } from '@xyflow/svelte'
+  import type { DeviceAccessIdentityState } from '$app-wasm'
   import {
     buildIdentityBridge,
     IdentityBridgeControlPosition,
@@ -23,6 +24,7 @@
   let {
     perspective,
     selectedVault,
+    identityStatus,
     vaults,
     copy,
     graphLabel,
@@ -31,6 +33,7 @@
   }: {
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
+    identityStatus: DeviceAccessIdentityState
     vaults: readonly VaultAccessView[]
     copy: IdentityBridgeCopy
     graphLabel: string
@@ -47,6 +50,7 @@
     buildIdentityBridge({
       perspective,
       selectedVault,
+      identityStatus,
       compact,
       vaults,
       copy,

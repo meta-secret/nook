@@ -1,4 +1,5 @@
 import type { Node } from "@xyflow/svelte";
+import type { DeviceAccessIdentityState } from "$app-wasm";
 import type { VaultAccessView } from "./access-chain";
 import { DashboardTextKind } from "../devices-access-dashboard-state";
 
@@ -45,6 +46,8 @@ export type IdentityBridgeIdentityData = {
   label: string;
   caption: string;
   description: string;
+  identityStatus: DeviceAccessIdentityState;
+  stateLabel: string;
 };
 
 export type IdentityBridgeVaultData = {
@@ -91,6 +94,7 @@ export type IdentityBridgeCopy = {
   selectedIdentity: string;
   vaultAccess: string;
   identityDescription: string;
+  identityState: string;
   statusMetricLabel: string;
   evidenceMetricLabel: string;
   verifiedStatus: string;
@@ -105,6 +109,7 @@ export type IdentityBridgeInput = {
   perspective: IdentityBridgePerspective;
   selectedVault: IdentityBridgeVaultSelection;
   compact: boolean;
+  identityStatus: DeviceAccessIdentityState;
   vaults: readonly VaultAccessView[];
   copy: IdentityBridgeCopy;
 };
@@ -118,7 +123,7 @@ export type IdentityBridgeDefinition = {
 function nodeAriaLabel(data: IdentityBridgeNodeData): string {
   switch (data.kind) {
     case IdentityBridgeNodeKind.Identity:
-      return `${data.caption}: ${data.label}. ${data.description}`;
+      return `${data.caption}: ${data.label}. ${data.stateLabel}. ${data.description}`;
     case IdentityBridgeNodeKind.Vault:
       return `${data.caption}: ${data.label}. ${data.statusLabel}`;
     case IdentityBridgeNodeKind.Empty:
@@ -182,6 +187,8 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           label: input.copy.currentIdentity,
           caption: input.copy.selectedIdentity,
           description: input.copy.identityDescription,
+          identityStatus: input.identityStatus,
+          stateLabel: input.copy.identityState,
         },
         x,
         54,
