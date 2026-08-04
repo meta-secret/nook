@@ -95,10 +95,10 @@
       fitView
       fitViewOptions={{
         padding: compact ? 0.04 : 0.08,
-        minZoom: compact ? 0.42 : 0.05,
+        minZoom: 0.05,
         maxZoom: 1.05,
       }}
-      minZoom={compact ? 0.4 : 0.05}
+      minZoom={0.05}
       maxZoom={compact ? 1.08 : 1.3}
       nodesDraggable={false}
       nodesConnectable={false}
