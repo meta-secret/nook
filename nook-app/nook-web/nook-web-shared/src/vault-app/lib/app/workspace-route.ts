@@ -34,7 +34,8 @@ export function workspacePath(route: WorkspaceRoute): string {
 
 /** Resolve a safe, non-sensitive workspace pathname. */
 export function workspaceRouteFromPath(pathname: string): WorkspaceRouteLookup {
-  const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
+  const appPath = stripBasePath(pathname).replace(/\/$/, "") || "/";
+  const normalized = appPath.replace(/^\/(?:simple|sentinel)(?=\/)/, "");
   switch (normalized) {
     case "/":
     case "/app":

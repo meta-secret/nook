@@ -12,6 +12,8 @@ describe('workspace routes', () => {
     ['/app/', WorkspaceRoute.Vault],
     ['/vault', WorkspaceRoute.Vault],
     ['/devices-access/', WorkspaceRoute.DevicesAccess],
+    ['/simple/devices-access', WorkspaceRoute.DevicesAccess],
+    ['/sentinel/settings', WorkspaceRoute.Settings],
     ['/admin', WorkspaceRoute.Admin],
     ['/onboard', WorkspaceRoute.Onboard],
     ['/settings', WorkspaceRoute.Settings],

@@ -167,6 +167,7 @@
       const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
       if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
         applyWorkspaceRoute(vault, workspaceRoute.route)
+        history.replaceState({}, '', workspacePath(workspaceRoute.route))
       } else {
         applyWorkspaceRoute(vault, WorkspaceRoute.Vault)
         history.replaceState({}, '', workspacePath(WorkspaceRoute.Vault))

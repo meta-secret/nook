@@ -48,13 +48,15 @@ test.describe('persistent workspace routing', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.goto('/onboard')
+    await page.goto('/onboard?sensitive=discarded#private-state')
     await authorizeDeviceProtection(page)
 
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page).toHaveURL(/\/onboard$/)
+    expect(new URL(page.url()).search).toBe('')
+    expect(new URL(page.url()).hash).toBe('')
 
     await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible()

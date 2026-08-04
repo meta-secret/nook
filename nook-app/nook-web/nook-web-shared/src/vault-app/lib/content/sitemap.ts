@@ -91,10 +91,16 @@ Allow: /robots.txt
 Allow: /sitemap.xml
 Disallow: /app/
 Disallow: /app-logs
+Disallow: /admin
+Disallow: /devices-access
 Disallow: /extension-connect
+Disallow: /help
 Disallow: /logs
+Disallow: /onboard
 Disallow: /privacy
+Disallow: /settings
 Disallow: /terms
+Disallow: /vault
 
 Sitemap: ${base}/sitemap.xml
 `;
