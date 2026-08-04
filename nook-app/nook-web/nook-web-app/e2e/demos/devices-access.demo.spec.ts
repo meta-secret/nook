@@ -49,7 +49,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
       }),
     )
     .toBe(true)
-  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.setViewportSize({ width: 1280, height: 720 })
   await page.waitForTimeout(BEAT_MS)
 
   const panel = page.getByTestId('devices-access-panel')
