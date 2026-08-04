@@ -11,12 +11,24 @@ const SENTINEL_RESPONSE_HASH_PREFIX = "#sentinel-response=";
 
 function sentinelGenesisLinkBase(): string {
   if (!("window" in globalThis)) return getEnrollmentLinkBase();
-  const url = new URL(window.location.href);
+  return sentinelGenesisLinkBaseForWorkspace(
+    getEnrollmentLinkBase(),
+    window.location.href,
+  );
+}
+
+export function sentinelGenesisLinkBaseForWorkspace(
+  enrollmentLinkBase: string,
+  currentLocation: string,
+): string {
+  const url = new URL(enrollmentLinkBase);
+  const workspace = new URL(currentLocation);
   // Workspace routing canonicalizes `/vault/` to `/vault`. Keep ceremony
-  // links on that same document so a response URL changes only its fragment:
-  // a slash-only navigation would recreate the app and lose the in-progress
-  // (intentionally in-memory) Genesis ceremony.
-  if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/+$/, "");
+  // links on the configured public origin and that same document so a response
+  // URL changes only its fragment: a slash-only navigation would recreate the
+  // app and lose the in-progress (intentionally in-memory) Genesis ceremony.
+  url.pathname =
+    workspace.pathname === "/" ? "/" : workspace.pathname.replace(/\/+$/, "");
   url.search = "";
   url.hash = "";
   return url.toString();
