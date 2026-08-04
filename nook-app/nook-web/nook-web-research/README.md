@@ -32,7 +32,7 @@ different layout or visual direction.
 ## Categories
 
 - **`nook-auth`** — presence-first Open Nook entry shortlist (What's there?,
-  Landing handoff, Key later, One question). Toggle Empty / Vault exists.
+  Landing handoff, Key later). Toggle Empty / Vault exists.
 - **`vault-auth-workflow`** — end-to-end auth → Sentinel. **Key later** and
   **Landing** both share: name vault → Simple or Sentinel → card stack
   (default) or vault terminal.

@@ -1,36 +1,26 @@
 import type { Component } from 'svelte'
 import AccessChoreography from './vault/access-choreography/Experiment.svelte'
-import BlackMonolith from './vault/black-monolith/Experiment.svelte'
 import CipherLedger from './vault/cipher-ledger/Experiment.svelte'
 import CredentialAirlock from './vault/credential-airlock/Experiment.svelte'
 import DistributedVaultPairing from './vault/distributed-vault-pairing/Experiment.svelte'
 import EvidenceRoom from './vault/evidence-room/Experiment.svelte'
-import KintsugiRecovery from './vault/kintsugi-recovery/Experiment.svelte'
 import SentinelCardStack from './vault/sentinel-card-stack/Experiment.svelte'
 import SealedCapsule from './vault/sealed-capsule/Experiment.svelte'
-import SecureHardware from './vault/secure-hardware/Experiment.svelte'
 import VaultTerminal from './vault/vault-terminal/Experiment.svelte'
 import KeyLater from './nook-auth/key-later/Experiment.svelte'
 import LandingHandoff from './nook-auth/landing-handoff/Experiment.svelte'
-import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
-import Blueprint from './keys-management/blueprint/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
-import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
-import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
 import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
-import MissionControl from './keys-management/mission-control/Experiment.svelte'
-import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
-import PreservedIdentityChainStrength from './identity-management/chain-strength/Experiment.svelte'
-import IdentityAtlas from './identity-management/identity-atlas/Experiment.svelte'
-import IdentitySwitchboard from './identity-management/identity-switchboard/Experiment.svelte'
+import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
+import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
-import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
-import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
+import FrozenIdentityBridge from './inspiration/identity-bridge/Experiment.svelte'
+import FrozenIdentityAndKeys from './inspiration/identity-and-keys/Experiment.svelte'
 import HandoffStory from './inspiration/handoff-story/Experiment.svelte'
 
 export interface ExperimentProps {
@@ -94,8 +84,7 @@ export const categories: ExperimentCategory[] = [
   {
     slug: 'identity-management',
     title: 'Identity Management',
-    description:
-      'Experiments for virtual identities, their devices and access methods, provider-backed identity records, and relationships with independent vaults.',
+    description: 'Small studies of identities and the public keys they keep.',
   },
   {
     slug: 'inspiration',
@@ -110,8 +99,7 @@ export const subcategories: ExperimentSubcategory[] = [
     categorySlug: 'nook-auth',
     slug: ExperimentVersion.V1,
     title: 'V1 · Shortlist',
-    description:
-      'Four kept directions. Toggle Empty / Vault exists in each sketch.',
+    description: 'Three kept directions. Toggle Empty / Vault exists in each sketch.',
   },
   {
     categorySlug: 'vault-auth-workflow',
@@ -130,15 +118,14 @@ export const subcategories: ExperimentSubcategory[] = [
     categorySlug: 'vault',
     slug: ExperimentVersion.V2,
     title: 'V2 · Selected directions',
-    description:
-      'The precision of Credential Airlock and the restraint of Black Monolith.',
+    description: 'The precision of Credential Airlock.',
   },
   {
     categorySlug: 'vault',
     slug: ExperimentVersion.V3,
     title: 'V3 · Selected directions',
     description:
-      'Evidence Room, Kintsugi Recovery, Access Choreography, and the wallet-inspired card stack.',
+      'Evidence Room, Access Choreography, and the wallet-inspired card stack.',
   },
   {
     categorySlug: 'vault',
@@ -153,13 +140,6 @@ export const subcategories: ExperimentSubcategory[] = [
     title: 'V1 · Show possession',
     description:
       'Containment and inventory: what holds what, and what you own in total.',
-  },
-  {
-    categorySlug: 'keys-management',
-    slug: ExperimentVersion.V2,
-    title: 'V2 · Draw the relationship',
-    description:
-      'Wiring diagrams. Select any node and only what it actually reaches stays lit.',
   },
   {
     categorySlug: 'keys-management',
@@ -178,9 +158,15 @@ export const subcategories: ExperimentSubcategory[] = [
   {
     categorySlug: 'identity-management',
     slug: ExperimentVersion.V1,
-    title: 'V1 · Identity relationships',
+    title: 'V1 · Identity and keys',
+    description: 'One identity, shown as a simple group of keys.',
+  },
+  {
+    categorySlug: 'identity-management',
+    slug: ExperimentVersion.V2,
+    title: 'V2 · Identity and vault access',
     description:
-      'Reserved for identity composition and vault-to-identity relationship experiments.',
+      'Three perspectives on the many-to-many authorization relationship: identity-first, overview, and vault-first.',
   },
   {
     categorySlug: 'inspiration',
@@ -202,11 +188,11 @@ const v2 = subcategories[3]
 const v3 = subcategories[4]
 const v4 = subcategories[5]
 const keysV1 = subcategories[6]
-const keysV2 = subcategories[7]
-const keysV3 = subcategories[8]
-const keysV4 = subcategories[9]
+const keysV3 = subcategories[7]
+const keysV4 = subcategories[8]
 const identityManagement = categories[4]
-const identityManagementV1 = subcategories[10]
+const identityManagementV1 = subcategories[9]
+const identityManagementV2 = subcategories[10]
 const inspiration = categories[5]
 const inspirationV1 = subcategories[11]
 
@@ -237,15 +223,6 @@ export const experiments: Experiment[] = [
     description:
       'Step timeline that keeps passkey as the last understanding, not the lobby.',
     component: KeyLater,
-  },
-  {
-    slug: 'one-question',
-    category: auth,
-    subcategory: authV1,
-    title: 'One question',
-    description:
-      'Ultra-minimal single question: unlock, or build Simple / Sentinel.',
-    component: OneQuestion,
   },
   {
     slug: 'key-later-sentinel-card-stack',
@@ -284,15 +261,6 @@ export const experiments: Experiment[] = [
     component: VaultTerminal,
   },
   {
-    slug: 'secure-hardware',
-    category: vault,
-    subcategory: v1,
-    title: 'Secure hardware module',
-    description:
-      'A tactile threshold appliance with key slots, policy controls, and a physical genesis interlock.',
-    component: SecureHardware,
-  },
-  {
     slug: 'sealed-capsule',
     category: vault,
     subcategory: v1,
@@ -311,15 +279,6 @@ export const experiments: Experiment[] = [
     component: CredentialAirlock,
   },
   {
-    slug: 'black-monolith',
-    category: vault,
-    subcategory: v2,
-    title: 'Black monolith',
-    description:
-      'An ultra-minimal, one-decision-at-a-time Sentinel genesis object.',
-    component: BlackMonolith,
-  },
-  {
     slug: 'evidence-room',
     category: vault,
     subcategory: v3,
@@ -327,15 +286,6 @@ export const experiments: Experiment[] = [
     description:
       'A forensic case file where every Sentinel genesis prerequisite becomes a sealed exhibit.',
     component: EvidenceRoom,
-  },
-  {
-    slug: 'kintsugi-recovery',
-    category: vault,
-    subcategory: v3,
-    title: 'Kintsugi recovery',
-    description:
-      'Independent participant public keys become the visible boundaries of one threshold vault.',
-    component: KintsugiRecovery,
   },
   {
     slug: 'access-choreography',
@@ -365,15 +315,6 @@ export const experiments: Experiment[] = [
     component: DistributedVaultPairing,
   },
   {
-    slug: 'concentric-trust',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Concentric trust',
-    description:
-      'One vault at a time, drawn as nested frames: passkeys outside, device keys within, vault at the core.',
-    component: ConcentricTrust,
-  },
-  {
     slug: 'key-index',
     category: keys,
     subcategory: keysV1,
@@ -381,33 +322,6 @@ export const experiments: Experiment[] = [
     description:
       'Your device stands at the head of a permanent index; selecting anything answers in plain identifier chips.',
     component: KeyIndex,
-  },
-  {
-    slug: 'signal-flow',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Signal flow',
-    description:
-      'A circuit board for your device alone. Seat a passkey, slot a vault, and watch the pulse reach the end or hit a cut trace.',
-    component: SignalFlow,
-  },
-  {
-    slug: 'blueprint',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Blueprint',
-    description:
-      'An engineering sheet with your device in the title block and every other part numbered by identifier.',
-    component: Blueprint,
-  },
-  {
-    slug: 'mission-control',
-    category: keys,
-    subcategory: keysV3,
-    title: 'Mission control',
-    description:
-      'A status board: one line per vault, counting passkeys, how many work from here, and enrolled devices.',
-    component: MissionControl,
   },
   {
     slug: 'chain-strength',
@@ -428,15 +342,6 @@ export const experiments: Experiment[] = [
     component: AccessTerminal,
   },
   {
-    slug: 'evidence-drawers',
-    category: keys,
-    subcategory: keysV3,
-    title: 'Evidence drawers',
-    description:
-      'A cabinet of engraved faces. Pull a drawer and it prints what reaches it; the rest recede.',
-    component: EvidenceDrawers,
-  },
-  {
     slug: 'identity-console',
     category: keys,
     subcategory: keysV4,
@@ -446,58 +351,40 @@ export const experiments: Experiment[] = [
     component: IdentityConsole,
   },
   {
-    slug: 'identity-chain-strength',
+    slug: 'identity-keys',
     category: identityManagement,
     subcategory: identityManagementV1,
-    title: 'Identity chain strength',
+    title: 'Identity and keys',
     description:
-      'The primary dark chain-strength view of physical devices, virtual identities, their keys, and identity-level vault grants.',
-    component: PreservedIdentityChainStrength,
+      'One identity in the center, connected to the three keys it keeps.',
+    component: IdentityKeys,
   },
   {
-    slug: 'identity-atlas',
+    slug: 'identity-bridge',
     category: identityManagement,
-    subcategory: identityManagementV1,
-    title: 'Identity atlas',
+    subcategory: identityManagementV2,
+    title: 'Identity bridge',
     description:
-      'Hierarchy first: a person, their virtual identities, and the devices and access methods inside the selected identity; vault grants remain a separate band.',
-    component: IdentityAtlas,
+      'Identity-first: device evidence flows into one identity, then authorization grants flow out to vaults.',
+    component: IdentityBridge,
   },
   {
-    slug: 'identity-switchboard',
-    category: identityManagement,
-    subcategory: identityManagementV1,
-    title: 'Identity switchboard',
-    description:
-      'An account-style access-method console above a separate many-to-many vault grant diagram.',
-    component: IdentitySwitchboard,
-  },
-  {
-    slug: 'frozen-identity-chain-strength',
+    slug: 'frozen-identity-bridge',
     category: inspiration,
     subcategory: inspirationV1,
-    title: 'Identity chain strength · kept',
+    title: 'Identity bridge · kept',
     description:
-      'The accepted dark rope preserved unchanged: physical device, identities, and vault grants through device-key and passkey strands.',
-    component: PreservedIdentityChainStrength,
+      'Frozen horizontal device → identity → vault bridge.',
+    component: FrozenIdentityBridge,
   },
   {
-    slug: 'frozen-chain-strength',
+    slug: 'frozen-identity-and-keys',
     category: inspiration,
     subcategory: inspirationV1,
-    title: 'Chain strength · kept',
+    title: 'Identity and keys · kept',
     description:
-      'The strand rope before the identity band, with passkeys and vaults listed on the device panel itself.',
-    component: FrozenChainStrength,
-  },
-  {
-    slug: 'frozen-chain-identities',
-    category: inspiration,
-    subcategory: inspirationV1,
-    title: 'Chain strength · identity band',
-    description:
-      'Identity cards over the strand rope, passkeys still on the right of each vault.',
-    component: FrozenChainIdentities,
+      'Frozen copy of the identity → device → installation key hierarchy.',
+    component: FrozenIdentityAndKeys,
   },
   {
     slug: 'frozen-access-terminal',
