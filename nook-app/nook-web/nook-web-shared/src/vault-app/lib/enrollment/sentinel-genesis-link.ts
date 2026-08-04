@@ -9,9 +9,17 @@ import {
 const SENTINEL_REQUEST_HASH_PREFIX = "#sentinel-request=";
 const SENTINEL_RESPONSE_HASH_PREFIX = "#sentinel-response=";
 
+function sentinelGenesisLinkBase(): string {
+  if (!("window" in globalThis)) return getEnrollmentLinkBase();
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 export function buildSentinelGenesisRequestLink(
   requestJson: string,
-  baseUrl = getEnrollmentLinkBase(),
+  baseUrl = sentinelGenesisLinkBase(),
 ): string {
   if (!requestJson.trim()) return "";
   return buildRequestLinkCore(requestJson, baseUrl);
@@ -19,7 +27,7 @@ export function buildSentinelGenesisRequestLink(
 
 export function buildSentinelGenesisParticipantResponseLink(
   responseJson: string,
-  baseUrl = getEnrollmentLinkBase(),
+  baseUrl = sentinelGenesisLinkBase(),
 ): string {
   if (!responseJson.trim()) return "";
   return buildParticipantResponseLinkCore(responseJson, baseUrl);

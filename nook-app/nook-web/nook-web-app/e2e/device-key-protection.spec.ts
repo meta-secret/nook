@@ -257,6 +257,7 @@ test.describe('passkey device-key protection', () => {
     const invitationLink = await page
       .getByTestId('sentinel-genesis-request-output')
       .inputValue()
+    expect(invitationLink).toContain('/onboard#sentinel-request=')
     expect(invitationLink).toContain('#sentinel-request=')
 
     const participantNameInput = page.getByTestId(
@@ -478,7 +479,7 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
     await page.reload()
     await openExistingVaultProtectionOverlay(page)
@@ -487,7 +488,7 @@ test.describe('passkey device-key protection', () => {
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
   })
 
   test('falls back to PIN setup when passkeys are unavailable', async ({
