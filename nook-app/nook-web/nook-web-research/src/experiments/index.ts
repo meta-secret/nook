@@ -26,6 +26,8 @@ import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
 import PreservedIdentityChainStrength from './identity-management/chain-strength/Experiment.svelte'
+import IdentityAtlas from './identity-management/identity-atlas/Experiment.svelte'
+import IdentitySwitchboard from './identity-management/identity-switchboard/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
 import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
@@ -451,6 +453,24 @@ export const experiments: Experiment[] = [
     description:
       'The primary dark chain-strength view of physical devices, virtual identities, their keys, and identity-level vault grants.',
     component: PreservedIdentityChainStrength,
+  },
+  {
+    slug: 'identity-atlas',
+    category: identityManagement,
+    subcategory: identityManagementV1,
+    title: 'Identity atlas',
+    description:
+      'Hierarchy first: a person, their virtual identities, and the devices and access methods inside the selected identity; vault grants remain a separate band.',
+    component: IdentityAtlas,
+  },
+  {
+    slug: 'identity-switchboard',
+    category: identityManagement,
+    subcategory: identityManagementV1,
+    title: 'Identity switchboard',
+    description:
+      'An account-style access-method console above a separate many-to-many vault grant diagram.',
+    component: IdentitySwitchboard,
   },
   {
     slug: 'frozen-identity-chain-strength',
