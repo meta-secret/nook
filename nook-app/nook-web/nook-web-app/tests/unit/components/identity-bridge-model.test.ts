@@ -147,8 +147,9 @@ describe('identity bridge graph', () => {
     const graph = buildIdentityBridge(compactInput)
 
     for (const node of graph.nodes) {
-      expect(node.position.x).toBeGreaterThanOrEqual(20)
-      expect(node.position.x + (node.width ?? 0)).toBeLessThanOrEqual(220)
+      const width = Number.parseInt(node.style.replace('width: ', ''), 10)
+      expect(node.position.x).toBeGreaterThanOrEqual(30)
+      expect(node.position.x + width).toBeLessThanOrEqual(210)
     }
   })
 
