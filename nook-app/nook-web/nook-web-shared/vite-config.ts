@@ -1,5 +1,6 @@
 import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
 import { vaultAppHeaders } from "./src/vault-app/security-headers";
 
@@ -25,8 +26,7 @@ export const VAULT_WORKSPACE_SPA_PATHS = VAULT_WORKSPACE_OUTPUT_ALIASES.map(
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);
-  type DevServer = Parameters<NonNullable<Plugin["configureServer"]>>[0];
-  const installMiddleware = (middlewares: DevServer["middlewares"]) => {
+  const installMiddleware = (middlewares: Connect.Server) => {
     middlewares.use((request, response, next) => {
       const pathname =
         request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
