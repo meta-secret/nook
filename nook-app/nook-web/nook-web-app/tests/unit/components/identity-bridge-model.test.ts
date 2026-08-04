@@ -135,6 +135,13 @@ describe('identity bridge graph', () => {
       false,
     )
     expect(graph.edges).toHaveLength(0)
+    const selectedVault = graph.nodes.find(
+      (node) => node.id === 'vault-selected',
+    )
+    expect(selectedVault?.data.kind).toBe(IdentityBridgeNodeKind.Vault)
+    if (selectedVault?.data.kind === IdentityBridgeNodeKind.Vault) {
+      expect(selectedVault.data.incomingRelation).toBe('')
+    }
   })
 
   test('formats timestamp evidence and keeps vault identifiers out of graph cards', () => {

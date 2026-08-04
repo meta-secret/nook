@@ -43,6 +43,7 @@ export enum IdentityBridgeRelationKind {
 export enum IdentityBridgeDeviceIconKind {
   Browser = "browser",
   PairedDevice = "paired-device",
+  RecoverableKey = "recoverable-key",
 }
 
 export enum IdentityBridgeHandleType {
@@ -320,7 +321,9 @@ function vaultData(
     evidenceMetricLabel: input.copy.evidenceMetricLabel,
     verifiedDeviceAccess: vault.verified,
     lateralAccessPort,
-    incomingRelation: input.copy.deviceVaultRelation(vault.label),
+    incomingRelation: vault.verified
+      ? input.copy.deviceVaultRelation(vault.label)
+      : "",
   };
 }
 

@@ -167,9 +167,10 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /Device evidence: This browser.*Test vault was opened by this exact device key/i,
+        name: /Device evidence: Passkey · recoverable identity.*Test vault was opened by this exact device key/i,
       }),
     ).toBeVisible()
+    await expect(bridge).not.toContainText('This browser')
     await expect(bridge).not.toContainText('Identity reference')
     await page.getByTestId('devices-access-perspective-identities').click()
     await page.setViewportSize({ width: 1440, height: 900 })

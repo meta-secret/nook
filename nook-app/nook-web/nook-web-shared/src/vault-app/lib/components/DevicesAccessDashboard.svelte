@@ -494,7 +494,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           selectedVaultStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeSelectedVault,
           ),
-          currentDevice: deviceKeyTitle(vault, view.protection),
+          currentDevice:
+            view.protection === DeviceAccessProtectionKind.PasskeyStandard
+              ? protectionLabel(vault, view.protection)
+              : deviceKeyTitle(vault, view.protection),
           currentIdentity: vault.t(
             I18N_KEYS.DevicesAccessBridgeCurrentIdentity,
           ),
@@ -610,9 +613,12 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               identityStatus={view.identityState}
               protectionLabel={protectionLabel(vault, view.protection)}
               deviceIconKind={view.protection ===
-              DeviceAccessProtectionKind.CompanionSession
-                ? IdentityBridgeDeviceIconKind.PairedDevice
-                : IdentityBridgeDeviceIconKind.Browser}
+              DeviceAccessProtectionKind.PasskeyStandard
+                ? IdentityBridgeDeviceIconKind.RecoverableKey
+                : view.protection ===
+                    DeviceAccessProtectionKind.CompanionSession
+                  ? IdentityBridgeDeviceIconKind.PairedDevice
+                  : IdentityBridgeDeviceIconKind.Browser}
               vaults={view.vaults}
               copy={bridgeCopy}
               graphLabel={vault.t(I18N_KEYS.DevicesAccessBridgeGraphLabel)}

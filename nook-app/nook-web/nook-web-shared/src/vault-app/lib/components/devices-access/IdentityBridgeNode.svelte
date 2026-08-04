@@ -63,6 +63,8 @@ data.lateralAccessPort &&
       <span class="node-icon">
         {#if data.iconKind === IdentityBridgeDeviceIconKind.PairedDevice}
           <MonitorSmartphone class="size-5" aria-hidden="true" />
+        {:else if data.iconKind === IdentityBridgeDeviceIconKind.RecoverableKey}
+          <KeyRound class="size-5" aria-hidden="true" />
         {:else}
           <Laptop class="size-5" aria-hidden="true" />
         {/if}
