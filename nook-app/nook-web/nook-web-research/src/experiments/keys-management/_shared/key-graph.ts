@@ -340,34 +340,11 @@ export function isHere(graph: KeyGraph, device: Device): boolean {
   )
 }
 
-/** Whether this browser holds a device key, as a state rather than a blank. */
-export enum LocalKeyKind {
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Missing = 'missing',
-  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
-  Present = 'present',
-}
-
-export type LocalKey =
-  | { kind: LocalKeyKind.Missing }
-  | { kind: LocalKeyKind.Present; device: Device }
-
-export function localKey(graph: KeyGraph): LocalKey {
-  for (const device of hereDevices(graph)) {
-    return { kind: LocalKeyKind.Present, device }
-  }
-  return { kind: LocalKeyKind.Missing }
-}
-
 /** Whether this browser, as it stands, can open the vault at all. */
 export function openableHere(graph: KeyGraph, vault: Vault): boolean {
   return hereDevices(graph).some((device) =>
     vault.deviceIds.includes(device.id),
   )
-}
-
-export function vaultsOpenableHere(graph: KeyGraph): Vault[] {
-  return graph.vaults.filter((vault) => openableHere(graph, vault))
 }
 
 /** The passkeys you could actually present from this browser right now. */
@@ -433,24 +410,6 @@ export function highlightFor(graph: KeyGraph, node: NodeRef): Highlight {
     deviceIds: devices.map((device) => device.id),
     vaultIds: vaults.map((vault) => vault.id),
   }
-}
-
-/** An edge is lit only when both of its endpoints are in the lit subgraph. */
-export function edgeLit(
-  highlight: Highlight,
-  fromKind: NodeKind,
-  fromId: string,
-  toId: string,
-): boolean {
-  const fromLit =
-    fromKind === NodeKind.Passkey
-      ? highlight.passkeyIds.includes(fromId)
-      : highlight.deviceIds.includes(fromId)
-  const toLit =
-    fromKind === NodeKind.Passkey
-      ? highlight.deviceIds.includes(toId)
-      : highlight.vaultIds.includes(toId)
-  return fromLit && toLit
 }
 
 /** The node a sketch should open on: this browser, or the first passkey. */

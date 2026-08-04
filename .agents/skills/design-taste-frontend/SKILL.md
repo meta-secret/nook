@@ -8,12 +8,10 @@ description: Design, implement, redesign, review, or polish Nook's user-visible 
 Ship Nook interfaces that feel deliberate, calm, trustworthy, and distinctly
 crafted without weakening product truth or security boundaries.
 
-This skill is Nook-specific. Do not translate examples from React, Next.js, or
-another design system into this repository. Read the externally managed
-`impeccable` skill as the design workflow and use this skill as Nook's Svelte
-implementation and visual-quality layer. If it is unavailable, run
-`task impeccable:install` and restart the agent harness so it discovers the
-generated local skill.
+This skill is Nook-specific and is the default design workflow for Nook UI.
+Do not translate examples from React, Next.js, or another design system into
+this repository. Impeccable is not a dependency of this skill and must not be
+loaded or run unless the user explicitly asks for it.
 
 ## 1. Start With Evidence
 
@@ -21,14 +19,13 @@ Before editing:
 
 1. Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) and the most specific
    linked architecture, product, and workflow rules for the surface.
-2. Follow Impeccable's setup, mode, playbook, and craft-floor instructions.
-3. Inspect the target at runtime when possible.
-4. Inspect at least one source of incumbent visual truth:
+2. Inspect the target at runtime when possible.
+3. Inspect at least one source of incumbent visual truth:
    - `nook-app/nook-web/nook-web-shared/src/vault-app/app.css`;
    - the nearest shared `lib/components/ui/` primitive;
    - one comparable shipping Svelte component;
    - existing light and dark rendered states.
-5. State one concise design read before implementation:
+4. State one concise design read before implementation:
 
    `Reading this as: <surface and mode> for <user and task>, preserving <Nook
    pattern>, with <visual direction> and <interaction priority>.`
@@ -39,7 +36,7 @@ materially different directions remain plausible.
 
 ## 2. Choose The Surface Mode
 
-Use Impeccable's modes and tune taste accordingly:
+Classify the surface mode and tune taste accordingly:
 
 | Surface | Mode | Default taste |
 |---|---|---|
@@ -289,7 +286,7 @@ and explicit complete validation.
 
 Before calling a Nook UI change complete, verify:
 
-- [ ] Both Impeccable and this skill were applied.
+- [ ] This skill was applied.
 - [ ] The design read and surface mode match the real user task.
 - [ ] Existing components, tokens, routes, copy voice, and analytics contracts
       were preserved unless explicitly in scope.

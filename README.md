@@ -18,8 +18,13 @@ Nook is a passwordless, local-first secrets manager. Your vault is encrypted in
 the browser, replicated only through storage you choose, and opened only by
 identities you authorize.
 
-There is no Nook account. There is no master password. Approved devices unlock
-the vault.
+There is no centrally hosted Nook account and no master password. The shipped
+applications authorize vault access with protected device identities. Nook's
+target architecture adds local-first virtual identities as durable
+authorization subjects; those identity records are encrypted and replicated
+through storage you choose, not owned by a Nook account service. See the
+[identity and vault architecture](.cortex/design-docs/identity-vault-architecture.md)
+for the implemented/target boundary.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change.
@@ -45,8 +50,10 @@ can be phished. Lose it, and you may lose the vault.
 
 Nook replaces that with device keys and deliberate consent:
 
-- **Device controlled.** Authority lives with approved devices and
-  cryptographic identities — not a central account database.
+- **Locally controlled.** Today authority lives with approved device keys; the
+  target identity model groups installation-specific device keys under
+  encrypted virtual identities. Neither model depends on a central account
+  database.
 - **Ciphertext outside.** Secrets are encrypted before leaving the client.
   Providers carry data without owning access.
 - **Consent required.** New devices and sensitive operations need visible,
@@ -187,7 +194,7 @@ passkey-provider visibility.
 3. The new device receives vault keys sealed to its public key and can unlock
    independently.
 
-### Four architecture layers
+### Current shipped architecture layers
 
 | Layer | What it does |
 | ----- | ------------ |
@@ -195,6 +202,10 @@ passkey-provider visibility.
 | Key envelopes | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority. |
 | Sync transport | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets. |
 | Event log | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer. |
+
+The target architecture keeps these vault and event-log boundaries while
+introducing virtual identity records and explicit identity-to-vault grants.
+Those identity-control records and their migration are not implemented yet.
 
 ```text
 local command

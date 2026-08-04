@@ -80,6 +80,31 @@ nook-wasm                     browser I/O, session, wasm-bindgen
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
 2. **Platform Portability:** `nook-app-common`, `nook-auth2`, `nook-replication`, `nook-event-log`, and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in these crates; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
+### Security-domain model
+
+Nook separates identity management from encrypted vault storage:
+
+```text
+person -> [virtual identity A | virtual identity B | ...]
+passkey/local protector -> local device key -> identity public-key record
+replication provider -> encrypted identity control log
+identity -> encrypted DEK authorization grant -> vault
+replication provider -> encrypted vault event log
+```
+
+An identity is a virtual account; one person may use multiple identities and
+each identity may have zero or more keys. Physical devices are hardware
+inventory, installations are local storage contexts, and installation-specific
+device keys are cryptographic authority. Identity
+records replicate public device keys and passkey credential records through
+identity-specific provider mounts; private device keys remain local. A vault
+owns its `store_id`, independent DEK, encrypted content, signed event log,
+projection, and grant policy. Passwords are vault content. A provider is a
+caller-supplied replication adapter, never an identity or unlock factor.
+Provider credentials stay sealed to a local device key. The normative model,
+passkey-locality rules, and migration boundary are in
+[identity-vault-architecture.md](design-docs/identity-vault-architecture.md).
+
 ---
 
 ## 2. Package Responsibilities & Layers
@@ -96,14 +121,28 @@ nook-wasm                     browser I/O, session, wasm-bindgen
   semantics stay in `nook-core`, and browser/platform behavior stays in
   `nook-wasm` or the web packages.
 
-### A. `nook-auth2` (Portable Vault Security / Key Access)
+### A. `nook-auth2` (Portable Identity and Vault Authorization)
 
-- **Device identities:** X25519 identity generation, device fingerprints, auth ids, and age envelopes.
-- **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM wrapping for the browser-persisted identity. Browser/WebAuthn ceremonies stay outside this crate.
-- **Credential envelopes:** `auth:` rows, `password_entries`, enrollment payloads, member roster encryption, and key-resolution helpers for `secrets_key` and `members_key`.
+- **Target device and identity foundations (not yet implemented):** Virtual
+  identity ids, installation-specific X25519 encryption and Ed25519 signing
+  keys, physical-device/key distinction, device fingerprints, and
+  identity/member relationships belong here when the identity migration is
+  implemented. Current auth ids and age envelopes remain the compatibility
+  boundary described below.
+- **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM
+  wrapping for an installation-specific private device key. Browser/WebAuthn
+  ceremonies stay outside this crate. The target model always generates a
+  fresh random local device key; deterministic passkey-derived identities are
+  an existing compatibility boundary, not the future physical-device model.
+- **Authorization envelopes:** Current `auth:` rows, `password_entries`,
+  enrollment payloads, member roster encryption, and key-resolution helpers
+  implement the existing wire boundary. Their target meaning is an explicit
+  identity-to-vault grant for the vault DEK/key hierarchy.
 - **Quorum recovery:** Fixed-policy SLIP-0039 recovery roots, protected per-device shares, and recovery-envelope helpers for `secrets_key` and `members_key` live here; recovery request/response exchange state stays out of sync providers.
 - **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
-- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser APIs, or sync reconciliation. Sync provider credentials authorize replica access only; they are not vault unlock credentials.
+- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser
+  APIs, or sync reconciliation. Provider credentials authorize replica access
+  only; they are not identity-membership or vault-unlock credentials.
 - **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
 
 ### B. `nook-replication` (Portable Replication Mechanics)
@@ -113,8 +152,10 @@ nook-wasm                     browser I/O, session, wasm-bindgen
   quarantine indexing/exclusion, and set union.
 - **Replica bookkeeping:** Provider-neutral immutable event bytes, per-provider
   outboxes, and missing-event repair planning.
-- **No vault policy:** No `VaultOperation`, secret payload, actor authorization,
-  key epoch, projection, provider credential, or session behavior.
+- **No identity or vault policy:** No identity membership, vault operation,
+  secret payload, actor authorization, key epoch, projection, provider
+  credential, or session behavior. It supplies mechanics independently to
+  identity-control and vault-event-log callers.
 - **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, browser API,
   or network transport. Hosts remain responsible for loading and persisting
   bytes.
@@ -284,6 +325,13 @@ this crate.
   future autofill flows pair only through `simple.nokey.sh`. The manifest and
   runtime guard exclude both Nook vault origins from widget injection, and Rust
   rejects Sentinel extension approval.
+- **Two user-facing responsibilities:** The extension acts for a selected
+  virtual identity through its installation-specific device key and manages
+  that identity's authorized relationship with a website/origin. It then
+  integrates vault-owned passwords and website passkeys after an applicable
+  vault grant is active. The first is identity management; the second is
+  vault-content integration. Neither turns the extension into a third vault
+  application.
 - **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading. `task extension:install:hosted` and the hosted `extension:run:*` variants verify deployment metadata and SHA-256, activate an immutable release atomically, and launch it only in a channel-specific isolated browser profile. `task extension:smoke:hosted CHANNEL=dev` or `PR=<number>` uses the verified hosted bundle and matching Simple Vault deployment for the full pairing, vault, login-fill, lock, and restart flow, then removes its temporary browser and vault state; production is intentionally rejected because the smoke creates vault data.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 - **Local projection bridge:** Simple Vault publishes its canonical encrypted,
@@ -355,17 +403,18 @@ this crate.
 | Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
 | Vault revision                         | Event-log causal heads (+ legacy YAML `vault_version`)        | Live sync is the event log ([vault-event-log.md](design-docs/vault-event-log.md)); scalar `vault_version` is historical/local projection context ([unified-vault.md](design-docs/unified-vault.md)) |
 | Active unlock mode                     | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |
-| On-disk key envelopes (keys mode only) | YAML `auth:` list                                             | `key_{sha256}` → age-armored `secrets_key` + `members_key`                                                                                                                     |
-| Member catalog                         | YAML `members:` list                                          | `pk_id` + `members_key`-encrypted `{pk_id, pk}`                                                                                                                                |
-| Pending joins (keys mode only)         | YAML `joins:` list                                            | `device_id` → JSON (includes `public_key` while pending)                                                                                                                       |
-| Device identity (X25519 private)       | AES-256-GCM wrapped age secret + WebAuthn PRF or PIN metadata  | IndexedDB `device_identity_wrapped`; legacy `device_identity_secret` exists only until one-time migration                                                                      |
-| Auth providers (GitHub PAT, labels)    | JSON snapshot                                                 | IndexedDB `nook_auth` → `providers` key                                                                                                                                        |
+| Current vault authorization envelopes  | YAML `auth:` list                                             | Existing per-device wire encoding of encrypted `secrets_key` + `members_key`; target ownership is an identity-to-vault DEK grant                                               |
+| Current vault member catalog           | YAML `members:` list                                          | Existing `pk_id` + `members_key`-encrypted relationship data; identity membership is moving to the independent identity domain                                                 |
+| Current vault-coupled joins            | YAML `joins:` list                                            | Existing transient device join wire; target onboarding belongs to identity management before a separate vault grant                                                           |
+| Current device identity (X25519 private) | AES-256-GCM wrapped or passkey-derived age secret + WebAuthn PRF/PIN metadata | IndexedDB `device_identity_wrapped`; deterministic standard mode is compatibility state. Target: fresh random installation-specific device key wrapped locally; identity records sync only its public key. |
+| Replication-provider connections       | JSON snapshot                                                 | IndexedDB `nook_auth` → `providers` key; credentials are sealed to the local device and targets may be mounted independently by identity and vault logs                         |
 
 See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
 See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
 See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync-provider credential persistence.
 See [vault-event-log.md](design-docs/vault-event-log.md) for provider event-log sync.
 See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture (scalar sync historical).
+See [identity-vault-architecture.md](design-docs/identity-vault-architecture.md) for identity, onboarding, grant, and provider ownership.
 
 ```
 secrets:  user passwords (secrets_key)

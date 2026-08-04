@@ -6,6 +6,12 @@ Tailwind CSS, and shadcn-svelte components.
 This app is intentionally isolated from the production Nook app. It has no
 WASM, Docker, backend, or production-code imports.
 
+Experiment copy is intentionally colocated with each disposable sketch and may
+remain English-only while the interaction and information architecture are
+being explored. The research catalog is not a shipped product surface. Any
+direction ported into a production Nook app must move visible copy into the
+shared translation catalogs before it can ship.
+
 ## Run it
 
 ```bash
@@ -32,19 +38,16 @@ different layout or visual direction.
 ## Categories
 
 - **`nook-auth`** — presence-first Open Nook entry shortlist (What's there?,
-  Landing handoff, Key later, One question). Toggle Empty / Vault exists.
+  Landing handoff, Key later). Toggle Empty / Vault exists.
 - **`vault-auth-workflow`** — end-to-end auth → Sentinel. **Key later** and
   **Landing** both share: name vault → Simple or Sentinel → card stack
   (default) or vault terminal.
 - **`vault`** — standalone Sentinel vault genesis UI directions.
-- **`keys-management`** — Devices & access directions, successors to the chain
-  shipped in [PR #904](https://github.com/meta-secret/nook/pull/904). They
-  answer the question a person actually has in front of a locked vault: _which
-  of my passkeys opens this, and can I use it from this browser?_ Every sketch
-  reads `keys-management/_shared/key-graph.ts` — a graph of passkeys, device
-  keys, and vaults, where a passkey reaches a vault only through a device in
-  between — and supports the three graphs in its top-right switch: three
-  passkeys, one passkey, new browser.
+- **`keys-management`** — Frozen-era Devices & access studies of passkeys,
+  device keys, and vaults. These sketches remain useful for possession and
+  evidence interactions, but they do not define the virtual-identity model.
+- **`identity-management`** — the current research direction: virtual
+  identities keep installation keys and receive independent vault grants.
 - **`inspiration`** — sketches frozen for an interaction or visual idea rather
   than as candidates. Borrow from them; do not iterate on them. They may read
   older fixtures, kept beside them.
@@ -60,14 +63,7 @@ be visible at a glance, not read off a label.
 Drawing every relation at once produced a net nobody could read. Prefer showing
 one vault, or one route, at a time.
 
-V4 takes its architecture from [Internet Identity](https://id.ai): the first
-question is not which key wraps which key but who you are signing in as. An
-identity is a passkey, so a person can hold several; Access names each one by the
-manager holding it, because "Bitwarden" is what someone recognises and `c07e33`
-is what they compare.
-
-The surface is Handoff story's rather than id.ai's, because the card grid the
-architecture arrives in reads as one undifferentiated deck. Near-black, a single
-warm accent for what is live here, hairline rules instead of card edges, and
-identifiers in mono against editorial type — the same three-act rail, now
-carrying panes instead of scroll positions.
+The retired passkey-as-identity direction is no longer an active catalog
+candidate. Its useful handoff interaction remains frozen under Inspiration;
+the current identity-management sketches keep passkeys, device keys, virtual
+identities, and vault grants as distinct objects.
