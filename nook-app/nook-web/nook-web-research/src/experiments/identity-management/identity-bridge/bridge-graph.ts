@@ -49,6 +49,11 @@ export enum BridgeIdentityPresentation {
   Evidence = 'evidence',
 }
 
+export enum BridgeControlPosition {
+  /** @public Passed through a Svelte component property; Knip cannot trace it. */
+  TopRight = 'top-right',
+}
+
 type GraphInstallation = {
   id: string
   label: string

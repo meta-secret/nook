@@ -244,8 +244,7 @@
   .node-title {
     min-width: 0;
   }
-  .node-title strong,
-  .node-title small {
+  .node-title strong {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -256,7 +255,6 @@
     font-size: 1rem;
     font-weight: 500;
   }
-  .node-title small,
   header > code {
     color: #777774;
     font-family:
