@@ -41,10 +41,7 @@ import {
   type EventOutboxTarget,
   type LocalFolderInspection,
 } from "$lib/vault/sync-operation-state";
-import {
-  AdminAccordionSection,
-  SettingsSection,
-} from "$lib/vault/state/ui.svelte";
+import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   scheduleAutoConnectAfterApproval,
@@ -366,9 +363,7 @@ export async function chooseReplacementLocalFolderForIssue(
     await state.removeProvider(providerId);
   }
   state.errorMsg = "";
-  state.settingsOpen = true;
-  state.settingsSection = SettingsSection.Admin;
-  state.adminAccordionSection = AdminAccordionSection.Storage;
+  state.openAdmin(AdminAccordionSection.Storage);
   state.beginAddProvider();
   state.beginProviderSetup(LOCAL_FOLDER_PROVIDER_TYPE);
 }

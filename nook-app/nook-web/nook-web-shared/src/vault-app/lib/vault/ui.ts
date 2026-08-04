@@ -14,13 +14,26 @@ import {
   SettingsAccordionSection,
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
+import { WorkspaceRoute, workspacePath } from "$lib/app/workspace-route";
 
-export function openSettings(
+function pushWorkspaceRoute(route: WorkspaceRoute): void {
+  if (!("window" in globalThis)) return;
+  const path = workspacePath(route);
+  const nextUrl = new URL(path, window.location.href);
+  if (
+    window.location.pathname === nextUrl.pathname &&
+    window.location.search === "" &&
+    window.location.hash === ""
+  ) {
+    return;
+  }
+  window.history.pushState({}, "", path);
+}
+
+function applySettings(
   state: UiActionsContext,
-  {
-    section = SettingsSection.Storage,
-    accordion = SettingsAccordionSection.Devices,
-  }: OpenSettingsArgs = {},
+  section: SettingsSection,
+  accordion: SettingsAccordionSection,
 ): void {
   state.helpOpen = false;
   state.settingsSection = section;
@@ -33,9 +46,9 @@ export function openSettings(
   void state.refreshDeviceState();
 }
 
-export function openAdmin(
+function applyAdmin(
   state: UiActionsContext,
-  accordion: OpenAdminAccordion = AdminAccordionSection.Vaults,
+  accordion: OpenAdminAccordion,
 ): void {
   state.helpOpen = false;
   state.cancelProviderSetup();
@@ -47,10 +60,87 @@ export function openAdmin(
   void state.refreshDeviceState();
 }
 
-export function closeSettings(state: UiActionsContext): void {
+function applyVault(state: UiActionsContext): void {
   state.cancelProviderSetup();
   state.cancelAddProvider();
   state.settingsOpen = false;
+  state.helpOpen = false;
+}
+
+/** Apply browser history to UI state without creating another history entry. */
+export function applyWorkspaceRoute(
+  state: UiActionsContext,
+  route: WorkspaceRoute,
+): void {
+  switch (route) {
+    case WorkspaceRoute.Vault:
+      applyVault(state);
+      return;
+    case WorkspaceRoute.DevicesAccess:
+      applySettings(
+        state,
+        SettingsSection.DevicesAccess,
+        SettingsAccordionSection.Devices,
+      );
+      return;
+    case WorkspaceRoute.Admin:
+      applyAdmin(state, AdminAccordionSection.Vaults);
+      return;
+    case WorkspaceRoute.Onboard:
+      applySettings(
+        state,
+        SettingsSection.Onboard,
+        SettingsAccordionSection.Devices,
+      );
+      return;
+    case WorkspaceRoute.Settings:
+      applySettings(
+        state,
+        SettingsSection.Storage,
+        SettingsAccordionSection.Devices,
+      );
+      return;
+    case WorkspaceRoute.Help:
+      state.settingsOpen = false;
+      state.helpOpen = true;
+  }
+}
+
+function workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
+  switch (section) {
+    case SettingsSection.DevicesAccess:
+      return WorkspaceRoute.DevicesAccess;
+    case SettingsSection.Admin:
+      return WorkspaceRoute.Admin;
+    case SettingsSection.Onboard:
+      return WorkspaceRoute.Onboard;
+    case SettingsSection.Storage:
+      return WorkspaceRoute.Settings;
+  }
+}
+
+export function openSettings(
+  state: UiActionsContext,
+  {
+    section = SettingsSection.Storage,
+    accordion = SettingsAccordionSection.Devices,
+  }: OpenSettingsArgs = {},
+): void {
+  applySettings(state, section, accordion);
+  pushWorkspaceRoute(workspaceRouteForSettings(section));
+}
+
+export function openAdmin(
+  state: UiActionsContext,
+  accordion: OpenAdminAccordion = AdminAccordionSection.Vaults,
+): void {
+  applyAdmin(state, accordion);
+  pushWorkspaceRoute(WorkspaceRoute.Admin);
+}
+
+export function closeSettings(state: UiActionsContext): void {
+  applyVault(state);
+  pushWorkspaceRoute(WorkspaceRoute.Vault);
 }
 
 export async function deleteLocalData(state: UiActionsContext): Promise<void> {
@@ -102,8 +192,10 @@ export async function handleRemoteLocalBrowserDataDeletion(
 export function openHelp(state: UiActionsContext): void {
   state.settingsOpen = false;
   state.helpOpen = true;
+  pushWorkspaceRoute(WorkspaceRoute.Help);
 }
 
 export function closeHelp(state: UiActionsContext): void {
   state.helpOpen = false;
+  pushWorkspaceRoute(WorkspaceRoute.Vault);
 }

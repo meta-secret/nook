@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createManifest } from '../../nook-web-extension/src/manifest'
+import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
 const webRoot = resolve(import.meta.dir, '../..')
 const simpleRoot = join(webRoot, 'nook-vault-simple')
@@ -31,6 +32,13 @@ for (const root of [simpleRoot, sentinelRoot]) {
     throw new Error(
       `Vault artifact contains a retired migration route: ${root}`,
     )
+  }
+  for (const route of VAULT_WORKSPACE_OUTPUT_ALIASES) {
+    if (!existsSync(join(root, `dist/${route}.html`))) {
+      throw new Error(
+        `Vault artifact is missing the ${route} SPA route: ${root}`,
+      )
+    }
   }
 }
 if (existsSync(join(siteRoot, 'migration.html'))) {

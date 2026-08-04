@@ -19,6 +19,7 @@ test('inspect independent identity, protection, and vault access evidence', asyn
   await addVaultPassword(page, 'Travel recovery', 'demo recovery passphrase')
 
   await page.getByTestId('vault-devices-access-tab').click()
+  await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()

@@ -10,6 +10,10 @@ import {
   buildSitemapXml,
   siteUrlFromEnv,
 } from '../nook-web-shared/src/vault-app/lib/content/sitemap'
+import {
+  VAULT_WORKSPACE_OUTPUT_ALIASES,
+  VAULT_WORKSPACE_SPA_PATHS,
+} from '../nook-web-shared/vite-config'
 
 const viteBase = 'Bun' in globalThis ? Bun.env.VITE_BASE : process.env.VITE_BASE
 const simpleAppUrl =
@@ -18,13 +22,19 @@ const sentinelAppUrl =
   process.env.VITE_SENTINEL_APP_URL?.trim() || 'https://sentinel.nokey.sh'
 
 const COMMON_APP_SPA_PATHS = new Set([
+  ...VAULT_WORKSPACE_SPA_PATHS,
   '/app-logs',
   '/logs',
   '/privacy',
   '/terms',
 ])
 const NOT_FOUND_PATHS = new Set(['/schema.xml'])
-const APP_SHELL_ALIASES = ['app-logs', 'extension-connect', 'logs']
+const APP_SHELL_ALIASES = [
+  ...VAULT_WORKSPACE_OUTPUT_ALIASES,
+  'app-logs',
+  'extension-connect',
+  'logs',
+]
 const STATIC_NOT_FOUND_DOCUMENT = `<!doctype html>
 <html lang="en">
   <head>
