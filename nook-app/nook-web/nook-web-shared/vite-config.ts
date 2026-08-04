@@ -19,13 +19,15 @@ export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
   "vault",
 ] as const;
 
-export const VAULT_WORKSPACE_SPA_PATHS =
-  VAULT_WORKSPACE_OUTPUT_ALIASES.map((alias) => `/${alias}`);
+export const VAULT_WORKSPACE_SPA_PATHS = VAULT_WORKSPACE_OUTPUT_ALIASES.map(
+  (alias) => `/${alias}`,
+);
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);
-  const middleware: NonNullable<Plugin["configureServer"]> = (server) => {
-    server.middlewares.use((request, response, next) => {
+  type DevServer = Parameters<NonNullable<Plugin["configureServer"]>>[0];
+  const installMiddleware = (middlewares: DevServer["middlewares"]) => {
+    middlewares.use((request, response, next) => {
       const pathname =
         request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
       if (options.denyPath?.(pathname)) {
@@ -39,8 +41,12 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   };
   return {
     name: options.name,
-    configureServer: middleware,
-    configurePreviewServer: middleware,
+    configureServer(server) {
+      installMiddleware(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server.middlewares);
+    },
     writeBundle() {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");
