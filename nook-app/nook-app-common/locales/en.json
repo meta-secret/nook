@@ -696,6 +696,7 @@
     "bridge_vault_grant": "Device-key access",
     "bridge_one_device_key": "1 key",
     "bridge_verified_vault_count": "{count} opened by key",
+    "bridge_verified_device_key_count": "Verified device keys: {count}",
     "bridge_graph_label": "Identity, device, and vault relationship graph",
     "bridge_graph_controls": "Graph viewport controls",
     "bridge_a11y_node": "Relationship node. Use Tab to move between nodes.",

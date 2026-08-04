@@ -506,6 +506,8 @@ pub const DEVICES_ACCESS_BRIDGE_VAULT_LEDE: &str = "devices_access.bridge_vault_
 pub const DEVICES_ACCESS_BRIDGE_VAULT_PLURAL: &str = "devices_access.bridge_vault_plural";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_SINGULAR: &str = "devices_access.bridge_vault_singular";
 pub const DEVICES_ACCESS_BRIDGE_VAULT_VIEW: &str = "devices_access.bridge_vault_view";
+pub const DEVICES_ACCESS_BRIDGE_VERIFIED_DEVICE_KEY_COUNT: &str =
+    "devices_access.bridge_verified_device_key_count";
 pub const DEVICES_ACCESS_BRIDGE_VERIFIED_VAULT_COUNT: &str =
     "devices_access.bridge_verified_vault_count";
 pub const DEVICES_ACCESS_BROWSER_CHROME: &str = "devices_access.browser_chrome";

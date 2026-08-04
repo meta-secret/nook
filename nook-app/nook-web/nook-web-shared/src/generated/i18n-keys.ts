@@ -397,6 +397,7 @@ export const I18N_KEYS = {
   DevicesAccessBridgeVaultPlural: 'devices_access.bridge_vault_plural',
   DevicesAccessBridgeVaultSingular: 'devices_access.bridge_vault_singular',
   DevicesAccessBridgeVaultView: 'devices_access.bridge_vault_view',
+  DevicesAccessBridgeVerifiedDeviceKeyCount: 'devices_access.bridge_verified_device_key_count',
   DevicesAccessBridgeVerifiedVaultCount: 'devices_access.bridge_verified_vault_count',
   DevicesAccessBrowserChrome: 'devices_access.browser_chrome',
   DevicesAccessBrowserEdge: 'devices_access.browser_edge',

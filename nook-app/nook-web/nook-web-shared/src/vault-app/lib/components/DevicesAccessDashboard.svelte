@@ -481,6 +481,8 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         ).length}
         {@const selectedVaultIsVerified = selectedVaultVerified(view)}
         {@const selectedVaultName = selectedVaultLabel(view)}
+        {@const selectedVaultExists =
+          selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
         {@const deviceIdentifier =
           view.deviceId.kind === DashboardTextKind.Known
             ? view.deviceId.value
@@ -591,7 +593,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                         : I18N_KEYS.DevicesAccessBridgeVaultPlural,
                     ),
                   })}
-                {:else}
+                {:else if selectedVaultExists}
                   {vault.t(I18N_KEYS.DevicesAccessBridgeVaultHeadline, {
                     count: selectedVaultIsVerified ? '1' : '0',
                     identities: vault.t(
@@ -601,6 +603,8 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                     ),
                     vault: selectedVaultName,
                   })}
+                {:else}
+                  {vault.t(I18N_KEYS.DevicesAccessBridgeNoSelectedVault)}
                 {/if}
               </h2>
               <p
@@ -608,7 +612,11 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               >
                 {selectedPerspective === IdentityBridgePerspective.Identities
                   ? vault.t(I18N_KEYS.DevicesAccessBridgeIdentityLede)
-                  : vault.t(I18N_KEYS.DevicesAccessBridgeVaultLede)}
+                  : selectedVaultExists
+                    ? vault.t(I18N_KEYS.DevicesAccessBridgeVaultLede)
+                    : vault.t(
+                        I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
+                      )}
               </p>
             </div>
 

@@ -84,6 +84,14 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-node-unlock')).toBeFocused({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await page.getByTestId('devices-access-perspective-vaults').click()
+    await expect(
+      page.getByRole('heading', { name: 'No vault selected', exact: true }),
+    ).toBeVisible()
+    await expect(dashboard).toContainText(
+      'Create or connect a vault, or select one from the Vault menu',
+    )
+    await page.getByTestId('devices-access-perspective-identities').click()
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(dashboard).toContainText(
       'Create or connect a vault to see its access here',
@@ -121,6 +129,11 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-chain')).toContainText(
       'Passkey · recoverable identity',
     )
+    await expect(
+      page.getByRole('button', {
+        name: /Local identity state.*1 opened by key/,
+      }),
+    ).toBeVisible()
 
     const unlockNode = page.getByTestId('devices-access-node-unlock')
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
@@ -191,6 +204,11 @@ test.describe('devices and access dashboard', () => {
     expect(compactProtectionFitsBridge).toBe(true)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByTestId('devices-access-perspective-vaults').click()
+    await expect(
+      page.getByRole('button', {
+        name: /Test vault.*Verified device keys: 1/,
+      }),
+    ).toBeVisible()
     await expect(
       bridge.getByRole('img', {
         name: /Test vault was opened by this exact device key/,

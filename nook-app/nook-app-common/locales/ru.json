@@ -696,6 +696,7 @@
     "bridge_vault_grant": "Доступ ключа устройства",
     "bridge_one_device_key": "1 ключ",
     "bridge_verified_vault_count": "Открыто ключом: {count}",
+    "bridge_verified_device_key_count": "Проверенных ключей устройства: {count}",
     "bridge_graph_label": "Связи идентификатора, устройства и сейфов",
     "bridge_graph_controls": "Управление областью схемы",
     "bridge_a11y_node": "Узел связей. Переходите между узлами клавишей Tab.",

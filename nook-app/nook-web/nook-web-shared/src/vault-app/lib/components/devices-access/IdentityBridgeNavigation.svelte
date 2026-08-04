@@ -80,12 +80,17 @@
               )}</small
             >
           </span>
-          <span class="entity-count"
+          <span class="entity-count" aria-hidden="true"
             ><VaultIcon
               class="size-3"
               aria-hidden="true"
             />{verifiedVaultCount}</span
           >
+          <span class="sr-only">
+            {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, {
+              count: String(verifiedVaultCount),
+            })}
+          </span>
         </button>
       </li>
     </ol>
@@ -119,11 +124,16 @@
                   : vault.t(I18N_KEYS.DevicesAccessRouteUnverified)}</small
               >
             </span>
-            <span class="entity-count"
+            <span class="entity-count" aria-hidden="true"
               ><KeyRound class="size-3" aria-hidden="true" />{vaultEntry.verified
                 ? 1
                 : 0}</span
             >
+            <span class="sr-only">
+              {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount, {
+                count: vaultEntry.verified ? '1' : '0',
+              })}
+            </span>
           </button>
         </li>
       {/each}
