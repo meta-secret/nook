@@ -556,6 +556,7 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-provider-label'),
     ).toBeFocused()
+    await page.getByTestId('devices-access-perspective-vaults').click()
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -628,7 +629,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-node-vaults')).toBeFocused()
   })
 
-  test('a locked browser identity keeps last-known vault access without vault contents', async ({
+  test('keeps last-known vault access separate while vault contents are locked', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -643,9 +644,11 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-identity-state')).toHaveCount(
       0,
     )
-    await expect(
-      page.getByTestId('devices-access-identity-card'),
-    ).toHaveAttribute('data-identity-state', 'Locked')
+    const identityGraph = page.getByTestId('devices-access-chain')
+    await expect(identityGraph).not.toContainText('Passkey')
+    await expect(identityGraph).not.toContainText('Device key')
+    await expect(identityGraph.locator('.svelte-flow__edge')).toHaveCount(0)
+    await page.getByTestId('devices-access-perspective-vaults').click()
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
       'Access verified',
