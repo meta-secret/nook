@@ -43,7 +43,7 @@ export type DemoChromeStubArgs = {
 /** Self-contained init/evaluate helper shared by Pilot UI demos. */
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
   type RuntimeMessage = {
-    type?: string
+    type: string
     payload?: { secretId?: string }
   }
   type RuntimeCallback = (response?: unknown) => void

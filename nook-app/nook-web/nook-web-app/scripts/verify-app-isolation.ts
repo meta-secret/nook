@@ -12,7 +12,7 @@ const siteRoot = join(webRoot, 'nook-web-app/dist/site')
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
   const files = await Promise.all(
-    entries.map((entry) => {
+    entries.map(async (entry) => {
       const path = join(directory, entry.name)
       return entry.isDirectory() ? filesBelow(path) : [path]
     }),
@@ -86,6 +86,8 @@ type PagesWorker = {
   ): Promise<Response>
 }
 const workerUrl = `${pathToFileURL(join(siteRoot, '_worker.js')).href}?verify=${Date.now()}`
+// This URL is derived solely from the local build output directory above.
+// eslint-disable-next-line no-unsanitized/method
 const pagesWorker = (await import(workerUrl)).default as PagesWorker
 let staticAssetRequests = 0
 const workerEnv = {

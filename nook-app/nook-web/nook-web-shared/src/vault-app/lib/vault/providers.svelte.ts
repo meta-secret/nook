@@ -446,7 +446,7 @@ export async function handleRemoteVaultAssessStatus(
       state.remoteVaultRecoveryState =
         RemoteVaultRecoveryState.PromptMissingOnly;
       return true;
-    default:
+    case RemoteVaultAssessDecision.Continue:
       return false;
   }
 }

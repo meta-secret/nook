@@ -8,7 +8,7 @@ import {
 
 const BEAT_MS = 650
 
-test('explain browser identity, passkey evidence, and vault relationships', async ({
+test('walk the access chain from passkey to browser device key to vaults', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -24,9 +24,18 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity unlocked',
   )
-  await expect(dashboard).toContainText('How to read this page')
+  const chain = page.getByTestId('devices-access-chain')
+  await expect(chain).toContainText('unlocks')
+  await expect(chain).toContainText('opens')
+  await expect(chain).toContainText('My browser')
+  await expect(chain).toContainText('My identities')
+  await expect(chain).toContainText('Vault access')
+  await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
+    0,
+  )
   await page.waitForTimeout(BEAT_MS)
 
+  const panel = page.getByTestId('devices-access-panel')
   await page
     .getByTestId('devices-access-provider-label')
     .fill('Apple Passwords on personal devices')
@@ -36,13 +45,19 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   )
   await page.waitForTimeout(BEAT_MS)
 
-  await dashboard
-    .getByText('Technical details and browser observations')
-    .click()
-  await expect(dashboard).toContainText('Passkey credential fingerprint')
-  await expect(dashboard).toContainText('Backed up or synced')
+  await page.getByTestId('devices-access-browser-reported').click()
+  await expect(panel).toContainText('Backed up or synced')
   await page.waitForTimeout(BEAT_MS)
 
+  await page.getByTestId('devices-access-node-device-key').click()
+  await expect(panel).toContainText('Browser device key')
+  await expect(panel).toContainText('A backup password is different')
+  await page.waitForTimeout(BEAT_MS)
+
+  await page.getByTestId('devices-access-node-vaults').click()
+  await expect(
+    page.getByTestId('devices-access-strength-vaults'),
+  ).toContainText('Verified way in')
   await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',
   )
@@ -56,7 +71,8 @@ test('explain browser identity, passkey evidence, and vault relationships', asyn
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity locked',
   )
-  await expect(page.getByTestId('devices-access-dashboard')).toContainText(
+  await page.getByTestId('devices-access-node-vaults').click()
+  await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',
   )
   await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(0)

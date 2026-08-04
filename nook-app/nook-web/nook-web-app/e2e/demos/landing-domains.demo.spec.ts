@@ -22,11 +22,16 @@ test('public landing modules preserve locale, theme, and install behavior', asyn
 
   await page.goto(`${PUBLIC_SITE_PATH}/`)
   await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
+  await expect(page.locator('h1 br')).toHaveCount(1)
   await expect(page.locator('.capsule-stage')).toBeVisible()
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.locator('[data-locale="ru"]').click()
   await expect(page.locator('h1')).toHaveText('Ключи,не аккаунты.')
+  await expect(page.locator('h1 br')).toHaveCount(1)
+  await expect(page.locator('.extension-manual code')).toHaveText(
+    'chrome://extensions',
+  )
   await page.waitForTimeout(DEMO_BEAT_MS)
 
   await page.getByTestId('landing-theme-toggle').click()

@@ -1,0 +1,30 @@
+{
+  "extends": "./nook-web-app/tsconfig.app.json",
+  "include": [
+    "nook-web-app/src/**/*.ts",
+    "nook-web-app/tests/**/*.ts",
+    "nook-web-app/e2e/**/*.ts",
+    "nook-web-app/scripts/**/*.ts",
+    "nook-web-app/playwright.config.ts",
+    "nook-web-app/playwright.isolation.config.ts",
+    "nook-web-extension/scripts/**/*.ts",
+    "nook-web-extension/src/**/*.ts",
+    "nook-web-extension/src/**/*.svelte",
+    "nook-web-extension/e2e/**/*.ts",
+    "nook-web-extension/e2e/**/*.svelte",
+    "nook-web-extension/playwright.config.ts",
+    "nook-web-app/vite.config.ts",
+    "nook-web-shared/src/**/*.ts",
+    "nook-web-shared/src/**/*.svelte",
+    "nook-vault-simple/src/**/*.ts",
+    "nook-vault-simple/src/**/*.svelte",
+    "nook-vault-simple/vite.config.ts",
+    "nook-vault-sentinel/src/**/*.ts",
+    "nook-vault-sentinel/src/**/*.svelte",
+    "nook-vault-sentinel/vite.config.ts"
+  ],
+  "exclude": [
+    "nook-web-shared/src/vault-app/lib/nook-wasm",
+    "nook-web-shared/src/vault-app/lib/nook-wasm-*"
+  ]
+}

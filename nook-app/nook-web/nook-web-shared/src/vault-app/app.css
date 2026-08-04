@@ -156,6 +156,12 @@
 }
 
 @layer utilities {
+  /* Quiet tracked data label used by the devices & access map. Colour is
+   * applied by the caller so it can invert on selected surfaces. */
+  .access-micro-label {
+    @apply text-[0.6875rem] font-medium tracking-[0.14em] uppercase;
+  }
+
   .app-header {
     position: sticky;
     top: 0;

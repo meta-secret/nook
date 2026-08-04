@@ -237,6 +237,7 @@ export function parseVaultEventLogSnapshot(
 
   for (const event of sortEventYamls(eventYamls)) {
     for (const operation of event.operations ?? []) {
+      if (!operation.type) continue
       switch (operation.type) {
         case 'vault-imported':
           for (const secret of operation.secrets ?? []) {
@@ -358,6 +359,8 @@ export function parseVaultEventLogSnapshot(
           secrets.clear()
           joins.clear()
           passwordEntries.clear()
+          break
+        default:
           break
       }
     }

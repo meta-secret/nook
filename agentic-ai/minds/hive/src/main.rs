@@ -7,7 +7,10 @@ use hive::HiveContext;
 use hive::auth::run_auth_broker;
 use hive::codex::{DEFAULT_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT};
 use hive::coordinator::run_coordinator;
-use hive::dispatcher::run_workbench_dispatcher;
+use hive::dispatcher::{
+    check_workbench_dispatcher_health, check_workbench_dispatcher_progress,
+    prepare_dispatcher_health, run_workbench_dispatcher,
+};
 use hive::model::{AgentId, EnqueueTask, TaskId, TaskTrigger};
 use hive::observer::{ObserverCoordinatorStore, run_observer, run_observer_coordinator};
 use hive::{
@@ -105,8 +108,30 @@ enum Command {
             default_value = "/tmp/nook-workbench"
         )]
         checkout: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_WORKBENCH_HEALTH_PATH",
+            default_value = "/tmp/hive-workbench-dispatcher-health"
+        )]
+        health_path: PathBuf,
         #[arg(long, env = "HIVE_WORKBENCH_POLL_SECONDS", default_value_t = 120)]
         poll_seconds: u64,
+    },
+    WorkbenchDispatcherHealth {
+        #[arg(
+            long,
+            env = "HIVE_WORKBENCH_HEALTH_PATH",
+            default_value = "/tmp/hive-workbench-dispatcher-health"
+        )]
+        health_path: PathBuf,
+        #[arg(
+            long,
+            env = "HIVE_WORKBENCH_HEALTH_MAX_AGE_SECONDS",
+            default_value_t = 600
+        )]
+        max_age_seconds: u64,
+        #[arg(long)]
+        progress: bool,
     },
     AuthBroker {
         #[arg(
@@ -265,16 +290,44 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
         Command::WorkbenchDispatcher {
             repository_url,
             checkout,
+            health_path,
             poll_seconds,
         } => {
+            prepare_dispatcher_health(&health_path).await?;
             let neo4j_password = cli
                 .neo4j_password
                 .as_deref()
                 .hive_context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
-            let store =
-                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password)
-                    .await?;
-            run_workbench_dispatcher(store, &repository_url, &checkout, poll_seconds).await
+            let store = tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password),
+            )
+            .await
+            .map_err(|_| {
+                hive::HiveError::message(
+                    "Workbench dispatcher Neo4j connection exceeded 300 seconds",
+                )
+            })??;
+            run_workbench_dispatcher(
+                store,
+                &repository_url,
+                &checkout,
+                &health_path,
+                poll_seconds,
+            )
+            .await
+        }
+        Command::WorkbenchDispatcherHealth {
+            health_path,
+            max_age_seconds,
+            progress,
+        } => {
+            let max_age = std::time::Duration::from_secs(max_age_seconds);
+            if progress {
+                check_workbench_dispatcher_progress(&health_path, max_age)
+            } else {
+                check_workbench_dispatcher_health(&health_path, max_age)
+            }
         }
         Command::Worker {
             agent_id,

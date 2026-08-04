@@ -164,7 +164,9 @@ function scheduleSessionExpiry(generation: number): void {
       sessionMessageDispatcher.replaceOperations(
         new Error(SESSION_LOCKED_ERROR),
       )
-      chrome.runtime.sendMessage({ type: 'nook:extension-session-expired' })
+      void chrome.runtime.sendMessage({
+        type: 'nook:extension-session-expired',
+      })
     }, SESSION_DURATION_MS),
   }
 }
@@ -934,7 +936,7 @@ async function handleMessage(message: unknown): Promise<unknown> {
         canceledWebsitePasskeyRequests.delete(payload.requestId)
       }
     }
-    default:
+    case ExtensionSessionMessageType.Lock:
       return
   }
 }

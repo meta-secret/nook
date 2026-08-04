@@ -3,6 +3,7 @@
   import { ArrowLeft } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+  import { DeviceProtectionGateFrame } from '$lib/components/device-protection-gate-state'
 
   let {
     vault,
@@ -50,7 +51,7 @@
     {/if}
     <DeviceProtectionGate
       {vault}
-      embedded
+      frame={DeviceProtectionGateFrame.SetupStep}
       onProtectionReady={handleProtectionReady}
     />
   </div>

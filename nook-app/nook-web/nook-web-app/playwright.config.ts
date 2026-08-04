@@ -35,6 +35,7 @@ const PR_SPECS = [
   'auth-provider-credential-encryption.spec.ts',
   'connect.spec.ts',
   'device-key-protection.spec.ts',
+  'devices-access.spec.ts',
   'local-vault-imports.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
