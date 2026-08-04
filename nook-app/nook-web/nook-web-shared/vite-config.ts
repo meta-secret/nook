@@ -1,19 +1,33 @@
 import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Connect } from "vite";
 import type { Plugin } from "vitest/config";
 import { vaultAppHeaders } from "./src/vault-app/security-headers";
 
 type VaultSpaOptions = {
   name: string;
-  spaPaths: string[];
+  spaPaths: readonly string[];
   denyPath?: (pathname: string) => boolean;
-  outputAliases: string[];
+  outputAliases: readonly string[];
 };
+
+export const VAULT_WORKSPACE_OUTPUT_ALIASES = [
+  "admin",
+  "devices-access",
+  "help",
+  "onboard",
+  "settings",
+  "vault",
+] as const;
+
+export const VAULT_WORKSPACE_SPA_PATHS = VAULT_WORKSPACE_OUTPUT_ALIASES.map(
+  (alias) => `/${alias}`,
+);
 
 export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   const spaPaths = new Set(options.spaPaths);
-  const middleware: NonNullable<Plugin["configureServer"]> = (server) => {
-    server.middlewares.use((request, response, next) => {
+  const installMiddleware = (middlewares: Connect.Server) => {
+    middlewares.use((request, response, next) => {
       const pathname =
         request.url?.split(/[?#]/, 1)[0]?.replace(/\/$/, "") || "/";
       if (options.denyPath?.(pathname)) {
@@ -27,8 +41,12 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   };
   return {
     name: options.name,
-    configureServer: middleware,
-    configurePreviewServer: middleware,
+    configureServer(server) {
+      installMiddleware(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server.middlewares);
+    },
     writeBundle() {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");

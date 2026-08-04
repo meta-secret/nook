@@ -53,6 +53,7 @@ const PR_SPECS = [
   'vault-password-device-key.spec.ts',
   'legal-pages.spec.ts',
   'logs-page.spec.ts',
+  'workspace-routing.spec.ts',
 ] as const
 
 /** Sync provider flows via isolated local e2e remotes (no live cloud quota). */

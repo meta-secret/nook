@@ -196,6 +196,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   clearUnlockedSession(resetManager?: boolean): void;
   beginAddProvider(): void;
   beginProviderSetup(type: "local-folder"): void;
+  openAdmin(accordion: AdminAccordionSection): void;
   ensureOAuthTokensFresh(): Promise<void>;
   ensureProviderSavedAfterConflict(
     conflict: NookSyncConflictReview,
@@ -251,11 +252,7 @@ export type SyncActionsContext = SyncProviderFields &
   SyncRuntimeFields &
   SyncSessionFields &
   SyncStateFields &
-  SyncActionPorts &
-  Pick<
-    VaultUiState,
-    "adminAccordionSection" | "settingsOpen" | "settingsSection"
-  >;
+  SyncActionPorts;
 
 export type ArchitectureActionsContext = Pick<
   VaultProviderState,

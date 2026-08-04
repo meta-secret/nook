@@ -1,6 +1,6 @@
 <script lang="ts">
   import { I18N_KEYS } from '../generated/i18n-keys'
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { VaultState } from '$lib/vault.svelte'
   import {
     DeviceProtectionStatus,
@@ -33,7 +33,7 @@
   import AppHeader from '$lib/components/app/AppHeader.svelte'
   import AuthenticatedVaultWorkspace from '$lib/components/app/AuthenticatedVaultWorkspace.svelte'
   import VaultAccessGate from '$lib/components/app/VaultAccessGate.svelte'
-  import { appPath, getLegalPageFromPath, isLogsPath } from '$lib/content/legal'
+  import { getLegalPageFromPath, isLogsPath } from '$lib/content/legal'
   import { isAppLogsPath } from '$lib/app/logs-api'
   import {
     adoptExtensionIdentity,
@@ -85,6 +85,13 @@
     ActiveVaultKind,
     LoginSetupKind,
   } from '$lib/vault/state/provider.svelte'
+  import {
+    WorkspaceRoute,
+    WorkspaceRouteLookupKind,
+    workspacePath,
+    workspaceRouteFromPath,
+  } from '$lib/app/workspace-route'
+  import { applyWorkspaceRoute } from '$lib/vault/ui'
   import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
   const IS_SIMPLE_APP = configuredVaultApplicationIsSimple()
   const IS_SENTINEL_APP = configuredVaultApplicationIsSentinel()
@@ -151,6 +158,21 @@
     appLogsPage = isAppLogsPath(window.location.pathname)
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
+    if (
+      legalPageState.kind === LegalRouteKind.Application &&
+      !logsPage &&
+      !appLogsPage &&
+      !extensionConnectRoute
+    ) {
+      const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+      if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
+        applyWorkspaceRoute(vault, workspaceRoute.route)
+        history.replaceState({}, '', workspacePath(workspaceRoute.route))
+      } else {
+        applyWorkspaceRoute(vault, WorkspaceRoute.Vault)
+        history.replaceState({}, '', workspacePath(WorkspaceRoute.Vault))
+      }
+    }
     const routeConnectRequest: ExtensionConnectRequestState = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : { kind: ExtensionConnectRequestStateKind.Absent }
@@ -174,9 +196,17 @@
     }
   }
 
+  $effect(() => {
+    if (!vault.isAuthenticated || !('window' in globalThis)) return
+    const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+    if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
+      untrack(() => applyWorkspaceRoute(vault, workspaceRoute.route))
+    }
+  })
+
   function navigateHome() {
-    vault.closeHelp()
-    history.pushState({}, '', appPath('/'))
+    applyWorkspaceRoute(vault, WorkspaceRoute.Vault)
+    history.pushState({}, '', workspacePath(WorkspaceRoute.Vault))
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
     appLogsPage = false
@@ -192,8 +222,8 @@
         kind: ExtensionConnectIntentKind.Absent,
       }
     }
-    vault.closeHelp()
-    history.pushState({}, '', appPath('/'))
+    applyWorkspaceRoute(vault, WorkspaceRoute.Vault)
+    history.pushState({}, '', workspacePath(WorkspaceRoute.Vault))
     legalPageState = { kind: LegalRouteKind.Application }
     logsPage = false
     appLogsPage = false

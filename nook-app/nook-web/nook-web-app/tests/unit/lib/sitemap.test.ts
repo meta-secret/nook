@@ -38,6 +38,16 @@ describe('sitemap', () => {
     expect(robots).toContain('Allow: /terms.html')
     expect(robots).toContain('Allow: /assets/')
     expect(robots).toContain('Disallow: /app/')
+    for (const path of [
+      '/admin',
+      '/devices-access',
+      '/help',
+      '/onboard',
+      '/settings',
+      '/vault',
+    ]) {
+      expect(robots).toContain(`Disallow: ${path}\n`)
+    }
     expect(robots).toContain('Disallow: /privacy')
     expect(robots).toContain('Disallow: /terms')
   })

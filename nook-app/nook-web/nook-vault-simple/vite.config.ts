@@ -2,6 +2,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 import {
+  VAULT_WORKSPACE_OUTPUT_ALIASES,
+  VAULT_WORKSPACE_SPA_PATHS,
   vaultAppAliases,
   vaultSpaPlugin,
 } from "../nook-web-shared/vite-config";
@@ -12,8 +14,20 @@ const siteUrl = process.env.VITE_SITE_URL?.trim() || "https://nokey.sh";
 
 const simpleSpa = vaultSpaPlugin({
   name: "simple-vault-spa",
-  spaPaths: ["/app-logs", "/extension-connect", "/logs", "/privacy", "/terms"],
-  outputAliases: ["app-logs", "extension-connect", "logs"],
+  spaPaths: [
+    ...VAULT_WORKSPACE_SPA_PATHS,
+    "/app-logs",
+    "/extension-connect",
+    "/logs",
+    "/privacy",
+    "/terms",
+  ],
+  outputAliases: [
+    ...VAULT_WORKSPACE_OUTPUT_ALIASES,
+    "app-logs",
+    "extension-connect",
+    "logs",
+  ],
 });
 
 export default defineConfig({
