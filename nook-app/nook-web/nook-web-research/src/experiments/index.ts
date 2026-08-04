@@ -26,7 +26,6 @@ import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
 import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
 import PreservedIdentityChainStrength from './identity-management/chain-strength/Experiment.svelte'
-import IdentityComposition from './identity-management/identity-composition/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
 import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
@@ -94,7 +93,7 @@ export const categories: ExperimentCategory[] = [
     slug: 'identity-management',
     title: 'Identity Management',
     description:
-      'One chain-strength proof of concept: a person can use multiple virtual identities whose public device-key records may be local-only or replicated through provider mounts.',
+      'Experiments for virtual identities, their devices and access methods, provider-backed identity records, and relationships with independent vaults.',
   },
   {
     slug: 'inspiration',
@@ -177,9 +176,9 @@ export const subcategories: ExperimentSubcategory[] = [
   {
     categorySlug: 'identity-management',
     slug: ExperimentVersion.V1,
-    title: 'V1 · Chain-strength proof of concept',
+    title: 'V1 · Identity relationships',
     description:
-      'One model only: identity → physical devices → local device keys → passkey access methods, with sync providers attached to the identity record.',
+      'Reserved for identity composition and vault-to-identity relationship experiments.',
   },
   {
     categorySlug: 'inspiration',
@@ -204,8 +203,6 @@ const keysV1 = subcategories[6]
 const keysV2 = subcategories[7]
 const keysV3 = subcategories[8]
 const keysV4 = subcategories[9]
-const identityManagement = categories[4]
-const identityManagementV1 = subcategories[10]
 const inspiration = categories[5]
 const inspirationV1 = subcategories[11]
 
@@ -443,15 +440,6 @@ export const experiments: Experiment[] = [
     description:
       'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
     component: IdentityConsole,
-  },
-  {
-    slug: 'identity-chain-strength',
-    category: identityManagement,
-    subcategory: identityManagementV1,
-    title: 'Identity chain strength',
-    description:
-      'Two independent views: inspect the devices and keys inside one virtual identity, then inspect vault-to-identity grants without key-level detail.',
-    component: IdentityComposition,
   },
   {
     slug: 'frozen-identity-chain-strength',
