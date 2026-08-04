@@ -176,7 +176,7 @@
 
   .perspective-heading {
     margin: 0 0 0.55rem 0.75rem;
-    color: #555653;
+    color: #92928e;
     font-size: 0.5625rem;
   }
 
@@ -254,7 +254,7 @@
     border: 0;
     border-radius: 2.5rem 0 0 2.5rem;
     background: transparent;
-    color: #6d6d6a;
+    color: #92928e;
     text-align: left;
   }
 
@@ -301,14 +301,14 @@
   }
   .identity-copy small {
     margin-top: 0.2rem;
-    color: #555653;
+    color: #92928e;
     font-size: 0.6875rem;
   }
   .identity-count {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    color: #6d6d6a;
+    color: #92928e;
     font-family: ui-monospace, monospace;
     font-size: 0.625rem;
   }

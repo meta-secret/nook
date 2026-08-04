@@ -123,9 +123,12 @@ passkey-locality rules, and migration boundary are in
 
 ### A. `nook-auth2` (Portable Identity and Vault Authorization)
 
-- **Device and identity foundations:** Virtual identity ids, X25519 device-key
-  generation, physical-device/key distinction, device fingerprints,
-  identity/member relationships, auth ids, and age envelopes.
+- **Target device and identity foundations (not yet implemented):** Virtual
+  identity ids, installation-specific X25519 encryption and Ed25519 signing
+  keys, physical-device/key distinction, device fingerprints, and
+  identity/member relationships belong here when the identity migration is
+  implemented. Current auth ids and age envelopes remain the compatibility
+  boundary described below.
 - **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM
   wrapping for an installation-specific private device key. Browser/WebAuthn
   ceremonies stay outside this crate. The target model always generates a

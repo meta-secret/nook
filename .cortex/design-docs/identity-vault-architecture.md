@@ -52,17 +52,21 @@ personal, work, family, project, pseudonymous, or recovery contexts. An
 identity may be personal or collective, but “collective” changes membership
 policy, not the meaning of identity.
 
-An identity may have zero keys. A zero-key identity is a valid dormant/setup
-state but cannot authorize an operation until a device or recovery key is
-added. This state must be explicit rather than represented as a missing
-identity.
+An identity may have zero active device keys only while a separately enrolled
+recovery authority remains able to authorize onboarding. A brand-new zero-key
+setup is an unpersisted local draft, not a replicable identity. The creation
+transaction atomically generates the first installation's X25519 encryption
+key, Ed25519 signing key, initial policy epoch key, and recipient envelope
+before the identity record may be persisted. No persisted control log is
+allowed to have neither an active device recipient nor a recovery recipient.
 
 The encrypted identity record/control log owns:
 
 - a stable identity id and user-facing label;
 - personal or collective membership and authority policy;
-- registered device-key ids, public keys, user-provided device labels,
-  onboarding evidence, key status, and revocation history;
+- registered device-key ids, X25519 encryption public keys, Ed25519 signing
+  public keys, user-provided device labels, onboarding evidence, key status,
+  and revocation history;
 - registered passkey credential records and their association with local
   device-key protection;
 - recovery relationships and identity-control events;
@@ -76,13 +80,18 @@ encrypted to the concrete X25519 public keys of active devices whose identity
 role permits control-log access; provider credentials and provider mounts are
 never recipients.
 
-Every control event is signed by its authoring device key over the identity id,
-policy epoch, causal parents, and ciphertext. The current identity policy
+Every control event is signed by its author's installation-specific Ed25519
+signing key over the identity id, policy epoch, causal parents, and ciphertext.
+That signing key is generated and enrolled beside, but is cryptographically
+distinct from, the installation's X25519 encryption key. The policy binds both
+public keys to the same installation, member, role, and status. Both private
+keys use the same local protection boundary; rotation atomically enrolls a new
+pair, and revocation invalidates both public keys. The current identity policy
 defines which author roles may issue ordinary events and which approval
 signatures or quorum are required for onboarding, role changes, recovery, and
-revocation. A collective identity therefore uses multiple verifiable device
-signatures to satisfy its threshold; it does not use an undocumented shared
-signing secret.
+revocation. A collective identity therefore uses multiple verifiable Ed25519
+device signatures to satisfy its threshold; it does not use an undocumented
+shared signing secret.
 
 A new installation bootstraps only through an invitation/onboarding ceremony
 approved under the current policy. That ceremony adds the new public key and an
@@ -94,8 +103,8 @@ vault rotation, this provides forward revocation; historical ciphertext must
 be compacted or re-encrypted if the product promises removal of past access.
 
 Only public key material, signed encrypted events, and recipient envelopes
-replicate. A private device key and plaintext control-log epoch key remain
-local to an authorized installation.
+replicate. Private X25519 and Ed25519 device keys and plaintext control-log
+epoch keys remain local to an authorized installation.
 
 ## Physical devices and device keys
 

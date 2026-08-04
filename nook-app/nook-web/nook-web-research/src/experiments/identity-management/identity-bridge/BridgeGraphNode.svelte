@@ -188,7 +188,7 @@
     min-height: 2rem;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    color: #6d6d6a;
+    color: #92928e;
     font-family:
       ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.5625rem;

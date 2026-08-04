@@ -14,7 +14,6 @@ import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
-import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import IdentityBridge from './identity-management/identity-bridge/Experiment.svelte'
 import IdentityKeys from './identity-management/identity-keys/Experiment.svelte'
@@ -150,13 +149,6 @@ export const subcategories: ExperimentSubcategory[] = [
       'Operator density: consoles and artifacts that put identifiers side by side.',
   },
   {
-    categorySlug: 'keys-management',
-    slug: ExperimentVersion.V4,
-    title: 'V4 · Identity first',
-    description:
-      "Internet Identity's architecture applied to Nook: one passkey is one identity, and access is a list of them.",
-  },
-  {
     categorySlug: 'identity-management',
     slug: ExperimentVersion.V1,
     title: 'V1 · Identity and keys',
@@ -190,12 +182,11 @@ const v3 = subcategories[4]
 const v4 = subcategories[5]
 const keysV1 = subcategories[6]
 const keysV3 = subcategories[7]
-const keysV4 = subcategories[8]
 const identityManagement = categories[4]
-const identityManagementV1 = subcategories[9]
-const identityManagementV2 = subcategories[10]
+const identityManagementV1 = subcategories[8]
+const identityManagementV2 = subcategories[9]
 const inspiration = categories[5]
-const inspirationV1 = subcategories[11]
+const inspirationV1 = subcategories[10]
 
 export const experiments: Experiment[] = [
   {
@@ -341,15 +332,6 @@ export const experiments: Experiment[] = [
     description:
       'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
     component: AccessTerminal,
-  },
-  {
-    slug: 'identity-console',
-    category: keys,
-    subcategory: keysV4,
-    title: 'Identity console',
-    description:
-      'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
-    component: IdentityConsole,
   },
   {
     slug: 'identity-keys',

@@ -7,6 +7,7 @@
     Smartphone,
   } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
+  import { identities, identityById } from '../_shared/identity-vault-fixtures'
   import type { ExperimentProps } from '../../index'
 
   const ACCENT = '#ff6b3d'
@@ -14,120 +15,12 @@
 
   let { navigate }: ExperimentProps = $props()
 
-  const identities = [
-    {
-      id: 'idn_7c9d',
-      label: 'Nora',
-      kind: 'Personal identity',
-      devices: [
-        {
-          id: 'device-macbook',
-          label: 'MacBook',
-          icon: LaptopMinimal,
-          keys: [
-            {
-              id: 'dev_72c1',
-              installation: 'Chrome',
-              publicKey: 'age1q8…6m4k',
-              added: '18 Jun',
-            },
-            {
-              id: 'dev_91ba',
-              installation: 'Extension',
-              publicKey: 'age1m2…q7ad',
-              added: '02 Jul',
-            },
-          ],
-        },
-        {
-          id: 'device-iphone',
-          label: 'iPhone',
-          icon: Smartphone,
-          keys: [
-            {
-              id: 'dev_b091',
-              installation: 'Nook',
-              publicKey: 'age1kp…8zc2',
-              added: '22 Jun',
-            },
-          ],
-        },
-        {
-          id: 'device-home',
-          label: 'Home computer',
-          icon: Monitor,
-          keys: [
-            {
-              id: 'dev_339a',
-              installation: 'Chrome',
-              publicKey: 'age1vr…2xk8',
-              added: '03 Jul',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 'idn_a2e6',
-      label: 'Northstar studio',
-      kind: 'Collective identity',
-      devices: [
-        {
-          id: 'device-studio',
-          label: 'Studio workstation',
-          icon: Monitor,
-          keys: [
-            {
-              id: 'dev_10ef',
-              installation: 'Firefox',
-              publicKey: 'age1t4…9nq3',
-              added: '02 Jul',
-            },
-          ],
-        },
-        {
-          id: 'device-studio-macbook',
-          label: 'MacBook',
-          icon: LaptopMinimal,
-          keys: [
-            {
-              id: 'dev_8ac4',
-              installation: 'Chrome',
-              publicKey: 'age1c7…5jr9',
-              added: '06 Jul',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 'idn_f014',
-      label: 'Field notes',
-      kind: 'Personal identity',
-      devices: [
-        {
-          id: 'device-field-phone',
-          label: 'iPhone',
-          icon: Smartphone,
-          keys: [
-            {
-              id: 'dev_51d2',
-              installation: 'Nook',
-              publicKey: 'age1f6…3zp8',
-              added: '11 Jul',
-            },
-          ],
-        },
-      ],
-    },
-  ] as const
-
   let selectedIdentityId = $state('idn_7c9d')
 
-  function identityById(id: string) {
-    const identity = identities.find((candidate) => candidate.id === id)
-    if (identity) return identity
-    throw new Error(`Unknown identity fixture: ${id}`)
+  function iconForDevice(label: string) {
+    if (label === 'iPhone') return Smartphone
+    if (label === 'MacBook') return LaptopMinimal
+    return Monitor
   }
 
   const selectedIdentity = $derived(identityById(selectedIdentityId))
@@ -161,7 +54,7 @@
           <button
             type="button"
             class="identity-menu-button {active ? 'selected' : ''}"
-            aria-label={`${identity.label}, ${identity.kind}, ${identity.devices.length} ${identity.devices.length === 1 ? 'device' : 'devices'}`}
+            aria-label={`${identity.label}, ${identity.description}, ${identity.devices.length} ${identity.devices.length === 1 ? 'device' : 'devices'}`}
             aria-current={active ? 'page' : 'false'}
             onclick={() => (selectedIdentityId = identity.id)}
           >
@@ -180,8 +73,8 @@
               >
                 {identity.label}
               </span>
-              <span class="mt-1 block truncate text-xs text-[#555653]">
-                {identity.kind}
+              <span class="mt-1 block truncate text-xs text-[#92928e]">
+                {identity.description}
               </span>
             </span>
 
@@ -200,7 +93,7 @@
     aria-labelledby="identity-statement"
   >
     <p class={CAPS} style="color:{ACCENT}">
-      Distributed identity · {selectedIdentity.kind}
+      Distributed identity · {selectedIdentity.description}
     </p>
 
     <h1
@@ -232,17 +125,17 @@
 
     <section class="mt-14" aria-labelledby="devices-heading">
       <header class="flex items-end justify-between gap-4">
-        <h2 id="devices-heading" class="{CAPS} text-[#6d6d6a]">
+        <h2 id="devices-heading" class="{CAPS} text-[#92928e]">
           Devices carrying its keys
         </h2>
-        <span class="font-mono text-xs text-[#555653]">
+        <span class="font-mono text-xs text-[#92928e]">
           {selectedIdentity.devices.length} total
         </span>
       </header>
 
       <ul class="device-shelves">
         {#each selectedIdentity.devices as device (device.id)}
-          {@const DeviceIcon = device.icon}
+          {@const DeviceIcon = iconForDevice(device.label)}
           <li class="device-shelf">
             <header class="device-shelf-heading">
               <span class="device-mark">
@@ -254,29 +147,29 @@
                 >
                   {device.label}
                 </h3>
-                <span class="mt-1 block font-mono text-[10px] text-[#6d6d6a]">
-                  {device.keys.length}
-                  {device.keys.length === 1 ? 'key' : 'keys'}
+                <span class="mt-1 block font-mono text-[10px] text-[#92928e]">
+                  {device.installations.length}
+                  {device.installations.length === 1 ? 'key' : 'keys'}
                 </span>
               </span>
             </header>
 
             <ul class="key-card-grid" aria-label="Keys on {device.label}">
-              {#each device.keys as key (key.id)}
+              {#each device.installations as key (key.id)}
                 <li class="key-card">
                   <div class="key-card-heading">
                     <span class="key-mark">
                       <KeyRound class="size-4" aria-hidden="true" />
                     </span>
                     <span class="key-card-copy">
-                      <span class="{CAPS} block text-[#6d6d6a]"
+                      <span class="{CAPS} block text-[#92928e]"
                         >Installation key</span
                       >
                       <span class="key-title-row">
                         <span
                           class="truncate text-base font-medium text-[#f4f3f0]"
                         >
-                          {key.installation}
+                          {key.label}
                         </span>
                         <span class="key-id">{key.id}</span>
                       </span>
@@ -301,7 +194,7 @@
       </ul>
     </section>
 
-    <p class="mt-10 max-w-xl text-sm leading-6 text-[#6d6d6a]">
+    <p class="mt-10 max-w-xl text-sm leading-6 text-[#92928e]">
       Each device keeps its private keys locally. The distributed identity
       carries only their public keys.
     </p>
@@ -408,7 +301,7 @@
     place-items: center;
     border: 2px solid #3f403e;
     border-radius: 999px;
-    color: #6d6d6a;
+    color: #92928e;
     transition:
       border-color 300ms ease,
       color 300ms ease;
@@ -429,7 +322,7 @@
   }
 
   .identity-menu-count {
-    color: #6d6d6a;
+    color: #92928e;
     font-family:
       ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.625rem;

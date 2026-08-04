@@ -116,7 +116,7 @@
 
   :global(.svelte-flow) {
     --xy-background-color: #0b0c0d;
-    --xy-edge-stroke-default: #555653;
+    --xy-edge-stroke-default: #777774;
     --xy-edge-stroke-width-default: 1.25;
     --xy-node-border-radius-default: 0.375rem;
     background: #0b0c0d;
