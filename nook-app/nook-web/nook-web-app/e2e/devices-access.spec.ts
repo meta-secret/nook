@@ -194,7 +194,7 @@ test.describe('devices and access dashboard', () => {
           protectionBounds.right <= bridgeBounds.right
         )
       })
-    expect(await protectionFitsBridge()).toBe(true)
+    await expect.poll(protectionFitsBridge).toBe(true)
     await page.setViewportSize({ width: 240, height: 844 })
     expect(
       await page.evaluate(
@@ -203,7 +203,7 @@ test.describe('devices and access dashboard', () => {
           document.documentElement.clientWidth,
       ),
     ).toBe(true)
-    expect(await protectionFitsBridge()).toBe(true)
+    await expect.poll(protectionFitsBridge).toBe(true)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(

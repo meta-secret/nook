@@ -141,6 +141,17 @@ describe('identity bridge graph', () => {
     ).toContain('Device key opened Home')
   })
 
+  test('keeps compact identity-bridge cards within a narrow viewport canvas', () => {
+    const compactInput = input(IdentityBridgePerspective.Identities)
+    compactInput.compact = true
+    const graph = buildIdentityBridge(compactInput)
+
+    for (const node of graph.nodes) {
+      expect(node.position.x).toBeGreaterThanOrEqual(10)
+      expect(node.position.x + (node.width ?? 0)).toBeLessThanOrEqual(230)
+    }
+  })
+
   test('routes vault-first evidence to the exact device key', () => {
     const graph = buildIdentityBridge(input(IdentityBridgePerspective.Vaults))
 

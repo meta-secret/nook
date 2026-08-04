@@ -404,6 +404,12 @@ function deviceData(
 function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
   const verifiedVaults = input.vaults.filter((vault) => vault.verified);
   if (input.compact) {
+    // Keep the compact graph legible at the narrowest supported viewport. The
+    // canvas reaches the viewport edge on small screens, so these dimensions
+    // leave a 10px inset on either side of a 240px viewport without relying on
+    // a lower fit zoom to contain the cards.
+    const compactGraphInset = 10;
+    const compactGraphWidth = 220;
     const identityY = 500;
     const vaultStartY = 790;
     const vaultNodes = verifiedVaults.map((vault, index) =>
@@ -416,9 +422,9 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           IdentityBridgePortMode.Target,
           true,
         ),
-        20,
+        compactGraphInset,
         vaultStartY + index * 190,
-        300,
+        compactGraphWidth,
       ),
     );
     if (verifiedVaults.length === 0) {
@@ -432,9 +438,9 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             label: input.copy.noVerifiedVaults,
             description: input.copy.noVerifiedVaultsDescription,
           },
-          20,
+          compactGraphInset,
           vaultStartY,
-          300,
+          compactGraphWidth,
         ),
       );
     }
@@ -444,24 +450,24 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           "stage-protection",
           input.copy.protectionStage,
           IdentityBridgeFlow.Vertical,
-          20,
+          compactGraphInset,
           0,
-          300,
+          compactGraphWidth,
         ),
         graphNode(
           "protection-current",
           protectionData(input, IdentityBridgeFlow.Vertical),
-          20,
+          compactGraphInset,
           44,
-          300,
+          compactGraphWidth,
         ),
         stageNode(
           "stage-device",
           input.copy.deviceStage,
           IdentityBridgeFlow.Vertical,
-          20,
+          compactGraphInset,
           200,
-          300,
+          compactGraphWidth,
         ),
         graphNode(
           "device-current",
@@ -471,17 +477,17 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             IdentityBridgePortMode.Both,
             input.copy.protectionDeviceRelation,
           ),
-          20,
+          compactGraphInset,
           244,
-          300,
+          compactGraphWidth,
         ),
         stageNode(
           "stage-identity",
           input.copy.identityStage,
           IdentityBridgeFlow.Vertical,
-          20,
+          compactGraphInset,
           450,
-          300,
+          compactGraphWidth,
         ),
         graphNode(
           "identity-current",
@@ -490,17 +496,17 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             IdentityBridgeFlow.Vertical,
             IdentityBridgePortMode.None,
           ),
-          40,
+          compactGraphInset + 10,
           identityY,
-          260,
+          compactGraphWidth - 20,
         ),
         stageNode(
           "stage-vault",
           input.copy.vaultStage,
           IdentityBridgeFlow.Vertical,
-          20,
+          compactGraphInset,
           740,
-          300,
+          compactGraphWidth,
         ),
         ...vaultNodes,
       ],
