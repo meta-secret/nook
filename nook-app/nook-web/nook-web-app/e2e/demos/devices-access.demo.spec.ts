@@ -25,7 +25,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
     'Identity unlocked',
   )
   const chain = page.getByTestId('devices-access-chain')
-  await expect(chain).toContainText('Device evidence')
+  await expect(chain).toContainText('Device-key evidence')
   await expect(chain).toContainText('Local identity state')
   await expect(chain).toContainText('Verified device-key access')
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
@@ -71,7 +71,7 @@ test('walk the access chain from passkey to browser device key to vaults', async
     }),
   ).toBeVisible()
   await expect(chain).toContainText('Selected vault')
-  await expect(chain).toContainText('Device evidence')
+  await expect(chain).toContainText('Device-key evidence')
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()

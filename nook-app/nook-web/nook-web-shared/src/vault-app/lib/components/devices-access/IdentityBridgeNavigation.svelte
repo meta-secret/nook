@@ -15,6 +15,8 @@
     selectedVault,
     verifiedVaultCount,
     vaults,
+    identityTitle,
+    identityDescription,
     onPerspective,
     onIdentity,
     onVault,
@@ -24,10 +26,18 @@
     selectedVault: IdentityBridgeVaultSelection
     verifiedVaultCount: number
     vaults: readonly VaultAccessView[]
+    identityTitle: string
+    identityDescription: string
     onPerspective: (perspective: IdentityBridgePerspective) => void
     onIdentity: () => void
     onVault: (storeId: string) => void
   } = $props()
+
+  function storeFingerprint(storeId: string): string {
+    return storeId.length <= 12
+      ? storeId
+      : `${storeId.slice(0, 6)}…${storeId.slice(-4)}`
+  }
 </script>
 
 <nav
@@ -71,14 +81,8 @@
             ><Fingerprint class="size-4" aria-hidden="true" /></span
           >
           <span class="entity-copy">
-            <strong
-              >{vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentity)}</strong
-            >
-            <small
-              >{vault.t(
-                I18N_KEYS.DevicesAccessBridgeCurrentIdentityDesc,
-              )}</small
-            >
+            <strong>{identityTitle}</strong>
+            <small>{identityDescription}</small>
           </span>
           <span class="entity-count" aria-hidden="true"
             ><VaultIcon
@@ -122,6 +126,9 @@
                 >{vaultEntry.verified
                   ? vault.t(I18N_KEYS.DevicesAccessRouteVerified)
                   : vault.t(I18N_KEYS.DevicesAccessRouteUnverified)}</small
+              >
+              <small class="entity-id" title={vaultEntry.storeId}
+                >{storeFingerprint(vaultEntry.storeId)}</small
               >
             </span>
             <span class="entity-count" aria-hidden="true"
@@ -254,6 +261,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .entity-copy .entity-id {
+    color: color-mix(in oklab, var(--muted-foreground) 72%, transparent);
+    font-family: ui-monospace, monospace;
+    font-size: 0.59375rem;
+    letter-spacing: 0.035em;
   }
   .entity-copy strong {
     font-size: 0.875rem;

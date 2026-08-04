@@ -487,6 +487,14 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           view.deviceId.kind === DashboardTextKind.Known
             ? view.deviceId.value
             : vault.t(I18N_KEYS.DevicesAccessUnknown)}
+        {@const companionIdentity =
+          view.protection === DeviceAccessProtectionKind.CompanionSession}
+        {@const identityTitle = companionIdentity
+          ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentity)
+          : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentity)}
+        {@const identityDescription = companionIdentity
+          ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityDesc)
+          : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentityDesc)}
         {@const bridgeCopy = {
           protectionStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
@@ -503,12 +511,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
             view.protection === DeviceAccessProtectionKind.PasskeyStandard
               ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
               : deviceKeyTitle(vault, view.protection),
-          currentIdentity: vault.t(
-            I18N_KEYS.DevicesAccessBridgeCurrentIdentity,
-          ),
-          selectedIdentity: vault.t(
-            I18N_KEYS.DevicesAccessBridgeSelectedIdentity,
-          ),
+          currentIdentity: identityTitle,
+          selectedIdentity: companionIdentity
+            ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityContext)
+            : vault.t(I18N_KEYS.DevicesAccessBridgeSelectedIdentity),
           vaultGrant: vault.t(I18N_KEYS.DevicesAccessBridgeVaultGrant),
           deviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice),
           oneDeviceKey: vault.t(I18N_KEYS.DevicesAccessBridgeOneDeviceKey),
@@ -569,6 +575,8 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
             {selectedVault}
             {verifiedVaultCount}
             vaults={view.vaults}
+            {identityTitle}
+            {identityDescription}
             onPerspective={selectPerspective}
             onIdentity={selectCurrentIdentity}
             onVault={selectVault}

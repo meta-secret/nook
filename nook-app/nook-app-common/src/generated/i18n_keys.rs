@@ -459,6 +459,12 @@ pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE_MOVED: &str = "devices_access.bridge_a
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_IN: &str = "devices_access.bridge_a11y_zoom_in";
 pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_OUT: &str = "devices_access.bridge_a11y_zoom_out";
 pub const DEVICES_ACCESS_BRIDGE_BROWSE_BY: &str = "devices_access.bridge_browse_by";
+pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY: &str =
+    "devices_access.bridge_companion_identity";
+pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY_CONTEXT: &str =
+    "devices_access.bridge_companion_identity_context";
+pub const DEVICES_ACCESS_BRIDGE_COMPANION_IDENTITY_DESC: &str =
+    "devices_access.bridge_companion_identity_desc";
 pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY: &str = "devices_access.bridge_current_identity";
 pub const DEVICES_ACCESS_BRIDGE_CURRENT_IDENTITY_DESC: &str =
     "devices_access.bridge_current_identity_desc";

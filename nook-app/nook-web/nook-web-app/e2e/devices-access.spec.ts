@@ -139,12 +139,12 @@ test.describe('devices and access dashboard', () => {
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('Device evidence')
+    await expect(bridge).toContainText('Device-key evidence')
     await expect(bridge).toContainText('Unlock protection')
     await expect(bridge).toContainText('Local identity state')
     await expect(bridge).toContainText('Verified device-key access')
     await expect(
-      bridge.getByRole('article', { name: /Device evidence/ }),
+      bridge.getByRole('article', { name: /Device-key evidence/ }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('article', {
@@ -216,7 +216,7 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /Device evidence: Device key.*Test vault was opened by this exact device key/i,
+        name: /Device-key evidence: Device key.*Test vault was opened by this exact device key/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')
@@ -452,6 +452,10 @@ test.describe('devices and access dashboard', () => {
     await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(bridge).toContainText('Paired-device identity state')
+    await expect(bridge).toContainText('Reported by paired device')
+    await expect(bridge).not.toContainText('Browser identity state')
+    await expect(bridge).not.toContainText('Local identity state')
     await expect(bridge).not.toContainText('This browser')
     const deviceKeyNode = page.getByTestId('devices-access-node-device-key')
     await deviceKeyNode.click()
