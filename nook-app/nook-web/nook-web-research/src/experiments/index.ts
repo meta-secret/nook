@@ -13,6 +13,9 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
+import IdentityChainStrands from './identity-management/identity-chain-strands/Experiment.svelte'
+import IdentityChainRibbon from './identity-management/identity-chain-ribbon/Experiment.svelte'
+import IdentityChainLedger from './identity-management/identity-chain-ledger/Experiment.svelte'
 import IdentityChainStrength from './identity-management/identity-chain-strength/Experiment.svelte'
 import IdentitySpectrum from './identity-management/identity-spectrum/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
@@ -228,6 +231,33 @@ const inspirationV1 = subcategories.find(
 )!
 
 export const experiments: Experiment[] = [
+  {
+    slug: 'identity-chain-strands',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity chain strands',
+    description:
+      'Direct evolution of chain-strength: Part 1 lists independent identities & device key material; Part 2 uses SVG strand paths connecting Vaults directly to Identities.',
+    component: IdentityChainStrands,
+  },
+  {
+    slug: 'identity-chain-ribbon',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity chain ribbon',
+    description:
+      'Tactical ribbon & badge hierarchy: Part 1 for independent identity key slots; Part 2 for visually separate vault entitlement ribbons.',
+    component: IdentityChainRibbon,
+  },
+  {
+    slug: 'identity-chain-ledger',
+    category: identityMgmt,
+    subcategory: identityMgmtV1,
+    title: 'Identity chain ledger',
+    description:
+      'Editorial cryptographic ledger: Section I for inscribed identity device key slots; Section II for multi-party vault quorum agreements.',
+    component: IdentityChainLedger,
+  },
   {
     slug: 'identity-chain-strength',
     category: identityMgmt,
