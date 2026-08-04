@@ -147,6 +147,9 @@ describe('identity bridge graph', () => {
     const graph = buildIdentityBridge(compactInput)
 
     for (const node of graph.nodes) {
+      if (typeof node.style !== 'string') {
+        throw new Error(`Compact graph node ${node.id} has no width style`)
+      }
       const width = Number.parseInt(node.style.replace('width: ', ''), 10)
       expect(node.position.x).toBeGreaterThanOrEqual(30)
       expect(node.position.x + width).toBeLessThanOrEqual(210)
