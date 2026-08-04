@@ -25,13 +25,11 @@ test('walk the access chain from passkey to browser device key to vaults', async
     'Identity unlocked',
   )
   const chain = page.getByTestId('devices-access-chain')
-  await expect(chain).toContainText('unlocks')
-  await expect(chain).toContainText('opens')
-  await expect(chain).toContainText('My browser')
-  await expect(chain).toContainText('My identities')
-  await expect(chain).toContainText('Vault access')
+  await expect(chain).toContainText('Device-key evidence')
+  await expect(chain).toContainText('Local identity state')
+  await expect(chain).toContainText('Verified device-key access')
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
-    0,
+    1,
   )
   await page.waitForTimeout(BEAT_MS)
 
@@ -64,6 +62,16 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await expect(page.getByTestId('devices-access-current-vault')).toContainText(
     'Travel recovery',
   )
+  await page.waitForTimeout(BEAT_MS)
+
+  await page.getByTestId('devices-access-perspective-vaults').click()
+  await expect(
+    page.getByRole('heading', {
+      name: /Verified device-key access to Test vault: 1/,
+    }),
+  ).toBeVisible()
+  await expect(chain).toContainText('Selected vault')
+  await expect(chain).toContainText('Device-key evidence')
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()

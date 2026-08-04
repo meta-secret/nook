@@ -186,7 +186,7 @@ export function stageLabel(
 }
 
 /** A companion session's identity belongs to the paired device, not here. */
-function deviceKeyTitle(
+export function deviceKeyTitle(
   vault: VaultState,
   protection: DeviceAccessProtectionKind,
 ): string {
@@ -207,6 +207,9 @@ export function panelTitle(
   }
   if (stage === AccessChainStage.Vaults) {
     return vault.t(I18N_KEYS.DevicesAccessVaultRelationships);
+  }
+  if (protection === DeviceAccessProtectionKind.PinOrPassphrase) {
+    return vault.t(I18N_KEYS.DevicesAccessPinNodeTitle);
   }
   return protectionLabel(vault, protection);
 }
