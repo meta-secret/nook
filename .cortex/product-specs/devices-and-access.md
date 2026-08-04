@@ -34,8 +34,12 @@ without making a vault the parent of those identities. See
 5. Identity records use zero or more sync-provider mounts to exchange encrypted
    membership, public-key, passkey-record, and revocation events.
 6. An identity may receive grants to zero, one, or many independent vaults.
-   Each vault owns an independent DEK and encrypts that DEK to the authorized
-   identity key or policy.
+   Each vault owns an independent DEK and one vault-owned grant per authorized
+   identity. The grant contains a recipient envelope for every concrete,
+   authorized installation-specific X25519 device public key in that identity;
+   an abstract identity key, policy, or provider mount is never the encryption
+   recipient. Adding an identity device does not add vault access until an
+   authorized vault actor refreshes the grant.
 7. A vault backup password opens only its owning vault. It does not unlock or
    replace a virtual identity or local device key.
 8. Storage and sync providers are neutral replication transports. Identity

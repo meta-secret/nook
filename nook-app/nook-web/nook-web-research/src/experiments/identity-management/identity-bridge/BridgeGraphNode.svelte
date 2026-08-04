@@ -34,7 +34,10 @@
 {/if}
 
 {#if data.kind === BridgeGraphDataKind.Device}
-  <article class="graph-card device-node">
+  <article
+    class="graph-card device-node"
+    aria-label={`Device evidence: ${data.label}`}
+  >
     <header>
       <span class="node-icon"><Laptop class="size-5" /></span>
       <span class="node-title"><strong>{data.label}</strong></span>
@@ -62,6 +65,7 @@
     class:evidence-node={data.presentation ===
       BridgeIdentityPresentation.Evidence}
     class="graph-card identity-node"
+    aria-label={`${data.presentation === BridgeIdentityPresentation.Hub ? 'Distributed identity' : 'Authorized identity'}: ${data.label}`}
   >
     <header>
       <span class="node-icon identity-icon"><Fingerprint class="size-5" /></span
@@ -119,7 +123,8 @@
   <div
     class:vertical-stage={data.flow !== BridgeGraphFlow.Horizontal}
     class="stage-marker"
-    aria-hidden="true"
+    role="heading"
+    aria-level="2"
   >
     <span>{data.label}</span>
   </div>
@@ -127,6 +132,7 @@
   <article
     class:source-node={data.portMode === BridgeGraphPortMode.Source}
     class="graph-card vault-node"
+    aria-label={`${data.portMode === BridgeGraphPortMode.Source ? 'Selected vault' : 'Vault grant'}: ${data.label}`}
   >
     <header>
       <span class="node-icon"><Vault class="size-5" /></span>

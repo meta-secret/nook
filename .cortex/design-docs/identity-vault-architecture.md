@@ -69,8 +69,33 @@ The encrypted identity record/control log owns:
 - zero or more sync-provider mounts for exchanging the encrypted record; and
 - references to grants from independent vaults.
 
-Only public key material and encrypted control state replicate. A private
-device key remains local to the installation that generated it.
+The control log uses a random 32-byte content-encryption key for each identity
+policy epoch. Identity events are encrypted with domain-separated keys derived
+from that epoch key. The epoch key is carried only in recipient envelopes
+encrypted to the concrete X25519 public keys of active devices whose identity
+role permits control-log access; provider credentials and provider mounts are
+never recipients.
+
+Every control event is signed by its authoring device key over the identity id,
+policy epoch, causal parents, and ciphertext. The current identity policy
+defines which author roles may issue ordinary events and which approval
+signatures or quorum are required for onboarding, role changes, recovery, and
+revocation. A collective identity therefore uses multiple verifiable device
+signatures to satisfy its threshold; it does not use an undocumented shared
+signing secret.
+
+A new installation bootstraps only through an invitation/onboarding ceremony
+approved under the current policy. That ceremony adds the new public key and an
+epoch-key envelope for it in one authorized transition. Downloading the
+provider replica alone yields ciphertext and cannot establish membership.
+Revocation advances the policy epoch, creates a fresh control-log key, and
+publishes envelopes only for the remaining authorized device keys. As with
+vault rotation, this provides forward revocation; historical ciphertext must
+be compacted or re-encrypted if the product promises removal of past access.
+
+Only public key material, signed encrypted events, and recipient envelopes
+replicate. A private device key and plaintext control-log epoch key remain
+local to an authorized installation.
 
 ## Physical devices and device keys
 

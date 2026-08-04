@@ -6,6 +6,12 @@ Tailwind CSS, and shadcn-svelte components.
 This app is intentionally isolated from the production Nook app. It has no
 WASM, Docker, backend, or production-code imports.
 
+Experiment copy is intentionally colocated with each disposable sketch and may
+remain English-only while the interaction and information architecture are
+being explored. The research catalog is not a shipped product surface. Any
+direction ported into a production Nook app must move visible copy into the
+shared translation catalogs before it can ship.
+
 ## Run it
 
 ```bash

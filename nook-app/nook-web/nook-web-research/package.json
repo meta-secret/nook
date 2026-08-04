@@ -23,7 +23,7 @@
     "tailwind-variants": "3.2.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "1.62.1",
     "@sveltejs/vite-plugin-svelte": "7.1.2",
     "@tailwindcss/vite": "4.3.1",
     "@tsconfig/svelte": "5.0.8",

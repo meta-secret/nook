@@ -60,4 +60,27 @@ test.describe('identity bridge', () => {
       graph.getByText('Authorized identities', { exact: true }),
     ).toBeVisible()
   })
+
+  test('switches distributed identities with accessible mobile selectors', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/experiments/identity-keys')
+
+    await expect(
+      page.getByRole('heading', { name: 'Nora lives across 3 devices.' }),
+    ).toBeVisible()
+
+    const northstar = page.getByRole('button', {
+      name: 'Northstar studio, Collective identity, 2 devices',
+    })
+    await expect(northstar).toBeVisible()
+    await northstar.click()
+    await expect(
+      page.getByRole('heading', {
+        name: 'Northstar studio lives across 2 devices.',
+      }),
+    ).toBeVisible()
+    await expect(northstar).toHaveAttribute('aria-current', 'page')
+  })
 })

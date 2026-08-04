@@ -161,6 +161,7 @@
           <button
             type="button"
             class="identity-menu-button {active ? 'selected' : ''}"
+            aria-label={`${identity.label}, ${identity.kind}, ${identity.devices.length} ${identity.devices.length === 1 ? 'device' : 'devices'}`}
             aria-current={active ? 'page' : 'false'}
             onclick={() => (selectedIdentityId = identity.id)}
           >
