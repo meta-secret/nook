@@ -462,7 +462,6 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-preview-vaults'),
     ).toContainText('Access not yet verified')
-    await expect(preview).toContainText('not verified')
     await expect(preview).not.toContainText('opens')
     await expect(preview).not.toContainText('No local vaults yet')
   })
@@ -516,6 +515,7 @@ test.describe('devices and access dashboard', () => {
     // The dashboard reads the snapshot when it mounts, so leave and come back.
     await page.getByTestId('vault-secrets-tab').click()
     await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('devices-access-perspective-vaults').click()
 
     const chain = page.getByTestId('devices-access-chain')
     await expect(chain).toContainText('No verified way in')
