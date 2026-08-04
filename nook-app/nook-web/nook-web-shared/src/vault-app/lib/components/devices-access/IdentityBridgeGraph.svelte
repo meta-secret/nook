@@ -52,6 +52,7 @@
     [IdentityBridgeNodeType.Bridge]: IdentityBridgeNode,
   }
   let compact = $state(false)
+  let canvasWidth = $state(0)
   const graph = $derived(
     buildIdentityBridge({
       perspective,
@@ -81,13 +82,14 @@
 </script>
 
 <div
+  bind:clientWidth={canvasWidth}
   class:compact
   class="bridge-canvas"
   data-testid="devices-access-chain"
   style={`--bridge-height: ${graph.compactHeight}px`}
   aria-label={graphLabel}
 >
-  {#key `${perspective}:${selectedVaultKey}:${compact}:${deviceIdentifier}:${vaults.length}`}
+  {#key `${perspective}:${selectedVaultKey}:${compact}:${canvasWidth}:${deviceIdentifier}:${vaults.length}`}
     <SvelteFlow
       nodes={graph.nodes}
       edges={graph.edges}
