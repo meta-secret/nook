@@ -14,13 +14,6 @@ import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
 import IdentityTreeFlow from './identity-management/identity-tree-flow/Experiment.svelte'
-import IdentityMeshPipeline from './identity-management/identity-mesh-pipeline/Experiment.svelte'
-import IdentityQuorumFlow from './identity-management/identity-quorum-flow/Experiment.svelte'
-import IdentityChainStrands from './identity-management/identity-chain-strands/Experiment.svelte'
-import IdentityChainRibbon from './identity-management/identity-chain-ribbon/Experiment.svelte'
-import IdentityChainLedger from './identity-management/identity-chain-ledger/Experiment.svelte'
-import IdentityChainStrength from './identity-management/identity-chain-strength/Experiment.svelte'
-import IdentitySpectrum from './identity-management/identity-spectrum/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
 import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
@@ -242,69 +235,6 @@ export const experiments: Experiment[] = [
     description:
       'Implements Pic1 identity tree + Pic2 3-tier component flow: Root Owner & Identity Tree above, Central Sentinel Quorum Controller in middle, Vault Entitlement Ledger below.',
     component: IdentityTreeFlow,
-  },
-  {
-    slug: 'identity-mesh-pipeline',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity mesh pipeline · Pic2 structure',
-    description:
-      'Direct adaptation of Pic2 vertical 3-tier flow: 3 Source Identity Cards top row, Central Entitlement Router middle hero, Full-width Vault Console window below.',
-    component: IdentityMeshPipeline,
-  },
-  {
-    slug: 'identity-quorum-flow',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity quorum flow · Pic2 structure',
-    description:
-      'Editorial paper rendition of Pic2 3-tier flow: Section I Source Identity Register above, Section II Central Multi-Party Engine middle, Section III Vault Quorum Ledger below.',
-    component: IdentityQuorumFlow,
-  },
-  {
-    slug: 'identity-chain-strands',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity chain strands',
-    description:
-      'Direct evolution of chain-strength: Part 1 lists independent identities & device key material; Part 2 uses SVG strand paths connecting Vaults directly to Identities.',
-    component: IdentityChainStrands,
-  },
-  {
-    slug: 'identity-chain-ribbon',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity chain ribbon',
-    description:
-      'Tactical ribbon & badge hierarchy: Part 1 for independent identity key slots; Part 2 for visually separate vault entitlement ribbons.',
-    component: IdentityChainRibbon,
-  },
-  {
-    slug: 'identity-chain-ledger',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity chain ledger',
-    description:
-      'Editorial cryptographic ledger: Section I for inscribed identity device key slots; Section II for multi-party vault quorum agreements.',
-    component: IdentityChainLedger,
-  },
-  {
-    slug: 'identity-chain-strength',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity chain strength',
-    description:
-      'Adapted from chain-strength: Part 1 lists independent identities with devices & keys; Part 2 visually separates vault-identity quorum relationships.',
-    component: IdentityChainStrength,
-  },
-  {
-    slug: 'identity-spectrum',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Identity spectrum',
-    description:
-      'Swiss grid & typography: independent identity device key rosters above, visually separate vault entitlement ledger below.',
-    component: IdentitySpectrum,
   },
   {
     slug: 'whats-there',
