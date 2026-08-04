@@ -1,14 +1,11 @@
 import type { Component } from 'svelte'
 import AccessChoreography from './vault/access-choreography/Experiment.svelte'
-import BlackMonolith from './vault/black-monolith/Experiment.svelte'
 import CipherLedger from './vault/cipher-ledger/Experiment.svelte'
 import CredentialAirlock from './vault/credential-airlock/Experiment.svelte'
 import DistributedVaultPairing from './vault/distributed-vault-pairing/Experiment.svelte'
 import EvidenceRoom from './vault/evidence-room/Experiment.svelte'
-import KintsugiRecovery from './vault/kintsugi-recovery/Experiment.svelte'
 import SentinelCardStack from './vault/sentinel-card-stack/Experiment.svelte'
 import SealedCapsule from './vault/sealed-capsule/Experiment.svelte'
-import SecureHardware from './vault/secure-hardware/Experiment.svelte'
 import VaultTerminal from './vault/vault-terminal/Experiment.svelte'
 import KeyLater from './nook-auth/key-later/Experiment.svelte'
 import LandingHandoff from './nook-auth/landing-handoff/Experiment.svelte'
@@ -16,18 +13,13 @@ import OneQuestion from './nook-auth/one-question/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
 import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
 import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
-import ChainStrengthMatrix from './identity-management/chain-strength-matrix/Experiment.svelte'
-import IdentityMeshInspector from './identity-management/identity-mesh-inspector/Experiment.svelte'
-import SentinelIdentityDeck from './identity-management/sentinel-identity-deck/Experiment.svelte'
+import IdentityChainStrength from './identity-management/identity-chain-strength/Experiment.svelte'
+import IdentitySpectrum from './identity-management/identity-spectrum/Experiment.svelte'
 import AccessTerminal from './keys-management/access-terminal/Experiment.svelte'
-import Blueprint from './keys-management/blueprint/Experiment.svelte'
 import ChainStrength from './keys-management/chain-strength/Experiment.svelte'
-import ConcentricTrust from './keys-management/concentric-trust/Experiment.svelte'
-import EvidenceDrawers from './keys-management/evidence-drawers/Experiment.svelte'
 import IdentityConsole from './keys-management/identity-console/Experiment.svelte'
 import KeyIndex from './keys-management/key-index/Experiment.svelte'
 import MissionControl from './keys-management/mission-control/Experiment.svelte'
-import SignalFlow from './keys-management/signal-flow/Experiment.svelte'
 import FrozenAccessTerminal from './inspiration/access-terminal/Experiment.svelte'
 import FrozenChainIdentities from './inspiration/chain-identities/Experiment.svelte'
 import FrozenChainStrength from './inspiration/chain-strength/Experiment.svelte'
@@ -237,31 +229,22 @@ const inspirationV1 = subcategories.find(
 
 export const experiments: Experiment[] = [
   {
-    slug: 'chain-strength-matrix',
+    slug: 'identity-chain-strength',
     category: identityMgmt,
     subcategory: identityMgmtV1,
-    title: 'Chain strength matrix',
+    title: 'Identity chain strength',
     description:
-      'Independent My Identities device key inventory paired with a visually separate vault-identity quorum matrix.',
-    component: ChainStrengthMatrix,
+      'Adapted from chain-strength: Part 1 lists independent identities with devices & keys; Part 2 visually separates vault-identity quorum relationships.',
+    component: IdentityChainStrength,
   },
   {
-    slug: 'identity-mesh-inspector',
+    slug: 'identity-spectrum',
     category: identityMgmt,
     subcategory: identityMgmtV1,
-    title: 'Identity mesh inspector',
+    title: 'Identity spectrum',
     description:
-      'Side-by-side workstation inspector: left panel for devices & key material, right obsidian card for vault-identity topology.',
-    component: IdentityMeshInspector,
-  },
-  {
-    slug: 'sentinel-identity-deck',
-    category: identityMgmt,
-    subcategory: identityMgmtV1,
-    title: 'Sentinel identity deck',
-    description:
-      'Tactical command deck with device hardware key slots on top and vault authorization policies below.',
-    component: SentinelIdentityDeck,
+      'Swiss grid & typography: independent identity device key rosters above, visually separate vault entitlement ledger below.',
+    component: IdentitySpectrum,
   },
   {
     slug: 'whats-there',
@@ -336,15 +319,6 @@ export const experiments: Experiment[] = [
     component: VaultTerminal,
   },
   {
-    slug: 'secure-hardware',
-    category: vault,
-    subcategory: v1,
-    title: 'Secure hardware module',
-    description:
-      'A tactile threshold appliance with key slots, policy controls, and a physical genesis interlock.',
-    component: SecureHardware,
-  },
-  {
     slug: 'sealed-capsule',
     category: vault,
     subcategory: v1,
@@ -363,15 +337,6 @@ export const experiments: Experiment[] = [
     component: CredentialAirlock,
   },
   {
-    slug: 'black-monolith',
-    category: vault,
-    subcategory: v2,
-    title: 'Black monolith',
-    description:
-      'An ultra-minimal, one-decision-at-a-time Sentinel genesis object.',
-    component: BlackMonolith,
-  },
-  {
     slug: 'evidence-room',
     category: vault,
     subcategory: v3,
@@ -379,15 +344,6 @@ export const experiments: Experiment[] = [
     description:
       'A forensic case file where every Sentinel genesis prerequisite becomes a sealed exhibit.',
     component: EvidenceRoom,
-  },
-  {
-    slug: 'kintsugi-recovery',
-    category: vault,
-    subcategory: v3,
-    title: 'Kintsugi recovery',
-    description:
-      'Independent participant public keys become the visible boundaries of one threshold vault.',
-    component: KintsugiRecovery,
   },
   {
     slug: 'access-choreography',
@@ -417,15 +373,6 @@ export const experiments: Experiment[] = [
     component: DistributedVaultPairing,
   },
   {
-    slug: 'concentric-trust',
-    category: keys,
-    subcategory: keysV1,
-    title: 'Concentric trust',
-    description:
-      'One vault at a time, drawn as nested frames: passkeys outside, device keys within, vault at the core.',
-    component: ConcentricTrust,
-  },
-  {
     slug: 'key-index',
     category: keys,
     subcategory: keysV1,
@@ -433,24 +380,6 @@ export const experiments: Experiment[] = [
     description:
       'Your device stands at the head of a permanent index; selecting anything answers in plain identifier chips.',
     component: KeyIndex,
-  },
-  {
-    slug: 'signal-flow',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Signal flow',
-    description:
-      'A circuit board for your device alone. Seat a passkey, slot a vault, and watch the pulse reach the end or hit a cut trace.',
-    component: SignalFlow,
-  },
-  {
-    slug: 'blueprint',
-    category: keys,
-    subcategory: keysV2,
-    title: 'Blueprint',
-    description:
-      'An engineering sheet with your device in the title block and every other part numbered by identifier.',
-    component: Blueprint,
   },
   {
     slug: 'mission-control',
@@ -478,15 +407,6 @@ export const experiments: Experiment[] = [
     description:
       'Keyboard-first console. Query an identifier, or print the whole thing as vault-centric ASCII.',
     component: AccessTerminal,
-  },
-  {
-    slug: 'evidence-drawers',
-    category: keys,
-    subcategory: keysV3,
-    title: 'Evidence drawers',
-    description:
-      'A cabinet of engraved faces. Pull a drawer and it prints what reaches it; the rest recede.',
-    component: EvidenceDrawers,
   },
   {
     slug: 'identity-console',
