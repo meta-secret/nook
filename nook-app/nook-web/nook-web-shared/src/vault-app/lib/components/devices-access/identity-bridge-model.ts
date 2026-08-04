@@ -406,10 +406,11 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
   if (input.compact) {
     // Keep the compact graph legible at the narrowest supported viewport. The
     // canvas reaches the viewport edge on small screens, so these dimensions
-    // leave a 10px inset on either side of a 240px viewport without relying on
-    // a lower fit zoom to contain the cards.
-    const compactGraphInset = 10;
-    const compactGraphWidth = 220;
+    // leave a 20px inset on either side of a 240px viewport. That accounts
+    // for the card border while preserving enough width to scan the evidence
+    // without relying on a lower fit zoom.
+    const compactGraphInset = 20;
+    const compactGraphWidth = 200;
     const identityY = 500;
     const vaultStartY = 790;
     const vaultNodes = verifiedVaults.map((vault, index) =>
