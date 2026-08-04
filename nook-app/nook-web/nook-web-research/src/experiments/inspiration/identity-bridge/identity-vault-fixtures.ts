@@ -4,7 +4,11 @@ export const identities = [
     label: 'Nora',
     description: 'Personal identity',
     devices: [
-      { id: 'macbook', label: 'MacBook', installations: ['Chrome', 'Extension'] },
+      {
+        id: 'macbook',
+        label: 'MacBook',
+        installations: ['Chrome', 'Extension'],
+      },
       { id: 'iphone', label: 'iPhone', installations: ['Nook'] },
       { id: 'home', label: 'Home computer', installations: ['Chrome'] },
     ],
@@ -54,7 +58,12 @@ export const vaults = [
 ] as const
 
 export const accessGrants = [
-  { id: 'grant_nora_home', identityId: 'idn_7c9d', vaultId: 'vlt_home', role: 'Owner' },
+  {
+    id: 'grant_nora_home',
+    identityId: 'idn_7c9d',
+    vaultId: 'vlt_home',
+    role: 'Owner',
+  },
   {
     id: 'grant_nora_shared',
     identityId: 'idn_7c9d',

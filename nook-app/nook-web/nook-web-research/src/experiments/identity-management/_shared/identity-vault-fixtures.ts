@@ -8,22 +8,42 @@ export const identities = [
         id: 'macbook',
         label: 'MacBook',
         installations: [
-          { id: 'dev_72c1', label: 'Chrome', publicKey: 'age1q8…6m4k', added: '18 Jun' },
-          { id: 'dev_91ba', label: 'Extension', publicKey: 'age1m2…q7ad', added: '02 Jul' },
+          {
+            id: 'dev_72c1',
+            label: 'Chrome',
+            publicKey: 'age1q8…6m4k',
+            added: '18 Jun',
+          },
+          {
+            id: 'dev_91ba',
+            label: 'Extension',
+            publicKey: 'age1m2…q7ad',
+            added: '02 Jul',
+          },
         ],
       },
       {
         id: 'iphone',
         label: 'iPhone',
         installations: [
-          { id: 'dev_b091', label: 'Nook', publicKey: 'age1kp…8zc2', added: '22 Jun' },
+          {
+            id: 'dev_b091',
+            label: 'Nook',
+            publicKey: 'age1kp…8zc2',
+            added: '22 Jun',
+          },
         ],
       },
       {
         id: 'home',
         label: 'Home computer',
         installations: [
-          { id: 'dev_339a', label: 'Chrome', publicKey: 'age1vr…2xk8', added: '03 Jul' },
+          {
+            id: 'dev_339a',
+            label: 'Chrome',
+            publicKey: 'age1vr…2xk8',
+            added: '03 Jul',
+          },
         ],
       },
     ],
@@ -37,14 +57,24 @@ export const identities = [
         id: 'studio',
         label: 'Studio workstation',
         installations: [
-          { id: 'dev_8e52', label: 'Firefox', publicKey: 'age1zu…3tf9', added: '09 May' },
+          {
+            id: 'dev_8e52',
+            label: 'Firefox',
+            publicKey: 'age1zu…3tf9',
+            added: '09 May',
+          },
         ],
       },
       {
         id: 'studio-macbook',
         label: 'MacBook',
         installations: [
-          { id: 'dev_f12c', label: 'Chrome', publicKey: 'age1hc…5nm1', added: '27 Jun' },
+          {
+            id: 'dev_f12c',
+            label: 'Chrome',
+            publicKey: 'age1hc…5nm1',
+            added: '27 Jun',
+          },
         ],
       },
     ],
@@ -58,7 +88,12 @@ export const identities = [
         id: 'field-phone',
         label: 'iPhone',
         installations: [
-          { id: 'dev_4fa8', label: 'Nook', publicKey: 'age1bd…7pk3', added: '14 Jul' },
+          {
+            id: 'dev_4fa8',
+            label: 'Nook',
+            publicKey: 'age1bd…7pk3',
+            added: '14 Jul',
+          },
         ],
       },
     ],
@@ -93,7 +128,12 @@ export const vaults = [
 ] as const
 
 export const accessGrants = [
-  { id: 'grant_nora_home', identityId: 'idn_7c9d', vaultId: 'vlt_home', role: 'Owner' },
+  {
+    id: 'grant_nora_home',
+    identityId: 'idn_7c9d',
+    vaultId: 'vlt_home',
+    role: 'Owner',
+  },
   {
     id: 'grant_nora_shared',
     identityId: 'idn_7c9d',

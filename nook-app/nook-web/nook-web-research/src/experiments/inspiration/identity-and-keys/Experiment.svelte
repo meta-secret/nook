@@ -173,7 +173,9 @@
 
             <span class="identity-menu-copy">
               <span
-                class="block truncate text-sm transition motion-reduce:transition-none {active ? 'text-[#f4f3f0]' : 'text-[#7b7b78]'}"
+                class="block truncate text-sm transition motion-reduce:transition-none {active
+                  ? 'text-[#f4f3f0]'
+                  : 'text-[#7b7b78]'}"
               >
                 {identity.label}
               </span>
@@ -209,13 +211,19 @@
       {selectedIdentity.devices.length === 1 ? 'device' : 'devices'}.
     </h1>
 
-    <div class="mt-10 flex max-w-xl items-center gap-4 border-l-2 border-[#3a3b3d] pl-5">
+    <div
+      class="mt-10 flex max-w-xl items-center gap-4 border-l-2 border-[#3a3b3d] pl-5"
+    >
       <span class="identity-artifact-mark">
         <Fingerprint class="size-5" aria-hidden="true" />
       </span>
       <span>
-        <span class="block text-lg leading-7 sm:text-xl">{selectedIdentity.label}</span>
-        <span class="mt-1.5 block font-mono text-xs tracking-[0.08em] text-[#777774]">
+        <span class="block text-lg leading-7 sm:text-xl"
+          >{selectedIdentity.label}</span
+        >
+        <span
+          class="mt-1.5 block font-mono text-xs tracking-[0.08em] text-[#777774]"
+        >
           {selectedIdentity.id}
         </span>
       </span>
@@ -240,11 +248,14 @@
                 <DeviceIcon class="size-4" aria-hidden="true" />
               </span>
               <span class="min-w-0">
-                <h3 class="text-base leading-5 font-medium tracking-[-0.02em] text-[#f4f3f0]">
+                <h3
+                  class="text-base leading-5 font-medium tracking-[-0.02em] text-[#f4f3f0]"
+                >
                   {device.label}
                 </h3>
                 <span class="mt-1 block font-mono text-[10px] text-[#6d6d6a]">
-                  {device.keys.length} {device.keys.length === 1 ? 'key' : 'keys'}
+                  {device.keys.length}
+                  {device.keys.length === 1 ? 'key' : 'keys'}
                 </span>
               </span>
             </header>
@@ -257,9 +268,13 @@
                       <KeyRound class="size-4" aria-hidden="true" />
                     </span>
                     <span class="key-card-copy">
-                      <span class="{CAPS} block text-[#6d6d6a]">Installation key</span>
+                      <span class="{CAPS} block text-[#6d6d6a]"
+                        >Installation key</span
+                      >
                       <span class="key-title-row">
-                        <span class="truncate text-base font-medium text-[#f4f3f0]">
+                        <span
+                          class="truncate text-base font-medium text-[#f4f3f0]"
+                        >
                           {key.installation}
                         </span>
                         <span class="key-id">{key.id}</span>
@@ -305,7 +320,8 @@
 
   .rail-heading span {
     display: none;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.6875rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -369,7 +385,12 @@
   }
 
   .identity-menu-button.selected {
-    background: linear-gradient(90deg, #1b1c1e 0%, #111214 62%, transparent 100%);
+    background: linear-gradient(
+      90deg,
+      #1b1c1e 0%,
+      #111214 62%,
+      transparent 100%
+    );
     opacity: 1;
   }
 
@@ -408,7 +429,8 @@
 
   .identity-menu-count {
     color: #6d6d6a;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.625rem;
     letter-spacing: 0.04em;
     text-align: right;
@@ -554,7 +576,8 @@
   .key-id {
     flex: none;
     color: #8b8b88;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.6875rem;
     letter-spacing: 0.04em;
   }

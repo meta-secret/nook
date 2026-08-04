@@ -99,7 +99,8 @@ export const subcategories: ExperimentSubcategory[] = [
     categorySlug: 'nook-auth',
     slug: ExperimentVersion.V1,
     title: 'V1 · Shortlist',
-    description: 'Three kept directions. Toggle Empty / Vault exists in each sketch.',
+    description:
+      'Three kept directions. Toggle Empty / Vault exists in each sketch.',
   },
   {
     categorySlug: 'vault-auth-workflow',
@@ -373,8 +374,7 @@ export const experiments: Experiment[] = [
     category: inspiration,
     subcategory: inspirationV1,
     title: 'Identity bridge · kept',
-    description:
-      'Frozen horizontal device → identity → vault bridge.',
+    description: 'Frozen horizontal device → identity → vault bridge.',
     component: FrozenIdentityBridge,
   },
   {

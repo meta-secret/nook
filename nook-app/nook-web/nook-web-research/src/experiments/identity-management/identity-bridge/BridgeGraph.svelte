@@ -22,12 +22,17 @@
     perspective,
     identityId,
     vaultId,
-  }: { perspective: BridgePerspective; identityId: string; vaultId: string } = $props()
+  }: { perspective: BridgePerspective; identityId: string; vaultId: string } =
+    $props()
 
   const nodeTypes: NodeTypes = { [BridgeGraphNodeType.Graph]: BridgeGraphNode }
-  const edgeTypes: EdgeTypes = { [BridgeGraphEdgeType.GrantLanes]: BridgeGrantEdge }
+  const edgeTypes: EdgeTypes = {
+    [BridgeGraphEdgeType.GrantLanes]: BridgeGrantEdge,
+  }
   let compact = $state(false)
-  const graph = $derived(buildBridgeGraph(perspective, identityId, vaultId, compact))
+  const graph = $derived(
+    buildBridgeGraph(perspective, identityId, vaultId, compact),
+  )
 
   $effect(() => {
     const media = window.matchMedia('(width < 48rem)')
@@ -53,7 +58,11 @@
       {edgeTypes}
       {nodeTypes}
       fitView
-      fitViewOptions={{ padding: compact ? 0.04 : 0.07, minZoom: compact ? 0.92 : 0.28, maxZoom: 1.05 }}
+      fitViewOptions={{
+        padding: compact ? 0.04 : 0.07,
+        minZoom: compact ? 0.92 : 0.28,
+        maxZoom: 1.05,
+      }}
       minZoom={compact ? 0.82 : 0.25}
       maxZoom={compact ? 1.1 : 1.35}
       nodesDraggable={false}
@@ -67,7 +76,12 @@
       preventScrolling={false}
       proOptions={{ hideAttribution: true }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={24} size={1} patternColor="#252629" />
+      <Background
+        variant={BackgroundVariant.Dots}
+        gap={24}
+        size={1}
+        patternColor="#252629"
+      />
       {#if !compact}
         <Controls
           position={BridgeControlPosition.TopRight}
@@ -115,7 +129,9 @@
   }
 
   :global(.svelte-flow__edge-path) {
-    transition: stroke 160ms ease, stroke-width 160ms ease;
+    transition:
+      stroke 160ms ease,
+      stroke-width 160ms ease;
   }
 
   :global(.svelte-flow__controls) {
@@ -134,10 +150,17 @@
     color: #a5a5a1 !important;
   }
 
-  :global(.svelte-flow__controls-button:hover) { background: #1a1b1d !important; color: #f4f3f0 !important; }
-  :global(.svelte-flow__controls-button svg) { fill: currentColor; }
+  :global(.svelte-flow__controls-button:hover) {
+    background: #1a1b1d !important;
+    color: #f4f3f0 !important;
+  }
+  :global(.svelte-flow__controls-button svg) {
+    fill: currentColor;
+  }
 
-  :global(.svelte-flow__controls-button:last-child) { border-right: 0; }
+  :global(.svelte-flow__controls-button:last-child) {
+    border-right: 0;
+  }
 
   @media (width < 48rem) {
     .bridge-canvas {

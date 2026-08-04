@@ -119,11 +119,15 @@ export type BridgeGraphDefinition = {
   compactHeight: number
 }
 
-function graphDevice(device: ReturnType<typeof identityById>['devices'][number]): GraphDevice {
+function graphDevice(
+  device: ReturnType<typeof identityById>['devices'][number],
+): GraphDevice {
   return {
     id: device.id,
     label: device.label,
-    installations: device.installations.map((installation) => ({ ...installation })),
+    installations: device.installations.map((installation) => ({
+      ...installation,
+    })),
   }
 }
 
@@ -171,7 +175,12 @@ function stageNode(
   }
 }
 
-function graphEdge(id: string, source: string, target: string, authorized: boolean): BridgeGraphEdge {
+function graphEdge(
+  id: string,
+  source: string,
+  target: string,
+  authorized: boolean,
+): BridgeGraphEdge {
   const color = authorized ? '#ff6b3d' : '#777774'
   return {
     id,
@@ -230,7 +239,9 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
         portMode: BridgeGraphPortMode.Source,
         flow: BridgeGraphFlow.Horizontal,
         label: device.label,
-        installations: device.installations.map((installation) => ({ ...installation })),
+        installations: device.installations.map((installation) => ({
+          ...installation,
+        })),
       },
       0,
       index * deviceGap,
@@ -296,7 +307,14 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
   )
 
   const stageNodes = [
-    stageNode('stage-devices', 'Device evidence', BridgeGraphFlow.Horizontal, 0, -58, 280),
+    stageNode(
+      'stage-devices',
+      'Device evidence',
+      BridgeGraphFlow.Horizontal,
+      0,
+      -58,
+      280,
+    ),
     stageNode(
       'stage-identity',
       'Distributed identity',
@@ -305,7 +323,14 @@ function buildIdentityGraph(identityId: string): BridgeGraphDefinition {
       -58,
       220,
     ),
-    stageNode('stage-vaults', 'Vault grants', BridgeGraphFlow.Horizontal, 650, -58, 330),
+    stageNode(
+      'stage-vaults',
+      'Vault grants',
+      BridgeGraphFlow.Horizontal,
+      650,
+      -58,
+      330,
+    ),
   ]
 
   return {
@@ -332,7 +357,9 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
         portMode: BridgeGraphPortMode.Source,
         flow: BridgeGraphFlow.EvidenceTree,
         label: device.label,
-        installations: device.installations.map((installation) => ({ ...installation })),
+        installations: device.installations.map((installation) => ({
+          ...installation,
+        })),
       },
       30,
       deviceY,
@@ -384,7 +411,12 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
     )
   })
   const evidenceEdges = identity.devices.map((device) =>
-    graphEdge(`edge-${device.id}-${identity.id}`, `device-${device.id}`, identityNodeId, false),
+    graphEdge(
+      `edge-${device.id}-${identity.id}`,
+      `device-${device.id}`,
+      identityNodeId,
+      false,
+    ),
   )
   const grantEdges = grants.map((grant, index) =>
     compactGrantEdge(
@@ -396,7 +428,14 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
   )
 
   const stageNodes = [
-    stageNode('stage-devices', 'Device evidence', BridgeGraphFlow.Vertical, 30, 0, 270),
+    stageNode(
+      'stage-devices',
+      'Device evidence',
+      BridgeGraphFlow.Vertical,
+      30,
+      0,
+      270,
+    ),
     stageNode(
       'stage-identity',
       'Distributed identity',
@@ -405,7 +444,14 @@ function buildCompactIdentityGraph(identityId: string): BridgeGraphDefinition {
       identityStageY,
       270,
     ),
-    stageNode('stage-vaults', 'Vault grants', BridgeGraphFlow.Vertical, 30, vaultStageY, 270),
+    stageNode(
+      'stage-vaults',
+      'Vault grants',
+      BridgeGraphFlow.Vertical,
+      30,
+      vaultStageY,
+      270,
+    ),
   ]
 
   return {
@@ -562,7 +608,14 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
   )
 
   const stageNodes = [
-    stageNode('stage-selected-vault', 'Selected vault', BridgeGraphFlow.Vertical, 0, 0, 300),
+    stageNode(
+      'stage-selected-vault',
+      'Selected vault',
+      BridgeGraphFlow.Vertical,
+      0,
+      0,
+      300,
+    ),
     stageNode(
       'stage-authorized-identities',
       'Authorized identities',
@@ -590,6 +643,7 @@ export function buildBridgeGraph(
     return buildCompactIdentityGraph(identityId)
   }
   if (compact) return buildCompactVaultGraph(vaultId)
-  if (perspective === BridgePerspective.Identities) return buildIdentityGraph(identityId)
+  if (perspective === BridgePerspective.Identities)
+    return buildIdentityGraph(identityId)
   return buildVaultGraph(vaultId)
 }
