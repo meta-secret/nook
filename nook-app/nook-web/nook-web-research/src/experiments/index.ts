@@ -203,6 +203,8 @@ const keysV1 = subcategories[6]
 const keysV2 = subcategories[7]
 const keysV3 = subcategories[8]
 const keysV4 = subcategories[9]
+const identityManagement = categories[4]
+const identityManagementV1 = subcategories[10]
 const inspiration = categories[5]
 const inspirationV1 = subcategories[11]
 
@@ -440,6 +442,15 @@ export const experiments: Experiment[] = [
     description:
       'Three acts on a rail: continue as an identity, read every passkey by its manager, see which one opens what.',
     component: IdentityConsole,
+  },
+  {
+    slug: 'identity-chain-strength',
+    category: identityManagement,
+    subcategory: identityManagementV1,
+    title: 'Identity chain strength',
+    description:
+      'The primary dark chain-strength view of physical devices, virtual identities, their keys, and identity-level vault grants.',
+    component: PreservedIdentityChainStrength,
   },
   {
     slug: 'frozen-identity-chain-strength',
