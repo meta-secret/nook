@@ -486,6 +486,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
             ? view.deviceId.value
             : vault.t(I18N_KEYS.DevicesAccessUnknown)}
         {@const bridgeCopy = {
+          protectionStage: vault.t(
+            I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
+          ),
           deviceStage: vault.t(I18N_KEYS.DevicesAccessBridgeDeviceEvidence),
           identityStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeDistributedIdentity,
@@ -496,7 +499,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           ),
           currentDevice:
             view.protection === DeviceAccessProtectionKind.PasskeyStandard
-              ? protectionLabel(vault, view.protection)
+              ? vault.t(I18N_KEYS.DevicesAccessBridgeDetailDevice)
               : deviceKeyTitle(vault, view.protection),
           currentIdentity: vault.t(
             I18N_KEYS.DevicesAccessBridgeCurrentIdentity,
@@ -540,6 +543,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           ),
           noSelectedVaultDescription: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
+          ),
+          protectionDeviceRelation: vault.t(
+            I18N_KEYS.DevicesAccessBridgeProtectionDeviceRelation,
           ),
           deviceVaultRelation: (vaultLabel: string) =>
             vault.t(I18N_KEYS.DevicesAccessBridgeDeviceVaultRelation, {

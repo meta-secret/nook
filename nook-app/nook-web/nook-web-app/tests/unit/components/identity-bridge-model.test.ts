@@ -12,6 +12,7 @@ import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib
 import { DeviceAccessIdentityState } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 const copy: IdentityBridgeCopy = {
+  protectionStage: 'Unlock protection',
   deviceStage: 'Device evidence',
   identityStage: 'Identity context',
   vaultStage: 'Verified device-key access',
@@ -37,6 +38,7 @@ const copy: IdentityBridgeCopy = {
   noVerifiedVaultsDescription: 'This key has not opened a known vault.',
   noSelectedVault: 'No vault selected',
   noSelectedVaultDescription: 'Select a vault.',
+  protectionDeviceRelation: 'Unlocks this device key',
   deviceVaultRelation: (vaultLabel) =>
     `Device key opened ${vaultLabel}; identity grant unknown`,
   vaultDeviceRelation: (vaultLabel) =>
@@ -101,13 +103,36 @@ describe('identity bridge graph', () => {
 
     expect(graph.nodes.some((node) => node.id === 'vault-home')).toBe(true)
     expect(graph.nodes.some((node) => node.id === 'vault-archive')).toBe(false)
-    expect(graph.edges.map((edge) => edge.id)).toEqual(['device-to-home'])
+    expect(graph.edges.map((edge) => edge.id)).toEqual([
+      'protection-to-device',
+      'device-to-home',
+    ])
     expect(
       graph.edges.find((edge) => edge.id === 'device-to-home'),
     ).toMatchObject({ source: 'device-current', target: 'vault-home' })
     expect(graph.edges.map((edge) => edge.ariaLabel)).toEqual([
+      'Unlocks this device key',
       'Device key opened Home; identity grant unknown',
     ])
+  })
+
+  test('shows the protection evidence that unlocks the device key', () => {
+    const graph = buildIdentityBridge(
+      input(IdentityBridgePerspective.Identities),
+    )
+
+    expect(
+      graph.nodes.find((node) => node.id === 'protection-current')?.data,
+    ).toMatchObject({
+      kind: IdentityBridgeNodeKind.Protection,
+      label: 'Passkey protected',
+    })
+    expect(
+      graph.edges.find((edge) => edge.id === 'protection-to-device'),
+    ).toMatchObject({
+      source: 'protection-current',
+      target: 'device-current',
+    })
   })
 
   test('routes vault-first evidence to the exact device key', () => {

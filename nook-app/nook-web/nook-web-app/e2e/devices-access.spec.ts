@@ -127,13 +127,21 @@ test.describe('devices and access dashboard', () => {
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Device evidence')
+    await expect(bridge).toContainText('Unlock protection')
     await expect(bridge).toContainText('Local identity state')
     await expect(bridge).toContainText('Verified device-key access')
     await expect(
       bridge.getByRole('article', { name: /Device evidence/ }),
     ).toBeVisible()
     await expect(
-      bridge.getByRole('article', { name: /Browser identity state/ }),
+      bridge.getByRole('article', {
+        name: /Unlock protection: Passkey · recoverable identity. Unlocks this device key/,
+      }),
+    ).toBeVisible()
+    await expect(
+      bridge.getByRole('article', {
+        name: /Browser identity state.*Identity unlocked/,
+      }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('article', { name: /Device-key access/ }),
@@ -159,6 +167,18 @@ test.describe('devices and access dashboard', () => {
           document.documentElement.clientWidth,
       ),
     ).toBe(true)
+    await page.setViewportSize({ width: 240, height: 844 })
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true)
+    await expect(
+      bridge.getByRole('article', { name: /Unlock protection/ }),
+    ).toBeInViewport()
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       bridge.getByRole('img', {
@@ -167,7 +187,7 @@ test.describe('devices and access dashboard', () => {
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /Device evidence: Passkey · recoverable identity.*Test vault was opened by this exact device key/i,
+        name: /Device evidence: Device key.*Test vault was opened by this exact device key/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')

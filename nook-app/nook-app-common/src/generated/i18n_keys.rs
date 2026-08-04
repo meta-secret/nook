@@ -490,6 +490,10 @@ pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS: &str =
 pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS_DESC: &str =
     "devices_access.bridge_no_verified_vaults_desc";
 pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE_KEY: &str = "devices_access.bridge_one_device_key";
+pub const DEVICES_ACCESS_BRIDGE_PROTECTION_DEVICE_RELATION: &str =
+    "devices_access.bridge_protection_device_relation";
+pub const DEVICES_ACCESS_BRIDGE_PROTECTION_EVIDENCE: &str =
+    "devices_access.bridge_protection_evidence";
 pub const DEVICES_ACCESS_BRIDGE_SELECTED_IDENTITY: &str = "devices_access.bridge_selected_identity";
 pub const DEVICES_ACCESS_BRIDGE_SELECTED_VAULT: &str = "devices_access.bridge_selected_vault";
 pub const DEVICES_ACCESS_BRIDGE_VAULT: &str = "devices_access.bridge_vault";

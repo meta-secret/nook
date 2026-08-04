@@ -54,7 +54,23 @@ data.lateralAccessPort &&
   />
 {/if}
 
-{#if data.kind === IdentityBridgeNodeKind.Device}
+{#if data.kind === IdentityBridgeNodeKind.Protection}
+  <article
+    class="bridge-card protection-card"
+    aria-label={`${data.caption}: ${data.label}. ${data.description}`}
+  >
+    <header>
+      <span class="node-icon"
+        ><LockKeyhole class="size-5" aria-hidden="true" /></span
+      >
+      <span class="node-heading">
+        <small>{data.caption}</small>
+        <strong>{data.label}</strong>
+      </span>
+    </header>
+    <p>{data.description}</p>
+  </article>
+{:else if data.kind === IdentityBridgeNodeKind.Device}
   <article
     class="bridge-card device-card"
     aria-label={`${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
@@ -99,7 +115,7 @@ data.lateralAccessPort &&
     class="bridge-card identity-card"
     data-testid="devices-access-identity-card"
     data-identity-state={DeviceAccessIdentityState[data.identityStatus]}
-    aria-label={`${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
+    aria-label={`${data.caption}: ${data.label}. ${data.stateLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
   >
     <header>
       <span class="node-icon identity-icon"
@@ -314,6 +330,7 @@ data.lateralAccessPort &&
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .protection-card,
   .identity-card,
   .vault-card {
     padding-bottom: 0.9rem;

@@ -384,6 +384,8 @@ export const I18N_KEYS = {
   DevicesAccessBridgeNoVerifiedVaults: 'devices_access.bridge_no_verified_vaults',
   DevicesAccessBridgeNoVerifiedVaultsDesc: 'devices_access.bridge_no_verified_vaults_desc',
   DevicesAccessBridgeOneDeviceKey: 'devices_access.bridge_one_device_key',
+  DevicesAccessBridgeProtectionDeviceRelation: 'devices_access.bridge_protection_device_relation',
+  DevicesAccessBridgeProtectionEvidence: 'devices_access.bridge_protection_evidence',
   DevicesAccessBridgeSelectedIdentity: 'devices_access.bridge_selected_identity',
   DevicesAccessBridgeSelectedVault: 'devices_access.bridge_selected_vault',
   DevicesAccessBridgeVault: 'devices_access.bridge_vault',
