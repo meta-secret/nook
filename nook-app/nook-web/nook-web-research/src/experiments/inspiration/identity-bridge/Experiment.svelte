@@ -73,7 +73,7 @@
     <div class="bridge">
       <section class="evidence-column" aria-labelledby="device-evidence-title">
         <div class="section-heading">
-          <span>Device evidence</span>
+          <span id="device-evidence-title">Device evidence</span>
           <span>{selectedIdentity.devices.length}</span>
         </div>
         <div class="device-stack">

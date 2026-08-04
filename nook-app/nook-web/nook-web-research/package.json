@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "bun run security && bun run unused && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
+    "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "unused": "knip --reporter compact",
@@ -22,6 +23,7 @@
     "tailwind-variants": "3.2.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@sveltejs/vite-plugin-svelte": "7.1.2",
     "@tailwindcss/vite": "4.3.1",
     "@tsconfig/svelte": "5.0.8",

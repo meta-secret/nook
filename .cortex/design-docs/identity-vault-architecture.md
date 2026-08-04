@@ -168,11 +168,32 @@ A vault owns its stable `store_id`, independent DEK/key epochs, encrypted
 secret records, signed event log, projection, conflicts, and vault-specific
 grant policy. Passwords and other secret items remain vault content.
 
-Identity and vault meet through an explicit authorization grant containing the
-vault id, identity id/policy epoch, role/capability, and vault DEK encrypted to
-an authorized identity key or policy. One identity may receive many vault
-grants and one vault may authorize many identities. Revoking a vault grant does
-not delete or redefine the virtual identity.
+Identity and vault meet through an explicit, vault-owned authorization grant.
+The grant contains the vault id and key epoch, identity id and policy epoch,
+role/capability, and one recipient envelope for each active device public key
+that the vault has authorized for that identity. Each envelope encrypts the
+vault epoch DEK to a concrete installation-specific X25519 device public key.
+The identity policy decides which device keys are eligible for a grant, but an
+abstract “identity key,” collective label, or sync-provider mount is never the
+cryptographic recipient.
+
+A grant mutation is a signed vault event authorized by the vault's current
+owner/member policy. The identity control log may reference that event, but it
+cannot mint vault access. Adding a device to an identity does not automatically
+open existing vaults: an authorized vault actor must refresh each applicable
+grant and add an envelope for the new device key. Personal and collective
+identity policies may require different approval or quorum evidence before
+that refresh, while decryption still terminates at named device public keys.
+
+Revoking one device removes its recipient envelope and advances the vault key
+epoch before subsequent writes. Revoking the entire identity removes every
+recipient envelope for that identity and also advances the vault key epoch;
+remaining recipients receive new envelopes. Rotation prevents revoked keys
+from decrypting future records but cannot retract plaintext or old ciphertext
+already obtained. A vault that promises historical revocation must compact or
+re-encrypt retained records into the new epoch. One identity may receive many
+vault grants and one vault may authorize many identities; removing a grant
+does not delete or redefine the virtual identity.
 
 Current Nook storage encodes much of this relationship as per-device `auth:`
 envelopes and vault member rows. That is the existing wire-compatibility

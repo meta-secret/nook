@@ -569,10 +569,10 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
       itemCount: vault.itemCount,
     },
     50,
-    0,
+    50,
     300,
   )
-  let identityY = 320
+  let identityY = 370
   const identityNodes = grants.map((grant) => {
     const identity = identityById(grant.identityId)
     const keyCount = identity.devices.reduce(
@@ -624,7 +624,7 @@ function buildCompactVaultGraph(vaultId: string): BridgeGraphDefinition {
       'Authorized identities',
       BridgeGraphFlow.Vertical,
       30,
-      270,
+      320,
       270,
     ),
   ]

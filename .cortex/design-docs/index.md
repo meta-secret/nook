@@ -13,7 +13,7 @@ This directory contains design specifications, architecture rationales, and core
 | [passkey-manager.md](passkey-manager.md) | Chromium website passkey provider, ceremony boundary, sync, and threat model | Implemented |
 | [secret-store-identity.md](secret-store-identity.md) | `store_id` logical vault identity, replication, `pk_id` rationale | Verified |
 | [vault-event-log.md](vault-event-log.md) | Immutable event log, causal DAG, projection (replaces scalar sync) | Implemented |
-| [vault-architecture-modes.md](vault-architecture-modes.md) | Device and vault access modes; replication is post-genesis storage | Implemented |
+| [vault-architecture-modes.md](vault-architecture-modes.md) | Implemented device/vault modes plus the unimplemented target identity lifecycle; replication is post-genesis storage | Implemented + target |
 | [sentinel-genesis.md](sentinel-genesis.md) | Provider-free Sentinel reverse onboarding, threshold policy, and atomic genesis | Implemented |
 | [vault-schema-versioning.md](vault-schema-versioning.md) | #52 safe migration via event log; projection `schema_version` | Implemented |
 | [typed-newtypes.md](typed-newtypes.md) | Domain newtypes over raw `String`/`u32`; version wrappers for multi-schema vault | In progress |

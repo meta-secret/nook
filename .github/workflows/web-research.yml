@@ -54,6 +54,7 @@ jobs:
           bun run format:check
           bun run check
           bun run build
+          bun run test:e2e
 
       - name: Deploy to Cloudflare Pages
         id: deploy

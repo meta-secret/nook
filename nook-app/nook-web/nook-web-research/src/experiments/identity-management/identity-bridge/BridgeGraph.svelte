@@ -48,6 +48,7 @@
   class:vault-canvas={perspective === BridgePerspective.Vaults}
   class:compact-canvas={compact}
   class="bridge-canvas"
+  data-testid="identity-bridge-graph"
   style={`--compact-height: ${graph.compactHeight}px`}
   aria-label="Identity, device, and vault relationship graph"
 >
