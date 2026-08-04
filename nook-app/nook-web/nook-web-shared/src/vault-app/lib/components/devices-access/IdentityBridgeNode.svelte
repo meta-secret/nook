@@ -3,16 +3,19 @@
     Fingerprint,
     KeyRound,
     Laptop,
+    LockKeyhole,
     MonitorSmartphone,
     ShieldCheck,
     ShieldQuestion,
     Vault,
   } from '@lucide/svelte'
   import { Handle, Position, type NodeProps } from '@xyflow/svelte'
+  import { DeviceAccessIdentityState } from '$app-wasm'
   import {
     IdentityBridgeFlow,
     IdentityBridgeDeviceIconKind,
     IdentityBridgeHandleType,
+    IdentityBridgeHandleId,
     IdentityBridgeNodeKind,
     IdentityBridgePortMode,
     type IdentityBridgeNode,
@@ -25,9 +28,24 @@
   <Handle
     class="bridge-handle"
     type={IdentityBridgeHandleType.Target}
-    position={data.flow === IdentityBridgeFlow.Vertical
-      ? Position.Top
-      : Position.Left}
+    id={data.kind === IdentityBridgeNodeKind.Vault && data.lateralAccessPort
+      ? IdentityBridgeHandleId.VaultAccess
+      : undefined}
+    position={data.kind === IdentityBridgeNodeKind.Vault &&
+    data.lateralAccessPort
+      ? Position.Right
+      : data.flow === IdentityBridgeFlow.Vertical
+        ? Position.Top
+        : Position.Left}
+  />
+{/if}
+
+{#if data.kind === IdentityBridgeNodeKind.Device && data.lateralAccessPort}
+  <Handle
+    class="bridge-handle"
+    type={IdentityBridgeHandleType.Source}
+    id={IdentityBridgeHandleId.VaultAccess}
+    position={Position.Right}
   />
 {/if}
 
@@ -67,7 +85,13 @@
   </article>
 {:else if data.kind === IdentityBridgeNodeKind.Identity}
   <article
+    class:identity-unlocked={data.identityStatus ===
+      DeviceAccessIdentityState.Unlocked}
+    class:identity-locked={data.identityStatus ===
+      DeviceAccessIdentityState.Locked}
     class="bridge-card identity-card"
+    data-testid="devices-access-identity-card"
+    data-identity-state={DeviceAccessIdentityState[data.identityStatus]}
     aria-label={`${data.caption}: ${data.label}`}
   >
     <header>
@@ -79,10 +103,13 @@
         <strong>{data.label}</strong>
       </span>
       <span class="state" data-testid="devices-access-identity-state"
-        ><ShieldCheck
-          class="size-3.5"
-          aria-hidden="true"
-        />{data.stateLabel}</span
+        >{#if data.identityStatus === DeviceAccessIdentityState.Unlocked}
+          <ShieldCheck class="size-3.5" aria-hidden="true" />
+        {:else if data.identityStatus === DeviceAccessIdentityState.Locked}
+          <LockKeyhole class="size-3.5" aria-hidden="true" />
+        {:else}
+          <ShieldQuestion class="size-3.5" aria-hidden="true" />
+        {/if}{data.stateLabel}</span
       >
     </header>
     <p>{data.description}</p>
@@ -207,8 +234,15 @@
     height: 2rem;
   }
   .identity-icon {
-    border-color: color-mix(in oklab, var(--primary) 65%, transparent);
     color: var(--foreground);
+  }
+  .identity-unlocked .identity-icon {
+    border-color: color-mix(in oklab, var(--primary) 65%, transparent);
+  }
+  .identity-locked .identity-icon,
+  .identity-locked .state {
+    border-color: color-mix(in oklab, var(--destructive) 45%, transparent);
+    color: var(--destructive);
   }
   .node-heading {
     min-width: 0;

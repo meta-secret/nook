@@ -611,6 +611,9 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked')
+    await expect(
+      page.getByTestId('devices-access-identity-card'),
+    ).toHaveAttribute('data-identity-state', 'Locked')
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(page.getByTestId('devices-access-vaults')).toContainText(
       'Access verified',

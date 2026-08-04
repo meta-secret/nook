@@ -9,6 +9,7 @@ import {
   type IdentityBridgeInput,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-model'
 import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+import { DeviceAccessIdentityState } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 const copy: IdentityBridgeCopy = {
   deviceStage: 'Device evidence',
@@ -36,6 +37,8 @@ const copy: IdentityBridgeCopy = {
   unverifiedStatus: 'Not yet verified',
   noAuthorizedIdentity: 'No verified relationship',
   noAuthorizedIdentityDescription: 'No verified evidence exists.',
+  noVerifiedVaults: 'No verified vault access',
+  noVerifiedVaultsDescription: 'This key has not opened a known vault.',
   noSelectedVault: 'No vault selected',
   noSelectedVaultDescription: 'Select a vault.',
   deviceIdentityRelation: 'Device key belongs to this identity context',
@@ -69,6 +72,7 @@ function input(
     compact: false,
     deviceIdentifier: 'device_public_key',
     identityIdentifier: 'passkey_user_handle',
+    identityStatus: DeviceAccessIdentityState.Unlocked,
     protectionLabel: 'Passkey protected',
     deviceIconKind: IdentityBridgeDeviceIconKind.Browser,
     vaults: [vault('home', true), vault('archive', false)],
@@ -103,8 +107,11 @@ describe('identity bridge graph', () => {
     expect(graph.nodes.some((node) => node.id === 'vault-archive')).toBe(false)
     expect(graph.edges.map((edge) => edge.id)).toEqual([
       'device-to-identity',
-      'identity-to-home',
+      'device-to-home',
     ])
+    expect(
+      graph.edges.find((edge) => edge.id === 'device-to-home'),
+    ).toMatchObject({ source: 'device-current', target: 'vault-home' })
     expect(graph.edges.map((edge) => edge.ariaLabel)).toEqual([
       'Device key belongs to this identity context',
       'Device key opened Home; identity grant unknown',
@@ -131,6 +138,19 @@ describe('identity bridge graph', () => {
       false,
     )
     expect(graph.edges).toHaveLength(0)
+  })
+
+  test('uses a perspective-specific empty state when no known vault was opened', () => {
+    const noAccess = input(IdentityBridgePerspective.Identities)
+    noAccess.vaults = [vault('archive', false)]
+    const graph = buildIdentityBridge(noAccess)
+    const empty = graph.nodes.find((node) => node.id === 'vault-empty')
+
+    expect(empty?.data).toMatchObject({
+      kind: IdentityBridgeNodeKind.Empty,
+      label: 'No verified vault access',
+      description: 'This key has not opened a known vault.',
+    })
   })
 
   test('keeps vault-first empty state in vault-first hierarchy', () => {

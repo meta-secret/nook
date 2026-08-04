@@ -5,6 +5,7 @@
     BackgroundVariant,
     Controls,
     SvelteFlow,
+    type AriaLabelConfig,
     type NodeTypes,
   } from '@xyflow/svelte'
   import {
@@ -18,6 +19,7 @@
     type IdentityBridgeVaultSelection,
   } from './identity-bridge-model'
   import type { VaultAccessView } from './access-chain'
+  import type { DeviceAccessIdentityState } from '$app-wasm'
   import IdentityBridgeNode from './IdentityBridgeNode.svelte'
 
   let {
@@ -25,23 +27,27 @@
     selectedVault,
     deviceIdentifier,
     identityIdentifier,
+    identityStatus,
     protectionLabel,
     deviceIconKind,
     vaults,
     copy,
     graphLabel,
     controlsLabel,
+    ariaLabelConfig,
   }: {
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
     deviceIdentifier: string
     identityIdentifier: string
+    identityStatus: DeviceAccessIdentityState
     protectionLabel: string
     deviceIconKind: IdentityBridgeDeviceIconKind
     vaults: readonly VaultAccessView[]
     copy: IdentityBridgeCopy
     graphLabel: string
     controlsLabel: string
+    ariaLabelConfig: Partial<AriaLabelConfig>
   } = $props()
 
   const nodeTypes: NodeTypes = {
@@ -55,6 +61,7 @@
       compact,
       deviceIdentifier,
       identityIdentifier,
+      identityStatus,
       protectionLabel,
       deviceIconKind,
       vaults,
@@ -106,6 +113,7 @@
       panOnScroll={false}
       preventScrolling={false}
       proOptions={{ hideAttribution: true }}
+      {ariaLabelConfig}
     >
       <Background
         variant={BackgroundVariant.Dots}

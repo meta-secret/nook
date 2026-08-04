@@ -539,6 +539,12 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           noAuthorizedIdentityDescription: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoAuthorizedDesc,
           ),
+          noVerifiedVaults: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoVerifiedVaults,
+          ),
+          noVerifiedVaultsDescription: vault.t(
+            I18N_KEYS.DevicesAccessBridgeNoVerifiedVaultsDesc,
+          ),
           noSelectedVault: vault.t(
             I18N_KEYS.DevicesAccessBridgeNoSelectedVault,
           ),
@@ -617,6 +623,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               {selectedVault}
               {deviceIdentifier}
               {identityIdentifier}
+              identityStatus={view.identityState}
               protectionLabel={protectionLabel(vault, view.protection)}
               deviceIconKind={view.protection ===
               DeviceAccessProtectionKind.CompanionSession
@@ -628,6 +635,48 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
               controlsLabel={vault.t(
                 I18N_KEYS.DevicesAccessBridgeGraphControls,
               )}
+              ariaLabelConfig={{
+                'node.a11yDescription.default': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yNode,
+                ),
+                'node.a11yDescription.keyboardDisabled': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yNode,
+                ),
+                'node.a11yDescription.ariaLiveMessage': ({
+                  direction,
+                  x,
+                  y,
+                }) =>
+                  vault.t(I18N_KEYS.DevicesAccessBridgeA11yNodeMoved, {
+                    direction,
+                    x: String(x),
+                    y: String(y),
+                  }),
+                'edge.a11yDescription.default': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yEdge,
+                ),
+                'controls.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeGraphControls,
+                ),
+                'controls.zoomIn.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yZoomIn,
+                ),
+                'controls.zoomOut.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yZoomOut,
+                ),
+                'controls.fitView.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yFitView,
+                ),
+                'controls.interactive.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yInteractivity,
+                ),
+                'minimap.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yMinimap,
+                ),
+                'handle.ariaLabel': vault.t(
+                  I18N_KEYS.DevicesAccessBridgeA11yHandle,
+                ),
+              }}
             />
           </div>
         </div>

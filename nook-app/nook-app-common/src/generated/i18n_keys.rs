@@ -448,6 +448,16 @@ pub const DEVICES_ACCESS_BACKUP_PASSWORD_BOUNDARY_COMPANION: &str =
     "devices_access.backup_password_boundary_companion";
 pub const DEVICES_ACCESS_BACKUP_PASSWORDS: &str = "devices_access.backup_passwords";
 pub const DEVICES_ACCESS_BACKUP_STATUS: &str = "devices_access.backup_status";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_EDGE: &str = "devices_access.bridge_a11y_edge";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_FIT_VIEW: &str = "devices_access.bridge_a11y_fit_view";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_HANDLE: &str = "devices_access.bridge_a11y_handle";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_INTERACTIVITY: &str =
+    "devices_access.bridge_a11y_interactivity";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_MINIMAP: &str = "devices_access.bridge_a11y_minimap";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE: &str = "devices_access.bridge_a11y_node";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_NODE_MOVED: &str = "devices_access.bridge_a11y_node_moved";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_IN: &str = "devices_access.bridge_a11y_zoom_in";
+pub const DEVICES_ACCESS_BRIDGE_A11Y_ZOOM_OUT: &str = "devices_access.bridge_a11y_zoom_out";
 pub const DEVICES_ACCESS_BRIDGE_AUTHORIZED_IDENTITIES: &str =
     "devices_access.bridge_authorized_identities";
 pub const DEVICES_ACCESS_BRIDGE_BROWSE_BY: &str = "devices_access.bridge_browse_by";
@@ -480,6 +490,10 @@ pub const DEVICES_ACCESS_BRIDGE_NO_AUTHORIZED_DESC: &str =
 pub const DEVICES_ACCESS_BRIDGE_NO_SELECTED_VAULT: &str = "devices_access.bridge_no_selected_vault";
 pub const DEVICES_ACCESS_BRIDGE_NO_SELECTED_VAULT_DESC: &str =
     "devices_access.bridge_no_selected_vault_desc";
+pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS: &str =
+    "devices_access.bridge_no_verified_vaults";
+pub const DEVICES_ACCESS_BRIDGE_NO_VERIFIED_VAULTS_DESC: &str =
+    "devices_access.bridge_no_verified_vaults_desc";
 pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE: &str = "devices_access.bridge_one_device";
 pub const DEVICES_ACCESS_BRIDGE_ONE_DEVICE_KEY: &str = "devices_access.bridge_one_device_key";
 pub const DEVICES_ACCESS_BRIDGE_SELECTED_IDENTITY: &str = "devices_access.bridge_selected_identity";
