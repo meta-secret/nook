@@ -257,7 +257,7 @@ test.describe('passkey device-key protection', () => {
     const invitationLink = await page
       .getByTestId('sentinel-genesis-request-output')
       .inputValue()
-    expect(invitationLink).toContain('/onboard#sentinel-request=')
+    expect(invitationLink).toContain('/vault/#sentinel-request=')
     expect(invitationLink).toContain('#sentinel-request=')
 
     const participantNameInput = page.getByTestId(
