@@ -20,7 +20,9 @@ test('walk the access chain from passkey to browser device key to vaults', async
 
   await page.getByTestId('vault-devices-access-tab').click()
   const dashboard = page.getByTestId('devices-access-dashboard')
-  await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await expect(dashboard).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity unlocked',
   )
@@ -35,7 +37,8 @@ test('walk the access chain from passkey to browser device key to vaults', async
   expect(
     await page.evaluate(
       () =>
-        document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
     ),
   ).toBe(true)
   await expect
