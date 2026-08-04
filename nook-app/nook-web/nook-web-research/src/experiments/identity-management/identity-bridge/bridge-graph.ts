@@ -38,17 +38,15 @@ export enum BridgeGraphFlow {
 }
 
 export enum BridgeHandleType {
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Source = 'source',
+  /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Target = 'target',
 }
 
 export enum BridgeIdentityPresentation {
   Hub = 'hub',
   Evidence = 'evidence',
-}
-
-export enum BridgeControlPosition {
-  TopRight = 'top-right',
 }
 
 type GraphInstallation = {

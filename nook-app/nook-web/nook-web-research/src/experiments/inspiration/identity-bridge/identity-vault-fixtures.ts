@@ -109,7 +109,3 @@ export function vaultById(id: string): Vault {
 export function grantsForIdentity(identityId: string): AccessGrant[] {
   return accessGrants.filter((grant) => grant.identityId === identityId)
 }
-
-export function grantsForVault(vaultId: string): AccessGrant[] {
-  return accessGrants.filter((grant) => grant.vaultId === vaultId)
-}
