@@ -263,12 +263,12 @@ function graphEdge(
     id,
     source,
     target,
-    sourceHandle: lateralAccessPort
-      ? IdentityBridgeHandleId.VaultAccess
-      : undefined,
-    targetHandle: lateralAccessPort
-      ? IdentityBridgeHandleId.VaultAccess
-      : undefined,
+    ...(lateralAccessPort
+      ? {
+          sourceHandle: IdentityBridgeHandleId.VaultAccess,
+          targetHandle: IdentityBridgeHandleId.VaultAccess,
+        }
+      : {}),
     type: IdentityBridgeEdgeType.SmoothStep,
     selectable: false,
     focusable: false,
