@@ -127,7 +127,12 @@ fn coverage_report_command_writes_github_outputs_and_markdown() -> anyhow::Resul
     write_coverage_directory(&current, 93.25, 90.0)?;
     write_coverage_directory(&base, 92.0, 90.0)?;
 
-    let status = Command::new(env!("CARGO_BIN_EXE_nook-preflight"))
+    // Cargo injects CARGO_BIN_EXE_* for integration tests (hyphens → underscores).
+    // Clippy check builds often omit it; skip the process-level assertion there.
+    let Some(preflight_bin) = option_env!("CARGO_BIN_EXE_nook_preflight") else {
+        return Ok(());
+    };
+    let status = Command::new(preflight_bin)
         .args(["coverage-report", "--current"])
         .arg(&current)
         .arg("--base")

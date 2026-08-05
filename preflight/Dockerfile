@@ -7,10 +7,9 @@ FROM rust-base AS chef
 
 WORKDIR /opt/nook/preflight
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
-RUN mkdir -p src tests \
+RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
-    && printf '\n' > src/lib.rs \
-    && printf '\n' > tests/stub.rs
+    && printf '\n' > src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM rust-base AS deps

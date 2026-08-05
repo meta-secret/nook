@@ -82,8 +82,7 @@ fn hive_named_sccache_helper_context_never_uploads_nook_app() -> anyhow::Result<
         );
     }
     assert!(
-        infra_hive
-            .contains("--build-context \"nook-sccache-helpers=$remote_dir/nook-app/docker\""),
+        infra_hive.contains("--build-context \"nook-sccache-helpers=$remote_dir/nook-app/docker\""),
         "remote Hive image builds must use the narrowed nook-sccache-helpers context"
     );
     Ok(())

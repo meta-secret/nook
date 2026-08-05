@@ -561,8 +561,7 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        !registry.contains("repo_root/.nook/cache")
-            && !registry.contains("credential_dir="),
+        !registry.contains("repo_root/.nook/cache") && !registry.contains("credential_dir="),
         "registry credentials must sync only to ~/.nook/cache"
     );
     assert!(!operations.contains("redis:credential"));
