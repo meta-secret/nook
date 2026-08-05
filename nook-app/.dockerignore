@@ -1,5 +1,5 @@
 # Safety net if a build ever uses nook-app/ as a named context root.
-# Hive correctly points --build-context nook-app at nook-app/docker instead.
+# Hive stages only the two sccache helper scripts into a temp context instead.
 target
 **/target
 **/node_modules

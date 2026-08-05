@@ -40,35 +40,51 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
 }
 
 #[test]
-fn hive_named_nook_app_context_is_the_docker_helpers_dir_only() -> anyhow::Result<()> {
+fn hive_named_sccache_helper_context_never_uploads_nook_app() -> anyhow::Result<()> {
     let hive_tasks = read("agentic-ai/minds/hive/Taskfile.yml");
     let hive_dockerfile = read("agentic-ai/minds/hive/Dockerfile");
+    let prepare = read("agentic-ai/minds/hive/prepare-sccache-context.sh");
     let infra_hive = read("infra/tasks/hive.yml");
-    assert!(
-        hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app/docker"),
-        "Hive must point its named context at nook-app/docker, not the full nook-app tree"
-    );
-    assert!(
-        !hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app\n")
-            && !hive_tasks.contains("NOOK_APP_CONTEXT: ../../nook-app\r"),
-        "Hive must not transfer the full nook-app checkout as a BuildKit context"
-    );
     for required in [
-        "COPY --from=nook-app sccache-wrapper.sh",
-        "COPY --from=nook-app sccache-report.sh",
+        "prepare-sccache-context.sh",
+        "prepare_nook_sccache_helpers_context",
+        "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT",
     ] {
         assert!(
-            hive_dockerfile.contains(required),
-            "Hive Dockerfile must copy sccache helpers from the narrowed docker context: {required}"
+            hive_tasks.contains(required),
+            "Hive tasks must stage a tiny sccache helper context: {required}"
         );
     }
     assert!(
-        !hive_dockerfile.contains("COPY --from=nook-app docker/"),
-        "Hive Dockerfile paths must be relative to nook-app/docker"
+        !hive_tasks.contains("NOOK_APP_CONTEXT")
+            && !hive_tasks.contains("--build-context \"nook-app=")
+            && !hive_tasks.contains("--build-context nook-app="),
+        "Hive must not use a named BuildKit context rooted at nook-app"
     );
+    for required in [
+        "COPY --from=nook-sccache-helpers sccache-wrapper.sh",
+        "COPY --from=nook-sccache-helpers sccache-report.sh",
+    ] {
+        assert!(
+            hive_dockerfile.contains(required),
+            "Hive Dockerfile must copy sccache helpers from the staged context: {required}"
+        );
+    }
+    for required in [
+        "nook-app/docker/sccache-wrapper.sh",
+        "nook-app/docker/sccache-report.sh",
+        "Refusing oversized sccache helper context",
+        "Refusing sccache helper context that looks like nook-app",
+    ] {
+        assert!(
+            prepare.contains(required),
+            "sccache helper staging script is missing: {required}"
+        );
+    }
     assert!(
-        infra_hive.contains("--build-context \"nook-app=$remote_dir/nook-app/docker\""),
-        "remote Hive image builds must use the narrowed nook-app/docker context"
+        infra_hive
+            .contains("--build-context \"nook-sccache-helpers=$remote_dir/nook-app/docker\""),
+        "remote Hive image builds must use the narrowed nook-sccache-helpers context"
     );
     Ok(())
 }

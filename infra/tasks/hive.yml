@@ -115,7 +115,7 @@ tasks:
           --network host \
           "${secret_args[@]}" \
           --tag "$image" \
-          --build-context "nook-app=$remote_dir/nook-app/docker" \
+          --build-context "nook-sccache-helpers=$remote_dir/nook-app/docker" \
           --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
           "$remote_dir/agentic-ai/minds"
         push_output="$(docker push "$image")"
