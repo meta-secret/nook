@@ -215,9 +215,11 @@ pub fn sentinel_genesis_participant_fingerprint(input: &str) -> MultiDeviceResul
 }
 
 fn build_sentinel_link(payload: &str, base_url: &str, hash_prefix: &str) -> String {
-    let base = base_url.trim().trim_end_matches('/');
+    // The browser route owns its canonical trailing-slash policy. Retain that
+    // exact route so a response link can be a same-document fragment change.
+    let base = base_url.trim();
     let encoded = URL_SAFE_NO_PAD.encode(payload.as_bytes());
-    format!("{base}/{hash_prefix}{encoded}")
+    format!("{base}{hash_prefix}{encoded}")
 }
 
 fn decode_sentinel_link_payload(
@@ -754,6 +756,21 @@ mod tests {
     }
 
     #[test]
+    fn request_link_preserves_a_canonical_route_without_a_trailing_slash() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let owner_signing = signing_key()?;
+        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
+        let request_json = serde_json::to_string(&session.request)?;
+
+        let link =
+            build_sentinel_genesis_request_link(&request_json, "https://nook.example/vault")?;
+
+        assert!(link.starts_with("https://nook.example/vault#sentinel-request="));
+        assert_eq!(normalize_sentinel_genesis_request(&link)?, request_json);
+        Ok(())
+    }
+
+    #[test]
     fn participant_response_link_round_trips_and_remains_session_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
@@ -772,6 +789,28 @@ mod tests {
         add_sentinel_genesis_participant_payload(&mut session, &normalized)?;
         assert!(session.is_complete());
         assert!(normalize_sentinel_genesis_participant_payload("not-a-response").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn participant_response_link_preserves_a_canonical_route_without_a_trailing_slash()
+    -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let owner_signing = signing_key()?;
+        let session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let (_, _, response) = participant(&session.request, "Peer")?;
+        let response_json = serde_json::to_string(&response)?;
+
+        let link = build_sentinel_genesis_participant_response_link(
+            &response_json,
+            "https://nook.example/vault",
+        )?;
+
+        assert!(link.starts_with("https://nook.example/vault#sentinel-response="));
+        assert_eq!(
+            normalize_sentinel_genesis_participant_payload(&link)?,
+            response_json
+        );
         Ok(())
     }
 

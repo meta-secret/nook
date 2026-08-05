@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   createIsolatedContext,
+  disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   waitForPersistedAppLog,
 } from './helpers'
@@ -31,6 +32,7 @@ async function clickDeviceProtectionSetup(page: Page) {
 async function createSentinelParticipantResponse(
   browser: Browser,
   invitationLink: string,
+  localAppUrl: string,
   label: string,
 ): Promise<{ context: BrowserContext; responseLink: string }> {
   const context = await createIsolatedContext(browser)
@@ -38,7 +40,12 @@ async function createSentinelParticipantResponse(
     localStorage.setItem('nook_e2e_manual_passkey', 'true')
   })
   const participant = await context.newPage()
-  await participant.goto(invitationLink)
+  const invitation = new URL(invitationLink)
+  const participantUrl = new URL(
+    `${invitation.pathname}${invitation.search}${invitation.hash}`,
+    localAppUrl,
+  ).toString()
+  await participant.goto(participantUrl)
   await expect(
     participant.getByTestId('sentinel-genesis-participant-step'),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -257,6 +264,7 @@ test.describe('passkey device-key protection', () => {
     const invitationLink = await page
       .getByTestId('sentinel-genesis-request-output')
       .inputValue()
+    expect(invitationLink).toContain('/vault#sentinel-request=')
     expect(invitationLink).toContain('#sentinel-request=')
 
     const participantNameInput = page.getByTestId(
@@ -274,6 +282,7 @@ test.describe('passkey device-key protection', () => {
     const participantOne = await createSentinelParticipantResponse(
       browser,
       invitationLink,
+      page.url(),
       'Sentinel participant one',
     )
     await page
@@ -295,9 +304,19 @@ test.describe('passkey device-key protection', () => {
     const participantTwo = await createSentinelParticipantResponse(
       browser,
       invitationLink,
+      page.url(),
       'Sentinel participant two',
     )
-    await page.goto(participantTwo.responseLink)
+    expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
+    const participantResponseUrl = new URL(participantTwo.responseLink)
+    const localParticipantResponseUrl = new URL(
+      `${participantResponseUrl.pathname}${participantResponseUrl.search}${participantResponseUrl.hash}`,
+      new URL(page.url()).origin,
+    )
+    await page.evaluate((responseLink) => {
+      window.location.href = responseLink
+    }, localParticipantResponseUrl.href)
+    await expect(page).toHaveURL(/\/vault$/)
     await expect(
       page.getByTestId('sentinel-genesis-authentication-ready'),
     ).toContainText('Authentication response received')
@@ -451,12 +470,16 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await disableVaultIdleLock(page)
 
     const wrapped = await readPersistedDeviceIdentity(page)
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await page.getByTestId('vault-devices-access-tab').click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('devices-access-node-device-key'),
     ).toHaveCount(0)
@@ -477,7 +500,7 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
     await page.reload()
     await openExistingVaultProtectionOverlay(page)
@@ -486,7 +509,7 @@ test.describe('passkey device-key protection', () => {
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
   })
 
   test('falls back to PIN setup when passkeys are unavailable', async ({

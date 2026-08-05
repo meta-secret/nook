@@ -1,5 +1,11 @@
 import { getEnrollmentLinkBase } from "$lib/enrollment/code";
 import {
+  WorkspaceRoute,
+  WorkspaceRouteLookupKind,
+  workspacePath,
+  workspaceRouteFromPath,
+} from "$lib/app/workspace-route";
+import {
   buildSentinelGenesisParticipantResponseLink as buildParticipantResponseLinkCore,
   buildSentinelGenesisRequestLink as buildRequestLinkCore,
   normalizeSentinelGenesisParticipantPayload,
@@ -9,9 +15,37 @@ import {
 const SENTINEL_REQUEST_HASH_PREFIX = "#sentinel-request=";
 const SENTINEL_RESPONSE_HASH_PREFIX = "#sentinel-response=";
 
+function sentinelGenesisLinkBase(): string {
+  if (!("window" in globalThis)) return getEnrollmentLinkBase();
+  return sentinelGenesisLinkBaseForWorkspace(
+    getEnrollmentLinkBase(),
+    window.location.href,
+  );
+}
+
+export function sentinelGenesisLinkBaseForWorkspace(
+  enrollmentLinkBase: string,
+  currentLocation: string,
+): string {
+  const url = new URL(enrollmentLinkBase);
+  const workspace = new URL(currentLocation);
+  // Workspace routing canonicalizes `/vault/` to `/vault`. Keep ceremony
+  // links on the configured public origin and that same document so a response
+  // URL changes only its fragment: a slash-only navigation would recreate the
+  // app and lose the in-progress (intentionally in-memory) Genesis ceremony.
+  const workspaceRoute = workspaceRouteFromPath(workspace.pathname);
+  url.pathname =
+    workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace
+      ? workspacePath(workspaceRoute.route)
+      : workspacePath(WorkspaceRoute.Vault);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
 export function buildSentinelGenesisRequestLink(
   requestJson: string,
-  baseUrl = getEnrollmentLinkBase(),
+  baseUrl = sentinelGenesisLinkBase(),
 ): string {
   if (!requestJson.trim()) return "";
   return buildRequestLinkCore(requestJson, baseUrl);
@@ -19,7 +53,7 @@ export function buildSentinelGenesisRequestLink(
 
 export function buildSentinelGenesisParticipantResponseLink(
   responseJson: string,
-  baseUrl = getEnrollmentLinkBase(),
+  baseUrl = sentinelGenesisLinkBase(),
 ): string {
   if (!responseJson.trim()) return "";
   return buildParticipantResponseLinkCore(responseJson, baseUrl);
