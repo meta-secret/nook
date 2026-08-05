@@ -1,6 +1,10 @@
 # Multi-Device Decentralized Auth Specification
 
-Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries. **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata. The immutable event log (`nook-log/v1/events/`) is the provider source of truth; `nook-projection.yaml` is only the local projection/import format.
+Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries.
+
+**Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata.
+
+The immutable event log (`nook-log/v1/events/`) is the provider source of truth. `nook-projection.yaml` is only the local projection/import format.
 
 **Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth2` boundary), §4 (storage table), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).
 
@@ -57,36 +61,43 @@ flowchart TB
 
 Both keys are generated together on genesis (`generate_vault_keys()`).
 
-For Sentinel genesis, the owner shares a `#sentinel-request=` invitation URL
-containing only the signed public ceremony request. A participant opens that
-URL on the device being enrolled, explicitly connects its locally protected
-device identity, and returns a `#sentinel-response=` URL containing the signed,
-session-bound public-key response. Rust validates and normalizes both URL
-payloads; TypeScript only transports them and drives the browser UI. No vault is
-persisted until every configured participant response has been verified and
-the ceremony can be finalized atomically.
+For Sentinel genesis, the owner shares a `#sentinel-request=` invitation URL.
+It contains only the signed public ceremony request.
+A participant opens that URL on the device being enrolled.
+The participant explicitly connects its locally protected device identity.
+The participant returns a `#sentinel-response=` URL.
+That URL contains the signed, session-bound public-key response.
+Rust validates and normalizes both URL payloads.
+TypeScript only transports them and drives the browser UI.
+No vault is persisted until every configured participant response has been verified.
+The ceremony can then be finalized atomically.
 
 ### 2.1 Local device-key protection
 
 Before any provider credential or device-key operation, the browser runs
-WebAuthn with required user verification and the PRF extension. Rust/WASM builds
-the `navigator.credentials.create/get` option payloads with
+WebAuthn with required user verification and the PRF extension.
+Rust/WASM builds the `navigator.credentials.create/get` option payloads with
 `1Password/passkey-rs` `passkey-types`, including PRF extension inputs.
-TypeScript owns only the browser platform call itself and extraction of the
-returned PRF extension result; it passes the 32-byte PRF output to WASM. Rust
-uses a versioned fixed PRF input for passkey mode, then derives the X25519 age
-identity from the PRF output and the passkey `userHandle` with HKDF-SHA256. Nook
-never stores a password or encryption key in WebAuthn `user.id`; the
-`userHandle` is a non-secret account binding and HKDF salt.
+TypeScript owns only the browser platform call itself.
+TypeScript extracts the returned PRF extension result.
+It passes the 32-byte PRF output to WASM.
+Rust uses a versioned fixed PRF input for passkey mode.
+Rust then derives the X25519 age identity from the PRF output and the passkey
+`userHandle` with HKDF-SHA256.
+Nook never stores a password or encryption key in WebAuthn `user.id`.
+The `userHandle` is a non-secret account binding and HKDF salt.
 
 Issue #201 proved the current browser boundary for `1Password/passkey-rs`:
-`passkey-client` can run a WebAuthn client when Rust also owns an
-`Authenticator`/`CredentialStore`, and its PRF support is useful for request
-types. It cannot invoke the browser/OS platform passkey provider because
-browsers expose that provider only through `navigator.credentials`. Nook must
-therefore keep a thin TypeScript bridge for the real platform ceremony while
-keeping option construction, wrapping, unwrapping, persistence, validation, and
-zeroization in Rust/WASM/core.
+
+- `passkey-client` can run a WebAuthn client when Rust also owns an
+  `Authenticator`/`CredentialStore`.
+- Its PRF support is useful for request types.
+- It cannot invoke the browser/OS platform passkey provider.
+- Browsers expose that provider only through `navigator.credentials`.
+
+Nook must therefore keep a thin TypeScript bridge for the real platform ceremony.
+Option construction, wrapping, unwrapping, persistence, validation, and
+zeroization stay in Rust/WASM/core.
 
 For Rust tests and local tooling, Nook has an in-memory mock passkey
 authenticator in `nook-auth2` behind the `mock-passkey` feature and normal unit
@@ -102,26 +113,31 @@ device-id verification live in `nook-auth2` and are unit-tested with the mock
 authenticator. `nook-wasm` should only adapt browser ceremonies and IndexedDB
 I/O around those core helpers.
 
-Passkey-backed Local Mode is deterministic: choosing the same discoverable Nook
-passkey returns the same `userHandle`, and evaluating the PRF with Nook's fixed
-domain-separated input returns the material needed to derive the same device
-identity. This lets a user clear Nook's IndexedDB metadata, choose the existing
-passkey again, and recover the same `device_id` without creating duplicate
-`nokey.sh / Nook device` passkeys. The persisted passkey record stores only
-prompting metadata (`credentialId`, `userHandle`, `prfInput`, `kdf`) and no
-encrypted age secret.
+Passkey-backed Local Mode is deterministic.
+Choosing the same discoverable Nook passkey returns the same `userHandle`.
+Evaluating the PRF with Nook's fixed domain-separated input returns the
+material needed to derive the same device identity.
+A user can clear Nook's IndexedDB metadata.
+They can choose the existing passkey again.
+They recover the same `device_id` without creating duplicate
+`nokey.sh / Nook device` passkeys.
+The persisted passkey record stores only prompting metadata
+(`credentialId`, `userHandle`, `prfInput`, `kdf`).
+It stores no encrypted age secret.
 
-Existing plaintext `device_identity_secret` records are migrated in place:
-WASM replaces them with deterministic passkey metadata or a PIN-wrapped record,
-then deletes the legacy plaintext. When WebAuthn PRF is unavailable, Nook offers
-a local PIN-derived wrapping mode instead of returning to plaintext storage. PIN
-mode uses a versioned `device_identity_wrapped` record with PBKDF2-SHA256
-parameters authenticated by AES-256-GCM metadata. It protects passive
-browser-storage copies from immediate plaintext key disclosure, but weak PINs
-have offline guessing risk if an attacker copies IndexedDB. Forgetting the PIN
-requires a destructive local identity reset; encrypted local vault blobs are
-preserved, but saved sync credentials are removed because they were sealed to
-the old identity.
+Existing plaintext `device_identity_secret` records are migrated in place.
+WASM replaces them with deterministic passkey metadata or a PIN-wrapped record.
+WASM then deletes the legacy plaintext.
+When WebAuthn PRF is unavailable, Nook offers a local PIN-derived wrapping mode.
+Nook does not return to plaintext storage.
+PIN mode uses a versioned `device_identity_wrapped` record.
+PBKDF2-SHA256 parameters are authenticated by AES-256-GCM metadata.
+PIN mode protects passive browser-storage copies from immediate plaintext key
+disclosure.
+Weak PINs have offline guessing risk if an attacker copies IndexedDB.
+Forgetting the PIN requires a destructive local identity reset.
+Encrypted local vault blobs are preserved.
+Saved sync credentials are removed because they were sealed to the old identity.
 
 ### 2.2 Browser and authenticator support (2026-07-03)
 
@@ -138,18 +154,22 @@ actual extension result as authoritative:
   user-agent allowlist.
 
 At registration Nook prefers `getClientExtensionResults().prf.enabled ===
-true`; at authorization it requires a 32-byte `prf.results.first` for PRF-backed
-records. A missing WebAuthn API/provider method or a completed ceremony without
-the required PRF result switches first-time setup to the PIN fallback and never
-falls back to plaintext. Ceremony exceptions remain explicit because names such
-as `NotSupportedError` and `NotAllowedError` cover ambiguous option,
-authenticator, cancellation, and timeout failures. Origin/configuration errors
-such as an invalid RP ID likewise remain explicit rather than silently
-weakening device protection.
-Returning browsers inspect the persisted
-`device_identity_wrapped` version to choose passkey or PIN authorization without
-user-agent guesses; browsers with no local passkey metadata can use the
-discoverable passkey chooser to rebuild the deterministic passkey record.
+true`.
+At authorization it requires a 32-byte `prf.results.first` for PRF-backed
+records.
+A missing WebAuthn API/provider method switches first-time setup to the PIN
+fallback.
+A completed ceremony without the required PRF result does the same.
+Nook never falls back to plaintext.
+Ceremony exceptions remain explicit.
+Names such as `NotSupportedError` and `NotAllowedError` cover ambiguous option,
+authenticator, cancellation, and timeout failures.
+Origin/configuration errors such as an invalid RP ID likewise remain explicit.
+Nook does not silently weaken device protection.
+Returning browsers inspect the persisted `device_identity_wrapped` version.
+They choose passkey or PIN authorization without user-agent guesses.
+Browsers with no local passkey metadata can use the discoverable passkey chooser.
+That chooser rebuilds the deterministic passkey record.
 
 References: [WebAuthn PRF specification](https://www.w3.org/TR/webauthn-3/#prf-extension),
 [Chromium intent to ship](https://groups.google.com/a/chromium.org/g/blink-dev/c/iTNOgLwD2bI),

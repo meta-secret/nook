@@ -14,10 +14,13 @@ through the same unlock/credential model without changing encrypted secret
 payloads. See [slip39-recovery.md](slip39-recovery.md) for the fixed 2-of-3
 device recovery design.
 
-Password entries are the foundation of the one-step QR enrolment flow: an
-enrolled device emits a QR containing `{auth_provider_creds, password}`; a new
-device scans, decrypts the vault, adds itself to the members roster, and is
-immediately a first-class member — no approval round-trip.
+Password entries are the foundation of the one-step QR enrolment flow.
+An enrolled device emits a QR containing `{auth_provider_creds, password}`.
+A new device scans the QR.
+It decrypts the vault.
+It adds itself to the members roster.
+It is immediately a first-class member.
+There is no approval round-trip.
 
 **Related:**
 [decentralized-auth.md](decentralized-auth.md) §2 (key hierarchy),
@@ -110,17 +113,20 @@ password_entries:
   vault keys.
 - Uses the **same `age` crate already in `nook-core`** —
   `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
-  decryption (see `nook-app/nook-core/src/vault_crypto.rs`). No new crypto
-  dependency, no separate scrypt crate, fully `wasm32-unknown-unknown`
-  compatible. The salt and work factor are embedded in the age header,
-  so the `kdf` / `work_factor` YAML hints are redundant — kept only for
-  tooling/visibility.
+  decryption (see `nook-app/nook-core/src/vault_crypto.rs`).
+  - No new crypto dependency.
+  - No separate scrypt crate.
+  - Fully `wasm32-unknown-unknown` compatible.
+  - The salt and work factor are embedded in the age header.
+  - The `kdf` / `work_factor` YAML hints are redundant — kept only for
+    tooling/visibility.
 - **Work factor differs from the existing per-record encryption.**
-  `VaultCrypto` uses `log_n = 15` because its passphrase is a 128-bit
-  random hex string (no brute-force surface). The password envelope's
-  passphrase is human-chosen, so it must use age's default ~1 s target
-  (`log_n ≈ 18`) via `Recipient::set_work_factor(18)` — _do not_ reuse
-  the `PROGRAMMATIC_SCRYPT_LOG_N` constant here.
+  - `VaultCrypto` uses `log_n = 15` because its passphrase is a 128-bit
+    random hex string (no brute-force surface).
+  - The password envelope's passphrase is human-chosen.
+  - It must use age's default ~1 s target (`log_n ≈ 18`) via
+    `Recipient::set_work_factor(18)`.
+  - _Do not_ reuse the `PROGRAMMATIC_SCRYPT_LOG_N` constant here.
 - Plaintext under the envelope is a compact JSON object — never the full
   vault, never any user secret values.
 
@@ -194,11 +200,15 @@ QR payload (JSON, then base64url, then a single-frame QR/link):
 }
 ```
 
-The payload carries provider credentials plus the selected backup password, not
-raw vault keys. A joining device saves provider credentials, calls
-`connectWithPassword(mode, creds, entry_id, password)`, unwraps the entry,
-generates its own device identity/signing key, writes its `auth:`/`members:`
-rows, imports/appends through the event log, and opens the vault.
+The payload carries provider credentials plus the selected backup password.
+It does not carry raw vault keys.
+A joining device saves provider credentials.
+It calls `connectWithPassword(mode, creds, entry_id, password)`.
+It unwraps the entry.
+It generates its own device identity/signing key.
+It writes its `auth:`/`members:` rows.
+It imports/appends through the event log.
+It opens the vault.
 
 No `joins:` row is created. No approval is needed. The new device is
 immediately a first-class member.
@@ -226,8 +236,8 @@ self-enrolment path as QR.
 
 | Threat                                                 | Mitigation                                                                                                                                                        |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| QR captured in transit (screen photo, MITM screenshot) | Rotate/remove the selected password entry; old codes stop unwrapping future epoch keys. Provider PAT scope is user-controlled and can be revoked at the provider. |
-| Weak password brute force on leaked vault data         | Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries and encourages generated passwords.                                    |
+| QR captured in transit (screen photo, MITM screenshot) | Rotate or remove the selected password entry. Old codes stop unwrapping future epoch keys. Provider PAT scope is user-controlled. The user can revoke it at the provider. |
+| Weak password brute force on leaked vault data         | Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries. UI encourages generated passwords.                                    |
 | Stolen vault file alone                                | `secrets:` ciphertext remains bound to `secrets_key`; password entries add a brute-force path gated by scrypt cost.                                               |
 | Compromise of one device                               | Device revocation and password removal are event-log security operations that rotate future epoch keys.                                                           |
 | Password reuse across services                         | UI warns and recommends generating a random password.                                                                                                             |

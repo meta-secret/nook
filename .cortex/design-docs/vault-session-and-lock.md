@@ -46,18 +46,33 @@ flowchart TB
 5. **Lock** does not delete vaults or providers — it drops vault keys, the
    current metadata page, any explicitly revealed records, and plaintext device
    identity from memory.
-6. **Settings → Delete local vault data** is the destructive browser reset. It
-   first locks other open Nook tabs, zeroizes their WASM sessions, clears their
-   tab-scoped storage, and waits for their storage work to drain. The reset
-   fails closed when safe cross-tab coordination is unavailable or a tab does
-   not acknowledge. It then zeroizes the active WASM session; independently clears every object store in
-   `nook_db`, `nook_auth`, `nook_file_sync`, and `nook_logs`; clears Web
-   Storage, Cache Storage, and accessible site cookies; and returns to the
-   landing page. Cleanup continues after individual store failures and reports
-   the aggregate error from a locked state. It never deletes remote sync
-   replicas, platform-authenticator passkeys, or the separately isolated
-   browser-extension origin. If the same `store_id` is later reopened, its
-   existing extension pairing is discovered again.
+6. **Settings → Delete local vault data** is the destructive browser reset. It:
+
+- first locks other open Nook tabs;
+- zeroizes their WASM sessions;
+- clears their tab-scoped storage; and
+- waits for their storage work to drain.
+
+The reset fails closed when safe cross-tab coordination is unavailable or a tab
+does not acknowledge. It then:
+
+- zeroizes the active WASM session;
+- independently clears every object store in `nook_db`, `nook_auth`,
+  `nook_file_sync`, and `nook_logs`;
+- clears Web Storage, Cache Storage, and accessible site cookies; and
+- returns to the landing page.
+
+Cleanup continues after individual store failures. It reports the aggregate error
+from a locked state.
+
+It never deletes:
+
+- remote sync replicas;
+- platform-authenticator passkeys; or
+- the separately isolated browser-extension origin.
+
+If the same `store_id` is later reopened, its existing extension pairing is
+discovered again.
 
 ---
 
@@ -128,22 +143,34 @@ passkey recovery action.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
 
 Existing-vault import must recover an authorized device identity before it
-attempts `connect`. The provider preflight may discover the remote `store_id`
-from signed encrypted events without decrypting the vault. Simple Vault uses
-that identifier to ask an already-paired extension for its memory-only identity;
-a locked extension owns and displays its unlock window. Only when no paired
-extension is available does the website present its own passkey/PIN device gate.
-Discovery is a bounded busy operation, and a missing `store_id` rejects an empty
-or incorrect provider before device authorization. The discovered identifier
-remains staged: it must not replace the active local vault until that exact
-provider vault connects successfully.
+attempts `connect`.
+
+The provider preflight may discover the remote `store_id` from signed encrypted
+events without decrypting the vault. Simple Vault uses that identifier to ask an
+already-paired extension for its memory-only identity. A locked extension owns
+and displays its unlock window.
+
+Only when no paired extension is available does the website present its own
+passkey/PIN device gate.
+
+Discovery is a bounded busy operation. A missing `store_id` rejects an empty or
+incorrect provider before device authorization.
+
+The discovered identifier remains staged. It must not replace the active local
+vault until that exact provider vault connects successfully.
+
 The same preflight projects only safe recovery metadata from signed events:
-active device labels/IDs (matching the `device …` suffix written into Nook
-passkey display names), backup-password labels, and whether Sentinel quorum is
-required. Device authorization may reload sealed provider state, so the exact
-staged provider credentials or local-folder handle must remain in memory and
-the successful ceremony must resume that staged import without asking the user
-to choose the provider again.
+
+- active device labels/IDs (matching the `device …` suffix written into Nook
+  passkey display names);
+- backup-password labels; and
+- whether Sentinel quorum is required.
+
+Device authorization may reload sealed provider state. The exact staged provider
+credentials or local-folder handle must remain in memory. The successful
+ceremony must resume that staged import without asking the user to choose the
+provider again.
+
 The flow must never call provider connect first and surface the internal
 `authorization_required` error to the user.
 
@@ -158,19 +185,26 @@ Lock is the safe “step away from this browser” action — analogous to loggi
 
 The browser extension has a separate, revocable device identity. After its
 passkey or PIN authorization, an offscreen extension document keeps that
-identity in WASM memory for a fixed 15-minute session so reopening the toolbar
-popup does not repeat the ceremony. It never persists the decrypted identity,
-PIN, or passkey PRF output to `chrome.storage`; expiry or browser shutdown
-zeroizes the manager and requires authorization again.
+identity in WASM memory for a fixed 15-minute session. Reopening the toolbar
+popup does not repeat the ceremony.
+
+It never persists the decrypted identity, PIN, or passkey PRF output to
+`chrome.storage`. Expiry or browser shutdown zeroizes the manager and requires
+authorization again.
 
 Simple Vault silently checks a paired extension every three seconds while both
 the site and extension identity are locked. Automatic discovery must never open
-an authentication surface. When the user explicitly chooses **Unlock**, a
-paired locked extension opens its own authorization window; the website waits
-for the extension's memory-only identity handoff and must not fall through to a
-second website passkey ceremony. Site-to-extension requests have a bounded
-five-second response deadline so a suspended or broken runtime cannot leave the
-website unlock action pending forever.
+an authentication surface.
+
+When the user explicitly chooses **Unlock**:
+
+- a paired locked extension opens its own authorization window;
+- the website waits for the extension's memory-only identity handoff; and
+- the website must not fall through to a second website passkey ceremony.
+
+Site-to-extension requests have a bounded five-second response deadline. A
+suspended or broken runtime cannot leave the website unlock action pending
+forever.
 
 ---
 
@@ -217,20 +251,28 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 
 ## 6. Security notes
 
-- Lock must clear WASM session state — never rely on hiding UI alone.
+- Lock must clear WASM session state. Never rely on hiding UI alone.
 - The unlocked WASM session retains encrypted record payloads, not a plaintext
-  `Database`. Local `secret_search_v2:{store_id}:{bucket}` records store
-  independently encrypted list/search fields (site, username/account, titles,
-  issuer, expiry, masked card/file metadata, and ids/types). Plaintext catalog
-  rows exist only in unlocked WASM memory. The catalog never contains
-  passwords, API keys, note bodies, seeds, full card numbers, OTP seeds,
-  passkey private keys, backup codes, or file contents. Existing vaults build it
-  once; later reconciliation decrypts only new, changed, or invalid rows and
-  re-encrypts only affected ID-derived buckets. Search scans authenticated
-  pre-normalized catalog text and does not decrypt vault records. Reveal and
-  secret copy decrypt exactly one full record;
-  hide, action completion, page/search replacement, and lock free it.
-- The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey or PIN authorization again depending on the stored wrapper.
-- Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
-- Vault authentication/authorization belongs to `nook-auth2`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.
-- Sentinel provider access never replaces participant quorum. Possessing a remote replica without `T` valid participant contributions must not produce an unlocked session.
+  `Database`.
+- Local `secret_search_v2:{store_id}:{bucket}` records store independently
+  encrypted list/search fields. These include site, username/account, titles,
+  issuer, expiry, masked card/file metadata, and ids/types.
+- Plaintext catalog rows exist only in unlocked WASM memory.
+- The catalog never contains passwords, API keys, note bodies, seeds, full card
+  numbers, OTP seeds, passkey private keys, backup codes, or file contents.
+- Existing vaults build the catalog once. Later reconciliation decrypts only new,
+  changed, or invalid rows and re-encrypts only affected ID-derived buckets.
+- Search scans authenticated pre-normalized catalog text. It does not decrypt vault
+  records.
+- Reveal and secret copy decrypt exactly one full record. Hide, action
+  completion, page/search replacement, and lock free it.
+- The wrapped device key and encrypted blobs remain after lock. The plaintext
+  device identity is zeroized and requires passkey or PIN authorization again
+  depending on the stored wrapper.
+- Sync provider tokens in `nook_auth` remain after lock. They are storage
+  credentials, not vault keys.
+- Vault authentication/authorization belongs to `nook-auth2`. Sync provider
+  replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.
+- Sentinel provider access never replaces participant quorum. Possessing a remote
+  replica without `T` valid participant contributions must not produce an
+  unlocked session.

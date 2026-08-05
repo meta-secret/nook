@@ -16,7 +16,7 @@ free-form task diary.
 4. Create `stats/ai-agent/<pr-number>.yaml` for
    [`meta-secret/nook-workbench`](https://github.com/meta-secret/nook-workbench)
    from current Nook `main` after the implementation PR is merged. Include the
-   repository test inventory for that merged head. Do this immediately; do not
+   repository test inventory for that merged head. Do this immediately. Do not
    wait for the post-merge Main workflow or deployment.
 5. Compare the completed record with the one or two most recent comparable
    non-stats PR records. Record the comparison and a waste assessment in the
@@ -28,8 +28,8 @@ free-form task diary.
    normal build-performance PR and own it through validation and squash merge.
    Never mix build or workflow changes into the statistics commit.
 
-Workbench statistics commits do not run Nook product workflows or produce
-another Nook statistics record.
+Workbench statistics commits do not run Nook product workflows. They do not
+produce another Nook statistics record.
 
 ## What to measure
 
@@ -282,23 +282,27 @@ Treat a metric as a performance regression when it is both:
 - at least 60 seconds slower in absolute time.
 
 The threshold is a triage floor, not permission to ignore obvious waste below
-it. The assessment must also inspect:
+it.
+
+The assessment must also inspect:
 
 - repeated full suites where a focused test would have isolated the failure;
 - local and remote final checks run serially rather than in parallel;
 - reruns made without a code/configuration change or a documented flaky failure;
 - avoidable merge attempts before readiness or base freshness;
 - cache misses, duplicated builds, repeated dependency setup, and slow steps
-  that dominate otherwise comparable runs.
+  that dominate otherwise comparable runs; and
 - unexpected `direct_compile` use in a trusted workflow that should have the
   persistent cache credentials, while recognizing that untrusted pull-request
   jobs must not receive those secrets.
 
 If a regression or waste is actionable, `waste_assessment.required_actions`
-must name the concrete build/workflow change and the agent must open a separate
-normal PR that implements, validates, and lands it. An unavoidable scope
-increase or external outage may be marked non-actionable only with specific
-evidence in `findings`; do not use a vague “this PR was larger” rationale.
+must name the concrete build/workflow change. The agent must open a separate
+normal PR that implements, validates, and lands it.
+
+An unavoidable scope increase or external outage may be marked non-actionable
+only with specific evidence in `findings`. Do not use a vague “this PR was
+larger” rationale.
 
 ## Workbench publication contract
 

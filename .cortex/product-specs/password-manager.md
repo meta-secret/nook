@@ -40,12 +40,24 @@ keys.
 ```
 
 ### A. Login & Storage Provider Flow
-1. **Device protection gate:** Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable. A backup password may instead unwrap a local vault directly; that path does not load the protected device identity or its sealed provider credentials.
+1. **Device protection gate:**
+   - Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
+   - A backup password may instead unwrap a local vault directly.
+   - That path does not load the protected device identity or its sealed provider credentials.
 2. **Login gate (vault locked):** If no saved providers exist, the user sees a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 3. **First-time setup:** User picks a storage provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful connect, the provider (including a device-sealed GitHub PAT) is saved to IndexedDB (`nook_auth`). The vault is created with **device keys** as the default unlock method.
-4. **Return visits:** The login gate shows device keys (default) and any labelled backup passwords. Device-key unlock starts passkey authorization directly when a wrapped passkey identity is present; PIN input, passkey recovery, and failed/cancelled attempts use the device-protection gate. Backup-password unlock opens the local vault directly. After device authorization, the vault may auto-unlock when device keys work. See [auth-providers.md](../design-docs/auth-providers.md) §3.
+4. **Return visits:** The login gate shows device keys (default) and any labelled backup passwords.
+   - Device-key unlock starts passkey authorization directly when a wrapped passkey identity is present.
+   - PIN input, passkey recovery, and failed/cancelled attempts use the device-protection gate.
+   - Backup-password unlock opens the local vault directly.
+   - After device authorization, the vault may auto-unlock when device keys work.
+   - See [auth-providers.md](../design-docs/auth-providers.md) §3.
 5. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
-6. **Encryption keys (auto-managed):** Before first connect, the user creates passkey-PRF protection or, when PRF is unavailable, a local PIN wrapper. Rust/WASM derives the AES key and stores the device private key as `device_identity_wrapped`. On connect, vault keys are generated and written to the vault file. GitHub only stores the encrypted vault file.
+6. **Encryption keys (auto-managed):**
+   - Before first connect, the user creates passkey-PRF protection or, when PRF is unavailable, a local PIN wrapper.
+   - Rust/WASM derives the AES key and stores the device private key as `device_identity_wrapped`.
+   - On connect, vault keys are generated and written to the vault file.
+   - GitHub only stores the encrypted vault file.
 7. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.
 8. **Future:** Sync providers replicate one local vault with version-based reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 
@@ -67,24 +79,90 @@ keys.
      opens guidance, never a credential-entry form. Existing passkeys appear as
      read-only RP/account metadata and can be deleted, but never revealed,
      copied, or edited as raw key material.
-6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
+6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI.
+
+To fix a mistake or update content, the user **adds a new item and deletes the old one**.
+
+A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db`. Storage must never hold duplicates if the second step fails mid-flight.
 7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
 8. **Importing from password managers:**
    - The user selects a plaintext Bitwarden JSON export in the browser.
-   - Rust parses the export and maps Bitwarden login items to Nook logins, Bitwarden secure-note items to Nook secure notes, and Bitwarden card items to Nook credit cards. Identities, SSH keys, and other unsupported types are counted and skipped.
-   - The user can select an unencrypted LastPass generic CSV export. Rust validates the canonical CSV columns, maps normal rows to Nook logins, maps `http://sn` rows to Nook secure notes, and preserves grouping, favorite, and optional TOTP metadata in encrypted notes.
-   - The user can select an unencrypted KeePassXC CSV export. Rust requires the canonical `Group`, `Title`, `Username`, `Password`, `URL`, and `Notes` columns, maps credential rows to Nook logins, maps note-only rows to Nook secure notes, preserves group and title metadata in encrypted notes, converts valid `otpauth://` TOTP values into authenticator items, and keeps other TOTP settings strings in notes. Native `.kdbx` databases and attachments are out of scope.
-   - The user can alternatively select an unencrypted 1Password 1PUX archive. Rust validates the bounded ZIP archive and format metadata, reads `export.data` in memory without extracting attachments, maps Login and Password items to Nook logins, Secure Note items to Nook secure notes, and Credit Card items to Nook credit cards. Attachments, passkeys, identities, SSH keys, and other unsupported categories are skipped.
-   - The user can alternatively select an unencrypted Apple Passwords CSV export or a Safari browsing-data ZIP that contains a passwords CSV. Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns, maps each row to a Nook login, preserves `Notes` and title metadata, and converts valid `OTPAuth` values into standalone authenticator items. Safari ZIP entry names may be localized; Nook prefers `Passwords.csv` and otherwise accepts any CSV whose headers match Apple's schema. Passkeys, Wi-Fi passwords, Sign in with Apple accounts, bookmarks, history, extensions, and Safari payment-card JSON are not imported.
-   - The user can scan Google Authenticator account-export QR codes with the camera or select QR-code images. Rust decodes the `otpauth-migration://` protobuf payloads in memory, requires every part of a multi-code batch before committing, converts supported TOTP accounts into standalone authenticator items, and counts unsupported HOTP or algorithm variants as skipped.
-   - The user can alternatively select an unencrypted Chrome-family password CSV export. Rust requires the portable `url`, `username`, and `password` columns, accepts optional `name`/`title` and `note`/`notes` metadata, and maps each non-empty row to a Nook login. Header order, case, BOMs, spaces, underscores, and hyphens are normalized so Chrome, Chromium, Brave, and Edge exports share one import path. Browser passkeys and non-password autofill data are not included.
-   - The user can select an unencrypted Dashlane CSV or CSV ZIP export. Rust accepts a single credentials, secure-notes, or payments CSV, or a ZIP that contains those category files. Credential rows map to Nook logins, valid `otpSecret`/`otpUrl` values become standalone authenticator items, secure-note rows map to secure notes, and `credit_card` payment rows map to credit cards. Alternate usernames and categories are preserved under a Dashlane notes section. IDs, personal information, Wi-Fi, bank accounts, passkeys, attachments, encrypted DASH archives, and Credential Exchange transfers are not imported.
-   - The user can select an unencrypted Proton Pass ZIP export or a decrypted `data.json`. Rust validates the bounded archive, reads `Proton Pass/data.json` in memory, maps login, note, and credit-card items, and preserves supported vault, state, pin, TOTP, alternate URL/email, and custom-field metadata in encrypted item notes. Encrypted PGP exports require prior decryption; identities, aliases, passkeys, attachments, and other unsupported types are skipped.
-   - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`: an item-identity tag that excludes the password and provider metadata, plus a secret-version tag that includes the password or other secret value and is bound to that identity.
-   - When both tags match, Nook enriches the existing item with missing notes and provider fields instead of creating a duplicate. When only identity matches, the differing password/secret version is imported as another item rather than silently overwriting either value.
-   - The event log requires both non-empty opaque tags beside every secret ciphertext, which reveals equality only inside that vault and avoids repeatedly decrypting unrelated records. Records with an older fingerprint scheme are decrypted and backfilled once; key-epoch rotation recomputes every tag with the new key.
-   - WASM encrypts every accepted item and appends the import, enrichment, and fingerprint-backfill operations in one signed event. The plaintext export is never persisted or logged by Nook.
+   - Rust parses the export and maps:
+     - Bitwarden login items → Nook logins
+     - Bitwarden secure-note items → Nook secure notes
+     - Bitwarden card items → Nook credit cards
+   - Identities, SSH keys, and other unsupported types are counted and skipped.
+   - The user can select an unencrypted LastPass generic CSV export.
+   - Rust validates the canonical CSV columns.
+   - Rust maps normal rows to Nook logins.
+   - Rust maps `http://sn` rows to Nook secure notes.
+   - Rust preserves grouping, favorite, and optional TOTP metadata in encrypted notes.
+   - The user can select an unencrypted KeePassXC CSV export.
+   - Rust requires the canonical `Group`, `Title`, `Username`, `Password`, `URL`, and `Notes` columns.
+   - Rust maps credential rows to Nook logins.
+   - Rust maps note-only rows to Nook secure notes.
+   - Rust preserves group and title metadata in encrypted notes.
+   - Rust converts valid `otpauth://` TOTP values into authenticator items.
+   - Rust keeps other TOTP settings strings in notes.
+   - Native `.kdbx` databases and attachments are out of scope.
+   - The user can alternatively select an unencrypted 1Password 1PUX archive.
+   - Rust validates the bounded ZIP archive and format metadata.
+   - Rust reads `export.data` in memory without extracting attachments.
+   - Rust maps Login and Password items to Nook logins.
+   - Rust maps Secure Note items to Nook secure notes.
+   - Rust maps Credit Card items to Nook credit cards.
+   - Attachments, passkeys, identities, SSH keys, and other unsupported categories are skipped.
+   - The user can alternatively select an unencrypted Apple Passwords CSV export or a Safari browsing-data ZIP that contains a passwords CSV.
+   - Rust validates the canonical `Title`, `URL`, `Username`, and `Password` columns.
+   - Rust maps each row to a Nook login.
+   - Rust preserves `Notes` and title metadata.
+   - Rust converts valid `OTPAuth` values into standalone authenticator items.
+   - Safari ZIP entry names may be localized.
+   - Nook prefers `Passwords.csv`.
+   - Nook otherwise accepts any CSV whose headers match Apple's schema.
+   - Passkeys, Wi-Fi passwords, Sign in with Apple accounts, bookmarks, history, extensions, and Safari payment-card JSON are not imported.
+   - The user can scan Google Authenticator account-export QR codes with the camera or select QR-code images.
+   - Rust decodes the `otpauth-migration://` protobuf payloads in memory.
+   - Rust requires every part of a multi-code batch before committing.
+   - Rust converts supported TOTP accounts into standalone authenticator items.
+   - Rust counts unsupported HOTP or algorithm variants as skipped.
+   - The user can alternatively select an unencrypted Chrome-family password CSV export.
+   - Rust requires the portable `url`, `username`, and `password` columns.
+   - Rust accepts optional `name`/`title` and `note`/`notes` metadata.
+   - Rust maps each non-empty row to a Nook login.
+   - Header order, case, BOMs, spaces, underscores, and hyphens are normalized.
+   - Chrome, Chromium, Brave, and Edge exports share one import path.
+   - Browser passkeys and non-password autofill data are not included.
+   - The user can select an unencrypted Dashlane CSV or CSV ZIP export.
+   - Rust accepts a single credentials, secure-notes, or payments CSV.
+   - Rust also accepts a ZIP that contains those category files.
+   - Credential rows map to Nook logins.
+   - Valid `otpSecret`/`otpUrl` values become standalone authenticator items.
+   - Secure-note rows map to secure notes.
+   - `credit_card` payment rows map to credit cards.
+   - Alternate usernames and categories are preserved under a Dashlane notes section.
+   - IDs, personal information, Wi-Fi, bank accounts, passkeys, attachments, encrypted DASH archives, and Credential Exchange transfers are not imported.
+   - The user can select an unencrypted Proton Pass ZIP export or a decrypted `data.json`.
+   - Rust validates the bounded archive.
+   - Rust reads `Proton Pass/data.json` in memory.
+   - Rust maps login, note, and credit-card items.
+   - Rust preserves supported vault, state, pin, TOTP, alternate URL/email, and custom-field metadata in encrypted item notes.
+   - Encrypted PGP exports require prior decryption.
+   - Identities, aliases, passkeys, attachments, and other unsupported types are skipped.
+   - Provider-neutral reconciliation is computed in Rust with two HMAC-SHA-256 tags keyed by the active vault `secrets_key`:
+     - an item-identity tag that excludes the password and provider metadata
+     - a secret-version tag that includes the password or other secret value and is bound to that identity
+   - When both tags match, Nook enriches the existing item with missing notes and provider fields instead of creating a duplicate.
+   - When only identity matches, the differing password/secret version is imported as another item.
+   - Nook does not silently overwrite either value.
+   - The event log requires both non-empty opaque tags beside every secret ciphertext.
+   - Tags reveal equality only inside that vault.
+   - Tags avoid repeatedly decrypting unrelated records.
+   - Records with an older fingerprint scheme are decrypted and backfilled once.
+   - Key-epoch rotation recomputes every tag with the new key.
+   - WASM encrypts every accepted item and appends the import, enrichment, and fingerprint-backfill operations in one signed event.
+   - The plaintext export is never persisted or logged by Nook.
 9. **Authenticator items:**
    - Users can store Google Authenticator-compatible TOTP secrets as standalone
      secure items with a service, optional account label, and setup key or

@@ -104,7 +104,13 @@ This document defines the strict development standards, architectural boundaries
 
 ### Unit tests carry ~99% of functional coverage
 
-**E2e tests are smoke tests, not a substitute for domain coverage.** Playwright flows exercise a thin slice of user paths (happy paths, a few conflict screens). They do **not** prove correctness of event sourcing, causal DAG merge, projection replay, epoch rotation, crypto, or multi-device sync.
+**E2e tests are smoke tests, not a substitute for domain coverage.**
+
+Playwright flows exercise a thin slice of user paths.
+
+They cover happy paths and a few conflict screens.
+
+They do **not** prove correctness of event sourcing, causal DAG merge, projection replay, epoch rotation, crypto, or multi-device sync.
 
 | Layer                         | Target                                                                            | Where                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -116,22 +122,22 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 ### Every bug fix requires a regression test
 
-Finding a root cause is not completion. Every AI-authored bug fix must add
-behavior-focused regression coverage that would fail on the broken behavior and
-pass with the fix:
+Finding a root cause is not completion.
+
+Every AI-authored bug fix must add behavior-focused regression coverage.
+
+That coverage must fail on the broken behavior and pass with the fix:
 
 - **`nook-app-common` / `nook-core` / `nook-auth2` / `nook-replication` / `nook-event-log`:** add one or more Rust unit, property, or
   integration tests at the owning domain boundary.
-- **Typed Rust/WASM boundary:** when the failure is reproducible without a
-  browser, add the narrow Rust/WASM test first. This supplements the owning
-  domain tests and does not replace browser coverage for a user-visible bug.
-- **Website or web extension:** add a Playwright e2e test that reproduces the
-  exact user sequence and asserts the previously missed failure. Component,
-  Vitest, or WASM coverage alone is insufficient because the existing e2e suite
-  already missed the integration bug.
-- **Cross-layer bugs:** cover each owning layer when practical: narrow
-  Rust/WASM tests for policy or boundary behavior, plus Playwright for the
-  visible website/extension regression.
+- **Typed Rust/WASM boundary:** When the failure is reproducible without a browser, add the narrow Rust/WASM test first.
+- This supplements the owning domain tests.
+- It does not replace browser coverage for a user-visible bug.
+- **Website or web extension:** Add a Playwright e2e test that reproduces the exact user sequence and asserts the previously missed failure.
+- Component, Vitest, or WASM coverage alone is insufficient because the existing e2e suite already missed the integration bug.
+- **Cross-layer bugs:** Cover each owning layer when practical.
+- Add narrow Rust/WASM tests for policy or boundary behavior.
+- Add Playwright for the visible website/extension regression.
 
 If faithful automated reproduction is technically impossible, document the
 specific constraint in the PR and add the closest deterministic lower-layer
@@ -144,12 +150,16 @@ The portable Rust crates (`nook-app-common`, `nook-core`, `nook-auth2`,
 are measured together with **`cargo llvm-cov nextest`** and checked against a
 committed **90%** line floor:
 
-| Artifact                        | Purpose                                                                                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-app/nook-core/coverage-floor.json` | Minimum combined **line** coverage % for the portable Rust crates (currently **90**)                                                    |
-| `task rust:coverage:check`      | CI gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check` / `task ci:pr` / PR CI) |
-| `task rust:coverage`            | Report only (no threshold check)                                                                                                      |
-| `task rust:coverage:update`     | Optional — rewrite floor file to measured % (user approval only)                                                                      |
+| Artifact | Purpose |
+| --- | --- |
+| `nook-app/nook-core/coverage-floor.json` | Minimum combined line coverage % (currently **90**) |
+| `task rust:coverage:check` | CI gate — compares measured vs floor |
+| `task rust:coverage` | Report only (no threshold check) |
+| `task rust:coverage:update` | Optional — rewrite floor file (user approval only) |
+
+`task rust:coverage:check` runs warmed `cargo llvm-cov nextest` in-image.
+
+It is part of `task check`, `task ci:pr`, and PR CI.
 
 **Agent rules:**
 
@@ -165,16 +175,25 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   on the owning boundary (`task rust:test`). Prefer colocated module unit tests
   for pure mechanics; use `tests/event_log_workflow.rs` and siblings for
   multi-device/provider scenarios.
-- **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
-- **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs. A bare `String` does not carry meaning; the compiler cannot catch swapped arguments. Use serde-transparent wrappers so wire JSON stays unchanged. Version fields (`VaultEventSchemaVersion`, …) must be newtypes — the app keeps multiple schema versions and each struct must declare which version it speaks. Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md). WASM getters may still return `String`; parse before calling core. No type-state for its own sake.
+- **Complex sync cases:** Event-sourcing merge uses a causal DAG, not scalar vector clocks.
+- Dedicated Rust tests are required for concurrent append, out-of-order delivery, join heads, and replacement/security conflicts.
+- See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
+- **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs.
+- A bare `String` does not carry meaning.
+- The compiler cannot catch swapped arguments.
+- Use serde-transparent wrappers so wire JSON stays unchanged.
+- Version fields (`VaultEventSchemaVersion`, …) must be newtypes.
+- The app keeps multiple schema versions and each struct must declare which version it speaks.
+- Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md).
+- WASM getters may still return `String`; parse before calling core.
+- No type-state for its own sake.
 - **UI / integration:** Playwright e2e in `nook-app/nook-web/nook-web-app/e2e/` — `task web:test:e2e` on main CI and explicitly for PR validation (no PAT); credentialed live sync via the manual `e2e-pr.yml` workflow or `task web:test:e2e:sync-live`. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
-- **Debugging / troubleshooting / CI verification — always check app logs:** After
-  test output and static analysis, persisted application logs are the **most
-  important** remaining signal. When a Playwright spec fails, CI goes red, or a web
-  flow misbehaves, agents **must** consult app logs before changing code:
-  Playwright attachment `nook-app-logs.json` (attached to every e2e result),
-  `fetchAppLogs(page)` (`/app-logs`), or `dumpNookLogs(page)`. Human UI: `/logs`. See
-  [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
+- **Debugging / troubleshooting / CI verification — always check app logs:**
+  - After test output and static analysis, persisted application logs are the **most important** remaining signal.
+  - When a Playwright spec fails, CI goes red, or a web flow misbehaves, agents **must** consult app logs before changing code.
+  - Sources: Playwright attachment `nook-app-logs.json` (attached to every e2e result), `fetchAppLogs(page)` (`/app-logs`), or `dumpNookLogs(page)`.
+  - Human UI: `/logs`.
+  - See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 - **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
 
 ---
@@ -187,39 +206,44 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Do not use semver ranges (`^`, `~`, `>=`, `*`) in dependencies.
 - **Bun for Node/JS Tooling:**
   - Svelte project dependencies must be managed using Bun.
-  - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
+  - Do not commit `package-lock.json` or `yarn.lock`.
+  - Commit `bun.lock` (with `package.json`) for reproducible Docker web installs.
+  - Pin linux/amd64 native optional deps:
+    `@rolldown/binding-linux-x64-gnu`,
+    `@tailwindcss/oxide-linux-x64-gnu`,
+    `lightningcss-linux-x64-gnu`.
+  - Regenerate those pins via `docker run --platform linux/amd64 ... bun install`
+    after web dependency changes.
 - **Harness Verification:**
-  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. PR CI and local optional mirrors use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
-  - Infrastructure automation must be defined in the `infra/Taskfile.yml`
-    composition root or one of its flattened, domain-owned
-    `infra/tasks/*.yml` Taskfiles. Every domain file must be reachable from the
-    composition root; do not add orphan Taskfiles or standalone shell scripts
-    anywhere under `infra/`. Repository preflight enforces this boundary.
-  - Before every push, agents and developers must run **`task format`
-    unconditionally**. It formats Rust and JS/TS/Svelte inside sealed Docker
-    images **and applies the diff to the host working tree**. Sealed-only
-    commands such as `task extension:format` do not write the host and must not
-    be the sole format step. **`task format` is the only required local product
-    action.** Product gates (format check, Clippy, vitest, svelte-check, web
-    lint including Knip unused and jscpd clone detection, web build, coverage,
-    e2e) run on **GitHub Actions**. See
-    [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) and
-    [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
-  - **Fix findings, do not silence them:** If Knip, jscpd, or any other check in
-    CI / `task check` fails, agents must fix the underlying code in the same
-    task. Raising thresholds, ignoring authored product sources, or shipping
-    with a red gate is forbidden unless the task explicitly maintains the gate.
-    See [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
+  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets.
+  - PR CI and local optional mirrors use dev/no-opt WASM mode.
+  - Main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
+  - Infrastructure automation must be defined in the `infra/Taskfile.yml` composition root or one of its flattened, domain-owned `infra/tasks/*.yml` Taskfiles.
+  - Every domain file must be reachable from the composition root.
+  - Do not add orphan Taskfiles or standalone shell scripts anywhere under `infra/`.
+  - Repository preflight enforces this boundary.
+  - Before every push, agents and developers must run **`task format` unconditionally**.
+  - It formats Rust and JS/TS/Svelte inside sealed Docker images **and applies the diff to the host working tree**.
+  - Sealed-only commands such as `task extension:format` do not write the host.
+  - They must not be the sole format step.
+  - **`task format` is the only required local product action.**
+  - Product gates run on **GitHub Actions**.
+  - Gates include format check, Clippy, vitest, svelte-check, web lint (Knip unused and jscpd clone detection), web build, coverage, and e2e.
+  - See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) and [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md).
+  - **Fix findings, do not silence them:** If Knip, jscpd, or any other check in CI / `task check` fails, agents must fix the underlying code in the same task.
+  - Raising thresholds, ignoring authored product sources, or shipping with a red gate is forbidden unless the task explicitly maintains the gate.
+  - See [workflows/quality.md § Fix check findings](workflows/quality.md#fix-check-findings--not-silence-them).
 
 ### Dockerfile cache mounts — never use them
 
 > ## ⛔ STRICTLY PROHIBITED: `RUN --mount=type=cache`
 >
 > **Never add a Dockerfile `RUN --mount=type=cache` directive anywhere in this repository.**
-> Cache mounts introduce hidden BuildKit-daemon state, can serialize concurrent
-> builds, and have caused immediate severe performance regressions on the shared
-> runner. Install dependencies directly in ordinary Dockerfile `RUN` layers and
-> let the immutable Docker layer plus the pinned lockfile be the cache boundary.
+> Cache mounts introduce hidden BuildKit-daemon state.
+> They can serialize concurrent builds.
+> They have caused immediate severe performance regressions on the shared runner.
+> Install dependencies directly in ordinary Dockerfile `RUN` layers.
+> Let the immutable Docker layer plus the pinned lockfile be the cache boundary.
 >
 > This prohibition applies regardless of `sharing=shared`, `sharing=private`, or
 > `sharing=locked`, and regardless of the comma-separated mount-option order.
@@ -271,22 +295,30 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 > ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
 >
-> Once a change or experiment is coherent enough to check, the mandatory
-> sequence is **`task format` → commit → push → allowlisted
-> `task remote TASK_NAME=<name>` as useful**. Heavy builds/tests do not run on
-> the agent machine. Ordinary pushes deliberately do not start the complete PR
-> workflow.
+> Once a change or experiment is coherent enough to check, the mandatory sequence is:
 >
-> At the final validation boundary, run `task pr:validate PR=<number>` (or add
-> `FULL_E2E=1` for a Main-fix PR), then monitor the repository-owned exact-head
-> checks. A later push invalidates prior results and requires another explicit
-> validation. After any red remote run, fix, `task format`, commit, push, and
-> dispatch the useful focused or complete remote validation again. See
-> [workflows/remote-execution.md](workflows/remote-execution.md).
+> 1. **`task format`**
+> 2. **commit**
+> 3. **push**
+> 4. **allowlisted `task remote TASK_NAME=<name>` as useful**
+>
+> Heavy builds/tests do not run on the agent machine.
+> Ordinary pushes deliberately do not start the complete PR workflow.
+>
+> At the final validation boundary, run `task pr:validate PR=<number>` (or add `FULL_E2E=1` for a Main-fix PR).
+> Then monitor the repository-owned exact-head checks.
+> A later push invalidates prior results and requires another explicit validation.
+> After any red remote run: fix, `task format`, commit, push, and dispatch the useful focused or complete remote validation again.
+> See [workflows/remote-execution.md](workflows/remote-execution.md).
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks while iterating, explicitly trigger complete PR validation when ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically. Do not stop at a ready-PR handoff or ask for separate merge permission. Do not run heavy product checks locally.
-- **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery. Do not wait for or monitor the post-merge Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure. Main remains an independently observable repository signal, not a task completion gate.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task.
+- Steps: fetch, branch from `origin/main`, implement, **always `task format`**, commit and push/open/update the PR, use focused hosted tasks while iterating, explicitly trigger complete PR validation when ready, fix failures, address comments and conflicts, require `task pr:ready`, and squash-merge automatically.
+- Do not stop at a ready-PR handoff or ask for separate merge permission.
+- Do not run heavy product checks locally.
+- **Finish at implementation PR merge.** A successful squash merge completes normal implementation delivery.
+- Do not wait for or monitor the post-merge Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure.
+- Main remains an independently observable repository signal, not a task completion gate.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open and land a pull request.** After pushing a branch, create a PR with a summary and test plan, own it through validation and conflict/comment resolution, then squash-merge it after the readiness audit succeeds. Never push directly to `main`.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:

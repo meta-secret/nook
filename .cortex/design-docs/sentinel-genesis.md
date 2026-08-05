@@ -88,32 +88,38 @@ or vault key to another device.
 5. Repeat until all configured `N` participant public keys are present,
    including Device A's own public keys.
 
-The Card Stack presents this dependency explicitly: Device A creates its local
-keys, defines the `T`-of-`N` share policy, and only then opens the device roster.
-The roster includes Device A and accepts exactly the remaining `N - 1`
-session-bound invitation responses; it must not infer `N` from however many
+The Card Stack presents this dependency explicitly:
+
+- Device A creates its local keys.
+- Device A defines the `T`-of-`N` share policy.
+- Device A only then opens the device roster.
+
+The roster includes Device A. It accepts exactly the remaining `N - 1`
+session-bound invitation responses. It must not infer `N` from however many
 devices the user happened to add.
 
 The Card Stack also keeps a stable interaction boundary between its two
-columns. The left column owns every setup and management action: creating local
-keys, naming the draft, choosing `T` and `N`, importing participant responses,
-finalizing genesis, and continuing to Sentinel unlock. The right column is
-read-only ceremony context: it accumulates the chosen vault name, policy, and
-roster count, then presents invitation and encrypted-share delivery QR data.
-Copying displayed ceremony data is allowed on the right; configuration controls
+columns:
+
+| Column | Role |
+| --- | --- |
+| Left | Every setup and management action: creating local keys, naming the draft, choosing `T` and `N`, importing participant responses, finalizing genesis, and continuing to Sentinel unlock |
+| Right | Read-only ceremony context: chosen vault name, policy, roster count, invitation QR data, and encrypted-share delivery QR data |
+
+Copying displayed ceremony data is allowed on the right. Configuration controls
 are not.
 
 Within the left column, configuration is progressive and compact. Device-key
 creation, vault naming, threshold selection, and participant collection are
 separate steps rather than one expanding form. Each step uses the same concise
-card language as the local-device row, while the wider right column preserves
-space for accumulated context and QR payloads.
+card language as the local-device row. The wider right column preserves space
+for accumulated context and QR payloads.
 
 The pending roster is pre-genesis ceremony state. It is not a vault member
-roster, has no `store_id`, creates no vault event, and cannot be opened as a
-vault. The Rust session contains public ceremony data only. Verified participant
-responses remain session state and are never interpreted as persisted vault
-membership before finalization.
+roster. It has no `store_id`. It creates no vault event. It cannot be opened as
+a vault. The Rust session contains public ceremony data only. Verified
+participant responses remain session state. They are never interpreted as
+persisted vault membership before finalization.
 
 ### Atomic key generation
 
@@ -181,19 +187,40 @@ device authorization
   -> create unlocked vault session
 ```
 
-The implemented unlock exchange is also typed and session-bound. The requester
-creates a signed request containing its ephemeral session, store, Sentinel policy,
-device encryption key, and signing key. A participant authorizes its protected
-device identity, opens only its local encrypted SLIP-0039 share inside Rust,
-encrypts an opaque contribution to the requester, and signs the response.
-Responses are rejected for the wrong session, store, policy, requester,
-participant, or share index and for duplicate participants/indexes. Only after
-`T` valid responses does Rust decrypt the transient contributions, reconstruct
-the root, derive the two vault keys, and return an unlocked session result.
+The implemented unlock exchange is also typed and session-bound.
 
-SLIP-0039 mnemonic text never crosses the Rust/WASM boundary, is never stored in
-the browser ceremony session, and is never exposed in a QR payload or Svelte
-state. The serializable request/response boundary carries signed metadata and
+The requester creates a signed request containing:
+
+- its ephemeral session;
+- store;
+- Sentinel policy;
+- device encryption key; and
+- signing key.
+
+A participant:
+
+- authorizes its protected device identity;
+- opens only its local encrypted SLIP-0039 share inside Rust;
+- encrypts an opaque contribution to the requester; and
+- signs the response.
+
+Responses are rejected for the wrong session, store, policy, requester,
+participant, or share index and for duplicate participants/indexes.
+
+Only after `T` valid responses does Rust:
+
+- decrypt the transient contributions;
+- reconstruct the root;
+- derive the two vault keys; and
+- return an unlocked session result.
+
+SLIP-0039 mnemonic text:
+
+- never crosses the Rust/WASM boundary;
+- is never stored in the browser ceremony session; and
+- is never exposed in a QR payload or Svelte state.
+
+The serializable request/response boundary carries signed metadata and
 age-encrypted ciphertext only.
 
 No password, sync-provider login, local cache, initiator role, or possession of
