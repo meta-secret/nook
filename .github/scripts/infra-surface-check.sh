@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Validate that the root Taskfile still exposes the Hive infrastructure surface.
-set -euo pipefail
+set -eu
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-task --list | grep -q 'infra:k0s:install'
-task --list | grep -q 'infra:kata:verify'
-task --list | grep -q 'infra:neo4j:deploy'
-task --list | grep -q 'infra:hive:deploy'
+task_list="$(task --list)"
+printf '%s\n' "$task_list" | grep -Fq 'infra:k0s:install'
+printf '%s\n' "$task_list" | grep -Fq 'infra:kata:verify'
+printf '%s\n' "$task_list" | grep -Fq 'infra:neo4j:deploy'
+printf '%s\n' "$task_list" | grep -Fq 'infra:hive:deploy'
 task infra:k0s:manifests:check

@@ -39,7 +39,7 @@ const result = await new Promise((resolve) => {
   })
 })
 
-console.log(JSON.stringify(result, undefined, 2))
+console.log(JSON.stringify(result, ['hung', 'code', 'signal', 'ms', 'out'], 2))
 if (result.hung || result.code !== 0) {
   console.error('FAIL: exitCiAgent did not terminate cleanly')
   process.exit(1)
