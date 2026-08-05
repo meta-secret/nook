@@ -2,8 +2,8 @@
 
 Use this workflow for quality, CI, and deployment changes.
 
-1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`, which Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling. The pinned `rust-ecosystem.yml` workflow is the source of truth for compiler-coupled or sanitizer-backed tools whose official runners provision a specialized toolchain (Kani, cargo-fuzz, and Dylint); do not duplicate those commands in bespoke preflight scanners.
-2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior. The Rust ecosystem workflow may use pinned official actions and GitHub-hosted native toolchains for advisory database access, sanitizers, model checking, and rustc-private lint libraries that are intentionally outside the stable sealed project images. Keep those jobs exact-head merge gates and pin every compiler-coupled version.
+1. Keep Taskfile as the source of truth for normal build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`, which Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling. Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it) and run via `rust-ecosystem.yml`; do not duplicate those commands in bespoke preflight scanners or compile their CLIs on the GitHub-hosted runner host. Kani remains on its official action because it provisions a specialized model-checking toolchain.
+2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for normal repo behavior. Prefer pinned release binaries on dedicated ecosystem stages (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) over `cargo install` on the runner, and keep those tools out of `rust-base`. Keep ecosystem Bake jobs exact-head merge gates and pin every compiler-coupled version.
 3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`. Do **not** use Docker named volumes for `target/`, Cargo registries, `node_modules`, or other build outputs; the Rust dep cache and warm `target/` are baked into normal image layers, and workspace source is copied into the nook-web image (sealed image, no runtime mount). Authenticated SeaweedFS S3 `sccache` is a compiler-output optimization below Docker/cargo-chef and never a correctness input. See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
@@ -36,34 +36,31 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `Rust ecosystem checks / Dependency policy and RustSec` —
-     [`cargo-deny`](https://embarkstudios.github.io/cargo-deny/) checks
-     advisories, licenses, duplicate/forbidden crates, and trusted sources for
-     the complete Cargo graph; [`rustsec/audit-check`](https://github.com/rustsec/audit-check)
-     independently audits the lockfile against the RustSec advisory database
-     Advisory exceptions must name the RustSec IDs, identify the exact pinned
-     upstream graph, and state the dependency upgrade that removes them in both
-     `deny.toml` and the affected workspace's `.cargo/audit.toml`. The current
-     `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
-     RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove
-     it when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
+     Bake `rust-dependency-policy` from `nook-app/docker/rust.Dockerfile` via
+     the separate `rust-ecosystem-policy-tools` image (pinned `cargo-deny` +
+     `cargo-audit`; not installed into `rust-base`). Never `cargo install`
+     those tools on the runner host. Advisory exceptions must name the RustSec
+     IDs, identify the exact pinned upstream graph, and state the dependency
+     upgrade that removes them in both `deny.toml` and the affected workspace's
+     `.cargo/audit.toml`. The current `agentic-ai/minds` exception is limited to
+     RUSTSEC-2026-0118 and RUSTSEC-2026-0119 in the pinned `openai/codex`
+     Rama/Hickory graph; remove it when upstream moves from `hickory-proto`
+     0.25.2 to 0.26.1 or later.
    - `Rust ecosystem checks / Proptest, Insta, and Loom` —
-     [`proptest`](https://proptest-rs.github.io/proptest/) generates and shrinks
-     domain inputs so invariants cover more than hand-picked examples;
-     [`insta`](https://insta.rs/) stores reviewable snapshots for stable,
-     non-secret structured output; and [`loom`](https://github.com/tokio-rs/loom)
-     explores permitted thread interleavings for bounded concurrency models
+     Bake `rust-ecosystem-deterministic` on `builder-core-deps` so
+     [`proptest`](https://proptest-rs.github.io/proptest/),
+     [`insta`](https://insta.rs/), and [`loom`](https://github.com/tokio-rs/loom)
+     reuse the sealed Rust dependency graph instead of a host toolchain.
    - `Rust ecosystem checks / Cargo fuzz smoke` —
-     [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html) drives
-     libFuzzer targets and retains minimized crash inputs for parser and
-     boundary hardening
+     Bake `rust-fuzz-smoke` from `rust-ecosystem-nightly` with pinned
+     [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
    - `Rust ecosystem checks / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
-     bounded proof harnesses, including panics, overflow, unsafe behavior, and
-     authored assertions, and produces counterexamples when a property fails
+     bounded proof harnesses via the official action (specialized toolchain).
    - `Rust ecosystem checks / Dylint repository lints` —
-     [`Dylint`](https://trailofbits.github.io/dylint/) runs pinned,
-     repository-selected Rust lints when Clippy cannot express a Nook-specific
-     source rule
+     Bake `rust-dylint` from `rust-ecosystem-nightly` with pinned
+     [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
+     `dylint-link` release binaries (no host `cargo install`).
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.

@@ -356,3 +356,179 @@ RUN test -f nook-app/Taskfile.yml \
     && git config user.name nook \
     && git add -A \
     && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null
+
+# --- Rust ecosystem gates ---
+# Same Dockerfile as rust-base, but separate Bake images/stages so product builds
+# do not inherit deny/audit/fuzz/dylint or a second nightly toolchain.
+
+FROM rust-base AS rust-ecosystem-policy-tools
+
+ARG CARGO_DENY_VERSION=0.20.2
+ARG CARGO_DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+ARG CARGO_AUDIT_VERSION=0.22.1
+ARG CARGO_AUDIT_SHA256=c32506f338bdcdaef5a17fb9f33abb6ecf9561324cfd34237fd335f9283a1eab
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL \
+      "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      -o /tmp/cargo-deny.tgz \
+    && echo "${CARGO_DENY_SHA256}  /tmp/cargo-deny.tgz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-deny.tgz -C /tmp \
+    && install -m 0755 \
+      "/tmp/cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl/cargo-deny" \
+      /usr/local/cargo/bin/cargo-deny \
+    && rm -rf /tmp/cargo-deny.tgz \
+      "/tmp/cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl" \
+    && curl -fsSL \
+      "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}.tgz" \
+      -o /tmp/cargo-audit.tgz \
+    && echo "${CARGO_AUDIT_SHA256}  /tmp/cargo-audit.tgz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-audit.tgz -C /tmp \
+    && install -m 0755 \
+      "/tmp/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}/cargo-audit" \
+      /usr/local/cargo/bin/cargo-audit \
+    && rm -rf /tmp/cargo-audit.tgz \
+      "/tmp/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}" \
+    && cargo-deny --version \
+    && cargo-audit --version
+
+FROM rust-ecosystem-policy-tools AS rust-dependency-policy
+
+WORKDIR /meta-secret/nook
+COPY . .
+RUN set -eux; \
+    for manifest in \
+      nook-app/Cargo.toml \
+      fuzz/Cargo.toml \
+      preflight/Cargo.toml \
+      agentic-ai/minds/Cargo.toml; do \
+      cargo-deny --manifest-path "$manifest" check; \
+    done; \
+    for workspace in nook-app fuzz preflight agentic-ai/minds; do \
+      (cd "$workspace" && cargo-audit); \
+    done
+
+FROM rust-base AS rust-ecosystem-nightly
+
+ARG DYLINT_NIGHTLY=nightly-2026-04-16
+ARG CARGO_FUZZ_VERSION=0.13.2
+ARG CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
+ARG CARGO_DYLINT_VERSION=6.0.1
+ARG CARGO_DYLINT_SHA256=9f130d915efbfd1d04160ac9874c617a5d74b48971881e25b5ea6c69e74597f7
+ARG DYLINT_LINK_SHA256=c47c31479a44ed6d6c8aaf43dfe6a1db65f5e4c4b834c7e7365a1d309e7c1bfd
+
+RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
+      --component clippy,llvm-tools-preview,rustc-dev \
+    && curl -fsSL \
+      "https://github.com/rust-fuzz/cargo-fuzz/releases/download/${CARGO_FUZZ_VERSION}/cargo-fuzz-${CARGO_FUZZ_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      -o /tmp/cargo-fuzz.tgz \
+    && echo "${CARGO_FUZZ_SHA256}  /tmp/cargo-fuzz.tgz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-fuzz.tgz -C /tmp \
+    && install -m 0755 /tmp/cargo-fuzz /usr/local/cargo/bin/cargo-fuzz \
+    && rm -rf /tmp/cargo-fuzz.tgz /tmp/cargo-fuzz \
+    && curl -fsSL \
+      "https://github.com/trailofbits/dylint/releases/download/v${CARGO_DYLINT_VERSION}/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}.tar.gz" \
+      -o /tmp/cargo-dylint.tgz \
+    && echo "${CARGO_DYLINT_SHA256}  /tmp/cargo-dylint.tgz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-dylint.tgz -C /tmp \
+    && install -m 0755 \
+      "/tmp/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}/cargo-dylint" \
+      /usr/local/cargo/bin/cargo-dylint \
+    && rm -rf /tmp/cargo-dylint.tgz \
+      "/tmp/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}" \
+    && curl -fsSL \
+      "https://github.com/trailofbits/dylint/releases/download/v${CARGO_DYLINT_VERSION}/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}.tar.gz" \
+      -o /tmp/dylint-link.tgz \
+    && echo "${DYLINT_LINK_SHA256}  /tmp/dylint-link.tgz" | sha256sum -c - \
+    && tar xzf /tmp/dylint-link.tgz -C /tmp \
+    && install -m 0755 \
+      "/tmp/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}/dylint-link" \
+      /usr/local/cargo/bin/dylint-link \
+    && rm -rf /tmp/dylint-link.tgz \
+      "/tmp/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}" \
+    && cargo fuzz --version \
+    && cargo dylint --version
+
+FROM rust-ecosystem-nightly AS rust-fuzz-smoke
+
+ARG FUZZ_SECONDS=20
+ARG DYLINT_NIGHTLY=nightly-2026-04-16
+
+WORKDIR /meta-secret/nook
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY fuzz fuzz
+
+ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    set -eux; \
+    cd nook-app; \
+    cargo clippy --manifest-path ../fuzz/Cargo.toml \
+      --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings; \
+    cargo metadata --manifest-path ../fuzz/Cargo.toml \
+      --locked --format-version 1 --no-deps >/dev/null; \
+    cargo fuzz run --fuzz-dir ../fuzz \
+      --target x86_64-unknown-linux-gnu \
+      wire-parsers -- -max_total_time="${FUZZ_SECONDS}"; \
+    nook-sccache-report rust-fuzz-smoke
+
+FROM rust-ecosystem-nightly AS rust-dylint
+
+ARG DYLINT_NIGHTLY=nightly-2026-04-16
+
+WORKDIR /meta-secret/nook
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
+
+ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
+ENV RUSTFLAGS="-D warnings"
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cd nook-app \
+    && cargo dylint --all -- --all-targets \
+    && nook-sccache-report rust-dylint
+
+FROM builder-core-deps AS rust-ecosystem-deterministic
+
+WORKDIR /meta-secret/nook
+COPY nook-app/Cargo.toml nook-app/Cargo.lock nook-app/
+COPY nook-app/.cargo nook-app/.cargo
+COPY nook-app/.config nook-app/.config
+COPY nook-app/nook-app-common nook-app/nook-app-common
+COPY nook-app/nook-auth2 nook-app/nook-auth2
+COPY nook-app/nook-replication nook-app/nook-replication
+COPY nook-app/nook-event-log nook-app/nook-event-log
+COPY nook-app/nook-companion-core nook-app/nook-companion-core
+COPY nook-app/nook-core nook-app/nook-core
+COPY nook-app/nook-companion-wasm nook-app/nook-companion-wasm
+COPY nook-app/nook-wasm nook-app/nook-wasm
+COPY nook-app/.insta.yaml nook-app/.insta.yaml
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    set -eux; \
+    cd nook-app; \
+    INSTA_UPDATE=no cargo test --locked -p nook-replication; \
+    RUSTFLAGS='--cfg loom' cargo test --locked -p nook-replication loom_tests --release; \
+    nook-sccache-report rust-ecosystem-deterministic

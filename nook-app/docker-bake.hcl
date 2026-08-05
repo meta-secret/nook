@@ -1,7 +1,7 @@
 // App bake: shared variables, parallel groups, and loadable runtime variants.
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
-//   nook-app/docker/rust.docker-bake.hcl        -> rust-base
+//   nook-app/docker/rust.docker-bake.hcl        -> rust-base + ecosystem gates
 //   nook-app/docker/web.docker-bake.hcl         -> web-base, web-e2e-base
 //   nook-app/nook-core/docker-bake.hcl          -> builder-core-deps, builder-debug
 //   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
@@ -55,6 +55,10 @@ variable "SCCACHE_BUCKET" {
 
 variable "SCCACHE_S3_MODE" {
   default = "external"
+}
+
+variable "FUZZ_SECONDS" {
+  default = "20"
 }
 
 // Enabled only by the GitHub Actions Docker setup after registry login.

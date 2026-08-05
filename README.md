@@ -455,10 +455,13 @@ and Neo4j deployment, while rotation stops the warm pool before publication
 and restores it afterward. Credential input is streamed into that cleanup-armed
 remote transaction rather than retained as a reusable host-side file.
 
-The explicitly triggered **Rust ecosystem checks** workflow adds dependency
-policy and RustSec auditing (`cargo-deny` plus `cargo-audit`), generated and
-snapshot tests (Proptest and Insta), bounded concurrency exploration (Loom),
-parser fuzzing (`cargo-fuzz`), model checking (Kani), and repository-selected
+The explicitly triggered **Rust ecosystem checks** workflow Bakes dependency
+policy, RustSec, Proptest/Insta/Loom, cargo-fuzz, and Dylint from stages in
+`nook-app/docker/rust.Dockerfile` as separate images off `rust-base`
+(`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) so the product base
+stays lean. Kani stays on its official action. Also covered:
+generated and snapshot tests (Proptest and Insta), bounded concurrency
+exploration (Loom), parser fuzzing (`cargo-fuzz`), model checking (Kani), and repository-selected
 Rust lints (Dylint). Fast deterministic tests remain part of ordinary Rust
 testing; fuzz, Loom, Kani, and compiler-coupled Dylint checks have bounded
 hosted jobs and scheduled/manual entry points. The selection and configuration

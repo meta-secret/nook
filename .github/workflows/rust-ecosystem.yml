@@ -10,6 +10,9 @@ on:
       - deny.toml
       - nook-app/.insta.yaml
       - nook-app/.cargo/**
+      - nook-app/docker/rust.Dockerfile
+      - nook-app/docker/rust.docker-bake.hcl
+      - nook-app/docker-bake.hcl
       - fuzz/**
       - preflight/**
       - agentic-ai/minds/**
@@ -29,6 +32,12 @@ concurrency:
     ${{ github.event.pull_request.number || github.ref }}-
     ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'shared' }}
   cancel-in-progress: true
+
+env:
+  NOOK_BAKE_FILES: >-
+    -f nook-app/docker-bake.hcl
+    -f nook-app/docker/rust.docker-bake.hcl
+    -f nook-app/nook-core/docker-bake.hcl
 
 jobs:
   validation-request:
@@ -60,49 +69,20 @@ jobs:
       github.event.label.name == 'ci:full-e2e'
     name: Dependency policy and RustSec
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     permissions:
-      checks: write
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: ./.github/actions/nook-docker-setup
         with:
-          manifest-path: nook-app/Cargo.toml
-          command: check
-          log-level: error
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          manifest-path: fuzz/Cargo.toml
-          command: check
-          log-level: error
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          manifest-path: preflight/Cargo.toml
-          command: check
-          log-level: error
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          manifest-path: agentic-ai/minds/Cargo.toml
-          command: check
-          log-level: error
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: nook-app
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: fuzz
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: preflight
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: agentic-ai/minds
-          ignore: RUSTSEC-2026-0118,RUSTSEC-2026-0119
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+      - name: Bake rust-dependency-policy
+        run: docker buildx bake $NOOK_BAKE_FILES rust-dependency-policy
 
   deterministic-tests:
     needs: validation-request
@@ -112,25 +92,18 @@ jobs:
       github.event.label.name == 'ci:full-e2e'
     name: Proptest, Insta, and Loom
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install workspace linker
-        run: sudo apt-get update && sudo apt-get install --yes mold
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/nook-docker-setup
         with:
-          workspaces: nook-app
-      - name: Property and snapshot tests
-        working-directory: nook-app
-        env:
-          INSTA_UPDATE: no
-        run: cargo test --locked -p nook-replication
-      - name: Concurrency permutation model
-        working-directory: nook-app
-        env:
-          RUSTFLAGS: --cfg loom
-        run: cargo test --locked -p nook-replication loom_tests --release
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+      - name: Bake rust-ecosystem-deterministic
+        run: docker buildx bake $NOOK_BAKE_FILES rust-ecosystem-deterministic
 
   fuzz-smoke:
     needs: validation-request
@@ -140,43 +113,23 @@ jobs:
       github.event.label.name == 'ci:full-e2e'
     name: Cargo fuzz smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: ./.github/actions/nook-docker-setup
         with:
-          toolchain: nightly-2026-04-16
-          components: clippy
-      - name: Install workspace linker
-        run: sudo apt-get update && sudo apt-get install --yes mold
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz@0.13.2
-      - name: Enforce fuzz-target lints
-        working-directory: nook-app
-        run: >-
-          cargo clippy --manifest-path ../fuzz/Cargo.toml
-          --locked --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
-      - name: Verify fuzz lockfile
-        working-directory: fuzz
-        run: cargo metadata --locked --format-version 1 --no-deps > /dev/null
-      - name: Exercise wire parsers
-        working-directory: nook-app
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+      - name: Bake rust-fuzz-smoke
         env:
           FUZZ_SECONDS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '900' || '20' }}
         run: >-
-          cargo fuzz run --fuzz-dir ../fuzz
-          --target x86_64-unknown-linux-gnu
-          wire-parsers -- -max_total_time=${FUZZ_SECONDS}
-      - name: Preserve fuzz corpus and crash inputs
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: wire-parsers-fuzz-${{ github.run_id }}
-          path: |
-            fuzz/artifacts
-            fuzz/corpus
-          if-no-files-found: ignore
+          docker buildx bake $NOOK_BAKE_FILES
+          --set rust-fuzz-smoke.args.FUZZ_SECONDS=$FUZZ_SECONDS
+          rust-fuzz-smoke
 
   kani:
     needs: validation-request
@@ -202,19 +155,15 @@ jobs:
       github.event.label.name == 'ci:full-e2e'
     name: Dylint repository lints
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: ./.github/actions/nook-docker-setup
         with:
-          toolchain: nightly-2026-04-16
-          components: llvm-tools-preview,rustc-dev
-      - name: Install workspace linker
-        run: sudo apt-get update && sudo apt-get install --yes mold
-      - name: Install Dylint
-        run: cargo install cargo-dylint dylint-link --version 6.0.1 --locked
-      - name: Run configured lint libraries
-        working-directory: nook-app
-        env:
-          RUSTFLAGS: -D warnings
-        run: cargo dylint --all -- --all-targets
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+      - name: Bake rust-dylint
+        run: docker buildx bake $NOOK_BAKE_FILES rust-dylint
