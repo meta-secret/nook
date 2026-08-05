@@ -25,15 +25,21 @@ const started = Date.now()
 const result = await new Promise((resolve) => {
   const timer = setTimeout(() => {
     child.kill('SIGKILL')
-    resolve({ hung: true, code: null, ms: Date.now() - started, out })
+    resolve({ hung: true, code: -1, ms: Date.now() - started, out })
   }, 5000)
   child.on('exit', (code, signal) => {
     clearTimeout(timer)
-    resolve({ hung: false, code, signal, ms: Date.now() - started, out })
+    resolve({
+      hung: false,
+      code: typeof code === 'number' ? code : -1,
+      signal: typeof signal === 'string' ? signal : '',
+      ms: Date.now() - started,
+      out,
+    })
   })
 })
 
-console.log(JSON.stringify(result, null, 2))
+console.log(JSON.stringify(result, undefined, 2))
 if (result.hung || result.code !== 0) {
   console.error('FAIL: exitCiAgent did not terminate cleanly')
   process.exit(1)

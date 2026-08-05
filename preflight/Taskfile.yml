@@ -79,7 +79,7 @@ tasks:
 
   preflight:source-architecture:
     desc: Enforce authored source size limits and Rust unit-test colocation.
-    dir: '{{.REPO_ROOT}}'
+    dir: '{{.ROOT_DIR}}'
     cmds:
       - >-
         cargo test

@@ -139,13 +139,13 @@ tasks:
 
   hive:console:install:
     desc: Install Hive Control Center dependencies.
-    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    dir: '{{.ROOT_DIR}}/agentic-ai/minds/hive-console'
     cmds:
       - bun install --frozen-lockfile
 
   hive:console:check:
     desc: Format-check, type-check, and build the Hive Control Center.
-    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    dir: '{{.ROOT_DIR}}/agentic-ai/minds/hive-console'
     cmds:
       - bun run format:check
       - bun run check
@@ -153,13 +153,13 @@ tasks:
 
   hive:console:e2e:prepare:
     desc: Install the Chromium browser for Hive Control Center Playwright e2e.
-    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    dir: '{{.ROOT_DIR}}/agentic-ai/minds/hive-console'
     cmds:
       - bunx playwright install --with-deps chromium
 
   hive:console:e2e:
     desc: Run Hive Control Center Playwright journeys.
-    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    dir: '{{.ROOT_DIR}}/agentic-ai/minds/hive-console'
     cmds:
       - bun run test:e2e
 
