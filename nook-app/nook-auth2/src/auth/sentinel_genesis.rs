@@ -759,8 +759,7 @@ mod tests {
     fn request_link_preserves_a_canonical_route_without_a_trailing_slash() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let session =
-            start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
+        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
         let request_json = serde_json::to_string(&session.request)?;
 
         let link =
