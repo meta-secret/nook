@@ -102,16 +102,29 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   const attentionEntries = $derived.by(() => {
     if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
     const snapshot = snapshotState.snapshot;
-    return snapshot.alerts.flatMap((alert) => {
-      const task = snapshot.tasks.find(
-        (candidate) => candidate.id === alert.task_id,
+    return snapshot.alerts
+      .flatMap((alert) => {
+        const task = snapshot.tasks.find(
+          (candidate) => candidate.id === alert.task_id,
+        );
+        return task ? [{ alert, task }] : [];
+      })
+      .sort(
+        (left, right) =>
+          right.task.updated_at - left.task.updated_at ||
+          right.alert.first_observed_at - left.alert.first_observed_at,
       );
-      return task ? [{ alert, task }] : [];
-    });
   });
   const attentionTaskIds = $derived(
     new Set(attentionEntries.map(({ task }) => task.id)),
   );
+
+  const executingTasks = $derived.by(() => {
+    if (snapshotState.kind !== ObserverFeedKind.Loaded) return [];
+    return snapshotState.snapshot.tasks
+      .filter((t) => t.status === ObservedExecutionStatus.Running)
+      .sort((left, right) => right.updated_at - left.updated_at);
+  });
 
   const statusCounts = $derived.by(() => {
     const all =
@@ -649,6 +662,25 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
             <span class="tab-badge">{statusCounts.completed}</span>
           </button>
         </nav>
+
+        {#if selectedTab === 'all' && executingTasks.length > 0 && normalizedSearch.length === 0}
+          <div class="executing-lane">
+            <div class="executing-heading">
+              <Activity size={15} />
+              <span>Executing now ({executingTasks.length})</span>
+            </div>
+            {#each executingTasks as task (task.id)}
+              {@render TaskRow(
+                task,
+                isSelectedTaskId(task.id),
+                copy,
+                statusLabel,
+                relativeTime,
+                () => selectTask(task.id),
+              )}
+            {/each}
+          </div>
+        {/if}
 
         {#if selectedTab === 'all' && attentionEntries.length > 0 && normalizedSearch.length === 0}
           <div class="attention-lane">
