@@ -86,14 +86,14 @@ Does not apply to:
 
 Before:
 
-- `ARCHITECTURE.md` says PR jobs write SeaweedFS compiler objects.
-- A workflow says PR jobs are read-only for that cache.
-- The Docker/Task code matches the read-only rule.
+- One paragraph says same-repository PR jobs write SeaweedFS objects.
+- Another paragraph in the same file says PR jobs bypass sccache.
+- The Docker/Task code mounts writer credentials for same-repository PR jobs.
 
 After:
 
-- Keep the read-only rule.
-- Fix `ARCHITECTURE.md` in the same PR.
+- Keep the writer-identity rule that matches the code.
+- Fix the stale bypass claim in the same PR.
 - Leave a short historical note only if old behavior still matters.
 
 Before:

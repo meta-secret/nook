@@ -71,7 +71,7 @@ Before (one dense table cell):
 > head-bucket; missing credentials or an unhealthy backend fail the build
 > instead of silently cold-compiling. Local materials live under `~/.nook/`.
 > Trusted Main uses read/write identity; Remote uses read-only credentials;
-> PR jobs receive neither and set `SCCACHE_OPTIONAL=1`.
+> fork jobs receive neither and set `SCCACHE_OPTIONAL=1`.
 
 After:
 
@@ -80,9 +80,9 @@ After:
 - Missing credentials or an unhealthy backend fail the build.
 - The build must not silently cold-compile in those cases.
 - Local materials live only under `~/.nook/`.
-- Trusted Main uses the authoritative read/write identity.
+- Trusted Main and same-repository PR jobs use the read/write identity.
 - Explicit Remote tasks use read-only credentials.
-- PR jobs receive neither identity.
+- Fork jobs receive neither identity.
 - Those jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`.
 
 Full rewritten example:
