@@ -657,8 +657,9 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-node-vaults').click()
     const vaults = page.getByTestId('devices-access-vaults')
     await expect(vaults).toContainText('Access verified')
-    await expect(vaults).toContainText('previously observed successful access')
-    await expect(vaults).not.toContainText('in this session')
+    const panel = page.getByTestId('devices-access-panel')
+    await expect(panel).toContainText('previously observed successful access')
+    await expect(panel).not.toContainText('in this session')
     await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(
       0,
     )
