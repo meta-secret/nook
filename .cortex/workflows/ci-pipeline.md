@@ -523,7 +523,8 @@ zstd recompression so a thin reimported index cannot replace the complete cook
 lineage. Main thereby exports protected default-branch refs that PR jobs restore
 from private Zot. Same-repository PR jobs authenticate with the Remote registry
 identity, while Zot ACLs deny that identity write access to
-`nook/buildcache/**` and their Bake configuration disables every exporter. Fork
+`nook/buildcache/**`. PR Bake exporters write only PR-scoped refs under
+`nook/remote-buildcache/**` (Main fallback restore stays enabled). Fork
 pull requests receive no registry credentials.
 Native coverage and WASM source-sensitive layers have separate Zot refs in
 addition to the manifest-only dependency refs, so non-Rust pushes do not repeat
@@ -531,17 +532,20 @@ unchanged Cargo compilation.
 Trusted Main Rust/WASM producers and explicitly dispatched same-repository Remote
 tasks use authenticated SeaweedFS S3 `sccache`. Compiler vertices receive the
 bucket-scoped build identity only through stable optional BuildKit secret IDs;
-secret contents do not participate in Docker cache checksums, so secret-free PR
-solves can still restore Main's exported vertices. PR, release, and arbitrary-ref
-workflows do not receive the compiler-cache credentials. SeaweedFS remains an
-optimization and never a correctness input.
+secret contents do not participate in Docker cache checksums, so secret-free
+solves can still restore Main's exported vertices. Same-repository PR and Rust
+ecosystem Docker jobs mount SeaweedFS `sccache` with the Main build identity
+(matching Hive). Release, browser-only, and arbitrary-ref workflows do not
+receive those credentials. Fork pull requests also stay secret-free. SeaweedFS
+remains an optimization and never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
 `task sccache:ensure` fails closed when credential files are missing or SeaweedFS
 is unhealthy, so a local misconfiguration cannot silently cold-compile. Secret-free
-hosted jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then
-bypasses sccache without replacing cargo-chef or changing build correctness.
+hosted jobs (forks, release, arbitrary-ref) set `SCCACHE_OPTIONAL=1` through
+`nook-cache-connect`; the wrapper then bypasses sccache without replacing
+cargo-chef or changing build correctness.
 Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
 The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
@@ -580,8 +584,10 @@ cache manifests after lane verification. Explicit Remote tasks restore their
 deterministic branch-and-task refs first and Main second, then export only those
 Remote refs;
 the Remote credential can update only `nook/remote-buildcache/**` and has read-only
-access to Main's `nook/buildcache/**` repository path. Other
-pull-request, release, and e2e jobs remain read-only. Fork pull requests do not
+access to Main's `nook/buildcache/**` repository path. Same-repository pull
+requests use that same Remote registry identity for PR-scoped exporters under
+`nook/remote-buildcache/**` and keep Main restore as fallback. Release and
+label-gated browser e2e jobs remain BuildKit-read-only. Fork pull requests do not
 receive credentials. Hive images also publish and pull through Zot. There is no
 host `:5000` listener and no `kubectl port-forward` for the registry.
 `main.yml` attaches and upserts the three

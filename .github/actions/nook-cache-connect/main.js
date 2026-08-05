@@ -37,8 +37,8 @@ fs.appendFileSync(
         ? "persistent_credential_available"
         : missingCredentialReason
     }`,
-    // Secret-free hosted jobs (PR/arbitrary-ref) intentionally omit SeaweedFS
-    // credentials. Local `task sccache:ensure` fails closed without them; mark
+    // Hosted jobs without SeaweedFS credentials (forks, release, arbitrary-ref)
+    // cold-compile. Local `task sccache:ensure` fails closed without them; mark
     // those CI paths as an explicit cold-compile exception.
     ...(credentialsPresent ? [] : ["SCCACHE_OPTIONAL=1"]),
     "",

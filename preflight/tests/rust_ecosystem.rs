@@ -30,12 +30,32 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Bake rust-fuzz-smoke",
         "Bake rust-dylint",
         "nook-docker-setup",
+        "NOOK_SCCACHE_ACCESS_KEY",
+        "docker-bake-sccache.sh",
         "kani-github-action",
         "FUZZ_SECONDS",
     ] {
         assert!(
             workflow.contains(marker),
             "Rust ecosystem workflow is missing {marker}"
+        );
+    }
+    assert!(
+        workflow.contains(
+            "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+        ),
+        "Rust ecosystem PRs must export only isolated remote-buildcache scopes"
+    );
+    let bake_helper = read(".github/scripts/docker-bake-sccache.sh")?;
+    for marker in [
+        "SCCACHE_S3_ACCESS_KEY_FILE",
+        "sccache_s3_access_key",
+        "sccache_s3_secret_key",
+        "docker buildx bake",
+    ] {
+        assert!(
+            bake_helper.contains(marker),
+            "ecosystem bake helper is missing {marker}"
         );
     }
     for forbidden in [
