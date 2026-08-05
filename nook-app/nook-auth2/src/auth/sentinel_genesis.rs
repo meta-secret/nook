@@ -793,8 +793,8 @@ mod tests {
     }
 
     #[test]
-    fn participant_response_link_preserves_a_canonical_route_without_a_trailing_slash(
-    ) -> anyhow::Result<()> {
+    fn participant_response_link_preserves_a_canonical_route_without_a_trailing_slash()
+    -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
         let session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;

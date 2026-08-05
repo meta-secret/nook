@@ -118,9 +118,10 @@ test.describe('vault password envelope (local)', () => {
       await joinClose.click()
     }
     await unlockVaultOnLogin(page, { password: 'reload-pass' })
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect(page).toHaveURL(/\/admin$/)
   })
 
   test('rejects short passwords client-side', async ({ page }) => {
