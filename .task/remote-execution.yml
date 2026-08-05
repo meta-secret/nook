@@ -50,6 +50,12 @@ tasks:
           exit 2
         fi
 
+        case "$requested_task" in
+          web:e2e|extension:e2e|check|ci:pr|ci:pr:e2e)
+            .github/scripts/require-current-base.sh origin main
+            ;;
+        esac
+
         gh workflow run remote.yml \
           --ref "$branch" \
           --raw-field "task=$requested_task"
@@ -110,6 +116,7 @@ tasks:
 
         local_sha="$(git rev-parse HEAD)"
         pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
+        base_ref="$(gh pr view "$REQUESTED_PR" --json baseRefName --jq .baseRefName)"
         if [ "$local_sha" != "$pr_sha" ]; then
           echo "Local HEAD is not PR #$REQUESTED_PR's current head." >&2
           echo "local: $local_sha" >&2
@@ -120,6 +127,8 @@ tasks:
           echo "Commit and push the complete change before requesting PR validation." >&2
           exit 2
         fi
+
+        .github/scripts/require-current-base.sh origin "$base_ref"
 
         validation_label="ci:validate"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
