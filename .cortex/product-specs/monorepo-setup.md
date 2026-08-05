@@ -14,7 +14,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 3. Toolchain & Runtime Specs
 
-- **Rust Version**: `1.96` (using trixie Debian base; `DEBIAN_RELEASE` arg in `nook-app/docker/base.Dockerfile`).
+- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/docker/rust.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.

@@ -235,14 +235,14 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         case "$(uname -s)" in
-          Darwin) security verify-cert -c "{{.REPO_ROOT}}/.nook/https/localhost.pem" -p ssl -s localhost >/dev/null 2>&1 ;;
-          Linux) openssl verify -CApath /etc/ssl/certs "{{.REPO_ROOT}}/.nook/https/localhost.pem" >/dev/null 2>&1 ;;
+          Darwin) security verify-cert -c "{{.LOCAL_HTTPS_DIR}}/localhost.pem" -p ssl -s localhost >/dev/null 2>&1 ;;
+          Linux) openssl verify -CApath /etc/ssl/certs "{{.LOCAL_HTTPS_DIR}}/localhost.pem" >/dev/null 2>&1 ;;
           *) exit 1 ;;
         esac'
     cmds:
       - >-
         bash -c 'set -euo pipefail;
-        ca="{{.REPO_ROOT}}/.nook/https/rootCA.pem";
+        ca="{{.LOCAL_HTTPS_DIR}}/rootCA.pem";
         case "$(uname -s)" in
           Darwin) security add-trusted-cert -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" "$ca" ;;
           Linux)
@@ -252,26 +252,36 @@ tasks:
         esac'
 
   web:https:generate:
-    desc: Build the pinned mkcert container and generate ignored localhost TLS material.
+    desc: Build the pinned mkcert container and generate shared localhost TLS material under ~/.nook/https.
     status:
-      - test -s "{{.REPO_ROOT}}/.nook/https/rootCA.pem"
-      - test -s "{{.REPO_ROOT}}/.nook/https/localhost.pem"
-      - test -s "{{.REPO_ROOT}}/.nook/https/localhost-key.pem"
+      - test -s "{{.LOCAL_HTTPS_DIR}}/rootCA.pem"
+      - test -s "{{.LOCAL_HTTPS_DIR}}/localhost.pem"
+      - test -s "{{.LOCAL_HTTPS_DIR}}/localhost-key.pem"
     cmds:
-      - mkdir -p "{{.REPO_ROOT}}/.nook/https"
       - >-
+        bash -c 'set -euo pipefail;
+        https_dir="{{.LOCAL_HTTPS_DIR}}";
+        install -d -m 0700 "$https_dir";
+        legacy="{{.REPO_ROOT}}/.nook/https";
+        if [ ! -s "$https_dir/localhost.pem" ] && [ -s "$legacy/localhost.pem" ]; then
+          cp -f "$legacy/rootCA.pem" "$legacy/localhost.pem" "$legacy/localhost-key.pem" "$https_dir/";
+          chmod 0600 "$https_dir"/*;
+        fi;
+        if [ -s "$https_dir/rootCA.pem" ] && [ -s "$https_dir/localhost.pem" ] && [ -s "$https_dir/localhost-key.pem" ]; then
+          exit 0;
+        fi;
         {{.DOCKER}} build
-        --file "{{.REPO_ROOT}}/nook-app/docker/mkcert.Dockerfile"
-        --tag "{{.DOCKER_MKCERT_IMAGE}}"
-        "{{.REPO_ROOT}}"
-      - >-
+          --file "{{.REPO_ROOT}}/nook-app/docker/mkcert.Dockerfile"
+          --tag "{{.DOCKER_MKCERT_IMAGE}}"
+          "{{.REPO_ROOT}}";
         {{.DOCKER}} run --rm
-        -e CAROOT=/certs
-        -v "{{.REPO_ROOT}}/.nook/https:/certs"
-        "{{.DOCKER_MKCERT_IMAGE}}"
-        -cert-file /certs/localhost.pem
-        -key-file /certs/localhost-key.pem
-        localhost 127.0.0.1 ::1
+          -e CAROOT=/certs
+          -v "$https_dir:/certs"
+          "{{.DOCKER_MKCERT_IMAGE}}"
+          -cert-file /certs/localhost.pem
+          -key-file /certs/localhost-key.pem
+          localhost 127.0.0.1 ::1;
+        chmod 0600 "$https_dir"/*'
 
   _web:install:
     desc: Sync web dependencies after package.json or bun.lock changes.

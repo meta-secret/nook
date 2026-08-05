@@ -1,28 +1,21 @@
 # syntax=docker/dockerfile:1.4
 
-# Separate Rust/WASM and web bases. They build in parallel and share only the pinned Node binary;
-# the final web image must not inherit Cargo target/ or the Rust toolchain.
+# Rust/WASM lineage. Manifest-only chef and builder-core-deps stages stay in this Dockerfile so their
+# cache keys depend on a stable internal stage instead of a named-target image whose exported
+# identity can change when a sibling hosted cache scope is republished. The web lineage lives in
+# web.Dockerfile and must not inherit Cargo target/ or the Rust toolchain.
 
 # Global ARGs used ONLY by the FROM lines below. A pre-FROM ARG is not visible inside any stage's
 # RUN/ENV — to use one there you must re-declare it in that stage. Only args that parameterize a
 # base image live here; CLI-version args are declared in the stage that consumes them.
-ARG RUST_VERSION=1.96
+ARG RUST_VERSION=1.97
 ARG DEBIAN_RELEASE=trixie
-# Pin floating registry tags by digest. `cargo-chef:latest-rust-*` and unpinned
-# `rust`/`node` tags move under us and rewrite the rust-base digest, which orphans
-# every downstream cargo-chef cook layer in the hosted GHA cache and forces PRs to
-# redownload crates on an otherwise unchanged Cargo.lock.
-ARG CARGO_CHEF_IMAGE=lukemathwalker/cargo-chef:latest-rust-1.96-trixie@sha256:3a1dd6010466c1cf591607a75c6e144ba9f099e7f3790d595c6a611a9c78f387
-ARG RUST_IMAGE=rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
-ARG NODE_IMAGE=node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573
+# Pin floating registry tags by digest. Unpinned `rust` tags move under us and rewrite the
+# rust-base digest, which orphans every downstream cargo-chef cook layer in the hosted GHA cache
+# and forces PRs to redownload crates on an otherwise unchanged Cargo.lock.
+ARG RUST_DIGEST=sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+ARG RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}
 
-FROM ${CARGO_CHEF_IMAGE} AS cargo-chef
-
-# Node is copied into the Rust base for wasm-bindgen Node tests and into the web base for Playwright
-# workers. Using the standalone binary keeps npm/npx out of the sealed images.
-FROM ${NODE_IMAGE} AS playwright-node
-
-# --- Rust/WASM branch -------------------------------------------------------
 FROM ${RUST_IMAGE} AS rust-base
 
 # Pinned CLI versions, declared once here because they are used only inside this stage's RUNs
@@ -39,6 +32,14 @@ ARG SCCACHE_BUCKET=nook-sccache
 # Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
 # avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
 ARG BINARYEN_VERSION=122
+# Node binary only — required for wasm-pack test --node. Pin version + sha256 so rust-base does
+# not track a floating Node image digest. npm/npx are intentionally omitted.
+ARG NODE_VERSION=24.19.0
+ARG NODE_SHA256=f625d97cd707df4ff96254916fbc5ff014f09c09effe5a1e0ca8f6d41a8789d4
+# cargo-chef binary only — pin the musl release tarball instead of copying from a full
+# Rust-based helper image just to obtain one CLI.
+ARG CARGO_CHEF_VERSION=0.1.77
+ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
 
 # Cargo uses the default <workspace>/target (i.e. /meta-secret/nook/nook-app/target). The heavy
 # target directory remains in the Rust lineage and local BuildKit cache, but is not inherited by
@@ -62,10 +63,21 @@ RUN apt-get update \
         curl \
         jq \
         mold \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Standalone CLIs first (version bumps only). cargo-chef last — only needed for Rust cache stages.
-COPY --from=playwright-node /usr/local/bin/node /usr/local/bin/node
+# Standalone CLIs first (version bumps only).
+RUN curl -fsSL \
+      "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
+      -o /tmp/node.tar.gz \
+    && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/node.tar.gz -C /tmp \
+    && install -m 0755 \
+      "/tmp/node-v${NODE_VERSION}-linux-x64/bin/node" \
+      /usr/local/bin/node \
+    && rm -rf /tmp/node.tar.gz "/tmp/node-v${NODE_VERSION}-linux-x64" \
+    && node --version
+
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
 
 RUN rustup component add rustfmt clippy llvm-tools-preview \
@@ -102,17 +114,28 @@ COPY nook-app/docker/sccache-wrapper.sh /usr/local/bin/nook-sccache
 COPY nook-app/docker/sccache-report.sh /usr/local/bin/nook-sccache-report
 RUN chmod 0755 /usr/local/bin/nook-sccache /usr/local/bin/nook-sccache-report
 
-COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
+RUN curl -fsSL \
+      "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/cargo-chef-x86_64-unknown-linux-musl.tar.xz" \
+      -o /tmp/cargo-chef.tar.xz \
+    && echo "${CARGO_CHEF_SHA256}  /tmp/cargo-chef.tar.xz" | sha256sum -c - \
+    && tar -xJf /tmp/cargo-chef.tar.xz -C /tmp \
+    && install -m 0755 \
+      /tmp/cargo-chef-x86_64-unknown-linux-musl/cargo-chef \
+      /usr/local/cargo/bin/cargo-chef \
+    && rm -rf /tmp/cargo-chef.tar.xz /tmp/cargo-chef-x86_64-unknown-linux-musl \
+    && cargo chef --version
 
 WORKDIR /meta-secret/nook
 
 # Keep manifest-only dependency stages in the same Dockerfile as rust-base. Their cache keys then
 # depend on a stable internal stage instead of a named-target image result whose exported identity
 # can change when a sibling hosted cache scope is republished.
-FROM rust-base AS chef-planner
+FROM rust-base AS chef-deps
 
 WORKDIR /meta-secret/nook/nook-app
 
+COPY nook-app/.cargo .cargo
+COPY nook-app/.config .config
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
 COPY nook-app/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
 COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
@@ -125,23 +148,6 @@ COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 RUN mkdir -p nook-app-common/src nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
     && touch nook-app-common/src/lib.rs nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
-
-FROM rust-base AS builder-deps-common
-
-WORKDIR /meta-secret/nook/nook-app
-
-COPY nook-app/.cargo .cargo
-COPY nook-app/.config .config
-COPY --from=chef-planner /meta-secret/nook/nook-app/recipe.json ./recipe.json
-COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
-COPY nook-app/nook-app-common/Cargo.toml nook-app-common/Cargo.toml
-COPY nook-app/nook-auth2/Cargo.toml nook-auth2/Cargo.toml
-COPY nook-app/nook-replication/Cargo.toml nook-replication/Cargo.toml
-COPY nook-app/nook-event-log/Cargo.toml nook-event-log/Cargo.toml
-COPY nook-app/nook-companion-core/Cargo.toml nook-companion-core/Cargo.toml
-COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
-COPY nook-app/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
-COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
 # nook-rust-wasm-deps-* so cook digests are new and Main publish must upload real
 # layer blobs — index-only refs to older scopes are not enough for PR restores.
@@ -157,16 +163,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report chef-wasm-clippy
 RUN cargo fetch --locked
 
-FROM builder-deps-common AS builder-wasm-deps
+FROM chef-deps AS builder-wasm-deps
 
-RUN mkdir -p nook-app-common/src nook-auth2/src nook-replication/src nook-event-log/src nook-companion-core/src nook-core/src nook-companion-wasm/src nook-wasm/src \
-    && touch nook-app-common/src/lib.rs nook-auth2/src/lib.rs nook-replication/src/lib.rs nook-event-log/src/lib.rs nook-companion-core/src/lib.rs nook-core/src/lib.rs nook-companion-wasm/src/lib.rs nook-wasm/src/lib.rs
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-test-dependencies
 
-FROM builder-wasm-deps AS builder-deps
+FROM builder-wasm-deps AS builder-core-deps
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
@@ -221,9 +225,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
-# Keep focused source stages in this Dockerfile so their builder-deps parent identity is portable
+# Keep focused source stages in this Dockerfile so their builder-core-deps parent identity is portable
 # across disposable BuildKit daemons. Named Bake target contexts do not preserve that identity.
-FROM builder-deps AS nook-rust-test
+FROM builder-core-deps AS nook-rust-test
 
 WORKDIR /meta-secret/nook
 
@@ -273,7 +277,7 @@ RUN test -f nook-app/Taskfile.yml \
     && git add -A \
     && git commit -q -m "nook-rust-test source snapshot" >/dev/null
 
-FROM builder-deps AS nook-rust-lint
+FROM builder-core-deps AS nook-rust-lint
 
 WORKDIR /meta-secret/nook
 
@@ -315,7 +319,7 @@ RUN test -f nook-app/Taskfile.yml \
     && git add -A \
     && git commit -q -m "nook-rust-lint source snapshot" >/dev/null
 
-FROM builder-deps AS nook-rust-coverage
+FROM builder-core-deps AS nook-rust-coverage
 
 WORKDIR /meta-secret/nook
 
@@ -352,40 +356,3 @@ RUN test -f nook-app/Taskfile.yml \
     && git config user.name nook \
     && git add -A \
     && git commit -q -m "nook-rust-coverage source snapshot" >/dev/null
-
-# --- Web/e2e branch ---------------------------------------------------------
-FROM debian:${DEBIAN_RELEASE}-slim AS web-base
-
-ARG BUN_VERSION=1.3.14
-ARG TASK_VERSION=3.42.1
-
-ENV BUN_INSTALL=/usr/local/bun
-ENV PATH="${BUN_INSTALL}/bin:${PATH}"
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        git \
-        jq \
-        unzip \
-        zip \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
-COPY --from=playwright-node /usr/local/bin/node /usr/local/bin/node
-RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
-
-WORKDIR /meta-secret/nook
-
-# Browser binaries are deliberately outside web-base. PR checks use web-base for unit tests and
-# preview builds. Main/manual e2e uses Debian's Chromium and ffmpeg packages instead of Playwright's
-# bundled Chromium + headless-shell download, which otherwise produces a ~1.3 GB image layer.
-FROM web-base AS web-e2e-base
-
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium ffmpeg xvfb \
-    && rm -rf /var/lib/apt/lists/*

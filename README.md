@@ -304,8 +304,10 @@ domain Taskfiles are prohibited.
 task web:dev
 ```
 
-The first run builds a pinned `mkcert` utility container, writes ignored TLS
-material under `.nook/https/`, and asks the host OS to trust that local CA.
+The first run builds a pinned `mkcert` utility container, writes TLS material
+under `~/.nook/https/` (shared across git worktrees), and asks the host OS to
+trust that local CA. Leftover checkout-scoped `.nook/https/` material is copied
+once into the home directory before a new CA is minted.
 Open [https://localhost:5173](https://localhost:5173) for the landing page, or
 [https://localhost:5173/app/](https://localhost:5173/app/) for the unified
 local test harness. Production builds are `bun run build` inside
@@ -331,13 +333,14 @@ use a separately authorized read-only identity for that bucket. Branch builds
 reuse trusted compiler objects but cannot replace them.
 Run `task infra:sccache:credential:sync` and
 `task infra:registry:credential:sync` once to create mode-`0600` credentials in
-`~/.nook/cache/` (and a copy under the repo `.nook/cache/`). Registry sync also
-runs `docker login registry.dev.nokey.sh`. Without the S3 key files, local and
-untrusted CI builds compile normally without sccache. Trusted Main receives the
-read/write bucket identity; explicit Remote tasks receive the read-only identity. Pull-request,
-arbitrary-ref, dependency-update, and AI-authored jobs receive neither. Stable
-BuildKit secret IDs keep credential values out of layer cache keys. Override the
-endpoint with `SCCACHE_ENDPOINT`.
+`~/.nook/cache/` (shared across checkouts; never written into the repo). Registry
+sync also runs `docker login registry.dev.nokey.sh`. Local Rust builds require
+those S3 key files (`task sccache:ensure` fails closed without them). Secret-free
+hosted jobs set `SCCACHE_OPTIONAL=1` and compile without sccache. Trusted Main
+receives the read/write bucket identity; explicit Remote tasks receive the
+read-only identity. Pull-request, arbitrary-ref, dependency-update, and
+AI-authored jobs receive neither. Stable BuildKit secret IDs keep credential
+values out of layer cache keys. Override the endpoint with `SCCACHE_ENDPOINT`.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT`.
 

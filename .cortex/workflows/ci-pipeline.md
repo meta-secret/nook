@@ -189,7 +189,7 @@ source, export, or application solve. Every outer WASM solve must therefore
 list the fingerprinted WASM dependency scope directly in its `cache-from`
 inputs, even when it also consumes `builder-wasm-deps` as a named context.
 The dependency producer itself extends `rust-base` inside
-`nook-app/docker/base.Dockerfile`; do not put that boundary behind another
+`nook-app/docker/rust.Dockerfile`; do not put that boundary behind another
 named-target image, because republishing the parent target can change the
 downstream cache identity across hosted builders. `nook-app/docker-bake.hcl`
 owns the direct consumer import, and Main verifies every publication from a
@@ -538,9 +538,10 @@ optimization and never a correctness input.
 Each workflow run and retry loads its sealed web and e2e results under run-scoped
 Docker image tags; concurrent jobs must never replace one another's runtime
 image between build and deploy.
-`task setup` verifies authenticated SeaweedFS S3 when credential files are
-available. Without them, the wrapper bypasses sccache. It does not replace
-cargo-chef or change the build result when unavailable to a secret-free job.
+`task sccache:ensure` fails closed when credential files are missing or SeaweedFS
+is unhealthy, so a local misconfiguration cannot silently cold-compile. Secret-free
+hosted jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then
+bypasses sccache without replacing cargo-chef or changing build correctness.
 Manual e2e, research, and every AI-agent job also use isolated
 GitHub-hosted runners and may restore the same scoped BuildKit layers.
 The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.

@@ -553,12 +553,18 @@ fn assert_infrastructure_deploy_contract() -> anyhow::Result<()> {
         "home_cache=\"${HOME}/.nook/cache\"",
         "docker login \"$host\"",
         "gh secret set NOOK_REGISTRY_REMOTE_PASSWORD",
+        "synchronized to ~/.nook/cache",
     ] {
         assert!(
             registry.contains(required),
             "registry credential sync is missing: {required}"
         );
     }
+    assert!(
+        !registry.contains("repo_root/.nook/cache")
+            && !registry.contains("credential_dir="),
+        "registry credentials must sync only to ~/.nook/cache"
+    );
     assert!(!operations.contains("redis:credential"));
     assert!(!operations.contains("redis:stats"));
 
@@ -575,7 +581,6 @@ fn assert_sccache_credential_contract() {
         "sccache:bucket:ensure:",
         "sccache:check:",
         "home_cache=\"${HOME}/.nook/cache\"",
-        "repo_cache=\"$repo_root/.nook/cache\"",
         "sccache-access-key",
         "sccache-secret-key",
         "sccache-remote-access-key",
@@ -612,9 +617,14 @@ fn assert_sccache_credential_contract() {
         );
     }
     assert!(
+        !sccache.contains("repo_cache=")
+            && !sccache.contains("$repo_root/.nook/cache")
+            && !sccache.contains("and .nook/cache"),
+        "SeaweedFS sccache credentials must sync only to ~/.nook/cache"
+    );
+    assert!(
         !sccache.contains("gh secret set NOOK_SCCACHE_ADMIN")
-            && !sccache.contains("$home_cache/sccache-admin")
-            && !sccache.contains("$repo_cache/sccache-admin"),
+            && !sccache.contains("$home_cache/sccache-admin"),
         "SeaweedFS administrative credentials must remain server-side"
     );
     assert!(

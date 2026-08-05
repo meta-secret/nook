@@ -340,7 +340,8 @@ origins.
 The interactive development origins are `https://localhost:5173` and the
 multi-worktree fallback `https://localhost:5175`; they must be registered
 explicitly in both provider consoles. `task web:dev` creates a trusted local
-certificate through the repository's pinned `mkcert` Docker image. Loopback HTTP
+certificate through the repository's pinned `mkcert` Docker image and stores it
+under `~/.nook/https/` so every worktree reuses the same CA. Loopback HTTP
 remains an internal Playwright transport only and does not represent the
 provider-enabled manual development environment.
 

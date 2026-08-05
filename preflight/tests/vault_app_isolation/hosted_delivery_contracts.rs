@@ -60,7 +60,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         );
     }
     assert!(
-        read(root, "nook-app/docker/base.docker-bake.hcl")
+        read(root, "nook-app/docker/rust.docker-bake.hcl")
             .contains("cache-to   = rust_base_cache_to"),
         "the Rust toolchain base must seed its own hosted cache before dependency scopes consume it"
     );
@@ -117,7 +117,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")
-            && app_tasks.contains("--set \"builder-deps.output=type=cacheonly\"")
+            && app_tasks.contains("--set \"builder-core-deps.output=type=cacheonly\"")
             && app_tasks.contains("--set \"builder-debug.output=type=cacheonly\""),
         "selected dependency and native-source cache publishers must be explicit cache-only Bake outputs"
     );
@@ -197,7 +197,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     );
     let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
     assert!(
-        docker_tasks.contains("ci-rust builder-deps rust-base")
+        docker_tasks.contains("ci-rust builder-core-deps rust-base")
             && docker_tasks.contains("wasm-export builder-wasm-deps")
             && docker_tasks.contains("nook-web-ci web-deps")
             && docker_tasks.contains("docker:ci:cache:publish:native:")
@@ -221,18 +221,66 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
         "Main must reject a published WASM cache until a fresh builder restores every dependency layer"
     );
-    let base_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
+    let base_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
     assert!(
-        base_dockerfile.contains("CARGO_CHEF_IMAGE=")
-            && base_dockerfile.contains("@sha256:")
-            && base_dockerfile.contains("FROM ${CARGO_CHEF_IMAGE} AS cargo-chef")
+        base_dockerfile.contains("ARG RUST_VERSION=")
+            && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
+            && base_dockerfile.contains("ARG RUST_DIGEST=sha256:")
+            && base_dockerfile
+                .contains("RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
             && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
-            && base_dockerfile.contains("FROM rust-base AS chef-planner")
-            && base_dockerfile.contains("FROM rust-base AS builder-deps-common")
+            && base_dockerfile.contains("FROM rust-base AS chef-deps")
+            && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")
+            && base_dockerfile.contains(
+                "cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json",
+            )
             && base_dockerfile.contains("NOOK_WASM_DEPS_CACHE_EPOCH=")
             && base_dockerfile.contains("/etc/nook-wasm-deps-cache-epoch")
-            && !base_dockerfile.contains("cargo-chef:latest-rust-${RUST_VERSION}"),
-        "Rust dependency stages must be self-contained on digest-pinned base images with an explicit reseed epoch"
+            && base_dockerfile.contains("ARG CARGO_CHEF_VERSION=")
+            && base_dockerfile.contains("ARG CARGO_CHEF_SHA256=")
+            && base_dockerfile.contains(
+                "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/",
+            )
+            && base_dockerfile.contains("/usr/local/cargo/bin/cargo-chef")
+            && !base_dockerfile.contains("AS chef-planner")
+            && !base_dockerfile.contains("COPY --from=chef-planner")
+            && !base_dockerfile.contains("lukemathwalker/cargo-chef")
+            && !base_dockerfile.contains("FROM ${CARGO_CHEF_IMAGE}")
+            && !base_dockerfile.contains("latest-rust-1.")
+            && !base_dockerfile.contains("rust:1."),
+        "Rust dependency stages must use a digest-pinned rust base and a single chef-deps prepare/cook stage"
+    );
+    let web_dockerfile = read(root, "nook-app/docker/web.Dockerfile");
+    let rust_bake = read(root, "nook-app/docker/rust.docker-bake.hcl");
+    let web_bake = read(root, "nook-app/docker/web.docker-bake.hcl");
+    for (path, dockerfile) in [
+        ("nook-app/docker/rust.Dockerfile", base_dockerfile.as_str()),
+        ("nook-app/docker/web.Dockerfile", web_dockerfile.as_str()),
+    ] {
+        assert!(
+            dockerfile.contains("NODE_VERSION=")
+                && dockerfile.contains("NODE_SHA256=")
+                && dockerfile.contains("https://nodejs.org/dist/v${NODE_VERSION}/")
+                && dockerfile.contains("sha256sum -c -")
+                && dockerfile.contains("install -m 0755")
+                && dockerfile.contains("/usr/local/bin/node")
+                && !dockerfile.contains("NODE_IMAGE=")
+                && !dockerfile.contains("playwright-node")
+                && !dockerfile.contains("FROM node:"),
+            "{path} must install a binary-only Node runtime via a pinned curl download"
+        );
+    }
+    assert!(
+        rust_bake.contains("dockerfile = \"nook-app/docker/rust.Dockerfile\"")
+            && rust_bake.contains("target \"rust-base\"")
+            && !rust_bake.contains("web.Dockerfile")
+            && web_bake.contains("dockerfile = \"nook-app/docker/web.Dockerfile\"")
+            && web_bake.contains("target \"web-base\"")
+            && web_bake.contains("target \"web-e2e-base\"")
+            && !web_bake.contains("rust.Dockerfile")
+            && !rust_bake.contains("base.Dockerfile")
+            && !web_bake.contains("base.Dockerfile"),
+        "Bake must split rust-base and web-base across rust/web docker-bake files"
     );
     Ok(())
 }
@@ -286,7 +334,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
         "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
     );
-    let dependency_dockerfile = read(root, "nook-app/docker/base.Dockerfile");
+    let dependency_dockerfile = read(root, "nook-app/docker/rust.Dockerfile");
     let core_dockerfile = read(root, "nook-app/nook-core/Dockerfile");
     assert!(
         !core_dockerfile.contains("wasm-dependency-test")
@@ -602,7 +650,7 @@ fn assert_preflight_reporter_contract(root: &Path) {
     );
     let preflight_dockerfile = read(root, "preflight/Dockerfile");
     assert!(
-        preflight_dockerfile.contains("FROM rust:1.96-bookworm AS build")
+        preflight_dockerfile.contains("FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS build")
             && preflight_dockerfile.contains("FROM scratch AS cli-export")
             && preflight_dockerfile.contains("target/debug/nook-preflight /nook-preflight"),
         "the preflight reporter must share the tested Debian build graph and export as a stripped CI tool"

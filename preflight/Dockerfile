@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.4
 
-FROM rust:1.96-bookworm AS build
+ARG RUST_VERSION=1.97
+ARG DEBIAN_RELEASE=trixie
+
+FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS build
 
 WORKDIR /opt/nook/preflight
 RUN rustup component add clippy rustfmt

@@ -1,13 +1,12 @@
 // nook-core build targets: cargo-chef dependency cache + native verify warm-up.
-// `builder-deps` is also the shared base for the wasm build (see nook-app/nook-wasm/docker-bake.hcl).
+// Native dependency warm-up on top of builder-wasm-deps (nextest/clippy/coverage graphs).
 // The selected builder caches this linux/amd64 lineage locally; hosted CI also restores the Rust Zot refs.
 
-// Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
-target "builder-deps" {
+target "builder-core-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/docker/base.Dockerfile"
-  target     = "builder-deps"
+  dockerfile = "nook-app/docker/rust.Dockerfile"
+  target     = "builder-core-deps"
   platforms  = ["linux/amd64"]
   cache-from = rust_deps_cache_from
   cache-to   = rust_deps_cache_to
@@ -16,7 +15,7 @@ target "builder-deps" {
 target "builder-wasm-deps" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/docker/base.Dockerfile"
+  dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "builder-wasm-deps"
   platforms  = ["linux/amd64"]
   // Main owns the complete dependency-fingerprinted WASM lineage. Pull requests restore it
@@ -39,7 +38,7 @@ target "builder-debug" {
   target     = "builder-debug"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-core-deps = "target:builder-core-deps"
   }
   cache-from = rust_native_source_cache_from
   cache-to   = rust_native_source_cache_to
@@ -54,7 +53,7 @@ target "coverage-export" {
   target     = "coverage-export"
   platforms  = ["linux/amd64"]
   contexts = {
-    builder-deps = "target:builder-deps"
+    builder-core-deps = "target:builder-core-deps"
   }
   // Main verifies this graph read-only, then exports the already-solved local builder state in a
   // separate post-verification step without a second reconstruction job.
@@ -67,7 +66,7 @@ target "coverage-export" {
 target "_nook-rust-test-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/docker/base.Dockerfile"
+  dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "nook-rust-test"
   platforms  = ["linux/amd64"]
   // Focused Remote rust:test runs own a branch-scoped Zot export. Trusted Main remains the
@@ -79,7 +78,7 @@ target "_nook-rust-test-common" {
 target "_nook-rust-lint-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/docker/base.Dockerfile"
+  dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "nook-rust-lint"
   platforms  = ["linux/amd64"]
   cache-from = rust_native_source_cache_from
@@ -89,7 +88,7 @@ target "_nook-rust-lint-common" {
 target "_nook-rust-coverage-common" {
   inherits   = ["_sccache"]
   context    = "."
-  dockerfile = "nook-app/docker/base.Dockerfile"
+  dockerfile = "nook-app/docker/rust.Dockerfile"
   target     = "nook-rust-coverage"
   platforms  = ["linux/amd64"]
   cache-from = rust_native_source_cache_from

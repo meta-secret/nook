@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
-# Native source verification extends the self-contained dependency targets from base.Dockerfile.
-FROM builder-deps AS builder-debug
+# Native source verification extends the self-contained dependency targets from rust.Dockerfile.
+FROM builder-core-deps AS builder-debug
 
 WORKDIR /meta-secret/nook/nook-app
 

@@ -598,11 +598,12 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
 - Registry BuildKit stores layers and dependency/source graph snapshots.
 - Neither is a correctness dependency.
 - `task infra:sccache:credential:sync` writes the ignored, mode-`0600`
-  `.nook/cache/sccache-access-key` and `sccache-secret-key` files. Hive
-  build/check/test tasks use those paths by default, while explicit
-  `SCCACHE_S3_*_KEY_FILE` overrides still apply in CI.
-- Forks and local runs without either credential file compile normally and
-  report the missing cache credential.
+  `~/.nook/cache/sccache-access-key` and `sccache-secret-key` files (never into
+  the repo checkout). Hive build/check/test tasks use those paths by default,
+  while explicit `SCCACHE_S3_*_KEY_FILE` overrides still apply in CI.
+- Local runs without either credential file fail closed unless
+  `SCCACHE_OPTIONAL=1`. Secret-free hosted jobs set that escape and compile
+  without sccache.
 - The S3 credentials are mounted as BuildKit secrets or read-only runtime
   secrets and are never copied into an image or cache layer.
 - The S3 credentials are not needed by the Hive worker. Worker tasks publish

@@ -44,12 +44,14 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     let app_tasks = read("nook-app/Taskfile.yml");
     for required in [
         "https://sccache.dev.nokey.sh",
-        ".nook/cache/sccache-access-key",
-        ".nook/cache/sccache-secret-key",
         "${HOME}/.nook/cache/sccache-access-key",
         "${HOME}/.nook/cache/sccache-secret-key",
-        "no S3 credential; compiling without sccache",
-        "SeaweedFS S3 is unavailable; compiling without remote sccache",
+        "~/.nook/cache/",
+        "missing S3 credentials",
+        "SCCACHE_OPTIONAL=1",
+        "Refusing to compile without sccache",
+        "SeaweedFS S3 is unavailable",
+        "Refusing to compile without a healthy remote sccache backend",
         "SeaweedFS S3 sccache is healthy",
         "--set '*.args.SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}'",
         "--set '*.args.SCCACHE_BUCKET={{.SCCACHE_BUCKET}}'",
@@ -60,6 +62,11 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
             "SeaweedFS sccache configuration is missing: {required}"
         );
     }
+    assert!(
+        !app_tasks.contains("{{.REPO_ROOT}}/.nook/cache/")
+            && !app_tasks.contains("repo .nook/cache"),
+        "local sccache credentials must live only under ~/.nook/cache"
+    );
     assert!(
         !app_tasks.contains("print $4; exit") && !app_tasks.contains("print $2; exit"),
         "pipefail-safe Docker inspection must consume complete output instead of SIGPIPEing the producer"
@@ -95,7 +102,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
     assert!(!bake.contains("extra-hosts"));
     assert!(!bake.contains("SCCACHE_REDIS"));
 
-    let rust_base = read("nook-app/docker/base.Dockerfile");
+    let rust_base = read("nook-app/docker/rust.Dockerfile");
     assert!(rust_base.contains("ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh"));
     assert!(rust_base.contains("ENV SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT}"));
     assert!(rust_base.contains("ENV SCCACHE_BUCKET=${SCCACHE_BUCKET}"));
@@ -106,7 +113,7 @@ fn sccache_uses_authenticated_seaweedfs_s3_without_docker_host_routing() -> anyh
         "nook-app/Taskfile.yml",
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker-bake.hcl",
-        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/rust.Dockerfile",
     ] {
         assert!(
             !read(path).contains("host.docker.internal")
@@ -167,6 +174,7 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
         "NOOK_SCCACHE_BACKEND_REASON=persistent_s3_service",
         "hosted_secret_free_by_design",
         "credentials_unavailable",
+        "SCCACHE_OPTIONAL=1",
     ] {
         assert!(
             cache_action_main.contains(required),
@@ -275,7 +283,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(wrapper.contains("exec /usr/local/bin/sccache \"$@\""));
     assert!(!wrapper.contains("REDIS"));
 
-    let rust_base = read("nook-app/docker/base.Dockerfile");
+    let rust_base = read("nook-app/docker/rust.Dockerfile");
     assert!(rust_base.contains("RUSTC_WRAPPER=/usr/local/bin/nook-sccache"));
     assert!(rust_base.contains("NOOK_SCCACHE_S3_MODE=${SCCACHE_S3_MODE}"));
     assert!(rust_base.contains("SCCACHE_IGNORE_SERVER_IO_ERROR=1"));
@@ -284,7 +292,7 @@ fn assert_rust_build_cache_boundary() {
     assert!(app_tasks.contains("--set '*.args.SCCACHE_S3_MODE={{.SCCACHE_S3_MODE}}'"));
 
     for path in [
-        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/rust.Dockerfile",
         "nook-app/nook-core/Dockerfile",
         "nook-app/nook-wasm/Dockerfile",
     ] {
@@ -326,7 +334,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "nook-app/docker-bake.hcl",
         "nook-app/**/docker-bake.hcl",
         "nook-app/docker/*.docker-bake.hcl",
-        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/rust.Dockerfile",
         "nook-app/docker/Taskfile.yml",
         "nook-app/docker/sccache-wrapper.sh",
         "nook-app/docker/sccache-report.sh",
@@ -472,7 +480,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM dependencies must restore Main's dedicated complete WASM dependency lineage"
     );
     assert!(
-        wasm_dependencies.contains("dockerfile = \"nook-app/docker/base.Dockerfile\"")
+        wasm_dependencies.contains("dockerfile = \"nook-app/docker/rust.Dockerfile\"")
             && !wasm_dependencies.contains("rust-base = \"target:rust-base\""),
         "WASM dependency cache keys must extend rust-base inside one Dockerfile instead of through a volatile named-target image"
     );
@@ -530,10 +538,10 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         );
     }
 
-    let rust_base = read("nook-app/docker/base.Dockerfile");
+    let rust_base = read("nook-app/docker/rust.Dockerfile");
     assert!(rust_base.contains("sccache-report.sh /usr/local/bin/nook-sccache-report"));
     for path in [
-        "nook-app/docker/base.Dockerfile",
+        "nook-app/docker/rust.Dockerfile",
         "nook-app/nook-core/Dockerfile",
         "nook-app/nook-wasm/Dockerfile",
     ] {
@@ -543,7 +551,7 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
         );
     }
     assert!(
-        read("nook-app/docker/base.Dockerfile")
+        read("nook-app/docker/rust.Dockerfile")
             .matches("nook-sccache-report")
             .count()
             >= 12
@@ -599,7 +607,7 @@ fn rust_build_targets_inherit_the_sccache_configuration() -> anyhow::Result<()> 
         (
             "nook-app/nook-core/docker-bake.hcl",
             [
-                "builder-deps",
+                "builder-core-deps",
                 "builder-debug",
                 "coverage-export",
                 "_nook-rust-test-common",

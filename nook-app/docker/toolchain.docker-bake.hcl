@@ -1,4 +1,4 @@
-// Web deps branch: `bun install` -> node_modules. Own bake target (like builder-deps), cached in the
+// Web deps branch: `bun install` -> node_modules. Own bake target (like builder-core-deps), cached in the
 // selected builder locally and in its own private Zot ref on hosted CI. No Rust target is merged here.
 target "web-deps" {
   context    = "."

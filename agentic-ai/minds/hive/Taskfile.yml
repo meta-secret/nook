@@ -4,29 +4,24 @@ vars:
   HIVE_DIR: ..
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
-  HIVE_TEST_RUNTIME_IMAGE: rust:1.96-trixie@sha256:1f0dbad1df66647807e6952d1db85d0b2bda7606cb2139d82517e4f009967376
+  HIVE_RUST_VERSION: '1.97'
+  HIVE_DEBIAN_RELEASE: trixie
+  HIVE_RUST_DIGEST: sha256:1bcff4befb740599103a2c7cb51058e14479b2e35e3a34a3f0dc4ede09927488
+  HIVE_TEST_RUNTIME_IMAGE: rust:{{.HIVE_RUST_VERSION}}-{{.HIVE_DEBIAN_RELEASE}}@{{.HIVE_RUST_DIGEST}}
   NOOK_APP_CONTEXT: ../../nook-app
   SCCACHE_S3_ACCESS_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_ACCESS_KEY_FILE";
-      elif [ -r "../../.nook/cache/sccache-access-key" ]; then
-        printf '%s' "../../.nook/cache/sccache-access-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-access-key" ]; then
-        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       else
-        printf '%s' "../../.nook/cache/sccache-access-key";
+        printf '%s' "${HOME}/.nook/cache/sccache-access-key";
       fi
   SCCACHE_S3_SECRET_KEY_FILE:
     sh: >-
       if [ -n "${SCCACHE_S3_SECRET_KEY_FILE:-}" ]; then
         printf '%s' "$SCCACHE_S3_SECRET_KEY_FILE";
-      elif [ -r "../../.nook/cache/sccache-secret-key" ]; then
-        printf '%s' "../../.nook/cache/sccache-secret-key";
-      elif [ -r "${HOME}/.nook/cache/sccache-secret-key" ]; then
-        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       else
-        printf '%s' "../../.nook/cache/sccache-secret-key";
+        printf '%s' "${HOME}/.nook/cache/sccache-secret-key";
       fi
 
 tasks:
