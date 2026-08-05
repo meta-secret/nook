@@ -407,7 +407,7 @@ RUN set -eux; \
       cargo-deny --manifest-path "$manifest" check; \
     done; \
     for workspace in nook-app fuzz preflight agentic-ai/minds; do \
-      (cd "$workspace" && cargo-audit); \
+      (cd "$workspace" && cargo-audit audit); \
     done
 
 FROM rust-base AS rust-ecosystem-nightly
@@ -416,9 +416,9 @@ ARG DYLINT_NIGHTLY=nightly-2026-04-16
 ARG CARGO_FUZZ_VERSION=0.13.2
 ARG CARGO_FUZZ_SHA256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c
 ARG CARGO_DYLINT_VERSION=6.0.1
-ARG CARGO_DYLINT_SHA256=9f130d915efbfd1d04160ac9874c617a5d74b48971881e25b5ea6c69e74597f7
-ARG DYLINT_LINK_SHA256=c47c31479a44ed6d6c8aaf43dfe6a1db65f5e4c4b834c7e7365a1d309e7c1bfd
 
+# cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
+# CI-only driver path, so install the pinned crates once into this image layer.
 RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
       --component clippy,llvm-tools-preview,rustc-dev \
     && curl -fsSL \
@@ -428,26 +428,8 @@ RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
     && tar xzf /tmp/cargo-fuzz.tgz -C /tmp \
     && install -m 0755 /tmp/cargo-fuzz /usr/local/cargo/bin/cargo-fuzz \
     && rm -rf /tmp/cargo-fuzz.tgz /tmp/cargo-fuzz \
-    && curl -fsSL \
-      "https://github.com/trailofbits/dylint/releases/download/v${CARGO_DYLINT_VERSION}/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}.tar.gz" \
-      -o /tmp/cargo-dylint.tgz \
-    && echo "${CARGO_DYLINT_SHA256}  /tmp/cargo-dylint.tgz" | sha256sum -c - \
-    && tar xzf /tmp/cargo-dylint.tgz -C /tmp \
-    && install -m 0755 \
-      "/tmp/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}/cargo-dylint" \
-      /usr/local/cargo/bin/cargo-dylint \
-    && rm -rf /tmp/cargo-dylint.tgz \
-      "/tmp/cargo-dylint-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}" \
-    && curl -fsSL \
-      "https://github.com/trailofbits/dylint/releases/download/v${CARGO_DYLINT_VERSION}/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}.tar.gz" \
-      -o /tmp/dylint-link.tgz \
-    && echo "${DYLINT_LINK_SHA256}  /tmp/dylint-link.tgz" | sha256sum -c - \
-    && tar xzf /tmp/dylint-link.tgz -C /tmp \
-    && install -m 0755 \
-      "/tmp/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}/dylint-link" \
-      /usr/local/cargo/bin/dylint-link \
-    && rm -rf /tmp/dylint-link.tgz \
-      "/tmp/dylint-link-x86_64-unknown-linux-gnu-v${CARGO_DYLINT_VERSION}" \
+    && cargo install cargo-dylint dylint-link \
+      --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo fuzz --version \
     && cargo dylint --version
 

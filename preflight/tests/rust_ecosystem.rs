@@ -63,10 +63,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "CARGO_DENY_SHA256=",
         "CARGO_AUDIT_SHA256=",
         "CARGO_FUZZ_SHA256=",
-        "CARGO_DYLINT_SHA256=",
         "DYLINT_NIGHTLY=nightly-2026-04-16",
+        "cargo install cargo-dylint dylint-link",
         "cargo-deny --manifest-path",
-        "cargo-audit",
+        "cargo-audit audit",
         "cargo fuzz run",
         "cargo dylint --all",
     ] {
@@ -80,7 +80,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .split("FROM rust-base AS rust-ecosystem-policy-tools")
         .next()
         .expect("rust-base section");
-    for forbidden in ["CARGO_DENY_SHA256=", "CARGO_AUDIT_SHA256=", "CARGO_FUZZ_SHA256="] {
+    for forbidden in [
+        "CARGO_DENY_SHA256=",
+        "CARGO_AUDIT_SHA256=",
+        "CARGO_FUZZ_SHA256=",
+        "cargo install cargo-dylint",
+    ] {
         assert!(
             !rust_base.contains(forbidden),
             "rust-base must not install ecosystem CLI {forbidden}"
