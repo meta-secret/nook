@@ -655,9 +655,10 @@ test.describe('devices and access dashboard', () => {
     await expect(identityGraph.locator('.svelte-flow__edge')).toHaveCount(0)
     await page.getByTestId('devices-access-perspective-vaults').click()
     await page.getByTestId('devices-access-node-vaults').click()
-    await expect(page.getByTestId('devices-access-vaults')).toContainText(
-      'Access verified',
-    )
+    const vaults = page.getByTestId('devices-access-vaults')
+    await expect(vaults).toContainText('Access verified')
+    await expect(vaults).toContainText('previously observed successful access')
+    await expect(vaults).not.toContainText('in this session')
     await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(
       0,
     )

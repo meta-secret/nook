@@ -130,13 +130,6 @@
                 <ShieldQuestion class="size-3.5" aria-hidden="true" />
               {/if}
             </span>
-            <span class="sr-only">
-              {vault.t(
-                vaultEntry.verified
-                  ? I18N_KEYS.DevicesAccessRouteVerified
-                  : I18N_KEYS.DevicesAccessRouteUnverified,
-              )}
-            </span>
           </button>
         </li>
       {/each}
