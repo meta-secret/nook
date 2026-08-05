@@ -739,7 +739,9 @@ export async function reloadUnlockWithSyncProvider(
   } else {
     await unlockVaultOnLogin(page)
   }
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('vault-admin-panel')),
+  ).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await dismissSyncConflictIfVisible(page)

@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   createIsolatedContext,
+  disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   waitForPersistedAppLog,
 } from './helpers'
@@ -469,6 +470,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await disableVaultIdleLock(page)
 
     const wrapped = await readPersistedDeviceIdentity(page)
     expect(wrapped).toContain('"protection":"pin"')
@@ -476,6 +478,9 @@ test.describe('passkey device-key protection', () => {
 
     const pinDeviceId = await readDeviceId(page)
     await page.getByTestId('vault-devices-access-tab').click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('devices-access-node-device-key').click()
     await expect(page.getByTestId('devices-access-device-id')).toContainText(
       pinDeviceId,
