@@ -402,3 +402,25 @@ test('marks a bounded attention count as truncated', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.attention-summary strong')).toHaveText('1+');
 });
+
+test('filters tasks by status tab, toggles grouping, and sorts tasks', async ({
+  page,
+}) => {
+  await routeSnapshot(page);
+  await page.goto('/');
+
+  // Test status tab navigation
+  await page.locator('.tab-button', { hasText: 'Completed' }).click();
+  await expect(
+    page.getByRole('button', { name: /Documentation Completed/ }),
+  ).toBeVisible();
+
+  // Test Grouping toggle
+  await page.getByRole('button', { name: 'All tasks' }).click();
+  await page.getByRole('button', { name: 'Group' }).click();
+  await expect(page.locator('.group-header').first()).toBeVisible();
+
+  // Test sorting dropdown
+  await page.locator('.sort-select').selectOption('attempts');
+  await expect(page.locator('.task-list')).toBeVisible();
+});
