@@ -299,9 +299,11 @@ test.describe('passkey device-key protection', () => {
       'Sentinel participant two',
     )
     expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
+    const participantResponseUrl = new URL(participantTwo.responseLink)
+    participantResponseUrl.origin = new URL(page.url()).origin
     await page.evaluate((responseLink) => {
       window.location.href = responseLink
-    }, participantTwo.responseLink)
+    }, participantResponseUrl.href)
     await expect(page).toHaveURL(/\/vault$/)
     await expect(
       page.getByTestId('sentinel-genesis-authentication-ready'),
