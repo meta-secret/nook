@@ -404,10 +404,8 @@ RUN set -eux; \
       fuzz/Cargo.toml \
       preflight/Cargo.toml \
       agentic-ai/minds/Cargo.toml; do \
-      cargo-deny --manifest-path "$manifest" \
-        --log-level error \
-        --hide-inclusion-graph \
-        check; \
+      cargo-deny --manifest-path "$manifest" --log-level error \
+        check --hide-inclusion-graph; \
     done; \
     for workspace in nook-app fuzz preflight agentic-ai/minds; do \
       (cd "$workspace" && cargo-audit audit); \
