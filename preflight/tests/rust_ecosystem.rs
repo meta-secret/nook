@@ -67,6 +67,24 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(replication.contains("#[kani::proof]"));
     assert!(fuzz_target.contains("fuzz_target!"));
     assert!(fuzz_manifest.contains("[lints.clippy]"));
+    assert!(fuzz_manifest.contains("expect_used = \"deny\""));
+    assert!(fuzz_manifest.contains("unwrap_used = \"deny\""));
+    for relative in [
+        "nook-app/clippy.toml",
+        "preflight/clippy.toml",
+        "agentic-ai/minds/clippy.toml",
+        "fuzz/clippy.toml",
+    ] {
+        let clippy = read(relative)?;
+        assert!(
+            clippy.contains("allow-expect-in-tests = false"),
+            "{relative} must deny expect in tests"
+        );
+        assert!(
+            clippy.contains("allow-unwrap-in-tests = false"),
+            "{relative} must deny unwrap in tests"
+        );
+    }
     assert!(readiness.contains("workflowFile: \"rust-ecosystem.yml\""));
     Ok(())
 }

@@ -126,9 +126,14 @@ Use this workflow for quality, CI, and deployment changes.
     in Insta; concurrent state machines belong in Loom; hostile byte inputs
     belong in cargo-fuzz; bounded exhaustive properties belong in Kani; and
     reusable AST/type-aware Rust source rules belong in Clippy or Dylint.
+    Panic shortcuts (`.expect` / `.unwrap`, including tests) belong to Clippy
+    workspace lints plus `clippy.toml`; do not re-implement them in preflight.
     Keep `preflight` for Nook-specific cross-language architecture, repository
     topology, delivery, and security contracts that those tools cannot
-    represent. Do not duplicate an ecosystem tool in a custom scanner.
+    represent — including authored `JsValue` paths before wasm-bindgen
+    expansion, repository-defined macros, and untyped JSON assertions in
+    known-contract tests. Do not duplicate an ecosystem tool in a custom
+    scanner.
 22. **Cost tiers:** cargo-deny, RustSec, Proptest, and committed Insta snapshots
     are normal merge checks. Loom models must remain bounded. Cargo-fuzz uses a
     short merge smoke and longer scheduled/manual campaigns. Kani proofs must

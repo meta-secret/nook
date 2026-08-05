@@ -177,7 +177,10 @@ erase test errors behind
 `Box<dyn std::error::Error>`: use the concrete crate error when one error family
 is involved, or `anyhow::Result` when a test composes unrelated fallible APIs.
 Workspace Clippy configuration denies both `expect_used` and `unwrap_used`
-across all targets.
+across all targets. Each Rust workspace `clippy.toml` sets
+`allow-expect-in-tests = false` and `allow-unwrap-in-tests = false`, so tests
+must use `Result` + `?` as well. Preflight only contracts that those Clippy
+settings remain configured; it does not re-scan for `.expect` calls.
 
 Production Rust must not depend on, import, return, or invoke `anyhow`.
 Libraries, binaries, examples, and build scripts expose concrete error enums
@@ -185,6 +188,10 @@ whose variants identify the failed operation and preserve typed sources.
 `anyhow` is permitted only in `#[cfg(test)]` unit-test code and integration
 tests under `tests/`, and it belongs in `[dev-dependencies]`. Repository
 preflight parses authored Rust and Cargo manifests to enforce that boundary.
+Authored `JsValue` paths, repository-defined macros, and untyped JSON
+assertions in known-contract tests stay in preflight because Clippy
+`disallowed_types` cannot distinguish wasm-bindgen-generated ABI code and the
+macro/JSON rules need whole-repository source AST walks.
 
 ## ⛔ Non-negotiable: authored Rust macros are prohibited
 

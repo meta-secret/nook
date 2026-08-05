@@ -12,9 +12,10 @@ structural absence such as iterator and lookup results, optional external
 inputs, caches, and raw compatibility DTOs. Required persisted values use
 required validated newtypes. Named product/lifecycle/auth states use enums.
 
-Do not use `.unwrap()` in authored Rust. Production code propagates or
-classifies failure; tests use `Result`/`?` when practical or `expect` with a
-fixture-specific invariant. Keep `clippy::unwrap_used` denied for every target.
+Do not use `.unwrap()` or `.expect(...)` in authored Rust. Production code
+propagates or classifies failure; tests return `Result` and use `?`. Keep
+`clippy::expect_used` and `clippy::unwrap_used` denied for every target, with
+workspace `clippy.toml` keeping both denied in tests.
 
 When the optionality comes from persisted JSON or browser storage, keep the raw
 compatibility shape only at the boundary and convert it into a typed Rust enum

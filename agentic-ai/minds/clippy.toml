@@ -1,0 +1,3 @@
+# Panic shortcuts stay denied in tests: prefer Result + ? over expect/unwrap.
+allow-expect-in-tests = false
+allow-unwrap-in-tests = false

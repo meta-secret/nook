@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Attribute, ExprMethodCall, ItemFn, ItemMod, ItemUse, Macro, UseTree};
+use syn::{Attribute, ItemFn, ItemMod, ItemUse, Macro, UseTree};
 
 fn repository_root() -> PathBuf {
     std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -70,6 +70,7 @@ fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
         "nook-app/Cargo.toml",
         "agentic-ai/minds/Cargo.toml",
         "preflight/Cargo.toml",
+        "fuzz/Cargo.toml",
     ] {
         let manifest =
             fs::read_to_string(root.join(relative)).with_context(|| format!("read {relative}"))?;
@@ -83,31 +84,24 @@ fn every_rust_workspace_denies_panic_shortcut_lints() -> Result<()> {
 }
 
 #[test]
-fn authored_rust_never_calls_expect() -> Result<()> {
+fn every_rust_workspace_keeps_panic_shortcuts_denied_in_tests() -> Result<()> {
     let root = repository_root();
-    let mut files = Vec::new();
-    collect_rust_files(&root, &mut files)?;
-
-    let mut violations = Vec::new();
-    for path in files {
-        let source =
-            fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        let syntax = syn::parse_file(&source)
-            .with_context(|| format!("parse authored Rust {}", path.display()))?;
-        let mut visitor = RustPolicyVisitor::default();
-        visitor.visit_file(&syntax);
-        for violation in visitor.panic_shortcuts {
-            violations.push(format!(
-                "{}:{violation}",
-                path.strip_prefix(&root).unwrap_or(&path).display()
-            ));
+    for relative in [
+        "nook-app/clippy.toml",
+        "agentic-ai/minds/clippy.toml",
+        "preflight/clippy.toml",
+        "fuzz/clippy.toml",
+    ] {
+        let config =
+            fs::read_to_string(root.join(relative)).with_context(|| format!("read {relative}"))?;
+        for setting in [
+            "allow-expect-in-tests = false",
+            "allow-unwrap-in-tests = false",
+        ] {
+            if !config.contains(setting) {
+                bail!("{relative} must configure {setting}");
+            }
         }
-    }
-    if !violations.is_empty() {
-        bail!(
-            "authored Rust must propagate errors with Result and ?: {}",
-            violations.join(", ")
-        );
     }
     Ok(())
 }
@@ -194,7 +188,6 @@ fn collect_named_files(directory: &Path, name: &str, files: &mut Vec<PathBuf>) -
 
 #[derive(Default)]
 struct RustPolicyVisitor {
-    panic_shortcuts: Vec<String>,
     production_anyhow: Vec<usize>,
     in_test: bool,
 }
@@ -239,17 +232,6 @@ impl<'ast> Visit<'ast> for RustPolicyVisitor {
         self.in_test |= Self::cfg_test(&module.attrs);
         syn::visit::visit_item_mod(self, module);
         self.in_test = was_in_test;
-    }
-
-    fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
-        if matches!(call.method.to_string().as_str(), "expect" | "expect_err") {
-            self.panic_shortcuts.push(format!(
-                "{}:{}",
-                call.method.span().start().line,
-                call.method
-            ));
-        }
-        syn::visit::visit_expr_method_call(self, call);
     }
 
     fn visit_item_use(&mut self, item: &'ast ItemUse) {
