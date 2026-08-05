@@ -269,7 +269,9 @@ fn assert_workflows_scope_cache_credentials() {
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 
     let pr = read(".github/workflows/pr.yml");
-    let pr_docker_setups = pr.matches("uses: ./.github/actions/nook-docker-setup").count();
+    let pr_docker_setups = pr
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
     assert_eq!(
         pr.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
         pr_docker_setups,
@@ -431,12 +433,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
     assert!(setup.contains("main-cache-only requires cache-write=false"));
-    assert!(setup.contains(
-        "isolated-cache-write requires main-cache-only=true and cache-write=false"
-    ));
-    assert!(setup.contains(
-        "isolated-cache-write requires workflow_dispatch or pull_request"
-    ));
+    assert!(
+        setup.contains("isolated-cache-write requires main-cache-only=true and cache-write=false")
+    );
+    assert!(setup.contains("isolated-cache-write requires workflow_dispatch or pull_request"));
     assert!(setup.contains("scope_suffix=\"-pr-$pr_number\""));
     assert!(
         setup.contains(
