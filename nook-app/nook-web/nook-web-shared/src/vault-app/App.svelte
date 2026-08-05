@@ -152,6 +152,15 @@
   )
 
   function syncRoute() {
+    if (!IS_SIMPLE_APP) {
+      const invitationRequest = consumeSentinelGenesisRequestFromLocation()
+      if (invitationRequest) sentinelInvitationRequest = invitationRequest
+      const participantResponse =
+        consumeSentinelGenesisParticipantResponseFromLocation()
+      if (participantResponse) sentinelParticipantResponse = participantResponse
+      const onboardingPackage = consumeSentinelOnboardingFromLocation()
+      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
+    }
     const routeLegalPage = getLegalPageFromPath(window.location.pathname)
     legalPageState = legalRoute(routeLegalPage)
     logsPage = isLogsPath(window.location.pathname)
@@ -184,15 +193,6 @@
         kind: ExtensionConnectIntentKind.Requested,
         request: routeConnectRequest.request,
       }
-    }
-    if (!IS_SIMPLE_APP) {
-      const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest) sentinelInvitationRequest = invitationRequest
-      const participantResponse =
-        consumeSentinelGenesisParticipantResponseFromLocation()
-      if (participantResponse) sentinelParticipantResponse = participantResponse
-      const onboardingPackage = consumeSentinelOnboardingFromLocation()
-      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
     }
   }
 

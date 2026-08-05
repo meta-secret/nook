@@ -38,6 +38,8 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     PollScheduleKind,
     SelectedTaskKind,
     SnapshotLoadRequestKind,
+    TaskSortOption,
+    TaskTabFilter,
     TaskSelectionKind,
     type DurableTaskLookup,
     type DetailPanelMount,
@@ -48,16 +50,13 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     type TaskSelection,
   } from './app-state';
 
-  type TabFilter = 'all' | 'attention' | 'running' | 'failed' | 'completed';
-  type SortOption = 'newest' | 'oldest' | 'attempts';
-
   let snapshotState = $state<ObserverFeed>({
     kind: ObserverFeedKind.NotLoaded,
   });
   let selectedIdState = $state<TaskSelection>({ kind: TaskSelectionKind.None });
   let search = $state('');
-  let selectedTab = $state<TabFilter>('all');
-  let sortBy = $state<SortOption>('newest');
+  let selectedTab = $state<TaskTabFilter>(TaskTabFilter.All);
+  let sortBy = $state<TaskSortOption>(TaskSortOption.Newest);
   let groupByKind = $state<boolean>(false);
   let loading = $state(true);
   let unavailable = $state(false);
@@ -160,18 +159,18 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     }
     let tasks = [...durableTasks, ...snapshotTasks];
 
-    if (selectedTab === 'attention') {
+    if (selectedTab === TaskTabFilter.Attention) {
       tasks = tasks.filter((t) => attentionTaskIds.has(t.id));
-    } else if (selectedTab === 'running') {
+    } else if (selectedTab === TaskTabFilter.Running) {
       tasks = tasks.filter((t) => t.status === ObservedExecutionStatus.Running);
-    } else if (selectedTab === 'failed') {
+    } else if (selectedTab === TaskTabFilter.Failed) {
       tasks = tasks.filter(
         (t) =>
           t.status === ObservedExecutionStatus.Failed ||
           t.status === ObservedExecutionStatus.Blocked ||
           attentionTaskIds.has(t.id),
       );
-    } else if (selectedTab === 'completed') {
+    } else if (selectedTab === TaskTabFilter.Completed) {
       tasks = tasks.filter(
         (t) => t.status === ObservedExecutionStatus.Completed,
       );
@@ -191,13 +190,13 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
     }
 
     return tasks.sort((left, right) => {
-      if (sortBy === 'newest') {
+      if (sortBy === TaskSortOption.Newest) {
         return right.updated_at - left.updated_at;
       }
-      if (sortBy === 'oldest') {
+      if (sortBy === TaskSortOption.Oldest) {
         return left.updated_at - right.updated_at;
       }
-      if (sortBy === 'attempts') {
+      if (sortBy === TaskSortOption.Attempts) {
         return right.attempt_count - left.attempt_count;
       }
       return 0;
@@ -593,9 +592,9 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
               <label class="sort-control" title="Sort order">
                 <ArrowUpDown size={14} />
                 <select bind:value={sortBy} class="sort-select">
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="attempts">Attempts</option>
+                  <option value={TaskSortOption.Newest}>Newest</option>
+                  <option value={TaskSortOption.Oldest}>Oldest</option>
+                  <option value={TaskSortOption.Attempts}>Attempts</option>
                 </select>
               </label>
 
@@ -614,19 +613,19 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
 
         <nav class="filter-tabs" aria-label="Task status filters">
           <button
-            class:active={selectedTab === 'all'}
+            class:active={selectedTab === TaskTabFilter.All}
             class="tab-button"
-            onclick={() => (selectedTab = 'all')}
+            onclick={() => (selectedTab = TaskTabFilter.All)}
           >
             <span>{copy.all_tasks}</span>
             <span class="tab-badge">{statusCounts.all}</span>
           </button>
 
           <button
-            class:active={selectedTab === 'attention'}
+            class:active={selectedTab === TaskTabFilter.Attention}
             class:has-count={statusCounts.attention > 0}
             class="tab-button tab-attention"
-            onclick={() => (selectedTab = 'attention')}
+            onclick={() => (selectedTab = TaskTabFilter.Attention)}
           >
             <AlertTriangle size={13} />
             <span>Attention</span>
@@ -636,34 +635,34 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           </button>
 
           <button
-            class:active={selectedTab === 'running'}
+            class:active={selectedTab === TaskTabFilter.Running}
             class="tab-button"
-            onclick={() => (selectedTab = 'running')}
+            onclick={() => (selectedTab = TaskTabFilter.Running)}
           >
             <span>{copy.running}</span>
             <span class="tab-badge">{statusCounts.running}</span>
           </button>
 
           <button
-            class:active={selectedTab === 'failed'}
+            class:active={selectedTab === TaskTabFilter.Failed}
             class="tab-button"
-            onclick={() => (selectedTab = 'failed')}
+            onclick={() => (selectedTab = TaskTabFilter.Failed)}
           >
             <span>{copy.failed}</span>
             <span class="tab-badge">{statusCounts.failed}</span>
           </button>
 
           <button
-            class:active={selectedTab === 'completed'}
+            class:active={selectedTab === TaskTabFilter.Completed}
             class="tab-button"
-            onclick={() => (selectedTab = 'completed')}
+            onclick={() => (selectedTab = TaskTabFilter.Completed)}
           >
             <span>{copy.completed}</span>
             <span class="tab-badge">{statusCounts.completed}</span>
           </button>
         </nav>
 
-        {#if selectedTab === 'all' && executingTasks.length > 0 && normalizedSearch.length === 0}
+        {#if selectedTab === TaskTabFilter.All && executingTasks.length > 0 && normalizedSearch.length === 0}
           <div class="executing-lane">
             <div class="executing-heading">
               <Activity size={15} />
@@ -682,7 +681,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
           </div>
         {/if}
 
-        {#if selectedTab === 'all' && attentionEntries.length > 0 && normalizedSearch.length === 0}
+        {#if selectedTab === TaskTabFilter.All && attentionEntries.length > 0 && normalizedSearch.length === 0}
           <div class="attention-lane">
             <div class="attention-heading">
               <AlertTriangle size={15} />
@@ -724,7 +723,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
               </div>
             {/each}
           {:else}
-            {#each filteredTasks.filter((task) => selectedTab !== 'all' || normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
+            {#each filteredTasks.filter((task) => selectedTab !== TaskTabFilter.All || normalizedSearch.length > 0 || !attentionTaskIds.has(task.id)) as task (task.id)}
               {@render TaskRow(
                 task,
                 isSelectedTaskId(task.id),
@@ -734,7 +733,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
                 () => selectTask(task.id),
               )}
             {:else}
-              {#if attentionEntries.length === 0 || normalizedSearch.length > 0 || selectedTab !== 'all'}
+              {#if attentionEntries.length === 0 || normalizedSearch.length > 0 || selectedTab !== TaskTabFilter.All}
                 <div class="empty-state">
                   <CircleDashed size={24} />
                   <strong>

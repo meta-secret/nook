@@ -1,5 +1,19 @@
 import type { ObservedTask, ObserverSnapshot } from './types';
 
+export enum TaskTabFilter {
+  All = 'all',
+  Attention = 'attention',
+  Running = 'running',
+  Failed = 'failed',
+  Completed = 'completed',
+}
+
+export enum TaskSortOption {
+  Newest = 'newest',
+  Oldest = 'oldest',
+  Attempts = 'attempts',
+}
+
 export enum ObserverFeedKind {
   NotLoaded = 'not-loaded',
   Loaded = 'loaded',
