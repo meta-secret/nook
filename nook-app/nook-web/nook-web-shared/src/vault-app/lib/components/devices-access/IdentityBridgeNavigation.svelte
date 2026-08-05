@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { Fingerprint, KeyRound, Vault as VaultIcon } from '@lucide/svelte'
+  import {
+    Fingerprint,
+    ShieldCheck,
+    ShieldQuestion,
+    Vault as VaultIcon,
+  } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import type { VaultState } from '$lib/vault.svelte'
   import type { VaultAccessView } from './access-chain'
@@ -13,7 +18,6 @@
     vault,
     perspective,
     selectedVault,
-    verifiedVaultCount,
     vaults,
     identityTitle,
     identityDescription,
@@ -24,7 +28,6 @@
     vault: VaultState
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
-    verifiedVaultCount: number
     vaults: readonly VaultAccessView[]
     identityTitle: string
     identityDescription: string
@@ -84,17 +87,6 @@
             <strong>{identityTitle}</strong>
             <small>{identityDescription}</small>
           </span>
-          <span class="entity-count" aria-hidden="true"
-            ><VaultIcon
-              class="size-3"
-              aria-hidden="true"
-            />{verifiedVaultCount}</span
-          >
-          <span class="sr-only">
-            {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount, {
-              count: String(verifiedVaultCount),
-            })}
-          </span>
         </button>
       </li>
     </ol>
@@ -131,15 +123,12 @@
                 >{storeFingerprint(vaultEntry.storeId)}</small
               >
             </span>
-            <span class="entity-count" aria-hidden="true"
-              ><KeyRound class="size-3" aria-hidden="true" />{vaultEntry.verified
-                ? 1
-                : 0}</span
-            >
-            <span class="sr-only">
-              {vault.t(I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount, {
-                count: vaultEntry.verified ? '1' : '0',
-              })}
+            <span class="entity-count" aria-hidden="true">
+              {#if vaultEntry.verified}
+                <ShieldCheck class="size-3.5" aria-hidden="true" />
+              {:else}
+                <ShieldQuestion class="size-3.5" aria-hidden="true" />
+              {/if}
             </span>
           </button>
         </li>

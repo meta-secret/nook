@@ -1,4 +1,4 @@
-<!-- The truthful three-link chain before this browser has chosen an identity. -->
+<!-- Independent empty states before this browser has sign-in protection. -->
 <script lang="ts">
   import { Laptop, Link2, Vault as VaultIcon } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -31,10 +31,6 @@
     </div>
   </section>
 
-  <p class="access-micro-label text-center text-muted-foreground">
-    {vault.t(I18N_KEYS.DevicesAccessLinkUnlocks)}
-  </p>
-
   <div class="border border-dashed border-border bg-card px-4 py-4 sm:px-5">
     <p class="access-micro-label text-muted-foreground">
       {vault.t(I18N_KEYS.DevicesAccessBrowserSection)}
@@ -44,14 +40,6 @@
       {vault.t(I18N_KEYS.DevicesAccessNotPrepared)}
     </p>
   </div>
-
-  <p class="access-micro-label text-center text-muted-foreground">
-    {vault.t(
-      vaults.length === 0
-        ? I18N_KEYS.DevicesAccessLinkOpens
-        : I18N_KEYS.DevicesAccessLinkUnverified,
-    )}
-  </p>
 
   <section>
     <h2 class="access-micro-label flex items-center gap-1.5 text-muted-foreground">

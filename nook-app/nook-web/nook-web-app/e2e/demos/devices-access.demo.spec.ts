@@ -8,7 +8,7 @@ import {
 
 const BEAT_MS = 650
 
-test('walk the access chain from passkey to browser device key to vaults', async ({
+test('inspect independent identity, protection, and vault access evidence', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -22,30 +22,26 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await expect(page.getByTestId('devices-access-identity-state')).toContainText(
-    'Identity unlocked',
-  )
+  await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()
   const chain = page.getByTestId('devices-access-chain')
-  await expect(chain).toContainText('Device-key evidence')
   await expect(chain).toContainText('Local identity state')
-  await expect(chain).toContainText('Verified device-key access')
-  await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
-    1,
-  )
+  await expect(chain).not.toContainText('Passkey')
+  await expect(chain).not.toContainText('Device key')
+  await expect(chain.locator('.svelte-flow__edge')).toHaveCount(0)
   await page.setViewportSize({ width: 240, height: 844 })
   await expect
     .poll(() =>
       chain.evaluate((element) => {
-        const protection = element.querySelector(
-          'article[aria-label*="Unlock protection"]',
+        const identity = element.querySelector(
+          '[data-testid="devices-access-identity-card"]',
         )
-        if (!(protection instanceof HTMLElement)) return false
+        if (!(identity instanceof HTMLElement)) return false
 
         const bridgeBounds = element.getBoundingClientRect()
-        const protectionBounds = protection.getBoundingClientRect()
+        const identityBounds = identity.getBoundingClientRect()
         return (
-          protectionBounds.left >= bridgeBounds.left &&
-          protectionBounds.right <= bridgeBounds.right
+          identityBounds.left >= bridgeBounds.left &&
+          identityBounds.right <= bridgeBounds.right
         )
       }),
     )
@@ -67,15 +63,8 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await expect(panel).toContainText('Backed up or synced')
   await page.waitForTimeout(BEAT_MS)
 
-  await page.getByTestId('devices-access-node-device-key').click()
-  await expect(panel).toContainText('Browser device key')
-  await expect(panel).toContainText('A backup password is different')
-  await page.waitForTimeout(BEAT_MS)
-
   await page.getByTestId('devices-access-node-vaults').click()
-  await expect(
-    page.getByTestId('devices-access-strength-vaults'),
-  ).toContainText('Verified way in')
+  await expect(panel).toContainText('Vault access evidence')
   await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',
   )
@@ -87,18 +76,17 @@ test('walk the access chain from passkey to browser device key to vaults', async
   await page.getByTestId('devices-access-perspective-vaults').click()
   await expect(
     page.getByRole('heading', {
-      name: /Verified device-key access to Test vault: 1/,
+      name: 'Local access to Test vault',
     }),
   ).toBeVisible()
   await expect(chain).toContainText('Selected vault')
-  await expect(chain).toContainText('Device-key evidence')
+  await expect(chain).toContainText('Verified way in')
+  await expect(chain).not.toContainText('Device key')
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()
   await page.getByTestId('login-devices-access').click()
-  await expect(page.getByTestId('devices-access-identity-state')).toContainText(
-    'Identity locked',
-  )
+  await expect(page.getByTestId('devices-access-identity-card')).toBeVisible()
   await page.getByTestId('devices-access-node-vaults').click()
   await expect(page.getByTestId('devices-access-vaults')).toContainText(
     'Access verified',

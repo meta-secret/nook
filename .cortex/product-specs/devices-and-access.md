@@ -109,20 +109,20 @@ identity model. The next identity-management design must also support:
 
 Current dashboard requirements:
 
-- The dashboard presents the access model as one three-link chain — what the
-  person presents, the browser device key it unlocks, and the vaults it opens —
-  and lets exactly one link be inspected at a time. Each link shows at most one
-  identifier so the relationship stays readable instead of becoming a list of
-  key ids.
-- The chain claims access only where a device-key open actually succeeded. The
-  vault link names verified vaults only, and while known vaults exist with none
-  verified, the relation drops the access verb instead of implying reach.
-- Each link's incoming relation is part of its accessible name, so the chain
-  reads as a chain without seeing the drawn connectors.
-- An unprepared browser has chosen neither a passkey nor a PIN, so its preview
-  names the first link generically rather than promising either. A companion
-  session's identity is attributed to the paired device, never to local browser
-  storage.
+- `DeviceAccessIdentityState` is browser/session state, not a virtual identity
+  record. The dashboard must not connect it to a passkey, device key, or vault
+  as if those facts established identity membership.
+- Identity and vault perspectives each show only their selected subject until a
+  typed identity record and explicit grant can prove a relationship.
+- Device-key identifiers and device-key nodes are implementation evidence and
+  are not shown in the identity-management surface. Successful local vault
+  access may remain visible without attributing it to an identity.
+- Sign-in protection and vault access remain independently inspectable below
+  the identity/vault canvas. Their tab order and accessible names must not imply
+  a causal identity chain.
+- An unprepared browser has chosen neither a passkey nor a PIN, so identity,
+  setup, and known-vault empty states remain visually separate. A companion
+  session is attributed to the paired device, never to local browser storage.
 - The login surface always offers **Devices & access**.
 - A first-run suggestion may invite the user to review access before choosing a
   vault; **Don't show again** is a browser-local preference and never hides the

@@ -1,112 +1,22 @@
 <script lang="ts">
   import {
     Fingerprint,
-    KeyRound,
-    Laptop,
     LockKeyhole,
-    MonitorSmartphone,
     ShieldCheck,
     ShieldQuestion,
     Vault,
   } from '@lucide/svelte'
-  import { Handle, Position, type NodeProps } from '@xyflow/svelte'
+  import type { NodeProps } from '@xyflow/svelte'
   import { DeviceAccessIdentityState } from '$app-wasm'
   import {
-    IdentityBridgeFlow,
-    IdentityBridgeDeviceIconKind,
-    IdentityBridgeHandleType,
-    IdentityBridgeHandleId,
     IdentityBridgeNodeKind,
-    IdentityBridgePortMode,
     type IdentityBridgeNode,
   } from './identity-bridge-model'
 
   let { data }: NodeProps<IdentityBridgeNode> = $props()
 </script>
 
-{#if data.portMode === IdentityBridgePortMode.Target || data.portMode === IdentityBridgePortMode.Both}
-  {#if data.kind === IdentityBridgeNodeKind.Vault && data.lateralAccessPort}
-    <Handle
-      class="bridge-handle"
-      type={IdentityBridgeHandleType.Target}
-      id={IdentityBridgeHandleId.VaultAccess}
-      position={Position.Right}
-    />
-  {:else}
-    <Handle
-      class="bridge-handle"
-      type={IdentityBridgeHandleType.Target}
-      position={data.flow === IdentityBridgeFlow.Vertical
-        ? Position.Top
-        : Position.Left}
-    />
-  {/if}
-{/if}
-
-{#if data.kind === IdentityBridgeNodeKind.Device &&
-data.lateralAccessPort &&
-(data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both)}
-  <Handle
-    class="bridge-handle"
-    type={IdentityBridgeHandleType.Source}
-    id={IdentityBridgeHandleId.VaultAccess}
-    position={Position.Right}
-  />
-{/if}
-
-{#if data.kind === IdentityBridgeNodeKind.Protection}
-  <article
-    class="bridge-card protection-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.description}`}
-  >
-    <header>
-      <span class="node-icon"
-        ><LockKeyhole class="size-5" aria-hidden="true" /></span
-      >
-      <span class="node-heading">
-        <small>{data.caption}</small>
-        <strong>{data.label}</strong>
-      </span>
-    </header>
-    <p>{data.description}</p>
-  </article>
-{:else if data.kind === IdentityBridgeNodeKind.Device}
-  <article
-    class="bridge-card device-card"
-    aria-label={`${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
-  >
-    <header>
-      <span class="node-icon">
-        {#if data.iconKind === IdentityBridgeDeviceIconKind.PairedDevice}
-          <MonitorSmartphone class="size-5" aria-hidden="true" />
-        {:else if data.iconKind === IdentityBridgeDeviceIconKind.RecoverableKey}
-          <KeyRound class="size-5" aria-hidden="true" />
-        {:else}
-          <Laptop class="size-5" aria-hidden="true" />
-        {/if}
-      </span>
-      <span class="node-heading">
-        <small>{data.caption}</small>
-        <strong>{data.label}</strong>
-      </span>
-      <code>{data.countLabel}</code>
-    </header>
-    <div class="rows">
-      {#each data.installations as installation (installation.id)}
-        <div class="row">
-          <span class="key-icon"
-            ><KeyRound class="size-4" aria-hidden="true" /></span
-          >
-          <span class="row-copy">
-            <strong>{installation.label}</strong>
-            <small>{installation.detail}</small>
-          </span>
-          <code title={installation.id}>{installation.id}</code>
-        </div>
-      {/each}
-    </div>
-  </article>
-{:else if data.kind === IdentityBridgeNodeKind.Identity}
+{#if data.kind === IdentityBridgeNodeKind.Identity}
   <article
     class:identity-unlocked={data.identityStatus ===
       DeviceAccessIdentityState.Unlocked}
@@ -115,7 +25,7 @@ data.lateralAccessPort &&
     class="bridge-card identity-card"
     data-testid="devices-access-identity-card"
     data-identity-state={DeviceAccessIdentityState[data.identityStatus]}
-    aria-label={`${data.caption}: ${data.label}. ${data.stateLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
+    aria-label={`${data.caption}: ${data.label}. ${data.stateLabel}. ${data.description}`}
   >
     <header>
       <span class="node-icon identity-icon"
@@ -136,16 +46,6 @@ data.lateralAccessPort &&
       >
     </header>
     <p>{data.description}</p>
-    <dl>
-      <div>
-        <dt>{data.deviceMetricLabel}</dt>
-        <dd>{data.deviceMetricValue}</dd>
-      </div>
-      <div>
-        <dt>{data.vaultMetricLabel}</dt>
-        <dd>{data.vaultMetricValue}</dd>
-      </div>
-    </dl>
   </article>
 {:else if data.kind === IdentityBridgeNodeKind.Stage}
   <div class="stage" role="heading" aria-level="2">
@@ -158,9 +58,9 @@ data.lateralAccessPort &&
   </article>
 {:else}
   <article
-    class:authorized={data.verifiedDeviceAccess}
+    class:authorized={data.verifiedLocalAccess}
     class="bridge-card vault-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.statusLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`}
+    aria-label={`${data.caption}: ${data.label}. ${data.statusLabel}`}
     data-testid="devices-access-strength-vaults"
   >
     <header>
@@ -170,7 +70,7 @@ data.lateralAccessPort &&
         <strong>{data.label}</strong>
       </span>
       <span class="state">
-        {#if data.verifiedDeviceAccess}<ShieldCheck
+        {#if data.verifiedLocalAccess}<ShieldCheck
             class="size-3.5"
             aria-hidden="true"
           />{/if}
@@ -191,16 +91,6 @@ data.lateralAccessPort &&
   </article>
 {/if}
 
-{#if data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both}
-  <Handle
-    class="bridge-handle"
-    type={IdentityBridgeHandleType.Source}
-    position={data.flow === IdentityBridgeFlow.Horizontal
-      ? Position.Right
-      : Position.Bottom}
-  />
-{/if}
-
 <style>
   .bridge-card,
   .empty-card {
@@ -219,35 +109,26 @@ data.lateralAccessPort &&
   }
   .bridge-card header {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 0.75rem;
     padding: 0.9rem;
   }
-  .identity-card header,
-  .vault-card header {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .identity-card .state,
   .vault-card .state {
     grid-column: 2;
   }
-  .node-icon,
-  .key-icon {
+  .identity-card .state {
+    grid-column: 2;
+  }
+  .node-icon {
     display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
     place-items: center;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: color-mix(in oklab, var(--muted) 55%, transparent);
     color: var(--muted-foreground);
-  }
-  .node-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-  }
-  .key-icon {
-    width: 2rem;
-    height: 2rem;
   }
   .identity-icon {
     color: var(--foreground);
@@ -271,8 +152,7 @@ data.lateralAccessPort &&
     white-space: nowrap;
   }
   .node-heading small,
-  .state,
-  header > code {
+  .state {
     color: var(--muted-foreground);
     font-family:
       ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -294,44 +174,6 @@ data.lateralAccessPort &&
   .authorized .state {
     color: var(--primary);
   }
-  .rows {
-    border-top: 1px solid var(--border);
-    padding: 0 0.9rem;
-  }
-  .row {
-    display: grid;
-    min-height: 3.8rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.65rem;
-  }
-  .row-copy {
-    min-width: 0;
-  }
-  .row-copy strong,
-  .row-copy small {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .row-copy strong {
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-  .row-copy small {
-    margin-top: 0.12rem;
-    color: var(--muted-foreground);
-    font-size: 0.625rem;
-  }
-  .row code,
-  header > code {
-    overflow: hidden;
-    max-width: 8rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .protection-card,
   .identity-card,
   .vault-card {
     padding-bottom: 0.9rem;
@@ -360,72 +202,67 @@ data.lateralAccessPort &&
     min-width: 0;
   }
   dt {
-    overflow: hidden;
     color: var(--muted-foreground);
-    font-size: 0.5875rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-family: ui-monospace, monospace;
+    font-size: 0.5625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
   dd {
     overflow: hidden;
-    margin: 0.2rem 0 0;
-    font-family: ui-monospace, monospace;
-    font-size: 0.625rem;
+    margin: 0.25rem 0 0;
+    font-size: 0.6875rem;
+    font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .stage {
-    display: grid;
-    min-height: 2rem;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    display: flex;
     align-items: center;
+    gap: 0.75rem;
     color: var(--muted-foreground);
     font-family: ui-monospace, monospace;
-    font-size: 0.5625rem;
-    letter-spacing: 0.15em;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
   }
   .stage::before,
   .stage::after {
     height: 1px;
-    background: color-mix(in oklab, var(--foreground) 20%, transparent);
+    flex: 1;
+    background: var(--border);
     content: '';
   }
   .stage span {
-    padding: 0.35rem 0.7rem;
-    border-right: 1px solid
-      color-mix(in oklab, var(--foreground) 20%, transparent);
-    border-left: 1px solid
-      color-mix(in oklab, var(--foreground) 20%, transparent);
-    background: var(--background);
     white-space: nowrap;
   }
   .empty-card {
     display: flex;
-    min-height: 7rem;
+    min-height: 8rem;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.75rem;
     padding: 1rem;
+    border-style: dashed;
     color: var(--muted-foreground);
   }
+  .empty-card span,
   .empty-card strong,
   .empty-card small {
     display: block;
   }
   .empty-card strong {
     color: var(--foreground);
-    font-size: 0.85rem;
+    font-size: 0.875rem;
   }
   .empty-card small {
     margin-top: 0.25rem;
-    font-size: 0.7rem;
+    font-size: 0.6875rem;
     line-height: 1.45;
   }
-  :global(.bridge-handle) {
-    width: 0.4rem;
-    height: 0.4rem;
-    border: 1px solid var(--background);
-    background: var(--primary);
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 72%, transparent);
+  @media (width < 48rem) {
+    dl {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

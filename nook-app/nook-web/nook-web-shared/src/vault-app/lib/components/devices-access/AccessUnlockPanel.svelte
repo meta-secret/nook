@@ -250,4 +250,11 @@ behind one disclosure.
   >
     {recoveryNote}
   </p>
+{:else if protection === DeviceAccessProtectionKind.CompanionSession}
+  <p
+    class="rounded-lg bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"
+    data-testid="devices-access-companion-session"
+  >
+    {vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc)}
+  </p>
 {/if}
