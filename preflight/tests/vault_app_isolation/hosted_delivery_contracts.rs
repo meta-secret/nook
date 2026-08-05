@@ -100,20 +100,38 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     let docker_tasks = read(root, "nook-app/docker/Taskfile.yml");
     assert!(
-        docker_tasks.contains("for attempt in 1 2; do")
+        docker_tasks.contains("bake-with-frontend-flake-retry.sh")
             && docker_tasks.contains("nook-web-ci")
-            && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\"")
-            && docker_tasks
-                .contains("task docker:ci:web:build: transient Bake failure; retrying in 2s",),
+            && !docker_tasks.contains("--set \"nook-web-ci.target=nook-web-verify\""),
         "hosted web delivery must solve the joined validation/build target once and retry only the immediate BuildKit frontend flake"
     );
     let app_tasks = read(root, "nook-app/Taskfile.yml");
     assert!(
-        app_tasks.contains("for attempt in 1 2; do")
-            && app_tasks.contains(
-                "task setup: transient $setup_target Bake failure; retrying final web solve in 2s",
-            ),
+        app_tasks.contains("bake-with-frontend-flake-retry.sh")
+            && app_tasks.contains("setup: $setup_target"),
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
+    );
+    let bake_retry = read(root, ".github/scripts/bake-with-frontend-flake-retry.sh");
+    for required in [
+        "is_buildkit_frontend_flake",
+        "failed to read dockerfile",
+        "non-transient Bake failure; not retrying",
+        "transient Bake failure; retrying in 2s...",
+        "for attempt in 1 2; do",
+    ] {
+        assert!(
+            bake_retry.contains(required),
+            "Bake frontend-flake retry helper is missing: {required}"
+        );
+    }
+    let isolation = read(
+        root,
+        "nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts",
+    );
+    assert!(
+        isolation.contains("await companionWasmReady")
+            && isolation.contains("createManifest('1.0.0')"),
+        "verify:isolation must await companion WASM before createManifest"
     );
     assert!(
         app_tasks.contains("--set \"builder-wasm-deps.output=type=cacheonly\"")

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { createManifest } from '../../nook-web-extension/src/manifest'
 import { VAULT_WORKSPACE_OUTPUT_ALIASES } from '../../nook-web-shared/vite-config'
 
@@ -239,6 +240,8 @@ for (const forbidden of [
   }
 }
 
+// createManifest reads companion WASM defaults; await init before calling it.
+await companionWasmReady
 const manifest = createManifest('1.0.0')
 if (
   manifest.externally_connectable.matches.length !== 1 ||
