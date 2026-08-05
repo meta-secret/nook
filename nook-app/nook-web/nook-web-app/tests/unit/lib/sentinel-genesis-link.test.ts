@@ -10,4 +10,13 @@ describe('Sentinel Genesis links', () => {
       ),
     ).toBe('https://public.nook.example/vault')
   })
+
+  test('strips the unified preview mount from the public ceremony link', () => {
+    expect(
+      sentinelGenesisLinkBaseForWorkspace(
+        'https://public.nook.example/',
+        'https://preview.internal.example/sentinel/vault#ignored',
+      ),
+    ).toBe('https://public.nook.example/vault')
+  })
 })

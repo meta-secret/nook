@@ -299,7 +299,9 @@ test.describe('passkey device-key protection', () => {
       'Sentinel participant two',
     )
     expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')
-    await page.goto(participantTwo.responseLink)
+    await page.evaluate((responseLink) => {
+      window.location.href = responseLink
+    }, participantTwo.responseLink)
     await expect(page).toHaveURL(/\/vault$/)
     await expect(
       page.getByTestId('sentinel-genesis-authentication-ready'),

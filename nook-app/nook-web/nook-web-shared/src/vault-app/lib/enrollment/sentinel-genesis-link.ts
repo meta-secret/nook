@@ -1,5 +1,11 @@
 import { getEnrollmentLinkBase } from "$lib/enrollment/code";
 import {
+  WorkspaceRoute,
+  WorkspaceRouteLookupKind,
+  workspacePath,
+  workspaceRouteFromPath,
+} from "$lib/app/workspace-route";
+import {
   buildSentinelGenesisParticipantResponseLink as buildParticipantResponseLinkCore,
   buildSentinelGenesisRequestLink as buildRequestLinkCore,
   normalizeSentinelGenesisParticipantPayload,
@@ -27,8 +33,11 @@ export function sentinelGenesisLinkBaseForWorkspace(
   // links on the configured public origin and that same document so a response
   // URL changes only its fragment: a slash-only navigation would recreate the
   // app and lose the in-progress (intentionally in-memory) Genesis ceremony.
+  const workspaceRoute = workspaceRouteFromPath(workspace.pathname);
   url.pathname =
-    workspace.pathname === "/" ? "/" : workspace.pathname.replace(/\/+$/, "");
+    workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace
+      ? workspacePath(workspaceRoute.route)
+      : workspacePath(WorkspaceRoute.Vault);
   url.search = "";
   url.hash = "";
   return url.toString();
