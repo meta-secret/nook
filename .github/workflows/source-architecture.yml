@@ -23,9 +23,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Task
+        uses: go-task/setup-task@v2
+
       - name: Enforce source limits and Rust unit-test colocation
-        run: >-
-          cargo test
-          --locked
-          --manifest-path preflight/Cargo.toml
-          --test source_file_size
+        run: task preflight:source-architecture

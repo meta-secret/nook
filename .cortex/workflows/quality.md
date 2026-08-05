@@ -10,6 +10,7 @@ Use this workflow for quality, CI, and deployment changes.
    - Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`.
    - `task preflight` Bakes `preflight-test` on the shared `rust-base` target with cargo-chef dependency cooks and SeaweedFS sccache.
    - The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
+   - Reusable GitHub workflow shell lives in `.task/ci-workflows.yml` and `.github/scripts/`; workflows stay thin `task` wrappers around Actions-only glue.
    - Rust ecosystem gates (cargo-deny, cargo-audit, Proptest/Insta/Loom, cargo-fuzz, Dylint) live as separate Bake images/stages in `nook-app/docker/rust.Dockerfile` (off `rust-base`, not inside it) and run through `task docker:ecosystem:*` from `rust-ecosystem.yml`.
    - Do not duplicate those commands in bespoke preflight scanners, call Bake helpers directly from the workflow, or compile their CLIs on the GitHub-hosted runner host.
    - Kani remains on its official action because it provisions a specialized model-checking toolchain.

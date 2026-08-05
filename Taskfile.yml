@@ -19,6 +19,9 @@ includes:
   remote-execution:
     taskfile: .task/remote-execution.yml
     flatten: true
+  ci-workflows:
+    taskfile: .task/ci-workflows.yml
+    flatten: true
   impeccable:
     taskfile: .task/impeccable.yml
     flatten: true

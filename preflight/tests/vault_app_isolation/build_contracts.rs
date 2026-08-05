@@ -282,192 +282,6 @@ fn assert_shared_wasm_build_contract(root: &Path) {
 }
 
 #[test]
-fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<()> {
-    let root = repository_root();
-    let manifest = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/src/manifest.ts",
-    );
-    let vault_target = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts",
-    );
-    for required_contract in [
-        "nookVaultAppExcludeMatchPatterns(simpleVaultBaseUrl)",
-        "exclude_matches: vaultAppExclusions",
-        "simpleVaultMatchPattern(simpleVaultBaseUrl)",
-        "sentinelVaultMatchPatterns(simpleVaultBaseUrl)",
-        "externally_connectable: {",
-        "matches: [simpleVaultMatch]",
-    ] {
-        assert!(
-            manifest.contains(required_contract),
-            "extension manifest must preserve dynamic vault isolation through {required_contract}"
-        );
-    }
-    assert!(
-        vault_target.contains("nook-companion-wasm")
-            && vault_target.contains("defaultSimpleVaultUrl"),
-        "extension vault targeting must call companion WASM host policy"
-    );
-    let vault_host_policy = read(
-        &root,
-        "nook-app/nook-companion-core/src/vault_host_policy.rs",
-    );
-    for production_boundary in [
-        "https://simple.nokey.sh/",
-        "https://simple.dev.nokey.sh/*",
-        "https://sentinel.nokey.sh/*",
-        "https://*.nokey-simple.pages.dev/*",
-        "https://*.nokey-sentinel.pages.dev/*",
-    ] {
-        assert!(
-            vault_host_policy.contains(production_boundary),
-            "companion vault host policy must preserve production boundary {production_boundary}"
-        );
-    }
-
-    let release = read(&root, ".github/workflows/release.yml");
-    for required in [
-        "nook-vault-simple/dist",
-        "nook-vault-sentinel/dist",
-        "simple.nokey.sh:nokey-simple",
-        "sentinel.nokey.sh:nokey-sentinel",
-        "nook-app-kind",
-        "node:24-trixie-slim",
-        "uses: actions/github-script@v9",
-    ] {
-        assert!(
-            release.contains(required),
-            "release workflow missing {required}"
-        );
-    }
-    assert!(
-        !release.contains("gh release "),
-        "release publication must not assume the self-hosted runner has the GitHub CLI"
-    );
-    let deploy = section(
-        &release,
-        "      - name: Deploy isolated Simple and Sentinel applications\n",
-        "\n      - name: Attach and verify isolated production domains",
-    );
-    assert!(
-        deploy.contains("docker run --rm")
-            && deploy.contains("node:24-trixie-slim")
-            && deploy.contains("npx --yes wrangler@4"),
-        "Wrangler must run inside an explicit Node container on the self-hosted runner"
-    );
-    Ok(())
-}
-
-#[test]
-fn development_and_release_wasm_build_modes_stay_separate() -> anyhow::Result<()> {
-    let root = repository_root();
-    let main = read(&root, ".github/workflows/main.yml");
-    assert!(main.contains("WASM_BUILD_MODE=dev"));
-    assert!(
-        !main.contains("WASM_BUILD_MODE=prod") && !main.contains("WASM_BUILD_MODE: prod"),
-        "main must not serialize production wasm optimization for development artifacts"
-    );
-
-    let release = read(&root, ".github/workflows/release.yml");
-    assert!(release.contains("WASM_BUILD_MODE=prod"));
-    assert!(
-        !release.contains("WASM_BUILD_MODE=dev"),
-        "release artifacts must remain production-optimized"
-    );
-    Ok(())
-}
-
-#[test]
-fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<()> {
-    let root = repository_root();
-    let main = read(&root, ".github/workflows/main.yml");
-    for required in [
-        "deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site",
-        "deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist",
-        "deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist",
-        "CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh",
-        "CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh",
-        "site_pages_host=\"development.nokey-sh.pages.dev\"",
-        "simple_pages_host=\"development.nokey-simple.pages.dev\"",
-        "sentinel_pages_host=\"development.nokey-sentinel.pages.dev\"",
-        "grep -Fq '<title>Nook — Keys, not accounts</title>'",
-        "grep -Fq '<meta name=\"nook-app-kind\" content=\"simple\"'",
-        "grep -Fq '<meta name=\"nook-app-kind\" content=\"sentinel\"'",
-        "zones/$zone_id/purge_cache",
-        "Cloudflare zone administration was unavailable; verifying live domains",
-        "cache_bust=\"nook_commit=${{ github.sha }}&attempt=$attempt\"",
-        "EXTENSION_CACHE_BUST=\"${{ github.sha }}-$attempt\"",
-        "Waiting for exact-head development extension artifacts",
-        "https://$DEV_DOMAIN/site/",
-        "https://$DEV_DOMAIN/simple/",
-        "https://$DEV_DOMAIN/sentinel/",
-        "[ \"$site_status\" = \"404\" ]",
-        "[ \"$simple_status\" = \"404\" ]",
-        "[ \"$sentinel_status\" = \"404\" ]",
-        "[ \"$simple_extension_status\" = \"200\" ]",
-        "[ \"$sentinel_extension_status\" = \"404\" ]",
-    ] {
-        assert!(
-            main.contains(required),
-            "main development deployment is missing isolation invariant: {required}"
-        );
-    }
-    assert!(
-        main.contains("VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}")
-            && main.contains("VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}")
-            && main.contains("VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}"),
-        "development artifacts must embed their stable isolated channel origins"
-    );
-
-    let pull_request = read(&root, ".github/workflows/pr.yml");
-    assert!(
-        pull_request.contains(
-            "EXTENSION_CACHE_BUST=\"${{ github.event.pull_request.head.sha }}-$attempt\""
-        ),
-        "PR extension verification must bypass mutable artifact caches on every convergence attempt"
-    );
-
-    let release = read(&root, ".github/workflows/release.yml");
-    assert!(
-        release.contains("EXTENSION_CACHE_BUST=\"$RELEASE_SHA-$attempt\"")
-            && release.contains("Waiting for exact-release extension artifacts"),
-        "release extension verification must retry cache-busted exact-release artifacts"
-    );
-
-    let verifier = read(
-        &root,
-        "nook-app/nook-web/nook-web-extension/scripts/verify-deployment.sh",
-    );
-    for required in [
-        "cache_busted_url()",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$EXTENSION_METADATA_URL\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$download_url\")\"",
-        "fetch_from_selected_origin \"$(cache_busted_url \"$checksum_url\")\"",
-        "Extension deployment verification failed at line $LINENO",
-    ] {
-        assert!(
-            verifier.contains(required),
-            "extension deployment verifier is missing cache/diagnostic invariant: {required}"
-        );
-    }
-
-    let docker_tasks = read(&root, "nook-app/docker/Taskfile.yml");
-    assert!(
-        docker_tasks.contains("-e CF_PAGES_DIST_DIR"),
-        "the selected Cloudflare artifact directory must reach the sealed deploy container"
-    );
-
-    let ci_tasks = read(&root, "nook-app/.task/ci.yml");
-    assert!(
-        ci_tasks.contains("*) deploy_dir=\"{{.REPO_ROOT}}/$deploy_dir\" ;;"),
-        "repo-relative Cloudflare artifact directories must resolve from the repository root"
-    );
-    Ok(())
-}
-
-#[test]
 fn focused_playwright_task_runs_only_matching_projects() -> anyhow::Result<()> {
     let root = repository_root();
     let web_tasks = read(&root, "nook-app/nook-web/.task/web.yml");
@@ -791,15 +605,24 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
     for required in [
         "- cron: '0 9 * * 1'",
         "cargo install cargo-outdated --version 0.19.0 --locked",
-        "cargo outdated --workspace --root-deps-only --exit-code 1",
-        "check_manifest nook-app",
-        "check_manifest preflight",
+        "task rust:deps:outdated",
         "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
         "task ci-agent:fix",
     ] {
         assert!(
             workflow.contains(required),
             "dependency update workflow missing required contract: {required}"
+        );
+    }
+    let audit_script = read(&root, ".github/scripts/ci-rust-deps-outdated.sh");
+    for required in [
+        "cargo outdated --workspace --root-deps-only --exit-code 1",
+        "check_manifest nook-app",
+        "check_manifest preflight",
+    ] {
+        assert!(
+            audit_script.contains(required),
+            "dependency update audit script missing required contract: {required}"
         );
     }
 

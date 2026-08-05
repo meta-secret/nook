@@ -1,0 +1,86 @@
+version: '3'
+
+vars:
+  REPO_ROOT:
+    sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
+
+tasks:
+  ci:pr:deploy-and-verify-previews:
+    desc: Deploy and verify Cloudflare Pages PR preview aliases.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-pr-deploy-and-verify-previews.sh"
+
+  ci:main:deploy-development:
+    desc: Deploy isolated development applications to Cloudflare Pages.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-main-deploy-development.sh"
+
+  ci:main:configure-dev-domains:
+    desc: Configure and verify isolated development custom domains.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-main-configure-dev-domains.sh"
+
+  ci:release:write-metadata:
+    desc: Write release.json metadata into production dist trees.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-write-metadata.sh"
+
+  ci:release:deploy-vaults:
+    desc: Deploy isolated Simple and Sentinel applications for release.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-deploy-vaults.sh"
+
+  ci:release:attach-prod-domains:
+    desc: Attach and verify isolated production vault domains.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-attach-prod-domains.sh"
+
+  ci:release:verify-extension:
+    desc: Verify production browser extension deployment for a release.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-release-verify-extension.sh"
+
+  rust:deps:outdated:
+    desc: Audit direct Cargo dependencies with cargo-outdated.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-rust-deps-outdated.sh"
+
+  docker:prune:stale:
+    desc: Prune stale Docker data on self-hosted runners.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/docker-prune-stale.sh"
+
+  ci:main:stage-coverage:
+    desc: Stage commit-keyed nook-core/auth coverage artifacts.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-main-stage-coverage.sh"
+
+  web:research:install:
+    desc: Install web-research catalog dependencies.
+    dir: '{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research'
+    cmds:
+      - bun install --frozen-lockfile
+
+  web:research:verify:
+    desc: Format-check, check, build, and e2e the web-research catalog.
+    dir: '{{.ROOT_DIR}}/nook-app/nook-web/nook-web-research'
+    cmds:
+      - bun run format:check
+      - bun run check
+      - bun run build
+      - bun run test:e2e
+
+  web:research:deploy:
+    desc: Deploy the web-research catalog to Cloudflare Pages.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/web-research-deploy.sh"
+
+  web:research:verify-live:
+    desc: Verify the live web-research custom domain.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/web-research-verify-live.sh"
+
+  infra:surface:check:
+    desc: Validate the root Taskfile still exposes Hive infrastructure commands.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/infra-surface-check.sh"

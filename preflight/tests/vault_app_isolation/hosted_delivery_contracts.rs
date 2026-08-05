@@ -803,11 +803,16 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         deploy.contains("id: deploy-all")
-            && deploy.contains(">\"$deploy_dir/unified.log\" 2>&1 &")
-            && deploy.contains(">\"$deploy_dir/site.log\" 2>&1 &")
-            && deploy.contains(">\"$deploy_dir/simple.log\" 2>&1 &")
-            && deploy.contains(">\"$deploy_dir/sentinel.log\" 2>&1 &")
-            && deploy.contains("wait_for_deploy"),
+            && deploy.contains("task ci:pr:deploy-and-verify-previews"),
+        "PR preview deploy must invoke the Taskfile entry that owns concurrent Pages uploads"
+    );
+    let deploy_script = read(root, ".github/scripts/ci-pr-deploy-and-verify-previews.sh");
+    assert!(
+        deploy_script.contains(">\"$deploy_dir/unified.log\" 2>&1 &")
+            && deploy_script.contains(">\"$deploy_dir/site.log\" 2>&1 &")
+            && deploy_script.contains(">\"$deploy_dir/simple.log\" 2>&1 &")
+            && deploy_script.contains(">\"$deploy_dir/sentinel.log\" 2>&1 &")
+            && deploy_script.contains("wait_for_deploy"),
         "independent Cloudflare preview uploads must run concurrently and all succeed before alias verification"
     );
     assert!(
@@ -932,7 +937,12 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     );
     let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
-        cleanup.contains("--filter until=168h"),
+        cleanup.contains("task docker:prune:stale"),
+        "runner cleanup must invoke the Taskfile prune entry"
+    );
+    let prune_script = read(root, ".github/scripts/docker-prune-stale.sh");
+    assert!(
+        prune_script.contains("--filter until=168h"),
         "runner cleanup must preserve the recent delivery cache"
     );
     Ok(())
