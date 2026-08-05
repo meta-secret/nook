@@ -649,18 +649,59 @@ fn assert_preflight_reporter_contract(root: &Path) {
         "native PR CI must export the preflight reporter with its coverage artifact"
     );
     let preflight_dockerfile = read(root, "preflight/Dockerfile");
+    for required in [
+        "FROM rust-base AS chef",
+        "FROM rust-base AS deps",
+        "FROM deps AS build",
+        "cargo chef prepare --recipe-path recipe.json",
+        "cargo chef cook --recipe-path recipe.json",
+        "cargo chef cook --tests --recipe-path recipe.json",
+        "cargo chef cook --clippy --recipe-path recipe.json",
+        "--mount=type=secret,id=sccache_s3_access_key,required=false",
+        "nook-sccache-report preflight-chef",
+        "nook-sccache-report preflight-build",
+        "FROM scratch AS cli-export",
+        "target/debug/nook-preflight /nook-preflight",
+    ] {
+        assert!(
+            preflight_dockerfile.contains(required),
+            "preflight Docker cache topology is missing: {required}"
+        );
+    }
     assert!(
-        preflight_dockerfile.contains("FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS build")
-            && preflight_dockerfile.contains("FROM scratch AS cli-export")
-            && preflight_dockerfile.contains("target/debug/nook-preflight /nook-preflight"),
-        "the preflight reporter must share the tested Debian build graph and export as a stripped CI tool"
+        !preflight_dockerfile.contains("FROM rust:")
+            && !preflight_dockerfile.contains("FROM rust@"),
+        "preflight must reuse rust-base instead of installing a floating Rust tag"
     );
+    let preflight_bake = read(root, "preflight/docker-bake.hcl");
+    for required in [
+        "target \"preflight-test\"",
+        "target \"preflight-cli-export\"",
+        "rust-base = \"target:rust-base\"",
+        "inherits   = [\"_sccache\"]",
+        "dockerfile = \"preflight/Dockerfile\"",
+    ] {
+        assert!(
+            preflight_bake.contains(required),
+            "preflight Bake wiring is missing: {required}"
+        );
+    }
     let preflight_tasks = read(root, "preflight/Taskfile.yml");
-    assert!(
-        preflight_tasks.contains("preflight:export:")
-            && preflight_tasks.contains("--target cli-export"),
-        "preflight must expose its reporter through an explicit export task"
-    );
+    for required in [
+        "preflight:export:",
+        "preflight-cli-export",
+        "preflight-test",
+        "PREFLIGHT_BAKE_FILES",
+        "preflight/docker-bake.hcl",
+        "nook-app/docker/rust.docker-bake.hcl",
+        "SCCACHE_S3_BUILD_SECRETS",
+        "deps:\n      - sccache:ensure",
+    ] {
+        assert!(
+            preflight_tasks.contains(required),
+            "preflight Taskfile Bake/sccache wiring is missing: {required}"
+        );
+    }
 }
 
 fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {

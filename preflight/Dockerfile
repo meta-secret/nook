@@ -1,26 +1,51 @@
 # syntax=docker/dockerfile:1.4
 
-ARG RUST_VERSION=1.97
-ARG DEBIAN_RELEASE=trixie
+# Reuses the shared rust-base Bake target (pinned Rust, sccache, cargo-chef).
+# Dependency cooks stay cacheable across source-only preflight edits.
 
-FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS build
+FROM rust-base AS chef
 
 WORKDIR /opt/nook/preflight
-RUN rustup component add clippy rustfmt
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
+RUN mkdir -p src tests \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && printf '\n' > src/lib.rs \
+    && printf '\n' > tests/stub.rs
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM rust-base AS deps
+
+WORKDIR /opt/nook/preflight
+COPY --from=chef /opt/nook/preflight/recipe.json recipe.json
+COPY preflight/Cargo.toml preflight/Cargo.lock ./
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo chef cook --recipe-path recipe.json \
+    && cargo chef cook --tests --recipe-path recipe.json \
+    && cargo chef cook --clippy --recipe-path recipe.json \
+    && nook-sccache-report preflight-chef
+
+FROM deps AS build
+
 COPY preflight/src src
 COPY preflight/tests tests
-RUN cargo fmt --check \
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo fmt --check \
     && cargo clippy --locked --all-targets -- -D warnings \
     && cargo test --locked --no-run \
     && cargo build --locked --bin nook-preflight \
-    && strip target/debug/nook-preflight
+    && strip target/debug/nook-preflight \
+    && nook-sccache-report preflight-build
 
 FROM build AS test
 
 COPY . /meta-secret/nook
 ENV NOOK_REPO_ROOT=/meta-secret/nook
-RUN cargo test --locked
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo test --locked \
+    && nook-sccache-report preflight-test
 
 FROM scratch AS cli-export
 
