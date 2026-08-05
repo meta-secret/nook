@@ -767,9 +767,7 @@ mod tests {
         let link =
             build_sentinel_genesis_request_link(&request_json, "https://nook.example/vault")?;
 
-        assert!(link.starts_with(
-            "https://nook.example/vault#sentinel-request="
-        ));
+        assert!(link.starts_with("https://nook.example/vault#sentinel-request="));
         assert_eq!(normalize_sentinel_genesis_request(&link)?, request_json);
         Ok(())
     }
