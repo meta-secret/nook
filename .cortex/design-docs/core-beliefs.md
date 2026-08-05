@@ -5,52 +5,121 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ---
 
 ## 1. Optimize for AI Legibility First
-* **Context is scarce**: Large, monolithic documentation files crowd out active code and task context. Repository documentation should follow the principle of **progressive disclosure**—a small, stable entry point (`AGENTS.md`) pointing to deeper, structured documents only when needed.
-* **Locality & Discoverability**: Code structure should be self-revealing. If an architecture choice or decision is not captured in the repository (e.g., hidden in chat transcripts, PR comments, or external docs), it does not exist for the agent.
+
+- **Context is scarce:** Large, monolithic documentation files crowd out active code and task context.
+- Repository documentation should follow **progressive disclosure**.
+- Use a small, stable entry point (`AGENTS.md`) that points to deeper, structured documents only when needed.
+- **Locality & Discoverability:** Code structure should be self-revealing.
+- If an architecture choice or decision is not captured in the repository, it does not exist for the agent.
+- Hidden context includes chat transcripts, PR comments, and external docs.
 
 ## 2. Enforce Invariants Mechanically, Don't Micromanage Implementations
-* **System of Checks**: We do not tell agents to "try harder" or rely on prose instructions to enforce rules. We write automated checks (linters, formatting rules, unit tests, Svelte diagnostics, Knip unused-code detection, jscpd clone detection) that fail early and loud.
-* **Actionable Failures**: When a script or test fails, the output must be clear and offer actionable remediation instructions so the agent can self-correct immediately.
-* **Fix the finding**: A failing Knip, jscpd, lint, test, coverage, or CI gate is a required fix in the same task — not a license to raise thresholds, add authored-code ignores, or defer. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
+
+- **System of Checks:** We do not tell agents to "try harder" or rely on prose instructions to enforce rules.
+- We write automated checks that fail early and loud.
+- Checks include linters, formatting rules, unit tests, Svelte diagnostics, Knip unused-code detection, and jscpd clone detection.
+- **Actionable Failures:** When a script or test fails, the output must be clear.
+- It must offer actionable remediation instructions so the agent can self-correct immediately.
+- **Fix the finding:** A failing Knip, jscpd, lint, test, coverage, or CI gate is a required fix in the same task.
+- It is not a license to raise thresholds, add authored-code ignores, or defer.
+- See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 ## 3. Strict boundaries & Parse at the Boundary
-* **No YOLO Data Probing**: We avoid guessing data shapes or traversing weakly-typed objects. Data must be parsed and validated at the system boundary (e.g., when passing data between Rust and JS/Svelte).
-* **Predictable Structure**: Each package has a strict layer of responsibility. Shared dependency-light application primitives flow from `nook-app-common` into portable auth/domain crates, then through `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
+
+- **No YOLO Data Probing:** We avoid guessing data shapes or traversing weakly-typed objects.
+- Data must be parsed and validated at the system boundary.
+- Example: when passing data between Rust and JS/Svelte.
+- **Predictable Structure:** Each package has a strict layer of responsibility.
+- Shared dependency-light application primitives flow from `nook-app-common` into portable auth/domain crates.
+- Then through `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI).
+- Any cross-layer leakage is disallowed.
 
 ## 4. Centralize Tooling behind a Single Command Surface
-* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml`, cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/.task/`. Agents do not run raw compiler, bundler, or environment commands. They use `task format` locally, `task remote TASK_NAME=<name>` for focused hosted execution, `task pr:validate` for the complete gate, and local `task web:dev` only for interactive development state. Human local mirrors remain available.
-* **Containerized Toolchain**: All compiles, tests, and package installs run inside Docker to ensure environment parity between the host machine and GitHub Actions CI.
+
+- **Task runner as the API:** We use Taskfile as the single interface for all development tasks.
+- Root `Taskfile.yml` is the repo entrypoint.
+- App tasks live in `nook-app/Taskfile.yml`.
+- Cross-package app tasks live in `nook-app/.task/`.
+- Docker tasks live in `nook-app/docker/Taskfile.yml`.
+- Web-family tasks live in `nook-app/nook-web/.task/`.
+- Agents do not run raw compiler, bundler, or environment commands.
+- They use `task format` locally.
+- They use `task remote TASK_NAME=<name>` for focused hosted execution.
+- They use `task pr:validate` for the complete gate.
+- They use local `task web:dev` only for interactive development state.
+- Human local mirrors remain available.
+- **Containerized Toolchain:** All compiles, tests, and package installs run inside Docker.
+- This ensures environment parity between the host machine and GitHub Actions CI.
 
 ## 5. Pay Down Tech Debt Continuously
-* **Technical Debt is High-Interest**: Stale dependencies, unpinned versions, and deprecated configurations are treated as bugs. We pay down minor technical debt continuously in small increments rather than letting it compound into large, disruptive refactoring jobs.
+
+- **Technical Debt is High-Interest:** Stale dependencies, unpinned versions, and deprecated configurations are treated as bugs.
+- We pay down minor technical debt continuously in small increments.
+- We do not let it compound into large, disruptive refactoring jobs.
 
 ## 6. Maximize Reuse via Rust
-* **Rust-First Domain Assets**: Domain rules live in their portable Rust owner (`nook-auth2` or `nook-core`), while cross-cutting assets such as i18n localization dictionaries and translation utilities live in the dependency-light `nook-app-common` crate. Because we plan to build CLI tools and mobile clients in the future, implementing these features in Rust ensures that they can be shared across platforms. Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
+
+- **Rust-First Domain Assets:** Domain rules live in their portable Rust owner (`nook-auth2` or `nook-core`).
+- Cross-cutting assets such as i18n localization dictionaries and translation utilities live in the dependency-light `nook-app-common` crate.
+- We plan to build CLI tools and mobile clients in the future.
+- Implementing these features in Rust ensures they can be shared across platforms.
+- Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
 
 ## 7. Close Every Task with a Duration Report
-* **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
-* **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done). See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
+
+- **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
+- **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done).
+- See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
-* **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → `task format` → commit and push/update PR → focused hosted execution → explicit complete PR validation → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
-* **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
-* **Question-only turns** (no code changes) skip the pipeline.
+
+- **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md).
+- Pipeline: fetch → branch from `origin/main` → implement → `task format` → commit and push/update PR → focused hosted execution → explicit complete PR validation → fix failures/comments/conflicts → exact-head readiness audit → automatic agent-owned squash merge.
+- **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
+- **Question-only turns** (no code changes) skip the pipeline.
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
-* **~99% of functional coverage belongs in Rust unit and integration tests**
-  (`nook-replication`, `nook-event-log`, `nook-core`, and `nook-auth2`). Causal
-  DAG and replica mechanics belong in `nook-replication`; event authorization,
-  projection replay, and epoch-conflict metadata belong in `nook-event-log`;
-  encryption workflows remain `nook-core` domain tests. None of these may be
-  inferred from Playwright.
-* **E2e validates thin UI paths** (unlock, save, provider sync, conflict screens). Treat e2e failures as integration regressions; treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
-* **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`). Below 90%, agents add Rust tests in the same task. Above 90%, prioritize behavioral tests over chasing every line.
-* **Prefer type-safe domain APIs** (newtypes, type-state markers at boundaries) when they prevent invalid states without obscuring the code. Simplicity wins over pattern theatrics.
+
+- **~99% of functional coverage belongs in Rust unit and integration tests.**
+- Crates: `nook-replication`, `nook-event-log`, `nook-core`, and `nook-auth2`.
+- Causal DAG and replica mechanics belong in `nook-replication`.
+- Event authorization, projection replay, and epoch-conflict metadata belong in `nook-event-log`.
+- Encryption workflows remain `nook-core` domain tests.
+- None of these may be inferred from Playwright.
+- **E2e validates thin UI paths:** unlock, save, provider sync, conflict screens.
+- Treat e2e failures as integration regressions.
+- Treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
+- **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`).
+- Below 90%, agents add Rust tests in the same task.
+- Above 90%, prioritize behavioral tests over chasing every line.
+- **Prefer type-safe domain APIs** (newtypes, type-state markers at boundaries) when they prevent invalid states without obscuring the code.
+- Simplicity wins over pattern theatrics.
 
 ## 10. Grow Cortex Dynamically
-* **`.cortex` is a living knowledge base**, not a frozen snapshot. Agents must **update it when durable knowledge is gained** — from user prompts, design dialogues, test discoveries, CI/PR postmortems, or code archaeology.
-* **What to capture:** testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons. Write concise, actionable prose; link to source files.
-* **Where to put it:** extend the relevant existing doc (`rules.md`, `design-docs/`, `workflows/`, `references/`). For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md). Add a new file only when the topic is substantial and has no natural home. Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.
-* **Root README is part of the same hygiene:** when a change alters package layout, dependency flow, sync/storage model, unlock/enrollment UX, public Task commands, or other facts the root [`README.md`](../../README.md) advertises, **update the README in the same PR**. Keep the README a concise public summary; put depth in `.cortex`. See [AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current).
-* **What not to capture:** chat fluff, one-off task status, or secrets. Do not duplicate large code blocks — point to modules and tests instead.
-* **When:** as part of the same PR that learns the fact, or in a immediate follow-up before the task is marked done. If you fixed a bug because tests revealed a missing invariant, document that invariant in `.cortex`.
+
+- **`.cortex` is a living knowledge base**, not a frozen snapshot.
+- Agents must **update it when durable knowledge is gained**.
+- Sources include user prompts, design dialogues, test discoveries, CI/PR postmortems, and code archaeology.
+- **What to capture:** testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
+- Write concise, actionable prose.
+- Link to source files.
+- **How to write it:** follow [`../dynamic-skills/cortex-writer.md`](../dynamic-skills/cortex-writer.md).
+- Split long dense sentences into short sentences, bullets, and lists.
+- One sentence should carry one idea.
+- Dense multi-clause prose is a P1 documentation finding.
+- **How to keep it true:** follow [`../dynamic-skills/cortex-consistency.md`](../dynamic-skills/cortex-consistency.md).
+- Agents garbage-collect obsolete cortex facts.
+- Docs must agree with each other and with the code.
+- Conflicts and stale claims are P1 documentation findings.
+- **Where to put it:** extend the relevant existing doc (`rules.md`, `design-docs/`, `workflows/`, `references/`).
+- For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).
+- Add a new file only when the topic is substantial and has no natural home.
+- Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.
+- **Root README is part of the same hygiene:** when a change alters package layout, dependency flow, sync/storage model, unlock/enrollment UX, public Task commands, or other facts the root [`README.md`](../../README.md) advertises, **update the README in the same PR**.
+- Keep the README a concise public summary.
+- Put depth in `.cortex`.
+- See [AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current).
+- **What not to capture:** chat fluff, one-off task status, or secrets.
+- Do not duplicate large code blocks — point to modules and tests instead.
+- **When:** as part of the same PR that learns the fact, or in an immediate follow-up before the task is marked done.
+- If you fixed a bug because tests revealed a missing invariant, document that invariant in `.cortex`.

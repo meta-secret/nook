@@ -4,7 +4,27 @@ We track known technical debt, version updates, and cleanup tasks to resolve the
 
 | Debt Item | Package | Context | Status |
 |---|---|---|---|
-| Replace raw `String`/`u32` with domain newtypes | nook-event-log / nook-core / nook-wasm | Event envelope, projection, wire types — see [typed-newtypes.md](../design-docs/typed-newtypes.md). Current checklist: `nook-app/nook-core/src/vault/vault_connect.rs` and `nook-app/nook-core/src/sync/vault_sync_session.rs` normalized loaded vault metadata/key fields; vault access states now cross WASM as the core `VaultAccessStatus` enum; `nook-app/nook-wasm/src/storage/indexed_db.rs` normalized local vault registry labels/timestamps; `nook-app/nook-wasm/src/logger.rs` normalized log timestamps; `nook-app/nook-wasm/src/manager/event_log.rs` normalizes external event YAML into typed `VaultEvent`. Remaining audit targets: provider snapshot compatibility structs in `nook-app/nook-core/src/sync/sync_provider_store.rs`, API DTO option bags and other manager sentinel strings in `nook-app/nook-wasm/src/types.rs` / `manager/mod.rs`, member/enrollment timestamp strings in `nook-app/nook-core/src/auth/multi_device.rs` and `nook-app/nook-core/src/auth/enrollment.rs`, and projection conflict optional fields in `nook-app/nook-event-log/src/projection.rs`. | In progress |
+| Replace raw `String`/`u32` with domain newtypes | nook-event-log / nook-core / nook-wasm | Event envelope, projection, wire types — see [typed-newtypes.md](../design-docs/typed-newtypes.md). | In progress |
 | Upgrade Svelte & ESLint dependencies to latest | nook-web | Upgraded Lucide-Svelte, ESLint, globals, Prettier plugin. Added explicit `@eslint/js` dependency to resolve CI resolution issues. | Resolved |
 | Relocate Dockerfile & Optimize Caching | repo | Relocated `.docker/build.Dockerfile` to `Dockerfile` at root and restructured layers. | Resolved |
 | Fix `table.grow` WebAssembly error | nook-wasm | Upgraded `wasm-pack` and manually installed `binaryen` version 122. | Resolved |
+
+## Replace raw `String`/`u32` with domain newtypes
+
+Scope: event envelope, projection, and wire types. See [typed-newtypes.md](../design-docs/typed-newtypes.md).
+
+**Already normalized:**
+
+- `nook-app/nook-core/src/vault/vault_connect.rs` — loaded vault metadata/key fields
+- `nook-app/nook-core/src/sync/vault_sync_session.rs` — loaded vault metadata/key fields
+- Vault access states now cross WASM as the core `VaultAccessStatus` enum
+- `nook-app/nook-wasm/src/storage/indexed_db.rs` — local vault registry labels/timestamps
+- `nook-app/nook-wasm/src/logger.rs` — log timestamps
+- `nook-app/nook-wasm/src/manager/event_log.rs` — external event YAML into typed `VaultEvent`
+
+**Remaining audit targets:**
+
+- Provider snapshot compatibility structs in `nook-app/nook-core/src/sync/sync_provider_store.rs`
+- API DTO option bags and other manager sentinel strings in `nook-app/nook-wasm/src/types.rs` / `manager/mod.rs`
+- Member/enrollment timestamp strings in `nook-app/nook-core/src/auth/multi_device.rs` and `nook-app/nook-core/src/auth/enrollment.rs`
+- Projection conflict optional fields in `nook-app/nook-event-log/src/projection.rs`

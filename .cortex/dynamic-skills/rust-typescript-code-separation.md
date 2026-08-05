@@ -10,12 +10,14 @@ core product knowledge rather than a visual component concern.
 
 `nook-web` defines exported TypeScript unions, structs, or validators for app
 concepts because the current flow is implemented from UI code. This duplicates
-domain schema outside Rust and risks drift across web, wasm, and future hosts.
+domain schema outside Rust. It risks drift across web, wasm, and future hosts.
 
 The review question is: "Is this type about the app itself, or is it only a
-visual element in the UI?" If it describes vault behavior, storage/sync
-providers, enrollment payloads, secret formats, validation, wire contracts,
-workflow command arguments, or recovery summaries, it is app/core information.
+visual element in the UI?"
+
+If it describes vault behavior, storage/sync providers, enrollment payloads,
+secret formats, validation, wire contracts, workflow command arguments, or
+recovery summaries, it is app/core information.
 
 ## Preferred Pattern
 
@@ -43,23 +45,25 @@ Put app/domain types in Rust first:
   listeners, `setTimeout`, viewport/URL state), the more strongly it belongs in
   TypeScript/Svelte rather than Rust/WASM.
 - Never clone or unwrap reactive data with
-  `JSON.parse(JSON.stringify(value))`. In `.svelte` and `.svelte.ts` modules,
-  pass `$state.snapshot(value)` directly at the API boundary. Keep replace-only
-  DTO state in `$state.raw` so ordinary `.ts` domain and adapter modules receive
-  plain values. Do not rename a utility, domain, or action module to
-  `.svelte.ts` merely to access `$state.snapshot`; move the snapshot to the
-  rune-owning caller instead. Do not introduce `plain*` or `toPlain`
-  serialization helpers.
+  `JSON.parse(JSON.stringify(value))`.
+- In `.svelte` and `.svelte.ts` modules, pass `$state.snapshot(value)` directly
+  at the API boundary.
+- Keep replace-only DTO state in `$state.raw` so ordinary `.ts` domain and
+  adapter modules receive plain values.
+- Do not rename a utility, domain, or action module to `.svelte.ts` merely to
+  access `$state.snapshot`. Move the snapshot to the rune-owning caller instead.
+- Do not introduce `plain*` or `toPlain` serialization helpers.
 - Use the `.svelte.ts` suffix only when the module genuinely owns Svelte
   reactivity such as `$state`, `$derived`, or `$effect`. The suffix opts the
-  module into Svelte compiler transformation; it is not a general marker for
+  module into Svelte compiler transformation. It is not a general marker for
   code called by Svelte components.
 - Keep reactive state and workflow actions as separate APIs. Do not add a
   `VaultState` method whose complete implementation is
-  `return someActions.operation(this, ...args)`. Components and peer action
-  modules should import and call the action directly. Retain a state method only
-  when it owns a real boundary such as `$state.snapshot`, enforces an invariant,
-  adapts arguments/results, or composes multiple operations.
+  `return someActions.operation(this, ...args)`.
+- Components and peer action modules should import and call the action directly.
+- Retain a state method only when it owns a real boundary such as
+  `$state.snapshot`, enforces an invariant, adapts arguments/results, or
+  composes multiple operations.
 - Consume generated WASM types and functions directly. Preserve a friendly web
   module API with direct import/export aliases when useful, but do not add local
   `type Foo = NookFoo` declarations or exported functions whose only statement

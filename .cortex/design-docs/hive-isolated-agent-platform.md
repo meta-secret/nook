@@ -24,16 +24,16 @@ Hive separates four responsibilities:
 2. **Neo4j coordinates durable work.** It is the only task queue, DAG, lease
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
-   core API; it does not spawn a Codex CLI process or parse CLI JSONL. Every
+   core API. It does not spawn a Codex CLI process or parse CLI JSONL. Every
    worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
-   the
-   non-UI representation of Codex Light.
+   the non-UI representation of Codex Light.
 4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
    GitHub credential and use standard `git` and `gh` workflows directly. Hive
    must not introduce a custom publication broker, filesystem mailbox, signed
    request protocol, or similar layer solely to protect GitHub credentials from
    Codex. Kata isolation and disposable workspaces remain operational
-   containment and lifecycle tools, not a statement that the agent is hostile.
+   containment and lifecycle tools. They are not a statement that the agent is
+   hostile.
 
 Hive does not add NATS, Redis, PostgreSQL, RabbitMQ, KubeVirt, or a
 Kata-specific application orchestrator. SeaweedFS S3 used by Hive CI is only an
@@ -89,16 +89,20 @@ version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
 under [`infra/k0s/`](../../infra/k0s/).
 
-Before applying a new worker/coordinator, dispatcher, or observer revision, the
-deployment task scales all three graph-client Deployments to zero and verifies
-their Pods are gone. Their manifests also use the Kubernetes `Recreate`
-strategy. A graph-schema rollout therefore drains every older binary globally
-before any new revision can migrate and serve the retained graph; temporary
-control-plane unavailability is preferred to mixed schema semantics.
-The worker installs termination handling before its first claim and finishes
-any in-flight claim transaction before releasing a newly acquired lease. During
-Pod shutdown, the coordinator remains available until the worker records its
-terminal lifecycle marker or Kubernetes exhausts the Pod grace period, so the
+Before applying a new worker/coordinator, dispatcher, or observer revision:
+
+- The deployment task scales all three graph-client Deployments to zero.
+- It verifies their Pods are gone.
+- Their manifests use the Kubernetes `Recreate` strategy.
+
+A graph-schema rollout drains every older binary globally before any new revision
+can migrate and serve the retained graph. Temporary control-plane unavailability
+is preferred to mixed schema semantics.
+
+The worker installs termination handling before its first claim. It finishes any
+in-flight claim transaction before releasing a newly acquired lease. During Pod
+shutdown, the coordinator remains available until the worker records its
+terminal lifecycle marker or Kubernetes exhausts the Pod grace period. The
 rollout cannot strand a `RUNNING` lease under a removed Pod.
 
 ## 3. Components and ownership
@@ -196,35 +200,70 @@ dependency summary and resulting source. Resumed publication branches still
 receive dependency artifacts added after the branch was first created.
 
 A blocker may retire as obsolete without resolving its named prerequisite only
-when every active transitive non-blocker consumer is a Main-repair task and
-every one of those repairs is already squash-merged with a successful
-containing Main run. Intermediate blocker nodes belong to the same prerequisite
-chain and are not independent consumers. Claiming snapshots the complete sorted
-owner set; completion transactionally rechecks that exact set and refuses
-retirement if a Main repair or any non-Main consumer was attached while the
-blocker was running. Before completion, the worker independently runs the full
-deterministic branch, merged-PR, squash-merge, ancestry, and successful
-containing-Main proof for every owning repair. It intentionally does not require
-the owner's later review, deployment, or Workbench completion steps, because
-those remain part of the owning task's terminal delivery verifier and may wait
-on this blocker. Prompt compliance alone cannot retire a live prerequisite. A
-refused retirement releases the lease and retry consumption so another worker
-can re-evaluate the updated ownership. The
-schema-8 terminal result marks this exceptional path explicitly with
-`obsolete: true`, and Hive persists that marker on both the task and attempt.
+when all of the following hold:
+
+- Every active transitive non-blocker consumer is a Main-repair task.
+- Every one of those repairs is already squash-merged with a successful
+  containing Main run.
+
+Intermediate blocker nodes belong to the same prerequisite chain. They are not
+independent consumers.
+
+**Claim and completion guards**
+
+- Claiming snapshots the complete sorted owner set.
+- Completion transactionally rechecks that exact set.
+- Completion refuses retirement if a Main repair or any non-Main consumer was
+  attached while the blocker was running.
+
+Before completion, the worker independently runs the full deterministic proof
+for every owning repair:
+
+- branch state;
+- merged PR;
+- squash merge;
+- ancestry; and
+- successful containing Main run.
+
+It intentionally does not require the owner's later review, deployment, or
+Workbench completion steps. Those remain part of the owning task's terminal
+delivery verifier and may wait on this blocker. Prompt compliance alone cannot
+retire a live prerequisite.
+
+A refused retirement releases the lease and retry consumption. Another worker can
+then re-evaluate the updated ownership.
+
+The schema-8 terminal result marks this exceptional path explicitly with
+`obsolete: true`. Hive persists that marker on both the task and attempt.
+
+**Rearming obsolete blockers**
+
 If a future task discovers or directly depends on the same stable blocker ID,
-Hive transactionally rearms the dependency subtree only when that requested
-root is itself obsolete. Both direct enqueue and discovered-blocker attachment
-create the owner edge and take a write lock on that root before re-reading and
-rearming it, so a concurrent retirement cannot leave the new consumer treating
-it as satisfied. Rearming preserves the monotonic attempt number and extends
-the maximum by three attempts, then derives each task's state from its direct
-dependencies; a normally completed root remains satisfied even if historical
-obsolete descendants are still attached.
-Normal completion, including a real patch produced while owners change,
-bypasses the retirement-only guard and persists normally. The shared-owner,
-mixed-owner, late-owner, future-owner, and genuine-completion race cases are
-behavior-tested in
+Hive transactionally rearms the dependency subtree only when that requested root
+is itself obsolete.
+
+Both direct enqueue and discovered-blocker attachment:
+
+- create the owner edge; and
+- take a write lock on that root before re-reading and rearming it.
+
+A concurrent retirement cannot leave the new consumer treating the blocker as
+satisfied.
+
+Rearming:
+
+- preserves the monotonic attempt number;
+- extends the maximum by three attempts; and
+- derives each task's state from its direct dependencies.
+
+A normally completed root remains satisfied even if historical obsolete
+descendants are still attached.
+
+Normal completion, including a real patch produced while owners change, bypasses
+the retirement-only guard and persists normally.
+
+The shared-owner, mixed-owner, late-owner, future-owner, and genuine-completion
+race cases are behavior-tested in
 `agentic-ai/minds/hive/tests/neo4j_store.rs` and its focused `rearm.rs`
 integration capability.
 
@@ -306,26 +345,41 @@ flowchart LR
 ```
 
 Every failed browser E2E, UI-demo, native, WASM, build, deployment, mixed, or
-unknown Main attempt follows the repair path above. A later failed rerun
-restores the incident to `ready`, clears prior completion evidence, and creates
-a new task generation keyed by workflow run and attempt. If an earlier
-generation is still active, the dispatcher cancels it before enqueueing the new
-generation so the next worker receives the latest failed-job evidence without
-creating competing repairs. The dispatcher aborts that reconciliation cycle
-after requesting cancellation. The running worker then stops its Codex
-execution and atomically acknowledges termination in Neo4j. In parallel, the
-dispatcher asks the credential-gated lifecycle controller to delete the exact
-worker Pod recorded for every cancelling root or exclusive blocker. The
-controller validates the worker label and waits for Kubernetes to confirm
-deletion before the dispatcher finalizes cancellation. This provides durable recovery when a worker crashes
-before acknowledging. The old generation and its cancelling descendants remain
-active until that proof, so no replacement can become claimable merely because
-time elapsed. Reconciliation of the
-already-current run/attempt generation is idempotent and never cancels it.
-Cancellation also cancels blockers exclusive to the superseded delivery;
-shared blockers remain available to other live dependents. Publication
-branches, plans, and worklogs are generation-specific while the incident path
-remains keyed by source SHA. Completed or failed generations and their
+unknown Main attempt follows the repair path above.
+
+A later failed rerun:
+
+- restores the incident to `ready`;
+- clears prior completion evidence; and
+- creates a new task generation keyed by workflow run and attempt.
+
+If an earlier generation is still active, the dispatcher cancels it before
+enqueueing the new generation. The next worker receives the latest failed-job
+evidence without creating competing repairs.
+
+The dispatcher aborts that reconciliation cycle after requesting cancellation.
+The running worker then:
+
+- stops its Codex execution; and
+- atomically acknowledges termination in Neo4j.
+
+In parallel, the dispatcher asks the credential-gated lifecycle controller to
+delete the exact worker Pod recorded for every cancelling root or exclusive
+blocker. The controller validates the worker label. It waits for Kubernetes to
+confirm deletion before the dispatcher finalizes cancellation. This provides
+durable recovery when a worker crashes before acknowledging.
+
+The old generation and its cancelling descendants remain active until that
+proof. No replacement can become claimable merely because time elapsed.
+
+Reconciliation of the already-current run/attempt generation is idempotent. It
+never cancels it.
+
+Cancellation also cancels blockers exclusive to the superseded delivery. Shared
+blockers remain available to other live dependents.
+
+Publication branches, plans, and worklogs are generation-specific. The incident
+path remains keyed by source SHA. Completed or failed generations and their
 publication history remain immutable.
 
 The token-free dispatcher maintains a shallow public Git checkout of Workbench
@@ -359,22 +413,30 @@ state, not completion. The task must:
 9. verify the resulting Main run; and
 10. complete the Workbench incident, linked plan, and worklog.
 
-An incident remains the durable desired-state signal, while Neo4j owns actual
-execution state and attempt history. Operators inspect that state with
-`task infra:hive:queue:status`, which includes the latest and previous attempt
-outcomes so replacement-Pod failures remain diagnosable. A failed Main-repair
-is not automatically rearmed on every dispatcher poll: after repairing the
-platform, the explicit
-`task infra:hive:queue:retry HIVE_TASK_ID=...` transition preserves prior
-attempts and guarantees at least three post-release attempts per reachable
-member without reducing a larger operator-granted budget. It atomically rearms
-obsolete dependency roots, failed members, and historical blocked members from
-leaves toward the Main repair. Members whose prerequisites remain incomplete
-stay blocked with an operator-visible reason; dependency-free blocked leaves
-become runnable. It write-locks the reachable graph before inspecting retirement
-state and holds those locks through owner reactivation, recomputes readiness
-from the revived graph, refuses an active task, and cannot repeat a recovery for
-the same image digest.
+An incident remains the durable desired-state signal. Neo4j owns actual execution
+state and attempt history.
+
+Operators inspect that state with `task infra:hive:queue:status`. That command
+includes the latest and previous attempt outcomes. Replacement-Pod failures
+remain diagnosable.
+
+A failed Main-repair is not automatically rearmed on every dispatcher poll.
+After repairing the platform, the explicit
+`task infra:hive:queue:retry HIVE_TASK_ID=...` transition:
+
+- preserves prior attempts;
+- guarantees at least three post-release attempts per reachable member without
+  reducing a larger operator-granted budget;
+- atomically rearms obsolete dependency roots, failed members, and historical
+  blocked members from leaves toward the Main repair;
+- leaves members whose prerequisites remain incomplete blocked with an
+  operator-visible reason;
+- makes dependency-free blocked leaves runnable;
+- write-locks the reachable graph before inspecting retirement state;
+- holds those locks through owner reactivation;
+- recomputes readiness from the revived graph;
+- refuses an active task; and
+- cannot repeat a recovery for the same image digest.
 
 ### GitHub delivery recovery
 
@@ -415,27 +477,40 @@ fallback to `runc`. The host, KVM support, runtime class, and guest-kernel
 identity are verified by infrastructure tasks before Hive deploys.
 
 The worker container alone uses the pinned, node-local
-`nook/hive-bubblewrap.json` seccomp profile because rootless Bubblewrap must
-create and populate its mount namespace inside the guest. `Localhost` keeps the
-Pod compatible with the namespace's Restricted admission policy. Dragonball
-remains the outer syscall and kernel boundary; the worker still runs as a
-non-root user with every capability dropped, privilege escalation disabled,
-and a read-only root filesystem. The profile denies unknown syscalls and derives
-its ordinary allowlist from Moby's pinned `seccomp/v0.2.1` default profile,
-adding only the namespace and mount calls required by Bubblewrap; privileged
-kernel APIs such as `bpf` and `perf_event_open` remain denied. Credential and
-lifecycle sidecars retain `RuntimeDefault`. The Taskfile installs the profile
-beneath k0s's kubelet seccomp root and configures runtime-rs to pass Kubernetes
-seccomp profiles into the Dragonball guest before applying Hive.
+`nook/hive-bubblewrap.json` seccomp profile. Rootless Bubblewrap must create and
+populate its mount namespace inside the guest. `Localhost` keeps the Pod
+compatible with the namespace's Restricted admission policy.
 
-Restricted Kubernetes Pods mask sensitive paths in their inherited `/proc`,
-which prevents an unprivileged nested sandbox from mounting a second procfs.
-Hive therefore routes embedded Codex commands through a tiny wrapper that
-selects Codex's explicit `--no-proc` mode. User, PID, mount, and restricted
-network namespaces remain active; only the redundant fresh procfs mount is
-omitted. Deployment verification launches the same no-fresh-proc Bubblewrap
-shape inside a live worker, verifies that the guest applied seccomp, and rejects
-the rollout if either boundary is unavailable.
+Dragonball remains the outer syscall and kernel boundary. The worker still runs
+as a non-root user with:
+
+- every capability dropped;
+- privilege escalation disabled; and
+- a read-only root filesystem.
+
+The profile:
+
+- denies unknown syscalls;
+- derives its ordinary allowlist from Moby's pinned `seccomp/v0.2.1` default
+  profile; and
+- adds only the namespace and mount calls required by Bubblewrap.
+
+Privileged kernel APIs such as `bpf` and `perf_event_open` remain denied.
+Credential and lifecycle sidecars retain `RuntimeDefault`. The Taskfile installs
+the profile beneath k0s's kubelet seccomp root. It configures runtime-rs to pass
+Kubernetes seccomp profiles into the Dragonball guest before applying Hive.
+
+Restricted Kubernetes Pods mask sensitive paths in their inherited `/proc`.
+That prevents an unprivileged nested sandbox from mounting a second procfs. Hive
+therefore routes embedded Codex commands through a tiny wrapper that selects
+Codex's explicit `--no-proc` mode. User, PID, mount, and restricted network
+namespaces remain active. Only the redundant fresh procfs mount is omitted.
+
+Deployment verification:
+
+- launches the same no-fresh-proc Bubblewrap shape inside a live worker;
+- verifies that the guest applied seccomp; and
+- rejects the rollout if either boundary is unavailable.
 
 Worker Pods have no hostPath volume and never mount the host repository, host
 `CODEX_HOME`, or host Docker socket. They contain no privileged containers and
@@ -667,23 +742,35 @@ journal evidence without reading secret contents.
 
 The host firewall keeps its default-drop input and forward policies. k0s adds
 only persisted rules for traffic sourced from the cluster Pod CIDR
-`10.244.0.0/16` arriving on the kube-router `kube-bridge`: local control-plane access on TCP
-`6443`/`8132`, kubelet access on `10250`, and Pod egress. Kube-router
-masquerades traffic leaving the cluster so CoreDNS and intentionally allowlisted
-worker egress receive replies through the node. These rules do not expose any
-control-plane port on the public interface. The installer uses a temporary
-owned rule while k0s starts and restores the previous live and persisted
-firewall state if installation errors, exits, or receives a termination
-signal. The rollback transaction flushes and recreates both managed host chains
-from a complete ordered snapshot, preserving unrelated rule positions. It
-records the existing CNI state before restarting k0s, so a controller rewrite
-cannot hide an `ipMasq` migration; migrations automatically replace existing
-Hive, dispatcher, and lifecycle-controller Pod sandboxes. The API server's
-stable loopback address is `10.201.0.1`, and the worker egress template uses its
-exact `/32` rather than a deployment-time endpoint lookup. The
-`nook-k0s-api-address.service` systemd unit assigns the `/32` before k0s starts
-and is enabled across reboots; installation verifies both unit state and the
-live `lo` address.
+`10.244.0.0/16` arriving on the kube-router `kube-bridge`:
+
+- local control-plane access on TCP `6443`/`8132`;
+- kubelet access on `10250`; and
+- Pod egress.
+
+Kube-router masquerades traffic leaving the cluster. CoreDNS and intentionally
+allowlisted worker egress receive replies through the node. These rules do not
+expose any control-plane port on the public interface.
+
+The installer uses a temporary owned rule while k0s starts. It restores the
+previous live and persisted firewall state if installation errors, exits, or
+receives a termination signal. The rollback transaction flushes and recreates
+both managed host chains from a complete ordered snapshot. It preserves unrelated
+rule positions.
+
+It records the existing CNI state before restarting k0s. A controller rewrite
+cannot hide an `ipMasq` migration. Migrations automatically replace existing
+Hive, dispatcher, and lifecycle-controller Pod sandboxes.
+
+The API server's stable loopback address is `10.201.0.1`. The worker egress
+template uses its exact `/32` rather than a deployment-time endpoint lookup.
+
+The `nook-k0s-api-address.service` systemd unit:
+
+- assigns the `/32` before k0s starts; and
+- is enabled across reboots.
+
+Installation verifies both unit state and the live `lo` address.
 
 Initial credential bootstrap requires explicit local file inputs:
 

@@ -10,9 +10,10 @@ go/adjust/stop gate before any additional implementation.
 ## Purpose and completion contract
 
 **AI-debug mode exists to fix bugs.** Annotation is the developer's input to a
-bug-fixing workflow; it is not the final deliverable. A successful annotation
-handoff obligates the agent to continue from evidence to implementation unless
-the developer explicitly asks for diagnosis only.
+bug-fixing workflow. It is not the final deliverable.
+
+A successful annotation handoff obligates the agent to continue from evidence to
+implementation unless the developer explicitly asks for diagnosis only.
 
 The workflow is not complete when the agent has merely:
 
@@ -33,9 +34,12 @@ For every submitted annotation, the agent must:
 5. commit, push, open or update the PR, and complete the repository's normal
    validation workflow.
 
-The agent may stop without a code fix only when the developer explicitly asked
-for diagnosis/review only, or when a concrete permission, product-decision, or
-external-state blocker makes the fix impossible within the authorized scope.
+The agent may stop without a code fix only when:
+
+- the developer explicitly asked for diagnosis/review only; or
+- a concrete permission, product-decision, or external-state blocker makes the
+  fix impossible within the authorized scope.
+
 In that case, report the exact blocker and the remaining work. Difficulty,
 uncertainty, or having already explained the bug are not blockers.
 
@@ -58,9 +62,11 @@ capability, so the checked-in project configuration enables
 
 ## What "enable AI-debug mode" means
 
-AI-debug mode is a live developer handoff, not just a running dev server or an
-agent-owned browser page. When a developer asks an agent to enable AI-debug
-mode, the request is complete only after the agent has:
+AI-debug mode is a live developer handoff. It is not just a running dev server or
+an agent-owned browser page.
+
+When a developer asks an agent to enable AI-debug mode, the request is complete
+only after the agent has:
 
 1. started `task ai-debug:dev` and confirmed the selected local `/app/` URL
    responds;
@@ -71,19 +77,28 @@ mode, the request is complete only after the agent has:
    the visible Playwright Dashboard.
 
 Do **not** report AI-debug mode as enabled after `task ai-debug:dev` alone.
-That command verifies the MCP configuration and starts Nook, but it cannot open
-the current Codex task's Playwright browser. Likewise, a successful
-`browser_navigate` result proves that the page loaded for the agent; it does not
-complete the developer-facing screenshot/annotation handoff.
+That command verifies the MCP configuration and starts Nook. It cannot open the
+current Codex task's Playwright browser.
+
+Likewise, a successful `browser_navigate` result proves that the page loaded for
+the agent. It does not complete the developer-facing screenshot/annotation
+handoff.
 
 The developer makes screenshot annotations in **Playwright Dashboard**, not in
-the live Chrome page. `browser_annotate` freezes the current Chrome page into a
-screenshot, opens the Dashboard, and waits for **Submit** followed by **Done**.
+the live Chrome page. `browser_annotate`:
+
+- freezes the current Chrome page into a screenshot;
+- opens the Dashboard; and
+- waits for **Submit** followed by **Done**.
+
 Keep the annotation call active until the developer finishes or explicitly
-cancels it. If the developer cannot see the windows, do not claim success or
-repeat `browser_navigate`; verify the active origin, invoke `browser_annotate`,
-and then troubleshoot the headed MCP launcher if the Dashboard still does not
-appear.
+cancels it. If the developer cannot see the windows:
+
+- do not claim success;
+- do not repeat `browser_navigate`;
+- verify the active origin;
+- invoke `browser_annotate`; and
+- troubleshoot the headed MCP launcher if the Dashboard still does not appear.
 
 ## One-time setup
 
@@ -119,17 +134,24 @@ Cursor `mcp.json`. It also verifies that HTTP/HTTPS and WS/WSS origins for ports
 `5173`/`5175` stay aligned across `.codex/config.toml`, `.cursor/mcp.json`, and
 [`.codex/playwright-local-only.ts`](../../.codex/playwright-local-only.ts).
 
-The project configuration pins `@playwright/mcp@0.0.78`, uses an ephemeral
-isolated browser profile, blocks service workers, ignores local HTTPS certificate
-errors (`--ignore-https-errors`), allows only the local Nook dev origins (HTTP and
-HTTPS on `localhost`/`127.0.0.1` ports `5173`/`5175`, plus matching `ws`/`wss`),
-aborts non-local HTTP and WebSocket traffic through a Playwright context route,
-limits console forwarding to warnings/errors, and exposes a narrow tool
-allowlist in Codex. `browser_network_requests`, storage inspection/export, file
-upload, and unrestricted Playwright execution are not available to the pilot
-agent. The isolated MCP browser also intercepts the native directory chooser, so
+The project configuration:
+
+- pins `@playwright/mcp@0.0.78`;
+- uses an ephemeral isolated browser profile;
+- blocks service workers;
+- ignores local HTTPS certificate errors (`--ignore-https-errors`);
+- allows only the local Nook dev origins (HTTP and HTTPS on `localhost`/`127.0.0.1`
+  ports `5173`/`5175`, plus matching `ws`/`wss`);
+- aborts non-local HTTP and WebSocket traffic through a Playwright context route;
+- limits console forwarding to warnings/errors; and
+- exposes a narrow tool allowlist in Codex.
+
+`browser_network_requests`, storage inspection/export, file upload, and
+unrestricted Playwright execution are not available to the pilot agent.
+
+The isolated MCP browser also intercepts the native directory chooser.
 `showDirectoryPicker()` cannot complete there. Nook reports that boundary in the
-local-folder setup UI; connect a local backup folder from a regular browser
+local-folder setup UI. Connect a local backup folder from a regular browser
 instead.
 
 ### Concurrent AI-debug sessions

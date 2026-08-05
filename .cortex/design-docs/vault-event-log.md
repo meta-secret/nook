@@ -50,24 +50,28 @@ artifact for event-log vaults.
 | Same path, different bytes | quarantine (corruption) |
 
 Current event schema `2` binds each event to `actor_signing_public_key`. The
-actor id must be the SHA-256 digest of that Ed25519 public key, and the event
+actor id must be the SHA-256 digest of that Ed25519 public key. The event
 signature must verify over the canonical body before a current-schema remote
-event enters the local event set. Non-genesis events are also checked against
-the event's causal past: an actor is accepted only if it is the import root, was
-introduced by a causally prior `join-approved` / `sentinel-participant-enrolled`,
-or is publishing its own self-signed membership event under a narrow policy:
+event enters the local event set.
 
-- `join-requested` — always allowed when self-signed (pending join);
-- `join-approved` — self-signed only for simple password QR self-enrol, and only
-  when causal ancestry has no Sentinel membership/share ops
-  (`sentinel-participant-enrolled` / `sentinel-shares-issued`);
-- `sentinel-participant-enrolled` — never self-signed; must be signed by an
-  already-authorized actor (owner approval / genesis).
+Non-genesis events are also checked against the event's causal past. An actor is
+accepted only if it is:
+
+- the import root;
+- introduced by a causally prior `join-approved` /
+  `sentinel-participant-enrolled`; or
+- publishing its own self-signed membership event under a narrow policy:
+
+| Event | Self-signed rule |
+| --- | --- |
+| `join-requested` | Always allowed when self-signed (pending join) |
+| `join-approved` | Self-signed only for simple password QR self-enrol, and only when causal ancestry has no Sentinel membership/share ops (`sentinel-participant-enrolled` / `sentinel-shares-issued`) |
+| `sentinel-participant-enrolled` | Never self-signed; must be signed by an already-authorized actor (owner approval / genesis) |
 
 The current event body requires the signing-key field. The shared signing-key
-type explicitly distinguishes `Unavailable` from a validated Ed25519 hex key,
-but current signed events reject `Unavailable`. Missing fields are not
-backfilled or accepted through a compatibility shape.
+type explicitly distinguishes `Unavailable` from a validated Ed25519 hex key.
+Current signed events reject `Unavailable`. Missing fields are not backfilled or
+accepted through a compatibility shape.
 
 Every encrypted secret payload also requires two non-empty vault-keyed tags:
 
@@ -76,7 +80,7 @@ Every encrypted secret payload also requires two non-empty vault-keyed tags:
 - `fingerprint` identifies one complete secret version, including the
   password/secret value and bound to the logical identity.
 
-They cannot be collapsed: matching identity with a different version is how
+They cannot be collapsed. Matching identity with a different version is how
 import reconciliation preserves a changed password as a separate item instead
 of silently overwriting it.
 
@@ -165,27 +169,40 @@ that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
 Provider connect and sync paths must classify the provider event set before
-writing outbox or repair events. Empty providers may be initialized from the
-active local vault, and a provider with exactly the active `store_id` may be
-union-synced. A provider with a different `store_id`, multiple discovered
-`store_id`s, unreadable event files, or invalid event bytes must fail closed
-before any write; the user must choose an explicit recovery/import path instead
-of letting the current local vault silently take over provider data.
+writing outbox or repair events.
+
+| Provider state | Action |
+| --- | --- |
+| Empty | May be initialized from the active local vault |
+| Exactly the active `store_id` | May be union-synced |
+| Different `store_id` | Fail closed before any write |
+| Multiple discovered `store_id`s | Fail closed before any write |
+| Unreadable event files | Fail closed before any write |
+| Invalid event bytes | Fail closed before any write |
+
+The user must choose an explicit recovery/import path. The current local vault
+must not silently take over provider data.
 
 Event-log provider sync never writes the materialized projection. Normal
-provider fan-out appends YAML event files and repairs missing provider events
+provider fan-out appends YAML event files. It repairs missing provider events
 from the local event store.
 
-Drive event storage tolerates duplicate app-data files for the same event name:
-fetch downloads all matches, skips unreadable or wrong-id candidates, accepts
-only bytes whose content-derived event id matches the requested id, treats
-identical duplicates as one event, and reports divergent valid envelopes as
-corruption. When every same-name candidate is unreadable, the event is treated
-as absent so put-if-absent can publish good local bytes; outbox flush must not
-treat a listed name alone as proof the event is already present. Drive list only
-counts files whose `appProperties.event_id` matches the filename digest, so
-name-only junk cannot inflate assess/sync downloads. Provider sync fetches only
-remote event ids that are missing locally.
+Drive event storage tolerates duplicate app-data files for the same event name.
+Fetch:
+
+- downloads all matches;
+- skips unreadable or wrong-id candidates;
+- accepts only bytes whose content-derived event id matches the requested id;
+- treats identical duplicates as one event; and
+- reports divergent valid envelopes as corruption.
+
+When every same-name candidate is unreadable, the event is treated as absent.
+`put-if-absent` can then publish good local bytes. Outbox flush must not treat a
+listed name alone as proof the event is already present.
+
+Drive list only counts files whose `appProperties.event_id` matches the filename
+digest. Name-only junk cannot inflate assess/sync downloads. Provider sync
+fetches only remote event ids that are missing locally.
 
 ## IndexedDB storage
 

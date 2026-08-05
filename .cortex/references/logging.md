@@ -13,15 +13,20 @@ this order:
    and web reports, Playwright report, and failure attachments.
 2. **Static analysis** — fmt, clippy, svelte-check, eslint, and type errors from
    focused or complete hosted execution.
-3. **Persisted application logs** — **the most important source after steps 1–2.**
-   Vault unlock, sync reconciliation, WASM tracing, and captured `console.*`
-   output live here. Test output and linters do not surface this layer.
+3. **Persisted application logs** — **the most important source after steps
+   1–2.**
+
+Vault unlock, sync reconciliation, WASM tracing, and captured `console.*`
+output live here. Test output and linters do not surface this layer.
 
 **Always check app logs** before changing production code or guessing from DOM
-snapshots or screenshot diffs alone. Every Playwright result includes
-`nook-app-logs.json` automatically; failed tests also print a readable tail to
-the test output. Locally use `fetchAppLogs(page)`, `/app-logs`, or the `/logs`
-viewer. If the trail is thin, lower the capture level and reproduce
+snapshots or screenshot diffs alone.
+
+Every Playwright result includes `nook-app-logs.json` automatically. Failed
+tests also print a readable tail to the test output. Locally use
+`fetchAppLogs(page)`, `/app-logs`, or the `/logs` viewer.
+
+If the trail is thin, lower the capture level and reproduce
 (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`).
 
 See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and-analysis) below for the preferred read order and helpers.
