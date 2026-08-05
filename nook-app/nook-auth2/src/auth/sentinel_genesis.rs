@@ -793,6 +793,28 @@ mod tests {
     }
 
     #[test]
+    fn participant_response_link_preserves_a_canonical_route_without_a_trailing_slash(
+    ) -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let owner_signing = signing_key()?;
+        let session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let (_, _, response) = participant(&session.request, "Peer")?;
+        let response_json = serde_json::to_string(&response)?;
+
+        let link = build_sentinel_genesis_participant_response_link(
+            &response_json,
+            "https://nook.example/vault",
+        )?;
+
+        assert!(link.starts_with("https://nook.example/vault#sentinel-response="));
+        assert_eq!(
+            normalize_sentinel_genesis_participant_payload(&link)?,
+            response_json
+        );
+        Ok(())
+    }
+
+    #[test]
     fn local_announcement_fingerprint_remains_readable_but_not_enrollable() -> anyhow::Result<()> {
         let peer = DeviceIdentity::generate()?;
         let peer_signing = signing_key()?;

@@ -100,7 +100,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/admin$/)
+    await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
 
     // Simulate lost device keys: wipe identity from nook_db but keep providers.

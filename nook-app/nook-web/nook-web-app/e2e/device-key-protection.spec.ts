@@ -31,6 +31,7 @@ async function clickDeviceProtectionSetup(page: Page) {
 async function createSentinelParticipantResponse(
   browser: Browser,
   invitationLink: string,
+  localAppUrl: string,
   label: string,
 ): Promise<{ context: BrowserContext; responseLink: string }> {
   const context = await createIsolatedContext(browser)
@@ -38,7 +39,12 @@ async function createSentinelParticipantResponse(
     localStorage.setItem('nook_e2e_manual_passkey', 'true')
   })
   const participant = await context.newPage()
-  await participant.goto(invitationLink)
+  const invitation = new URL(invitationLink)
+  const participantUrl = new URL(
+    `${invitation.pathname}${invitation.search}${invitation.hash}`,
+    localAppUrl,
+  ).toString()
+  await participant.goto(participantUrl)
   await expect(
     participant.getByTestId('sentinel-genesis-participant-step'),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
@@ -275,6 +281,7 @@ test.describe('passkey device-key protection', () => {
     const participantOne = await createSentinelParticipantResponse(
       browser,
       invitationLink,
+      page.url(),
       'Sentinel participant one',
     )
     await page
@@ -296,6 +303,7 @@ test.describe('passkey device-key protection', () => {
     const participantTwo = await createSentinelParticipantResponse(
       browser,
       invitationLink,
+      page.url(),
       'Sentinel participant two',
     )
     expect(participantTwo.responseLink).toContain('/vault#sentinel-response=')

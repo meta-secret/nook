@@ -127,7 +127,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/admin$/)
+    await expect(page).toHaveURL(/\/admin$/)
     await waitForPersistedAppLog(page, {
       scope: 'vault-password',
       level: 'info',
@@ -159,7 +159,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page).toHaveURL(/\/vault\/admin$/)
+    await expect(page).toHaveURL(/\/admin$/)
   })
 
   test('hides backup password option when vault has no password entries', async ({
