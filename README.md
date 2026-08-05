@@ -439,6 +439,11 @@ task infra:status           # inspect the remote infrastructure stack
 task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 ```
 
+Expensive remote browser/full-suite dispatches and `task pr:validate` refresh
+the target base first and stop immediately when the branch is behind. Merge the
+reported `origin/<base>`, format, push, and rerun instead of spending hosted
+validation on an obsolete base.
+
 Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
 authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit
 `infra:hive:auth:rotate` command above only when intentionally replacing that
