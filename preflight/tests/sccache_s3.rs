@@ -242,7 +242,6 @@ fn assert_workflows_scope_cache_credentials() {
     for path in [
         ".github/workflows/agent-implement.yml",
         ".github/workflows/e2e-pr.yml",
-        ".github/workflows/pr.yml",
         ".github/workflows/release.yml",
         ".github/workflows/rust-dependency-updates.yml",
     ] {
@@ -268,6 +267,39 @@ fn assert_workflows_scope_cache_credentials() {
         "trusted Main Rust and WASM producers must populate SeaweedFS compiler objects"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
+
+    let pr = read(".github/workflows/pr.yml");
+    let pr_docker_setups = pr
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
+    assert_eq!(
+        pr.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
+        pr_docker_setups,
+        "same-repository PR Docker jobs must mount SeaweedFS sccache like Hive"
+    );
+    assert_eq!(
+        pr.matches("NOOK_SCCACHE_SECRET_KEY").count(),
+        pr_docker_setups
+    );
+    assert_eq!(
+        pr.matches("isolated-cache-write: \"true\"").count(),
+        pr_docker_setups,
+        "PR Docker jobs must write only isolated remote-buildcache scopes"
+    );
+    assert!(!pr.contains("NOOK_CACHE_REDIS_PASSWORD"));
+
+    let ecosystem = read(".github/workflows/rust-ecosystem.yml");
+    let ecosystem_docker_setups = ecosystem
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
+    assert_eq!(
+        ecosystem.matches("NOOK_SCCACHE_ACCESS_KEY").count(),
+        ecosystem_docker_setups,
+        "Rust ecosystem Docker jobs must mount SeaweedFS sccache"
+    );
+    assert!(ecosystem.contains(
+        "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+    ));
 
     let remote = read(".github/workflows/remote.yml");
     let selected_jobs = remote.matches("if: inputs.task == '").count();
@@ -401,7 +433,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("[ -z \"$read_only\" ]"));
     assert!(setup.contains("main-cache-only"));
     assert!(setup.contains("main-cache-only requires cache-write=false"));
-    assert!(setup.contains("isolated-cache-write requires workflow_dispatch"));
+    assert!(
+        setup.contains("isolated-cache-write requires main-cache-only=true and cache-write=false")
+    );
+    assert!(setup.contains("isolated-cache-write requires workflow_dispatch or pull_request"));
+    assert!(setup.contains("scope_suffix=\"-pr-$pr_number\""));
     assert!(
         setup.contains(
             "branch_hash=\"$(printf '%s' \"$GITHUB_REF_NAME\" | sha256sum | cut -c1-20)\""

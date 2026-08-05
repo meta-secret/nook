@@ -509,9 +509,10 @@ no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
 
 Rust compilation has a second cache boundary below Docker layers: pinned
 `sccache` clients use authenticated SeaweedFS S3 to reuse compatible
-source-sensitive compiler outputs whenever credentials are available. A
-secret-free build bypasses sccache. SeaweedFS does not cache Cargo downloads or
-Docker layers.
+source-sensitive compiler outputs whenever credentials are available.
+Same-repository Main, Hive, PR, Rust ecosystem, and Remote jobs mount those
+credentials; fork/release/secret-free builds bypass sccache. SeaweedFS does not
+cache Cargo downloads or Docker layers.
 PR CI also uploads the small native coverage and generated WASM handoffs. After
 the complete PR workflow succeeds, default-branch-only
 `pr-validation-handoff.yml` verifies the source run and required jobs, validates
