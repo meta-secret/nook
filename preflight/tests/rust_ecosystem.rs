@@ -66,6 +66,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "DYLINT_NIGHTLY=nightly-2026-04-16",
         "cargo install cargo-dylint dylint-link",
         "cargo-deny --manifest-path",
+        "--hide-inclusion-graph",
+        "--log-level error",
         "cargo-audit audit",
         "cargo fuzz run",
         "cargo dylint --all",
