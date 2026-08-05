@@ -34,43 +34,12 @@ jobs:
       - name: Install cargo-outdated
         run: cargo install cargo-outdated --version 0.19.0 --locked
 
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+
       - name: Check every direct Cargo dependency
         id: audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          outdated=false
-
-          check_manifest() {
-            local directory="$1"
-            local status
-
-            set +e
-            (
-              cd "$directory"
-              cargo outdated --workspace --root-deps-only --exit-code 1
-            )
-            status=$?
-            set -e
-
-            case "$status" in
-              0)
-                echo "All direct dependencies are current in $directory."
-                ;;
-              1)
-                echo "Direct dependency updates are available in $directory."
-                outdated=true
-                ;;
-              *)
-                echo "cargo outdated failed in $directory (exit $status)." >&2
-                exit "$status"
-                ;;
-            esac
-          }
-
-          check_manifest nook-app
-          check_manifest preflight
-          echo "outdated=$outdated" >> "$GITHUB_OUTPUT"
+        run: task rust:deps:outdated
 
   update:
     name: AI update, full test, PR, and merge

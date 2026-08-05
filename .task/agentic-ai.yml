@@ -1,6 +1,8 @@
 version: '3'
 
 vars:
+  REPO_ROOT:
+    sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   CI_AGENT_DIR: agentic-ai/ci-agent
   CI_AGENT_IMAGE:
     sh: >-
@@ -107,6 +109,26 @@ tasks:
     cmds:
       - npm run build
 
+  ci-agent:test:
+    desc: Install and unit-test ci-agent on the host.
+    dir: '{{.CI_AGENT_DIR}}'
+    cmds:
+      - npm ci
+      - npm test
+
+  ci-agent:smoke:
+    desc: Verify exitCiAgent terminates despite open handles.
+    dir: '{{.CI_AGENT_DIR}}'
+    deps:
+      - ci-agent:build
+    cmds:
+      - node scripts/exit-smoke.mjs
+
+  ci-agent:plan:
+    desc: Run the task-planning agent in a detached worktree and copy the plan back.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/ci-agent-plan.sh"
+
   ci-agent:prepare:
     desc: Install and build ci-agent on the host (Node 22.13+). Prefer Docker tasks for CI.
     cmds:
@@ -114,6 +136,40 @@ tasks:
         node -e "const [maj,min]=process.versions.node.split('.').map(Number);
         if(maj<22||(maj===22&&min<13)){console.error('ci-agent requires Node.js 22.13+ (have '+process.versions.node+')');process.exit(1)}"
       - task: ci-agent:build
+
+  hive:console:install:
+    desc: Install Hive Control Center dependencies.
+    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    cmds:
+      - bun install --frozen-lockfile
+
+  hive:console:check:
+    desc: Format-check, type-check, and build the Hive Control Center.
+    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    cmds:
+      - bun run format:check
+      - bun run check
+      - bun run build
+
+  hive:console:e2e:prepare:
+    desc: Install the Chromium browser for Hive Control Center Playwright e2e.
+    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    cmds:
+      - bunx playwright install --with-deps chromium
+
+  hive:console:e2e:
+    desc: Run Hive Control Center Playwright journeys.
+    dir: '{{.REPO_ROOT}}/agentic-ai/minds/hive-console'
+    cmds:
+      - bun run test:e2e
+
+  hive:console:verify:
+    desc: Install, check, and e2e-test the Hive Control Center.
+    cmds:
+      - task: hive:console:install
+      - task: hive:console:check
+      - task: hive:console:e2e:prepare
+      - task: hive:console:e2e
 
   ci-agent:docker:build:
     desc: Build the worktree-scoped nook-ci-agent image (Node + Docker CLI + task; no daemon).

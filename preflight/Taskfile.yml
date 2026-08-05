@@ -76,3 +76,13 @@ tasks:
         {{.PREFLIGHT_BAKE_FILES}}
         --set "preflight-cli-export.output=type=local,dest={{.PREFLIGHT_OUTPUT_DIR}}"
         preflight-cli-export
+
+  preflight:source-architecture:
+    desc: Enforce authored source size limits and Rust unit-test colocation.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - >-
+        cargo test
+        --locked
+        --manifest-path preflight/Cargo.toml
+        --test source_file_size

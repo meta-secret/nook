@@ -224,21 +224,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           CI_AGENT_PROMPT_FILE: .github/prompts/agent-plan.md
           CI_AGENT_TIMEOUT_MS: "600000"
-        run: |
-          set -euo pipefail
-          rm -f -- "$WORKBENCH_PLAN_FILE"
-          planning_parent="$(mktemp -d)"
-          planning_root="$planning_parent/checkout"
-          cleanup() {
-            git worktree remove --force "$planning_root" 2>/dev/null || true
-            rm -rf -- "$planning_parent"
-          }
-          trap cleanup EXIT
-          git worktree add --detach "$planning_root" HEAD
-          REPO_ROOT="$planning_root" task ci-agent:run
-          test -s "$planning_root/$WORKBENCH_PLAN_FILE"
-          cp -- "$planning_root/$WORKBENCH_PLAN_FILE" "$WORKBENCH_PLAN_FILE"
-          test -s "$WORKBENCH_PLAN_FILE"
+        run: task ci-agent:plan
 
       - name: Validate and publish Workbench task plan
         id: plan

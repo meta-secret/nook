@@ -15,6 +15,9 @@ on:
       - .github/scripts/services-network-repair-test.py
       - .github/scripts/zot-registry-public-contract-test.py
       - .task/agentic-ai.yml
+      - .task/ci-workflows.yml
+      - .github/scripts/infra-surface-check.sh
+      - Taskfile.yml
       - agentic-ai/minds/**
       - infra/compose.yaml
       - infra/k0s/**
@@ -31,6 +34,9 @@ on:
       - .github/scripts/services-network-repair-test.py
       - .github/scripts/zot-registry-public-contract-test.py
       - .task/agentic-ai.yml
+      - .task/ci-workflows.yml
+      - .github/scripts/infra-surface-check.sh
+      - Taskfile.yml
       - agentic-ai/minds/**
       - infra/compose.yaml
       - infra/k0s/**
@@ -78,23 +84,16 @@ jobs:
           bun-version: 1.3.14
 
       - name: Install Hive Control Center dependencies
-        working-directory: agentic-ai/minds/hive-console
-        run: bun install --frozen-lockfile
+        run: task hive:console:install
 
       - name: Verify Hive Control Center source
-        working-directory: agentic-ai/minds/hive-console
-        run: |
-          bun run format:check
-          bun run check
-          bun run build
+        run: task hive:console:check
 
       - name: Install Hive Control Center browser
-        working-directory: agentic-ai/minds/hive-console
-        run: bunx playwright install --with-deps chromium
+        run: task hive:console:e2e:prepare
 
       - name: Verify Hive Control Center journeys
-        working-directory: agentic-ai/minds/hive-console
-        run: bun run test:e2e
+        run: task hive:console:e2e
 
       - name: Configure persistent Rust compiler cache
         uses: ./.github/actions/nook-cache-connect
@@ -121,12 +120,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Validate Taskfile command surface
-        run: |
-          task --list | grep -q 'infra:k0s:install'
-          task --list | grep -q 'infra:kata:verify'
-          task --list | grep -q 'infra:neo4j:deploy'
-          task --list | grep -q 'infra:hive:deploy'
-          task infra:k0s:manifests:check
+        run: task infra:surface:check
 
       - name: Hive Rust verification
         env:

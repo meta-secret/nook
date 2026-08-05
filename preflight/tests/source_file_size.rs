@@ -83,12 +83,20 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
 fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result<()> {
     let workflow =
         fs::read_to_string(repository_root().join(".github/workflows/source-architecture.yml"))?;
+    let taskfile = fs::read_to_string(repository_root().join("preflight/Taskfile.yml"))?;
 
     assert!(workflow.contains("pull_request:"));
     assert!(
         !workflow.contains("paths:") && !workflow.contains("paths-ignore:"),
         "the source-architecture workflow must not skip authored product trees"
     );
-    assert!(workflow.contains("--test source_file_size"));
+    assert!(
+        workflow.contains("task preflight:source-architecture"),
+        "the source-architecture workflow must invoke the Taskfile gate"
+    );
+    assert!(
+        taskfile.contains("--test source_file_size"),
+        "preflight:source-architecture must run the source_file_size test"
+    );
     Ok(())
 }
