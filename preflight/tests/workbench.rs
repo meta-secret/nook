@@ -29,6 +29,7 @@ fn directory_has_files(path: &Path) -> bool {
 #[test]
 fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Result<()> {
     let workflow = read(".github/workflows/agent-implement.yml");
+    let plan_script = read(".github/scripts/ci-agent-plan.sh");
     let record_validator = read(".github/scripts/workbench-records.cjs");
 
     for required in [
@@ -41,8 +42,7 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Supply either issue_path or prompt, not both",
         "Claim ready Workbench issue",
         "Run task-planning agent",
-        "git worktree add --detach",
-        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
+        "task ci-agent:plan",
         "Validate and publish Workbench task plan",
         "Publish Workbench result",
         "steps.workbench.outputs.found == 'true'",
@@ -56,6 +56,15 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         assert!(
             workflow.contains(required),
             "Workbench agent workflow is missing: {required}"
+        );
+    }
+    for required in [
+        "git worktree add --detach",
+        "REPO_ROOT=\"$planning_root\" task ci-agent:run",
+    ] {
+        assert!(
+            plan_script.contains(required),
+            "Workbench planning script is missing: {required}"
         );
     }
     for required in [
